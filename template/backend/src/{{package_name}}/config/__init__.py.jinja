@@ -1,0 +1,52 @@
+"""Application configuration.
+
+Settings are composed from domain sections (config/sections/) so each area
+of concern owns its own environment variable block. get_settings() is
+lru_cache'd: one Settings instance per process.
+
+Usage:
+    from {{ package_name }}.config import get_settings
+    settings = get_settings()
+    print(settings.database.postgres_host)
+"""
+
+from functools import lru_cache
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from {{ package_name }}.config.sections.database import DatabaseSettings
+from {{ package_name }}.config.sections.example import ExampleSettings
+
+
+class Settings(BaseSettings):
+    """Root settings; composes section sub-models."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        env_nested_delimiter="__",
+    )
+
+    debug: bool = False
+    secret_key: str = "changeme"
+
+    # Domain sections — populated from nested env vars or sub-model defaults.
+    database: DatabaseSettings = DatabaseSettings()
+    example: ExampleSettings = ExampleSettings()
+
+    @model_validator(mode="after")
+    def _warn_insecure_defaults(self) -> "Settings":
+        import logging
+
+        if not self.debug and self.secret_key == "changeme":
+            logging.getLogger(__name__).warning(
+                "SECRET_KEY is set to the insecure default. Set a real value in production."
+            )
+        return self
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the cached Settings instance (one per process)."""
+    return Settings()

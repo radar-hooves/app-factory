@@ -1,0 +1,19 @@
+import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [tailwindcss(), sveltekit()],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+      '/mcp': 'http://localhost:8000',
+    },
+    // Inject Authentik dev-bypass headers — same code path as production.
+    // Change the uid/username to impersonate a different user.
+    headers: {
+      'x-authentik-uid': 'dev-uid',
+      'x-authentik-username': 'devuser',
+    },
+  },
+});

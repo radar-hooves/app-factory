@@ -1,0 +1,107 @@
+"""Database engine and session factory.
+
+Sync-vs-async is isolated here so switching later only touches this module
+and alembic/env.py. The criterion for async: the request path parallelises
+I/O (multiple concurrent DB queries per request). Default is sync.
+
+Current mode: {{ db_mode }}
+"""
+
+{% if db_mode == "async" %}
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from {{ package_name }}.config import get_settings
+
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def get_engine() -> AsyncEngine:
+    """Return the shared async engine (created once per process)."""
+    global _engine
+    if _engine is None:
+        settings = get_settings()
+        _engine = create_async_engine(
+            settings.database.async_database_url,
+            echo=settings.debug,
+            pool_pre_ping=True,
+        )
+    return _engine
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            bind=get_engine(),
+            expire_on_commit=False,
+            autoflush=False,
+        )
+    return _session_factory
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency: yields an async database session per request."""
+    factory = get_session_factory()
+    async with factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+{% else %}
+from collections.abc import Generator
+
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from {{ package_name }}.config import get_settings
+
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
+
+
+def get_engine() -> Engine:
+    """Return the shared sync engine (created once per process)."""
+    global _engine
+    if _engine is None:
+        settings = get_settings()
+        _engine = create_engine(
+            settings.database.database_url,
+            echo=settings.debug,
+            pool_pre_ping=True,
+        )
+    return _engine
+
+
+def get_session_factory() -> sessionmaker[Session]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(
+            bind=get_engine(),
+            autoflush=False,
+            expire_on_commit=False,
+        )
+    return _session_factory
+
+
+def get_session() -> Generator[Session, None, None]:
+    """FastAPI dependency: yields a sync database session per request."""
+    factory = get_session_factory()
+    with factory() as session:
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+{% endif %}

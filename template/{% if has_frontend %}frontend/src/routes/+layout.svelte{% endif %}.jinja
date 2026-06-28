@@ -1,0 +1,22 @@
+<script lang="ts">
+  import '../app.css';
+  import { ModeWatcher } from 'mode-watcher';
+  import { Toaster } from 'svelte-sonner';
+  import { page } from '$app/state';
+
+  let { children } = $props();
+
+  // Page title: "Page Name — {{ project_name }}" or bare app name.
+  let pageTitle = $derived(
+    page.data.title ? `${page.data.title} — {{ project_name }}` : '{{ project_name }}'
+  );
+</script>
+
+<svelte:head>
+  <title>{pageTitle}</title>
+</svelte:head>
+
+<ModeWatcher />
+<Toaster richColors />
+
+{@render children()}

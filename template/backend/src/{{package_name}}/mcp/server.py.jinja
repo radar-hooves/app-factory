@@ -1,0 +1,49 @@
+"""FastMCP server for {{ project_name }}.
+
+Mounted at /mcp by the app factory (app.mount("/mcp", mcp.http_app(path="/"))).
+Add domain-specific tools in dispatcher modules and register them here.
+
+Design rules (rules-library/ai/sidekick-tooling.md):
+  - Target ≤20 tools; above 30 is a design defect.
+  - Use action-dispatcher pattern: one tool per noun, action= parameter.
+  - Tool docstrings must enumerate every action and its parameters.
+"""
+
+import logging
+
+from fastmcp import FastMCP
+
+from {{ package_name }}.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def create_mcp_server() -> FastMCP:
+    """Create and configure the FastMCP server instance."""
+    settings = get_settings()
+
+    mcp: FastMCP = FastMCP(
+        name="{{ project_name }}",
+        instructions=(
+            "Use this server to interact with {{ project_name }}. "
+            "Available tools are listed below. "
+            "Prefer action-dispatcher tools (action= parameter) over per-operation tools."
+        ),
+    )
+
+    # Register domain dispatchers here as the app grows.
+    # Example:
+    #   from {{ package_name }}.mcp.dispatchers.example import register_example_tools
+    #   register_example_tools(mcp)
+
+    @mcp.tool()
+    def health_check() -> dict[str, str]:
+        """Check that the MCP server is reachable.
+
+        Returns:
+            dict with 'status': 'ok'.
+        """
+        return {"status": "ok", "app": "{{ project_name }}"}
+
+    logger.info("MCP server created: %s", mcp.name)
+    return mcp

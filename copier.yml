@@ -1,0 +1,28 @@
+_subdirectory: template
+
+questions:
+  project_name:
+    type: str
+    help: 'Project name (kebab-case, e.g. my-app)'
+
+  package_name:
+    type: str
+    help: 'Python package name (snake_case). Defaults to project_name with hyphens replaced by underscores.'
+    default: "{{ project_name | replace('-', '_') }}"
+
+  description:
+    type: str
+    help: 'One-sentence description of the project'
+
+  has_frontend:
+    type: bool
+    help: 'Include a SvelteKit frontend? (default: yes)'
+    default: true
+
+  db_mode:
+    type: str
+    help: 'Database session mode: sync (default, single-threaded request path) or async (I/O-fan-out criterion)'
+    choices:
+      - sync
+      - async
+    default: sync

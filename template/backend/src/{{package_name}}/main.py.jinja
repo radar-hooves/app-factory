@@ -1,0 +1,69 @@
+"""Application factory for {{ project_name }}.
+
+The canonical household shape:
+  - lifespan combines db + mcp lifespans via combine_lifespans
+  - /mcp is mounted as an ASGI sub-app (FastMCP HTTP transport)
+  - The SPA is served from /frontend/build/ by app.frontend
+
+Auth: Tier 1a (Authentik proxy-delegated). Identity arrives in
+X-authentik-uid / X-authentik-username headers; no app-level sessions.
+"""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+from {{ package_name }}.api.main import api_router
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.db.session import get_engine
+from {{ package_name }}.logging import configure_logging
+from {{ package_name }}.mcp.server import create_mcp_server
+
+
+@asynccontextmanager
+async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Warm the database engine; dispose on shutdown."""
+    engine = get_engine()
+    app.state.engine = engine
+    yield
+    {% if db_mode == "async" %}
+    await engine.dispose()
+    {% else %}
+    engine.dispose()
+    {% endif %}
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    settings = get_settings()
+    configure_logging(debug=settings.debug)
+
+    mcp = create_mcp_server()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        async with _db_lifespan(app):
+            async with mcp.lifespan(app):
+                yield
+
+    app = FastAPI(
+        title="{{ project_name }}",
+        description="{{ description }}",
+        lifespan=lifespan,
+        debug=settings.debug,
+    )
+
+    # MCP surface at /mcp
+    app.mount("/mcp", mcp.http_app(path="/"))
+
+    # API routes at /api
+    app.include_router(api_router, prefix="/api")
+
+    {% if has_frontend %}
+    # Serve the SPA — must be last so API routes take precedence.
+    app.mount("/", StaticFiles(directory="frontend/build", html=True), name="frontend")
+    {% endif %}
+
+    return app

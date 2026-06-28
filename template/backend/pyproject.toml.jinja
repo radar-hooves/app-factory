@@ -1,0 +1,73 @@
+[project]
+name = "{{ project_name }}"
+version = "2026.1.0"
+description = "{{ description }}"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.34.0",
+    "fastmcp>=3.4.0",
+    "pydantic>=2.13.0",
+    "pydantic-settings>=2.14.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.15.0",
+    {% if db_mode == "async" %}
+    "asyncpg>=0.30.0",
+    {% else %}
+    "psycopg2-binary>=2.9.0",
+    {% endif %}
+    "httpx>=0.28.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+    "mypy>=2.1.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ package_name }}"]
+
+[tool.uv]
+default-groups = ["dev"]
+environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib --strict-markers"
+testpaths = ["tests"]
+markers = [
+    "unit: fast, isolated, no external dependencies",
+    "integration: exercises multiple components; may need fixtures or services",
+]
+
+[tool.coverage.run]
+source = ["src/{{ package_name }}"]
+omit = ["*/tests/*", "*/migrations/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70

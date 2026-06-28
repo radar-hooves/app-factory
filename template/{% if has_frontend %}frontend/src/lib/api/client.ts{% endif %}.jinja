@@ -1,0 +1,16 @@
+/**
+ * openapi-fetch client for {{ project_name }}.
+ *
+ * Run `pnpm generate:api` after changing the backend to regenerate schema.d.ts.
+ * The client is type-safe: paths come from the generated schema, not strings.
+ *
+ * credentials: 'include' sends the Authentik session cookie so the proxy
+ * can validate the request.
+ */
+import createClient from 'openapi-fetch';
+import type { paths } from './schema';
+
+export const api = createClient<paths>({
+  baseUrl: import.meta.env.VITE_API_URL ?? '',
+  credentials: 'include',
+});

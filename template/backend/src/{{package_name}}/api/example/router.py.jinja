@@ -1,0 +1,46 @@
+"""HTTP routes for the example domain.
+
+Routers contain no business logic — they delegate to service functions and
+translate between HTTP and domain types.
+"""
+
+from fastapi import APIRouter
+
+from {{ package_name }}.api.example import service
+from {{ package_name }}.api.example.schemas import ExampleItemCreate, ExampleItemRead
+from {{ package_name }}.deps import CurrentUser, SessionDep
+
+router = APIRouter()
+
+
+@router.get("/", response_model=list[ExampleItemRead], operation_id="listExampleItems")
+{% if db_mode == "async" %}
+async def list_items(session: SessionDep, _user: CurrentUser) -> list[ExampleItemRead]:
+{% else %}
+def list_items(session: SessionDep, _user: CurrentUser) -> list[ExampleItemRead]:
+{% endif %}
+    """List all example items."""
+    items = {% if db_mode == "async" %}await {% endif %}service.list_items(session)
+    return [ExampleItemRead.model_validate(item) for item in items]
+
+
+@router.get("/{item_id}", response_model=ExampleItemRead, operation_id="getExampleItem")
+{% if db_mode == "async" %}
+async def get_item(item_id: int, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+{% else %}
+def get_item(item_id: int, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+{% endif %}
+    """Get a single example item by id."""
+    item = {% if db_mode == "async" %}await {% endif %}service.get_item(session, item_id)
+    return ExampleItemRead.model_validate(item)
+
+
+@router.post("/", response_model=ExampleItemRead, status_code=201, operation_id="createExampleItem")
+{% if db_mode == "async" %}
+async def create_item(data: ExampleItemCreate, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+{% else %}
+def create_item(data: ExampleItemCreate, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+{% endif %}
+    """Create a new example item."""
+    item = {% if db_mode == "async" %}await {% endif %}service.create_item(session, data)
+    return ExampleItemRead.model_validate(item)

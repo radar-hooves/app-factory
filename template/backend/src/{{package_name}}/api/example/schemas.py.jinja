@@ -1,0 +1,20 @@
+"""Pydantic request/response schemas for the example domain."""
+
+from pydantic import BaseModel, ConfigDict
+
+
+class ExampleItemCreate(BaseModel):
+    """Request body for creating an ExampleItem."""
+
+    title: str
+    body: str | None = None
+
+
+class ExampleItemRead(BaseModel):
+    """Response schema for ExampleItem (excludes internal DB columns)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    body: str | None

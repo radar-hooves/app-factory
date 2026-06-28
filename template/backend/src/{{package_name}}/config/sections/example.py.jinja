@@ -1,0 +1,24 @@
+"""Example domain settings section.
+
+Copy this file for each domain that needs its own configuration block.
+Env vars are prefixed with EXAMPLE_ and lowercased automatically because
+case_sensitive defaults to False in pydantic-settings.
+
+Example .env:
+    EXAMPLE_FEATURE_FLAG=true
+    EXAMPLE_MAX_ITEMS=100
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ExampleSettings(BaseSettings):
+    """Settings for the example domain."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="EXAMPLE_",
+        case_sensitive=False,
+    )
+
+    feature_flag: bool = False
+    max_items: int = 50

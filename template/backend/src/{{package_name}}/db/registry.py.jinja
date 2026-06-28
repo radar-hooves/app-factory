@@ -1,0 +1,11 @@
+"""Model registry — import every ORM model here so Alembic's autogenerate
+can discover all tables via Base.metadata.
+
+Add one import per model module as the domain grows:
+    from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+"""
+
+from {{ package_name }}.db.base import Base  # noqa: F401
+from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+
+__all__ = ["Base"]

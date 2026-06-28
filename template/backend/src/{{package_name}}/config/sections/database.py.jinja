@@ -1,0 +1,40 @@
+"""Database connection settings."""
+
+from pydantic import computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class DatabaseSettings(BaseSettings):
+    """PostgreSQL connection parameters.
+
+    Standard env var names: POSTGRES_USER, POSTGRES_PASSWORD, etc.
+    case_sensitive=False (default) maps them from the environment automatically.
+    """
+
+    model_config = SettingsConfigDict(case_sensitive=False)
+
+    postgres_user: str = "postgres"
+    postgres_password: str  # required — no default; must be set in .env or environment
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "{{ project_name | replace('-', '_') }}"
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def database_url(self) -> str:
+        """Sync SQLAlchemy connection URL."""
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    {% if db_mode == "async" %}
+    @computed_field  # type: ignore[misc]
+    @property
+    def async_database_url(self) -> str:
+        """Async SQLAlchemy connection URL (asyncpg driver)."""
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+    {% endif %}

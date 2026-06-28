@@ -1,0 +1,63 @@
+"""Tests for the example domain slice.
+
+Demonstrates the transaction-rollback pattern and httpx.AsyncClient usage.
+Replace with tests for the first real domain when the example slice is removed.
+"""
+
+import pytest
+
+
+@pytest.mark.unit
+def test_example_schema_validation():
+    """ExampleItemCreate rejects empty titles."""
+    from pydantic import ValidationError
+
+    from {{ package_name }}.api.example.schemas import ExampleItemCreate
+
+    with pytest.raises(ValidationError):
+        ExampleItemCreate(title="")  # title is required (non-empty str)
+
+
+@pytest.mark.integration
+async def test_list_items_empty(client):
+    """GET /api/example/ returns an empty list on a fresh database."""
+    response = await client.get("/api/example/")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.integration
+async def test_create_and_get_item(client):
+    """POST then GET round-trips correctly."""
+    # Create
+    create_resp = await client.post("/api/example/", json={"title": "Hello", "body": "World"})
+    assert create_resp.status_code == 201
+    item = create_resp.json()
+    assert item["title"] == "Hello"
+    item_id = item["id"]
+
+    # Get by id
+    get_resp = await client.get(f"/api/example/{item_id}")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["title"] == "Hello"
+
+
+@pytest.mark.integration
+async def test_get_item_not_found(client):
+    """GET for a missing item returns 404."""
+    response = await client.get("/api/example/99999")
+    assert response.status_code == 404
+
+
+@pytest.mark.integration
+async def test_auth_required(client):
+    """Requests without identity headers are rejected (401)."""
+    from httpx import ASGITransport, AsyncClient
+
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as unauthenticated:
+        response = await unauthenticated.get("/api/example/")
+    assert response.status_code == 401

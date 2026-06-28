@@ -1,0 +1,23 @@
+"""API router aggregator.
+
+Include one sub-router per vertical domain slice. Each slice lives in
+api/<domain>/ with its own router.py, schemas.py, models.py, service.py,
+and dependencies.py.
+"""
+
+from fastapi import APIRouter
+
+from {{ package_name }}.api.example.router import router as example_router
+from {{ package_name }}.exceptions import AppError, app_error_handler
+
+api_router = APIRouter()
+api_router.include_router(example_router, prefix="/example", tags=["example"])
+
+
+def register_exception_handlers(app) -> None:  # type: ignore[type-arg]
+    """Register application exception handlers on the FastAPI app instance.
+
+    Call from the app factory after creating the app:
+        register_exception_handlers(app)
+    """
+    app.add_exception_handler(AppError, app_error_handler)

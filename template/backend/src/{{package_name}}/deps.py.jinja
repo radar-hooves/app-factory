@@ -1,0 +1,53 @@
+"""Reusable FastAPI dependency aliases (Annotated pattern).
+
+Import these instead of writing Depends(...) inline in route signatures.
+Add project-specific aliases here as the domain grows.
+"""
+
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
+
+from {{ package_name }}.config import Settings, get_settings
+{% if db_mode == "async" %}
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from {{ package_name }}.db.session import get_session
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+{% else %}
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.db.session import get_session
+
+SessionDep = Annotated[Session, Depends(get_session)]
+{% endif %}
+
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+async def get_current_user(
+    x_authentik_uid: Annotated[str | None, Header(alias="x-authentik-uid")] = None,
+    x_authentik_username: Annotated[str | None, Header(alias="x-authentik-username")] = None,
+) -> dict[str, str]:
+    """Extract the authenticated user from Authentik forward-auth headers.
+
+    Tier 1a (proxy-delegated) auth: the proxy injects these headers after
+    verifying the user's session. The app trusts the headers; network isolation
+    is the security boundary (see rules-library/auth-patterns/proxy-delegated-auth.md).
+
+    Returns:
+        dict with 'uid' (stable identifier) and 'username' (display name).
+
+    Raises:
+        HTTPException: 401 when headers are absent (request bypassed the proxy).
+    """
+    if not x_authentik_uid:
+        raise HTTPException(status_code=401, detail="Missing identity headers — is the proxy configured?")
+    return {
+        "uid": x_authentik_uid,
+        "username": x_authentik_username or x_authentik_uid,
+    }
+
+
+CurrentUser = Annotated[dict[str, str], Depends(get_current_user)]

@@ -1,0 +1,151 @@
+"""Pytest fixtures for {{ project_name }} tests.
+
+Fixture hierarchy:
+    _engine (session) ─→ _session_factory (session)
+    client (function) ─→ session (function)
+
+The transaction-rollback fixture (session) wraps each test in a savepoint and
+rolls back after the test, leaving the database clean without a teardown script.
+Uses httpx.AsyncClient + ASGITransport for async endpoint tests.
+"""
+
+import os
+
+import pytest
+
+# Set required env vars before importing application modules so Settings
+# can instantiate without a real .env file present in CI.
+os.environ.setdefault("POSTGRES_USER", "postgres")
+os.environ.setdefault("POSTGRES_HOST", "localhost")
+os.environ.setdefault("POSTGRES_PORT", "5432")
+os.environ.setdefault("POSTGRES_DB", "{{ project_name | replace('-', '_') }}_test")
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("DEBUG", "true")
+# POSTGRES_PASSWORD must be set in the shell (e.g. via .envrc.local) before
+# running tests. Raise a clear error instead of a cryptic Pydantic failure.
+if "POSTGRES_PASSWORD" not in os.environ:
+    raise RuntimeError(
+        "POSTGRES_PASSWORD must be set before running tests.\n"
+        "Add it to your .envrc.local or export it in your shell."
+    )
+
+{% if db_mode == "async" %}
+from collections.abc import AsyncGenerator
+
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.db.base import Base
+from {{ package_name }}.db.registry import Base as _registry_base  # noqa: F401 — registers models
+from {{ package_name }}.deps import get_session
+from {{ package_name }}.main import create_app
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest_asyncio.fixture(scope="session")
+async def _engine():
+    """Session-scoped async engine; creates schema once, drops on teardown."""
+    settings = get_settings()
+    engine = create_async_engine(settings.database.async_database_url, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def _session_factory(_engine):
+    return async_sessionmaker(bind=_engine, expire_on_commit=False, autoflush=False)
+
+
+@pytest_asyncio.fixture(scope="function")
+async def session(_session_factory) -> AsyncGenerator[AsyncSession, None]:
+    """Per-test async session with transaction rollback for isolation."""
+    async with _session_factory() as s:
+        async with s.begin():
+            yield s
+            await s.rollback()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """httpx.AsyncClient wired to the FastAPI app with DB override."""
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={
+            "x-authentik-uid": "test-uid",
+            "x-authentik-username": "testuser",
+        },
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+{% else %}
+from collections.abc import Generator
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.db.base import Base
+from {{ package_name }}.db.registry import Base as _registry_base  # noqa: F401 — registers models
+from {{ package_name }}.deps import get_session
+from {{ package_name }}.main import create_app
+
+
+@pytest.fixture(scope="session")
+def _engine():
+    """Session-scoped sync engine; creates schema once, drops on teardown."""
+    settings = get_settings()
+    engine = create_engine(settings.database.database_url, echo=False)
+    Base.metadata.create_all(engine)
+    yield engine
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def _session_factory(_engine):
+    return sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
+
+
+@pytest.fixture(scope="function")
+def session(_session_factory) -> Generator[Session, None, None]:
+    """Per-test sync session with transaction rollback for isolation."""
+    with _session_factory() as s:
+        s.begin_nested()  # savepoint — rollback after test
+        yield s
+        s.rollback()
+
+
+@pytest.fixture(scope="function")
+async def client(session: Session) -> AsyncClient:
+    """httpx.AsyncClient wired to the FastAPI app with DB override."""
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={
+            "x-authentik-uid": "test-uid",
+            "x-authentik-username": "testuser",
+        },
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+{% endif %}
