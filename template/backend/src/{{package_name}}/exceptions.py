@@ -15,7 +15,9 @@ class AppError(Exception):
     status_code: int = 500
     error_code: str = "internal_error"
 
-    def __init__(self, message: str, *, details: dict | None = None) -> None:
+    def __init__(
+        self, message: str, *, details: dict[str, object] | None = None
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.details = details or {}
@@ -42,8 +44,9 @@ class AuthError(AppError):
     error_code = "auth_error"
 
 
-async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Map AppError subclasses to structured JSON HTTP responses."""
+    assert isinstance(exc, AppError)
     return JSONResponse(
         status_code=exc.status_code,
         content={

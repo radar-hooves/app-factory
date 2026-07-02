@@ -9,8 +9,10 @@ Auth: Tier 1a (Authentik proxy-delegated). Identity arrives in
 X-authentik-uid / X-authentik-username headers; no app-level sessions.
 """
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +23,10 @@ from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.logging import configure_logging
 from {{ package_name }}.mcp.server import create_mcp_server
 
+_log = logging.getLogger(__name__)
+
+_FRONTEND_BUILD = Path("frontend/build")
+
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -28,11 +34,11 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     engine = get_engine()
     app.state.engine = engine
     yield
-    {% if db_mode == "async" %}
+{% if db_mode == "async" %}
     await engine.dispose()
-    {% else %}
+{% else %}
     engine.dispose()
-    {% endif %}
+{% endif %}
 
 
 def create_app() -> FastAPI:
@@ -41,11 +47,12 @@ def create_app() -> FastAPI:
     configure_logging(debug=settings.debug)
 
     mcp = create_mcp_server()
+    mcp_http_app = mcp.http_app(path="/")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async with _db_lifespan(app):
-            async with mcp.lifespan(app):
+            async with mcp_http_app.lifespan(mcp_http_app):
                 yield
 
     app = FastAPI(
@@ -56,14 +63,18 @@ def create_app() -> FastAPI:
     )
 
     # MCP surface at /mcp
-    app.mount("/mcp", mcp.http_app(path="/"))
+    app.mount("/mcp", mcp_http_app)
 
     # API routes at /api
     app.include_router(api_router, prefix="/api")
+{% if has_frontend %}
 
-    {% if has_frontend %}
     # Serve the SPA — must be last so API routes take precedence.
-    app.mount("/", StaticFiles(directory="frontend/build", html=True), name="frontend")
-    {% endif %}
+    # Skip mounting if the frontend has not been built yet (dev-only path).
+    if _FRONTEND_BUILD.is_dir():
+        app.mount("/", StaticFiles(directory=str(_FRONTEND_BUILD), html=True), name="frontend")
+    else:
+        _log.warning("frontend/build not found; SPA not mounted. Run `pnpm build` in frontend/.")
+{% endif %}
 
     return app

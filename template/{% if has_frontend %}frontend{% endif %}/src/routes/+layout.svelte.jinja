@@ -1,4 +1,4 @@
-<script lang="ts">
+{% raw %}<script lang="ts">
   import '../app.css';
   import { ModeWatcher } from 'mode-watcher';
   import { Toaster } from 'svelte-sonner';
@@ -6,9 +6,9 @@
 
   let { children } = $props();
 
-  // Page title: "Page Name — {{ project_name }}" or bare app name.
+  // Page title: "Page Name — {% endraw %}{{ project_name }}{% raw %}" or bare app name.
   let pageTitle = $derived(
-    page.data.title ? `${page.data.title} — {{ project_name }}` : '{{ project_name }}'
+    page.data.title ? `${page.data.title} — {% endraw %}{{ project_name }}{% raw %}` : '{% endraw %}{{ project_name }}{% raw %}'
   );
 </script>
 
@@ -20,3 +20,4 @@
 <Toaster richColors />
 
 {@render children()}
+{% endraw %}

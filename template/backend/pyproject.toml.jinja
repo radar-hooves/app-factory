@@ -13,6 +13,7 @@ dependencies = [
     "alembic>=1.15.0",
     {% if db_mode == "async" %}
     "asyncpg>=0.30.0",
+    "greenlet>=3.0.0",
     {% else %}
     "psycopg2-binary>=2.9.0",
     {% endif %}

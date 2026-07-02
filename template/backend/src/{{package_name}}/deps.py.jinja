@@ -7,22 +7,18 @@ Add project-specific aliases here as the domain grows.
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
-
-from {{ package_name }}.config import Settings, get_settings
-{% if db_mode == "async" %}
+{% if db_mode == "async" -%}
 from sqlalchemy.ext.asyncio import AsyncSession
-
+{% else -%}
+from sqlalchemy.orm import Session
+{% endif %}
+from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.db.session import get_session
-
+{% if db_mode == "async" %}
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 {% else %}
-from sqlalchemy.orm import Session
-
-from {{ package_name }}.db.session import get_session
-
 SessionDep = Annotated[Session, Depends(get_session)]
 {% endif %}
-
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 

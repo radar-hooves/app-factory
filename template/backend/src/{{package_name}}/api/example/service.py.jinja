@@ -6,14 +6,13 @@ This makes them testable without an HTTP layer.
 
 import logging
 
-{% if db_mode == "async" %}
+{% if db_mode == "async" -%}
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-{% else %}
+{% else -%}
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 {% endif %}
-
 from {{ package_name }}.api.example.models import ExampleItem
 from {{ package_name }}.api.example.schemas import ExampleItemCreate
 from {{ package_name }}.exceptions import NotFoundError
