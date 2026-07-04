@@ -25,3 +25,12 @@ db_mode:
     - sync
     - async
   default: sync
+
+backend_port:
+  type: int
+  help: 'Backend API dev port — allocate from the port registry (band 8300-8399); never a framework default'
+
+frontend_port:
+  type: int
+  help: 'Frontend Vite dev port — allocate from the port registry (band 5170-5199); never a framework default'
+  when: "{{ has_frontend }}"

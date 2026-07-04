@@ -13,7 +13,7 @@
     "lint": "pnpm run lint:js",
     "lint:js": "eslint .",
     "lint:css": "stylelint \"src/**/*.{css,svelte}\"",
-    "generate:api": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/schema.d.ts",
+    "generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

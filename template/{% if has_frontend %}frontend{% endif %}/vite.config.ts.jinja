@@ -5,9 +5,10 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   server: {
+    port: {{ frontend_port }},
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/mcp': 'http://localhost:8000',
+      '/api': 'http://localhost:{{ backend_port }}',
+      '/mcp': 'http://localhost:{{ backend_port }}',
     },
     // Inject Authentik dev-bypass headers — same code path as production.
     // Change the uid/username to impersonate a different user.

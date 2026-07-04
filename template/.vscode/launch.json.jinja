@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: Dev",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["{{ package_name }}.server:app", "--reload", "--host", "0.0.0.0", "--port", "{{ backend_port }}"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "justMyCode": false,
+      "preLaunchTask": "Kill Port {{ backend_port }}",
+      "presentation": { "group": "1_backend", "order": 1 }
+    }{% if has_frontend %},
+    {
+      "name": "Frontend: Dev",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev"],
+      "serverReadyAction": { "pattern": "Local:.*(https?://.*)", "action": "openExternally" },
+      "preLaunchTask": "Kill Port {{ frontend_port }}",
+      "presentation": { "group": "2_frontend", "order": 1 }
+    }{% endif %}
+  ]{% if has_frontend %},
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": ["Backend: Dev", "Frontend: Dev"],
+      "stopAll": true,
+      "presentation": { "group": "0_fullstack", "order": 1 }
+    }
+  ]{% endif %}
+}
