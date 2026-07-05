@@ -94,3 +94,7 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 **Frontend: SvelteKit SPA served by the backend** `adapter-static` builds to `frontend/build/`; FastAPI serves it via `StaticFiles(..., html=True)`. The Vite dev server proxies `/api` and `/mcp` to the backend and injects the dev Authentik headers so the same code path runs in both environments.
 
 **Design tokens: Eucalyptus palette (OKLCH)** The shared household design language (`docs/master/design/shared-design-language.md`). Update master tokens first, then adopt per project. No raw `oklch()` values in component files — all via CSS custom properties defined in `app.css`.
+
+## Verified Greenfield
+
+Seshat (WP-12) was the first project stamped greenfield from this template, 2026-07-05. That run surfaced seven template bugs — missing answers file, an unrendered `.env.example`, a wrong async Alembic URL, an unwired exception handler, a pytest loop-scope mismatch, several stamped-file formatting failures, and an over-strict conftest guard — all fixed in this template as a direct result.

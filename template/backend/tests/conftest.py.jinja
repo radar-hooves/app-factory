@@ -22,11 +22,14 @@ os.environ.setdefault("POSTGRES_DB", "{{ project_name | replace('-', '_') }}_tes
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEBUG", "true")
 # POSTGRES_PASSWORD must be set in the shell (e.g. via .envrc.local) before
-# running tests. Raise a clear error instead of a cryptic Pydantic failure.
+# running tests. Exit cleanly with a clear message instead of a cryptic
+# Pydantic failure buried in fixture setup.
 if "POSTGRES_PASSWORD" not in os.environ:
-    raise RuntimeError(
-        "POSTGRES_PASSWORD must be set before running tests.\n"
-        "Add it to your .envrc.local or export it in your shell."
+    pytest.exit(
+        "Required test env vars not set: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, "
+        "POSTGRES_PORT, POSTGRES_DB. Add POSTGRES_PASSWORD to your .envrc.local or export it in "
+        "your shell; adjust to your app's settings surface if it differs.",
+        returncode=1,
     )
 
 {% if db_mode == "async" %}
@@ -91,7 +94,6 @@ async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
-
 {% else %}
 from collections.abc import Generator
 
@@ -147,4 +149,4 @@ async def client(session: Session) -> AsyncClient:
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
-{% endif %}
+{% endif -%}

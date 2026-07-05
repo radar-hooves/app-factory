@@ -6,7 +6,6 @@ I/O (multiple concurrent DB queries per request). Default is sync.
 
 Current mode: {{ db_mode }}
 """
-
 {% if db_mode == "async" %}
 from collections.abc import AsyncGenerator
 
@@ -57,7 +56,6 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
 {% else %}
 from collections.abc import Generator
 
@@ -104,4 +102,4 @@ def get_session() -> Generator[Session, None, None]:
         except Exception:
             session.rollback()
             raise
-{% endif %}
+{% endif -%}

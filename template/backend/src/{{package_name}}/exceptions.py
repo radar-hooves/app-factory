@@ -15,9 +15,7 @@ class AppError(Exception):
     status_code: int = 500
     error_code: str = "internal_error"
 
-    def __init__(
-        self, message: str, *, details: dict[str, object] | None = None
-    ) -> None:
+    def __init__(self, message: str, *, details: dict[str, object] | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.details = details or {}

@@ -15,9 +15,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+{% if has_frontend -%}
 from fastapi.staticfiles import StaticFiles
-
-from {{ package_name }}.api.main import api_router
+{% endif %}
+from {{ package_name }}.api.main import api_router, register_exception_handlers
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.logging import configure_logging
@@ -40,7 +41,6 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     engine.dispose()
 {% endif %}
 
-
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         debug=settings.debug,
     )
+    register_exception_handlers(app)
 
     # MCP surface at /mcp
     app.mount("/mcp", mcp_http_app)
@@ -68,7 +69,6 @@ def create_app() -> FastAPI:
     # API routes at /api
     app.include_router(api_router, prefix="/api")
 {% if has_frontend %}
-
     # Serve the SPA — must be last so API routes take precedence.
     # Skip mounting if the frontend has not been built yet (dev-only path).
     if _FRONTEND_BUILD.is_dir():
@@ -76,5 +76,4 @@ def create_app() -> FastAPI:
     else:
         _log.warning("frontend/build not found; SPA not mounted. Run `pnpm build` in frontend/.")
 {% endif %}
-
     return app
