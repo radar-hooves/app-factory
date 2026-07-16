@@ -98,3 +98,22 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 ## Verified Greenfield
 
 Seshat (WP-12) was the first project stamped greenfield from this template, 2026-07-05. That run surfaced seven template bugs — missing answers file, an unrendered `.env.example`, a wrong async Alembic URL, an unwired exception handler, a pytest loop-scope mismatch, several stamped-file formatting failures, and an over-strict conftest guard — all fixed in this template as a direct result.
+
+## Releasing a template change (read this before editing)
+
+This repo is a **copier source**, and `copier update` checks out the **latest git tag** — not the tip of `main`. A change pushed without a tag is therefore invisible to every app: they keep stamping and updating against the previous tag, with no error and no signal that anything was missed.
+
+So a template change is not shipped until it is tagged:
+
+```bash
+git tag -a v2026.7.1 -m "Release 2026.7.1"   # CalVer: YYYY.M.x, per rules-library/core/10-git-workflow.md
+git push origin main v2026.7.1
+```
+
+Tag once per logical change set, not per commit (`10-git-workflow.md` §Release Cadence). Apps then pull the change forward with `copier update`; their `.copier-answers.yml` records which tag they last took.
+
+Tagging by hand is discipline, not a ratchet — the same failure mode `rules-library/dev-platform/20-common-libraries.md` documents for published wheels, where an unbumped version silently served stale code. If template changes ever start missing their tags, the fix is to stamp the tag in CI, not to try harder.
+
+## Where this lives
+
+Authored here; consumed as `gh:poodle64/full-stack-app-template`. The shape it stamps is law in the household's `rules-library/dev-platform/30-canonical-app-shape.md`; this template is that rule's executable form, and the two move together. Extracted from `poodle64/master-project` (history preserved) so that copier has a tagged VCS source — see master-project#161.
