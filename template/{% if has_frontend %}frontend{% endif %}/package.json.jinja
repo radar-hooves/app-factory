@@ -10,7 +10,7 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "pnpm run lint:js",
+    "lint": "pnpm run lint:js && pnpm run lint:css",
     "lint:js": "eslint .",
     "lint:css": "stylelint \"src/**/*.{css,svelte}\"",
     "generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
@@ -46,6 +46,7 @@
   "dependencies": {
     "@poodle64/design-tokens": "^2026.7.0",
     "@poodle64/ui": "^2026.7.0",
+    "bits-ui": "^2.18.1",
     "mode-watcher": "^1.1.0",
     "openapi-fetch": "^0.17.0"
   }
