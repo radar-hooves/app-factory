@@ -8,6 +8,37 @@ The git tag is this repo's single source of truth for its version: `copier`
 resolves a template by its latest tag, so there is no `VERSION` file to drift
 against it. A change is not shipped until the tag is pushed.
 
+## [2026.7.2] - 2026-07-28
+
+### Fixed
+
+- The stamped `app.css` now imports `@poodle64/ui/styles.css`, so the shared
+  components have a colour surface behind them. The scaffold declared the
+  shadcn semantic names (`--card`, `--popover`, `--muted`, `--accent`,
+  `--input`, `--secondary`, and their `-foreground` pairs) as plain custom
+  properties in a `:root, .dark` block. That makes the variable exist but never
+  tells Tailwind v4 they are theme colours, so `bg-card`, `bg-popover`,
+  `bg-muted`, `bg-accent`, `bg-secondary` and `border-input` compiled to no CSS
+  rule at all: no build error, no lint hit, no failing test, just classes in
+  the DOM with nothing behind them. Every app stamped from this template
+  inherited it — dropdowns with no hover state, inputs with no border, cards
+  and popovers with no surface colour (`poodle64/design-system#3`).
+
+### Changed
+
+- The per-app shadcn alias block is deleted. `@poodle64/ui@2026.7.2` ships that
+  whole surface itself, mapping *and* Tailwind registration, so an app writing
+  its own would only fight it. A stamped app now differentiates its palette
+  through `--ds-color-*` alone. Sidebar and chart colours stay per app: the
+  package ships no sidebar or chart component, and chrome hue is genuinely an
+  app's own decision, so the scaffold still declares and registers those.
+- The block's five `--status-*` convenience aliases go with it. Nothing in the
+  scaffold read them, and `@poodle64/design-tokens` already registers
+  `--color-status-*`, so `bg-status-success` and friends were always the
+  working path.
+- `@poodle64/ui` and `@poodle64/design-tokens` version specs raised to
+  `^2026.7.2`.
+
 ## [2026.7.1] - 2026-07-28
 
 ### Added
@@ -57,5 +88,6 @@ against it. A change is not shipped until the tag is pushed.
   standalone copier source, extracted from `poodle64/master-project` with
   history preserved so that copier has a tagged VCS source of its own.
 
+[2026.7.2]: https://github.com/poodle64/full-stack-app-template/compare/v2026.7.1...v2026.7.2
 [2026.7.1]: https://github.com/poodle64/full-stack-app-template/compare/v2026.7.0...v2026.7.1
 [2026.7.0]: https://github.com/poodle64/full-stack-app-template/releases/tag/v2026.7.0

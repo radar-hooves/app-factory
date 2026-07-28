@@ -1,6 +1,13 @@
 @import 'tailwindcss';
 @import '@poodle64/design-tokens/tokens.tw.css';
 @import '@poodle64/design-tokens/tokens.css';
+
+/* The component stylesheet. Carries the shadcn semantic surface (--card,
+   --popover, --muted, --accent, --input, --radius, and the -foreground pairs)
+   AND the Tailwind registration those names need, so bg-card / bg-muted /
+   bg-accent / border-input compile to real rules instead of nothing at all.
+   Must come after the token imports: every name in it aliases a --ds-* token. */
+@import '@poodle64/ui/styles.css';
 @import 'tw-animate-css';
 
 /* @poodle64/ui ships in node_modules, outside Tailwind's default src/ scan —
@@ -31,38 +38,16 @@
   --ds-color-ring:               oklch(0.65 0.12 145);
 }
 
-/* shadcn-svelte alias layer — map --ds-* onto shadcn component vars */
-:root, .dark {
-  --background:           var(--ds-color-background);
-  --foreground:           var(--ds-color-foreground);
-  --card:                 var(--ds-color-surface-2);
-  --card-foreground:      var(--ds-color-foreground);
-  --popover:              var(--ds-color-surface-3);
-  --popover-foreground:   var(--ds-color-foreground);
-  --primary:              var(--ds-color-primary);
-  --primary-foreground:   var(--ds-color-primary-foreground);
-  --secondary:            var(--ds-color-surface-1);
-  --secondary-foreground: var(--ds-color-foreground);
-  --muted:                var(--ds-color-surface-1);
-  --muted-foreground:     var(--ds-color-muted-foreground);
-  --accent:               var(--ds-color-surface-2);
-  --accent-foreground:    var(--ds-color-foreground);
-  --destructive:          var(--ds-color-destructive);
-  --destructive-foreground: var(--ds-color-destructive-foreground);
-  --border:               var(--ds-color-border);
-  --input:                var(--ds-color-border);
-  --ring:                 var(--ds-color-ring);
-  --radius:               var(--ds-radius-lg);
+/*
+  App-local vars not provided by the packages.
 
-  /* Status convenience aliases */
-  --status-success: var(--ds-color-status-success);
-  --status-warning: var(--ds-color-status-warning);
-  --status-error:   var(--ds-color-status-error);
-  --status-info:    var(--ds-color-status-info);
-  --status-neutral: var(--ds-color-status-neutral);
-}
-
-/* App-local vars not provided by the package */
+  There is deliberately no shadcn alias layer here. @poodle64/ui/styles.css
+  ships that whole surface — the --ds-* mapping AND the @theme inline
+  registration Tailwind needs — so an app writing its own would only fight it.
+  Sidebar and chart colours are the exception the package leaves to each app:
+  it ships no sidebar or chart component, and chrome hue is genuinely a
+  per-app decision, so they are declared and registered below.
+*/
 :root {
   --sidebar:                  oklch(0.15 0.01 145);
   --sidebar-foreground:       oklch(0.9 0.02 145);
