@@ -1,0 +1,193 @@
+"""Tests for the /mcp inbound-auth gate.
+
+The defect these guard against is a silent one: an unauthenticated MCP surface
+builds, type-checks, and renders perfectly. Only driving a request at it proves
+it refuses. Every case here asserts the OUTCOME of a real request through the
+gate, never that the module imports.
+
+The userinfo endpoint is faked with httpx.MockTransport, so no identity
+provider is needed to run these.
+"""
+
+import httpx
+import pytest
+
+from {{ package_name }}.mcp.actors import Actor, ActorRegistry
+from {{ package_name }}.mcp.http_auth import require_bearer_auth
+
+USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
+
+
+async def _inner_app(scope, receive, send):
+    """A stand-in for the FastMCP app: echoes the x-client-id the gate wrote."""
+    headers = {name.decode(): value.decode() for name, value in scope.get("headers", [])}
+    body = headers.get("x-client-id", "<absent>").encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [(b"content-type", b"text/plain"), (b"content-length", str(len(body)).encode())],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+def _userinfo_transport(claims: dict[str, object] | None, status: int = 200) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if status != 200:
+            return httpx.Response(status)
+        return httpx.Response(200, json=claims)
+
+    return httpx.MockTransport(handler)
+
+
+def _unreachable_transport() -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("userinfo unreachable")
+
+    return httpx.MockTransport(handler)
+
+
+async def _call(gated, headers: dict[str, str] | None = None) -> httpx.Response:
+    transport = httpx.ASGITransport(app=gated)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post("/", headers=headers or {}, content=b"")
+
+
+@pytest.mark.unit
+async def test_no_token_is_refused():
+    """A request with no Authorization header never reaches the inner app."""
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+    )
+    response = await _call(gated)
+    assert response.status_code == 401
+    assert response.json()["error"] == "unauthorized"
+    assert response.headers["www-authenticate"].startswith("Bearer")
+
+
+@pytest.mark.unit
+async def test_unset_userinfo_url_fails_closed():
+    """An unconfigured identity provider closes the surface; it does not open it.
+
+    This is the shipped default, so a freshly stamped app is never open.
+    """
+    gated = require_bearer_auth(_inner_app, userinfo_url="", transport=_userinfo_transport({"sub": "anyone"}))
+    response = await _call(gated, {"Authorization": "Bearer any-token"})
+    assert response.status_code == 401
+
+
+@pytest.mark.unit
+async def test_rejected_token_is_refused():
+    """A token the identity provider rejects is refused."""
+    gated = require_bearer_auth(_inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport(None, status=401))
+    response = await _call(gated, {"Authorization": "Bearer bad-token"})
+    assert response.status_code == 401
+
+
+@pytest.mark.unit
+async def test_valid_token_passes_and_injects_identity():
+    """A valid token reaches the inner app with the resolved identity attached."""
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+    )
+    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    assert response.status_code == 200
+    assert response.text == "mcp-service"
+
+
+@pytest.mark.unit
+async def test_client_supplied_identity_is_stripped():
+    """A caller cannot self-declare an identity; the gate is the sole writer."""
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+    )
+    response = await _call(gated, {"Authorization": "Bearer good-token", "x-client-id": "local-console"})
+    assert response.status_code == 200
+    assert response.text == "mcp-service"
+
+
+@pytest.mark.unit
+async def test_missing_claim_falls_back_to_sub():
+    """The configured claim is preferred; `sub` is the fallback."""
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"sub": "fallback-identity"})
+    )
+    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    assert response.status_code == 200
+    assert response.text == "fallback-identity"
+
+
+@pytest.mark.unit
+async def test_unreachable_provider_is_503_not_open():
+    """An unreachable identity provider fails closed with 503, never open."""
+    gated = require_bearer_auth(_inner_app, userinfo_url=USERINFO_URL, transport=_unreachable_transport())
+    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    assert response.status_code == 503
+
+
+@pytest.mark.unit
+def test_actor_registry_refuses_unregistered_identity(tmp_path):
+    """The allow-list is load-bearing: an unregistered identity raises."""
+    config = tmp_path / "actors.yaml"
+    config.write_text(
+        "actors:\n"
+        "  - client_id: mcp-service\n"
+        "    actor_id: claude-code\n"
+        "    actor_type: agent\n"
+        "    display: Claude Code via mcp-gateway\n",
+        encoding="utf-8",
+    )
+    registry = ActorRegistry(config)
+    assert registry.resolve("mcp-service") == Actor(
+        id="claude-code", type="agent", display="Claude Code via mcp-gateway"
+    )
+    with pytest.raises(KeyError):
+        registry.resolve("someone-else")
+
+
+@pytest.mark.unit
+def test_shipped_actors_file_registers_the_gateway_consumer():
+    """The stamped config/actors.yaml is valid and carries the expected entries."""
+    from {{ package_name }}.config import get_settings
+
+    registry = ActorRegistry(get_settings().mcp.actors_config_path)
+    assert "mcp-service" in registry.registered_ids()
+    assert "local-console" in registry.registered_ids()
+
+
+@pytest.mark.integration
+async def test_mounted_mcp_surface_refuses_unauthenticated_request():
+    """Drive the real app: POST /mcp/ with no token is refused (401)."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/mcp/",
+            headers={"content-type": "application/json", "accept": "application/json, text/event-stream"},
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        )
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+async def test_proxy_headers_do_not_open_the_mcp_surface():
+    """The human surface's identity headers are not a key to the machine surface."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/mcp/",
+            headers={
+                "content-type": "application/json",
+                "accept": "application/json, text/event-stream",
+                "x-authentik-uid": "dev-uid",
+                "x-authentik-username": "devuser",
+            },
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        )
+    assert response.status_code == 401

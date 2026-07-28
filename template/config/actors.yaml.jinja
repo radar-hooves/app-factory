@@ -1,0 +1,41 @@
+# Actor registry for the embedded MCP server ({{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH).
+#
+# Maps an authenticated client identity string to an Actor. An identity that is
+# not listed here is REFUSED — the server, never the caller, decides the actor
+# and its type.
+#
+# For HTTP MCP clients the identity comes from the OIDC bearer-token gate
+# (backend/src/{{ package_name }}/mcp/http_auth.py), which validates the caller's
+# Authentik Bearer token against the userinfo endpoint and resolves client_id
+# from the configured identity claim ({{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM,
+# default preferred_username, falling back to sub).
+#
+# The allow-list is load-bearing, not decorative. Authentik serves ONE
+# instance-wide userinfo endpoint that accepts any currently-valid token from
+# any application on the instance, so the bearer check alone proves identity —
+# not which application the token was minted for. This file is what restores
+# the app boundary.
+#
+# Each entry maps client_id -> actor_id / actor_type / display. As the app grows
+# its own authorisation (roles, grants, tenancy), key that off actor_id.
+actors:
+  # The trusted in-process / local console caller (stdio transport only; the
+  # HTTP gate never resolves this identity from a bearer).
+  - client_id: local-console
+    actor_id: principal
+    actor_type: principal
+    display: Local Console
+
+  # The household's shared mcp-gateway consumer. Deployments set
+  # {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM=mcp_actor so any token minted through
+  # that Authentik client resolves to this one registered identity.
+  - client_id: mcp-service
+    actor_id: claude-code
+    actor_type: agent
+    display: Claude Code via mcp-gateway
+
+  # Add one entry per further machine consumer, e.g.:
+  # - client_id: <the value of the identity claim on that caller's token>
+  #   actor_id: <your app's own stable id for it>
+  #   actor_type: agent
+  #   display: Human-readable description

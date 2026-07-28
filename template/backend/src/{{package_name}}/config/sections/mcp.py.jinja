@@ -1,0 +1,82 @@
+"""MCP inbound-auth configuration settings.
+
+Governs the Authentik-bearer gate on the embedded MCP server's HTTP surface
+(``mcp/http_auth.py``) and the actor registry it feeds (``mcp/actors.py``).
+This is the household's canonical inbound-auth shape for an app-mounted MCP
+tool surface: Authentik authenticates the caller and asserts a coarse identity;
+the app keeps fine-grained authorisation server-side, keyed to that identity.
+
+The REST/browser auth path (``deps.py`` — Tier 1a proxy headers) is a separate
+concern and is unaffected by this section. A machine caller reaching ``/mcp``
+does not traverse the human proxy, so a forwarded identity header is not
+trustworthy there; see ``rules-library/auth-patterns/proxy-delegated-auth.md``
+§Scope.
+
+Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
+    {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL
+    {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM
+    {{ project_name | upper | replace('-', '_') }}_OIDC_RESOURCE_METADATA_URL
+    {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH
+"""
+
+from pathlib import Path
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _project_root() -> Path:
+    """Return the repository root (one level above backend/)."""
+    sections_dir = Path(__file__).resolve().parent  # backend/src/{{ package_name }}/config/sections
+    config_dir = sections_dir.parent  # backend/src/{{ package_name }}/config
+    pkg_dir = config_dir.parent  # backend/src/{{ package_name }}
+    src_dir = pkg_dir.parent  # backend/src
+    backend_dir = src_dir.parent  # backend
+    return backend_dir.parent  # repository root
+
+
+def _default_actors_path() -> Path:
+    """Return the default actor-registry path (``config/actors.yaml`` at the repo root)."""
+    return _project_root() / "config" / "actors.yaml"
+
+
+class MCPSettings(BaseSettings):
+    """Inbound-auth configuration for the embedded MCP server's HTTP surface."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="{{ project_name | upper | replace('-', '_') }}_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Authentik OIDC userinfo endpoint used to validate a caller's Bearer token
+    # and resolve its identity, e.g. https://auth.example.org/application/o/userinfo/.
+    # Empty string -> the gate fails CLOSED: every /mcp HTTP request 401s. That is
+    # the deliberate default, so a freshly stamped app is never open by accident
+    # and runs locally with no identity provider configured.
+    # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL
+    oidc_userinfo_url: str = ""
+
+    # The userinfo claim used as the resolved client identity (falls back to
+    # "sub" when the configured claim is absent from the userinfo response).
+    # Deployments behind the shared mcp-gateway client set this to mcp_actor.
+    # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM
+    oidc_identity_claim: str = "preferred_username"
+
+    # Protected-resource metadata URL advertised in the 401 WWW-Authenticate
+    # header (RFC 9728), e.g. https://app.example.org/.well-known/oauth-protected-resource.
+    # Empty string omits the resource_metadata parameter.
+    # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_RESOURCE_METADATA_URL
+    oidc_resource_metadata_url: str = ""
+
+    # Path to the actor registry YAML mapping a validated bearer identity to an
+    # Actor (id, type, display). Defaults to the repo's config/actors.yaml.
+    # Env: {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH
+    actors_config_path: Path = _default_actors_path()
+
+    @field_validator("actors_config_path", mode="before")
+    @classmethod
+    def _coerce_path(cls, v: object) -> Path:
+        if v is None or v == "":
+            return _default_actors_path()
+        return Path(str(v))

@@ -8,10 +8,15 @@ export default defineConfig({
     port: {{ frontend_port }},
     proxy: {
       '/api': 'http://localhost:{{ backend_port }}',
+      // /mcp is proxied so an MCP client can reach the dev backend through this
+      // origin. The headers below do NOT authenticate it: /mcp validates an
+      // Authentik Bearer token app-side and is closed until
+      // {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
       '/mcp': 'http://localhost:{{ backend_port }}',
     },
-    // Inject Authentik dev-bypass headers — same code path as production.
-    // Change the uid/username to impersonate a different user.
+    // Inject Authentik dev-bypass headers for the HUMAN surface (/api, the SPA)
+    // — same code path as production. Change the uid/username to impersonate a
+    // different user. These headers carry no weight on /mcp.
     headers: {
       'x-authentik-uid': 'dev-uid',
       'x-authentik-username': 'devuser',

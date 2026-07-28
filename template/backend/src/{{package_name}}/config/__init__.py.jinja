@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
+from {{ package_name }}.config.sections.mcp import MCPSettings
 
 
 class Settings(BaseSettings):
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
     # Domain sections — populated from nested env vars or sub-model defaults.
     database: DatabaseSettings = DatabaseSettings()
     example: ExampleSettings = ExampleSettings()
+    # Inbound auth for the embedded MCP surface. Defaults fail CLOSED: with no
+    # {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL set, every /mcp HTTP request 401s.
+    mcp: MCPSettings = MCPSettings()
 
     @model_validator(mode="after")
     def _warn_insecure_defaults(self) -> "Settings":

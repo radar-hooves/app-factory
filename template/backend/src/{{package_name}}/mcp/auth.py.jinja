@@ -1,0 +1,85 @@
+"""Resolves the calling actor for an MCP tool call (household inbound-auth pattern).
+
+The embedded MCP server is mounted over HTTP (``main.py``), gated by
+``http_auth.require_bearer_auth``: every ``/mcp`` HTTP request must carry an
+Authentik OAuth2 Bearer token that validates against the userinfo endpoint,
+and the gate writes the resolved identity to the ``x-client-id`` header (any
+client-supplied value stripped first — see ``http_auth.py``).
+
+:func:`resolve_actor` reads that header and maps it to an :class:`~.actors.Actor`
+via the server-side :class:`~.actors.ActorRegistry` (``config/actors.yaml``).
+Callers cannot self-declare identity: over HTTP the wire ``_meta.client_id`` is
+never trusted (only the header the gate itself wrote), and an identity absent
+from the registry is refused, never defaulted to a privileged actor.
+
+Authentik authenticates; this app authorises. Map ``actor_id`` / ``actor_type``
+onto your own server-side authorisation (roles, grants, tenancy) as the domain
+grows — this module has no domain knowledge of its own.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from fastmcp.server.dependencies import get_context, get_http_headers
+
+from {{ package_name }}.exceptions import AuthError
+from {{ package_name }}.mcp.actors import Actor, ActorRegistry
+
+
+@lru_cache(maxsize=1)
+def _actor_registry() -> ActorRegistry:
+    """Build the actor registry once per process from {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH."""
+    from {{ package_name }}.config import get_settings
+
+    return ActorRegistry(get_settings().mcp.actors_config_path)
+
+
+def resolve_actor() -> Actor:
+    """Resolve the calling actor from the registry.
+
+    Fails closed: a missing client identity is a typed refusal, never a silent
+    default to a privileged identity. The only exception is an explicitly
+    configured ``local-console`` mapping in the registry for a trusted
+    in-process caller.
+
+    The identity SOURCE is chosen by transport, because only one source is
+    trustworthy per transport:
+
+    - Over the HTTP transport the ``x-client-id`` header is authoritative and
+      the wire ``_meta.client_id`` is IGNORED. The header is written exclusively
+      by ``http_auth.require_bearer_auth`` from the validated bearer, with any
+      client-supplied value stripped first. ``_meta`` travels inside the
+      JSON-RPC request params and is fully caller-controlled, so trusting it
+      here would let any holder of a registered bearer self-declare a
+      privileged actor by sending ``_meta.client_id="local-console"``.
+    - For a genuine in-process / stdio caller (no HTTP request context) the
+      trusted ``ctx.client_id`` is used.
+
+    Either way the server-side registry owns the identity -> actor mapping; an
+    unregistered identity is refused, so the caller cannot self-declare an
+    actor or type.
+
+    Raises:
+        AuthError: no client identity was presented, or the presented identity
+            is not registered in ``config/actors.yaml``.
+    """
+    http_headers = get_http_headers()
+    try:
+        ctx = get_context()
+    except RuntimeError:
+        ctx = None
+    over_http = bool(http_headers) or getattr(ctx, "transport", None) in ("streamable-http", "sse")
+    client_id: str | None = http_headers.get("x-client-id") or None if over_http else getattr(ctx, "client_id", None)
+    if client_id is None:
+        raise AuthError(
+            "MCP client identity is absent",
+            details={"reason": "the server cannot resolve an actor without a client_id"},
+        )
+    try:
+        return _actor_registry().resolve(client_id)
+    except KeyError:
+        raise AuthError(
+            "MCP client identity is not registered",
+            details={"client_id": client_id, "registered": _actor_registry().registered_ids()},
+        ) from None

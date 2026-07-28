@@ -17,7 +17,10 @@ dependencies = [
     {% else %}
     "psycopg2-binary>=2.9.0",
     {% endif %}
+    # httpx: the MCP bearer gate's userinfo client (mcp/http_auth.py).
     "httpx>=0.28.0",
+    # pyyaml: the MCP actor allow-list loader (mcp/actors.py).
+    "pyyaml>=6.0.2",
 ]
 
 [dependency-groups]
