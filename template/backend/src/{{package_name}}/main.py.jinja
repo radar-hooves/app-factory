@@ -89,9 +89,15 @@ def create_app() -> FastAPI:
                 async with raw_mcp_app.lifespan(raw_mcp_app):
                     yield
         finally:
-            # Close the gate's userinfo httpx client so its connection pool
-            # does not leak across app-factory lifecycles (tests, hot reload).
-            await gated_mcp_app.aclose()
+            # Close the gate's userinfo httpx client so its connection pool does
+            # not leak across app-factory lifecycles (tests, hot reload). Logged
+            # rather than raised: an exception from a finally block REPLACES the
+            # one propagating out of the try, so a failure here would hide the
+            # startup error that actually matters.
+            try:
+                await gated_mcp_app.aclose()
+            except Exception:
+                _log.exception("Failed to close the MCP bearer gate's userinfo client")
 
     app = FastAPI(
         title="{{ project_name }}",

@@ -9,6 +9,8 @@ The userinfo endpoint is faked with httpx.MockTransport, so no identity
 provider is needed to run these.
 """
 
+import json
+
 import httpx
 import pytest
 
@@ -170,6 +172,114 @@ async def test_mounted_mcp_surface_refuses_unauthenticated_request():
             json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         )
     assert response.status_code == 401
+
+
+async def _drive_health_check(client: httpx.AsyncClient, token: str) -> dict[str, object]:
+    """Run the full MCP handshake and call health_check, returning the tool result.
+
+    Driving the real handshake is the point: it is the only way to reach a tool
+    body, and therefore the only way to observe whether the allow-list actually
+    refuses a caller the bearer gate has already let through.
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {token}",
+    }
+    init = await client.post(
+        "/mcp/",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "t", "version": "1"},
+            },
+        },
+    )
+    assert init.status_code == 200, init.text
+    session = {"Mcp-Session-Id": init.headers["mcp-session-id"]}
+    await client.post(
+        "/mcp/", headers={**headers, **session}, json={"jsonrpc": "2.0", "method": "notifications/initialized"}
+    )
+    called = await client.post(
+        "/mcp/",
+        headers={**headers, **session},
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "health_check", "arguments": {}}},
+    )
+    assert called.status_code == 200, called.text
+    payload = called.text.split("data: ", 1)[1]
+    result: dict[str, object] = json.loads(payload)["result"]
+    return result
+
+
+@pytest.fixture
+def _configured_idp(monkeypatch):
+    """Point the app at a userinfo endpoint and answer it, with no live provider.
+
+    `valid-registered` resolves to an identity listed in config/actors.yaml;
+    `valid-unregistered` resolves to one that is not. Both are valid tokens as
+    far as the identity provider is concerned, which is the whole point: it
+    separates "did the bearer check pass" from "did the allow-list pass".
+
+    The settings object is patched rather than the environment, because each
+    section is instantiated as a class-level default when config/ is imported —
+    long before any test sets an env var.
+    """
+
+    async def _get(self, url, *, headers=None, **kwargs):
+        presented = (headers or {}).get("Authorization", "")[7:].strip()
+        claims = {"valid-registered": "mcp-service", "valid-unregistered": "nobody-in-the-allow-list"}
+        request = httpx.Request("GET", url)
+        if presented not in claims:
+            return httpx.Response(401, request=request)
+        return httpx.Response(200, json={"preferred_username": claims[presented]}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", _get)
+
+    from {{ package_name }} import main as main_module
+    from {{ package_name }}.config import get_settings
+
+    configured = get_settings().model_copy(deep=True)
+    configured.mcp.oidc_userinfo_url = USERINFO_URL
+    monkeypatch.setattr(main_module, "get_settings", lambda: configured)
+
+
+@pytest.mark.integration
+async def test_registered_identity_reaches_the_tool(_configured_idp):
+    """A valid bearer for a REGISTERED identity reaches the tool and is named."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            result = await _drive_health_check(client, "valid-registered")
+    assert result["isError"] is False, result
+    assert result["structuredContent"]["actor"] == "claude-code"
+
+
+@pytest.mark.integration
+async def test_valid_bearer_for_unregistered_identity_is_refused(_configured_idp):
+    """The allow-list is load-bearing, driven end to end.
+
+    The bearer VALIDATES here — the identity provider accepts it and the gate
+    lets it through. What must still refuse it is config/actors.yaml. Asserting
+    this against ActorRegistry alone would not notice the wiring between the two
+    breaking, which is the failure this test exists to catch.
+    """
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            result = await _drive_health_check(client, "valid-unregistered")
+    assert result["isError"] is True, result
+    assert "not registered" in str(result["content"])
 
 
 @pytest.mark.integration

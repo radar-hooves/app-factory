@@ -50,13 +50,22 @@ against it. A change is not shipped until the tag is pushed.
   warning naming the variable, so the closed state is never a mystery.
 - `config/actors.yaml`, seeded with the `local-console` principal and the
   household's shared `mcp-service` gateway consumer.
-- `tests/test_mcp_auth.py`: eleven tests that *drive* the gate rather than
-  import it, faking the userinfo endpoint with `httpx.MockTransport`. Covers
-  no-token, provider-rejects, provider-unreachable (503, never open), unset-URL
-  fail-closed, valid-token-passes with identity injected, client-supplied
-  `x-client-id` stripped, `sub` fallback, allow-list refusal, and two
-  integration checks driving the real mount, including one proving the human
-  surface's `x-authentik-*` headers do not open the machine surface.
+- `tests/test_mcp_auth.py`: thirteen tests that *drive* the gate rather than
+  import it, faking the userinfo endpoint so none of them needs a live identity
+  provider. Covers no-token, provider-rejects, provider-unreachable (503, never
+  open), unset-URL fail-closed, valid-token-passes with identity injected,
+  client-supplied `x-client-id` stripped, `sub` fallback, and allow-list
+  refusal. Four integration tests drive the real mount through a full MCP
+  handshake to an actual `tools/call`: one proves a **registered** identity
+  reaches the tool, one proves an identity whose bearer **validates** but which
+  is absent from `actors.yaml` is refused there, one proves an unauthenticated
+  request never gets that far, and one proves the human surface's
+  `x-authentik-*` headers do not open the machine surface.
+
+  The suite was mutation-checked rather than assumed: reverting the mount to
+  the raw app (the exact defect this release fixes) turns four of them red, and
+  making the allow-list silently default an unknown identity turns the
+  allow-list test red. A test that cannot fail is not a gate.
 - `pyyaml` as a backend runtime dependency (the actor-registry loader), and a
   comment on `httpx` recording that the gate's userinfo client is what needs it.
 
@@ -87,7 +96,9 @@ against it. A change is not shipped until the tag is pushed.
   session manager's task group lives there), so wrapping the wrong one either
   leaves the session manager unstarted or leaves `/mcp` open. The gate's
   userinfo `httpx` client is closed on shutdown so its connection pool does not
-  leak across app-factory lifecycles.
+  leak across app-factory lifecycles; a failure to close it is logged rather
+  than raised, because an exception from a `finally` block replaces the one
+  propagating out of the `try` and would hide the startup error that matters.
 - The human surface is untouched and stays a separate concern. A machine caller
   does not traverse the human proxy, so trusting `X-authentik-*` on `/mcp`
   would be a bypass (`rules-library/auth-patterns/proxy-delegated-auth.md`
