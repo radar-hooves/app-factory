@@ -8,6 +8,73 @@ The git tag is this repo's single source of truth for its version: `copier`
 resolves a template by its latest tag, so there is no `VERSION` file to drift
 against it. A change is not shipped until the tag is pushed.
 
+## [2026.7.3] - 2026-07-29
+
+### Security
+
+- The embedded MCP surface is now authenticated. The template mounted `/mcp`
+  with **no gate at all**, so every app stamped from it shipped that machine
+  surface reachable by anything on its network, and nothing in the scaffold
+  signalled that it mattered. This is the failure mode
+  `rules-library/core/73-verification.md` §Behaviour vs Appearance describes
+  exactly: an open surface builds, type-checks and renders perfectly, so no
+  existing gate could have caught it. Only driving a request at it proves
+  anything.
+
+  `/mcp` now sits behind the household's canonical Authentik bearer gate,
+  lifted verbatim from godswood (`mcp/http_auth.py` and `mcp/actors.py` are
+  byte-identical to the copies in godswood and seshat, and name no service, so
+  they stamp unmodified and stay carbon copies). Each `/mcp` HTTP request must
+  carry an Authentik OAuth2 bearer that validates against the OIDC userinfo
+  endpoint; the gate is the sole writer of `x-client-id`, stripping any
+  client-supplied value, so a caller cannot self-declare an identity.
+
+  `mcp/auth.py` resolves that identity to an Actor through `config/actors.yaml`
+  and the scaffold's `health_check` tool calls it, so the allow-list is
+  load-bearing rather than decorative. Both halves are needed: Authentik serves
+  one instance-wide userinfo endpoint that accepts a valid token from any
+  application on the instance, so the bearer check proves identity alone and
+  the allow-list is what restores the app boundary.
+
+### Added
+
+- `config/sections/mcp.py` (`MCPSettings`), composed onto the root `Settings`,
+  giving a stamped app four runtime-driven variables prefixed with its own
+  name: `<APP>_OIDC_USERINFO_URL`, `<APP>_OIDC_IDENTITY_CLAIM` (default
+  `preferred_username`), `<APP>_OIDC_RESOURCE_METADATA_URL`, and
+  `<APP>_ACTORS_CONFIG_PATH` (default `config/actors.yaml`). Pointing an app at
+  a different identity provider is a config change, never a rebuild.
+- An **unset userinfo URL fails closed**: every `/mcp` request 401s. That is
+  the shipped default, so a fresh stamp runs locally with no identity provider
+  and its machine surface is shut rather than open. `create_app()` logs a
+  warning naming the variable, so the closed state is never a mystery.
+- `config/actors.yaml`, seeded with the `local-console` principal and the
+  household's shared `mcp-service` gateway consumer.
+- `tests/test_mcp_auth.py`: eleven tests that *drive* the gate rather than
+  import it, faking the userinfo endpoint with `httpx.MockTransport`. Covers
+  no-token, provider-rejects, provider-unreachable (503, never open), unset-URL
+  fail-closed, valid-token-passes with identity injected, client-supplied
+  `x-client-id` stripped, `sub` fallback, allow-list refusal, and two
+  integration checks driving the real mount, including one proving the human
+  surface's `x-authentik-*` headers do not open the machine surface.
+- `pyyaml` as a backend runtime dependency (the actor-registry loader), and a
+  comment on `httpx` recording that the gate's userinfo client is what needs it.
+
+### Changed
+
+- `main.py` mounts the **gated** app while chaining the lifespan from the
+  **raw** one. `raw_mcp_app` carries the FastMCP lifespan (the streamable-HTTP
+  session manager's task group lives there), so wrapping the wrong one either
+  leaves the session manager unstarted or leaves `/mcp` open. The gate's
+  userinfo `httpx` client is closed on shutdown so its connection pool does not
+  leak across app-factory lifecycles.
+- The human surface is untouched and stays a separate concern. A machine caller
+  does not traverse the human proxy, so trusting `X-authentik-*` on `/mcp`
+  would be a bypass (`rules-library/auth-patterns/proxy-delegated-auth.md`
+  §Scope). The sibling apps confirm browser-side auth is genuinely per-app, so
+  it stays out of the template. `vite.config.ts` now says so at the proxy entry
+  that made it look otherwise.
+
 ## [2026.7.2] - 2026-07-28
 
 ### Fixed

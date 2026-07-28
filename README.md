@@ -24,6 +24,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   │   ├── __init__.py     root Settings + lru_cache get_settings()
 │   │   │   └── sections/
 │   │   │       ├── database.py DatabaseSettings (POSTGRES_* env vars)
+│   │   │       ├── mcp.py      MCPSettings (<APP>_OIDC_* inbound-auth vars)
 │   │   │       └── example.py  Domain-section template (copy per domain)
 │   │   ├── db/
 │   │   │   ├── base.py         DeclarativeBase + TimestampMixin
@@ -39,10 +40,16 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   │       └── dependencies.py  domain-specific Depends() wrappers
 │   │   ├── services/           cross-domain shared services
 │   │   └── mcp/
-│   │       └── server.py       FastMCP server + health_check tool
+│   │       ├── server.py       FastMCP server + health_check tool
+│   │       ├── http_auth.py    Authentik bearer gate on /mcp (carbon copy)
+│   │       ├── actors.py       identity → Actor allow-list loader (carbon copy)
+│   │       └── auth.py         resolve_actor() for the tool layer
 │   └── tests/
 │       ├── conftest.py         engine + txn-rollback session + httpx.AsyncClient
+│       ├── test_mcp_auth.py    drives the /mcp gate: refusals, accept, allow-list
 │       └── test_example.py     unit + integration tests for the example slice
+├── config/
+│   └── actors.yaml             MCP actor allow-list (identity → actor_id/type)
 └── frontend/                   (only when has_frontend=true)
     ├── package.json            SvelteKit + shadcn-svelte + Tailwind v4
     ├── svelte.config.js        adapter-static SPA + path aliases
@@ -85,13 +92,28 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 
 ## Key Decisions
 
-**Auth: Tier 1a (proxy-delegated, default for homelab apps)** Identity arrives via `x-authentik-uid` / `x-authentik-username` headers injected by Authentik. The app trusts headers; network isolation is the security boundary. No app-level sessions or Redis needed. Change to Tier 1b (BFF) when the app must be reachable without a proxy in front of it.
+**Auth: two surfaces, two gates, never interchangeable** A stamped app exposes a human surface and a machine surface, and each is gated on its own terms. Mixing them is a bypass, not a shortcut.
+
+The **human surface** (`/api`, the SPA) is Tier 1a (proxy-delegated, the default for homelab apps). Identity arrives via `x-authentik-uid` / `x-authentik-username` headers injected by Authentik. The app trusts headers; network isolation is the security boundary. No app-level sessions or Redis needed. Change to Tier 1b (BFF) when the app must be reachable without a proxy in front of it.
+
+The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token app-side and resolves it against an `actors.yaml` allow-list. It does *not* trust a forwarded identity header, because a machine caller does not traverse the human proxy and could forge one (`rules-library/auth-patterns/proxy-delegated-auth.md` §Scope). `mcp/http_auth.py` and `mcp/actors.py` are byte-identical carbon copies of the household's canonical gate, shared with godswood, seshat, core-memory, tapestry and milton; do not edit them per app. Both halves are load-bearing: Authentik serves one instance-wide userinfo endpoint that accepts any valid token from any application on the instance, so the bearer check proves identity alone and the allow-list is what restores the app boundary. Every tool calls `resolve_actor()` and authorises off `actor.id` / `actor.type`.
+
+**MCP inbound-auth environment variables** All four are read at runtime, so pointing an app at a different identity provider never needs a rebuild. `<APP>` is the project name upper-cased with hyphens as underscores.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `<APP>_OIDC_USERINFO_URL` | `""` | Authentik userinfo endpoint. **Empty fails closed**: every `/mcp` request 401s. |
+| `<APP>_OIDC_IDENTITY_CLAIM` | `preferred_username` | Claim read as the caller identity, falling back to `sub`. Deployments behind the shared mcp-gateway client set `mcp_actor`. |
+| `<APP>_OIDC_RESOURCE_METADATA_URL` | `""` | Advertised in the 401 `WWW-Authenticate` header (RFC 9728). Empty omits it. |
+| `<APP>_ACTORS_CONFIG_PATH` | `config/actors.yaml` | The actor allow-list. An identity the gate resolves but that is absent here is refused. |
+
+The fail-closed default is deliberate. A fresh stamp runs locally with no identity provider configured and its `/mcp` is shut rather than open, and `create_app()` logs a warning naming the variable so the closed state is never a mystery.
 
 **Persistence: PostgreSQL + SQLAlchemy 2.0 + Alembic** Sync by default; switch to async by setting `db_mode=async` at generation time (not after). The criterion for async: the request path parallelises I/O.
 
-**MCP surface: FastMCP mounted at /mcp** The embedded MCP server shares the FastAPI process and lifespan. Tools are registered in `mcp/server.py`. Target ≤20 tools; use the action-dispatcher pattern (one tool per noun, `action=` parameter).
+**MCP surface: FastMCP mounted at /mcp, behind the bearer gate** The embedded MCP server shares the FastAPI process and lifespan. Tools are registered in `mcp/server.py`. Target ≤20 tools; use the action-dispatcher pattern (one tool per noun, `action=` parameter). The mount has a subtlety worth knowing before you touch `main.py`: `raw_mcp_app` carries the FastMCP lifespan (the streamable-HTTP session manager's task group lives there) while the gated wrapper is what mounts at `/mcp`. Chain the lifespan from the raw app and mount the gated one. Getting that backwards either leaves the session manager unstarted or leaves the surface open. The agent endpoint is `POST /mcp/`, trailing slash required.
 
-**Frontend: SvelteKit SPA served by the backend** `adapter-static` builds to `frontend/build/`; FastAPI serves it via `StaticFiles(..., html=True)`. The Vite dev server proxies `/api` and `/mcp` to the backend and injects the dev Authentik headers so the same code path runs in both environments.
+**Frontend: SvelteKit SPA served by the backend** `adapter-static` builds to `frontend/build/`; FastAPI serves it via `StaticFiles(..., html=True)`. The Vite dev server proxies `/api` and `/mcp` to the backend and injects the dev Authentik headers so the same code path runs in both environments. Those injected headers authenticate the human surface only. They carry no weight on `/mcp`, which stays shut until `<APP>_OIDC_USERINFO_URL` is set.
 
 **Design tokens: Eucalyptus palette (OKLCH)** The shared household design language (`docs/master/design/shared-design-language.md`). Update master tokens first, then adopt per project. No raw `oklch()` values in component files — all via CSS custom properties defined in `app.css`.
 
