@@ -95,7 +95,7 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 
 **Design tokens: Eucalyptus palette (OKLCH)** The shared household design language (`docs/master/design/shared-design-language.md`). Update master tokens first, then adopt per project. No raw `oklch()` values in component files — all via CSS custom properties defined in `app.css`.
 
-**Component system: `@poodle64/ui` (shared shadcn-svelte primitives)** The shadcn-svelte primitives (bits-ui) are consumed as a published package, not vendored per app — `import { Button } from '@poodle64/ui/button'`. A fix lands once and reaches every app; the per-app `app.css` alias layer still owns palette differentiation. `app.css` carries a Tailwind v4 `@source` line pointing at the package's `dist/` so its classes are scanned. WP-51 Lane WP (`master-project#174`); superseded the earlier vendor-per-app pattern.
+**Component system: `@poodle64/ui` (shared shadcn-svelte primitives)** The shadcn-svelte primitives (bits-ui) are consumed as a published package, not vendored per app: `import { Button } from '@poodle64/ui/button'`. A fix lands once and reaches every app; the per-app `app.css` alias layer still owns palette differentiation. `app.css` carries a Tailwind v4 `@source` line pointing at the package's `dist/` so its classes are scanned. The package's peers that the scaffold actually uses (`bits-ui`, `mode-watcher`, `svelte-sonner`) stay declared in the app's own `package.json`: pnpm resolves an undeclared optional peer into the package's private tree, where app code cannot import it and a second copy would be a `Toaster` that never sees the app's own `toast()` calls. WP-51 Lane WP (`master-project#174`); superseded the earlier vendor-per-app pattern.
 
 ## Verified Greenfield
 
