@@ -36,6 +36,17 @@ against it. A change is not shipped until the tag is pushed.
   application on the instance, so the bearer check proves identity alone and
   the allow-list is what restores the app boundary.
 
+- The `local-console` principal is refused over HTTP. `ActorRegistry` seeds
+  that identity unconditionally as the trusted in-process caller, so it is
+  registered even when `config/actors.yaml` omits it. Combined with the
+  instance-wide userinfo endpoint above, a token minted for *any* application
+  whose identity claim happened to equal `local-console` would otherwise have
+  resolved to the `principal` actor, regardless of the allow-list. The
+  transport check now reserves it for genuine stdio callers. This is closed in
+  the template's own `mcp/auth.py`; the shared `actors.py` stays a byte-identical
+  carbon copy, and the same hardening for the five apps already running the
+  gate is raised separately (see the report accompanying this release).
+
 ### Added
 
 - `config/sections/mcp.py` (`MCPSettings`), composed onto the root `Settings`,
@@ -50,17 +61,18 @@ against it. A change is not shipped until the tag is pushed.
   warning naming the variable, so the closed state is never a mystery.
 - `config/actors.yaml`, seeded with the `local-console` principal and the
   household's shared `mcp-service` gateway consumer.
-- `tests/test_mcp_auth.py`: thirteen tests that *drive* the gate rather than
+- `tests/test_mcp_auth.py`: fourteen tests that *drive* the gate rather than
   import it, faking the userinfo endpoint so none of them needs a live identity
   provider. Covers no-token, provider-rejects, provider-unreachable (503, never
   open), unset-URL fail-closed, valid-token-passes with identity injected,
   client-supplied `x-client-id` stripped, `sub` fallback, and allow-list
-  refusal. Four integration tests drive the real mount through a full MCP
+  refusal. Five integration tests drive the real mount through a full MCP
   handshake to an actual `tools/call`: one proves a **registered** identity
   reaches the tool, one proves an identity whose bearer **validates** but which
-  is absent from `actors.yaml` is refused there, one proves an unauthenticated
-  request never gets that far, and one proves the human surface's
-  `x-authentik-*` headers do not open the machine surface.
+  is absent from `actors.yaml` is refused there, one proves the `local-console`
+  principal is unreachable over HTTP, one proves an unauthenticated request
+  never gets that far, and one proves the human surface's `x-authentik-*`
+  headers do not open the machine surface.
 
   The suite was mutation-checked rather than assumed: reverting the mount to
   the raw app (the exact defect this release fixes) turns four of them red, and

@@ -26,6 +26,15 @@ from fastmcp.server.dependencies import get_context, get_http_headers
 from {{ package_name }}.exceptions import AuthError
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
 
+# ActorRegistry seeds this identity unconditionally, as the trusted in-process
+# caller — it is registered even when config/actors.yaml does not mention it.
+# That is right for stdio and wrong for HTTP: the bearer gate resolves an
+# identity from an Authentik userinfo claim, and Authentik serves ONE
+# instance-wide userinfo endpoint, so a token from any application on the
+# instance whose claim happened to equal this string would otherwise arrive
+# here and resolve to the principal actor. Reserved for stdio below.
+_LOCAL_CONSOLE = "local-console"
+
 
 @lru_cache(maxsize=1)
 def _actor_registry() -> ActorRegistry:
@@ -75,6 +84,11 @@ def resolve_actor() -> Actor:
         raise AuthError(
             "MCP client identity is absent",
             details={"reason": "the server cannot resolve an actor without a client_id"},
+        )
+    if over_http and client_id == _LOCAL_CONSOLE:
+        raise AuthError(
+            "MCP client identity is reserved for local in-process callers",
+            details={"client_id": client_id, "reason": "the local-console actor is not reachable over HTTP"},
         )
     try:
         return _actor_registry().resolve(client_id)

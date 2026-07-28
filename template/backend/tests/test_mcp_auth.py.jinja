@@ -232,7 +232,11 @@ def _configured_idp(monkeypatch):
 
     async def _get(self, url, *, headers=None, **kwargs):
         presented = (headers or {}).get("Authorization", "")[7:].strip()
-        claims = {"valid-registered": "mcp-service", "valid-unregistered": "nobody-in-the-allow-list"}
+        claims = {
+            "valid-registered": "mcp-service",
+            "valid-unregistered": "nobody-in-the-allow-list",
+            "valid-local-console": "local-console",
+        }
         request = httpx.Request("GET", url)
         if presented not in claims:
             return httpx.Response(401, request=request)
@@ -280,6 +284,27 @@ async def test_valid_bearer_for_unregistered_identity_is_refused(_configured_idp
             result = await _drive_health_check(client, "valid-unregistered")
     assert result["isError"] is True, result
     assert "not registered" in str(result["content"])
+
+
+@pytest.mark.integration
+async def test_local_console_identity_is_not_reachable_over_http(_configured_idp):
+    """The in-process principal cannot be reached by an HTTP caller.
+
+    ActorRegistry seeds `local-console` unconditionally, so it is registered
+    even when config/actors.yaml omits it. Because Authentik serves one
+    instance-wide userinfo endpoint, a token minted for ANY application whose
+    identity claim equals that string would otherwise resolve to the principal
+    actor. The HTTP transport refuses it regardless of the allow-list.
+    """
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            result = await _drive_health_check(client, "valid-local-console")
+    assert result["isError"] is True, result
+    assert "reserved for local in-process callers" in str(result["content"])
 
 
 @pytest.mark.integration
