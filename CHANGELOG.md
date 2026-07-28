@@ -60,6 +60,26 @@ against it. A change is not shipped until the tag is pushed.
 - `pyyaml` as a backend runtime dependency (the actor-registry loader), and a
   comment on `httpx` recording that the gate's userinfo client is what needs it.
 
+### Fixed
+
+- `cp .env.example .env`, the template's own documented dev path, made a
+  stamped app refuse to start. The root `Settings` model read that file under
+  pydantic-settings' default `extra="forbid"`, and `.env.example` ships nothing
+  *but* section-owned keys (`POSTGRES_*`, and now the MCP auth block), so every
+  one came back as "Extra inputs are not permitted". Sections now read the
+  shared `.env` themselves and ignore keys they do not own, which is what a
+  composed-settings model needs: the root owns the unprefixed keys, each
+  section owns its prefix, and a key belonging to a sibling is not an error.
+  This is the shape godswood already runs. Found while driving the new
+  `<APP>_OIDC_*` variables, which landed in the same trap.
+- Settings and the SPA directory now resolve from the module rather than the
+  working directory, via a new `config/paths.py`. `uvicorn` starts in
+  `backend/` in dev (`.envrc`, `launch.json`'s `cwd`) and at the repo root in a
+  container, so a relative path finds the target in one case and silently not
+  the other. `_FRONTEND_BUILD` had exactly that defect: launched from
+  `backend/`, `frontend/build` did not resolve, so a stamped app logged a
+  warning and served no SPA at all.
+
 ### Changed
 
 - `main.py` mounts the **gated** app while chaining the lifespan from the

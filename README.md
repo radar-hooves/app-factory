@@ -22,6 +22,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   ├── deps.py             SessionDep, SettingsDep, CurrentUser (Annotated)
 │   │   ├── config/
 │   │   │   ├── __init__.py     root Settings + lru_cache get_settings()
+│   │   │   ├── paths.py        source-tree-relative .env / repo-root lookup
 │   │   │   └── sections/
 │   │   │       ├── database.py DatabaseSettings (POSTGRES_* env vars)
 │   │   │       ├── mcp.py      MCPSettings (<APP>_OIDC_* inbound-auth vars)
@@ -108,6 +109,8 @@ The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token ap
 | `<APP>_ACTORS_CONFIG_PATH` | `config/actors.yaml` | The actor allow-list. An identity the gate resolves but that is absent here is refused. |
 
 The fail-closed default is deliberate. A fresh stamp runs locally with no identity provider configured and its `/mcp` is shut rather than open, and `create_app()` logs a warning naming the variable so the closed state is never a mystery.
+
+**Config: composed sections over one shared `.env`** The root `Settings` owns the unprefixed keys; each section owns its own prefix (`POSTGRES_*`, `EXAMPLE_*`, `<APP>_OIDC_*`). All of them read the same `backend/.env`, so every model must set `extra="ignore"`: a key belonging to a sibling section is not an error, and forbidding it makes the app refuse to start on the very file `.env.example` tells you to copy. Paths come from `config/paths.py` rather than the working directory, because `uvicorn` starts in `backend/` in dev and at the repo root in a container. Follow both conventions when you add a section.
 
 **Persistence: PostgreSQL + SQLAlchemy 2.0 + Alembic** Sync by default; switch to async by setting `db_mode=async` at generation time (not after). The criterion for async: the request path parallelises I/O.
 
