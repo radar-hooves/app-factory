@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 {% endif %}
 from {{ package_name }}.api.main import api_router, register_exception_handlers
 from {{ package_name }}.config import get_settings
+from {{ package_name }}.config.paths import project_root
 from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.logging import configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
@@ -37,7 +38,10 @@ from {{ package_name }}.mcp.server import create_mcp_server
 
 _log = logging.getLogger(__name__)
 
-_FRONTEND_BUILD = Path("frontend/build")
+# Resolved from the source tree, not the working directory: uvicorn is launched
+# from backend/ in dev (.envrc, .vscode/launch.json) and from the repo root in a
+# container, and a CWD-relative path silently serves no SPA in one of the two.
+_FRONTEND_BUILD: Path = project_root() / "frontend" / "build"
 
 
 @asynccontextmanager

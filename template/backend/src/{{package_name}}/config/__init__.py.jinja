@@ -15,6 +15,7 @@ from functools import lru_cache
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from {{ package_name }}.config.paths import env_file
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
@@ -23,10 +24,16 @@ from {{ package_name }}.config.sections.mcp import MCPSettings
 class Settings(BaseSettings):
     """Root settings; composes section sub-models."""
 
+    # extra="ignore" is load-bearing, not laxness. Every section reads the same
+    # .env, and the root model owns only the unprefixed keys below. Forbidding
+    # extras here makes the app refuse to start the moment .env carries a key a
+    # SECTION owns (POSTGRES_*, EXAMPLE_*, the MCP auth block) — which is
+    # exactly what .env.example ships, so `cp .env.example .env` was fatal.
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=env_file(),
         case_sensitive=False,
         env_nested_delimiter="__",
+        extra="ignore",
     )
 
     debug: bool = False

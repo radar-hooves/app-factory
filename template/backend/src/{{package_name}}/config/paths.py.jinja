@@ -1,0 +1,33 @@
+"""Shared path helpers for locating the app's env file and repo-root config.
+
+Settings sections must find the same `.env` whether the process was started
+from `backend/` (the dev path: `.envrc`, and `.vscode/launch.json`'s `cwd`) or
+from the repository root. A relative `".env"` resolves against the current
+working directory and so finds it in one case and silently not the other, which
+is how a section ends up reading defaults nobody chose. These helpers walk up
+from this module instead, so the answer does not depend on where you started.
+
+In a production container the package is installed into site-packages and the
+walk lands somewhere that does not exist. That is fine and deliberate:
+pydantic-settings ignores a missing env file and reads the process environment,
+which is how a container supplies configuration anyway. A deployment that keeps
+its actor registry elsewhere sets the path explicitly.
+"""
+
+from pathlib import Path
+
+
+def backend_dir() -> Path:
+    """Return the `backend/` directory of the source tree."""
+    here = Path(__file__).resolve()  # backend/src/{{ package_name }}/config/paths.py
+    return here.parents[3]
+
+
+def project_root() -> Path:
+    """Return the repository root (one level above `backend/`)."""
+    return backend_dir().parent
+
+
+def env_file() -> str:
+    """Return the absolute path to the shared `.env` file (`backend/.env`)."""
+    return str(backend_dir() / ".env")

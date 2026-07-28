@@ -24,26 +24,19 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-def _project_root() -> Path:
-    """Return the repository root (one level above backend/)."""
-    sections_dir = Path(__file__).resolve().parent  # backend/src/{{ package_name }}/config/sections
-    config_dir = sections_dir.parent  # backend/src/{{ package_name }}/config
-    pkg_dir = config_dir.parent  # backend/src/{{ package_name }}
-    src_dir = pkg_dir.parent  # backend/src
-    backend_dir = src_dir.parent  # backend
-    return backend_dir.parent  # repository root
+from {{ package_name }}.config.paths import env_file, project_root
 
 
 def _default_actors_path() -> Path:
     """Return the default actor-registry path (``config/actors.yaml`` at the repo root)."""
-    return _project_root() / "config" / "actors.yaml"
+    return project_root() / "config" / "actors.yaml"
 
 
 class MCPSettings(BaseSettings):
     """Inbound-auth configuration for the embedded MCP server's HTTP surface."""
 
     model_config = SettingsConfigDict(
+        env_file=env_file(),
         env_prefix="{{ project_name | upper | replace('-', '_') }}_",
         case_sensitive=False,
         extra="ignore",
