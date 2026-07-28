@@ -3,6 +3,11 @@
 @import '@poodle64/design-tokens/tokens.css';
 @import 'tw-animate-css';
 
+/* @poodle64/ui ships in node_modules, outside Tailwind's default src/ scan —
+   without this the shared components render unstyled: no build error, no
+   lint hit, just missing classes in the compiled CSS. */
+@source '../node_modules/@poodle64/ui/dist';
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -19,6 +24,7 @@
   --ds-color-primary-foreground: oklch(1 0 0);
   --ds-color-ring:               oklch(0.55 0.12 145);
 }
+
 .dark {
   --ds-color-primary:            oklch(0.65 0.12 145);
   --ds-color-primary-foreground: oklch(0.1 0.01 145);
@@ -66,13 +72,13 @@
   --sidebar-accent-foreground: oklch(0.9 0.02 145);
   --sidebar-border:           oklch(0.3 0.04 145);
   --sidebar-ring:             var(--ds-color-ring);
-
   --chart-1: oklch(0.55 0.12 145);
   --chart-2: oklch(0.6 0.1 200);
   --chart-3: oklch(0.65 0.1 260);
   --chart-4: oklch(0.7 0.1 60);
   --chart-5: oklch(0.6 0.15 330);
 }
+
 .dark {
   --sidebar:                  oklch(0.1 0.01 145);
   --sidebar-foreground:       oklch(0.9 0.02 145);
@@ -82,7 +88,6 @@
   --sidebar-accent-foreground: oklch(0.9 0.02 145);
   --sidebar-border:           oklch(0.28 0.04 145);
   --sidebar-ring:             var(--ds-color-ring);
-
   --chart-1: oklch(0.65 0.12 145);
   --chart-2: oklch(0.7 0.1 200);
   --chart-3: oklch(0.72 0.1 260);
@@ -110,9 +115,11 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   html {
     font-size: var(--base-font-size, 14px);
   }
+
   body {
     @apply bg-background text-foreground;
   }

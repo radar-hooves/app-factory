@@ -1,21 +1,20 @@
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
-import tailwind from 'eslint-plugin-tailwindcss';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
+// No eslint-plugin-tailwindcss: its no-arbitrary-value rule is inoperative
+// under Tailwind v4 (no tailwind.config.js to introspect), and v4.2.0 of the
+// plugin dropped the flat/recommended export this config used to load,
+// crashing ESLint outright. The binding raw-value gate is the frontend-ci.yaml
+// grep gate (docs/master/templates/golden-patterns/app-shape-and-frontend.md
+// §Enforcement), not this plugin.
 export default ts.config(
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
-	...tailwind.configs['flat/recommended'],
 	prettier,
 	...svelte.configs.prettier,
 	{
-		settings: {
-			tailwindcss: {
-				cssConfigPath: './src/app.css',
-			},
-		},
 		languageOptions: {
 			globals: {
 				...globals.browser,
@@ -32,10 +31,9 @@ export default ts.config(
 		},
 		rules: {
 			'svelte/no-navigation-without-resolve': 'off',
-			'tailwindcss/no-arbitrary-value': 'error',
 		},
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/', 'src/lib/components/ui/**'],
+		ignores: ['build/', '.svelte-kit/', 'dist/'],
 	},
 );
