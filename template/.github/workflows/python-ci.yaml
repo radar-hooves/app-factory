@@ -1,0 +1,25 @@
+name: Python CI
+
+# Thin caller of the golden reusable (rules-library/core/10-ci-workflow-standard.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/python-ci.yaml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/python-ci.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-ci:
+    uses: poodle64/master-project/.github/workflows/python-ci.yaml@main
+    with:
+      working-directory: backend
+      lint-paths: 'src tests'
+      mypy-paths: 'src'

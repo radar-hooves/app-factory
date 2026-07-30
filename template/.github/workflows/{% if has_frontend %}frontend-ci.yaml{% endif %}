@@ -1,0 +1,23 @@
+name: Frontend CI
+
+# Thin caller of the golden reusable (rules-library/core/10-ci-workflow-standard.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yaml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-ci:
+    uses: poodle64/master-project/.github/workflows/frontend-ci.yaml@main
+    with:
+      working-directory: frontend
