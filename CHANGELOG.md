@@ -8,6 +8,47 @@ The git tag is this repo's single source of truth for its version: `copier`
 resolves a template by its latest tag, so there is no `VERSION` file to drift
 against it. A change is not shipped until the tag is pushed.
 
+## [2026.7.4] - 2026-07-31
+
+### Added
+
+Stamps the full scaffolding set so a new app copies nothing from a sibling
+(master-project#230 ruling 1, poodle64/full-stack-app-template#3). Previously
+`template/` stamped only `backend/`, `frontend/`, `config/`, `.vscode/`,
+`renovate.json` and the answers file; everything else was hand-copied from
+whichever app happened to be handy, which is how mission-command inherited a
+committed `.env.example` carrying a literal unrendered `{{ project_name }}`
+and how the six live apps drifted three different ways on the same files.
+
+- `.pre-commit-config.yaml`, root `.envrc`, `.gitattributes`, `.gitignore`,
+  and an empty `.mcp.json` — the convergent files every app needs and none
+  should hand-author.
+- `.github/workflows/canonical-shape.yaml` and `python-ci.yaml` (always),
+  `frontend-ci.yaml` (only when `has_frontend`, closing #1) — thin callers of
+  the `poodle64/master-project` reusables, verified live on first push.
+- `DESIGN.md` and `README.md` skeletons. Both are app-owned the moment they
+  are stamped, so `copier.yml` now lists them in `_skip_if_exists`:
+  `copier update` creates them once and never touches them again.
+- The Docker/deploy set: `Dockerfile` (multi-stage — a frontend build stage
+  only when `has_frontend`, a `uv`-native backend build, a non-root runtime),
+  `compose.yaml` (a local image-build-and-smoke-test compose against the
+  shared dev Postgres — not the production stack, which lives in the fleet
+  repo), and `.dockerignore`. The canonical shape had no deploy story at all;
+  this defines the household's first one.
+- `+layout.svelte` now wraps every route in `@poodle64/ui`'s `AppShell`
+  instead of a bare fragment, and `+page.svelte` drops its own `<main>` now
+  that the shell supplies one. Hand-rolling the shell per app was the
+  recorded gap master-project#230 Finding 5 flagged; this is the template's
+  own migration off it.
+
+### Fixed
+
+- `backend/pyproject.toml`'s `db_mode` conditional left indented
+  whitespace-only lines in every rendered app regardless of which branch
+  fired, tripping pre-commit's `trailing-whitespace` hook on the very first
+  run. Found and fixed while building the round-trip verification for the
+  additions above.
+
 ## [2026.7.3] - 2026-07-29
 
 ### Security

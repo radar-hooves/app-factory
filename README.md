@@ -6,6 +6,16 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 
 ```text
 <project>/
+├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check
+├── .envrc                      direnv: source_up + uv sync (backend/)
+├── .gitattributes / .gitignore
+├── .mcp.json                   empty — enable per project
+├── .github/workflows/
+│   ├── canonical-shape.yaml    always — structural gate
+│   ├── python-ci.yaml          always — thin caller of the python-ci reusable
+│   └── frontend-ci.yaml        only when has_frontend
+├── DESIGN.md / README.md       skeletons — app-owned after stamping (_skip_if_exists)
+├── Dockerfile / compose.yaml / .dockerignore   local build + smoke-test deploy set
 ├── backend/
 │   ├── pyproject.toml          uv + src-layout + runtime deps
 │   ├── .python-version         3.14
@@ -60,7 +70,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
         ├── app.css             design tokens (Eucalyptus palette, OKLCH)
         ├── routes/
         │   ├── +layout.ts      ssr=false, prerender=false
-        │   ├── +layout.svelte  ModeWatcher + Sonner + page title
+        │   ├── +layout.svelte  ModeWatcher + Sonner + page title, routes wrapped in @poodle64/ui's AppShell
         │   ├── +page.ts        { title: 'Home' }
         │   └── +page.svelte    starter home page (API smoke check)
         └── lib/
