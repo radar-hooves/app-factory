@@ -4,6 +4,7 @@
   import '@fontsource-variable/hanken-grotesk';
   import '@fontsource-variable/jetbrains-mono';
   import { ModeWatcher } from 'mode-watcher';
+  import { AppShell } from '@poodle64/ui/app-shell';
   import { Toaster } from '@poodle64/ui/sonner';
   import { page } from '$app/state';
 
@@ -22,5 +23,9 @@
 <ModeWatcher />
 <Toaster richColors />
 
-{@render children()}
-{% endraw %}
+<!-- No nav yet — a fresh app has one route. Pass `nav` once there is more
+     than one page to link between (rules-library/svelte/20-sveltekit-frontend.md). -->
+<AppShell brandTitle="{% endraw %}{{ project_name }}{% raw %}" currentPath={page.url.pathname} content="standard">
+  {@render children()}
+</AppShell>
+{% endraw -%}
