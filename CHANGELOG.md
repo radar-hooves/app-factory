@@ -23,9 +23,16 @@ and how the six live apps drifted three different ways on the same files.
 - `.pre-commit-config.yaml`, root `.envrc`, `.gitattributes`, `.gitignore`,
   and an empty `.mcp.json` — the convergent files every app needs and none
   should hand-author.
-- `.github/workflows/canonical-shape.yaml` and `python-ci.yaml` (always),
-  `frontend-ci.yaml` (only when `has_frontend`, closing #1) — thin callers of
-  the `poodle64/master-project` reusables, verified live on first push.
+- `.github/workflows/canonical-shape.yaml`, `python-ci.yaml` and
+  `auto-label-issues.yaml` (always; a public repo deletes the auto-label
+  caller as a recorded deviation, since it cannot resolve the private
+  reusable — `core/10-ci-workflow-standard.md`), `frontend-ci.yaml` (only
+  when `has_frontend`, closing #1) — thin callers of the
+  `poodle64/master-project` reusables, verified live on first push.
+- The stamped `.gitignore` instantiates the canonical structure from
+  `docs/master/templates/gitignore.md`, including the `.vscode` allow-list
+  whose leading `!.vscode/` defeats a user-global `.vscode/` ignore — without
+  it a freshly stamped app's `.vscode` files silently never reach git.
 - `DESIGN.md` and `README.md` skeletons. Both are app-owned the moment they
   are stamped, so `copier.yml` now lists them in `_skip_if_exists`:
   `copier update` creates them once and never touches them again.

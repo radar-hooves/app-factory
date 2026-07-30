@@ -1,0 +1,26 @@
+# Auto-Label Issues
+#
+# Thin caller of the master-project reusable
+# (rules-library/core/10-ci-workflow-standard.md). A PUBLIC repo must omit
+# this caller entirely — GitHub cannot resolve the private reusable from a
+# public repo — and record the omission as a registry deviation; delete this
+# file in that case.
+#
+# Prerequisites in the calling repo:
+#   - Delete default labels: "good first issue", "help wanted"
+#   - Create priority labels: priority:low, priority:medium, priority:high
+
+name: Auto-Label Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  auto-label:
+    permissions:
+      issues: write
+      models: read
+      contents: read
+    uses: poodle64/master-project/.github/workflows/auto-label-issues.yaml@main
+    secrets: inherit

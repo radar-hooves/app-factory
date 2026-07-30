@@ -1,44 +1,116 @@
-# App-scoped ignores
+# ============================================================================
+# Operating System
+# ============================================================================
+.DS_Store
+._.DS_Store
+Thumbs.db
+desktop.ini
 
-# Python / backend
-.venv/
+# ============================================================================
+# Editor / IDE
+# ============================================================================
+.idea/
+# Share the four VS Code config files. !.vscode/ re-includes the directory so the
+# file allow-list can take effect even when a global git ignore excludes .vscode/.
+!.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# Claude Code
+# ============================================================================
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/.sessions/
+.claude/worktrees/
+.worktrees/
+# Worktree governance-resolution shims: deliberately UNTRACKED. A tracked shim
+# would place .claude/.claude/skills inside the scanned tree and register the
+# whole master skills pool a second time in every session (master-project#188).
+.claude/.claude
+.claude/docs
+.claude/rules-library
+
+# ============================================================================
+# Environment & Secrets
+# ============================================================================
+.env
+.env.*
+!.env.example
+.envrc.local
+.direnv/
+
+# ============================================================================
+# Python
+# ============================================================================
 __pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
 *.egg-info/
 dist/
+build/
 .pytest_cache/
-.ruff_cache/
 .mypy_cache/
+.ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
-# Node / frontend
+# ============================================================================
+# Node.js
+# ============================================================================
 node_modules/
+.npm/
+.pnpm-store/
+coverage/
+*.lcov
+
+# ============================================================================
+# SvelteKit / Vite
+# ============================================================================
 .svelte-kit/
+frontend/.svelte-kit/
 frontend/build/
+frontend/dist/
 frontend/.vite/
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
+*.tsbuildinfo
 
-# Local env (never commit values)
-.env
-.env.*
-!.env.example
+# ============================================================================
+# Docker
+# ============================================================================
+compose.override.yaml
 
-# OS
-.DS_Store
+# ============================================================================
+# Testing / MCP Tools
+# ============================================================================
+.playwright-mcp/
 
-# Claude Code local state (never shared)
-.claude/settings.local.json
-.claude/CLAUDE.local.md
-.claude/.sessions/
+# ============================================================================
+# TikZ / LaTeX Diagrams
+# ============================================================================
+docs/diagrams/*.aux
+docs/diagrams/*.log
+docs/diagrams/*.pdf
 
-# Worktree governance-resolution shims: deliberately UNTRACKED.
-# A worktree resolves inherited governance through the main checkout's copy, so
-# it never needs its own — and must not have one: a tracked shim would place
-# .claude/.claude/skills inside the scanned tree and register the whole master
-# skills pool a second time in every session (master-project#188).
-.claude/.claude
-.claude/docs
-.claude/rules-library
-.claude/worktrees/
+# ============================================================================
+# Logs
+# ============================================================================
+logs/
+*.log
+
+# ============================================================================
+# Project-Specific
+# ============================================================================
+# Add project-specific patterns here
