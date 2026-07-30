@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation (not needed in image)
+docs/
+DESIGN.md
+*.md
+!README.md
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node — exclude installed/build artefacts but keep the frontend source: the
+# Dockerfile's frontend stage builds the SPA inside the image.
+node_modules/
+**/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.envrc*
+.direnv/
+.mcp.json
+
+# Tests
+tests/
+*.test.*
+
+# OS
+.DS_Store
+Thumbs.db

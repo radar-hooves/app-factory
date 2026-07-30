@@ -1,0 +1,56 @@
+# {{ project_name }} — local image build + smoke test.
+#
+# This builds the production image from source and runs it against the shared
+# dev Postgres (rules-library/infra/20-dev-services.md). It is NOT the
+# production deployment — that lives as its own stack under the operator's
+# fleet repo, using the published image. Stop any local dev server on
+# {{ backend_port }} before bringing this up; both bind the same host port.
+
+services:
+  {{ package_name }}:
+    build:
+      context: .
+      dockerfile: Dockerfile
+{%- if has_frontend %}
+      secrets:
+        - npm_token
+{%- endif %}
+    container_name: {{ project_name }}
+    restart: always
+    ports:
+      - '{{ backend_port }}:{{ backend_port }}'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      POSTGRES_HOST: host.docker.internal
+    env_file:
+      - ./backend/.env
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import socket, urllib.request
+          socket.setdefaulttimeout(5)
+          response = urllib.request.urlopen("http://localhost:{{ backend_port }}/openapi.json")
+          exit(0 if response.getcode() == 200 else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+        tag: '{{ '{{' }}.Name{{ '}}' }}'
+{% if has_frontend %}
+# BuildKit secret for the @poodle64 GitHub Packages read during the frontend
+# build stage (see Dockerfile). Provide a read:packages token:
+#   NPM_TOKEN=<token> docker compose build
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
+{% endif -%}
