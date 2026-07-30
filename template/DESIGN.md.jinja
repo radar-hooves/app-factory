@@ -1,0 +1,62 @@
+---
+name: {{ project_name }}
+description: >-
+  {{ description }}
+version: 2026.1.0
+status: 'draft — stamped defaults; update as {{ project_name }}''s visual identity develops'
+---
+
+# {{ project_name }} Design
+
+## Current state
+{% if has_frontend %}
+Freshly stamped from the household's canonical full-stack template. The
+frontend consumes `@poodle64/design-tokens` and `@poodle64/ui` as shipped —
+no local overrides beyond the primary accent below.
+
+## Shared baseline
+
+The household shared design language and token package are the binding
+sources for any UI work in this repo:
+
+- **Design language doc:** `docs/master/design/shared-design-language.md`
+- **Token package:** `@poodle64/design-tokens` (published to GitHub Packages,
+  public repo `poodle64/design-system`)
+- **Component package:** `@poodle64/ui` — the shadcn-svelte primitives plus
+  the composed `AppShell` every app builds its routes from
+  (`rules-library/svelte/20-sveltekit-frontend.md`)
+
+The package defines the binding constants for radius (`--ds-radius-lg:
+0.625rem`), typography (Fraunces / Hanken Grotesk / JetBrains Mono), status
+vocabulary (success / warning / error / info / neutral), colour space
+(oklch), and the `--ds-*` namespace.
+
+## Brand primary
+
+`app.css` overrides `--ds-color-primary` only — everything else in the shared
+token sheet is used as-is. Stamped default: Eucalyptus (hue 145). Pick your
+own hue by changing the three `oklch(...)` values in `:root` and `.dark` (see
+the comment inline).
+
+## Shell
+
+`+layout.svelte` wraps every route in `AppShell` (`variant="rail"`, the
+package default) with `content="standard"`. Sidebar and chart colours are the
+one surface the package leaves to each app — declared and registered in
+`app.css` alongside the primary override.
+
+## Adoption path
+
+To change the accent colour or shell variant:
+
+1. Edit the `--ds-color-primary` (and `--ds-color-ring`) values in
+   `frontend/src/app.css`.
+2. Pass `variant="header"` to `AppShell` in `+layout.svelte` if primary
+   navigation should live in the top bar instead of a rail.
+3. Update this file's `status` frontmatter field once the identity is settled.
+{% else %}
+Backend-only ({{ project_name }} was stamped with no frontend). This file has
+nothing to record yet — if a frontend is added later, restamp or copy
+`@poodle64/design-tokens`'s `templates/DESIGN.md.template` and follow the
+adoption path there.
+{% endif -%}

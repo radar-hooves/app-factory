@@ -1,5 +1,11 @@
 _subdirectory: template
 
+# README.md and DESIGN.md are stamped once as skeletons, then owned by the
+# app: copier update must never clobber app-authored content in them.
+_skip_if_exists:
+  - README.md
+  - DESIGN.md
+
 project_name:
   type: str
   help: 'Project name (kebab-case, e.g. my-app)'

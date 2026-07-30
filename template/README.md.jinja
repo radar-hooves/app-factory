@@ -1,0 +1,46 @@
+<div align="center">
+
+# {{ project_name }}
+
+_{{ description }}_
+
+</div>
+
+<!-- ANCHOR: stamped skeleton — expand with a hero screenshot, features, and a
+     Documentation table linking to docs/ as the app grows. See
+     docs/master/templates/readme-template.md for the full section set. -->
+
+## Installation
+
+**Prerequisites:** Python 3.14+, PostgreSQL (shared dev instance), direnv{% if has_frontend %}, Node.js 22+, pnpm{% endif %}
+
+```bash
+git clone git@github.com:poodle64/{{ project_name }}.git
+cd {{ project_name }}
+direnv allow
+cp backend/.env.example backend/.env   # set POSTGRES_PASSWORD and friends
+uv run --project backend alembic upgrade head
+```
+
+```bash
+uv run --project backend uvicorn {{ package_name }}.server:app --reload --port {{ backend_port }}   # backend
+{% if has_frontend -%}
+pnpm -C frontend dev   # frontend, http://localhost:{{ frontend_port }}
+{% endif -%}
+```
+
+## Tech Stack
+
+| Layer | Choice |
+| --- | --- |
+| Backend | FastAPI, SQLAlchemy + Alembic, PostgreSQL |
+{%- if has_frontend %}
+| Frontend | SvelteKit (Svelte 5), TypeScript, Tailwind CSS v4, `@poodle64/ui` |
+{%- endif %}
+| Shape | household canonical full-stack template — see `DESIGN.md` and `rules-library/dev-platform/30-canonical-app-shape.md` |
+
+<div align="center">
+<sub>
+<a href="https://github.com/poodle64/{{ project_name }}/issues">Report Bug</a>
+</sub>
+</div>
