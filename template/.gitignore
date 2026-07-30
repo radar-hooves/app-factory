@@ -1,0 +1,44 @@
+# App-scoped ignores
+
+# Python / backend
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+.svelte-kit/
+frontend/build/
+frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+
+# Local env (never commit values)
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# Claude Code local state (never shared)
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/.sessions/
+
+# Worktree governance-resolution shims: deliberately UNTRACKED.
+# A worktree resolves inherited governance through the main checkout's copy, so
+# it never needs its own — and must not have one: a tracked shim would place
+# .claude/.claude/skills inside the scanned tree and register the whole master
+# skills pool a second time in every session (master-project#188).
+.claude/.claude
+.claude/docs
+.claude/rules-library
+.claude/worktrees/
