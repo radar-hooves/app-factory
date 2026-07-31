@@ -8,6 +8,47 @@ The git tag is this repo's single source of truth for its version: `copier`
 resolves a template by its latest tag, so there is no `VERSION` file to drift
 against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+### Changed
+
+- **`db_mode` is gone — sync SQLAlchemy is the only mode.** Per the operator's
+  ratified household standard (`rules-library/dev-platform/30-canonical-app-shape.md`:
+  godswood ran the async experiment and came back, and an agent workforce
+  writes materially safer sync code), the `db_mode` copier question is
+  removed and every `{% if db_mode == ... %}` branch in the template
+  collapses to the sync path: sync `create_engine`, `psycopg2-binary`, a
+  sync session factory, sync `alembic/env.py`, sync route handlers in the
+  example domain. An existing app's `.copier-answers.yml` carrying `db_mode`
+  is unaffected; `copier update` ignores answers for removed questions.
+- **The stamped test suite is now hermetic.** `backend/tests/conftest.py`
+  is rebuilt on the household pattern (`rules-library/python/71-python-testing.md`
+  §Database Integration Tests, ported from mission-command
+  `backend/tests/conftest.py`): an ephemeral `postgres:17-alpine`
+  testcontainer per session (random password/port), a
+  `<PROJECT>_TEST_POSTGRES_{HOST,PORT,USER,PASSWORD}` override quartet
+  (all-or-none, with a loud warning on a partial set), assignment over
+  ambient `POSTGRES_*` with `POSTGRES_DB` forced to `<package>_test`, and
+  schema built via `alembic upgrade head` in a subprocess with a
+  head-revision assertion; never `create_all`, never the shared dev
+  instance. The existing identity-header client and savepoint-based
+  rollback session fixtures keep working on top. `testcontainers[postgres]`
+  joins the stamped dev dependency group.
+
+### Added
+
+- `backend/alembic/versions/` ships an initial migration creating
+  `example_items`, so the hermetic harness's `alembic upgrade head` has a
+  real schema to build. Previously the versions directory was empty, and
+  the example domain's table only existed on the strength of a matching
+  model definition.
+- `services/fanout.py`: a bounded `ThreadPoolExecutor` helper (`run_fanout`)
+  for an endpoint that genuinely fans out I/O inside the sync world: the
+  concurrency valve `30-canonical-app-shape.md` names as the replacement
+  for an app-wide async flip. Submits a list of callables, bounds workers,
+  and captures each callable's exception on its own result; never a
+  silent swallow. Covered by a stamped unit test.
+
 ## [2026.7.4] - 2026-07-31
 
 ### Added
