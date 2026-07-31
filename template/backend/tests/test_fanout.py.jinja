@@ -1,0 +1,62 @@
+"""Tests for the bounded thread-pool fan-out helper."""
+
+import pytest
+
+from {{ package_name }}.services.fanout import run_fanout
+
+
+@pytest.mark.unit
+def test_empty_input_returns_empty_list():
+    """No calls means no work and no thread pool spun up."""
+    assert run_fanout([]) == []
+
+
+@pytest.mark.unit
+def test_results_are_returned_in_call_order():
+    """Each callable's result lands at its own index, not submission-completion order."""
+    calls = [lambda n=n: n for n in range(5)]
+    results = run_fanout(calls, max_workers=2)
+    assert [r.value for r in results] == [0, 1, 2, 3, 4]
+    assert all(r.ok for r in results)
+
+
+@pytest.mark.unit
+def test_one_failure_does_not_hide_or_cancel_the_others():
+    """A raising callable is captured on its own result; every other call still completes."""
+
+    def _boom():
+        raise ValueError("fan-out failure")
+
+    calls = [lambda: 1, _boom, lambda: 3]
+    results = run_fanout(calls, max_workers=3)
+
+    assert results[0].ok
+    assert results[0].value == 1
+    assert not results[1].ok
+    assert isinstance(results[1].error, ValueError)
+    assert results[2].ok
+    assert results[2].value == 3
+
+
+@pytest.mark.unit
+def test_max_workers_bounds_concurrency():
+    """No more than max_workers callables run at once, verified by a peak-concurrency counter."""
+    import threading
+    import time
+
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def _tracked():
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return None
+
+    run_fanout([_tracked for _ in range(6)], max_workers=2)
+    assert peak <= 2
