@@ -8,7 +8,7 @@ The git tag is this repo's single source of truth for its version: `copier`
 resolves a template by its latest tag, so there is no `VERSION` file to drift
 against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.7.5] - 2026-07-31
 
 ### Changed
 
