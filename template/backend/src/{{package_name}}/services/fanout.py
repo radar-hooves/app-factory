@@ -25,9 +25,7 @@ class FanoutResult[T]:
         return self.error is None
 
 
-def run_fanout[T](
-    calls: Sequence[Callable[[], T]], *, max_workers: int = DEFAULT_MAX_WORKERS
-) -> list[FanoutResult[T]]:
+def run_fanout[T](calls: Sequence[Callable[[], T]], *, max_workers: int = DEFAULT_MAX_WORKERS) -> list[FanoutResult[T]]:
     """Run `calls` concurrently on a bounded thread pool.
 
     Each callable's outcome is captured individually — one failure does not
