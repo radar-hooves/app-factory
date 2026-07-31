@@ -1,152 +1,289 @@
 """Pytest fixtures for {{ project_name }} tests.
 
-Fixture hierarchy:
-    _engine (session) ─→ _session_factory (session)
-    client (function) ─→ session (function)
-
-The transaction-rollback fixture (session) wraps each test in a savepoint and
-rolls back after the test, leaving the database clean without a teardown script.
-Uses httpx.AsyncClient + ASGITransport for async endpoint tests.
+Uses httpx.AsyncClient + ASGITransport for endpoint tests, over an ephemeral
+per-session Postgres testcontainer — the household hermetic-test pattern
+(`rules-library/python/71-python-testing.md` §Database Integration Tests).
 """
 
+import logging
 import os
+import secrets
+import subprocess
+import sys
+from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 
 import pytest
 
-# Set required env vars before importing application modules so Settings
-# can instantiate without a real .env file present in CI.
-os.environ.setdefault("POSTGRES_USER", "postgres")
-os.environ.setdefault("POSTGRES_HOST", "localhost")
-os.environ.setdefault("POSTGRES_PORT", "5432")
-os.environ.setdefault("POSTGRES_DB", "{{ project_name | replace('-', '_') }}_test")
+# Settings tests never read may be absent from the environment.
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEBUG", "true")
-# POSTGRES_PASSWORD must be set in the shell (e.g. via .envrc.local) before
-# running tests. Exit cleanly with a clear message instead of a cryptic
-# Pydantic failure buried in fixture setup.
-if "POSTGRES_PASSWORD" not in os.environ:
-    pytest.exit(
-        "Required test env vars not set: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, "
-        "POSTGRES_PORT, POSTGRES_DB. Add POSTGRES_PASSWORD to your .envrc.local or export it in "
-        "your shell; adjust to your app's settings surface if it differs.",
-        returncode=1,
+
+# ── Required env vars — set BEFORE any {{ package_name }} import ────────────
+# The suite brings its OWN database server and never inherits one. Deferring
+# to whatever a developer's shell happens to export made every run depend on
+# ambient state nobody chose here, and left the door open for POSTGRES_* to
+# one day point somewhere real.
+#
+# So the server is resolved here, authoritatively, and the resolved values are
+# ASSIGNED over anything the shell exports:
+#
+#   1. {{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_* when set — an explicit,
+#      purpose-provisioned test server (a CI service container).
+#   2. Otherwise an ephemeral Docker container this module starts and
+#      `pytest_sessionfinish` removes. Nothing ambient can reach it and it
+#      dies with the run.
+#
+# POSTGRES_DB stays forced as defence in depth: belt and braces now that the
+# server is guaranteed not to be anything but a throwaway.
+TEST_DATABASE_NAME = "{{ package_name }}_test"
+_TEST_ENV_PREFIX = "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_"
+_TEST_POSTGRES_KEYS = ("host", "port", "user", "password")
+
+_EPHEMERAL_POSTGRES = None
+
+
+def _start_ephemeral_postgres() -> dict[str, str]:
+    """Start a throwaway Postgres via testcontainers and return its settings.
+
+    testcontainers owns the parts that are easy to get subtly wrong: the
+    readiness protocol, a random free host port, socket differences across
+    Docker/Colima/Podman, and — the reason it is worth a dependency — a reaper
+    sidecar that removes the container even when pytest is SIGKILLed. A
+    ``pytest_sessionfinish`` hook cannot do that last one, so a hand-rolled
+    ``docker run`` leaks a container on every hard kill, OOM or crashed runner.
+
+    Random host port also sidesteps a CI runner's fixed-port collisions with
+    always-on shared services (`core/10-ci-workflow-standard.md` §Shared Host
+    Services vs CI Service Containers) — nothing here claims 5432.
+    """
+    global _EPHEMERAL_POSTGRES
+    from testcontainers.community.postgres import PostgresContainer
+
+    container = PostgresContainer(
+        image="postgres:17-alpine",
+        username="postgres",
+        password=secrets.token_urlsafe(16),
+        dbname="postgres",
+        driver=None,
+    )
+    try:
+        container.start()
+    except Exception as exc:  # noqa: BLE001 -- any startup failure needs the same actionable message
+        raise RuntimeError(
+            "The test suite provisions its own Postgres via testcontainers, and it could not start.\n"
+            f"  {type(exc).__name__}: {exc}\n"
+            "Either start Docker, or point the suite at a purpose-provisioned test server with\n"
+            f"{_TEST_ENV_PREFIX}{{HOST,PORT,USER,PASSWORD}}.\n"
+            "It deliberately will NOT use POSTGRES_* from your shell."
+        ) from exc
+
+    _EPHEMERAL_POSTGRES = container
+    return {
+        "host": container.get_container_host_ip(),
+        "port": str(container.get_exposed_port(5432)),
+        "user": container.username,
+        "password": container.password,
+    }
+
+
+def _partial_quartet_warning(explicit: dict[str, str | None]) -> str | None:
+    """Return a warning when some, but not all, of the four vars are set.
+
+    A silent fallback here would be the failure: a typo'd or half-configured
+    quartet would fall back to the ephemeral container exactly as quietly as
+    setting none of them, so anyone meaning to target a real server would
+    never learn their config was ignored. Returns None when the quartet is
+    either unset or complete — both are the ordinary, unremarkable cases.
+    """
+    set_keys = {key for key in _TEST_POSTGRES_KEYS if explicit.get(key)}
+    if not set_keys or set_keys == set(_TEST_POSTGRES_KEYS):
+        return None
+    missing = ", ".join(f"{_TEST_ENV_PREFIX}{key.upper()}" for key in _TEST_POSTGRES_KEYS if key not in set_keys)
+    return (
+        f"Only some {_TEST_ENV_PREFIX}* vars are set (missing: {missing}); ignoring the partial "
+        "quartet and falling back to an ephemeral Postgres container instead. Set all four, or none."
     )
 
-{% if db_mode == "async" %}
-from collections.abc import AsyncGenerator
 
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+def _resolve_test_server() -> dict[str, str]:
+    """Resolve the Postgres the suite will use, never inheriting POSTGRES_*."""
+    explicit = {key: os.environ.get(f"{_TEST_ENV_PREFIX}{key.upper()}") for key in _TEST_POSTGRES_KEYS}
 
-from {{ package_name }}.config import get_settings
-from {{ package_name }}.db.base import Base
-from {{ package_name }}.db.registry import Base as _registry_base  # noqa: F401 — registers models
-from {{ package_name }}.deps import get_session
-from {{ package_name }}.main import create_app
+    warning = _partial_quartet_warning(explicit)
+    if warning:
+        logging.warning(warning)
+
+    if all(explicit.values()):
+        return {key: value for key, value in explicit.items() if value is not None}
+
+    return _start_ephemeral_postgres()
+
+
+_TEST_SERVER = _resolve_test_server()
+os.environ["POSTGRES_USER"] = _TEST_SERVER["user"]
+os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
+os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
+os.environ["POSTGRES_PASSWORD"] = _TEST_SERVER["password"]
+os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
+
+from httpx import ASGITransport, AsyncClient  # noqa: E402 -- must follow the env-var resolution above
+from sqlalchemy import event  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+
+from {{ package_name }}.db.session import get_engine, get_session  # noqa: E402
+from {{ package_name }}.main import create_app  # noqa: E402
+
+# Default Tier 1a identity headers (rules-library/auth-patterns/proxy-delegated-auth.md
+# §Tests: "inject default identity headers in the test client fixture").
+DEFAULT_IDENTITY_HEADERS = {"x-authentik-uid": "test-uid", "x-authentik-username": "testuser"}
+
+
+def _ensure_test_database_ready() -> None:
+    """Create and migrate the test database before anything can connect to it.
+
+    Runs `alembic upgrade head` — not a `create_all` + stamp — so the app's
+    real migrations stay genuinely exercised by the suite rather than trusted
+    on the strength of a matching model definition. Migrations run through
+    the ordinary alembic CLI in a subprocess: alembic/env.py calls
+    `fileConfig()`, which reconfigures logging for the whole process — a
+    subprocess contains that side effect instead of letting it break every
+    test that asserts on a captured warning.
+    """
+    from sqlalchemy import create_engine, text
+
+    from {{ package_name }}.config import get_settings
+
+    settings = get_settings().database
+    maintenance_url = settings.database_url.rsplit("/", 1)[0] + "/postgres"
+    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": TEST_DATABASE_NAME}
+            ).scalar()
+            if not exists:
+                logging.info("Creating test database %s", TEST_DATABASE_NAME)
+                conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}"'))
+    finally:
+        engine.dispose()
+
+    backend_root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(  # noqa: S603 -- fixed argv, no user input reaches it
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_root,
+        env={**os.environ, "POSTGRES_DB": TEST_DATABASE_NAME},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Could not migrate the test database {TEST_DATABASE_NAME!r}.\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    alembic_cfg = Config(str(backend_root / "alembic.ini"))
+    head_revision = ScriptDirectory.from_config(alembic_cfg).get_current_head()
+
+    schema_engine = create_engine(settings.database_url)
+    try:
+        with schema_engine.connect() as conn:
+            current_revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    finally:
+        schema_engine.dispose()
+
+    if current_revision != head_revision:
+        raise RuntimeError(
+            f"Test database {TEST_DATABASE_NAME!r} is at alembic revision {current_revision!r}, "
+            f"expected head {head_revision!r}. `alembic upgrade head` did not leave the database "
+            "where it should be."
+        )
+
+
+def pytest_sessionstart(session) -> None:
+    """Build the test database before anything can try to connect to it.
+
+    Not inside a fixture: the application lifespan runs its own database
+    connectivity check when the app is first created, and fixture ordering
+    does not guarantee a schema-building fixture wins that race. A
+    session-start hook precedes every fixture, so there is no race to lose.
+    """
+    _ensure_test_database_ready()
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Stop the ephemeral Postgres, if this run started one.
+
+    The clean-exit path. testcontainers' reaper is what covers the unclean
+    ones (SIGKILL, OOM, a runner dying mid-suite), which is precisely why the
+    container lifecycle is not hand-rolled here.
+
+    Best-effort: a failure to tear down must not change the exit status of a
+    run whose tests have already passed.
+    """
+    if _EPHEMERAL_POSTGRES is None:
+        return
+    try:
+        _EPHEMERAL_POSTGRES.stop()
+    except Exception as exc:  # noqa: BLE001 -- teardown must never fail a passing run
+        logging.warning("Could not stop the ephemeral test Postgres: %s", exc)
 
 
 @pytest.fixture(scope="session")
-def anyio_backend() -> str:
-    return "asyncio"
+def app():
+    return create_app()
 
 
-@pytest_asyncio.fixture(scope="session")
-async def _engine():
-    """Session-scoped async engine; creates schema once, drops on teardown."""
-    settings = get_settings()
-    engine = create_async_engine(settings.database.async_database_url, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+@pytest.fixture
+def session() -> Generator[Session, None, None]:
+    """A real Postgres session bound to a connection-level transaction, rolled
+    back at teardown (`rules-library/python/71-python-testing.md` §Transaction
+    Rollback Fixture, sync form).
+
+    A service that calls `session.commit()` explicitly would, on a session
+    bound to a plain connection, commit the OUTER transaction this fixture
+    opens, leaving nothing for teardown's rollback to undo and leaking test
+    rows into the database permanently. SQLAlchemy's documented fix for
+    exactly this ("join a Session into an external transaction, such as for
+    test suites") is a SAVEPOINT: `session.begin_nested()` opens one, and the
+    `after_transaction_end` listener re-opens a fresh one every time a
+    commit ends the current one — so commits release/restart SAVEPOINTs
+    instead of ever reaching the outer connection transaction, which is the
+    only thing teardown rolls back.
+    """
+    engine = get_engine()
+    connection = engine.connect()
+    outer_transaction = connection.begin()
+    session_factory = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False)
+    db_session = session_factory()
+    db_session.begin_nested()
+
+    @event.listens_for(db_session, "after_transaction_end")
+    def _restart_savepoint(sess, transaction) -> None:
+        if transaction.nested and not transaction._parent.nested:
+            sess.begin_nested()
+
+    try:
+        yield db_session
+    finally:
+        event.remove(db_session, "after_transaction_end", _restart_savepoint)
+        db_session.close()
+        outer_transaction.rollback()
+        connection.close()
 
 
-@pytest_asyncio.fixture(scope="session")
-async def _session_factory(_engine):
-    return async_sessionmaker(bind=_engine, expire_on_commit=False, autoflush=False)
-
-
-@pytest_asyncio.fixture(scope="function")
-async def session(_session_factory) -> AsyncGenerator[AsyncSession, None]:
-    """Per-test async session with transaction rollback for isolation."""
-    async with _session_factory() as s:
-        async with s.begin():
-            yield s
-            await s.rollback()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """httpx.AsyncClient wired to the FastAPI app with DB override."""
-    app = create_app()
+@pytest.fixture
+async def client(app, session: Session) -> AsyncGenerator[AsyncClient, None]:
+    """httpx.AsyncClient wired to the FastAPI app with the rollback session and a default identity."""
     app.dependency_overrides[get_session] = lambda: session
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
-        headers={
-            "x-authentik-uid": "test-uid",
-            "x-authentik-username": "testuser",
-        },
+        headers=DEFAULT_IDENTITY_HEADERS,
     ) as ac:
         yield ac
-    app.dependency_overrides.clear()
-{% else %}
-from collections.abc import Generator
-
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-
-from {{ package_name }}.config import get_settings
-from {{ package_name }}.db.base import Base
-from {{ package_name }}.db.registry import Base as _registry_base  # noqa: F401 — registers models
-from {{ package_name }}.deps import get_session
-from {{ package_name }}.main import create_app
-
-
-@pytest.fixture(scope="session")
-def _engine():
-    """Session-scoped sync engine; creates schema once, drops on teardown."""
-    settings = get_settings()
-    engine = create_engine(settings.database.database_url, echo=False)
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-@pytest.fixture(scope="session")
-def _session_factory(_engine):
-    return sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
-
-
-@pytest.fixture(scope="function")
-def session(_session_factory) -> Generator[Session, None, None]:
-    """Per-test sync session with transaction rollback for isolation."""
-    with _session_factory() as s:
-        s.begin_nested()  # savepoint — rollback after test
-        yield s
-        s.rollback()
-
-
-@pytest.fixture(scope="function")
-async def client(session: Session) -> AsyncClient:
-    """httpx.AsyncClient wired to the FastAPI app with DB override."""
-    app = create_app()
-    app.dependency_overrides[get_session] = lambda: session
-    transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-        headers={
-            "x-authentik-uid": "test-uid",
-            "x-authentik-username": "testuser",
-        },
-    ) as ac:
-        yield ac
-    app.dependency_overrides.clear()
-{% endif -%}
+    app.dependency_overrides.pop(get_session, None)
