@@ -50,11 +50,8 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     engine = get_engine()
     app.state.engine = engine
     yield
-{% if db_mode == "async" %}
-    await engine.dispose()
-{% else %}
     engine.dispose()
-{% endif %}
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""

@@ -24,14 +24,6 @@ has_frontend:
   help: 'Include a SvelteKit frontend? (default: yes)'
   default: true
 
-db_mode:
-  type: str
-  help: 'Database session mode: sync (default, single-threaded request path) or async (I/O-fan-out criterion)'
-  choices:
-    - sync
-    - async
-  default: sync
-
 backend_port:
   type: int
   help: 'Backend API dev port — allocate from the port registry (band 8300-8399); never a framework default'

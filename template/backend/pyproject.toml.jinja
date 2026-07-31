@@ -11,12 +11,7 @@ dependencies = [
     "pydantic-settings>=2.14.0",
     "sqlalchemy>=2.0.0",
     "alembic>=1.15.0",
-    {%- if db_mode == "async" %}
-    "asyncpg>=0.30.0",
-    "greenlet>=3.0.0",
-    {%- else %}
     "psycopg2-binary>=2.9.0",
-    {%- endif %}
     # httpx: the MCP bearer gate's userinfo client (mcp/http_auth.py).
     "httpx>=0.28.0",
     # pyyaml: the MCP actor allow-list loader (mcp/actors.py).
@@ -31,6 +26,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "httpx>=0.28.0",
+    "testcontainers[postgres]>=4.13.2",
 ]
 
 [build-system]

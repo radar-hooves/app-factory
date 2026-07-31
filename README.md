@@ -22,7 +22,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   ├── .envrc                  direnv: uv sync + activate
 │   ├── alembic.ini             migration config (DB URL injected at runtime)
 │   ├── alembic/
-│   │   ├── env.py              sync or async branch (chosen at generation)
+│   │   ├── env.py              sync (create_engine + NullPool)
 │   │   └── versions/           migration scripts
 │   ├── src/<package>/
 │   │   ├── main.py             create_app(): lifespan + /mcp mount + SPA serve
@@ -39,7 +39,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   │       └── example.py  Domain-section template (copy per domain)
 │   │   ├── db/
 │   │   │   ├── base.py         DeclarativeBase + TimestampMixin
-│   │   │   ├── session.py      engine + sessionmaker + get_session (sync/async)
+│   │   │   ├── session.py      engine + sessionmaker + get_session (sync)
 │   │   │   └── registry.py     imports all models → Alembic target_metadata
 │   │   ├── api/
 │   │   │   ├── main.py         api_router aggregator + exception handler registration
@@ -50,13 +50,14 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   │       ├── router.py   FastAPI routes
 │   │   │       └── dependencies.py  domain-specific Depends() wrappers
 │   │   ├── services/           cross-domain shared services
+│   │   │   └── fanout.py       bounded thread-pool helper for I/O fan-out endpoints
 │   │   └── mcp/
 │   │       ├── server.py       FastMCP server + health_check tool
 │   │       ├── http_auth.py    Authentik bearer gate on /mcp (carbon copy)
 │   │       ├── actors.py       identity → Actor allow-list loader (carbon copy)
 │   │       └── auth.py         resolve_actor() for the tool layer
 │   └── tests/
-│       ├── conftest.py         engine + txn-rollback session + httpx.AsyncClient
+│       ├── conftest.py         ephemeral testcontainer Postgres + txn-rollback session + httpx.AsyncClient
 │       ├── test_mcp_auth.py    drives the /mcp gate: refusals, accept, allow-list
 │       └── test_example.py     unit + integration tests for the example slice
 ├── config/
@@ -87,9 +88,6 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 | `package_name` | snake_case(project_name) | Python package under `src/` |
 | `description` | — | one-sentence description in metadata |
 | `has_frontend` | `true` | include the `frontend/` SvelteKit skeleton |
-| `db_mode` | `sync` | `sync` (default) or `async` (I/O-fan-out criterion) |
-
-The sync/async choice is isolated to `db/session.py` and `alembic/env.py` so it stays reversible. Record the decision and criterion in the project's ADR.
 
 ## Usage
 
@@ -122,7 +120,7 @@ The fail-closed default is deliberate. A fresh stamp runs locally with no identi
 
 **Config: composed sections over one shared `.env`** The root `Settings` owns the unprefixed keys; each section owns its own prefix (`POSTGRES_*`, `EXAMPLE_*`, `<APP>_OIDC_*`). All of them read the same `backend/.env`, so every model must set `extra="ignore"`: a key belonging to a sibling section is not an error, and forbidding it makes the app refuse to start on the very file `.env.example` tells you to copy. Paths come from `config/paths.py` rather than the working directory, because `uvicorn` starts in `backend/` in dev and at the repo root in a container. Follow both conventions when you add a section.
 
-**Persistence: PostgreSQL + SQLAlchemy 2.0 + Alembic** Sync by default; switch to async by setting `db_mode=async` at generation time (not after). The criterion for async: the request path parallelises I/O.
+**Persistence: PostgreSQL + sync SQLAlchemy 2.0 + Alembic** Sync is the household way; there is no per-app sync/async choice. An endpoint that genuinely fans out I/O uses the bounded thread-pool fan-out helper (`services/fanout.py`) inside the sync world instead of an app-wide async flip. Tests run against the suite's own ephemeral `postgres:17-alpine` testcontainer, schema-built via `alembic upgrade head`; never the shared dev instance, never `create_all`.
 
 **MCP surface: FastMCP mounted at /mcp, behind the bearer gate** The embedded MCP server shares the FastAPI process and lifespan. Tools are registered in `mcp/server.py`. Target ≤20 tools; use the action-dispatcher pattern (one tool per noun, `action=` parameter). The mount has a subtlety worth knowing before you touch `main.py`: `raw_mcp_app` carries the FastMCP lifespan (the streamable-HTTP session manager's task group lives there) while the gated wrapper is what mounts at `/mcp`. Chain the lifespan from the raw app and mount the gated one. Getting that backwards either leaves the session manager unstarted or leaves the surface open. The agent endpoint is `POST /mcp/`, trailing slash required.
 

@@ -14,21 +14,21 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[ExampleItemRead], operation_id="listExampleItems")
-{% if db_mode == "async" %}async def{% else %}def{% endif %} list_items(session: SessionDep, _user: CurrentUser) -> list[ExampleItemRead]:
+def list_items(session: SessionDep, _user: CurrentUser) -> list[ExampleItemRead]:
     """List all example items."""
-    items = {% if db_mode == "async" %}await {% endif %}service.list_items(session)
+    items = service.list_items(session)
     return [ExampleItemRead.model_validate(item) for item in items]
 
 
 @router.get("/{item_id}", response_model=ExampleItemRead, operation_id="getExampleItem")
-{% if db_mode == "async" %}async def{% else %}def{% endif %} get_item(item_id: int, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+def get_item(item_id: int, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
     """Get a single example item by id."""
-    item = {% if db_mode == "async" %}await {% endif %}service.get_item(session, item_id)
+    item = service.get_item(session, item_id)
     return ExampleItemRead.model_validate(item)
 
 
 @router.post("/", response_model=ExampleItemRead, status_code=201, operation_id="createExampleItem")
-{% if db_mode == "async" %}async def{% else %}def{% endif %} create_item(data: ExampleItemCreate, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+def create_item(data: ExampleItemCreate, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
     """Create a new example item."""
-    item = {% if db_mode == "async" %}await {% endif %}service.create_item(session, data)
+    item = service.create_item(session, data)
     return ExampleItemRead.model_validate(item)
