@@ -4,6 +4,17 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.1] - 2026-08-06
+
+### Added
+
+- **This repo's own root now carries a `.pre-commit-config.yaml`** (gitleaks + the household `check-pii` hook + standard file hygiene), separate from the `template/.pre-commit-config.yaml` stamped into scaffolded apps. Previously commits to `copier.yml`, `README.md`, and everything under `template/` carried no PII guard and no secret scan at all — only the apps this repo produces were protected, never the factory itself. Installed and driven both directions: a staged PII-shaped probe is blocked, a clean probe passes.
+- **`template/.github/workflows/security.yaml.jinja`**: a thin caller of the master-project `security-checks.yaml` reusable (gitleaks, Python dependency audit, Trivy filesystem scan, CycloneDX SBOM — `node-dir: frontend` added only when `has_frontend`), so every scaffolded app inherits CI security scanning from day one. Previously the template shipped `canonical-shape.yaml`, `python-ci.yaml`, `frontend-ci.yaml` and `auto-label-issues.yaml` but no security workflow at all, and the reusable had zero callers estate-wide. Verified by a real `copier copy` in both `has_frontend` states — both renders parse as valid YAML and pass the correct `working-directory`/`node-dir` inputs the reusable actually declares.
+
+### Investigated (not fixed — see rationale)
+
+- **Gap 3, `.claude/hooks/master/check-pii.py` symlink provisioning**: `template/.pre-commit-config.yaml` references a path copier itself never provisions (no `.claude` in the template tree, no `_tasks` entry). Confirmed via a real `copier copy`: the symlink is genuinely absent from raw output. Left unfixed — the sanctioned entry point (`/scaffold-project`) already creates every governance symlink at step 3, strictly *before* the copier stamp at step 4d, so the path always resolves by the time `pre-commit install` runs in practice. A `_tasks` entry would duplicate that already-correct logic, hard-codes the `repos/<name>/`-under-master relative depth copier cannot itself verify, and — because `_tasks` re-run on every `copier update`, not just `copy` — would execute against every existing scaffolded app's tree on its next update, a blast radius disproportionate to guarding against a raw `copier copy` invoked outside the documented flow. Reported for an operator decision rather than hacked in.
+
 ## [2026.8.0] - 2026-08-01
 
 ### Added
