@@ -1,6 +1,6 @@
 """Bounded thread-pool fan-out helper for I/O-bound work.
 
-Sync SQLAlchemy is the household way (`rules-library/dev-platform/30-canonical-app-shape.md`);
+Sync SQLAlchemy is the household way (`rules-library/platform/canonical-app-shape.md`);
 this is the concurrency valve for a request path that genuinely fans out I/O
 (e.g. calling several independent external services) inside that sync world,
 in place of an app-wide async flip.

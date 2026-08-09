@@ -57,12 +57,12 @@ repos:
   #                              Household PII scan                              #
   # ---------------------------------------------------------------------------- #
 
-  # The master check-pii hook, symlinked at .claude/hooks/master/check-pii.py
+  # The master check-pii hook, symlinked at .claude/hooks/master/precommit/pii.py
   # (rules-library/core/20-pre-commit-config.md — never a per-repo copy).
   - repo: local
     hooks:
       - id: check-pii
         name: 'security · Detect PII (names, mobiles, personal emails)'
-        entry: python3 .claude/hooks/master/check-pii.py
+        entry: python3 .claude/hooks/master/precommit/pii.py
         language: system
         types: [text]

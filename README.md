@@ -1,6 +1,6 @@
 # full-stack-app template
 
-Canonical household full-stack application shape, stamped by `copier` via `/scaffold-project`. This template is the **executable source of truth** for the shape described in `rules-library/dev-platform/30-canonical-app-shape.md`.
+Canonical household full-stack application shape, stamped by `copier` via `/scaffold-project`. This template is the **executable source of truth** for the shape described in `rules-library/platform/canonical-app-shape.md`.
 
 ## Shape
 
@@ -105,7 +105,7 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 
 The **human surface** (`/api`, the SPA) is Tier 1a (proxy-delegated, the default for homelab apps). Identity arrives via `x-authentik-uid` / `x-authentik-username` headers injected by Authentik. The app trusts headers; network isolation is the security boundary. No app-level sessions or Redis needed. Change to Tier 1b (BFF) when the app must be reachable without a proxy in front of it.
 
-The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token app-side and resolves it against an `actors.yaml` allow-list. It does *not* trust a forwarded identity header, because a machine caller does not traverse the human proxy and could forge one (`rules-library/auth-patterns/proxy-delegated-auth.md` §Scope). `mcp/http_auth.py` and `mcp/actors.py` are byte-identical carbon copies of the household's canonical gate, shared with godswood, seshat, core-memory, tapestry and milton; do not edit them per app. Both halves are load-bearing: Authentik serves one instance-wide userinfo endpoint that accepts any valid token from any application on the instance, so the bearer check proves identity alone and the allow-list is what restores the app boundary. Every tool calls `resolve_actor()` and authorises off `actor.id` / `actor.type`.
+The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token app-side and resolves it against an `actors.yaml` allow-list. It does *not* trust a forwarded identity header, because a machine caller does not traverse the human proxy and could forge one (`rules-library/platform/proxy-delegated-auth.md` §Scope). `mcp/http_auth.py` and `mcp/actors.py` are byte-identical carbon copies of the household's canonical gate, shared with godswood, seshat, core-memory, tapestry and milton; do not edit them per app. Both halves are load-bearing: Authentik serves one instance-wide userinfo endpoint that accepts any valid token from any application on the instance, so the bearer check proves identity alone and the allow-list is what restores the app boundary. Every tool calls `resolve_actor()` and authorises off `actor.id` / `actor.type`.
 
 **MCP inbound-auth environment variables** All four are read at runtime, so pointing an app at a different identity provider never needs a rebuild. `<APP>` is the project name upper-cased with hyphens as underscores.
 
@@ -149,8 +149,8 @@ git push origin main v2026.7.1
 
 Tag once per logical change set, not per commit (`10-git-workflow.md` §Release Cadence). Apps then pull the change forward with `copier update`; their `.copier-answers.yml` records which tag they last took.
 
-Tagging by hand is discipline, not a ratchet — the same failure mode `rules-library/dev-platform/20-common-libraries.md` documents for published wheels, where an unbumped version silently served stale code. If template changes ever start missing their tags, the fix is to stamp the tag in CI, not to try harder.
+Tagging by hand is discipline, not a ratchet — the same failure mode `rules-library/platform/common-libraries.md` documents for published wheels, where an unbumped version silently served stale code. If template changes ever start missing their tags, the fix is to stamp the tag in CI, not to try harder.
 
 ## Where this lives
 
-Authored here; consumed as `gh:poodle64/full-stack-app-template`. The shape it stamps is law in the household's `rules-library/dev-platform/30-canonical-app-shape.md`; this template is that rule's executable form, and the two move together. Extracted from `poodle64/master-project` (history preserved) so that copier has a tagged VCS source — see master-project#161.
+Authored here; consumed as `gh:poodle64/full-stack-app-template`. The shape it stamps is law in the household's `rules-library/platform/canonical-app-shape.md`; this template is that rule's executable form, and the two move together. Extracted from `poodle64/master-project` (history preserved) so that copier has a tagged VCS source — see master-project#161.

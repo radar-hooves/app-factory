@@ -1,6 +1,6 @@
 name: Canonical Shape
 
-# Structural gate for rules-library/dev-platform/30-canonical-app-shape.md.
+# Structural gate for rules-library/platform/canonical-app-shape.md.
 # A green run means the LAYOUT conforms, not that the repo is fully canonical.
 on:
   push:
