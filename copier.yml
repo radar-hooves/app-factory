@@ -1,10 +1,13 @@
 _subdirectory: template
 
 # README.md and DESIGN.md are stamped once as skeletons, then owned by the
-# app: copier update must never clobber app-authored content in them.
+# app: copier update must never clobber app-authored content in them. The
+# design-craft baseline is stamped once empty and then grows as the app's own
+# debt register — an update must never wipe the debt it has banked.
 _skip_if_exists:
   - README.md
   - DESIGN.md
+  - frontend/.design-craft-baseline.json
 
 project_name:
   type: str
@@ -31,4 +34,4 @@ backend_port:
 frontend_port:
   type: int
   help: 'Frontend Vite dev port — allocate from the port registry (band 5170-5199); never a framework default'
-  when: "{{ has_frontend }}"
+  when: '{{ has_frontend }}'

@@ -14,6 +14,7 @@
     "lint": "pnpm run lint:js",
     "lint:js": "eslint .",
     "lint:css": "stylelint \"src/**/*.{css,svelte}\"",
+    "lint:design": "node scripts/check-design-craft.mjs",
     "generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
     "test:e2e": "playwright test"
   },
@@ -31,6 +32,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-svelte": "^3.0.0",
     "globals": "^16.0.0",
+    "impeccable": "3.5.0",
     "openapi-typescript": "^7.13.0",
     "typescript-eslint": "^8.0.0",
     "postcss-html": "^1.7.0",

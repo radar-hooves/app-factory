@@ -59,3 +59,25 @@ repos:
         language: system
         pass_filenames: false
         files: ^backend/(pyproject\.toml|uv\.lock)$
+{%- if has_frontend %}
+
+  # Catches craft defects every other gate is blind to — a nested card, a
+  # side-tab accent border, gradient-text on a heading, decorative slop. It
+  # compiles, renders, type-checks and passes its tests; it is only wrong once
+  # a human looks at the rendered page (canonical-app-shape.md). Static mode
+  # only (source analysis, no browser) — the live browser sweep needs a running
+  # dev server and stays a manual/app-local tool, never pre-commit.
+  #
+  # Gates on NEW hard findings only, against frontend/.design-craft-baseline.json
+  # — a debt register, so it lands on a non-clean app and still fails forward.
+  # Needs `pnpm install` in frontend/ (the script exits 2 with a clear message
+  # if impeccable is missing).
+  - repo: local
+    hooks:
+      - id: design-craft
+        name: 'design - No new UI craft defects (slop, overflow, nesting)'
+        entry: node frontend/scripts/check-design-craft.mjs
+        language: system
+        files: '^frontend/src/.*\.(svelte|css|ts)$'
+        pass_filenames: false
+{%- endif %}

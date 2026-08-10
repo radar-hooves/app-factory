@@ -6,7 +6,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 
 ```text
 <project>/
-├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check
+├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check + design-craft (has_frontend)
 ├── .envrc                      direnv: source_up + uv sync (backend/)
 ├── .gitattributes / .gitignore
 ├── .mcp.json                   empty — enable per project
@@ -63,10 +63,13 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 ├── config/
 │   └── actors.yaml             MCP actor allow-list (identity → actor_id/type)
 └── frontend/                   (only when has_frontend=true)
-    ├── package.json            SvelteKit + shadcn-svelte + Tailwind v4
+    ├── package.json            SvelteKit + shadcn-svelte + Tailwind v4 (+ impeccable for the craft gate)
     ├── svelte.config.js        adapter-static SPA + path aliases
     ├── vite.config.ts          proxy /api → backend, dev auth header injection
     ├── tsconfig.json
+    ├── .design-craft-baseline.json  app-owned debt register — stamped empty, grows as findings are banked
+    ├── scripts/
+    │   └── check-design-craft.mjs   static craft gate (impeccable); pre-commit + `pnpm lint:design`
     └── src/
         ├── app.css             design tokens (Eucalyptus palette, OKLCH)
         ├── routes/
@@ -82,12 +85,12 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 
 ## Questions (copier.yml)
 
-| Question | Default | Effect |
-| --- | --- | --- |
-| `project_name` | — | kebab-case name; used in pyproject.toml, package naming |
-| `package_name` | snake_case(project_name) | Python package under `src/` |
-| `description` | — | one-sentence description in metadata |
-| `has_frontend` | `true` | include the `frontend/` SvelteKit skeleton |
+| Question       | Default                  | Effect                                                  |
+| -------------- | ------------------------ | ------------------------------------------------------- |
+| `project_name` | —                        | kebab-case name; used in pyproject.toml, package naming |
+| `package_name` | snake_case(project_name) | Python package under `src/`                             |
+| `description`  | —                        | one-sentence description in metadata                    |
+| `has_frontend` | `true`                   | include the `frontend/` SvelteKit skeleton              |
 
 ## Usage
 
@@ -105,16 +108,16 @@ copier copy docs/master/templates/full-stack-app /path/to/new-project
 
 The **human surface** (`/api`, the SPA) is Tier 1a (proxy-delegated, the default for homelab apps). Identity arrives via `x-authentik-uid` / `x-authentik-username` headers injected by Authentik. The app trusts headers; network isolation is the security boundary. No app-level sessions or Redis needed. Change to Tier 1b (BFF) when the app must be reachable without a proxy in front of it.
 
-The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token app-side and resolves it against an `actors.yaml` allow-list. It does *not* trust a forwarded identity header, because a machine caller does not traverse the human proxy and could forge one (`rules-library/platform/proxy-delegated-auth.md` §Scope). `mcp/http_auth.py` and `mcp/actors.py` are byte-identical carbon copies of the household's canonical gate, shared with godswood, seshat, core-memory, tapestry and milton; do not edit them per app. Both halves are load-bearing: Authentik serves one instance-wide userinfo endpoint that accepts any valid token from any application on the instance, so the bearer check proves identity alone and the allow-list is what restores the app boundary. Every tool calls `resolve_actor()` and authorises off `actor.id` / `actor.type`.
+The **machine surface** (`/mcp`) validates a live Authentik OIDC bearer token app-side and resolves it against an `actors.yaml` allow-list. It does _not_ trust a forwarded identity header, because a machine caller does not traverse the human proxy and could forge one (`rules-library/platform/proxy-delegated-auth.md` §Scope). `mcp/http_auth.py` and `mcp/actors.py` are byte-identical carbon copies of the household's canonical gate, shared with godswood, seshat, core-memory, tapestry and milton; do not edit them per app. Both halves are load-bearing: Authentik serves one instance-wide userinfo endpoint that accepts any valid token from any application on the instance, so the bearer check proves identity alone and the allow-list is what restores the app boundary. Every tool calls `resolve_actor()` and authorises off `actor.id` / `actor.type`.
 
 **MCP inbound-auth environment variables** All four are read at runtime, so pointing an app at a different identity provider never needs a rebuild. `<APP>` is the project name upper-cased with hyphens as underscores.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `<APP>_OIDC_USERINFO_URL` | `""` | Authentik userinfo endpoint. **Empty fails closed**: every `/mcp` request 401s. |
-| `<APP>_OIDC_IDENTITY_CLAIM` | `preferred_username` | Claim read as the caller identity, falling back to `sub`. Deployments behind the shared mcp-gateway client set `mcp_actor`. |
-| `<APP>_OIDC_RESOURCE_METADATA_URL` | `""` | Advertised in the 401 `WWW-Authenticate` header (RFC 9728). Empty omits it. |
-| `<APP>_ACTORS_CONFIG_PATH` | `config/actors.yaml` | The actor allow-list. An identity the gate resolves but that is absent here is refused. |
+| Variable                           | Default              | Meaning                                                                                                                     |
+| ---------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `<APP>_OIDC_USERINFO_URL`          | `""`                 | Authentik userinfo endpoint. **Empty fails closed**: every `/mcp` request 401s.                                             |
+| `<APP>_OIDC_IDENTITY_CLAIM`        | `preferred_username` | Claim read as the caller identity, falling back to `sub`. Deployments behind the shared mcp-gateway client set `mcp_actor`. |
+| `<APP>_OIDC_RESOURCE_METADATA_URL` | `""`                 | Advertised in the 401 `WWW-Authenticate` header (RFC 9728). Empty omits it.                                                 |
+| `<APP>_ACTORS_CONFIG_PATH`         | `config/actors.yaml` | The actor allow-list. An identity the gate resolves but that is absent here is refused.                                     |
 
 The fail-closed default is deliberate. A fresh stamp runs locally with no identity provider configured and its `/mcp` is shut rather than open, and `create_app()` logs a warning naming the variable so the closed state is never a mystery.
 
@@ -128,7 +131,7 @@ The fail-closed default is deliberate. A fresh stamp runs locally with no identi
 
 **Design tokens: Eucalyptus palette (OKLCH)** The shared household design language (`docs/master/reference/guide-shared-design-language.md`). Update master tokens first, then adopt per project. No raw `oklch()` values in component files — all via CSS custom properties defined in `app.css`.
 
-**Component system: `@poodle64/ui` (shared shadcn-svelte primitives)** The shadcn-svelte primitives (bits-ui) are consumed as a published package, not vendored per app: `import { Button } from '@poodle64/ui/button'`. A fix lands once and reaches every app. Two `app.css` lines make that work, and both are load-bearing: `@import '@poodle64/ui/styles.css'` (after the token imports) brings in the shadcn semantic surface *and* its Tailwind registration, and `@source '../node_modules/@poodle64/ui/dist'` puts the package inside Tailwind's scan. The package's peers that the scaffold actually uses (`bits-ui`, `mode-watcher`, `svelte-sonner`) stay declared in the app's own `package.json`: pnpm resolves an undeclared optional peer into the package's private tree, where app code cannot import it and a second copy would be a `Toaster` that never sees the app's own `toast()` calls. WP-51 Lane WP (`master-project#174`); superseded the earlier vendor-per-app pattern.
+**Component system: `@poodle64/ui` (shared shadcn-svelte primitives)** The shadcn-svelte primitives (bits-ui) are consumed as a published package, not vendored per app: `import { Button } from '@poodle64/ui/button'`. A fix lands once and reaches every app. Two `app.css` lines make that work, and both are load-bearing: `@import '@poodle64/ui/styles.css'` (after the token imports) brings in the shadcn semantic surface _and_ its Tailwind registration, and `@source '../node_modules/@poodle64/ui/dist'` puts the package inside Tailwind's scan. The package's peers that the scaffold actually uses (`bits-ui`, `mode-watcher`, `svelte-sonner`) stay declared in the app's own `package.json`: pnpm resolves an undeclared optional peer into the package's private tree, where app code cannot import it and a second copy would be a `Toaster` that never sees the app's own `toast()` calls. WP-51 Lane WP (`master-project#174`); superseded the earlier vendor-per-app pattern.
 
 **Palette differentiation: `--ds-color-*`, never a hand-written alias layer** An app picks its palette by overriding `--ds-color-primary` (and its pair) in `app.css`; the whole shadcn surface follows, because `@poodle64/ui/styles.css` maps every shadcn name onto a `--ds-*` token. A stamped app must **not** re-declare `--card` / `--popover` / `--muted` / `--accent` / `--input` / `--radius` and friends itself. Doing so was the norm before `@poodle64/ui@2026.7.2` and it silently half-worked: declaring those names as plain custom properties makes the variable exist but never tells Tailwind v4 they are theme colours, so `bg-card`, `bg-muted`, `bg-accent` and `border-input` compile to no rule at all: no build error, no lint hit, no failing test, just classes in the DOM with nothing behind them (`poodle64/design-system#3`). The one part of the surface still owned per app is sidebar and chart colours: the package ships no sidebar or chart component and chrome hue is genuinely an app's own decision, so the scaffold declares and registers those itself.
 
