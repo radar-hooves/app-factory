@@ -1,5 +1,6 @@
 {% raw %}<script lang="ts">
   import { onMount } from 'svelte';
+  import PageHeader from '@poodle64/ui/page-header';
 
   let status = $state<string | null>(null);
 
@@ -15,8 +16,9 @@
   });
 </script>
 
-<h1 class="text-3xl font-bold text-primary">{% endraw %}{{ project_name }}{% raw %}</h1>
-<p class="mt-2 text-muted-foreground">{% endraw %}{{ description }}{% raw %}</p>
+<!-- Compose the shared page-title treatment rather than a hand-rolled heading —
+     every route shares one header (canonical-app-shape.md, check-ui-drift.mjs). -->
+<PageHeader title="{% endraw %}{{ project_name }}{% raw %}" subtitle="{% endraw %}{{ description }}{% raw %}" />
 
 {#if status}
   <p class="mt-6 rounded-md border bg-card px-4 py-3 text-sm text-card-foreground">

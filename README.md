@@ -6,7 +6,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 
 ```text
 <project>/
-├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check + design-craft (has_frontend)
+├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check + design-craft + design-drift (has_frontend)
 ├── .envrc                      direnv: source_up + uv sync (backend/)
 ├── .gitattributes / .gitignore
 ├── .mcp.json                   empty — enable per project
@@ -68,8 +68,10 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
     ├── vite.config.ts          proxy /api → backend, dev auth header injection
     ├── tsconfig.json
     ├── .design-craft-baseline.json  app-owned debt register — stamped empty, grows as findings are banked
+    ├── .ui-drift-baseline.json      app-owned debt register — stamped empty, grows as findings are banked
     ├── scripts/
-    │   └── check-design-craft.mjs   static craft gate (impeccable); pre-commit + `pnpm lint:design`
+    │   ├── check-design-craft.mjs   static craft gate (impeccable); pre-commit + `pnpm lint:design`
+    │   └── check-ui-drift.mjs       drift gate (@poodle64/ui reuse); pre-commit + `pnpm lint:drift`
     └── src/
         ├── app.css             design tokens (Eucalyptus palette, OKLCH)
         ├── routes/

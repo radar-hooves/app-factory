@@ -4,6 +4,28 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.3] - 2026-08-10
+
+### Added
+
+- **The UI-drift gate is now stamped into every `has_frontend` app — the sibling of the design-craft gate (2026.8.2).** `frontend/scripts/check-ui-drift.mjs` reads the component set `@poodle64/ui` actually ships and fails the app for hand-rolling what the package already provides, as a `repo: local` pre-commit hook (`design-drift`) gating on NEW findings against `frontend/.ui-drift-baseline.json`. It catches the reuse class every other gate is blind to — a hand-written component compiles, renders, type-checks and passes its tests, and is only wrong once a human sees it does not match the rest of the app. `canonical-app-shape.md` has bound every app to this gate (naming `repos/cadmus/scripts/check-ui-drift.mjs` as the reference implementation) since before the craft gate; until this stamp nothing wired it — coverage outrunning implementation, the same rule-outruns-wiring defect the craft gate closed a version earlier.
+  - **Two checks, both universal to any app on the shared package.** (1) A local `.svelte` component whose name matches one the package ships — `components/ui/` excluded, since those are the app's own shadcn primitives for what the package genuinely does not ship. (2) A route writing its own `<h1>` instead of composing the shared `PageHeader`.
+  - **The third cadmus check is deliberately not carried.** Cadmus also fails a route composing a component its surface brief does not name; surface briefs were not promoted to the household standard (master-project#249 — four briefs against thirty routes in cadmus's own home app), so a template demanding them would enforce a contract the estate has decided against. An app that adopts surface briefs adds that check back locally, with its own `docs/product/surfaces/` contract behind it.
+  - **Anchored to the frontend package, not a repo root.** Cadmus's reference keys off `process.cwd()` and a root pnpm workspace; the household template nests the frontend, so the script resolves its paths from `import.meta.url` and runs identically from the pre-commit cwd (repo root) and `pnpm lint:drift` (frontend/). Its baseline key stays the uniform `${rule}:${file}` because both carried rules are one-finding-per-file — with a comment preserving cadmus's measured fail-open lesson should a multi-per-file rule ever be added back.
+  - **The baseline is app-owned:** stamped once empty and added to `_skip_if_exists`, so `copier update` never wipes the debt an app has banked. The script is template-owned and updates normally. `pnpm lint:drift` runs it by hand.
+  - The hook is wrapped in the existing `{% if has_frontend %}` block, so a backend-only stamp never carries a gate it cannot run.
+
+### Fixed
+
+- **The template's own starter `+page.svelte` was itself violating the invariant the new gate enforces** — it wrote a raw `<h1>`/`<p>` page title instead of composing the shared `PageHeader`, so every app ever stamped from this template was born non-conformant, caught by nothing. It now composes `PageHeader title=… subtitle=…`. This surfaced exactly as the drift gate's own proof demanded: a fresh stamp could not pass an empty baseline until the scaffold itself was made conformant — which is the finding, not a reason to pre-populate a baseline.
+
+### Proof — a real stamp, driven, not a copy-paste claim
+
+- A `has_frontend=true` stamp scans clean against the empty baseline: exit 0, zero findings, from both the pre-commit cwd (repo root) and `pnpm lint:drift` (frontend/), against the real `@poodle64/ui` component set. The design-craft gate still passes on the same fixed scaffold.
+- Run against the pre-fix scaffold, the gate failed on `src/routes/+page.svelte [hand-rolled-page-title]` — the template defect fixed above, caught by the gate that now ships beside the fix; `page-header` sat unused in the gate's own "never imports" list, precisely what the scaffold should have been composing.
+- Real violations fail it: a local `Card.svelte` duplicating `@poodle64/ui/card` and a second route writing its own `<h1>` produced exit 1 naming both, while an app-owned `components/ui/…/Card.svelte` was correctly exempt. Banking them with `--baseline` grandfathers them (exit 0); a further new `Badge.svelte` then fails on the new one alone. A missing `@poodle64/ui` exits 2 with a clear message, never a silent pass.
+- A `has_frontend=false` stamp renders valid YAML with both design hooks cleanly absent.
+
 ## [2026.8.2] - 2026-08-10
 
 ### Added

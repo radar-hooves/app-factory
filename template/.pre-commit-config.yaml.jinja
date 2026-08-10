@@ -80,4 +80,23 @@ repos:
         language: system
         files: '^frontend/src/.*\.(svelte|css|ts)$'
         pass_filenames: false
+
+  # Catches the app hand-rolling what @poodle64/ui already ships — a local
+  # component duplicating a shipped one, or a route writing its own <h1>
+  # instead of composing the shared PageHeader. Invisible to every other gate:
+  # it compiles, renders, type-checks and passes its tests, and is only wrong
+  # once a human sees it does not match the rest of the app (canonical-app-shape.md).
+  #
+  # Gates on NEW findings only, against frontend/.ui-drift-baseline.json — a
+  # debt register, so it lands on a non-clean app and still fails forward.
+  # Needs `pnpm install` in frontend/ (the script exits 2 with a clear message
+  # if @poodle64/ui is missing).
+  - repo: local
+    hooks:
+      - id: design-drift
+        name: 'design - No new UI drift (hand-rolled shared components)'
+        entry: node frontend/scripts/check-ui-drift.mjs
+        language: system
+        files: '^frontend/src/.*\.svelte$'
+        pass_filenames: false
 {%- endif %}

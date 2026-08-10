@@ -15,6 +15,7 @@
     "lint:js": "eslint .",
     "lint:css": "stylelint \"src/**/*.{css,svelte}\"",
     "lint:design": "node scripts/check-design-craft.mjs",
+    "lint:drift": "node scripts/check-ui-drift.mjs",
     "generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
     "test:e2e": "playwright test"
   },
