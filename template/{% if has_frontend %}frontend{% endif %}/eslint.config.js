@@ -133,7 +133,11 @@ export default ts.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector: "CallExpression[callee.object.name='window'][callee.property.name='addEventListener'][arguments.0.value='keydown']",
+          // Both receivers: the replacement targets <svelte:document>, so
+          // `document.addEventListener` is the MORE idiomatic spelling of the
+          // mistake and must not sail through while `window.` is caught.
+          selector:
+            "CallExpression[callee.object.name=/^(window|document)$/][callee.property.name='addEventListener'][arguments.0.value='keydown']",
           message: 'Bind keyboard shortcuts with <svelte:document onkeydown={...}> so the listener is torn down with the component.',
         },
         {
@@ -164,14 +168,6 @@ export default ts.config(
           message: 'Use the shadcn table primitives from @poodle64/ui/table rather than raw table markup.',
         },
       ],
-    },
-  },
-  {
-    // The package's own primitives are the one place raw table markup
-    // belongs: a wrapper cannot wrap itself.
-    files: ['src/lib/components/ui/**'],
-    rules: {
-      'svelte/no-restricted-html-elements': 'off',
     },
   },
   {
