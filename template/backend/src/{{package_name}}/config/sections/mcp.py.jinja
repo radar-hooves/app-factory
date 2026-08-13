@@ -9,7 +9,7 @@ the app keeps fine-grained authorisation server-side, keyed to that identity.
 The REST/browser auth path (``deps.py`` — Tier 1a proxy headers) is a separate
 concern and is unaffected by this section. A machine caller reaching ``/mcp``
 does not traverse the human proxy, so a forwarded identity header is not
-trustworthy there; see ``rules-library/auth-patterns/proxy-delegated-auth.md``
+trustworthy there; see ``rules-library/platform/proxy-delegated-auth.md``
 §Scope.
 
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):

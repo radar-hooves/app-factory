@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this template are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow calendar versioning (`YYYY.M.x`) per `rules-library/core/10-git-workflow.md`.
+All notable changes to this template are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow calendar versioning (`YYYY.M.x`) per `rules-library/core/git-workflow.md`.
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
@@ -11,6 +11,14 @@ Surfaced by the second ADOPT run (`earworm`).
 ### Fixed
 
 - **The SPA fallback swallowed every unmatched API path as HTML 200.** Only `_app/` was excluded from the `index.html` fallback, so `POST /api/does-not-exist` returned the app's own HTML with a 200 rather than a 404 — a misconfigured machine client got a page instead of an error it could act on, and a wrong path looked like a working one. `main.py` now excludes the API namespaces (`api/`, `mcp/`) alongside `_app/`; an app mounting a further namespace adds it to `_API_PREFIXES`.
+
+Surfaced by the first UPDATE run (`mission-command`, v2026.7.5 → v2026.8.4) — the first repo to take the template forward by `copier update` rather than a fresh stamp or an adopt.
+
+- **The stamped deployment-environment migration broke an updating app's revision chain.** `down_revision` names the template's own initial revision, `825a4116c834`, which exists only in a freshly stamped app. An app taking it by update gets `KeyError: '825a4116c834'` while alembic builds its revision map — surfacing as a pytest INTERNALERROR, not a migration error, so it reads as a harness fault. The template cannot know an app's head, so the migration's docstring now says to repoint it, and names the symptom.
+- **Rule citations across the stamped tree pointed at paths the rules-library no longer has.** `dev-platform/30-canonical-app-shape.md`, `svelte/20-sveltekit-frontend.md`, `python/71-python-testing.md`, `auth-patterns/proxy-delegated-auth.md`, `ai/sidekick-tooling.md`, `infra/20-dev-services.md` and the `core/10-`, `core/20-`, `core/71-`, `core/73-` numbered forms were all stamped into every app, which then carried them into its own new files. Repaired here so an app stops inheriting them.
+- **`main.py`'s docstring described a `combine_lifespans` helper the file does not have** — the lifespan chains the db engine and the FastMCP lifespan directly.
+- **`README.md` and `compose.yaml` still pointed at the shared dev Postgres**, which no longer exists: `dev-environment.md` §"There Is No Development Database" is the current shape.
+- **`playwright.config.ts` referred to `vite.config.ts.jinja`** — a template-authoring filename leaking verbatim into every stamped app.
 
 ## [2026.8.5] - 2026-08-13
 

@@ -1,6 +1,6 @@
 name: Python CI
 
-# Thin caller of the golden reusable (rules-library/core/10-ci-workflow-standard.md).
+# Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
 on:
   push:
     branches: [main]

@@ -24,7 +24,7 @@ async def get_current_user(
 
     Tier 1a (proxy-delegated) auth: the proxy injects these headers after
     verifying the user's session. The app trusts the headers; network isolation
-    is the security boundary (see rules-library/auth-patterns/proxy-delegated-auth.md).
+    is the security boundary (see rules-library/platform/proxy-delegated-auth.md).
 
     Returns:
         dict with 'uid' (stable identifier) and 'username' (display name).

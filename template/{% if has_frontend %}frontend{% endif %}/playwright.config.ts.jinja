@@ -32,7 +32,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `vite dev --port ${E2E_PORT}`,
-    // Read by vite.config.ts.jinja's dev-identity header; keeps this suite's
+    // Read by vite.config.ts's dev-identity header; keeps this suite's
     // writes off whatever the interactive `dev-uid` identity owns.
     env: { {{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID },
     port: E2E_PORT,

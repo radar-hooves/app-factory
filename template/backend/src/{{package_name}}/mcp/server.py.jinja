@@ -11,7 +11,7 @@ are required: Authentik serves one instance-wide userinfo endpoint, so the
 token alone proves identity, not which app it was minted for — the allow-list
 is what restores the app boundary. Authorise off actor.id / actor.type.
 
-Design rules (rules-library/ai/sidekick-tooling.md):
+Design rules (rules-library/sidekick/sidekick-tooling.md):
   - Target ≤20 tools; above 30 is a design defect.
   - Use action-dispatcher pattern: one tool per noun, action= parameter.
   - Tool docstrings must enumerate every action and its parameters.

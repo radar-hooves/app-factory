@@ -12,7 +12,7 @@ _{{ description }}_
 
 ## Installation
 
-**Prerequisites:** Python 3.14+, PostgreSQL (shared dev instance), direnv{% if has_frontend %}, Node.js 22+, pnpm{% endif %}
+**Prerequisites:** Python 3.14+, PostgreSQL (the app's own database — there is no development instance to start), direnv{% if has_frontend %}, Node.js 22+, pnpm{% endif %}
 
 ```bash
 git clone git@github.com:poodle64/{{ project_name }}.git
@@ -37,7 +37,7 @@ pnpm -C frontend dev   # frontend, http://localhost:{{ frontend_port }}
 {%- if has_frontend %}
 | Frontend | SvelteKit (Svelte 5), TypeScript, Tailwind CSS v4, `@poodle64/ui` |
 {%- endif %}
-| Shape | household canonical full-stack template — see `DESIGN.md` and `rules-library/dev-platform/30-canonical-app-shape.md` |
+| Shape | household canonical full-stack template — see `DESIGN.md` and `rules-library/platform/canonical-app-shape.md` |
 
 <div align="center">
 <sub>

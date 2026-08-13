@@ -3,7 +3,7 @@
 # This guards the template's own source (copier.yml, README.md, and
 # everything under template/) — NOT the scaffolded apps it produces, which
 # get their own guard via the shipped template/.pre-commit-config.yaml
-# (rules-library/core/20-pre-commit-config.md). Without this file, commits to
+# (rules-library/core/pre-commit-config.md). Without this file, commits to
 # copier.yml or the template's own docs carried no PII guard and no gitleaks.
 #
 # Install with: pre-commit install
@@ -58,7 +58,7 @@ repos:
   # ---------------------------------------------------------------------------- #
 
   # The master check-pii hook, symlinked at .claude/hooks/master/precommit/pii.py
-  # (rules-library/core/20-pre-commit-config.md — never a per-repo copy).
+  # (rules-library/core/pre-commit-config.md — never a per-repo copy).
   - repo: local
     hooks:
       - id: check-pii

@@ -2,7 +2,7 @@
 
 Uses httpx.AsyncClient + ASGITransport for endpoint tests, over an ephemeral
 per-session Postgres testcontainer — the household hermetic-test pattern
-(`rules-library/python/71-python-testing.md` §Database Integration Tests).
+(`rules-library/stacks/python-testing.md` §Database Integration Tests).
 """
 
 import logging
@@ -53,7 +53,7 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     ``docker run`` leaks a container on every hard kill, OOM or crashed runner.
 
     Random host port also sidesteps a CI runner's fixed-port collisions with
-    always-on shared services (`core/10-ci-workflow-standard.md` §Shared Host
+    always-on shared services (`core/ci-workflow-standard.md` §Shared Host
     Services vs CI Service Containers) — nothing here claims 5432.
     """
     global _EPHEMERAL_POSTGRES
@@ -125,7 +125,7 @@ from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from {{ package_name }}.db.session import get_engine, get_session  # noqa: E402
 from {{ package_name }}.main import create_app  # noqa: E402
 
-# Default Tier 1a identity headers (rules-library/auth-patterns/proxy-delegated-auth.md
+# Default Tier 1a identity headers (rules-library/platform/proxy-delegated-auth.md
 # §Tests: "inject default identity headers in the test client fixture").
 DEFAULT_IDENTITY_HEADERS = {"x-authentik-uid": "test-uid", "x-authentik-username": "testuser"}
 
@@ -231,7 +231,7 @@ def app():
 @pytest.fixture
 def session() -> Generator[Session]:
     """A real Postgres session bound to a connection-level transaction, rolled
-    back at teardown (`rules-library/python/71-python-testing.md` §Transaction
+    back at teardown (`rules-library/stacks/python-testing.md` §Transaction
     Rollback Fixture, sync form).
 
     A service that calls `session.commit()` explicitly would, on a session

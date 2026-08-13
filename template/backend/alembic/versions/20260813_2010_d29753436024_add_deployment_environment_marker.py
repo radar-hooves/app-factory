@@ -3,6 +3,12 @@
 Revision ID: d29753436024
 Revises: 825a4116c834
 Create Date: 2026-08-13 20:10:00.000000+00:00
+
+An app taking this by `copier update` must repoint `down_revision` at its own
+current head — 825a4116c834 is the template's initial revision and exists only
+in a freshly stamped app. Left unrepointed, alembic raises
+`KeyError: '825a4116c834'` while building its revision map, which surfaces as a
+pytest INTERNALERROR rather than a migration error.
 """
 
 from collections.abc import Sequence

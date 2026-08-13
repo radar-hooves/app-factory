@@ -1,7 +1,7 @@
 # Auto-Label Issues
 #
 # Thin caller of the master-project reusable
-# (rules-library/core/10-ci-workflow-standard.md). A PUBLIC repo must omit
+# (rules-library/core/ci-workflow-standard.md). A PUBLIC repo must omit
 # this caller entirely — GitHub cannot resolve the private reusable from a
 # public repo — and record the omission as a registry deviation; delete this
 # file in that case.

@@ -1,6 +1,6 @@
 name: Security
 
-# Thin caller of the golden reusable (rules-library/core/10-ci-workflow-standard.md):
+# Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md):
 # secret scan (gitleaks), Python dependency audit (pip-audit over the hashed
 # lockfile), Trivy filesystem scan, and a CycloneDX SBOM artefact{% if has_frontend %} —
 # plus a Node/pnpm audit over frontend/{% endif %}.

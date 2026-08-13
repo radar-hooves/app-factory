@@ -1,6 +1,6 @@
 """Database engine and session factory.
 
-Sync SQLAlchemy is the household way (`rules-library/dev-platform/30-canonical-app-shape.md`);
+Sync SQLAlchemy is the household way (`rules-library/platform/canonical-app-shape.md`);
 there is no per-app sync/async choice. An endpoint that genuinely fans out I/O
 uses the bounded thread-pool helper in `services/fanout.py` instead of an
 app-wide async flip.

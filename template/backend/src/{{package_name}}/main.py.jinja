@@ -1,13 +1,13 @@
 """Application factory for {{ project_name }}.
 
 The canonical household shape:
-  - lifespan combines db + mcp lifespans via combine_lifespans
+  - lifespan chains the db engine and the FastMCP lifespan
   - /mcp is mounted as an ASGI sub-app (FastMCP HTTP transport), wrapped in the
     household's canonical Authentik bearer-token gate
   - The SPA is served from /frontend/build/ by app.frontend
 
 The app exposes two surfaces and each is gated on its own terms — they are NOT
-interchangeable (rules-library/dev-platform/30-canonical-app-shape.md):
+interchangeable (rules-library/platform/canonical-app-shape.md):
 
   - The HUMAN surface (/api, the SPA) is Tier 1a (Authentik proxy-delegated).
     Identity arrives in X-authentik-uid / X-authentik-username headers; no

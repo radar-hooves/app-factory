@@ -1,7 +1,8 @@
 # {{ project_name }} — local image build + smoke test.
 #
-# This builds the production image from source and runs it against the shared
-# dev Postgres (rules-library/infra/20-dev-services.md). It is NOT the
+# This builds the production image from source and runs it against the same
+# database the dev server uses — there is no separate development database
+# (rules-library/stacks/dev-environment.md). It is NOT the
 # production deployment — that lives as its own stack under the operator's
 # fleet repo, using the published image. Stop any local dev server on
 # {{ backend_port }} before bringing this up; both bind the same host port.
