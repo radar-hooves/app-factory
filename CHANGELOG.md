@@ -10,6 +10,7 @@ Surfaced by the second ADOPT run (`earworm`).
 
 ### Fixed
 
+- **The test suite could not collect: `testcontainers.community.postgres` does not exist.** `conftest.py` imported the ephemeral Postgres from a module path no released `testcontainers` ships (latest is 4.15.0; there is no 5.x and no `community` namespace), so a stamped app's very first `pytest` run died resolving its own database fixture. The import is `testcontainers.postgres`.
 - **The image build could never authenticate in CI.** The Dockerfile mounted its GitHub Packages token as a BuildKit secret named `npm_token`, while the household's own reusable image workflow (`master-project/.github/workflows/docker-image-simple.yaml`) supplies it as `gh_pkg_token` — and the mount is `required=true`, so every stamped app's first `Build and Push Docker Image` run failed on a secret that was there under another name. Both the Dockerfile and `compose.yaml` now use `gh_pkg_token`; the local build variable is `GH_PKG_TOKEN`.
 - **The SPA fallback swallowed every unmatched API path as HTML 200.** Only `_app/` was excluded from the `index.html` fallback, so `POST /api/does-not-exist` returned the app's own HTML with a 200 rather than a 404 — a misconfigured machine client got a page instead of an error it could act on, and a wrong path looked like a working one. `main.py` now excludes the API namespaces (`api/`, `mcp/`) alongside `_app/`; an app mounting a further namespace adds it to `_API_PREFIXES`.
 
