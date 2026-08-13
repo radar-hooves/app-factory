@@ -11,10 +11,12 @@ export default {
     'hue-degree-notation': 'number',
     'lightness-notation': 'number',
     // Tailwind v4 at-rules the standard config doesn't know about.
-    'at-rule-no-unknown': [true, { ignoreAtRules: ['theme', 'source', 'custom-variant', 'apply'] }],
+    'at-rule-no-unknown': [true, { ignoreAtRules: ['theme', 'source', 'custom-variant', 'apply', 'utility', 'plugin'] }],
     // app.css's five-block structure (docs/master/templates/golden-patterns/
     // app-shape-and-frontend.md §"Token consumption") deliberately repeats
     // `:root`/`.dark` once per block for readability.
     'no-duplicate-selectors': null,
+    // Svelte's own scoping pseudo-classes, not standard CSS.
+    'selector-pseudo-class-no-unknown': [true, { ignorePseudoClasses: ['global', 'local'] }],
   },
 };

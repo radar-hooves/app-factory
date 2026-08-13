@@ -5,17 +5,17 @@
  * shape usable with svelte-sonner: toast.error(info.title, { description: info.description }).
  */
 
-export interface ApiError {
+export interface ApiErrorInfo {
   title: string;
   description?: string;
   status?: number;
 }
 
-export function extractApiError(error: unknown, status?: number): ApiError {
+export function extractApiError(error: unknown, status?: number): ApiErrorInfo {
   if (error && typeof error === 'object') {
     const e = error as Record<string, unknown>;
     if (typeof e.message === 'string') {
-      return { title: e.error as string ?? 'Error', description: e.message, status };
+      return { title: (e.error as string) ?? 'Error', description: e.message, status };
     }
     if (typeof e.detail === 'string') {
       return { title: 'Error', description: e.detail, status };

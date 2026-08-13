@@ -1,0 +1,45 @@
+import { defineConfig, devices } from '@playwright/test';
+
+const CI = !!process.env.CI;
+
+// There is one database and no staging environment (dev-environment.md
+// "There Is No Development Database"), so this suite gets its own port and
+// its own identity — the two things that stop it colliding with a `pnpm dev`
+// session already running, or writing under the identity that session uses.
+const E2E_PORT = {{ frontend_port }} + 1000; // not {{ frontend_port }}: a fixed offset out of the whole frontend-dev port band so it can never collide with any app's interactive dev server.
+const E2E_UID = 'e2e-uid';
+
+export default defineConfig({
+  testDir: 'tests/e2e',
+  timeout: CI ? 90_000 : 30_000,
+  expect: { timeout: CI ? 20_000 : 5_000 },
+  // Deliberately no CI retry: a retry turns a real intermittent failure into a green build.
+  retries: 0,
+  reporter: CI
+    ? [['list'], ['html', { open: 'never' }], ['junit', { outputFile: 'test-results/junit.xml' }], ['github']]
+    : [['list']],
+  use: {
+    baseURL: `http://localhost:${E2E_PORT}`,
+    trace: CI ? 'retain-on-failure' : 'off',
+  },
+  projects: [
+    // Chromium only. Add firefox/webkit `devices` entries here if
+    // cross-browser coverage becomes worth the run-time cost.
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  webServer: {
+    command: `vite dev --port ${E2E_PORT}`,
+    // Read by vite.config.ts.jinja's dev-identity header; keeps this suite's
+    // writes off whatever the interactive `dev-uid` identity owns.
+    env: { {{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID },
+    port: E2E_PORT,
+    // Never reuse — the whole point of the separate port and identity is
+    // that this suite controls the server it runs against.
+    reuseExistingServer: false,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
+});

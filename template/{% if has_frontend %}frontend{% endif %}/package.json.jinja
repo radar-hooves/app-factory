@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.28.0",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite dev --port {{ frontend_port }}",
     "build": "vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
@@ -14,10 +14,16 @@
     "lint": "pnpm run lint:js",
     "lint:js": "eslint .",
     "lint:css": "stylelint \"src/**/*.{css,svelte}\"",
+    "lint:css:fix": "stylelint --fix \"src/**/*.{css,svelte}\"",
     "lint:design": "node scripts/check-design-craft.mjs",
+    "lint:design:live": "node scripts/check-design-craft.mjs --live",
     "lint:drift": "node scripts/check-ui-drift.mjs",
     "generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
-    "test:e2e": "playwright test"
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "playwright test --pass-with-no-tests",
+    "test:e2e:debug": "playwright test --debug"
   },
   "devDependencies": {
     "@fontsource-variable/fraunces": "^5.1.0",
@@ -26,33 +32,45 @@
     "@lucide/svelte": "^1.7.0",
     "@playwright/test": "^1.58.0",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.50.0",
+    "@sveltejs/kit": "^2.57.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.0",
     "@tailwindcss/vite": "^4.2.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
+    "@types/node": "^24.10.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-svelte": "^3.0.0",
+    "eslint-plugin-tailwindcss": "^4.0.6",
     "globals": "^16.0.0",
     "impeccable": "3.5.0",
+    "jsdom": "^28.1.0",
     "openapi-typescript": "^7.13.0",
-    "typescript-eslint": "^8.0.0",
     "postcss-html": "^1.7.0",
     "stylelint": "^16.0.0",
     "stylelint-config-html": "^1.1.0",
-    "stylelint-config-standard": "^37.0.0",
+    "stylelint-config-standard": "^40.0.0",
     "svelte": "^5.54.0",
     "svelte-check": "^4.4.0",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.0",
-    "vite": "^7.3.0"
+    "typescript-eslint": "^8.55.0",
+    "vite": "^7.3.5",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@poodle64/design-tokens": "^2026.7.2",
     "@poodle64/ui": "^2026.7.2",
     "bits-ui": "^2.18.1",
+    "clsx": "^2.1.1",
     "mode-watcher": "^1.1.0",
     "openapi-fetch": "^0.17.0",
-    "svelte-sonner": "^1.1.1"
+    "svelte-sonner": "^1.1.1",
+    "tailwind-merge": "^3.4.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

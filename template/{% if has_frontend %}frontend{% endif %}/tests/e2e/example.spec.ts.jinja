@@ -1,0 +1,10 @@
+import { expect, test } from '@playwright/test';
+
+// The scaffold's example E2E spec — delete it once this app has real ones.
+// It exists so a freshly stamped app has a playwright run that passes, and
+// proves the harness (dedicated port, synthetic identity, no server reuse)
+// actually drives the app.
+test('the home route renders the shared page header', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1, name: '{{ project_name }}' })).toBeVisible();
+});

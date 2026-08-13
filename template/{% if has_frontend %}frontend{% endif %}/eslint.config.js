@@ -1,5 +1,6 @@
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
+import tailwind from 'eslint-plugin-tailwindcss';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
@@ -17,12 +18,9 @@ import ts from 'typescript-eslint';
 // table "simple" or "complex", which columns to hide responsively — which no
 // linter can decide.
 //
-// No eslint-plugin-tailwindcss: its no-arbitrary-value rule is inoperative
-// under Tailwind v4 (no tailwind.config.js to introspect), and v4.2.0 of the
-// plugin dropped the flat/recommended export this config used to load,
-// crashing ESLint outright. The binding raw-value gate is the frontend-ci.yaml
-// grep gate (docs/master/templates/golden-patterns/app-shape-and-frontend.md
-// §Enforcement), not this plugin.
+// eslint-plugin-tailwindcss's flat/recommended export crashes under Tailwind
+// v4 (no tailwind.config.js to introspect) — never import it; the
+// no-arbitrary-value rule below is wired directly instead.
 export default ts.config(
   ...ts.configs.recommended,
   ...svelte.configs.recommended,
@@ -41,6 +39,15 @@ export default ts.config(
     // names the replacement, because a lint error that only says "no" gets
     // suppressed; one that says what to use instead gets followed.
     rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+
       'no-restricted-globals': [
         'error',
         {
@@ -136,8 +143,7 @@ export default ts.config(
           // Both receivers: the replacement targets <svelte:document>, so
           // `document.addEventListener` is the MORE idiomatic spelling of the
           // mistake and must not sail through while `window.` is caught.
-          selector:
-            "CallExpression[callee.object.name=/^(window|document)$/][callee.property.name='addEventListener'][arguments.0.value='keydown']",
+          selector: "CallExpression[callee.object.name=/^(window|document)$/][callee.property.name='addEventListener'][arguments.0.value='keydown']",
           message: 'Bind keyboard shortcuts with <svelte:document onkeydown={...}> so the listener is torn down with the component.',
         },
         {
@@ -169,6 +175,26 @@ export default ts.config(
         },
       ],
     },
+  },
+  {
+    // Wired directly rather than through the plugin's recommended export —
+    // see the top-of-file note. The frontend-ci.yaml grep gate
+    // (docs/master/templates/golden-patterns/app-shape-and-frontend.md
+    // §Enforcement) is the binding check for Svelte `class=` strings, which
+    // this rule cannot see; it catches TS/JS-authored class values instead.
+    plugins: { tailwindcss: tailwind },
+    settings: {
+      tailwindcss: {
+        cssConfigPath: './src/app.css',
+      },
+    },
+    rules: {
+      'tailwindcss/no-arbitrary-value': 'error',
+    },
+  },
+  {
+    // Vendored shadcn-svelte primitives — arbitrary values are upstream-managed.
+    ignores: ['src/lib/components/ui/**'],
   },
   {
     ignores: ['build/', '.svelte-kit/', 'dist/'],

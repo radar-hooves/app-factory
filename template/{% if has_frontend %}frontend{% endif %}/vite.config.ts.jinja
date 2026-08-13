@@ -2,6 +2,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
+// Overridable so playwright.config.ts.jinja's E2E suite authenticates as its
+// own identity rather than this default interactive one — see its comment.
+const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'dev-uid';
+
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   server: {
@@ -15,10 +19,9 @@ export default defineConfig({
       '/mcp': 'http://localhost:{{ backend_port }}',
     },
     // Inject Authentik dev-bypass headers for the HUMAN surface (/api, the SPA)
-    // — same code path as production. Change the uid/username to impersonate a
-    // different user. These headers carry no weight on /mcp.
+    // — same code path as production. These headers carry no weight on /mcp.
     headers: {
-      'x-authentik-uid': 'dev-uid',
+      'x-authentik-uid': devUid,
       'x-authentik-username': 'devuser',
     },
   },
