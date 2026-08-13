@@ -12,7 +12,7 @@ Usage:
 
 from functools import lru_cache
 
-from pydantic import ValidationError, computed_field, model_validator
+from pydantic import Field, ValidationError, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.paths import env_file
@@ -59,12 +59,19 @@ class Settings(BaseSettings):
     # with cors_origins_list below doing the split.
     cors_origins: str = ""
 
-    # Domain sections — populated from nested env vars or sub-model defaults.
-    database: DatabaseSettings = DatabaseSettings()
-    example: ExampleSettings = ExampleSettings()
+    # Domain sections. get_settings() constructs each one and passes it as an
+    # init argument, which is why these carry only a factory: a section left to
+    # the parent's own sources is rebuilt from THEM, and the parent knows only
+    # the DATABASE__POSTGRES_HOST spelling. A bare POSTGRES_HOST in the
+    # environment then reaches nothing, the section falls back to its own field
+    # defaults or to .env, and a container configured entirely by environment
+    # silently runs on localhost. Init arguments outrank every source, so the
+    # section's own resolution (env, then .env, then default) is what stands.
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    example: ExampleSettings = Field(default_factory=ExampleSettings)
     # Inbound auth for the embedded MCP surface. Defaults fail CLOSED: with no
     # {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL set, every /mcp HTTP request 401s.
-    mcp: MCPSettings = MCPSettings()
+    mcp: MCPSettings = Field(default_factory=MCPSettings)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -87,7 +94,11 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return the cached Settings instance (one per process)."""
     try:
-        return Settings()
+        return Settings(
+            database=DatabaseSettings(),
+            example=ExampleSettings(),
+            mcp=MCPSettings(),
+        )
     except ValidationError as exc:
         # `from None`, deliberately: chaining the original ValidationError
         # would re-print pydantic's input_value echo (the whole env dict,

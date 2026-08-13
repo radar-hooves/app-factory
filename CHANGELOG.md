@@ -6,9 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Surfaced by the second ADOPT run (`earworm`).
+Surfaced by the third ADOPT run (`eight`).
 
 ### Fixed
+
+- **No environment variable reached any settings section.** `Settings` declared each section as a class-body instance (`database: DatabaseSettings = DatabaseSettings()`), and pydantic rebuilds a nested settings default from the PARENT's sources — which know only the `DATABASE__POSTGRES_HOST` spelling. A bare `POSTGRES_HOST` therefore reached nothing and the section fell back to its own field defaults or to `.env`, so a container configured entirely by environment silently ran on `localhost:5432`, and the test harness's "never inherit ambient `POSTGRES_*`" guarantee was not one: `.env` won. Sections are now built in `get_settings()` and passed as init arguments, which outrank every source, so each section's own env → `.env` → default resolution stands.
+- **`DEBUG=true` rendered a full traceback to the caller.** The app factory passed `settings.debug` to `FastAPI(debug=...)`, which installs Starlette's interactive error page. `ServerErrorMiddleware` checks that flag BEFORE the registered `Exception` handler, so the sanitised 500 body never ran and `core/security-standards.md`'s no-stack-traces rule was broken by a single env var. The flag is hardcoded `False`; `settings.debug` still drives logging verbosity.
+- **`.envrc` broke two `core/direnv.md` invariants.** It neither overrode `direnv_layout_dir` (so a checkout inside a file-sync folder got an in-tree `.direnv/` churning watched-file mtimes) nor preferred Nix when a `flake.nix` is present (so a stamped app on a host whose toolchain comes from the flake lost it).
+
+Surfaced by the second ADOPT run (`earworm`).
 
 - **The test suite could not collect: `testcontainers.community.postgres` does not exist.** `conftest.py` imported the ephemeral Postgres from a module path no released `testcontainers` ships (latest is 4.15.0; there is no 5.x and no `community` namespace), so a stamped app's very first `pytest` run died resolving its own database fixture. The import is `testcontainers.postgres`.
 - **The image build could never authenticate in CI.** The Dockerfile mounted its GitHub Packages token as a BuildKit secret named `npm_token`, while the household's own reusable image workflow (`master-project/.github/workflows/docker-image-simple.yaml`) supplies it as `gh_pkg_token` — and the mount is `required=true`, so every stamped app's first `Build and Push Docker Image` run failed on a secret that was there under another name. Both the Dockerfile and `compose.yaml` now use `gh_pkg_token`; the local build variable is `GH_PKG_TOKEN`.

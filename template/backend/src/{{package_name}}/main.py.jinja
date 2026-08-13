@@ -134,7 +134,13 @@ def create_app() -> FastAPI:
         title="{{ project_name }}",
         description="{{ description }}",
         lifespan=lifespan,
-        debug=settings.debug,
+        # Hardcoded, not settings.debug: the flag installs Starlette's
+        # interactive error page, which ServerErrorMiddleware checks BEFORE the
+        # Exception handler registered below, so a DEBUG=true process renders a
+        # full traceback to the caller — `core/security-standards.md` forbids
+        # exposing stack traces. settings.debug still drives logging verbosity
+        # through configure_logging() above.
+        debug=False,
     )
     register_exception_handlers(app)
 
