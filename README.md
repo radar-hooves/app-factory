@@ -173,6 +173,16 @@ Six things a greenfield stamp never has to think about:
    config-key descriptions, test names, README headings. Where the app says the
    same thing differently, take the template's words
    (`canonical-app-shape.md` §Sameness Extends to Prose).
+7. **Rename a colliding `operation_id`.** `api/system/router.py` claims
+   `healthCheck`. An app that already had its own liveness route usually claims
+   it too, and FastAPI resolves the collision by dropping one path from the
+   schema — a `UserWarning` on stdout, then a generated `schema.d.ts` quietly
+   missing an endpoint. Rename the app's.
+8. **Resolve a conflict hunk against the comment it sits in.** Taking the app's
+   side of one hunk and the template's side of the next can split a `/* ... */`
+   block across the boundary. Neither `pnpm check` nor `eslint` sees it; the
+   first signal is `pnpm build` failing inside Tailwind with `Unterminated
+   string`. Read each resolved file once before running the gates.
 
 Verify by driving, not by building: the backend suite with nothing else running
 (it must start its own Postgres), `pnpm check`/`lint`/`build`, both design gates,
