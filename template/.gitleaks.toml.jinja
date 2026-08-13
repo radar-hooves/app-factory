@@ -1,12 +1,15 @@
 title = "{{ project_name }} gitleaks config"
 
+# `useDefault` is what loads gitleaks' ~170 built-in rules. Without it a config
+# carrying only an [allowlist] has NO rules at all, so every scan passes and the
+# secret gate is silently dead — in pre-commit, in CI, everywhere.
+[extend]
+useDefault = true
+
 [allowlist]
   description = "Allowlist for documentation examples and non-secrets"
   regexTarget = "match"
   regexes = [
     '''your_password''',
     '''your_secret_key''',
-  ]
-  paths = [
-    '''\.env\.example$''',
   ]
