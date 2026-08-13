@@ -10,6 +10,11 @@ describe('extractApiError', () => {
     expect(info).toEqual({ title: 'not_found', description: 'No such item', status: 404 });
   });
 
+  it("gives the client's normalised network code a human title", () => {
+    const info = extractApiError({ error: 'network_error', message: 'Could not reach the API.' }, 503);
+    expect(info.title).toBe('Network error');
+  });
+
   it("maps FastAPI's bare detail payload", () => {
     expect(extractApiError({ detail: 'Unprocessable' }, 422)).toEqual({
       title: 'Error',
@@ -18,10 +23,14 @@ describe('extractApiError', () => {
     });
   });
 
-  it('reports a fetch failure as a network error', () => {
+  // A raw TypeError is an object with a string `message`, so it reaches this
+  // helper looking exactly like a backend envelope. The ordering inside
+  // extractApiError is what keeps them apart.
+  it('reports a raw fetch rejection as a network error, not a generic one', () => {
     expect(extractApiError(new TypeError('Failed to fetch'))).toEqual({
       title: 'Network error',
       description: 'Failed to fetch',
+      status: undefined,
     });
   });
 
