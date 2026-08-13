@@ -1,0 +1,112 @@
+"""Guard against pointing {{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_* at production.
+
+Extracted out of ``conftest.py`` so this logic is unit-testable via an
+ordinary import: ``conftest.py`` itself cannot be safely re-imported for
+testing, because its module-level code stands up a real ephemeral Postgres
+container (or connects to a real explicit server) as a side effect of
+import. This module has no side effects of its own -- only functions,
+called by ``conftest.py`` at the point it resolves the test server.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import quote_plus
+
+from sqlalchemy import create_engine, text
+
+TEST_POSTGRES_KEYS = ("host", "port", "user", "password")
+_TEST_ENV_PREFIX = "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_"
+_APPLICATION_DATABASE = "{{ project_name | replace('-', '_') }}"
+
+
+def partial_quartet_warning(explicit: dict[str, str | None]) -> str | None:
+    """Return a warning message when some, but not all, of the four vars are set.
+
+    A silent fallback here would be the failure: a typo'd or half-configured
+    quartet would fall back to the ephemeral container exactly as quietly as
+    setting none of them, so anyone meaning to target a real server would
+    never learn their config was ignored. Returns None when the quartet is
+    either unset or complete -- both are the ordinary, unremarkable cases.
+    """
+    set_keys = {key for key in TEST_POSTGRES_KEYS if explicit.get(key)}
+    if not set_keys or set_keys == set(TEST_POSTGRES_KEYS):
+        return None
+    missing = ", ".join(f"{_TEST_ENV_PREFIX}{key.upper()}" for key in TEST_POSTGRES_KEYS if key not in set_keys)
+    return (
+        f"Only some {_TEST_ENV_PREFIX}* vars are set (missing: {missing}); ignoring the partial "
+        "quartet and falling back to an ephemeral Postgres container instead. Set all four, or none."
+    )
+
+
+def explicit_server_url(explicit: dict[str, str], dbname: str) -> str:
+    """Build a connection URL to a database on the explicit test server.
+
+    Mirrors ``DatabaseSettings.database_url`` (``config/sections/database.py``)
+    without going through ``get_settings()`` -- the caller (``conftest.py``)
+    has not assigned ``POSTGRES_*`` env vars at the point this runs.
+    """
+    username = quote_plus(explicit["user"])
+    password = quote_plus(explicit["password"])
+    return f"postgresql://{username}:{password}@{explicit['host']}:{explicit['port']}/{dbname}"
+
+
+def refuse_if_explicit_server_is_production(explicit: dict[str, str]) -> None:
+    """Refuse to run the suite against an explicit test server that is production.
+
+    ``{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_*`` is meant
+    to point at a purpose-provisioned test server (CI's own service
+    container) -- but the four vars are entirely unvalidated, and a
+    development session can reach the real database through a tunnel that
+    presents as localhost on an arbitrary port. Typing that tunnel's
+    host/port into these four vars would aim the whole suite at production
+    with no guard at all: the stamp check the test engine fixture runs later
+    reads the marker on the TEST database it creates, never the target
+    SERVER's own application database.
+
+    Checks the same stamp mechanism production stamps itself with on every
+    container start (``{{ package_name }}.db.stamp``), fail-closed like
+    ``{{ package_name }}.db.environment.is_production``: an unstamped or
+    unreadable marker reads as production, because guessing "safe" wrongly
+    here is catastrophic and guessing "unsafe" wrongly costs one command to
+    stamp it.
+
+    Raises:
+        RuntimeError: The target server could not be reached, or its
+            application database reads as production.
+    """
+    from {{ package_name }}.db.environment import is_production
+
+    maintenance_engine = create_engine(explicit_server_url(explicit, "postgres"))
+    try:
+        with maintenance_engine.connect() as conn:
+            # The application database is always named "{{ project_name | replace('-', '_') }}"
+            # in this project (config/sections/database.py's default). Probing
+            # that specific database -- rather than enumerating every database
+            # on an unfamiliar server -- is the minimum check that catches the
+            # one shape of accident this project can actually make.
+            database_exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": _APPLICATION_DATABASE}
+            ).scalar()
+    except Exception as exc:  # can't verify safety, so this must not proceed silently
+        raise RuntimeError(
+            f"Could not connect to the {_TEST_ENV_PREFIX}* server to check whether it is "
+            f"production before creating anything there.\n  {type(exc).__name__}: {exc}"
+        ) from exc
+    finally:
+        maintenance_engine.dispose()
+
+    if not database_exists:
+        return  # A genuine purpose-provisioned test server has no such database.
+
+    target_engine = create_engine(explicit_server_url(explicit, _APPLICATION_DATABASE))
+    try:
+        if is_production(target_engine):
+            raise RuntimeError(
+                f"{_TEST_ENV_PREFIX}* points at a server whose {_APPLICATION_DATABASE!r} database is "
+                "stamped production (or carries no readable stamp at all, which reads as production "
+                "fail-closed). Refusing to run the test suite against it -- this is very likely "
+                "production reached through a tunnel. If this genuinely is a purpose-provisioned "
+                f"test server, stamp its database first: python -m {{ package_name }}.db.stamp local"
+            )
+    finally:
+        target_engine.dispose()

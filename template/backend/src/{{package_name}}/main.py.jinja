@@ -25,16 +25,19 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 {% if has_frontend -%}
 from fastapi.staticfiles import StaticFiles
 {% endif %}
-from {{ package_name }}.api.main import api_router, register_exception_handlers
+from {{ package_name }}.api.main import api_router
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.paths import project_root
 from {{ package_name }}.db.session import get_engine
+from {{ package_name }}.exceptions import register_exception_handlers
 from {{ package_name }}.logging import configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from {{ package_name }}.mcp.server import create_mcp_server
+from {{ package_name }}.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
 
 _log = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ _FRONTEND_BUILD: Path = project_root() / "frontend" / "build"
 
 
 @asynccontextmanager
-async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Warm the database engine; dispose on shutdown."""
     engine = get_engine()
     app.state.engine = engine
@@ -80,11 +83,10 @@ def create_app() -> FastAPI:
         )
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
-            async with _db_lifespan(app):
-                async with raw_mcp_app.lifespan(raw_mcp_app):
-                    yield
+            async with _db_lifespan(app), raw_mcp_app.lifespan(raw_mcp_app):
+                yield
         finally:
             # Close the gate's userinfo httpx client so its connection pool does
             # not leak across app-factory lifecycles (tests, hot reload). Logged
@@ -103,6 +105,20 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
     register_exception_handlers(app)
+
+    # Middleware order: added last wraps outermost (runs first). Execution
+    # order is RequestID -> RequestLogging -> SecurityHeaders -> CORS -> handler,
+    # so the correlation id is bound before anything downstream logs.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(SecurityHeadersMiddleware, is_production=not settings.debug)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIDMiddleware)
 
     # MCP surface at /mcp — the GATED app, never raw_mcp_app. Every HTTP request
     # must carry a valid Authentik Bearer token or it 401s before reaching a tool.

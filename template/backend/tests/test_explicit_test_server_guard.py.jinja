@@ -1,0 +1,128 @@
+"""Tests for the {{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_* explicit-server production guard.
+
+Exercises ``tests/support/explicit_server_guard.py`` directly rather than
+through ``conftest.py``: ``conftest.py``'s module-level code stands up a
+real ephemeral Postgres (or connects to a real explicit server) as a side
+effect of import, which is exactly what these tests must not do. A
+monkeypatched fake engine stands in for a real second server.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from tests.support import explicit_server_guard as guard
+
+_EXPLICIT = {"host": "db.example", "port": "5432", "user": "tester", "password": "secret"}
+
+
+class _FakeResult:
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def scalar(self) -> object:
+        return self._value
+
+
+class _FakeConnection:
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def __enter__(self) -> _FakeConnection:
+        return self
+
+    def __exit__(self, *exc_info: object) -> bool:
+        return False
+
+    def execute(self, *args: object, **kwargs: object) -> _FakeResult:
+        return _FakeResult(self._value)
+
+
+class _FakeEngine:
+    def __init__(self, scalar_value: object) -> None:
+        self._scalar_value = scalar_value
+        self.disposed = False
+
+    def connect(self) -> _FakeConnection:
+        return _FakeConnection(self._scalar_value)
+
+    def dispose(self) -> None:
+        self.disposed = True
+
+
+class _BrokenEngine:
+    """Simulates a server that cannot be reached at all."""
+
+    def connect(self) -> _FakeConnection:
+        raise OSError("connection refused")
+
+    def dispose(self) -> None:
+        pass
+
+
+@pytest.mark.unit
+class TestPartialQuartetWarning:
+    def test_none_set_returns_none(self):
+        assert guard.partial_quartet_warning({"host": None, "port": None, "user": None, "password": None}) is None
+
+    def test_all_set_returns_none(self):
+        assert guard.partial_quartet_warning(_EXPLICIT) is None
+
+    def test_partial_set_names_only_the_missing_vars(self):
+        partial = {"host": "db.example", "port": "5432", "user": None, "password": None}
+        message = guard.partial_quartet_warning(partial)
+        assert message is not None
+        assert "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_USER" in message
+        assert "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_PASSWORD" in message
+        assert "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_HOST" not in message
+        assert "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_PORT" not in message
+
+
+@pytest.mark.unit
+class TestExplicitServerUrl:
+    def test_builds_expected_url_and_quotes_special_characters(self):
+        explicit = {"host": "db.example", "port": "5433", "user": "te st", "password": "p@ss/word"}
+        url = guard.explicit_server_url(explicit, "postgres")
+        assert url == "postgresql://te+st:p%40ss%2Fword@db.example:5433/postgres"
+
+
+@pytest.mark.unit
+class TestRefuseIfExplicitServerIsProduction:
+    def test_database_absent_is_not_an_error(self, monkeypatch):
+        """A genuine purpose-provisioned server has no application database -- nothing to check."""
+        maintenance_engine = _FakeEngine(scalar_value=None)
+        monkeypatch.setattr(guard, "create_engine", lambda url: maintenance_engine)
+
+        guard.refuse_if_explicit_server_is_production(_EXPLICIT)  # must not raise
+
+        assert maintenance_engine.disposed
+
+    def test_production_stamped_target_is_refused(self, monkeypatch):
+        maintenance_engine = _FakeEngine(scalar_value=True)
+        target_engine = _FakeEngine(scalar_value=None)
+        made = iter([maintenance_engine, target_engine])
+
+        monkeypatch.setattr(guard, "create_engine", lambda url: next(made))
+        monkeypatch.setattr("{{ package_name }}.db.environment.is_production", lambda engine: True)
+
+        with pytest.raises(RuntimeError, match="production"):
+            guard.refuse_if_explicit_server_is_production(_EXPLICIT)
+
+        assert maintenance_engine.disposed
+        assert target_engine.disposed
+
+    def test_local_stamped_target_is_not_refused(self, monkeypatch):
+        maintenance_engine = _FakeEngine(scalar_value=True)
+        target_engine = _FakeEngine(scalar_value=None)
+        made = iter([maintenance_engine, target_engine])
+
+        monkeypatch.setattr(guard, "create_engine", lambda url: next(made))
+        monkeypatch.setattr("{{ package_name }}.db.environment.is_production", lambda engine: False)
+
+        guard.refuse_if_explicit_server_is_production(_EXPLICIT)  # must not raise
+
+    def test_unreachable_server_raises_a_clear_error(self, monkeypatch):
+        monkeypatch.setattr(guard, "create_engine", lambda url: _BrokenEngine())
+
+        with pytest.raises(RuntimeError, match="Could not connect"):
+            guard.refuse_if_explicit_server_is_production(_EXPLICIT)

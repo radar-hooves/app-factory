@@ -16,6 +16,8 @@ dependencies = [
     "httpx>=0.28.0",
     # pyyaml: the MCP actor allow-list loader (mcp/actors.py).
     "pyyaml>=6.0.2",
+    # gunicorn: production process manager (entrypoint.sh, gunicorn.conf.py).
+    "gunicorn>=23.0.0",
 ]
 
 [dependency-groups]
@@ -45,7 +47,7 @@ line-length = 120
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4"]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
 ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]

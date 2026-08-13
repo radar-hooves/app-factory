@@ -1,0 +1,116 @@
+"""What environment is the connected database?
+
+Production stamps its own row on every container start (``entrypoint.sh``
+calls ``db/stamp.py`` immediately after migrations). A database that has
+never been stamped is treated as production -- the fail-closed default,
+because guessing "local" wrongly risks running destructive tooling against
+the real database, while guessing "production" wrongly costs one command to
+stamp it. This exists because a development session can reach the real
+database directly (there is no separate development database), and a tunnel
+makes it present as localhost on an arbitrary port -- no client-side check
+can tell the two apart, so the answer is read from the database itself.
+"""
+
+from __future__ import annotations
+
+import logging
+from enum import StrEnum
+
+from sqlalchemy import Boolean, CheckConstraint, DateTime, String, func, text
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.orm import Mapped, mapped_column
+
+from {{ package_name }}.db.base import Base
+
+logger = logging.getLogger(__name__)
+
+
+class DeploymentEnvironment(StrEnum):
+    """The environment a database says it is."""
+
+    PRODUCTION = "production"
+    LOCAL = "local"
+
+
+class DeploymentEnvironmentMarker(Base):
+    """The row a database uses to say what it is."""
+
+    __tablename__ = "deployment_environment"
+
+    # A single row, enforced below: a table that could hold two rows would let
+    # a second, friendlier row be appended rather than the stamp being
+    # overwritten.
+    id: Mapped[bool] = mapped_column(Boolean, primary_key=True, server_default=text("true"))
+    environment: Mapped[str] = mapped_column(String(32), nullable=False)
+    stamped_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("id IS TRUE", name="ck_deployment_environment_single_row"),
+        CheckConstraint(
+            "environment IN ('production', 'local')",
+            name="ck_deployment_environment_known_value",
+        ),
+    )
+
+
+def stamped_environment(bind: Engine | Connection) -> DeploymentEnvironment | None:
+    """Return what the database says it is, or None if it has never said.
+
+    The honest reading. None genuinely means unknown -- a database created
+    moments ago and not yet stamped is indistinguishable here from one whose
+    marker table does not exist. Callers decide what unknown is worth; see
+    ``read_environment`` for the interpretation that refuses.
+    """
+    statement = text("SELECT environment FROM deployment_environment LIMIT 1")
+    try:
+        if isinstance(bind, Engine):
+            with bind.connect() as connection:
+                value = connection.execute(statement).scalar()
+        else:
+            value = bind.execute(statement).scalar()
+    except Exception as exc:  # an unreadable marker is an unknown one
+        logger.debug("Could not read the deployment environment marker: %s", exc)
+        return None
+    return DeploymentEnvironment(value) if value is not None else None
+
+
+def read_environment(bind: Engine | Connection) -> DeploymentEnvironment:
+    """Return the environment the connected database declares, treating unknown as production.
+
+    The fail-closed reading, for gating destructive work. An unstamped
+    database and one with no marker table are both reported as PRODUCTION,
+    because the cost of guessing "local" wrongly is an erased ledger and the
+    cost of guessing "production" wrongly is one command to stamp it.
+    """
+    environment = stamped_environment(bind)
+    if environment is None:
+        logger.warning("The deployment environment marker is unset or unreadable; assuming production")
+        return DeploymentEnvironment.PRODUCTION
+    return environment
+
+
+def stamp_environment(bind: Engine | Connection, environment: DeploymentEnvironment) -> None:
+    """Record what this database is, replacing any previous stamp.
+
+    The marker table holds exactly one row (a check constraint enforces it),
+    so a re-stamp overwrites rather than accumulating -- a database cannot
+    end up claiming to be both.
+    """
+    statement = text(
+        """
+        INSERT INTO deployment_environment (id, environment, stamped_at)
+        VALUES (TRUE, :environment, NOW())
+        ON CONFLICT (id) DO UPDATE SET environment = EXCLUDED.environment, stamped_at = EXCLUDED.stamped_at
+        """
+    )
+    if isinstance(bind, Engine):
+        with bind.begin() as connection:
+            connection.execute(statement, {"environment": environment.value})
+    else:
+        bind.execute(statement, {"environment": environment.value})
+    logger.info("Stamped this database as %s", environment.value)
+
+
+def is_production(bind: Engine | Connection) -> bool:
+    """Whether the connected database declares itself production."""
+    return read_environment(bind) is DeploymentEnvironment.PRODUCTION

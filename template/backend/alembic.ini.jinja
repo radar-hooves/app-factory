@@ -11,11 +11,10 @@ version_locations = %(here)s/alembic/versions
 sqlalchemy.url = driver://user:pass@localhost/dbname
 
 [post_write_hooks]
-# Uncomment to auto-format new migration files with ruff.
-# hooks = ruff
-# ruff.type = console_scripts
-# ruff.entrypoint = ruff
-# ruff.options = format REVISION_SCRIPT_FILENAME
+hooks = ruff
+ruff.type = exec
+ruff.executable = ruff
+ruff.options = format REVISION_SCRIPT_FILENAME
 
 [loggers]
 keys = root,sqlalchemy,alembic

@@ -23,7 +23,7 @@ from functools import lru_cache
 
 from fastmcp.server.dependencies import get_context, get_http_headers
 
-from {{ package_name }}.exceptions import AuthError
+from {{ package_name }}.exceptions import AuthenticationError
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
 
 # ActorRegistry seeds this identity unconditionally, as the trusted in-process
@@ -70,8 +70,8 @@ def resolve_actor() -> Actor:
     actor or type.
 
     Raises:
-        AuthError: no client identity was presented, or the presented identity
-            is not registered in ``config/actors.yaml``.
+        AuthenticationError: no client identity was presented, or the
+            presented identity is not registered in ``config/actors.yaml``.
     """
     http_headers = get_http_headers()
     try:
@@ -81,19 +81,20 @@ def resolve_actor() -> Actor:
     over_http = bool(http_headers) or getattr(ctx, "transport", None) in ("streamable-http", "sse")
     client_id: str | None = http_headers.get("x-client-id") or None if over_http else getattr(ctx, "client_id", None)
     if client_id is None:
-        raise AuthError(
+        raise AuthenticationError(
             "MCP client identity is absent",
-            details={"reason": "the server cannot resolve an actor without a client_id"},
+            details="the server cannot resolve an actor without a client_id",
         )
     if over_http and client_id == _LOCAL_CONSOLE:
-        raise AuthError(
+        raise AuthenticationError(
             "MCP client identity is reserved for local in-process callers",
-            details={"client_id": client_id, "reason": "the local-console actor is not reachable over HTTP"},
+            details="the local-console actor is not reachable over HTTP",
+            context={"client_id": client_id},
         )
     try:
         return _actor_registry().resolve(client_id)
     except KeyError:
-        raise AuthError(
+        raise AuthenticationError(
             "MCP client identity is not registered",
-            details={"client_id": client_id, "registered": _actor_registry().registered_ids()},
+            context={"client_id": client_id, "registered": _actor_registry().registered_ids()},
         ) from None

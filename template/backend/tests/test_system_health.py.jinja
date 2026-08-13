@@ -1,0 +1,36 @@
+"""Tests for the /api/system/health endpoint."""
+
+import pytest
+
+
+@pytest.mark.integration
+async def test_health_check_reports_healthy(client):
+    """A healthy database round-trips to a 200 with the expected fields."""
+    response = await client.get("/api/system/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "healthy"
+    assert "version" in body
+    assert "environment" in body
+    assert "timestamp" in body
+
+
+@pytest.mark.integration
+async def test_health_check_returns_503_when_database_is_unreachable(app, client):
+    """The only dependency check allowed to fail this endpoint is the database."""
+    from {{ package_name }}.db.session import get_session
+
+    class _BrokenSession:
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("connection refused")
+
+    def _broken_session():
+        yield _BrokenSession()
+
+    app.dependency_overrides[get_session] = _broken_session
+    try:
+        response = await client.get("/api/system/health")
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 503

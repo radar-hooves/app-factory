@@ -38,7 +38,6 @@ os.environ.setdefault("DEBUG", "true")
 # server is guaranteed not to be anything but a throwaway.
 TEST_DATABASE_NAME = "{{ package_name }}_test"
 _TEST_ENV_PREFIX = "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_"
-_TEST_POSTGRES_KEYS = ("host", "port", "user", "password")
 
 _EPHEMERAL_POSTGRES = None
 
@@ -69,7 +68,7 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     )
     try:
         container.start()
-    except Exception as exc:  # noqa: BLE001 -- any startup failure needs the same actionable message
+    except Exception as exc:  # any startup failure needs the same actionable message
         raise RuntimeError(
             "The test suite provisions its own Postgres via testcontainers, and it could not start.\n"
             f"  {type(exc).__name__}: {exc}\n"
@@ -87,35 +86,28 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     }
 
 
-def _partial_quartet_warning(explicit: dict[str, str | None]) -> str | None:
-    """Return a warning when some, but not all, of the four vars are set.
-
-    A silent fallback here would be the failure: a typo'd or half-configured
-    quartet would fall back to the ephemeral container exactly as quietly as
-    setting none of them, so anyone meaning to target a real server would
-    never learn their config was ignored. Returns None when the quartet is
-    either unset or complete — both are the ordinary, unremarkable cases.
-    """
-    set_keys = {key for key in _TEST_POSTGRES_KEYS if explicit.get(key)}
-    if not set_keys or set_keys == set(_TEST_POSTGRES_KEYS):
-        return None
-    missing = ", ".join(f"{_TEST_ENV_PREFIX}{key.upper()}" for key in _TEST_POSTGRES_KEYS if key not in set_keys)
-    return (
-        f"Only some {_TEST_ENV_PREFIX}* vars are set (missing: {missing}); ignoring the partial "
-        "quartet and falling back to an ephemeral Postgres container instead. Set all four, or none."
-    )
-
-
 def _resolve_test_server() -> dict[str, str]:
     """Resolve the Postgres the suite will use, never inheriting POSTGRES_*."""
-    explicit = {key: os.environ.get(f"{_TEST_ENV_PREFIX}{key.upper()}") for key in _TEST_POSTGRES_KEYS}
+    from tests.support.explicit_server_guard import (
+        TEST_POSTGRES_KEYS,
+        partial_quartet_warning,
+        refuse_if_explicit_server_is_production,
+    )
 
-    warning = _partial_quartet_warning(explicit)
+    explicit = {key: os.environ.get(f"{_TEST_ENV_PREFIX}{key.upper()}") for key in TEST_POSTGRES_KEYS}
+
+    warning = partial_quartet_warning(explicit)
     if warning:
         logging.warning(warning)
 
     if all(explicit.values()):
-        return {key: value for key, value in explicit.items() if value is not None}
+        resolved = {key: value for key, value in explicit.items() if value is not None}
+        # An explicit quartet is meant for a purpose-provisioned test server,
+        # but the four vars are otherwise unvalidated — this is the one guard
+        # standing between a typo'd host/port and running the suite against
+        # the real database (`tests/support/explicit_server_guard.py`).
+        refuse_if_explicit_server_is_production(resolved)
+        return resolved
 
     return _start_ephemeral_postgres()
 
@@ -128,7 +120,6 @@ os.environ["POSTGRES_PASSWORD"] = _TEST_SERVER["password"]
 os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
 from httpx import ASGITransport, AsyncClient  # noqa: E402 -- must follow the env-var resolution above
-from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
 from {{ package_name }}.db.session import get_engine, get_session  # noqa: E402
@@ -169,7 +160,7 @@ def _ensure_test_database_ready() -> None:
         engine.dispose()
 
     backend_root = Path(__file__).resolve().parent.parent
-    result = subprocess.run(  # noqa: S603 -- fixed argv, no user input reaches it
+    result = subprocess.run(  # fixed argv, no user input reaches it
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=backend_root,
         env={**os.environ, "POSTGRES_DB": TEST_DATABASE_NAME},
@@ -228,7 +219,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
         return
     try:
         _EPHEMERAL_POSTGRES.stop()
-    except Exception as exc:  # noqa: BLE001 -- teardown must never fail a passing run
+    except Exception as exc:  # teardown must never fail a passing run
         logging.warning("Could not stop the ephemeral test Postgres: %s", exc)
 
 
@@ -238,7 +229,7 @@ def app():
 
 
 @pytest.fixture
-def session() -> Generator[Session, None, None]:
+def session() -> Generator[Session]:
     """A real Postgres session bound to a connection-level transaction, rolled
     back at teardown (`rules-library/python/71-python-testing.md` §Transaction
     Rollback Fixture, sync form).
@@ -246,37 +237,33 @@ def session() -> Generator[Session, None, None]:
     A service that calls `session.commit()` explicitly would, on a session
     bound to a plain connection, commit the OUTER transaction this fixture
     opens, leaving nothing for teardown's rollback to undo and leaking test
-    rows into the database permanently. SQLAlchemy's documented fix for
-    exactly this ("join a Session into an external transaction, such as for
-    test suites") is a SAVEPOINT: `session.begin_nested()` opens one, and the
-    `after_transaction_end` listener re-opens a fresh one every time a
-    commit ends the current one — so commits release/restart SAVEPOINTs
+    rows into the database permanently. `join_transaction_mode="create_savepoint"`
+    is SQLAlchemy 2.0's native answer: the session opens a SAVEPOINT and
+    reopens one after every commit, so commits release/restart SAVEPOINTs
     instead of ever reaching the outer connection transaction, which is the
     only thing teardown rolls back.
     """
     engine = get_engine()
     connection = engine.connect()
     outer_transaction = connection.begin()
-    session_factory = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False)
+    session_factory = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
     db_session = session_factory()
-    db_session.begin_nested()
-
-    @event.listens_for(db_session, "after_transaction_end")
-    def _restart_savepoint(sess, transaction) -> None:
-        if transaction.nested and not transaction._parent.nested:
-            sess.begin_nested()
 
     try:
         yield db_session
     finally:
-        event.remove(db_session, "after_transaction_end", _restart_savepoint)
         db_session.close()
         outer_transaction.rollback()
         connection.close()
 
 
 @pytest.fixture
-async def client(app, session: Session) -> AsyncGenerator[AsyncClient, None]:
+async def client(app, session: Session) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient wired to the FastAPI app with the rollback session and a default identity."""
     app.dependency_overrides[get_session] = lambda: session
     transport = ASGITransport(app=app)

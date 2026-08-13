@@ -1,0 +1,75 @@
+"""Gunicorn configuration for production deployment.
+
+TLS/HSTS is normally terminated by the reverse proxy; the app also sets HSTS
+itself (middleware.py) so it is safe standalone. Bound to all interfaces
+because the container exposes no ports directly to the host network.
+"""
+
+import logging
+import os
+
+bind = "0.0.0.0:{{ backend_port }}"
+backlog = 2048
+
+# Worker count is container-aware. DEBUG runs a single worker. Production
+# reads WEB_CONCURRENCY (the 12-factor standard), which the deployment sets
+# to match the container's actual CPU allocation. The default of 5 sizes a
+# 2-CPU container by gunicorn's (2 * cores) + 1 rule. This deliberately does
+# NOT call multiprocessing.cpu_count(): inside a container that reports the
+# HOST's logical CPUs (ignoring the cgroup limit), so a host-derived count
+# over-provisions the worker pool badly enough to trip the OOM-killer on a
+# cold-start fork storm.
+workers = 1 if os.getenv("DEBUG", "false").lower() == "true" else int(os.getenv("WEB_CONCURRENCY", "5"))
+worker_class = "uvicorn.workers.UvicornWorker"
+worker_connections = 1000
+max_requests = 1000
+max_requests_jitter = 100
+
+timeout = 60
+graceful_timeout = 30
+keepalive = 2
+
+preload_app = True
+reuse_port = True
+
+loglevel = "debug" if os.getenv("DEBUG", "false").lower() == "true" else "warning"
+accesslog = None  # disabled; access logs flow through uvicorn.access -> the app's own root handler
+errorlog = "-"  # stderr for Gunicorn's own master-process messages only
+logconfig_dict = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "root": {"level": "INFO", "handlers": []},
+    "loggers": {
+        "gunicorn.error": {"level": "INFO", "handlers": [], "propagate": True},
+        "gunicorn.access": {"level": "INFO", "handlers": [], "propagate": True},
+    },
+}
+
+proc_name = "{{ package_name }}"
+
+# Security limits
+limit_request_line = 4094
+limit_request_fields = 100
+limit_request_field_size = 8190
+
+
+def when_ready(server) -> None:
+    """Announce readiness once the server can accept connections."""
+    server.log.info("{{ project_name }} is ready to accept connections (%d worker(s))", workers)
+
+
+def worker_int(worker) -> None:
+    """Log a worker's graceful-shutdown signal."""
+    worker.log.info("Worker %s received shutdown signal", worker.pid)
+
+
+def on_exit(server) -> None:
+    """Log final shutdown."""
+    server.log.info("{{ project_name }} shutdown complete")
+
+
+def post_fork(server, worker) -> None:
+    """Mute uvicorn's own startup noise; the app owns stdout via configure_logging()."""
+    if os.getenv("DEBUG", "false").lower() != "true":
+        for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+            logging.getLogger(name).setLevel(logging.WARNING)

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Container entrypoint: migrate, stamp, then start the application server.
+# If the database isn't ready, alembic fails and Docker restarts the container.
+
+set -e
+
+echo "Running database migrations..."
+cd /app/backend
+alembic upgrade head
+echo "Migrations complete."
+
+# Production declares itself in its own database. A development session can
+# reach the same database through a tunnel, where it presents as localhost on
+# an arbitrary port, so no client-side check can tell it apart from a local
+# one -- the marker is what destructive tooling reads instead. Stamped on
+# every start so a restored or recreated volume re-arms the guard without
+# anyone remembering to.
+echo "Stamping deployment environment..."
+python -m {{ package_name }}.db.stamp production
+
+cd /app
+echo "Starting application server..."
+exec gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py

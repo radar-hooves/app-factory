@@ -12,13 +12,28 @@ Usage:
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import ValidationError, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.paths import env_file
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
+
+
+def _describe_config_error(exc: ValidationError) -> str:
+    """Render a config-load failure without echoing field values.
+
+    Pydantic's default ValidationError str() includes ``input_value=...``,
+    which for a settings model is the whole env dict -- sibling secrets
+    included. One missing required field would otherwise print fragments of
+    every other value into logs and tracebacks.
+    """
+    parts = [
+        f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']} [{err['type']}]"
+        for err in exc.errors(include_url=False, include_input=False)
+    ]
+    return f"{exc.error_count()} validation error(s) for {exc.title} — " + "; ".join(parts)
 
 
 class Settings(BaseSettings):
@@ -39,6 +54,11 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str = "changeme"
 
+    # Comma-separated: CORS needs exact origin strings, not a parsed URL —
+    # kept as the raw string field pydantic-settings maps CORS_ORIGINS onto,
+    # with cors_origins_list below doing the split.
+    cors_origins: str = ""
+
     # Domain sections — populated from nested env vars or sub-model defaults.
     database: DatabaseSettings = DatabaseSettings()
     example: ExampleSettings = ExampleSettings()
@@ -46,8 +66,14 @@ class Settings(BaseSettings):
     # {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL set, every /mcp HTTP request 401s.
     mcp: MCPSettings = MCPSettings()
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Allowed CORS origins, split from the comma-separated env value."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
     @model_validator(mode="after")
-    def _warn_insecure_defaults(self) -> "Settings":
+    def _warn_insecure_defaults(self) -> Settings:
         import logging
 
         if not self.debug and self.secret_key == "changeme":
@@ -60,4 +86,11 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Return the cached Settings instance (one per process)."""
-    return Settings()
+    try:
+        return Settings()
+    except ValidationError as exc:
+        # `from None`, deliberately: chaining the original ValidationError
+        # would re-print pydantic's input_value echo (the whole env dict,
+        # sibling secrets included) in the traceback. The sanitised message
+        # already names the field, error type, and message.
+        raise RuntimeError(_describe_config_error(exc)) from None

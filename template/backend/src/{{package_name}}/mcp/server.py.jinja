@@ -50,8 +50,8 @@ def create_mcp_server() -> FastMCP:
             dict with 'status': 'ok', the app name, and the resolved actor.
 
         Raises:
-            AuthError: the caller's identity is absent or is not registered in
-                config/actors.yaml.
+            AuthenticationError: the caller's identity is absent or is not
+                registered in config/actors.yaml.
         """
         actor = resolve_actor()
         return {

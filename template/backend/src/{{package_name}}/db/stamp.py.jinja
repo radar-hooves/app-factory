@@ -1,0 +1,72 @@
+"""Stamp the connected database with the environment it is.
+
+Run by ``backend/entrypoint.sh`` on every production container start,
+immediately after migrations, so production's own database carries the
+marker that destructive tooling reads. Also runnable by hand to claim a
+local database::
+
+    python -m {{ package_name }}.db.stamp local
+    python -m {{ package_name }}.db.stamp production
+
+This is a separate module from ``environment`` because
+``python -m {{ package_name }}.db.environment`` would import that module
+twice -- once as ``{{ package_name }}.db.environment`` via the package, once
+as ``__main__`` -- and its model would then be registered against
+``Base.metadata`` twice, which SQLAlchemy rejects outright.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+
+from {{ package_name }}.db.environment import DeploymentEnvironment, stamp_environment, stamped_environment
+from {{ package_name }}.db.session import get_engine
+
+logger = logging.getLogger(__name__)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse args and stamp the connected database; returns the process exit code."""
+    parser = argparse.ArgumentParser(description="Record what environment this database is.")
+    parser.add_argument(
+        "environment",
+        choices=[member.value for member in DeploymentEnvironment],
+        help="What this database is.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-stamp a database that already claims to be production.",
+    )
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    target = DeploymentEnvironment(args.environment)
+    engine = get_engine()
+    # The HONEST reading, not the fail-closed one. Claiming a database that
+    # has never been stamped is the ordinary first-run case and must not need
+    # --force: a flag demanded for the common path is one that gets typed
+    # reflexively, and then it no longer guards the case it was built for.
+    current = stamped_environment(engine)
+
+    # Downgrading production's own claim is how a guard gets talked out of
+    # refusing, so it takes an explicit --force rather than happening quietly.
+    if current is DeploymentEnvironment.PRODUCTION and target is not DeploymentEnvironment.PRODUCTION:
+        if not args.force:
+            print(
+                "This database currently declares itself production. "
+                "Re-stamping it as local disarms every guard that protects it. "
+                "Pass --force if that is genuinely what you mean.",
+                file=sys.stderr,
+            )
+            return 1
+        logger.warning("Re-stamping a production database as %s under --force", target.value)
+
+    stamp_environment(engine, target)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -5,19 +5,11 @@ api/<domain>/ with its own router.py, schemas.py, models.py, service.py,
 and dependencies.py.
 """
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter
 
 from {{ package_name }}.api.example.router import router as example_router
-from {{ package_name }}.exceptions import AppError, app_error_handler
+from {{ package_name }}.api.system.router import router as system_router
 
 api_router = APIRouter()
 api_router.include_router(example_router, prefix="/example", tags=["example"])
-
-
-def register_exception_handlers(app: FastAPI) -> None:
-    """Register application exception handlers on the FastAPI app instance.
-
-    Call from the app factory after creating the app:
-        register_exception_handlers(app)
-    """
-    app.add_exception_handler(AppError, app_error_handler)
+api_router.include_router(system_router, prefix="/system", tags=["system"])

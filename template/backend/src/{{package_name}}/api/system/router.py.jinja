@@ -1,0 +1,44 @@
+"""HTTP routes for the system domain.
+
+Infrastructure plumbing; registered at the top level of the API router.
+No auth dependency — a load balancer or monitor calling this has no identity
+to present.
+"""
+
+from datetime import UTC, datetime
+from importlib.metadata import version
+
+from fastapi import APIRouter
+from sqlalchemy import text
+
+from {{ package_name }}.api.system.schemas import HealthResponse
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.deps import SessionDep
+from {{ package_name }}.exceptions import ServiceUnavailableError
+
+router = APIRouter()
+
+
+@router.get("/health", response_model=HealthResponse, operation_id="healthCheck")
+def health_check(session: SessionDep) -> HealthResponse:
+    """Report liveness and verify the database dependency.
+
+    Pings the database with `SELECT 1`; a 503 is the only outcome that
+    should fail a load balancer's health check, so every other dependency
+    this app grows should degrade the body, never this status code.
+
+    Raises:
+        ServiceUnavailableError: the database is unreachable (503).
+    """
+    try:
+        session.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise ServiceUnavailableError("Database is unreachable", details=str(exc)) from exc
+
+    settings = get_settings()
+    return HealthResponse(
+        status="healthy",
+        version=version("{{ project_name }}"),
+        environment="development" if settings.debug else "production",
+        timestamp=datetime.now(UTC),
+    )
