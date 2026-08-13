@@ -21,7 +21,9 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+{% if has_frontend -%}
 from pathlib import Path
+{% endif -%}
 from typing import Any
 
 from fastapi import FastAPI
@@ -34,7 +36,9 @@ from starlette.types import Scope
 {% endif %}
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.config import get_settings
+{% if has_frontend -%}
 from {{ package_name }}.config.paths import project_root
+{% endif -%}
 from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.exceptions import register_exception_handlers
 from {{ package_name }}.logging import configure_logging
@@ -43,7 +47,7 @@ from {{ package_name }}.mcp.server import create_mcp_server
 from {{ package_name }}.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
 
 _log = logging.getLogger(__name__)
-
+{% if has_frontend %}
 # Resolved from the source tree, not the working directory: uvicorn is launched
 # from backend/ in dev (.envrc, .vscode/launch.json) and from the repo root in a
 # container, and a CWD-relative path silently serves no SPA in one of the two.
@@ -78,6 +82,7 @@ class _SPAStaticFiles(StaticFiles):
                 return await super().get_response("index.html", scope)
             raise
 
+{% endif %}
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
