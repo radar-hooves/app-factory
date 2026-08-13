@@ -6,6 +6,9 @@ timezone = UTC
 truncate_slug_length = 40
 output_encoding = utf-8
 version_locations = %(here)s/alembic/versions
+# Alembic 1.16+ warns on every run without this, and its legacy fallback splits
+# paths on spaces as well as os.pathsep.
+path_separator = os
 
 # Placeholder — env.py overrides this at runtime from application config.
 sqlalchemy.url = driver://user:pass@localhost/dbname

@@ -79,9 +79,7 @@ class ServiceUnavailableError(BackendBaseException):
     error_code = "service_unavailable"
 
 
-def _build_error_response(
-    exc: BackendBaseException, *, headers: dict[str, str] | None = None
-) -> JSONResponse:
+def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] | None = None) -> JSONResponse:
     content: dict[str, object] = {"error": exc.error_code, "message": exc.message}
     if exc.details:
         content["details"] = exc.details
@@ -98,37 +96,27 @@ async def not_found_error_handler(request: Request, exc: NotFoundError) -> JSONR
     return _build_error_response(exc)
 
 
-async def validation_error_handler(
-    request: Request, exc: ValidationError
-) -> JSONResponse:
+async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
 
 
-async def authentication_error_handler(
-    request: Request, exc: AuthenticationError
-) -> JSONResponse:
+async def authentication_error_handler(request: Request, exc: AuthenticationError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc, headers={"WWW-Authenticate": "Bearer"})
 
 
-async def forbidden_error_handler(
-    request: Request, exc: ForbiddenError
-) -> JSONResponse:
+async def forbidden_error_handler(request: Request, exc: ForbiddenError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
 
 
-async def upstream_service_error_handler(
-    request: Request, exc: UpstreamServiceError
-) -> JSONResponse:
+async def upstream_service_error_handler(request: Request, exc: UpstreamServiceError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
 
 
-async def service_unavailable_error_handler(
-    request: Request, exc: ServiceUnavailableError
-) -> JSONResponse:
+async def service_unavailable_error_handler(request: Request, exc: ServiceUnavailableError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
 

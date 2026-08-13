@@ -20,9 +20,7 @@ request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 # a token in it) that key-based redaction cannot see.
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b")
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]+")
-_KV_SECRET_RE = re.compile(
-    r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key)\b(\"?\s*[=:]\s*\"?)([^\s,&\"'}]+)"
-)
+_KV_SECRET_RE = re.compile(r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key)\b(\"?\s*[=:]\s*\"?)([^\s,&\"'}]+)")
 _EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 
 

@@ -8,14 +8,22 @@
    bg-accent / border-input compile to real rules instead of nothing at all.
    Must come after the token imports: every name in it aliases a --ds-* token. */
 @import '@poodle64/ui/styles.css';
-@import 'tw-animate-css';
 
 /* @poodle64/ui ships in node_modules, outside Tailwind's default src/ scan —
    without this the shared components render unstyled: no build error, no
    lint hit, just missing classes in the compiled CSS. */
 @source '../node_modules/@poodle64/ui/dist';
 
-@custom-variant dark (&:is(.dark *));
+/*
+  The enter/exit animation keyframes and the `dark`, `data-open` and
+  `data-closed` variants all arrive with @poodle64/ui/styles.css above, so a
+  stamped app declares none of them. The variants are why that matters beyond
+  tidiness: Tailwind compiles a bare `data-open:` utility to `&[data-open]`
+  while bits-ui emits `data-state="open"`, so a locally-declared variant matches
+  nothing — dead CSS that reads as correct, raising no build error and no lint
+  hit. Declaring any of them here forks what the package gets right once for
+  every app.
+*/
 
 /*
   Per-app primary override for {{ project_name }}.
@@ -24,7 +32,7 @@
   font tokens. Only override --ds-color-primary here. All other brand
   colour adjustments belong in the shared token sheet first.
 
-  Eucalyptus defaults (hue 145) — replace XXX with your chosen hue if different.
+  Eucalyptus defaults (hue 145) — change the hue to pick this app's accent.
 */
 :root {
   --ds-color-primary:            oklch(0.55 0.12 145);
@@ -49,13 +57,13 @@
   per-app decision, so they are declared and registered below.
 */
 :root {
-  --sidebar:                  oklch(0.15 0.01 145);
-  --sidebar-foreground:       oklch(0.9 0.02 145);
+  --sidebar:                  var(--ds-color-surface-1);
+  --sidebar-foreground:       var(--ds-color-foreground);
   --sidebar-primary:          var(--ds-color-primary);
   --sidebar-primary-foreground: var(--ds-color-primary-foreground);
-  --sidebar-accent:           oklch(0.25 0.04 145);
-  --sidebar-accent-foreground: oklch(0.9 0.02 145);
-  --sidebar-border:           oklch(0.3 0.04 145);
+  --sidebar-accent:           var(--ds-color-surface-2);
+  --sidebar-accent-foreground: var(--ds-color-foreground);
+  --sidebar-border:           var(--ds-color-border);
   --sidebar-ring:             var(--ds-color-ring);
   --chart-1: oklch(0.55 0.12 145);
   --chart-2: oklch(0.6 0.1 200);
@@ -65,13 +73,13 @@
 }
 
 .dark {
-  --sidebar:                  oklch(0.1 0.01 145);
-  --sidebar-foreground:       oklch(0.9 0.02 145);
+  --sidebar:                  var(--ds-color-surface-1);
+  --sidebar-foreground:       var(--ds-color-foreground);
   --sidebar-primary:          var(--ds-color-primary);
   --sidebar-primary-foreground: var(--ds-color-primary-foreground);
-  --sidebar-accent:           oklch(0.22 0.04 145);
-  --sidebar-accent-foreground: oklch(0.9 0.02 145);
-  --sidebar-border:           oklch(0.28 0.04 145);
+  --sidebar-accent:           var(--ds-color-surface-2);
+  --sidebar-accent-foreground: var(--ds-color-foreground);
+  --sidebar-border:           var(--ds-color-border);
   --sidebar-ring:             var(--ds-color-ring);
   --chart-1: oklch(0.65 0.12 145);
   --chart-2: oklch(0.7 0.1 200);

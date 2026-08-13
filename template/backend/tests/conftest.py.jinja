@@ -73,7 +73,7 @@ def _start_ephemeral_postgres() -> dict[str, str]:
             "The test suite provisions its own Postgres via testcontainers, and it could not start.\n"
             f"  {type(exc).__name__}: {exc}\n"
             "Either start Docker, or point the suite at a purpose-provisioned test server with\n"
-            f"{_TEST_ENV_PREFIX}{{HOST,PORT,USER,PASSWORD}}.\n"
+            f"{_TEST_ENV_PREFIX}{% raw %}{{HOST,PORT,USER,PASSWORD}}{% endraw %}.\n"
             "It deliberately will NOT use POSTGRES_* from your shell."
         ) from exc
 

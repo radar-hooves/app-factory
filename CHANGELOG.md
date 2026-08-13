@@ -4,6 +4,24 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.5] - 2026-08-13
+
+`fixxxer` was the first repo taken through the ADOPT path — stamped over an existing, unstamped app rather than scaffolded fresh. Everything below is a defect that run surfaced, each one invisible to a greenfield stamp because a fresh app never drives the surface it breaks.
+
+### Fixed
+
+- **The SPA mount 404d every client-side deep link.** `StaticFiles(html=True)` serves `index.html` for a directory, not for a path the client router owns, so a stamped app was reachable only from its root: `/items/1` returned JSON 404 rather than the app. `main.py` now falls back to `index.html` on a 404, except under `_app/`, where a miss is a genuinely missing asset and must stay a 404 rather than return HTML to a script tag.
+- **The Vite dev proxy could not authenticate against its own backend.** The Authentik identity headers sat on `server.headers`, which sets headers on Vite's response to the browser — the backend never saw them, so every `/api` call 401d and the client bounced to the Authentik outpost. They move onto the `/api` proxy entry, which is what `proxy-delegated-auth.md` §Development specifies.
+- **`alembic.ini` lost `path_separator`**, so every alembic invocation printed two deprecation warnings and fell back to splitting paths on spaces.
+- **`conftest.py`'s "point the suite at a real test server" message rendered as `(Undefined, Undefined, Undefined, Undefined)`** — jinja evaluated the literal `{HOST,PORT,USER,PASSWORD}` brace group instead of emitting it.
+- **`exceptions.py` and `logging.py` were wrapped narrower than the line length the template's own ruff config stamps**, so the first `ruff format` in a stamped repo rewrote them and the first commit carried a formatting diff nobody authored.
+- **`app.css` re-declared `@custom-variant dark` and imported `tw-animate-css`**, both of which `@poodle64/ui/styles.css` has owned since `2026.7.6`; `sveltekit-frontend.md` forbids an app carrying either. The app-level `tw-animate-css` dependency goes with them.
+- **The sidebar tokens hardcoded a near-black in the light `:root` block**, so a stamped app that grows a drawer gets a dark rail in light mode. They now track the shared surface ladder (`--ds-color-surface-1`/`-2`), which moves with the palette instead of pinning a second neutral.
+
+### Added
+
+- **An ADOPT procedure in the README** — stamping over an existing app, and the six reconciliation steps that are not obvious from the greenfield path.
+
 ## [2026.8.4] - 2026-08-13
 
 Only 3 of the estate's 10 full-stack apps were ever stamped from this template, and all at old tags. `godswood` and `cadmus` — the two apps `canonical-app-shape.md` names as its reference implementations — were never stamped at all. Hand-built, never downstream of the factory, they each grew the same scaffolding alone and diverged doing it. This release harvests what they grew, settles every disagreement once, and makes the template the canonical source rather than the trailing one.
