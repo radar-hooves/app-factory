@@ -76,15 +76,18 @@ repos:
 {%- if has_frontend %}
 
   # Prettier is the frontend's only formatter, as ruff-format is the backend's.
-  # Run from the app's own node_modules so `frontend/.prettierrc` resolves its
-  # svelte and tailwind plugins; needs `pnpm install` in frontend/, like the two
-  # design gates below. `--ignore-path` is explicit because prettier discovers
-  # an ignore file relative to the CWD, and pre-commit's CWD is the repo root.
+  # Needs `pnpm install` in frontend/, like the two design gates below.
+  #
+  # The `cd` is load-bearing and the prefix strip goes with it: prettier
+  # resolves a config's `plugins` entries against its own CWD, not against the
+  # config file, so run from the repo root it finds frontend/.prettierrc and
+  # then fails to load prettier-plugin-svelte from there. pre-commit hands
+  # paths relative to the repo root, hence ${@#frontend/}.
   - repo: local
     hooks:
       - id: prettier
         name: 'frontend - Format with prettier'
-        entry: frontend/node_modules/.bin/prettier --write --ignore-unknown --ignore-path frontend/.prettierignore
+        entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --write --ignore-unknown "${@#frontend/}"' --
         language: system
         files: '^frontend/.*\.(svelte|ts|js|mjs|cjs|css|json|html)$'
 
