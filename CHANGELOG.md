@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Surfaced by the second ADOPT run (`earworm`).
+
+### Fixed
+
+- **The SPA fallback swallowed every unmatched API path as HTML 200.** Only `_app/` was excluded from the `index.html` fallback, so `POST /api/does-not-exist` returned the app's own HTML with a 200 rather than a 404 — a misconfigured machine client got a page instead of an error it could act on, and a wrong path looked like a working one. `main.py` now excludes the API namespaces (`api/`, `mcp/`) alongside `_app/`; an app mounting a further namespace adds it to `_API_PREFIXES`.
+
 ## [2026.8.5] - 2026-08-13
 
 `fixxxer` was the first repo taken through the ADOPT path — stamped over an existing, unstamped app rather than scaffolded fresh. Everything below is a defect that run surfaced, each one invisible to a greenfield stamp because a fresh app never drives the surface it breaks.
