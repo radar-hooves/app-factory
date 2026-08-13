@@ -19,9 +19,9 @@ RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 # repo is public. The token is mounted as a BuildKit secret and streamed
 # straight into a temp npmrc — never baked into a layer. Local builds pass it
 # explicitly:
-#   docker build --secret id=npm_token,src=<file containing a read:packages token> .
-RUN --mount=type=secret,id=npm_token,required=true sh -c '\
-    { printf "@poodle64:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken="; cat /run/secrets/npm_token; } \
+#   docker build --secret id=gh_pkg_token,src=<file containing a read:packages token> .
+RUN --mount=type=secret,id=gh_pkg_token,required=true sh -c '\
+    { printf "@poodle64:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken="; cat /run/secrets/gh_pkg_token; } \
     > /tmp/npmrc-ghpkg && \
     NPM_CONFIG_USERCONFIG=/tmp/npmrc-ghpkg pnpm install --frozen-lockfile && \
     rm -f /tmp/npmrc-ghpkg'

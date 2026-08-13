@@ -14,7 +14,7 @@ services:
       dockerfile: Dockerfile
 {%- if has_frontend %}
       secrets:
-        - npm_token
+        - gh_pkg_token
 {%- endif %}
     container_name: {{ project_name }}
     restart: always
@@ -50,8 +50,8 @@ services:
 {% if has_frontend %}
 # BuildKit secret for the @poodle64 GitHub Packages read during the frontend
 # build stage (see Dockerfile). Provide a read:packages token:
-#   NPM_TOKEN=<token> docker compose build
+#   GH_PKG_TOKEN=<token> docker compose build
 secrets:
-  npm_token:
-    environment: NPM_TOKEN
+  gh_pkg_token:
+    environment: GH_PKG_TOKEN
 {% endif -%}
