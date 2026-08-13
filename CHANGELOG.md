@@ -4,6 +4,62 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.4] - 2026-08-13
+
+Only 3 of the estate's 10 full-stack apps were ever stamped from this template, and all at old tags. `godswood` and `cadmus` — the two apps `canonical-app-shape.md` names as its reference implementations — were never stamped at all. Hand-built, never downstream of the factory, they each grew the same scaffolding alone and diverged doing it. This release harvests what they grew, settles every disagreement once, and makes the template the canonical source rather than the trailing one.
+
+### Changed — the two design gates are now one version each
+
+`check-ui-drift.mjs` and `check-design-craft.mjs` existed in three divergent copies: template 216/229 lines, godswood 364/330, cadmus 395/379, all different from each other. Both apps had independently grown their gates roughly 80% past the template. Each gate is now a single version, the union of the genuinely better behaviour.
+
+**check-ui-drift.mjs.** Keeps the template's `import.meta.url` anchoring — the script resolves the same paths from pre-commit's cwd (repo root) and from `pnpm lint:drift` (frontend/), which neither app's `process.cwd()` version can. Adopts godswood's **delegating-composition exemption**: a local file that imports the shipped component of the same name is a wrapper, not a fork, and name-only matching flagged a legitimate one that would have been "fixed" by deleting it. Carries cadmus's third rule, `surface-brief-divergence`, which the template had deliberately dropped — it is inert without `docs/product/surfaces/`, so an app that keeps no briefs never sees it fire, while an app that adopts them gets the gate instead of re-porting it. Carrying it brings back the non-uniform baseline key it needs: one page can compose several undeclared components, so a uniform `${rule}:${file}` key banks them all at once and goes silent exactly when a new divergence lands. Cadmus's `records/` exemption is **not** inherited — it is an app concept, and a route that legitimately owns its title banks the finding instead.
+
+**check-design-craft.mjs.** Carries **live mode** from both apps as an opt-in `--live` flag (`pnpm lint:design:live`), with pre-commit still static-only. Dropping the capability did not stop apps having it; it only meant each one ported it back by hand. Keeps the template's honouring of impeccable's own `severity: "advisory"` classification, which neither app has. Ships the three prose suppressions both apps independently agreed on (`em-dash-overuse`, `marketing-buzzword`, `aphoristic-cadence`) — these are household writing conventions reaching the UI as-is, not UI defects, and an empty default just made every app re-derive the same call. App-measured suppressions are still argued locally and never inherited from another app's measurements.
+
+The scripts move to a `.jinja`-rendered form where they need the app's name or port; both baselines stay app-owned via `_skip_if_exists`.
+
+### Added — backend production runtime
+
+- **`backend/entrypoint.sh` and `backend/gunicorn.conf.py`.** The template had neither, so every app reinvented production startup. Startup is now migrate → stamp the deployment environment → `exec gunicorn`, and the Dockerfile hands off to it rather than running migrations inline, so the stamp re-arms on every boot. Worker count uses godswood's container-aware formula, not cadmus's `cpu_count() * 2 + 1`: inside a cgroup-limited container that reads the **host's** cores and over-provisions into the OOM killer.
+- **Deployment-environment stamp** (`db/environment.py`, `db/stamp.py`, `tests/support/explicit_server_guard.py` and its tests). Development points at the real database and a tunnel makes production present as localhost, so no client-side check can tell them apart; the suite reads a marker row in the database itself and refuses to run against one that declares itself production. Both apps built this independently, fail-closed in both.
+- **A REST health endpoint** (`GET /api/system/health`). The template had none at all — only an MCP `health_check` tool. The shape is the union: cadmus's typed liveness response (`status`, `version`, `environment`, `timestamp`) plus godswood's `SELECT 1` dependency ping, the only check permitted to return 503.
+- **Middleware the household rules already required and the template omitted**: request-ID propagation (godswood's; cadmus has none), request logging with timing, security headers, and configurable CORS. Headers are set in Python, cadmus's call — godswood punts them to nginx, and an app must be safe standalone.
+- **Secret redaction in the log formatter** (godswood's; neither the template nor cadmus had it): JWTs, `Bearer` tokens, `password`/`token`/`secret`/`api_key` pairs and emails.
+
+### Added — frontend scaffolding
+
+`vitest.config.ts` (cadmus's minimal baseline, not godswood's memory-tuned one — that solves a large-suite problem a fresh app has not got), `playwright.config.ts`, `components.json` and `src/lib/utils.ts`'s `cn()`, `src/app.d.ts`, `src/lib/api/index.ts`, a 30-second request timeout, and `redirectToAuthentik()` with the 401 middleware that calls it.
+
+Playwright takes cadmus's safety pattern, and the reason generalises: there is one database and no staging environment, so the E2E suite gets a **dedicated port**, a **dedicated synthetic identity**, and `reuseExistingServer: false`. A run must never adopt the session the operator has open. Reporters take godswood's fuller set, a strict superset.
+
+Example `vitest` and `playwright` specs ship, so a fresh stamp's suites run green instead of exiting 1 on "no test files found" — with CI now running frontend tests, a scaffold that cannot pass its own suite is a gate disabled in week one.
+
+### Added — root, CI and container
+
+`.gitleaks.toml` (the template shipped the gitleaks hook with no paired config, so the first placeholder in a stamped `.env.example` blocked the initial commit — both apps had written the same allowlist), the two handoff-governance pre-commit hooks, and `cleanup-container-images.yaml`. The Dockerfile pins pnpm through `corepack prepare` (both apps hit a floating pnpm breaking the build), stamps `GIT_COMMIT`, and runs as a generic `appuser` at uid 1000, matching the numeric `--chown` every `COPY` already used.
+
+### Fixed
+
+- **`check-pii` pointed at a hook path that no longer exists.** Both apps agree the current path is `.claude/hooks/master/precommit/pii.py`; the template's hook had been running nowhere.
+- **CI ran no frontend tests.** The reusable defaults `run-tests` to `false` and the template never set it. It also lacked `packages: read`, without which the reusable's install of `@poodle64/*` from GitHub Packages loses its token — a caller's permissions are the ceiling for what it calls.
+- **Three config bugs a fresh stamp shipped with.** stylelint rejected Svelte's `:global()` and Tailwind v4's `@utility`/`@plugin`; eslint failed on any deliberately-unused `_arg`. All three would have bitten the first real component.
+- **The API client had no `onError` middleware**, so a network failure or timeout abort threw past every call site's `if (error)` contract and leaked its timeout timer. `sveltekit-api-client.md` requires that path normalised once.
+- **`extractApiError` reported a network failure as a bare "Error".** It checked the backend envelope first, and an `Error` is an object carrying a string `message`, so a `TypeError` from a failed fetch matched that branch and the `instanceof TypeError` arm below was unreachable. Found by the scaffold's own new example spec.
+- **`eslint-plugin-tailwindcss` is back.** The template had dropped it because v4's flat/`recommended` export crashes ESLint; both apps run the same version fine by wiring the rule directly and never importing that export.
+- **Local copies of the `WithoutChild`/`WithElementRef` type helpers dropped** — `@poodle64/ui` ships its own, and `sveltekit-frontend.md` §Utils calls a local copy a fork. `tsconfig.json` gains the `noUncheckedIndexedAccess` and `verbatimModuleSyntax` that `typescript-basics.md` requires.
+
+### Settled prose
+
+Where the three trees said the same thing three ways, one wording wins and the template carries it: pre-commit hook names keep the plain `'<domain> - <Sentence case>'` style (cadmus already matched; godswood's emoji/`·` style is the outlier); the exception hierarchy takes `BackendBaseException` / `AuthenticationError` / `ForbiddenError` / `UpstreamServiceError` / `ServiceUnavailableError`, which is where both apps converged **against** the template's `AppError`/`AuthError`, with `ForbiddenError` beating godswood's `PermissionError` because that shadows a Python builtin; the API error shape is `ApiErrorInfo`, which cannot collide with an `ApiError` a generated OpenAPI schema may define; the toast mount keeps `Toaster` with cadmus and godswood's `closeButton position="top-right"`.
+
+`.pii-patterns.json` was deliberately **not** harvested despite both apps carrying one: `docs/master/templates/pre-commit-config.md` is explicit that the repo-local file is added on demand, because an empty stub in every repo reads as coverage it does not provide.
+
+### Proof — two real stamps, driven
+
+- **`has_frontend: true`** renders with no unresolved Jinja and no leaked reference-app names. Backend: `uv sync` then **33 tests pass**. Frontend: `pnpm install` (no interactive esbuild prompt), `pnpm build`, `pnpm check` (407 files, **0 errors**), `pnpm lint`, `pnpm lint:css` all clean; `pnpm test:run` **5 passed**; `pnpm exec playwright test` **1 passed**, driving a real Chromium against the dedicated E2E port.
+- **Both gates exit 0 against the freshly stamped tree with empty baselines**, run from both the frontend package and the repo root (the pre-commit cwd) — the failure mode `canonical-app-shape.md` warns about, checked rather than assumed.
+- **`has_frontend: false`** renders with no frontend directory and no design hooks in the rendered pre-commit config; every YAML and JSON file parses; the same 33 backend tests pass.
+
 ## [2026.8.3] - 2026-08-10
 
 ### Added

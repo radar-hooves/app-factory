@@ -6,18 +6,24 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 
 ```text
 <project>/
-├── .pre-commit-config.yaml     gitleaks + check-pii + generic hooks + ruff + uv-lock-check + design-craft + design-drift (has_frontend)
+├── .pre-commit-config.yaml     gitleaks + check-pii + handoff governance + generic hooks + ruff + uv-lock-check + design-craft + design-drift (has_frontend)
+├── .gitleaks.toml              allowlist so .env.example placeholders do not block the first commit
 ├── .envrc                      direnv: source_up + uv sync (backend/)
 ├── .gitattributes / .gitignore
 ├── .mcp.json                   empty — enable per project
 ├── .github/workflows/
 │   ├── canonical-shape.yaml    always — structural gate
 │   ├── python-ci.yaml          always — thin caller of the python-ci reusable
+│   ├── security.yaml           always — thin caller of the security reusable
+│   ├── auto-label-issues.yaml  always — thin caller of the issue-labelling reusable
+│   ├── cleanup-container-images.yaml  weekly registry-bloat sweep
 │   └── frontend-ci.yaml        only when has_frontend
 ├── DESIGN.md / README.md       skeletons — app-owned after stamping (_skip_if_exists)
 ├── Dockerfile / compose.yaml / .dockerignore   local build + smoke-test deploy set
 ├── backend/
 │   ├── pyproject.toml          uv + src-layout + runtime deps
+│   ├── entrypoint.sh           container start: migrate → stamp environment → exec gunicorn
+│   ├── gunicorn.conf.py        production server config (container-aware worker count)
 │   ├── .python-version         3.14
 │   ├── .envrc                  direnv: uv sync + activate
 │   ├── alembic.ini             migration config (DB URL injected at runtime)
@@ -27,8 +33,9 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   ├── src/<package>/
 │   │   ├── main.py             create_app(): lifespan + /mcp mount + SPA serve
 │   │   ├── server.py           uvicorn entrypoint (dev)
-│   │   ├── logging.py          configure_logging(); never the root logger
-│   │   ├── exceptions.py       AppError hierarchy + FastAPI handler
+│   │   ├── logging.py          configure_logging() with secret redaction + request-id filter
+│   │   ├── middleware.py       request id, request logging, security headers
+│   │   ├── exceptions.py       BackendBaseException hierarchy + per-type handlers
 │   │   ├── deps.py             SessionDep, SettingsDep, CurrentUser (Annotated)
 │   │   ├── config/
 │   │   │   ├── __init__.py     root Settings + lru_cache get_settings()
@@ -39,10 +46,13 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │   │       └── example.py  Domain-section template (copy per domain)
 │   │   ├── db/
 │   │   │   ├── base.py         DeclarativeBase + TimestampMixin
-│   │   │   ├── session.py      engine + sessionmaker + get_session (sync)
+│   │   │   ├── session.py      engine + sessionmaker + get_session (sync, UTC per connection)
+│   │   │   ├── environment.py  deployment-environment marker, read fail-closed
+│   │   │   ├── stamp.py        CLI that stamps the marker (called by entrypoint.sh)
 │   │   │   └── registry.py     imports all models → Alembic target_metadata
 │   │   ├── api/
 │   │   │   ├── main.py         api_router aggregator + exception handler registration
+│   │   │   ├── system/         GET /api/system/health — liveness + DB ping (503 only on DB)
 │   │   │   └── example/        vertical domain slice
 │   │   │       ├── models.py   SQLAlchemy ORM model
 │   │   │       ├── schemas.py  Pydantic request/response models
@@ -58,31 +68,41 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
 │   │       └── auth.py         resolve_actor() for the tool layer
 │   └── tests/
 │       ├── conftest.py         ephemeral testcontainer Postgres + txn-rollback session + httpx.AsyncClient
+│       ├── support/            explicit_server_guard — refuses to run against a production database
 │       ├── test_mcp_auth.py    drives the /mcp gate: refusals, accept, allow-list
+│       ├── test_system_health.py  health endpoint: healthy and DB-down
 │       └── test_example.py     unit + integration tests for the example slice
 ├── config/
 │   └── actors.yaml             MCP actor allow-list (identity → actor_id/type)
 └── frontend/                   (only when has_frontend=true)
     ├── package.json            SvelteKit + shadcn-svelte + Tailwind v4 (+ impeccable for the craft gate)
+    ├── components.json         shadcn-svelte config
     ├── svelte.config.js        adapter-static SPA + path aliases
     ├── vite.config.ts          proxy /api → backend, dev auth header injection
+    ├── vitest.config.ts        unit tests (jsdom, browser resolve conditions)
+    ├── playwright.config.ts    E2E on a dedicated port and identity, never reusing a dev server
     ├── tsconfig.json
     ├── .design-craft-baseline.json  app-owned debt register — stamped empty, grows as findings are banked
     ├── .ui-drift-baseline.json      app-owned debt register — stamped empty, grows as findings are banked
     ├── scripts/
-    │   ├── check-design-craft.mjs   static craft gate (impeccable); pre-commit + `pnpm lint:design`
+    │   ├── check-design-craft.mjs   craft gate (impeccable); pre-commit static, `pnpm lint:design:live` drives a browser
     │   └── check-ui-drift.mjs       drift gate (@poodle64/ui reuse); pre-commit + `pnpm lint:drift`
+    ├── tests/e2e/              example playwright spec
     └── src/
         ├── app.css             design tokens (Eucalyptus palette, OKLCH)
+        ├── app.d.ts             SvelteKit ambient types
+        ├── test/                vitest setup + $app module stubs
         ├── routes/
         │   ├── +layout.ts      ssr=false, prerender=false
         │   ├── +layout.svelte  ModeWatcher + Sonner + page title, routes wrapped in @poodle64/ui's AppShell
         │   ├── +page.ts        { title: 'Home' }
         │   └── +page.svelte    starter home page (API smoke check)
         └── lib/
+            ├── utils.ts        cn() (clsx + tailwind-merge)
             └── api/
-                ├── client.ts   openapi-fetch client (type-safe, credentials: include)
-                └── error.ts    extractApiError() → { title, description, status }
+                ├── client.ts   openapi-fetch client + timeout, 401 redirect, error normaliser
+                ├── error.ts    extractApiError() → ApiErrorInfo { title, description, status }
+                └── index.ts    barrel
 ```
 
 ## Questions (copier.yml)
