@@ -1,19 +1,19 @@
 {% raw %}<script lang="ts">
-  import { onMount } from 'svelte';
-  import PageHeader from '@poodle64/ui/page-header';
+	import { onMount } from 'svelte';
+	import PageHeader from '@poodle64/ui/page-header';
 
-  let status = $state<string | null>(null);
+	let status = $state<string | null>(null);
 
-  onMount(async () => {
-    try {
-      const res = await fetch('/api/example/');
-      if (!res.ok) throw new Error(`${res.status}`);
-      const items = await res.json();
-      status = `Connected — ${items.length} example items in the database.`;
-    } catch (err) {
-      status = `Could not reach the API: ${err}`;
-    }
-  });
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/example/');
+			if (!res.ok) throw new Error(`${res.status}`);
+			const items = await res.json();
+			status = `Connected — ${items.length} example items in the database.`;
+		} catch (err) {
+			status = `Could not reach the API: ${err}`;
+		}
+	});
 </script>
 
 <!-- Compose the shared page-title treatment rather than a hand-rolled heading —
@@ -21,10 +21,10 @@
 <PageHeader title="{% endraw %}{{ project_name }}{% raw %}" subtitle="{% endraw %}{{ description }}{% raw %}" />
 
 {#if status}
-  <p class="mt-6 rounded-md border bg-card px-4 py-3 text-sm text-card-foreground">
-    {status}
-  </p>
+	<p class="bg-card text-card-foreground mt-6 rounded-md border px-4 py-3 text-sm">
+		{status}
+	</p>
 {:else}
-  <p class="mt-6 text-sm text-muted-foreground">Checking API…</p>
+	<p class="text-muted-foreground mt-6 text-sm">Checking API…</p>
 {/if}
 {% endraw -%}

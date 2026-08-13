@@ -7,26 +7,26 @@ import { defineConfig } from 'vite';
 const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'dev-uid';
 
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
-  server: {
-    port: {{ frontend_port }},
-    proxy: {
-      '/api': {
-        target: 'http://localhost:{{ backend_port }}',
-        // Inject Authentik identity headers for the HUMAN surface, so dev runs
-        // the same backend code path production does. They belong on the PROXY,
-        // not on `server.headers`: that sets headers on Vite's response to the
-        // browser, which the backend never sees, and every /api call 401s.
-        headers: {
-          'x-authentik-uid': devUid,
-          'x-authentik-username': 'devuser',
-        },
-      },
-      // /mcp is proxied so an MCP client can reach the dev backend through this
-      // origin. It gets no identity headers: /mcp validates an Authentik Bearer
-      // token app-side and is closed until
-      // {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
-      '/mcp': 'http://localhost:{{ backend_port }}',
-    },
-  },
+	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		port: {{ frontend_port }},
+		proxy: {
+			'/api': {
+				target: 'http://localhost:{{ backend_port }}',
+				// Inject Authentik identity headers for the HUMAN surface, so dev runs
+				// the same backend code path production does. They belong on the PROXY,
+				// not on `server.headers`: that sets headers on Vite's response to the
+				// browser, which the backend never sees, and every /api call 401s.
+				headers: {
+					'x-authentik-uid': devUid,
+					'x-authentik-username': 'devuser'
+				}
+			},
+			// /mcp is proxied so an MCP client can reach the dev backend through this
+			// origin. It gets no identity headers: /mcp validates an Authentik Bearer
+			// token app-side and is closed until
+			// {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
+			'/mcp': 'http://localhost:{{ backend_port }}'
+		}
+	}
 });

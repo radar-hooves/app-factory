@@ -13,8 +13,8 @@ import type { Middleware } from 'openapi-fetch';
 import type { paths } from './schema';
 
 export const api = createClient<paths>({
-  baseUrl: import.meta.env.VITE_API_URL ?? '',
-  credentials: 'include',
+	baseUrl: import.meta.env.VITE_API_URL ?? '',
+	credentials: 'include'
 });
 
 // Track timeout IDs by request identity (survives request.clone()).
@@ -22,30 +22,30 @@ const timeoutIds = new WeakMap<Request, ReturnType<typeof setTimeout>>();
 
 // Abort requests exceeding 30 seconds.
 const timeoutMiddleware: Middleware = {
-  async onRequest({ request }) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
-    const newRequest = new Request(request, { signal: controller.signal });
-    timeoutIds.set(newRequest, timeoutId);
-    return newRequest;
-  },
-  async onResponse({ request, response }) {
-    clearRequestTimeout(request);
-    return response;
-  },
-  // onResponse never runs when fetch rejects, so the timer is cleared here too
-  // or it leaks on every network failure.
-  async onError({ request }) {
-    clearRequestTimeout(request);
-  },
+	async onRequest({ request }) {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 30_000);
+		const newRequest = new Request(request, { signal: controller.signal });
+		timeoutIds.set(newRequest, timeoutId);
+		return newRequest;
+	},
+	async onResponse({ request, response }) {
+		clearRequestTimeout(request);
+		return response;
+	},
+	// onResponse never runs when fetch rejects, so the timer is cleared here too
+	// or it leaks on every network failure.
+	async onError({ request }) {
+		clearRequestTimeout(request);
+	}
 };
 
 function clearRequestTimeout(request: Request) {
-  const timeoutId = timeoutIds.get(request);
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-    timeoutIds.delete(request);
-  }
+	const timeoutId = timeoutIds.get(request);
+	if (timeoutId) {
+		clearTimeout(timeoutId);
+		timeoutIds.delete(request);
+	}
 }
 
 // fetch() REJECTS on a network/CORS failure (TypeError) or a timeout abort
@@ -53,19 +53,22 @@ function clearRequestTimeout(request: Request) {
 // that throwing path here, once, so every call site stays on the same
 // try/catch-free `if (error)` contract (sveltekit-api-client.md §Error Handling).
 const errorNormaliserMiddleware: Middleware = {
-  async onError({ error }) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return new Response(JSON.stringify({ error: 'timeout', message: 'The request timed out.' }), {
-        status: 408,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    // 503, not 0: the Response constructor rejects a status outside 200-599.
-    return new Response(JSON.stringify({ error: 'network_error', message: 'Could not reach the API.' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  },
+	async onError({ error }) {
+		if (error instanceof DOMException && error.name === 'AbortError') {
+			return new Response(JSON.stringify({ error: 'timeout', message: 'The request timed out.' }), {
+				status: 408,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		// 503, not 0: the Response constructor rejects a status outside 200-599.
+		return new Response(
+			JSON.stringify({ error: 'network_error', message: 'Could not reach the API.' }),
+			{
+				status: 503,
+				headers: { 'Content-Type': 'application/json' }
+			}
+		);
+	}
 };
 
 // Tier 1a is proxy-delegated: there is no app-level login page. An unauthenticated
@@ -74,16 +77,16 @@ const errorNormaliserMiddleware: Middleware = {
 // round-trips back to `rd`; in dev the proxy is absent (Vite injects identity headers)
 // so this path is not exercised. There is no refresh endpoint.
 export function redirectToAuthentik(returnPath: string = '/') {
-  window.location.href = `/outpost.goauthentik.io/start?rd=${encodeURIComponent(returnPath)}`;
+	window.location.href = `/outpost.goauthentik.io/start?rd=${encodeURIComponent(returnPath)}`;
 }
 
 // 401 middleware: an expired or absent session sends the browser to re-authenticate.
 const authMiddleware: Middleware = {
-  async onResponse({ response }) {
-    if (response.status !== 401) return response;
-    redirectToAuthentik(window.location.pathname + window.location.search);
-    return response;
-  },
+	async onResponse({ response }) {
+		if (response.status !== 401) return response;
+		redirectToAuthentik(window.location.pathname + window.location.search);
+		return response;
+	}
 };
 
 api.use(timeoutMiddleware);

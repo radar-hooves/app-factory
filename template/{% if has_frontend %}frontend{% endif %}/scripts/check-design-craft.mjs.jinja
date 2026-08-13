@@ -28,7 +28,15 @@
  * Exit:   0 clean · 1 new finding(s) · 2 could not run
  */
 
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, accessSync, constants as fsConstants } from 'node:fs';
+import {
+	existsSync,
+	readFileSync,
+	writeFileSync,
+	readdirSync,
+	statSync,
+	accessSync,
+	constants as fsConstants
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -80,8 +88,10 @@ const LIVE_VIEWPORTS = ['1280x800', '390x844'];
 const ADVISORY_RULES = new Set(['em-dash-overuse', 'marketing-buzzword', 'aphoristic-cadence']);
 
 if (!existsSync(IMPECCABLE)) {
-  console.error(`impeccable not installed at ${path.relative(FRONTEND_ROOT, IMPECCABLE)} — run pnpm install in frontend/ first.`);
-  process.exit(2);
+	console.error(
+		`impeccable not installed at ${path.relative(FRONTEND_ROOT, IMPECCABLE)} — run pnpm install in frontend/ first.`
+	);
+	process.exit(2);
 }
 
 const args = process.argv.slice(2);
@@ -101,52 +111,56 @@ const writeBaseline = args.includes('--baseline');
 // ---------------------------------------------------------------------------
 
 function isExecutable(candidate) {
-  try {
-    accessSync(candidate, fsConstants.X_OK);
-    return statSync(candidate).isFile();
-  } catch {
-    return false;
-  }
+	try {
+		accessSync(candidate, fsConstants.X_OK);
+		return statSync(candidate).isFile();
+	} catch {
+		return false;
+	}
 }
 
 const EXECUTABLE_NAMES = new Set(['Google Chrome for Testing', 'chrome', 'chromium']);
 
 function findExecutableUnder(dir, depth = 0) {
-  if (depth > 5) return null;
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const found = findExecutableUnder(full, depth + 1);
-      if (found) return found;
-    } else if (EXECUTABLE_NAMES.has(entry.name) && isExecutable(full)) {
-      return full;
-    }
-  }
-  return null;
+	if (depth > 5) return null;
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return null;
+	}
+	for (const entry of entries) {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) {
+			const found = findExecutableUnder(full, depth + 1);
+			if (found) return found;
+		} else if (EXECUTABLE_NAMES.has(entry.name) && isExecutable(full)) {
+			return full;
+		}
+	}
+	return null;
 }
 
 function resolveBrowserExecutable() {
-  const configured = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (configured && isExecutable(configured)) return configured;
+	const configured = process.env.PUPPETEER_EXECUTABLE_PATH;
+	if (configured && isExecutable(configured)) return configured;
 
-  const browsersDir = [process.env.PLAYWRIGHT_BROWSERS_PATH, path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright'), path.join(os.homedir(), '.cache', 'ms-playwright')].find((dir) => dir && existsSync(dir));
-  if (!browsersDir) return null;
+	const browsersDir = [
+		process.env.PLAYWRIGHT_BROWSERS_PATH,
+		path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright'),
+		path.join(os.homedir(), '.cache', 'ms-playwright')
+	].find((dir) => dir && existsSync(dir));
+	if (!browsersDir) return null;
 
-  const chromiumBuilds = readdirSync(browsersDir)
-    .filter((d) => /^chromium-\d+$/.test(d))
-    .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
+	const chromiumBuilds = readdirSync(browsersDir)
+		.filter((d) => /^chromium-\d+$/.test(d))
+		.sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
 
-  for (const build of chromiumBuilds) {
-    const found = findExecutableUnder(path.join(browsersDir, build));
-    if (found) return found;
-  }
-  return null;
+	for (const build of chromiumBuilds) {
+		const found = findExecutableUnder(path.join(browsersDir, build));
+		if (found) return found;
+	}
+	return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,35 +177,38 @@ function resolveBrowserExecutable() {
 // ---------------------------------------------------------------------------
 
 function runImpeccable(cliArgs, envOverrides = {}) {
-  const result = spawnSync(IMPECCABLE, cliArgs, {
-    encoding: 'utf8',
-    env: { ...process.env, ...envOverrides },
-    maxBuffer: 1024 * 1024 * 20,
-  });
-  if (result.error) {
-    return { ok: false, message: `could not run impeccable: ${result.error.message}` };
-  }
-  const stderr = (result.stderr || '').trim();
-  if (stderr) {
-    return { ok: false, message: stderr };
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch (err) {
-    return { ok: false, message: `impeccable produced invalid JSON: ${err.message}` };
-  }
-  if (!Array.isArray(parsed)) {
-    return { ok: false, message: 'impeccable produced an unexpected JSON shape (expected an array)' };
-  }
-  return { ok: true, findings: parsed };
+	const result = spawnSync(IMPECCABLE, cliArgs, {
+		encoding: 'utf8',
+		env: { ...process.env, ...envOverrides },
+		maxBuffer: 1024 * 1024 * 20
+	});
+	if (result.error) {
+		return { ok: false, message: `could not run impeccable: ${result.error.message}` };
+	}
+	const stderr = (result.stderr || '').trim();
+	if (stderr) {
+		return { ok: false, message: stderr };
+	}
+	let parsed;
+	try {
+		parsed = JSON.parse(result.stdout);
+	} catch (err) {
+		return { ok: false, message: `impeccable produced invalid JSON: ${err.message}` };
+	}
+	if (!Array.isArray(parsed)) {
+		return {
+			ok: false,
+			message: 'impeccable produced an unexpected JSON shape (expected an array)'
+		};
+	}
+	return { ok: true, findings: parsed };
 }
 
 const oneLine = (value, max = 180) => {
-  const collapsed = String(value ?? '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
+	const collapsed = String(value ?? '')
+		.replace(/\s+/g, ' ')
+		.trim();
+	return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
 };
 
 // ---------------------------------------------------------------------------
@@ -201,52 +218,59 @@ const oneLine = (value, max = 180) => {
 let raw = [];
 
 if (mode === 'static') {
-  const res = runImpeccable(['detect', STATIC_TARGET, '--json']);
-  if (!res.ok) {
-    console.error(`Static scan failed: ${res.message}`);
-    process.exit(2);
-  }
-  raw = res.findings.map((f) => ({ ...f, target: path.relative(FRONTEND_ROOT, f.file) }));
+	const res = runImpeccable(['detect', STATIC_TARGET, '--json']);
+	if (!res.ok) {
+		console.error(`Static scan failed: ${res.message}`);
+		process.exit(2);
+	}
+	raw = res.findings.map((f) => ({ ...f, target: path.relative(FRONTEND_ROOT, f.file) }));
 } else {
-  // Fail loud on an unreachable app rather than let a `[]` from a refused
-  // connection read as a clean pass — see the runImpeccable comment above.
-  try {
-    await fetch(BASE_URL, { signal: AbortSignal.timeout(5000) });
-  } catch (err) {
-    console.error(`Cannot reach ${BASE_URL} — is the dev server running? (pnpm dev)\n${err.message}`);
-    process.exit(2);
-  }
+	// Fail loud on an unreachable app rather than let a `[]` from a refused
+	// connection read as a clean pass — see the runImpeccable comment above.
+	try {
+		await fetch(BASE_URL, { signal: AbortSignal.timeout(5000) });
+	} catch (err) {
+		console.error(
+			`Cannot reach ${BASE_URL} — is the dev server running? (pnpm dev)\n${err.message}`
+		);
+		process.exit(2);
+	}
 
-  const execPath = resolveBrowserExecutable();
-  if (!execPath) {
-    console.error('No Chromium executable found for impeccable’s live scan (checked PUPPETEER_EXECUTABLE_PATH and the Playwright cache).\n' + 'Run: pnpm exec playwright install chromium (from frontend/)');
-    process.exit(2);
-  }
+	const execPath = resolveBrowserExecutable();
+	if (!execPath) {
+		console.error(
+			'No Chromium executable found for impeccable’s live scan (checked PUPPETEER_EXECUTABLE_PATH and the Playwright cache).\n' +
+				'Run: pnpm exec playwright install chromium (from frontend/)'
+		);
+		process.exit(2);
+	}
 
-  for (const route of LIVE_ROUTES) {
-    const url = new URL(route, BASE_URL).toString();
-    for (const viewport of LIVE_VIEWPORTS) {
-      const res = runImpeccable(['detect', url, '--viewport', viewport, '--json'], { PUPPETEER_EXECUTABLE_PATH: execPath });
-      if (!res.ok) {
-        console.error(`Live scan failed at ${route} (${viewport}): ${res.message}`);
-        process.exit(2);
-      }
-      // target is the route we asked for, not impeccable's own `file` (the full
-      // scanned URL) — a defect present at one viewport is the same defect at
-      // the other, and the baseline key must not care which one found it.
-      for (const f of res.findings) raw.push({ ...f, target: route });
-    }
-  }
+	for (const route of LIVE_ROUTES) {
+		const url = new URL(route, BASE_URL).toString();
+		for (const viewport of LIVE_VIEWPORTS) {
+			const res = runImpeccable(['detect', url, '--viewport', viewport, '--json'], {
+				PUPPETEER_EXECUTABLE_PATH: execPath
+			});
+			if (!res.ok) {
+				console.error(`Live scan failed at ${route} (${viewport}): ${res.message}`);
+				process.exit(2);
+			}
+			// target is the route we asked for, not impeccable's own `file` (the full
+			// scanned URL) — a defect present at one viewport is the same defect at
+			// the other, and the baseline key must not care which one found it.
+			for (const f of res.findings) raw.push({ ...f, target: route });
+		}
+	}
 }
 
 const normalised = raw.map((f) => ({
-  rule: f.antipattern,
-  target: f.target,
-  detail: oneLine(f.snippet ? `${f.name} — ${f.snippet}` : f.name || f.description),
-  // A finding is advisory if impeccable itself marks it so, or if this app has
-  // argued the rule down (ADVISORY_RULES). Advisory findings are reported,
-  // never fail, never baselined.
-  advisory: f.severity === 'advisory' || ADVISORY_RULES.has(f.antipattern),
+	rule: f.antipattern,
+	target: f.target,
+	detail: oneLine(f.snippet ? `${f.name} — ${f.snippet}` : f.name || f.description),
+	// A finding is advisory if impeccable itself marks it so, or if this app has
+	// argued the rule down (ADVISORY_RULES). Advisory findings are reported,
+	// never fail, never baselined.
+	advisory: f.severity === 'advisory' || ADVISORY_RULES.has(f.antipattern)
 }));
 
 const findings = normalised.filter((f) => !f.advisory);
@@ -279,23 +303,25 @@ const advisory = normalised.filter((f) => f.advisory);
 // composed component, is rarely fixed one instance at a time — it is fixed by
 // revisiting the whole target. Re-open this if that stops being true.
 function key(finding) {
-  return mode === 'live' ? `live:${finding.rule}:${finding.target}` : `${finding.rule}:${finding.target}`;
+	return mode === 'live'
+		? `live:${finding.rule}:${finding.target}`
+		: `${finding.rule}:${finding.target}`;
 }
 
 function readBaselineKeys() {
-  if (!existsSync(BASELINE)) return new Set();
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync(BASELINE, 'utf8'));
-  } catch (err) {
-    console.error(`${path.relative(FRONTEND_ROOT, BASELINE)} is not valid JSON: ${err.message}`);
-    process.exit(2);
-  }
-  if (!Array.isArray(parsed)) {
-    console.error(`${path.relative(FRONTEND_ROOT, BASELINE)} does not contain a JSON array.`);
-    process.exit(2);
-  }
-  return new Set(parsed);
+	if (!existsSync(BASELINE)) return new Set();
+	let parsed;
+	try {
+		parsed = JSON.parse(readFileSync(BASELINE, 'utf8'));
+	} catch (err) {
+		console.error(`${path.relative(FRONTEND_ROOT, BASELINE)} is not valid JSON: ${err.message}`);
+		process.exit(2);
+	}
+	if (!Array.isArray(parsed)) {
+		console.error(`${path.relative(FRONTEND_ROOT, BASELINE)} does not contain a JSON array.`);
+		process.exit(2);
+	}
+	return new Set(parsed);
 }
 
 const isLiveKey = (k) => k.startsWith('live:');
@@ -303,39 +329,53 @@ const allBaseline = readBaselineKeys();
 const modeKnown = new Set([...allBaseline].filter((k) => isLiveKey(k) === (mode === 'live')));
 
 if (writeBaseline) {
-  const otherModeKeys = [...allBaseline].filter((k) => isLiveKey(k) !== (mode === 'live'));
-  const thisModeKeys = [...new Set(findings.map(key))];
-  const combined = [...new Set([...otherModeKeys, ...thisModeKeys])].sort();
-  writeFileSync(BASELINE, `${JSON.stringify(combined, null, 2)}\n`);
-  const otherLabel = mode === 'live' ? 'static' : 'live';
-  console.log(
-    `Baseline written (${mode} mode): ${thisModeKeys.length} known ${mode} finding(s); ` + `${otherModeKeys.length} ${otherLabel} finding(s) preserved untouched. ` + `${combined.length} total in ${path.relative(FRONTEND_ROOT, BASELINE)}`
-  );
-  process.exit(0);
+	const otherModeKeys = [...allBaseline].filter((k) => isLiveKey(k) !== (mode === 'live'));
+	const thisModeKeys = [...new Set(findings.map(key))];
+	const combined = [...new Set([...otherModeKeys, ...thisModeKeys])].sort();
+	writeFileSync(BASELINE, `${JSON.stringify(combined, null, 2)}\n`);
+	const otherLabel = mode === 'live' ? 'static' : 'live';
+	console.log(
+		`Baseline written (${mode} mode): ${thisModeKeys.length} known ${mode} finding(s); ` +
+			`${otherModeKeys.length} ${otherLabel} finding(s) preserved untouched. ` +
+			`${combined.length} total in ${path.relative(FRONTEND_ROOT, BASELINE)}`
+	);
+	process.exit(0);
 }
 
 const fresh = findings.filter((f) => !modeKnown.has(key(f)));
 const fixed = [...modeKnown].filter((k) => !findings.some((f) => key(f) === k));
 
 if (asJson) {
-  console.log(JSON.stringify({ mode, fresh, grandfathered: findings.length - fresh.length, fixed, advisory }, null, 2));
-  process.exit(fresh.length ? 1 : 0);
+	console.log(
+		JSON.stringify(
+			{ mode, fresh, grandfathered: findings.length - fresh.length, fixed, advisory },
+			null,
+			2
+		)
+	);
+	process.exit(fresh.length ? 1 : 0);
 }
 
 for (const f of fresh) console.error(`${f.target}\n  [${f.rule}] ${f.detail}`);
 if (fresh.length) {
-  console.error(`\n${fresh.length} NEW design-craft finding(s) (${mode} mode).`);
-  console.error('Fix it, or if it is a false positive for this app, argue the case and add it to ADVISORY_RULES with a reason.');
+	console.error(`\n${fresh.length} NEW design-craft finding(s) (${mode} mode).`);
+	console.error(
+		'Fix it, or if it is a false positive for this app, argue the case and add it to ADVISORY_RULES with a reason.'
+	);
 } else {
-  console.log(`No new design-craft findings in ${mode} mode. (${modeKnown.size} known, grandfathered.)`);
+	console.log(
+		`No new design-craft findings in ${mode} mode. (${modeKnown.size} known, grandfathered.)`
+	);
 }
 if (fixed.length) {
-  console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
-  for (const k of fixed) console.log(`  ${k}`);
+	console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
+	for (const k of fixed) console.log(`  ${k}`);
 }
 if (advisory.length) {
-  console.log(`\nFYI — ${advisory.length} advisory finding(s) (reported, never failing, never baselined):`);
-  for (const f of advisory) console.log(`  ${f.target} [${f.rule}] ${f.detail}`);
+	console.log(
+		`\nFYI — ${advisory.length} advisory finding(s) (reported, never failing, never baselined):`
+	);
+	for (const f of advisory) console.log(`  ${f.target} [${f.rule}] ${f.detail}`);
 }
 
 process.exit(fresh.length ? 1 : 0);

@@ -1,23 +1,21 @@
 {% raw %}<script lang="ts">
-  import '../app.css';
-  import '@fontsource-variable/fraunces';
-  import '@fontsource-variable/hanken-grotesk';
-  import '@fontsource-variable/jetbrains-mono';
-  import { ModeWatcher } from 'mode-watcher';
-  import { AppShell } from '@poodle64/ui/app-shell';
-  import { Toaster } from '@poodle64/ui/sonner';
-  import { page } from '$app/state';
+	import '../app.css';
+	import '@fontsource-variable/fraunces';
+	import '@fontsource-variable/hanken-grotesk';
+	import '@fontsource-variable/jetbrains-mono';
+	import { ModeWatcher } from 'mode-watcher';
+	import { AppShell } from '@poodle64/ui/app-shell';
+	import { Toaster } from '@poodle64/ui/sonner';
+	import { page } from '$app/state';
 
-  let { children } = $props();
+	let { children } = $props();
 
-  // Page title: "Page Name — {% endraw %}{{ project_name }}{% raw %}" or bare app name.
-  let pageTitle = $derived(
-    page.data.title ? `${page.data.title} — {% endraw %}{{ project_name }}{% raw %}` : '{% endraw %}{{ project_name }}{% raw %}'
-  );
+	// Page title: "Page Name — {% endraw %}{{ project_name }}{% raw %}" or bare app name.
+	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_name }}{% raw %}` : '{% endraw %}{{ project_name }}{% raw %}');
 </script>
 
 <svelte:head>
-  <title>{pageTitle}</title>
+	<title>{pageTitle}</title>
 </svelte:head>
 
 <ModeWatcher />
@@ -29,6 +27,6 @@
      old `content` prop this used to pass "standard" to; pick a measure once
      a page needs a narrower cap (see the component's own doc comment). -->
 <AppShell brandTitle="{% endraw %}{{ project_name }}{% raw %}" currentPath={page.url.pathname}>
-  {@render children()}
+	{@render children()}
 </AppShell>
 {% endraw -%}

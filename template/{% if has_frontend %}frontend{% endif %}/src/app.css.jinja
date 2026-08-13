@@ -35,15 +35,15 @@
   Eucalyptus defaults (hue 145) — change the hue to pick this app's accent.
 */
 :root {
-  --ds-color-primary:            oklch(0.55 0.12 145);
-  --ds-color-primary-foreground: oklch(1 0 0);
-  --ds-color-ring:               oklch(0.55 0.12 145);
+	--ds-color-primary: oklch(0.55 0.12 145);
+	--ds-color-primary-foreground: oklch(1 0 0);
+	--ds-color-ring: oklch(0.55 0.12 145);
 }
 
 .dark {
-  --ds-color-primary:            oklch(0.65 0.12 145);
-  --ds-color-primary-foreground: oklch(0.1 0.01 145);
-  --ds-color-ring:               oklch(0.65 0.12 145);
+	--ds-color-primary: oklch(0.65 0.12 145);
+	--ds-color-primary-foreground: oklch(0.1 0.01 145);
+	--ds-color-ring: oklch(0.65 0.12 145);
 }
 
 /*
@@ -57,63 +57,63 @@
   per-app decision, so they are declared and registered below.
 */
 :root {
-  --sidebar:                  var(--ds-color-surface-1);
-  --sidebar-foreground:       var(--ds-color-foreground);
-  --sidebar-primary:          var(--ds-color-primary);
-  --sidebar-primary-foreground: var(--ds-color-primary-foreground);
-  --sidebar-accent:           var(--ds-color-surface-2);
-  --sidebar-accent-foreground: var(--ds-color-foreground);
-  --sidebar-border:           var(--ds-color-border);
-  --sidebar-ring:             var(--ds-color-ring);
-  --chart-1: oklch(0.55 0.12 145);
-  --chart-2: oklch(0.6 0.1 200);
-  --chart-3: oklch(0.65 0.1 260);
-  --chart-4: oklch(0.7 0.1 60);
-  --chart-5: oklch(0.6 0.15 330);
+	--sidebar: var(--ds-color-surface-1);
+	--sidebar-foreground: var(--ds-color-foreground);
+	--sidebar-primary: var(--ds-color-primary);
+	--sidebar-primary-foreground: var(--ds-color-primary-foreground);
+	--sidebar-accent: var(--ds-color-surface-2);
+	--sidebar-accent-foreground: var(--ds-color-foreground);
+	--sidebar-border: var(--ds-color-border);
+	--sidebar-ring: var(--ds-color-ring);
+	--chart-1: oklch(0.55 0.12 145);
+	--chart-2: oklch(0.6 0.1 200);
+	--chart-3: oklch(0.65 0.1 260);
+	--chart-4: oklch(0.7 0.1 60);
+	--chart-5: oklch(0.6 0.15 330);
 }
 
 .dark {
-  --sidebar:                  var(--ds-color-surface-1);
-  --sidebar-foreground:       var(--ds-color-foreground);
-  --sidebar-primary:          var(--ds-color-primary);
-  --sidebar-primary-foreground: var(--ds-color-primary-foreground);
-  --sidebar-accent:           var(--ds-color-surface-2);
-  --sidebar-accent-foreground: var(--ds-color-foreground);
-  --sidebar-border:           var(--ds-color-border);
-  --sidebar-ring:             var(--ds-color-ring);
-  --chart-1: oklch(0.65 0.12 145);
-  --chart-2: oklch(0.7 0.1 200);
-  --chart-3: oklch(0.72 0.1 260);
-  --chart-4: oklch(0.75 0.1 60);
-  --chart-5: oklch(0.7 0.15 330);
+	--sidebar: var(--ds-color-surface-1);
+	--sidebar-foreground: var(--ds-color-foreground);
+	--sidebar-primary: var(--ds-color-primary);
+	--sidebar-primary-foreground: var(--ds-color-primary-foreground);
+	--sidebar-accent: var(--ds-color-surface-2);
+	--sidebar-accent-foreground: var(--ds-color-foreground);
+	--sidebar-border: var(--ds-color-border);
+	--sidebar-ring: var(--ds-color-ring);
+	--chart-1: oklch(0.65 0.12 145);
+	--chart-2: oklch(0.7 0.1 200);
+	--chart-3: oklch(0.72 0.1 260);
+	--chart-4: oklch(0.75 0.1 60);
+	--chart-5: oklch(0.7 0.15 330);
 }
 
 @theme inline {
-  --color-sidebar:                    var(--sidebar);
-  --color-sidebar-foreground:         var(--sidebar-foreground);
-  --color-sidebar-primary:            var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent:             var(--sidebar-accent);
-  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
-  --color-sidebar-border:             var(--sidebar-border);
-  --color-sidebar-ring:               var(--sidebar-ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
+	* {
+		@apply border-border outline-ring/50;
+	}
 
-  html {
-    font-size: var(--base-font-size, 14px);
-  }
+	html {
+		font-size: var(--base-font-size, 14px);
+	}
 
-  body {
-    @apply bg-background text-foreground;
-  }
+	body {
+		@apply bg-background text-foreground;
+	}
 }

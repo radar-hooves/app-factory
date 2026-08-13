@@ -42,29 +42,33 @@ const BASELINE = path.join(FRONTEND_ROOT, '.ui-drift-baseline.json');
 const SURFACES_DIR = path.join(REPO_ROOT, 'docs/product/surfaces');
 
 if (!existsSync(UI_DIST)) {
-  console.error(`@poodle64/ui not installed at ${path.relative(FRONTEND_ROOT, UI_DIST)} — run pnpm install in frontend/ first.`);
-  process.exit(2);
+	console.error(
+		`@poodle64/ui not installed at ${path.relative(FRONTEND_ROOT, UI_DIST)} — run pnpm install in frontend/ first.`
+	);
+	process.exit(2);
 }
 
-const shipped = new Set(readdirSync(UI_DIST).filter((d) => statSync(path.join(UI_DIST, d)).isDirectory()));
+const shipped = new Set(
+	readdirSync(UI_DIST).filter((d) => statSync(path.join(UI_DIST, d)).isDirectory())
+);
 
 /** kebab-case a PascalCase component name, to compare against a package subpath. */
 const kebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
 const kebabToPascal = (k) =>
-  k
-    .split('-')
-    .map((s) => s[0].toUpperCase() + s.slice(1))
-    .join('');
+	k
+		.split('-')
+		.map((s) => s[0].toUpperCase() + s.slice(1))
+		.join('');
 
 function walk(dir, out = []) {
-  if (!existsSync(dir)) return out;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
-    else out.push(full);
-  }
-  return out;
+	if (!existsSync(dir)) return out;
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) walk(full, out);
+		else out.push(full);
+	}
+	return out;
 }
 
 const files = walk(SRC);
@@ -89,16 +93,16 @@ const findings = [];
 // the test, because it does not import the thing it forked.
 // ---------------------------------------------------------------------------
 for (const f of files.filter((f) => f.endsWith('.svelte'))) {
-  if (f.includes(`${path.sep}components${path.sep}ui${path.sep}`)) continue;
-  const name = path.basename(f, '.svelte');
-  if (!shipped.has(kebab(name))) continue;
-  const src = readFileSync(f, 'utf8');
-  if (new RegExp(`from\\s+['"]@poodle64/ui/${kebab(name)}['"]`).test(src)) continue;
-  findings.push({
-    rule: 'vendored-copy',
-    file: rel(f),
-    detail: `local ${name} duplicates @poodle64/ui/${kebab(name)}; import the shipped one`,
-  });
+	if (f.includes(`${path.sep}components${path.sep}ui${path.sep}`)) continue;
+	const name = path.basename(f, '.svelte');
+	if (!shipped.has(kebab(name))) continue;
+	const src = readFileSync(f, 'utf8');
+	if (new RegExp(`from\\s+['"]@poodle64/ui/${kebab(name)}['"]`).test(src)) continue;
+	findings.push({
+		rule: 'vendored-copy',
+		file: rel(f),
+		detail: `local ${name} duplicates @poodle64/ui/${kebab(name)}; import the shipped one`
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -115,19 +119,19 @@ for (const f of files.filter((f) => f.endsWith('.svelte'))) {
 // inherited from another app.
 // ---------------------------------------------------------------------------
 for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
-  const src = readFileSync(f, 'utf8');
-  // Deliberately NOT "…and does not import PageHeader": a page that swapped its
-  // PageHeader back for a raw <h1> while leaving the now-unused import behind
-  // would satisfy that condition. PageHeader emits the page's <h1> itself, so a
-  // route writing its own is wrong either way — it has abandoned the shared
-  // treatment, or it has shipped two h1s.
-  if (/<h1[\s>]/.test(src)) {
-    findings.push({
-      rule: 'hand-rolled-page-title',
-      file: rel(f),
-      detail: 'writes its own <h1>; compose PageHeader so every route shares one title treatment',
-    });
-  }
+	const src = readFileSync(f, 'utf8');
+	// Deliberately NOT "…and does not import PageHeader": a page that swapped its
+	// PageHeader back for a raw <h1> while leaving the now-unused import behind
+	// would satisfy that condition. PageHeader emits the page's <h1> itself, so a
+	// route writing its own is wrong either way — it has abandoned the shared
+	// treatment, or it has shipped two h1s.
+	if (/<h1[\s>]/.test(src)) {
+		findings.push({
+			rule: 'hand-rolled-page-title',
+			file: rel(f),
+			detail: 'writes its own <h1>; compose PageHeader so every route shares one title treatment'
+		});
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -146,35 +150,37 @@ for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
 // Button is not one. Only a COMPOSED component counts.
 // ---------------------------------------------------------------------------
 const PRIMITIVES = new Set([
-  'alert',
-  'alert-dialog',
-  'avatar',
-  'badge',
-  'button',
-  'card',
-  'checkbox',
-  'command',
-  'data-table',
-  'dialog',
-  'dropdown-menu',
-  'input',
-  'input-group',
-  'label',
-  'password-input',
-  'popover',
-  'progress',
-  'select',
-  'separator',
-  'skeleton',
-  'sonner',
-  'switch',
-  'table',
-  'tabs',
-  'textarea',
-  'tooltip',
+	'alert',
+	'alert-dialog',
+	'avatar',
+	'badge',
+	'button',
+	'card',
+	'checkbox',
+	'command',
+	'data-table',
+	'dialog',
+	'dropdown-menu',
+	'input',
+	'input-group',
+	'label',
+	'password-input',
+	'popover',
+	'progress',
+	'select',
+	'separator',
+	'skeleton',
+	'sonner',
+	'switch',
+	'table',
+	'tabs',
+	'textarea',
+	'tooltip'
 ]);
 
-const surfaceFiles = existsSync(SURFACES_DIR) ? readdirSync(SURFACES_DIR).filter((f) => f.endsWith('.md') && f !== 'README.md') : [];
+const surfaceFiles = existsSync(SURFACES_DIR)
+	? readdirSync(SURFACES_DIR).filter((f) => f.endsWith('.md') && f !== 'README.md')
+	: [];
 
 // route -> +page.svelte file. A route group is a parenthesised directory name
 // (`(protected)`, `(admin)`) that organises files on disk without appearing in
@@ -182,19 +188,19 @@ const surfaceFiles = existsSync(SURFACES_DIR) ? readdirSync(SURFACES_DIR).filter
 // URL) can be matched against a filesystem path.
 const routeToPageFile = new Map();
 for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
-  const relDir = path.relative(ROUTES, path.dirname(f));
-  const segments = relDir.split(path.sep).filter((s) => s && !/^\(.*\)$/.test(s));
-  routeToPageFile.set('/' + segments.join('/'), f);
+	const relDir = path.relative(ROUTES, path.dirname(f));
+	const segments = relDir.split(path.sep).filter((s) => s && !/^\(.*\)$/.test(s));
+	routeToPageFile.set('/' + segments.join('/'), f);
 }
 
 /** Pull the named `## Heading` section's body out of a brief's markdown. */
 function briefSection(md, heading) {
-  const lines = md.split('\n');
-  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
-  if (start === -1) return '';
-  let end = lines.findIndex((l, idx) => idx > start && /^## /.test(l));
-  if (end === -1) end = lines.length;
-  return lines.slice(start + 1, end).join('\n');
+	const lines = md.split('\n');
+	const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+	if (start === -1) return '';
+	let end = lines.findIndex((l, idx) => idx > start && /^## /.test(l));
+	if (end === -1) end = lines.length;
+	return lines.slice(start + 1, end).join('\n');
 }
 
 /**
@@ -205,16 +211,16 @@ function briefSection(md, heading) {
  * component only in prose.
  */
 function declaredVocabulary(decisionSection) {
-  const declared = new Set();
-  const backtickRe = /`([^`]+)`/g;
-  let m;
-  while ((m = backtickRe.exec(decisionSection))) {
-    for (const candidate of m[1].split(',')) {
-      const k = kebab(candidate.trim());
-      if (shipped.has(k)) declared.add(k);
-    }
-  }
-  return declared;
+	const declared = new Set();
+	const backtickRe = /`([^`]+)`/g;
+	let m;
+	while ((m = backtickRe.exec(decisionSection))) {
+		for (const candidate of m[1].split(',')) {
+			const k = kebab(candidate.trim());
+			if (shipped.has(k)) declared.add(k);
+		}
+	}
+	return declared;
 }
 
 /**
@@ -223,15 +229,15 @@ function declaredVocabulary(decisionSection) {
  * directories export a type of the same name.
  */
 function composedImports(src) {
-  const found = new Set();
-  const importRe = /^[ \t]*import\s+(type\s+)?[^\n]*?from\s+['"]@poodle64\/ui\/([a-z0-9-]+)['"]/gm;
-  let m;
-  while ((m = importRe.exec(src))) {
-    if (m[1]) continue;
-    const component = m[2];
-    if (shipped.has(component) && !PRIMITIVES.has(component)) found.add(component);
-  }
-  return found;
+	const found = new Set();
+	const importRe = /^[ \t]*import\s+(type\s+)?[^\n]*?from\s+['"]@poodle64\/ui\/([a-z0-9-]+)['"]/gm;
+	let m;
+	while ((m = importRe.exec(src))) {
+		if (m[1]) continue;
+		const component = m[2];
+		if (shipped.has(component) && !PRIMITIVES.has(component)) found.add(component);
+	}
+	return found;
 }
 
 /**
@@ -241,53 +247,55 @@ function composedImports(src) {
  * level deep" in the brief contract.
  */
 function childComponentFiles(pageSrc) {
-  const out = [];
-  const importRe = /from\s+['"](\$components\/[^'"]+|\$lib\/[^'"]+)['"]/g;
-  let m;
-  while ((m = importRe.exec(pageSrc))) {
-    const spec = m[1];
-    if (!spec.endsWith('.svelte')) continue;
-    const relPath = spec.startsWith('$components/') ? spec.replace('$components/', 'lib/components/') : spec.replace('$lib/', 'lib/');
-    const full = path.join(SRC, relPath);
-    if (existsSync(full)) out.push(full);
-  }
-  return out;
+	const out = [];
+	const importRe = /from\s+['"](\$components\/[^'"]+|\$lib\/[^'"]+)['"]/g;
+	let m;
+	while ((m = importRe.exec(pageSrc))) {
+		const spec = m[1];
+		if (!spec.endsWith('.svelte')) continue;
+		const relPath = spec.startsWith('$components/')
+			? spec.replace('$components/', 'lib/components/')
+			: spec.replace('$lib/', 'lib/');
+		const full = path.join(SRC, relPath);
+		if (existsSync(full)) out.push(full);
+	}
+	return out;
 }
 
 const staleBriefs = [];
 
 for (const surfaceFile of surfaceFiles) {
-  const md = readFileSync(path.join(SURFACES_DIR, surfaceFile), 'utf8');
-  const routeMatch = md.match(/^route:\s*(\S+)/m);
-  if (!routeMatch) continue;
-  const route = routeMatch[1];
-  const pageFile = routeToPageFile.get(route);
+	const md = readFileSync(path.join(SURFACES_DIR, surfaceFile), 'utf8');
+	const routeMatch = md.match(/^route:\s*(\S+)/m);
+	if (!routeMatch) continue;
+	const route = routeMatch[1];
+	const pageFile = routeToPageFile.get(route);
 
-  if (!pageFile) {
-    staleBriefs.push(`docs/product/surfaces/${surfaceFile} (route: ${route})`);
-    continue;
-  }
+	if (!pageFile) {
+		staleBriefs.push(`docs/product/surfaces/${surfaceFile} (route: ${route})`);
+		continue;
+	}
 
-  const declared = declaredVocabulary(briefSection(md, 'The decision'));
-  const pageSrc = readFileSync(pageFile, 'utf8');
-  const sources = [pageSrc, ...childComponentFiles(pageSrc).map((f) => readFileSync(f, 'utf8'))];
+	const declared = declaredVocabulary(briefSection(md, 'The decision'));
+	const pageSrc = readFileSync(pageFile, 'utf8');
+	const sources = [pageSrc, ...childComponentFiles(pageSrc).map((f) => readFileSync(f, 'utf8'))];
 
-  const composed = new Set();
-  for (const src of sources) {
-    for (const c of composedImports(src)) composed.add(c);
-  }
+	const composed = new Set();
+	for (const src of sources) {
+		for (const c of composedImports(src)) composed.add(c);
+	}
 
-  for (const c of [...composed].sort()) {
-    if (declared.has(c)) continue;
-    findings.push({
-      rule: 'surface-brief-divergence',
-      file: rel(pageFile),
-      // Carried as its own field, not just baked into `detail`, because the
-      // baseline key needs it too — see the key() comment below.
-      component: kebabToPascal(c),
-      detail: `composes ${kebabToPascal(c)}, which docs/product/surfaces/${surfaceFile} does not name; update the brief first if the presentation decision has changed`,
-    });
-  }
+	for (const c of [...composed].sort()) {
+		if (declared.has(c)) continue;
+		findings.push({
+			rule: 'surface-brief-divergence',
+			file: rel(pageFile),
+			// Carried as its own field, not just baked into `detail`, because the
+			// baseline key needs it too — see the key() comment below.
+			component: kebabToPascal(c),
+			detail: `composes ${kebabToPascal(c)}, which docs/product/surfaces/${surfaceFile} does not name; update the brief first if the presentation decision has changed`
+		});
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -297,10 +305,12 @@ for (const surfaceFile of surfaceFiles) {
 // can be read the way an audit reads it: for each one, "do we hand-roll that?"
 // ---------------------------------------------------------------------------
 const allSource = files
-  .filter((f) => f.endsWith('.svelte') || f.endsWith('.ts'))
-  .map((f) => readFileSync(f, 'utf8'))
-  .join('\n');
-const unused = [...shipped].filter((c) => !new RegExp(`@poodle64/ui/${c}\\b`).test(allSource)).sort();
+	.filter((f) => f.endsWith('.svelte') || f.endsWith('.ts'))
+	.map((f) => readFileSync(f, 'utf8'))
+	.join('\n');
+const unused = [...shipped]
+	.filter((c) => !new RegExp(`@poodle64/ui/${c}\\b`).test(allSource))
+	.sort();
 
 // ---------------------------------------------------------------------------
 // Baseline: gate on NEW drift, not on the backlog.
@@ -329,12 +339,17 @@ const unused = [...shipped].filter((c) => !new RegExp(`@poodle64/ui/${c}\\b`).te
 // already-flagged page produces no fresh finding at all. That is a fail-open —
 // the gate goes quiet exactly when a new divergence lands. Its key therefore
 // carries the component name.
-const key = (f) => (f.rule === 'surface-brief-divergence' ? `${f.rule}:${f.file}:${f.component}` : `${f.rule}:${f.file}`);
+const key = (f) =>
+	f.rule === 'surface-brief-divergence'
+		? `${f.rule}:${f.file}:${f.component}`
+		: `${f.rule}:${f.file}`;
 
 if (process.argv.includes('--baseline')) {
-  writeFileSync(BASELINE, JSON.stringify([...new Set(findings.map(key))].sort(), null, 2) + '\n');
-  console.log(`Baseline written: ${findings.length} known finding(s) in ${path.relative(FRONTEND_ROOT, BASELINE)}`);
-  process.exit(0);
+	writeFileSync(BASELINE, JSON.stringify([...new Set(findings.map(key))].sort(), null, 2) + '\n');
+	console.log(
+		`Baseline written: ${findings.length} known finding(s) in ${path.relative(FRONTEND_ROOT, BASELINE)}`
+	);
+	process.exit(0);
 }
 
 const known = new Set(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : []);
@@ -342,42 +357,42 @@ const fresh = findings.filter((f) => !known.has(key(f)));
 const fixed = [...known].filter((k) => !findings.some((f) => key(f) === k));
 
 if (process.argv.includes('--json')) {
-  console.log(
-    JSON.stringify(
-      {
-        fresh,
-        grandfathered: findings.length - fresh.length,
-        fixed,
-        unusedShippedComponents: unused,
-        staleBriefs,
-      },
-      null,
-      2
-    )
-  );
-  process.exit(fresh.length ? 1 : 0);
+	console.log(
+		JSON.stringify(
+			{
+				fresh,
+				grandfathered: findings.length - fresh.length,
+				fixed,
+				unusedShippedComponents: unused,
+				staleBriefs
+			},
+			null,
+			2
+		)
+	);
+	process.exit(fresh.length ? 1 : 0);
 }
 
 for (const f of fresh) console.error(`${f.file}\n  [${f.rule}] ${f.detail}`);
 if (fresh.length) {
-  console.error(`\n${fresh.length} NEW design-system drift finding(s).`);
-  console.error('Compose what the package ships; a local copy cannot receive an upstream fix.');
+	console.error(`\n${fresh.length} NEW design-system drift finding(s).`);
+	console.error('Compose what the package ships; a local copy cannot receive an upstream fix.');
 } else {
-  console.log(`No new design-system drift. (${known.size} known, grandfathered.)`);
+	console.log(`No new design-system drift. (${known.size} known, grandfathered.)`);
 }
 if (fixed.length) {
-  console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
-  for (const k of fixed) console.log(`  ${k}`);
+	console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
+	for (const k of fixed) console.log(`  ${k}`);
 }
 if (unused.length) {
-  console.log(`\nFYI — ${unused.length} shipped components this app never imports:`);
-  console.log(`  ${unused.join(', ')}`);
-  console.log('  Worth a glance: is any of them something a page here hand-rolls?');
+	console.log(`\nFYI — ${unused.length} shipped components this app never imports:`);
+	console.log(`  ${unused.join(', ')}`);
+	console.log('  Worth a glance: is any of them something a page here hand-rolls?');
 }
 if (staleBriefs.length) {
-  console.log(`\nFYI — ${staleBriefs.length} surface brief(s) whose route no longer exists:`);
-  for (const s of staleBriefs) console.log(`  ${s}`);
-  console.log('  A brief for a route that has gone is a decision nobody is reading any more.');
+	console.log(`\nFYI — ${staleBriefs.length} surface brief(s) whose route no longer exists:`);
+	for (const s of staleBriefs) console.log(`  ${s}`);
+	console.log('  A brief for a route that has gone is a decision nobody is reading any more.');
 }
 
 process.exit(fresh.length ? 1 : 0);

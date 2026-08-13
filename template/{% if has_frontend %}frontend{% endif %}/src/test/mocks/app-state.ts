@@ -10,6 +10,6 @@
  * `$app/state` without mocking it.
  */
 export const page = {
-  params: {} as Record<string, string>,
-  url: new URL('http://localhost/'),
+	params: {} as Record<string, string>,
+	url: new URL('http://localhost/')
 };

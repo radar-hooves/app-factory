@@ -75,6 +75,19 @@ repos:
         files: ^backend/(pyproject\.toml|uv\.lock)$
 {%- if has_frontend %}
 
+  # Prettier is the frontend's only formatter, as ruff-format is the backend's.
+  # Run from the app's own node_modules so `frontend/.prettierrc` resolves its
+  # svelte and tailwind plugins; needs `pnpm install` in frontend/, like the two
+  # design gates below. `--ignore-path` is explicit because prettier discovers
+  # an ignore file relative to the CWD, and pre-commit's CWD is the repo root.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: 'frontend - Format with prettier'
+        entry: frontend/node_modules/.bin/prettier --write --ignore-unknown --ignore-path frontend/.prettierignore
+        language: system
+        files: '^frontend/.*\.(svelte|ts|js|mjs|cjs|css|json|html)$'
+
   # Catches craft defects every other gate is blind to — a nested card, a
   # side-tab accent border, gradient-text on a heading, decorative slop. It
   # compiles, renders, type-checks and passes its tests; it is only wrong once
