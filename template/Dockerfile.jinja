@@ -10,7 +10,9 @@ WORKDIR /frontend
 # one field drives the container and the CI gate alike.
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./
 
-RUN corepack enable
+# Pinned to package.json's packageManager (pnpm@10.28.0) — keep the two in
+# step; bare `corepack enable` alone lets a floating pnpm break the build.
+RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
 # @poodle64/design-tokens and @poodle64/ui are hosted on GitHub Packages
 # (npm.pkg.github.com) and need an authenticated read even though the source
@@ -46,20 +48,33 @@ FROM python:3.14-slim-bookworm
 
 WORKDIR /app
 
+# Git commit hash baked in at build time.
+# Usage: docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) .
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 ENV TZ=Australia/Brisbane
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Non-root user (uid 1000; household container convention).
-RUN useradd -m -u 1000 -s /bin/bash {{ package_name }}
+# Non-root user (uid 1000; household container convention). Generic name —
+# every COPY below sets ownership by numeric --chown, so nothing depends on
+# the username matching the package.
+RUN useradd -m -u 1000 -s /bin/bash appuser
 
 # Self-contained venv from the builder.
 COPY --from=builder --chown=1000:1000 /app/backend/.venv /app/backend/.venv
 ENV PATH="/app/backend/.venv/bin:$PATH"
 
 # alembic.ini + migration scripts are plain files, not part of the installed
-# wheel; the CMD below invokes alembic against them directly from /app/backend.
+# wheel; entrypoint.sh below invokes alembic against them directly from
+# /app/backend.
 COPY --chown=1000:1000 backend/alembic ./backend/alembic
 COPY --chown=1000:1000 backend/alembic.ini ./backend/alembic.ini
+
+# Migrates the database, stamps the deployment environment, then execs the
+# ASGI server ({{ package_name }}.server:app — keep in step if that target moves).
+COPY --chown=1000:1000 backend/entrypoint.sh ./backend/entrypoint.sh
+RUN chmod +x ./backend/entrypoint.sh
 
 # The MCP actor registry (mcp/actors.py) — maps an Authentik-authenticated
 # identity to an actor id; {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH points at it.
@@ -70,12 +85,8 @@ ENV {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH=/app/confi
 # process cwd (WORKDIR /app) — frontend/build.
 COPY --from=frontend --chown=1000:1000 /frontend/build ./frontend/build
 {% endif %}
-USER {{ package_name }}
+USER 1000:1000
 
 EXPOSE {{ backend_port }}
 
-# alembic.ini's script_location resolves relative to the process cwd, not the
-# -c ini path, so migrate from inside a subshell cd'd into backend/; the
-# subshell keeps the outer cwd at /app for uvicorn{% if has_frontend %}, where main.py's
-# _FRONTEND_BUILD ("frontend/build") must resolve{% endif %}.
-CMD ["sh", "-c", "(cd backend && alembic upgrade head) && uvicorn {{ package_name }}.main:create_app --factory --host 0.0.0.0 --port {{ backend_port }}"]
+CMD ["./backend/entrypoint.sh"]

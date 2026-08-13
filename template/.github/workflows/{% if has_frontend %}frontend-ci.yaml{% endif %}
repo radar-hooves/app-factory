@@ -13,11 +13,16 @@ on:
       - '.github/workflows/frontend-ci.yaml'
   workflow_dispatch:
 
+# A caller's permissions are the CEILING for the reusable it calls, so
+# `packages: read` must be granted here or the reusable's install of
+# @poodle64/* from GitHub Packages loses its token.
 permissions:
   contents: read
+  packages: read
 
 jobs:
   frontend-ci:
     uses: poodle64/master-project/.github/workflows/frontend-ci.yaml@main
     with:
       working-directory: frontend
+      run-tests: true

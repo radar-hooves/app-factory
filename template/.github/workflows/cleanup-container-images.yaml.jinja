@@ -1,0 +1,17 @@
+name: Cleanup Old Container Images
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  cleanup:
+    uses: poodle64/master-project/.github/workflows/cleanup-container-images.yaml@main
+    with:
+      package-name: {{ project_name }}
+      keep-versions: '10'

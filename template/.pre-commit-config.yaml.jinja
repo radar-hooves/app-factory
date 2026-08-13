@@ -12,9 +12,23 @@ repos:
     hooks:
       - id: check-pii
         name: 'security - Detect PII (names, mobiles, personal emails)'
-        entry: python3 .claude/hooks/master/check-pii.py
+        entry: python3 .claude/hooks/master/precommit/pii.py
         language: system
         types: [text]
+
+      - id: check-handoff-tracks-work
+        name: 'governance - Handoff outstanding work is tracked'
+        entry: python3 .claude/hooks/master/precommit/handoff-tracking.py
+        language: system
+        files: '^docs/development/handoffs/.*\.md$'
+        pass_filenames: true
+
+      - id: check-handoff-status-chain
+        name: 'governance - Handoff status chain is honest'
+        entry: python3 .claude/hooks/master/precommit/handoff-status.py
+        language: system
+        files: '^docs/development/handoffs/.*\.md$'
+        pass_filenames: true
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -64,9 +78,9 @@ repos:
   # Catches craft defects every other gate is blind to — a nested card, a
   # side-tab accent border, gradient-text on a heading, decorative slop. It
   # compiles, renders, type-checks and passes its tests; it is only wrong once
-  # a human looks at the rendered page (canonical-app-shape.md). Static mode
-  # only (source analysis, no browser) — the live browser sweep needs a running
-  # dev server and stays a manual/app-local tool, never pre-commit.
+  # a human looks at the rendered page (canonical-app-shape.md). The script
+  # also has a --live mode that drives a real browser against a running dev
+  # server; pre-commit deliberately runs static only.
   #
   # Gates on NEW hard findings only, against frontend/.design-craft-baseline.json
   # — a debt register, so it lands on a non-clean app and still fails forward.
@@ -83,9 +97,9 @@ repos:
 
   # Catches the app hand-rolling what @poodle64/ui already ships — a local
   # component duplicating a shipped one, or a route writing its own <h1>
-  # instead of composing the shared PageHeader. Invisible to every other gate:
-  # it compiles, renders, type-checks and passes its tests, and is only wrong
-  # once a human sees it does not match the rest of the app (canonical-app-shape.md).
+  # instead of composing the shared PageHeader. It compiles, renders,
+  # type-checks and passes its tests, and is only wrong once a human sees it
+  # does not match the rest of the app (canonical-app-shape.md).
   #
   # Gates on NEW findings only, against frontend/.ui-drift-baseline.json — a
   # debt register, so it lands on a non-clean app and still fails forward.

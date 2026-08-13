@@ -1,29 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "dependencyDashboard": true,
-  "labels": ["dependencies"],
-  "timezone": "Australia/Brisbane",
-  "schedule": ["after 10pm every weekday", "before 5am every day"],
-  "prConcurrentLimit": 3,
-  "prHourlyLimit": 2,
-  "npmrc": "@poodle64:registry=https://npm.pkg.github.com/",
-  "packageRules": [
-    {
-      "description": "Batch non-major updates into one PR to keep the noise low.",
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "groupName": "non-major dependencies"
-    },
-    {
-      "description": "Major updates get their own PR each.",
-      "matchUpdateTypes": ["major"],
-      "separateMajorMinor": true
-    },
-    {
-      "description": "Design tokens: manual review required — token shape changes affect every component.",
-      "matchPackageNames": ["@poodle64/design-tokens"],
-      "rangeStrategy": "bump",
-      "automerge": false
-    }
-  ]
+  "extends": ["local>poodle64/master-project"]
 }
