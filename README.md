@@ -131,7 +131,7 @@ a fresh one, and the difference is not the stamp — it is the reconcile after i
 Proved on `fixxxer`, 2026-08-13.
 
 ```bash
-uvx copier@latest copy --overwrite --defaults --vcs-ref v2026.8.5 \
+uvx copier@latest copy --overwrite --defaults --vcs-ref v2026.8.6 \
   --data project_name=<app> --data package_name=<package> \
   --data description="<one sentence>" --data has_frontend=true \
   --data backend_port=<from the port registry> \

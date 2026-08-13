@@ -1,0 +1,8 @@
+# This repo has no Prettier of its own, but an ancestor `.prettierrc` in the
+# master umbrella reaches it: `proseWrap: "never"` unwraps README.md and
+# CHANGELOG.md onto single 2000-column lines, so a one-line change arrives as a
+# whole-file diff. Both are hand-wrapped and read far more often than edited.
+#
+# The frontend the template STAMPS is a different matter — it carries its own
+# prettier, config and hook under template/frontend/, and formats normally.
+*.md

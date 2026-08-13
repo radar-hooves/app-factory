@@ -4,11 +4,28 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.8.6] - 2026-08-13
 
-Surfaced by the third ADOPT run (`eight`).
+Seven apps were adopted or updated onto the template today, and each hand-applied fixes that had landed on `main` without a tag. `copier` resolves a template by its latest TAG, so every one of them was invisible: this release is what actually delivers them.
+
+### Added — the template ships a formatter
+
+**Prettier.** The template shipped `eslint-config-prettier` and nothing else, so a stamped app inherited a config that only turns OFF eslint's formatting rules — no formatter, no config, no format script. Of the seven apps onboarded today, one carried its own Prettier setup and the rest had none, which is the per-repo variance `master/umbrella.md` §"collapse to ONE mechanism per job" exists to prevent. Prettier now ships whole: the dependency, `.prettierrc`, `.prettierignore`, `format` / `format:check` scripts, and a pre-commit hook.
+
+The settings are the household's existing frontend consensus — tabs, single quotes, no trailing comma, 100 columns, the svelte and tailwind plugins — already agreed by milton, portcullis, core-memory, cadmus and design-system. A fresh stamp matches its siblings with no decision to make. `lint` becomes `prettier --check . && eslint .`, which is the shape the shared `frontend-ci` reusable already documents for `pnpm lint`, so format drift fails CI with no change to the reusable. `eslint-config-prettier` stays: with a real formatter present it is finally doing its actual job of standing eslint down from formatting.
+
+Prettier is scoped to `frontend/`, as `ruff-format` is to `backend/`. Root YAML and Markdown stay unformatted deliberately — the shared workflow templates carry `prettier-ignore` markers precisely because prettier strips the step indentation they rely on.
+
+Every frontend source in the template is reformatted to that style, so a fresh stamp passes its own `format:check` rather than failing the first gate it meets. The two design-gate baselines and the generated `schema.d.ts` are in `.prettierignore`: another tool owns their layout, and reformatting them turns each write into a two-tool diff.
 
 ### Fixed
+
+Surfaced by stamping and driving BOTH modes — `has_frontend` true and false — which nothing had done since the SPA work landed.
+
+- **A backend-only stamp could not import its own `main`.** The SPA fallback added in 2026.8.5 put only its four imports inside the `has_frontend` conditional; the `_SPAStaticFiles` class, the build path and the prefix constants stayed outside it. `has_frontend=false` therefore produced `NameError: name 'StaticFiles' is not defined` on the first import of `main`, so the whole test suite and the server were dead on arrival. The block now sits inside the conditional with its imports, and `Path` / `project_root` are conditional with it since nothing else in the module uses them.
+- **`conftest.py` imported a module the declared dependency floor does not ship.** The floor was `testcontainers[postgres]>=4.13.2`, and `testcontainers.community.postgres` first appears in 4.15.0 — verified against 4.13.2, 4.14.0 and 4.15.0. A fresh stamp resolved 4.15.0 and worked, so the mismatch was invisible; an app taking the change by `copier update` against a lock pinned to 4.13 or 4.14 would import a module its own dependency does not have. The floor is now 4.15.0.
+
+Surfaced by the third ADOPT run (`eight`).
 
 - **No environment variable reached any settings section.** `Settings` declared each section as a class-body instance (`database: DatabaseSettings = DatabaseSettings()`), and pydantic rebuilds a nested settings default from the PARENT's sources — which know only the `DATABASE__POSTGRES_HOST` spelling. A bare `POSTGRES_HOST` therefore reached nothing and the section fell back to its own field defaults or to `.env`, so a container configured entirely by environment silently ran on `localhost:5432`, and the test harness's "never inherit ambient `POSTGRES_*`" guarantee was not one: `.env` won. Sections are now built in `get_settings()` and passed as init arguments, which outrank every source, so each section's own env → `.env` → default resolution stands.
 - **`DEBUG=true` rendered a full traceback to the caller.** The app factory passed `settings.debug` to `FastAPI(debug=...)`, which installs Starlette's interactive error page. `ServerErrorMiddleware` checks that flag BEFORE the registered `Exception` handler, so the sanitised 500 body never ran and `core/security-standards.md`'s no-stack-traces rule was broken by a single env var. The flag is hardcoded `False`; `settings.debug` still drives logging verbosity.
@@ -16,7 +33,7 @@ Surfaced by the third ADOPT run (`eight`).
 
 Surfaced by the second ADOPT run (`earworm`).
 
-- **The test suite could not collect: `testcontainers.community.postgres` does not exist.** `conftest.py` imported the ephemeral Postgres from a module path no released `testcontainers` ships (latest is 4.15.0; there is no 5.x and no `community` namespace), so a stamped app's very first `pytest` run died resolving its own database fixture. The import is `testcontainers.postgres`.
+- **The test suite could not collect: `conftest.py` imported a `testcontainers` module the app's resolved version did not have.** A stamped app's very first `pytest` run died resolving its own database fixture. Diagnosed at the time as a module path that does not exist and switched to `testcontainers.postgres`, which is in fact the deprecated alias — the real fault was the dependency floor, and both halves are settled in this release's `Fixed` section above: the import is `testcontainers.community.postgres` and the floor is 4.15.0.
 - **The image build could never authenticate in CI.** The Dockerfile mounted its GitHub Packages token as a BuildKit secret named `npm_token`, while the household's own reusable image workflow (`master-project/.github/workflows/docker-image-simple.yaml`) supplies it as `gh_pkg_token` — and the mount is `required=true`, so every stamped app's first `Build and Push Docker Image` run failed on a secret that was there under another name. Both the Dockerfile and `compose.yaml` now use `gh_pkg_token`; the local build variable is `GH_PKG_TOKEN`.
 - **The SPA fallback swallowed every unmatched API path as HTML 200.** Only `_app/` was excluded from the `index.html` fallback, so `POST /api/does-not-exist` returned the app's own HTML with a 200 rather than a 404 — a misconfigured machine client got a page instead of an error it could act on, and a wrong path looked like a working one. `main.py` now excludes the API namespaces (`api/`, `mcp/`) alongside `_app/`; an app mounting a further namespace adds it to `_API_PREFIXES`.
 
