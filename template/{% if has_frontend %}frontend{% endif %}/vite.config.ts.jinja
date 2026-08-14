@@ -16,6 +16,12 @@ if (!devUid) {
 	);
 }
 
+// Optional, and absent in most apps. Production's forward-auth proxy forwards
+// whatever entitlements Authentik holds for the user; an app that gates modules
+// on them needs the same header in dev or every gated module vanishes. Unset,
+// the header is simply not sent, which is what an app that gates nothing wants.
+const devEntitlements = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS;
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
@@ -35,7 +41,8 @@ export default defineConfig({
 				// (platform/proxy-delegated-auth.md), so sending a placeholder
 				// username overwrites the real profile in the real database.
 				headers: {
-					'x-authentik-uid': devUid
+					'x-authentik-uid': devUid,
+					...(devEntitlements ? { 'x-authentik-entitlements': devEntitlements } : {})
 				}
 			},
 			// /mcp is proxied so an MCP client can reach the dev backend through this
