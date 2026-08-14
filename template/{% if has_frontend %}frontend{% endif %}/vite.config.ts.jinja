@@ -2,9 +2,19 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// Overridable so playwright.config.ts's E2E suite authenticates as its own
-// identity rather than this default interactive one — see its comment.
-const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'dev-uid';
+// NO DEFAULT, deliberately. There is no development database
+// (stacks/dev-environment.md): the dev server points at the app's REAL one, and
+// the backend upserts a user by this key on every request — so a defaulted uid
+// silently writes a real user row into production. Refusing to start is the
+// cheaper failure. Overridable so playwright.config.ts's E2E suite
+// authenticates as its own identity — see its comment.
+const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID;
+if (!devUid) {
+	throw new Error(
+		'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
+			'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
+	);
+}
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
@@ -20,9 +30,12 @@ export default defineConfig({
 				// the same backend code path production does. They belong on the PROXY,
 				// not on `server.headers`: that sets headers on Vite's response to the
 				// browser, which the backend never sees, and every /api call 401s.
+				// The stable uid ONLY. Display fields are deliberately not injected:
+				// the backend updates mutable fields on every upsert
+				// (platform/proxy-delegated-auth.md), so sending a placeholder
+				// username overwrites the real profile in the real database.
 				headers: {
-					'x-authentik-uid': devUid,
-					'x-authentik-username': 'devuser'
+					'x-authentik-uid': devUid
 				}
 			},
 			// /mcp is proxied so an MCP client can reach the dev backend through this
