@@ -4,6 +4,16 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.12] - 2026-08-14
+
+### Removed (BREAKING for the container build, in the good direction)
+
+- **The GitHub Packages arrangement for installing `@poodle64/*` is deleted, not moved.** Publishing moved to public npm on 2026-08-04 (OIDC trusted publishing, no token anywhere) and the consumption side never followed it. Every stamped app was still mounting a `read:packages` token as a **required** BuildKit secret, writing a temp `.npmrc`, and pointing the `@poodle64` scope at `npm.pkg.github.com` — a registry that demands an authenticated read even for a public package, which is precisely why an unconfigured install 404s.
+
+  `registry.npmjs.org` serves the same packages anonymously, so the scope line, the token mount and the temp npmrc all go and `RUN pnpm install --frozen-lockfile` stands alone. **A container build no longer needs a build secret at all** — drop `--secret id=gh_pkg_token,...` from any local build command, and the CI workflow that supplies it.
+
+- **`frontend/.npmrc` is now a template-owned file** in the parity manifest. It was the one frontend config nothing checked, which is how two apps kept a scope line the factory had already dropped.
+
 ## [2026.8.11] - 2026-08-14
 
 ### Fixed
