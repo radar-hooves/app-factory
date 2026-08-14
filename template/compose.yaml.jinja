@@ -12,10 +12,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-{%- if has_frontend %}
-      secrets:
-        - gh_pkg_token
-{%- endif %}
     container_name: {{ project_name }}
     restart: always
     ports:
@@ -47,11 +43,3 @@ services:
         max-size: '10m'
         max-file: '3'
         tag: '{{ '{{' }}.Name{{ '}}' }}'
-{% if has_frontend %}
-# BuildKit secret for the @poodle64 GitHub Packages read during the frontend
-# build stage (see Dockerfile). Provide a read:packages token:
-#   GH_PKG_TOKEN=<token> docker compose build
-secrets:
-  gh_pkg_token:
-    environment: GH_PKG_TOKEN
-{% endif -%}

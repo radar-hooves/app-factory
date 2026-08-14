@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.13] - 2026-08-14
+
+### Removed
+
+- **`packages: read` on the frontend-ci caller.** It was granted so the reusable's install could reach GitHub Packages, which is retired — so the grant is now an unneeded permission on every app, and its comment asserted a dependency that no longer exists. Found because a convergence lane faithfully copied the stale comment into an app while retiring that very arrangement.
+
+- **The `gh_pkg_token` build secret in `compose.yaml`, which 2026.8.12 claimed to remove and did not.** The edit was made and then left unstaged while the rest of that release was staged by explicit path, so the tag shipped without it and a freshly scaffolded app still declared a secret for a registry it no longer uses. Caught by re-reading the working tree rather than trusting the release note — which is the only reason it did not sit there indefinitely.
+
 ## [2026.8.12] - 2026-08-14
 
 ### Removed (BREAKING for the container build, in the good direction)
