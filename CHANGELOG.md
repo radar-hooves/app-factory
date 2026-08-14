@@ -4,6 +4,24 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.9] - 2026-08-14
+
+### Added
+
+- **mypy now runs in pre-commit, not only in CI.** CI-only was the fleet's stated position until 2026-08-14, when three apps failed CI on strict-mode errors in a single night — earworm with 46 across 15 files, mission-command with 18, milton with its own set. Every one of them was committed locally against a green pre-commit that never type-checked anything, so "pre-commit passed" was read as "the suite is clean" and a whole class of error reached `main` unopposed in three repos at once.
+
+  earworm added the hook locally and recorded it as too expensive to propose fleet-wide, because `pass_filenames: false` makes mypy re-read the whole tree whatever is staged. That cost was estimated, not measured. Measured: **0.41s** over 140 source files with a warm incremental cache. The objection does not survive the measurement, so the hook is the factory's.
+
+  It also lands here with a defect fixed. earworm's copy carried `files:` **twice** on the same hook, so YAML's last-key-wins left it gated on `^backend/(pyproject\.toml|uv\.lock)$` — the hook added to catch type errors in source never ran when source changed. That is exactly the failure mode a per-app copy produces and a factory copy does not.
+
+- **The parity manifest ships with the template (`template/.template-parity.json`) and regenerates on commit** rather than by a step someone has to remember. A stale manifest silently passes every app that matches the OLD template, which is the one failure a parity gate must not have.
+
+### Fixed
+
+- **`svelte({ hot: false })` was removed in vite-plugin-svelte 7 and the template still shipped it.** portcullis had already been bumped to 7 and fixed itself locally; the other nine sat on 6.x carrying an inert option that would have errored on the first Renovate bump. Verified against both 6.2.4 and 7.x, because the template has to work on both while the rollout is in flight.
+
+- **The shipped `.gitignore` hid the template's own `.vscode` sources**, so the editor config the factory exists to distribute could not be committed from the template repo itself.
+
 ## [2026.8.8] - 2026-08-14
 
 ### Changed (BREAKING) — `details` is structured, and only structured
