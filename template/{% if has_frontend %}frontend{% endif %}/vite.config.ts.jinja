@@ -2,54 +2,68 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// NO DEFAULT, deliberately. There is no development database
-// (stacks/dev-environment.md): the dev server points at the app's REAL one, and
-// the backend upserts a user by this key on every request — so a defaulted uid
-// silently writes a real user row into production. Refusing to start is the
-// cheaper failure. Overridable so playwright.config.ts's E2E suite
-// authenticates as its own identity — see its comment.
-const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID;
-if (!devUid) {
-	throw new Error(
-		'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
-			'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
-	);
-}
+export default defineConfig(({ command, isPreview }) => {
+	const plugins = [tailwindcss(), sveltekit()];
 
-// Optional, and absent in most apps. Production's forward-auth proxy forwards
-// whatever entitlements Authentik holds for the user; an app that gates modules
-// on them needs the same header in dev or every gated module vanishes. Unset,
-// the header is simply not sent, which is what an app that gates nothing wants.
-const devEntitlements = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS;
-
-export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
-	server: {
-		port: {{ frontend_port }},
-		// The port is allocated in the household registry; failing beats silently
-		// moving off it onto one another app owns.
-		strictPort: true,
-		proxy: {
-			'/api': {
-				target: 'http://localhost:{{ backend_port }}',
-				// Inject Authentik identity headers for the HUMAN surface, so dev runs
-				// the same backend code path production does. They belong on the PROXY,
-				// not on `server.headers`: that sets headers on Vite's response to the
-				// browser, which the backend never sees, and every /api call 401s.
-				// The stable uid ONLY. Display fields are deliberately not injected:
-				// the backend updates mutable fields on every upsert
-				// (platform/proxy-delegated-auth.md), so sending a placeholder
-				// username overwrites the real profile in the real database.
-				headers: {
-					'x-authentik-uid': devUid,
-					...(devEntitlements ? { 'x-authentik-entitlements': devEntitlements } : {})
-				}
-			},
-			// /mcp is proxied so an MCP client can reach the dev backend through this
-			// origin. It gets no identity headers: /mcp validates an Authentik Bearer
-			// token app-side and is closed until
-			// {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
-			'/mcp': 'http://localhost:{{ backend_port }}'
-		}
+	// The dev proxy and the identity it injects exist ONLY to serve `vite dev`.
+	// `vite build`, `vite preview` and `svelte-check` also load this config but
+	// never run that proxy, so they must not require a dev identity the built SPA
+	// never carries — reading or throwing for it there would abort the production
+	// image build (`pnpm run build`) and the CI type-check (`pnpm check`) for a
+	// value they never use.
+	if (command !== 'serve' || isPreview) {
+		return { plugins };
 	}
+
+	// NO DEFAULT, deliberately. There is no development database
+	// (stacks/dev-environment.md): the dev server points at the app's REAL one, and
+	// the backend upserts a user by this key on every request — so a defaulted uid
+	// silently writes a real user row into production. Refusing to start is the
+	// cheaper failure. Overridable so playwright.config.ts's E2E suite
+	// authenticates as its own identity — see its comment.
+	const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID;
+	if (!devUid) {
+		throw new Error(
+			'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
+				'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
+		);
+	}
+
+	// Optional, and absent in most apps. Production's forward-auth proxy forwards
+	// whatever entitlements Authentik holds for the user; an app that gates modules
+	// on them needs the same header in dev or every gated module vanishes. Unset,
+	// the header is simply not sent, which is what an app that gates nothing wants.
+	const devEntitlements = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS;
+
+	return {
+		plugins,
+		server: {
+			port: {{ frontend_port }},
+			// The port is allocated in the household registry; failing beats silently
+			// moving off it onto one another app owns.
+			strictPort: true,
+			proxy: {
+				'/api': {
+					target: 'http://localhost:{{ backend_port }}',
+					// Inject Authentik identity headers for the HUMAN surface, so dev runs
+					// the same backend code path production does. They belong on the PROXY,
+					// not on `server.headers`: that sets headers on Vite's response to the
+					// browser, which the backend never sees, and every /api call 401s.
+					// The stable uid ONLY. Display fields are deliberately not injected:
+					// the backend updates mutable fields on every upsert
+					// (platform/proxy-delegated-auth.md), so sending a placeholder
+					// username overwrites the real profile in the real database.
+					headers: {
+						'x-authentik-uid': devUid,
+						...(devEntitlements ? { 'x-authentik-entitlements': devEntitlements } : {})
+					}
+				},
+				// /mcp is proxied so an MCP client can reach the dev backend through this
+				// origin. It gets no identity headers: /mcp validates an Authentik Bearer
+				// token app-side and is closed until
+				// {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
+				'/mcp': 'http://localhost:{{ backend_port }}'
+			}
+		}
+	};
 });
