@@ -1,10 +1,10 @@
 # Pre-commit hooks for the full-stack-app-template repo ITSELF.
 #
-# This guards the template's own source (copier.yml, README.md, and
+# This guards the template's own source (copier.yaml, README.md, and
 # everything under template/) — NOT the scaffolded apps it produces, which
 # get their own guard via the shipped template/.pre-commit-config.yaml
 # (rules-library/core/pre-commit-config.md). Without this file, commits to
-# copier.yml or the template's own docs carried no PII guard and no gitleaks.
+# copier.yaml or the template's own docs carried no PII guard and no gitleaks.
 #
 # Install with: pre-commit install
 # Run manually: pre-commit run --all-files

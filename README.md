@@ -105,7 +105,7 @@ Canonical household full-stack application shape, stamped by `copier` via `/scaf
                 └── index.ts    barrel
 ```
 
-## Questions (copier.yml)
+## Questions (copier.yaml)
 
 | Question       | Default                  | Effect                                                  |
 | -------------- | ------------------------ | ------------------------------------------------------- |

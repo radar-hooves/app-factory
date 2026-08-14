@@ -16,7 +16,7 @@
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
     "backend/entrypoint.sh": "6bbe92d24a02f57c",
     "backend/gunicorn.conf.py": "88e064b2faa00516",
-    "compose.yaml": "54a98b8ffdbf224f",
+    "compose.yaml": "97bcb2338aa26cd8",
     "frontend/.npmrc": "93d7b61d9d1758fd",
     "frontend/.prettierignore": "9bc58f14bf2d6e80",
     "frontend/.prettierrc": "daec45a55e1f3ad7",

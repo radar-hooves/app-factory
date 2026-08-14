@@ -35,4 +35,15 @@ backend_port:
 frontend_port:
   type: int
   help: 'Frontend Vite dev port — allocate from the port registry (band 5170-5199); never a framework default'
+
+postgres_host:
+  type: str
+  default: ''
+  help: >-
+    Tailnet address of the fleet host running this app's Postgres. There is no development database (stacks/dev-environment.md) — dev points at the real one, and the tailnet makes one address correct on any network. Left empty the compose file carries no default and a fresh clone must set POSTGRES_HOST.
+
+
+postgres_port:
+  type: int
+  help: 'Postgres port for THIS app on the fleet host — one database per app, so it is per-app like backend_port'
   when: '{{ has_frontend }}'

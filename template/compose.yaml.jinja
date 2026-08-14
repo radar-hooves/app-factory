@@ -16,10 +16,15 @@ services:
     restart: always
     ports:
       - '{{ backend_port }}:{{ backend_port }}'
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
     environment:
-      POSTGRES_HOST: host.docker.internal
+      # There is no development database (stacks/dev-environment.md): the
+      # workstation runs no backing services, so this points at the app's REAL
+      # Postgres on the fleet host, at that host's tailnet address — one address
+      # that stays correct on any network. `host.docker.internal` was wrong here
+      # and reached a workstation Postgres that does not exist. The `:-` defaults
+      # keep a fresh clone working unconfigured while leaving an override open.
+      POSTGRES_HOST: ${POSTGRES_HOST:-{{ postgres_host }}}
+      POSTGRES_PORT: ${POSTGRES_PORT:-{{ postgres_port }}}
     env_file:
       - ./backend/.env
     stop_grace_period: 30s
