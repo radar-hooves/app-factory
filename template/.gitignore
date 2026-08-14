@@ -10,10 +10,11 @@ desktop.ini
 # Editor / IDE
 # ============================================================================
 .idea/
-# Share the four VS Code config files. !.vscode/ re-includes the directory so the
-# file allow-list can take effect even when a global git ignore excludes .vscode/.
+# Share the four VS Code config files; !.vscode/ re-includes the directory under a
+# global ignore. *.jinja is for THIS repo: without it copier stamps apps debug-less.
 !.vscode/
 .vscode/*
+!.vscode/*.jinja
 !.vscode/settings.json
 !.vscode/launch.json
 !.vscode/tasks.json
