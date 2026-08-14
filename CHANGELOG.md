@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.7] - 2026-08-14
+
+### Fixed — `details` accepts structured data again
+
+`BackendBaseException.__init__` typed `details` as `str | None`. It is serialised straight into the JSON error body, so a dict was always the more useful shape — a caller reading `{"field": "email", "reason": "taken"}` gets structured detail, where a stringified dict has to be re-parsed to be useful at all.
+
+The narrow type was not merely suboptimal, it was silently destructive. `exceptions.py` reads as template-owned scaffolding, so a stamp takes the template's copy — and mission-command, which had `details: dict[str, object] | None`, had that contract replaced under 18 call sites still passing dicts at v2026.8.4. Its `Python CI` has been failing mypy ever since, unnoticed, because the app's own test suite and pre-commit both pass: only CI runs mypy.
+
+`details` is now `str | dict[str, Any] | None`. Backward compatible for every app already passing a string or nothing, and it restores the richer contract for those that were carrying one.
+
+The wider lesson is recorded here rather than in the code: a file that looks like scaffolding can still carry a contract the app's own code depends on, and "template-owned files take the template's version" is not safe for those without checking the call sites first.
+
 ## [2026.8.6] - 2026-08-13
 
 Seven apps were adopted or updated onto the template today, and each hand-applied fixes that had landed on `main` without a tag. `copier` resolves a template by its latest TAG, so every one of them was invisible: this release is what actually delivers them.
