@@ -22,6 +22,13 @@ backlog = 2048
 workers = 1 if os.getenv("DEBUG", "false").lower() == "true" else int(os.getenv("WEB_CONCURRENCY", "5"))
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
+
+# The proxy reaches this container over a Docker network, not loopback, so
+# uvicorn's 127.0.0.1 default rejects its X-Forwarded-For and request.client.host
+# stays the PROXY's address. Anything keyed on client IP — a rate limiter, an
+# audit trail — then buckets every user together. Narrow, not "*": a caller
+# reaching the container directly must not get to assert its own address.
+forwarded_allow_ips = "127.0.0.1,172.16.0.0/12,10.0.0.0/8"
 max_requests = 1000
 max_requests_jitter = 100
 
