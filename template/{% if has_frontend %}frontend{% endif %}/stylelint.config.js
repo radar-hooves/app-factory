@@ -20,6 +20,9 @@ export default {
 		// `:root`/`.dark` once per block for readability.
 		'no-duplicate-selectors': null,
 		// Svelte's own scoping pseudo-classes, not standard CSS.
-		'selector-pseudo-class-no-unknown': [true, { ignorePseudoClasses: ['global', 'local'] }]
+		'selector-pseudo-class-no-unknown': [true, { ignorePseudoClasses: ['global', 'local'] }],
+		// Scoped-component CSS legitimately produces descending specificity: each
+		// component owns its own cascade, so the rule fires on correct code.
+		'no-descending-specificity': null
 	}
 };

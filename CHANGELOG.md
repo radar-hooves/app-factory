@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.10] - 2026-08-14
+
+### Added
+
+Three settings the apps had already worked out and the factory had not. Each was found in exactly one app during the #274 convergence pass, each is right for all ten, and each is now the template's.
+
+- **`strictPort: true` on the dev server** (from mission-command). Ports are allocated in the household registry, so a vite dev server that silently walks to the next free port lands on one another app owns. Failing to start is the correct behaviour.
+
+- **`no-descending-specificity: null` in stylelint** (from mission-command). Scoped-component CSS legitimately produces descending specificity — each component owns its own cascade — so the rule fires on correct code and trains people to ignore stylelint.
+
+- **`src/lib/api/openapi.json` in `.prettierignore`** (from milton). Only milton commits the spec today, but ignoring a generated artefact everywhere costs nothing and stops the next app rediscovering it.
+
 ## [2026.8.9] - 2026-08-14
 
 ### Added

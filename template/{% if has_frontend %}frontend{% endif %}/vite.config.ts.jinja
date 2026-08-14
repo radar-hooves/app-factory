@@ -10,6 +10,9 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		port: {{ frontend_port }},
+		// The port is allocated in the household registry; failing beats silently
+		// moving off it onto one another app owns.
+		strictPort: true,
 		proxy: {
 			'/api': {
 				target: 'http://localhost:{{ backend_port }}',
