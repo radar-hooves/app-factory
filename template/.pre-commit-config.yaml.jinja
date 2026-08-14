@@ -74,13 +74,14 @@ repos:
         pass_filenames: false
         files: ^backend/(pyproject\.toml|uv\.lock)$
 
-  # mypy runs here as well as in CI. CI-only was the fleet's position until
-  # 2026-08-14, when three apps failed CI on strict-mode errors in one night
-  # (earworm 46 across 15 files, mission-command 18, milton) — all of them
-  # committed locally against a green pre-commit that never type-checked
-  # anything. pass_filenames: false because mypy resolves across files, so it
-  # takes the whole tree exactly as CI does; `files` still gates WHETHER it
-  # runs. Measured cost with a warm cache: 0.41s over 140 source files.
+  # mypy runs here as well as in CI, so a type error cannot reach main via a
+  # green local commit. pass_filenames: false because mypy resolves across
+  # files, so it takes the whole tree exactly as CI does; `files` still gates
+  # WHETHER it runs. Warm-cache cost is a fraction of a second.
+  #
+  # Never name a specific app in a template file: the parity normaliser rewrites
+  # an app's own name to a placeholder wherever it appears, so a comment naming
+  # one makes that app — and only that app — fail the gate forever.
   - repo: local
     hooks:
       - id: mypy

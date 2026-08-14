@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.11] - 2026-08-14
+
+### Fixed
+
+- **A template file must never name a specific app, and 2026.8.9's mypy comment named three.** The parity normaliser rewrites an app's own name to a placeholder wherever it appears, precisely so `entrypoint.sh` naming `milton.main:app` and one naming `seshat.main:app` hash identically. It cannot tell an identifier from prose — so a comment naming earworm, mission-command and milton normalised differently in exactly those three repos and nowhere else, and would have shown them permanent drift no convergence could clear.
+
+  The comment is now app-free and carries the warning, so the next author does not rediscover it. The incident detail it was carrying belongs in the commit message regardless (`core/conventions.md` §Comment Density).
+
 ## [2026.8.10] - 2026-08-14
 
 ### Added
