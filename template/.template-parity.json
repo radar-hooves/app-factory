@@ -1,0 +1,32 @@
+{
+  "files": {
+    ".gitattributes": "e753774a5c6c845d",
+    ".github/workflows/auto-label-issues.yaml": "5c7fac564fe0c97d",
+    ".github/workflows/canonical-shape.yaml": "2e0ec4404fd389ba",
+    ".github/workflows/cleanup-container-images.yaml": "2ed676ac47be1996",
+    ".github/workflows/frontend-ci.yaml": "b319be1343056376",
+    ".github/workflows/python-ci.yaml": "d9fb9815abebd936",
+    ".github/workflows/security.yaml": "8451649e993fc029",
+    ".gitleaks.toml": "1b7c88c74306f1c6",
+    ".pre-commit-config.yaml": "193dd823d245cff0",
+    ".vscode/extensions.json": "b80a1aae541ed9e7",
+    "Dockerfile": "5b2c2034f9b8f7d8",
+    "backend/alembic.ini": "fc9b4a245e2122fc",
+    "backend/alembic/env.py": "96013c18e1511f9e",
+    "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
+    "backend/entrypoint.sh": "6bbe92d24a02f57c",
+    "backend/gunicorn.conf.py": "040efb7acdce3519",
+    "compose.yaml": "adf05fc7a1be2105",
+    "frontend/.prettierignore": "5082b4060a693e70",
+    "frontend/.prettierrc": "daec45a55e1f3ad7",
+    "frontend/components.json": "3192c135e1a87e3e",
+    "frontend/eslint.config.js": "ec8bd6f91501f9d5",
+    "frontend/playwright.config.ts": "c775f9ca3f0a44d2",
+    "frontend/stylelint.config.js": "1f247130f4bbf8fc",
+    "frontend/svelte.config.js": "7a618e7bcad8bcd2",
+    "frontend/tsconfig.json": "5ba6072319c60e79",
+    "frontend/vite.config.ts": "a66378880fb4ab84",
+    "frontend/vitest.config.ts": "9d3e9872698bc9a7",
+    "renovate.json": "cbac5a95b942ac92"
+  }
+}

@@ -241,6 +241,14 @@ Tag once per logical change set, not per commit (`git-workflow.md` §Release Cad
 
 Tagging by hand is discipline, not a ratchet — the same failure mode `rules-library/platform/common-libraries.md` documents for published wheels, where an unbumped version silently served stale code. If template changes ever start missing their tags, the fix is to stamp the tag in CI, not to try harder.
 
+### The parity manifest ships with the tag
+
+`template/.template-parity.json` is a manifest of hashes over every template-owned file, with app-specific tokens (name, package, ports, palette) normalised out. Each stamped app carries a copy and hashes its own files against it, so an app that quietly edits its `Dockerfile` fails CI instead of drifting unnoticed; the check `.github/actions/canonical-shape` runs for every repo.
+
+You do not maintain it by hand. It is derived from this repo's own files and the `template-parity-manifest` pre-commit hook regenerates it whenever anything under `template/` changes; if it rewrites the file, re-stage and commit again. Applying the discipline lesson above: a manifest kept current by a documented step would go stale exactly the way an untagged change does, and a stale manifest is worse than none: it passes every app that matches the *old* template.
+
+An app that must genuinely differ records `parity:<path>` in its `.canonical-exceptions`, with a date and a reason. The bar is `canonical-app-shape.md` §Sameness: a difference that is right is right for every app, so it belongs here, not there.
+
 ## Where this lives
 
 Authored here; consumed as `gh:poodle64/full-stack-app-template`. The shape it stamps is law in the household's `rules-library/platform/canonical-app-shape.md`; this template is that rule's executable form, and the two move together. Extracted from `poodle64/master-project` (history preserved) so that copier has a tagged VCS source — see master-project#161.
