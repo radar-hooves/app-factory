@@ -26,7 +26,7 @@
     "frontend/svelte.config.js": "7a618e7bcad8bcd2",
     "frontend/tsconfig.json": "5ba6072319c60e79",
     "frontend/vite.config.ts": "b77ac978f697aa96",
-    "frontend/vitest.config.ts": "9d3e9872698bc9a7",
+    "frontend/vitest.config.ts": "b63b63ca0b97a339",
     "renovate.json": "cbac5a95b942ac92"
   }
 }

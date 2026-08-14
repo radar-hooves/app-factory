@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [svelte({ hot: false }), tailwindcss()],
+	// No `hot` option: vite-plugin-svelte 7 removed it, and it was always a no-op
+	// here — vitest runs no dev server, so there is nothing to hot-reload.
+	plugins: [svelte(), tailwindcss()],
 	test: {
 		globals: true,
 		environment: 'jsdom',
