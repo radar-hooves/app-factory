@@ -29,8 +29,13 @@ worker_connections = 1000
 # audit trail — then buckets every user together. Narrow, not "*": a caller
 # reaching the container directly must not get to assert its own address.
 forwarded_allow_ips = "127.0.0.1,172.16.0.0/12,10.0.0.0/8"
-max_requests = 1000
-max_requests_jitter = 100
+# Recycling a worker is a hygiene default, not a universal one. A service whose
+# worker holds process-local state a restart cannot rebuild — an unlocked vault
+# session, a supervised child process — comes back from a recycle unable to serve,
+# and it is the recycle rather than the load that breaks it. Setting both to 0
+# disables recycling; every other app leaves the default and never thinks about it.
+max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))
+max_requests_jitter = int(os.getenv("GUNICORN_MAX_REQUESTS_JITTER", "100"))
 
 timeout = 60
 graceful_timeout = 30
