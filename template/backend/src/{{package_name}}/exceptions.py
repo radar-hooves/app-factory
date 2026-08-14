@@ -28,11 +28,10 @@ class BackendBaseException(Exception):
         self,
         message: str,
         *,
-        # A dict is accepted as well as a string because `details` is serialised
-        # straight into the JSON error body: structured detail survives to the
-        # caller, where a stringified dict would have to be re-parsed. Narrowing
-        # this to `str` silently broke 18 call sites in a stamped app.
-        details: str | dict[str, Any] | None = None,
+        # Structured only. `details` is serialised straight into the JSON error
+        # body, so a mapping is the shape a caller can actually act on; a bare
+        # sentence goes in `message`. Accepting both was two doors onto one job.
+        details: dict[str, Any] | None = None,
         context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)

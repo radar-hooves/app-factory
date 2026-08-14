@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.8.8] - 2026-08-14
+
+### Changed (BREAKING) — `details` is structured, and only structured
+
+`BackendBaseException.details` is now `dict[str, Any] | None`. It was `str | None`; v2026.8.7 briefly widened it to `str | dict[str, Any] | None`, which was wrong — a union is two doors onto one job, exactly what `master/umbrella.md` names as the defect, and "backward compatible" is not a virtue this estate recognises (`core/code-quality.md` §No Backwards Compatibility).
+
+`details` is serialised straight into the JSON error body. A mapping is what a caller can act on programmatically; a bare sentence belongs in `message`, which already exists for it. So the mapping is the shape, and the string case is simply deleted rather than accommodated.
+
+**Migration:** every `details="some sentence"` call site becomes either `details={"reason": "some sentence"}` with a key that means something, or moves the sentence into `message` and drops `details` entirely. Prefer the second where the string was only ever prose — an invented key is not structure.
+
+v2026.8.7 is superseded on the day it was cut and should not be adopted; it reached one consumer (mission-command) before this correction and that repo comes to 2026.8.8 directly.
+
 ## [2026.8.7] - 2026-08-14
 
 ### Fixed — `details` accepts structured data again
