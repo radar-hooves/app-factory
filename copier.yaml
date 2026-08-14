@@ -45,5 +45,6 @@ postgres_host:
 
 postgres_port:
   type: int
-  help: 'Postgres port for THIS app on the fleet host — one database per app, so it is per-app like backend_port'
-  when: '{{ has_frontend }}'
+  default: 5432
+  help: >-
+    Postgres port for THIS app on the fleet host — one database per app, so it is per-app like backend_port. 5432 is the shared dev instance; an app that publishes its own database for workstation access takes a unique port from the Atlas Dev-DB band and answers with that.
