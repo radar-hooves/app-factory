@@ -22,12 +22,24 @@ export default defineConfig(({ command, isPreview }) => {
 	// cheaper failure. Overridable so playwright.config.ts's E2E suite
 	// authenticates as its own identity — see its comment.
 	const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID;
-	if (!devUid) {
-		throw new Error(
-			'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
-				'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
-		);
-	}
+
+	// Asserted in configureServer, NOT in the config body. The `command`
+	// discriminator above is not sufficient on its own: svelte-check loads this
+	// config with command === 'serve' to resolve the Tailwind plugin for
+	// preprocessing, so throwing in the body fails `pnpm check` on every app with
+	// a <style> block, for a value the type-check never uses. configureServer is
+	// the one hook that runs only when a real `vite dev` server is created.
+	const requireDevIdentity = {
+		name: 'require-dev-identity',
+		configureServer() {
+			if (!devUid) {
+				throw new Error(
+					'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
+						'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
+				);
+			}
+		}
+	};
 
 	// Optional, and absent in most apps. Production's forward-auth proxy forwards
 	// whatever entitlements Authentik holds for the user; an app that gates modules
@@ -36,7 +48,7 @@ export default defineConfig(({ command, isPreview }) => {
 	const devEntitlements = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS;
 
 	return {
-		plugins,
+		plugins: [...plugins, requireDevIdentity],
 		server: {
 			port: {{ frontend_port }},
 			// The port is allocated in the household registry; failing beats silently
@@ -54,7 +66,10 @@ export default defineConfig(({ command, isPreview }) => {
 					// (platform/proxy-delegated-auth.md), so sending a placeholder
 					// username overwrites the real profile in the real database.
 					headers: {
-						'x-authentik-uid': devUid,
+						// `?? ''` only satisfies the type: configureServer above aborts
+						// `vite dev` before a server exists, so an unset uid never reaches
+						// a request. It is not a fallback identity.
+						'x-authentik-uid': devUid ?? '',
 						...(devEntitlements ? { 'x-authentik-entitlements': devEntitlements } : {})
 					}
 				},
