@@ -40,6 +40,17 @@ class BackendBaseException(Exception):
         self.context = context or {}
 
 
+class BadRequestError(BackendBaseException):
+    """The request itself is malformed or self-contradictory (400).
+
+    Distinct from ValidationError (422): that one means a well-formed request
+    whose values failed a domain rule.
+    """
+
+    status_code = 400
+    error_code = "bad_request"
+
+
 class NotFoundError(BackendBaseException):
     """Resource does not exist."""
 
@@ -99,6 +110,11 @@ def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] 
 def _log_exception(request: Request, exc: BackendBaseException) -> None:
     log_context = {"path": request.url.path, "method": request.method, **exc.context}
     logger.error("%s: %s", exc.__class__.__name__, exc.message, extra=log_context)
+
+
+async def bad_request_error_handler(request: Request, exc: BadRequestError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc)
 
 
 async def not_found_error_handler(request: Request, exc: NotFoundError) -> JSONResponse:
@@ -169,6 +185,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     Call from the app factory after creating the app:
         register_exception_handlers(app)
     """
+    _register(app, BadRequestError, bad_request_error_handler)
     _register(app, NotFoundError, not_found_error_handler)
     _register(app, ValidationError, validation_error_handler)
     _register(app, AuthenticationError, authentication_error_handler)

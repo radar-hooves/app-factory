@@ -1,5 +1,7 @@
 """Database connection settings."""
 
+from urllib.parse import quote_plus
+
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,8 +40,15 @@ class DatabaseSettings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Sync SQLAlchemy connection URL."""
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        """Sync SQLAlchemy connection URL.
+
+        User and password are percent-encoded: a generated password containing
+        `@`, `:`, `/`, `?` or `#` otherwise splits the URL at the wrong place and
+        the app fails to connect with an error that names neither the password
+        nor the reason. The failure is invisible until a rotation happens to
+        produce one of those characters, which is exactly when nobody is looking
+        for a parsing bug.
+        """
+        user = quote_plus(self.postgres_user)
+        password = quote_plus(self.postgres_password)
+        return f"postgresql://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
