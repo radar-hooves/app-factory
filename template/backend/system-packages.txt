@@ -1,0 +1,13 @@
+# Debian packages this app's domain needs at RUNTIME, one per line.
+#
+# The Dockerfile that reads this file is identical in every household app; this
+# list is where an app is allowed to differ, exactly as the palette and the port
+# allocations are. Blank lines and comments are ignored, and an empty list skips
+# apt entirely — most apps never touch this file.
+#
+# Runtime only. A build-time toolchain belongs in the builder stage, and a
+# Python dependency belongs in pyproject.toml.
+#
+# Examples from the fleet: ffmpeg (audio/video transcode), tesseract-ocr and
+# poppler-utils (OCR and PDF extraction), libgl1 and libglib2.0-0 (the shared
+# objects OpenCV-backed wheels dlopen at import).

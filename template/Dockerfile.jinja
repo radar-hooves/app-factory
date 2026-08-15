@@ -51,6 +51,20 @@ ENV GIT_COMMIT=${GIT_COMMIT}
 ENV TZ=Australia/Brisbane
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# Domain runtime binaries. This block is the factory's and is identical in every
+# app; the LIST is the app's, the same shape as the palette or the port. Most
+# apps ship an empty backend/system-packages.txt and this is a no-op adding no
+# layer. It sits here, above every app-code COPY, so an ordinary code change
+# never invalidates the apt layer — and above USER, because apt needs root.
+# The file is REQUIRED: delete it in an app and the COPY fails the build.
+COPY backend/system-packages.txt ./backend/system-packages.txt
+RUN packages="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' ./backend/system-packages.txt | tr '\n' ' ')" \
+    && if [ -n "$packages" ]; then \
+         apt-get update \
+         && apt-get install -y --no-install-recommends $packages \
+         && rm -rf /var/lib/apt/lists/*; \
+       fi
+
 # Non-root user (uid 1000; household container convention). Generic name —
 # every COPY below sets ownership by numeric --chown, so nothing depends on
 # the username matching the package.
