@@ -11,8 +11,10 @@ from importlib.metadata import version
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from {{ package_name }}.api.system.schemas import HealthResponse
+from {{ package_name }}.api.system.schemas import DatabaseEnvironmentResponse, HealthResponse
 from {{ package_name }}.config import get_settings
+from {{ package_name }}.db.environment import read_environment
+from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.deps import SessionDep
 from {{ package_name }}.exceptions import ServiceUnavailableError
 
@@ -42,3 +44,23 @@ def health_check(session: SessionDep) -> HealthResponse:
         environment="development" if settings.debug else "production",
         timestamp=datetime.now(UTC),
     )
+
+
+@router.get(
+    "/database-environment",
+    response_model=DatabaseEnvironmentResponse,
+    operation_id="databaseEnvironment",
+)
+def database_environment() -> DatabaseEnvironmentResponse:
+    """Report what the database this backend is bound to declares itself to be.
+
+    The one thing a caller talking to this backend over HTTP — rather than
+    holding a connection of its own — can ask to find out what it is really
+    about to write to. `db/environment.py`'s reasoning applies unchanged:
+    unstamped or unreachable reads as production, fail-closed.
+
+    No auth dependency, matching /health: a caller that cannot yet tell which
+    database it has reached is in no position to authenticate against it, and
+    the answer names an environment, never a host or a credential.
+    """
+    return DatabaseEnvironmentResponse(environment=read_environment(get_engine()).value)

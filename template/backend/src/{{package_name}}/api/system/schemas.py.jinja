@@ -12,3 +12,9 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     timestamp: datetime
+
+
+class DatabaseEnvironmentResponse(BaseModel):
+    """What the running backend's database declares itself to be."""
+
+    environment: str
