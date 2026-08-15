@@ -68,10 +68,10 @@ class _SPAStaticFiles(StaticFiles):
 
     The SPA router owns paths that have no file on disk, and `html=True` alone
     does not cover them: it serves index.html for a directory, so a deep link
-    like /items/1 404s and the app is reachable only from its root. Catching the
-    404 hands the path to the client router instead. A miss under the
-    immutable-asset prefix stays a 404, so a broken build surfaces rather than
-    returning HTML to something expecting a script.
+    into a client route 404s and the app is reachable only from its root.
+    Catching the 404 hands the path to the client router instead. A miss under
+    the immutable-asset prefix stays a 404, so a broken build surfaces rather
+    than returning HTML to something expecting a script.
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:
@@ -83,7 +83,6 @@ class _SPAStaticFiles(StaticFiles):
             raise
 
 {% endif %}
-
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Warm the database engine; dispose on shutdown."""
