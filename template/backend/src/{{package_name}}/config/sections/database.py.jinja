@@ -25,7 +25,12 @@ class DatabaseSettings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = ""  # required — must be overridden in .env or environment
     postgres_host: str = "localhost"
-    postgres_port: int = 5432
+    # The app's registry-allocated port, not PostgreSQL's default: the host runs
+    # one server per app and the registry is what stops two of them colliding
+    # (registry-ports.md). The template asked for this answer and then ignored it
+    # here, so a stamped app defaulted to 5432 and reached whichever database
+    # happened to own it.
+    postgres_port: int = {{ postgres_port }}
     postgres_db: str = "{{ project_name | replace('-', '_') }}"
 
     @computed_field  # type: ignore[prop-decorator]

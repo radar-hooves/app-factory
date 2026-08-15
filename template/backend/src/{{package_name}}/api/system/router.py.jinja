@@ -33,7 +33,7 @@ def health_check(session: SessionDep) -> HealthResponse:
     try:
         session.execute(text("SELECT 1"))
     except Exception as exc:
-        raise ServiceUnavailableError("Database is unreachable", details=str(exc)) from exc
+        raise ServiceUnavailableError("Database is unreachable", details={"reason": str(exc)}) from exc
 
     settings = get_settings()
     return HealthResponse(
