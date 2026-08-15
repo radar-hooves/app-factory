@@ -17,3 +17,16 @@ target-version = "py314"
 # are held to the same width by hand; the plain .py files below are the ones a
 # formatter can actually keep honest.
 extend-exclude = ["*.jinja"]
+
+# Mirrored from template/backend/pyproject.toml.jinja, not chosen here: the point
+# is to lint these files as the stamped app will, so this repo must not hold an
+# app to a rule the app itself does not run. Ruff's default set is wider, and
+# reported three N999s for the directory literally being named
+# `{{package_name}}` plus a BLE001 on the fan-out helper's deliberate
+# collect-every-error catch — findings about the TEMPLATE's shape, not the app's.
+[lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
+ignore = ["E501", "B008"]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
