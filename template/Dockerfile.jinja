@@ -65,6 +65,22 @@ RUN packages="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' ./backend/system-package
          && rm -rf /var/lib/apt/lists/*; \
        fi
 
+# Strip the base image's system pip and setuptools. The app runs entirely from
+# the self-contained venv copied below, so the base interpreter's own pip and
+# setuptools are never invoked at runtime — yet they were the sole source of the
+# two HIGH findings the image scan gates on: pip vendors msgpack
+# (GHSA-6v7p-g79w-8964) and the base tag bundles setuptools (CVE-2025-47273).
+# Neither is in uv.lock, so no app can fix them by bumping a dependency.
+# `rm`, not `pip uninstall`, because pip cannot reliably remove itself.
+RUN rm -rf \
+      /usr/local/lib/python3.14/site-packages/pip \
+      /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+      /usr/local/lib/python3.14/site-packages/setuptools \
+      /usr/local/lib/python3.14/site-packages/setuptools-*.dist-info \
+      /usr/local/lib/python3.14/site-packages/pkg_resources \
+      /usr/local/lib/python3.14/site-packages/_distutils_hack \
+      /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
+
 # Non-root user (uid 1000; household container convention). Generic name —
 # every COPY below sets ownership by numeric --chown, so nothing depends on
 # the username matching the package.

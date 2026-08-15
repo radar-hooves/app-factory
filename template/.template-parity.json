@@ -10,7 +10,7 @@
     ".gitleaks.toml": "1b7c88c74306f1c6",
     ".pre-commit-config.yaml": "6c4a3dd8f0415c46",
     ".vscode/extensions.json": "3a0005a77860d54d",
-    "Dockerfile": "78042907fff2c370",
+    "Dockerfile": "04ed8bf5f1918139",
     "backend/alembic.ini": "fc9b4a245e2122fc",
     "backend/alembic/env.py": "96013c18e1511f9e",
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
