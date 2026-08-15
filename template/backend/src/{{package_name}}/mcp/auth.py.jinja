@@ -82,13 +82,12 @@ def resolve_actor() -> Actor:
     client_id: str | None = http_headers.get("x-client-id") or None if over_http else getattr(ctx, "client_id", None)
     if client_id is None:
         raise AuthenticationError(
-            "MCP client identity is absent",
-            details="the server cannot resolve an actor without a client_id",
+            "MCP client identity is absent: the server cannot resolve an actor without a client_id"
         )
     if over_http and client_id == _LOCAL_CONSOLE:
         raise AuthenticationError(
-            "MCP client identity is reserved for local in-process callers",
-            details="the local-console actor is not reachable over HTTP",
+            "MCP client identity is reserved for local in-process callers: "
+            "the local-console actor is not reachable over HTTP",
             context={"client_id": client_id},
         )
     try:

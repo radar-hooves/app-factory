@@ -29,7 +29,7 @@
     "backend/src/{package}/exceptions.py": "65157d6d57e15205",
     "backend/src/{package}/logging.py": "6c6ff49f82abd75e",
     "backend/src/{package}/mcp/actors.py": "41d9d2de7eff167c",
-    "backend/src/{package}/mcp/auth.py": "37412d5691a42506",
+    "backend/src/{package}/mcp/auth.py": "efbec12676b85217",
     "backend/src/{package}/mcp/http_auth.py": "c0819bae7151f0c8",
     "backend/src/{package}/middleware.py": "71bf6a952f198399",
     "backend/src/{package}/server.py": "85a9d5b4d9600758",
