@@ -19,7 +19,7 @@
     "backend/src/{package}/api/system/router.py": "4dcdf66b28e2d453",
     "backend/src/{package}/api/system/schemas.py": "ed00699302043d0e",
     "backend/src/{package}/config/paths.py": "7890f0789fed0cc5",
-    "backend/src/{package}/config/sections/database.py": "80d12f6bc07dee7e",
+    "backend/src/{package}/config/sections/database.py": "8fb6851916eda8ab",
     "backend/src/{package}/config/sections/mcp.py": "4ca78362e44fb267",
     "backend/src/{package}/db/base.py": "e22cbb4d531bc913",
     "backend/src/{package}/db/environment.py": "10ff3ec24835a11d",

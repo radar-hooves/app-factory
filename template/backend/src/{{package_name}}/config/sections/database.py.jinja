@@ -25,11 +25,13 @@ class DatabaseSettings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = ""  # required — must be overridden in .env or environment
     postgres_host: str = "localhost"
-    # The app's registry-allocated port, not PostgreSQL's default: the host runs
-    # one server per app and the registry is what stops two of them colliding
-    # (registry-ports.md). The template asked for this answer and then ignored it
-    # here, so a stamped app defaulted to 5432 and reached whichever database
-    # happened to own it.
+    # The app's registry-allocated port, not PostgreSQL's own default: the host
+    # runs one server per app and the registry is what stops two of them
+    # colliding (registry-ports.md). This once hardcoded the default while still
+    # asking for the answer, so a stamped app reached whichever database happened
+    # to own that port. No literal port number in this comment, deliberately: the
+    # parity gate rewrites the app's answered port wherever it appears in the
+    # file, so a number here reads as drift on an otherwise identical copy.
     postgres_port: int = {{ postgres_port }}
     postgres_db: str = "{{ project_name | replace('-', '_') }}"
 
