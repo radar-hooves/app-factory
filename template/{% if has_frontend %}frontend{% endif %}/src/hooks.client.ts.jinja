@@ -1,0 +1,82 @@
+import type { HandleClientError } from '@sveltejs/kit';
+
+/**
+ * Recovery from a stale build reference after a deploy.
+ *
+ * The whole frontend build is baked into the image, so a deploy changes every
+ * chunk hash at once. A tab open across a deploy still holds the old module
+ * URLs; the next navigation dynamically imports one, gets a 404, and SvelteKit
+ * routes that into its load-error path.
+ *
+ * SvelteKit already tries to self-heal here: it calls `updated.check()`, and on
+ * a version mismatch does a silent full navigation. That check fetches
+ * `/_app/version.json`, which the proxy gates behind the identity provider along
+ * with the rest of the app. With an expired session the fetch returns a 302,
+ * `check()` swallows any non-OK response as "no update available", and the real
+ * failure falls through to the generic 500 page instead.
+ *
+ * A full page load fixes it — the proxy re-authenticates and serves the current
+ * manifest — which is why "Go home" always worked. This does that
+ * automatically, but only for the failure it can positively identify.
+ */
+
+const RELOAD_MARKER = '{{ project_name }}:chunk-reload-at';
+
+/** How long to treat a previous recovery reload as "just happened". */
+const RELOAD_COOLDOWN_MS = 15_000;
+
+/**
+ * True when an error is a failed dynamic import of a build chunk.
+ *
+ * Each engine words this differently and none of them expose a code, so
+ * matching the message is the only option available. Kept deliberately narrow:
+ * a genuine application error must still reach the error page rather than
+ * triggering a reload that hides it.
+ */
+export function isStaleChunkError(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+
+	if (!message) return false;
+
+	return [
+		'failed to fetch dynamically imported module', // Chromium
+		'error loading dynamically imported module', // Firefox
+		'importing a module script failed', // Safari
+		'failed to load module script' // Chromium, wrong MIME type
+	].some((signature) => message.toLowerCase().includes(signature));
+}
+
+/**
+ * True when we have not already attempted a recovery reload very recently.
+ *
+ * Without this a chunk that is genuinely missing (rather than merely stale)
+ * would reload forever. One attempt is enough: if a fresh manifest still cannot
+ * load the chunk, the error page is the correct outcome.
+ *
+ * Exported for its own test — the cooldown is the guard that stops this feature
+ * becoming a reload loop, so it is worth asserting directly.
+ */
+export function mayAttemptReload(now: number = Date.now()): boolean {
+	try {
+		const previous = sessionStorage.getItem(RELOAD_MARKER);
+		if (previous && now - Number(previous) < RELOAD_COOLDOWN_MS) return false;
+		sessionStorage.setItem(RELOAD_MARKER, String(now));
+		return true;
+	} catch {
+		// Private browsing or a blocked storage partition: prefer showing the
+		// error page over risking an unguarded reload loop.
+		return false;
+	}
+}
+
+export const handleError: HandleClientError = ({ error, message }) => {
+	if (isStaleChunkError(error) && mayAttemptReload()) {
+		// A full document fetch: it picks up the current manifest and follows the
+		// proxy's authentication redirect when the session has also expired.
+		// Assigning location.href would be a no-op on a URL carrying a fragment.
+		location.reload();
+		return { message: 'Updating to the latest version…' };
+	}
+
+	return { message };
+};
