@@ -1,0 +1,19 @@
+# The line length this template SHIPS, so anything that formats the files here
+# produces what a stamped app will hold.
+#
+# This repo is not a Python project and had no ruff config at all, so every
+# formatter run against template/backend/src/ — an editor, a hook, an agent —
+# silently used ruff's default 88 while `template/backend/pyproject.toml` gives
+# every stamped app 120. The first `ruff format` in a new app then rewrapped the
+# shipped files, and they read as drift against the factory from that moment on,
+# in every app, permanently.
+#
+# Keep this in lockstep with template/backend/pyproject.toml's [tool.ruff].
+line-length = 120
+target-version = "py314"
+
+# The jinja-templated sources are not parseable Python (`from {{ package_name }}
+# import ...`), so they are excluded rather than reported as syntax errors. They
+# are held to the same width by hand; the plain .py files below are the ones a
+# formatter can actually keep honest.
+extend-exclude = ["*.jinja"]

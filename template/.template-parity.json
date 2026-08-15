@@ -26,7 +26,7 @@
     "backend/src/{package}/db/session.py": "6ef53cd6e5b9e1a1",
     "backend/src/{package}/db/stamp.py": "24ec470513e88ee2",
     "backend/src/{package}/deps.py": "29bc98fdb0b17f1d",
-    "backend/src/{package}/exceptions.py": "65157d6d57e15205",
+    "backend/src/{package}/exceptions.py": "1448f262fb635a68",
     "backend/src/{package}/logging.py": "6c6ff49f82abd75e",
     "backend/src/{package}/mcp/actors.py": "41d9d2de7eff167c",
     "backend/src/{package}/mcp/auth.py": "efbec12676b85217",

@@ -68,6 +68,13 @@ class ForbiddenError(BackendBaseException):
     error_code = "forbidden"
 
 
+class ConflictError(BackendBaseException):
+    """The request conflicts with the resource's current state (409)."""
+
+    status_code = 409
+    error_code = "conflict"
+
+
 class UpstreamServiceError(BackendBaseException):
     """A dependent external service failed or returned an unusable response (502)."""
 
@@ -110,6 +117,11 @@ async def authentication_error_handler(request: Request, exc: AuthenticationErro
 
 
 async def forbidden_error_handler(request: Request, exc: ForbiddenError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc)
+
+
+async def conflict_error_handler(request: Request, exc: ConflictError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
 
@@ -161,6 +173,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register(app, ValidationError, validation_error_handler)
     _register(app, AuthenticationError, authentication_error_handler)
     _register(app, ForbiddenError, forbidden_error_handler)
+    _register(app, ConflictError, conflict_error_handler)
     _register(app, UpstreamServiceError, upstream_service_error_handler)
     _register(app, ServiceUnavailableError, service_unavailable_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
