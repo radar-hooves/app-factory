@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 # The local console session is always the trusted local caller in development.
 _DEFAULT_LOCAL_CLIENT = "local-console"
