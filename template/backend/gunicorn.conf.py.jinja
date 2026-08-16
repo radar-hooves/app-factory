@@ -23,12 +23,16 @@ workers = 1 if os.getenv("DEBUG", "false").lower() == "true" else int(os.getenv(
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 
-# The proxy reaches this container over a Docker network, not loopback, so
-# uvicorn's 127.0.0.1 default rejects its X-Forwarded-For and request.client.host
-# stays the PROXY's address. Anything keyed on client IP — a rate limiter, an
-# audit trail — then buckets every user together. Narrow, not "*": a caller
-# reaching the container directly must not get to assert its own address.
-forwarded_allow_ips = "127.0.0.1,172.16.0.0/12,10.0.0.0/8"
+# Which peers may assert a client address via X-Forwarded-For, rewriting
+# request.client before any app code runs. Defaults to uvicorn's loopback-only
+# value; a deployment behind a reverse proxy sets FORWARDED_ALLOW_IPS to that
+# proxy's OWN address. Do NOT widen it to an RFC1918 range: every container on a
+# Docker bridge network sits inside 172.16.0.0/12, so such a value trusts every
+# neighbour to assert its own address, and an app that reads request.client for
+# auth or a trusted-proxy check is then spoofable by anything on that network.
+# Leave unset where the app resolves X-Forwarded-For itself behind its own
+# trusted-proxy gate — the rewrite would destroy the peer address it checks.
+forwarded_allow_ips = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
 # Recycling a worker is a hygiene default, not a universal one. A service whose
 # worker holds process-local state a restart cannot rebuild — an unlocked vault
 # session, a supervised child process — comes back from a recycle unable to serve,

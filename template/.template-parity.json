@@ -15,7 +15,7 @@
     "backend/alembic/env.py": "96013c18e1511f9e",
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
     "backend/entrypoint.sh": "6bbe92d24a02f57c",
-    "backend/gunicorn.conf.py": "ff5497c0f7edaa52",
+    "backend/gunicorn.conf.py": "2af94d0fb1640c9f",
     "backend/src/{package}/api/system/router.py": "91994ff367b2e36d",
     "backend/src/{package}/api/system/schemas.py": "c8e1ea3bec21c82a",
     "backend/src/{package}/config/paths.py": "7890f0789fed0cc5",
