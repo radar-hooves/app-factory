@@ -266,6 +266,52 @@ async def test_registered_identity_reaches_the_tool(_configured_idp):
     assert result["structuredContent"]["actor"] == "claude-code"
 
 
+async def test_middleware_gates_a_tool_that_never_calls_resolve_actor(monkeypatch):
+    """The middleware refuses without the tool body participating at all.
+
+    This is the whole reason ActorGateMiddleware exists, and it cannot be shown
+    with the shipped health_check: that tool calls resolve_actor() itself, so it
+    would refuse an unregistered caller with or without the middleware. What
+    needs proving is that a tool whose author FORGOT is still gated.
+
+    So call_next here is a stand-in for exactly that tool — it records whether
+    it ran and gates nothing. The assertion is that it never ran.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from {{ package_name }}.mcp import auth as auth_module
+
+    monkeypatch.setattr(auth_module, "get_http_headers", lambda: {"x-client-id": "not-in-the-registry"})
+
+    reached = False
+
+    async def call_next(_context):
+        nonlocal reached
+        reached = True
+        return "tool ran"
+
+    with pytest.raises(ToolError, match="not registered"):
+        await auth_module.ActorGateMiddleware().on_call_tool(None, call_next)
+
+    assert reached is False, "the middleware let an unregistered caller reach the tool body"
+
+
+async def test_middleware_waves_through_a_stdio_call(monkeypatch):
+    """A stdio caller carries no HTTP headers and must be untouched.
+
+    The middleware is wired unconditionally, so this is what stops it breaking
+    genuine in-process callers.
+    """
+    from {{ package_name }}.mcp import auth as auth_module
+
+    monkeypatch.setattr(auth_module, "get_http_headers", dict)
+
+    async def call_next(_context):
+        return "tool ran"
+
+    assert await auth_module.ActorGateMiddleware().on_call_tool(None, call_next) == "tool ran"
+
+
 @pytest.mark.integration
 async def test_valid_bearer_for_unregistered_identity_is_refused(_configured_idp):
     """The allow-list is load-bearing, driven end to end.

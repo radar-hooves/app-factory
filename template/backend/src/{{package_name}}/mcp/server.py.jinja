@@ -4,12 +4,17 @@ Mounted at /mcp by the app factory, wrapped in the Authentik bearer-token gate
 (mcp/http_auth.py) — a request that does not carry a valid token never reaches
 a tool in this module.
 
-Every tool calls resolve_actor() to learn WHO is calling. The gate proves the
-caller holds a valid Authentik token; resolve_actor() checks that identity
-against config/actors.yaml and refuses one that is not registered. Both steps
-are required: Authentik serves one instance-wide userinfo endpoint, so the
-token alone proves identity, not which app it was minted for — the allow-list
-is what restores the app boundary. Authorise off actor.id / actor.type.
+ActorGateMiddleware enforces the registry check on EVERY HTTP tool call, so a
+tool cannot be left ungated by forgetting to ask. The gate proves the caller
+holds a valid Authentik token; the middleware checks that identity against
+config/actors.yaml and refuses one that is not registered. Both steps are
+required: Authentik serves one instance-wide userinfo endpoint, so the token
+alone proves identity, not which app it was minted for — the allow-list is
+what restores the app boundary.
+
+A tool still calls resolve_actor() when it needs to know WHO is calling in
+order to authorise off actor.id / actor.type. It no longer has to call it in
+order to be gated at all.
 
 Design rules (rules-library/sidekick/sidekick-tooling.md):
   - Target ≤20 tools; above 30 is a design defect.
@@ -21,7 +26,7 @@ import logging
 
 from fastmcp import FastMCP
 
-from {{ package_name }}.mcp.auth import resolve_actor
+from {{ package_name }}.mcp.auth import ActorGateMiddleware, resolve_actor
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,11 @@ def create_mcp_server() -> FastMCP:
             "Prefer action-dispatcher tools (action= parameter) over per-operation tools."
         ),
     )
+
+    # Gate every HTTP tool call on a registered actor. Self-exempts stdio, so a
+    # genuine in-process caller is untouched. Wire this BEFORE any dispatcher —
+    # a tool registered without it is reachable by any valid Authentik bearer.
+    mcp.add_middleware(ActorGateMiddleware())
 
     # Register domain dispatchers here as the app grows.
     # Example:

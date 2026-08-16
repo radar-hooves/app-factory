@@ -19,12 +19,19 @@ grows — this module has no domain knowledge of its own.
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
+import mcp.types as mt
+from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_context, get_http_headers
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
+from fastmcp.tools.base import ToolResult
 
 from {{ package_name }}.exceptions import AuthenticationError
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
+
+logger = logging.getLogger(__name__)
 
 # ActorRegistry seeds this identity unconditionally, as the trusted in-process
 # caller — it is registered even when config/actors.yaml does not mention it.
@@ -98,3 +105,41 @@ def resolve_actor() -> Actor:
             "MCP client identity is not registered",
             context={"client_id": client_id, "registered": _actor_registry().registered_ids()},
         ) from None
+
+
+class ActorGateMiddleware(Middleware):
+    """Require every HTTP MCP tool call to resolve to a registered actor.
+
+    Wired unconditionally onto the FastMCP instance, because the gate
+    self-exempts by transport: a stdio call carries no HTTP request headers,
+    so it is waved through untouched below. Only a call arriving with real
+    HTTP headers (i.e. through the bearer-auth-gated /mcp mount) is actually
+    resolved and checked.
+
+    This gates ``on_call_tool`` only — connect, initialise and list-tools are
+    not gated. Any caller presenting a valid Authentik bearer may reach that
+    far; it is refused only on attempting to call a tool while resolving to an
+    unregistered identity (authenticate at the transport, authorise at the
+    tool call).
+
+    A tool body MAY still call :func:`resolve_actor` to learn WHO is calling —
+    it must, to make an authorisation decision of its own. What it no longer
+    has to do is remember to call it in order to be gated at all.
+    """
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext[mt.CallToolRequestParams],
+        call_next: CallNext[mt.CallToolRequestParams, ToolResult],
+    ) -> ToolResult:
+        """Resolve the caller's actor and refuse an unregistered HTTP caller."""
+        if not get_http_headers():
+            return await call_next(context)
+
+        try:
+            resolve_actor()
+        except AuthenticationError as exc:
+            logger.warning("MCP HTTP tool call rejected: %s", exc.message)
+            raise ToolError(exc.message) from exc
+
+        return await call_next(context)
