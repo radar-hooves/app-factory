@@ -1,0 +1,140 @@
+"""Tests for the app's one rate limiter and its trusted-proxy boundary.
+
+Covers `master-project#277`'s stated Test Requirements: a 429 carrying
+Retry-After, the counter keyed on the forwarded client address rather than the
+proxy's, and in-memory storage engaging rather than the limit silently
+disabling.
+
+The trust tests matter more than they look. A limiter keyed on the wrong field
+fails in one of two ways, and both are silent: key on the proxy and every
+caller shares one bucket (a self-inflicted denial of service), or believe an
+untrusted X-Forwarded-For and any caller can move itself to a fresh bucket at
+will, which is the limiter not existing.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import TYPE_CHECKING
+
+import pytest
+
+from {{ package_name }}.proxy_trust import client_ip, peer_is_trusted
+from {{ package_name }}.rate_limit import build_limiter, rate_limit_handler
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
+
+
+def _request(peer: str | None, headers: dict[str, str] | None = None) -> Request:
+    """Build a minimal stand-in carrying only what the trust helpers read."""
+    return SimpleNamespace(  # type: ignore[return-value]
+        client=SimpleNamespace(host=peer) if peer else None,
+        headers=headers or {},
+        url=SimpleNamespace(path="/api/example"),
+        method="GET",
+    )
+
+
+def _settings(networks: str = "", storage: str = "", default: str = "100/minute") -> object:
+    return SimpleNamespace(
+        security=SimpleNamespace(
+            trusted_proxy_network_list=[
+                __import__("ipaddress").ip_network(n.strip(), strict=False)
+                for n in networks.split(",")
+                if n.strip()
+            ],
+            rate_limit_storage_uri=storage,
+            rate_limit_default=default,
+            rate_limit_enabled=True,
+        )
+    )
+
+
+class TestTrustBoundary:
+    def test_no_configured_proxies_trusts_nobody(self) -> None:
+        """The secure default: with no trusted networks, no peer may speak for another."""
+        req = _request("172.22.0.100", {"x-forwarded-for": "203.0.113.9"})
+        assert peer_is_trusted(req, _settings()) is False
+        assert client_ip(req, _settings()) == "172.22.0.100"
+
+    def test_untrusted_peer_cannot_assert_its_own_address(self) -> None:
+        """A caller reaching the app directly must not move its own bucket."""
+        req = _request("172.22.0.55", {"x-forwarded-for": "1.2.3.4"})
+        settings = _settings(networks="172.22.0.100/32")
+        assert client_ip(req, settings) == "172.22.0.55"
+
+    def test_trusted_peer_yields_the_forwarded_caller(self) -> None:
+        req = _request("172.22.0.100", {"x-forwarded-for": "203.0.113.9"})
+        assert client_ip(req, _settings(networks="172.22.0.100/32")) == "203.0.113.9"
+
+    def test_chain_is_walked_right_to_left_past_trusted_hops(self) -> None:
+        """client -> CDN -> proxy: the caller is the outermost UNtrusted entry.
+
+        Taking the last hop would return the CDN for every caller; taking the
+        first would let the caller forge it.
+        """
+        req = _request(
+            "172.22.0.100",
+            {"x-forwarded-for": "203.0.113.9, 172.22.0.7, 172.22.0.100"},
+        )
+        settings = _settings(networks="172.22.0.0/24")
+        assert client_ip(req, settings) == "203.0.113.9"
+
+    def test_forged_leftmost_entry_is_not_taken_verbatim(self) -> None:
+        """A caller prepending a lie still resolves to the address the proxy saw."""
+        req = _request(
+            "172.22.0.100",
+            {"x-forwarded-for": "9.9.9.9, 203.0.113.9"},
+        )
+        settings = _settings(networks="172.22.0.100/32")
+        assert client_ip(req, settings) == "203.0.113.9"
+
+    def test_garbage_forwarded_header_falls_back_to_the_peer(self) -> None:
+        req = _request("172.22.0.100", {"x-forwarded-for": "not-an-ip"})
+        assert client_ip(req, _settings(networks="172.22.0.100/32")) == "172.22.0.100"
+
+    def test_missing_client_never_raises(self) -> None:
+        assert client_ip(_request(None), _settings()) == "unknown"
+
+
+class TestStorageFallback:
+    def test_empty_storage_uri_builds_an_in_memory_limiter_still_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No Redis must mean in-memory counters, NEVER a disabled limit."""
+        import {{ package_name }}.rate_limit as module
+
+        monkeypatch.setattr(module, "get_settings", lambda: _settings(storage=""))
+        limiter = build_limiter()
+        assert limiter.enabled is True
+
+    def test_redis_uri_is_passed_through_to_storage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import {{ package_name }}.rate_limit as module
+
+        monkeypatch.setattr(
+            module, "get_settings", lambda: _settings(storage="memory://")
+        )
+        limiter = build_limiter()
+        assert limiter.enabled is True
+
+
+class TestRateLimitResponse:
+    def test_429_carries_retry_after(self) -> None:
+        """security-standards.md requires Retry-After on every 429."""
+        req = _request("203.0.113.9")
+        response = rate_limit_handler(req, SimpleNamespace(retry_after=30))  # type: ignore[arg-type]
+        assert response.status_code == 429
+        assert response.headers["Retry-After"] == "30"
+
+    def test_429_retry_after_defaults_when_absent(self) -> None:
+        req = _request("203.0.113.9")
+        response = rate_limit_handler(req, Exception("no retry_after"))
+        assert response.status_code == 429
+        assert int(response.headers["Retry-After"]) > 0
+
+    def test_429_is_logged_as_a_security_event(self, caplog: pytest.LogCaptureFixture) -> None:
+        req = _request("203.0.113.9")
+        with caplog.at_level("WARNING"):
+            rate_limit_handler(req, SimpleNamespace(retry_after=5))  # type: ignore[arg-type]
+        assert any(r.message == "Rate limit exceeded" for r in caplog.records)

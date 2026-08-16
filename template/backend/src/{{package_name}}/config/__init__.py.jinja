@@ -19,6 +19,7 @@ from {{ package_name }}.config.paths import env_file
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
+from {{ package_name }}.config.sections.security import SecuritySettings
 
 
 def _describe_config_error(exc: ValidationError) -> str:
@@ -72,6 +73,9 @@ class Settings(BaseSettings):
     # Inbound auth for the embedded MCP surface. Defaults fail CLOSED: with no
     # {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL set, every /mcp HTTP request 401s.
     mcp: MCPSettings = Field(default_factory=MCPSettings)
+    # Trusted-proxy boundary and rate limiting. Defaults are the SAFE ones:
+    # no proxy is trusted, so no caller can assert its own address.
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -98,6 +102,7 @@ def get_settings() -> Settings:
             database=DatabaseSettings(),
             example=ExampleSettings(),
             mcp=MCPSettings(),
+            security=SecuritySettings(),
         )
     except ValidationError as exc:
         # `from None`, deliberately: chaining the original ValidationError

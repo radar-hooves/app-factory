@@ -45,6 +45,7 @@ from {{ package_name }}.logging import configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from {{ package_name }}.mcp.server import create_mcp_server
 from {{ package_name }}.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
+from {{ package_name }}.rate_limit import RateLimitExceeded, SlowAPIMiddleware, limiter, rate_limit_handler
 
 _log = logging.getLogger(__name__)
 {% if has_frontend %}
@@ -147,6 +148,14 @@ def create_app() -> FastAPI:
         debug=False,
     )
     register_exception_handlers(app)
+
+    # The one rate limiter (master-project#277). SlowAPIMiddleware applies the
+    # default limit to every route; @limiter.limit() overrides it per route.
+    # Registered before the middleware block below so a 429 is still wrapped by
+    # RequestID and the security headers.
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
 
     # Middleware order: added last wraps outermost (runs first). Execution
     # order is RequestID -> RequestLogging -> SecurityHeaders -> CORS -> handler,

@@ -16,6 +16,10 @@ dependencies = [
     "httpx>=0.28.0",
     # pyyaml: the MCP actor allow-list loader (mcp/actors.py).
     "pyyaml>=6.0.2",
+    # slowapi: the app's one rate limiter (rate_limit.py). Storage is chosen at
+    # deploy time — a Redis URL shares counters across workers, empty is
+    # in-memory — so no app needs a Redis dependency it does not want.
+    "slowapi>=0.1.10",
     # gunicorn: production process manager (entrypoint.sh, gunicorn.conf.py).
     "gunicorn>=23.0.0",
 ]

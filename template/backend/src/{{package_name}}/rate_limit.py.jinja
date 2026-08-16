@@ -1,0 +1,116 @@
+"""The app's one rate limiter.
+
+Built on slowapi (the Starlette/FastAPI binding for the `limits` library) so
+storage is a deployment choice rather than an architectural one: set a Redis
+URL and counters are shared across workers and processes; leave it empty and
+they are in-memory. That is `security-standards.md`'s "Redis-backed counters
+with in-memory fallback" satisfied by the library, which is why an app without
+Redis does not need one and an app with Redis needs no extra code.
+
+Do NOT hand-roll a second limiter beside this one. Four apps in this estate
+each wrote their own — one of them 586 lines — and six had none at all
+(master-project#277). Per-route limits and a per-app `key_func` are the
+supported ways to differ; a parallel implementation is not.
+
+Usage:
+
+    from {{ package_name }}.rate_limit import limiter
+
+    @router.get("/expensive")
+    @limiter.limit("5/minute")
+    async def expensive(request: Request) -> ...:
+        ...
+
+The `request` parameter is required on a decorated route — slowapi reads the
+key from it.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.responses import JSONResponse
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.proxy_trust import client_ip
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
+    from starlette.responses import Response
+
+logger = logging.getLogger(__name__)
+
+
+def rate_limit_key(request: Request) -> str:
+    """Key a request by its caller's real address.
+
+    Deliberately NOT slowapi's own ``get_remote_address``: that returns the TCP
+    peer, which behind a reverse proxy is the PROXY for every caller — putting
+    the whole internet in one bucket and turning the limiter into a self-inflicted
+    denial of service. ``client_ip`` resolves the forwarded chain, but only when
+    the peer is a configured trusted proxy.
+
+    An app that authenticates its callers should override this with something
+    stronger (an API-key id, an account id) so one noisy consumer cannot
+    throttle another; pass it as ``key_func`` when building the limiter.
+    """
+    return client_ip(request, get_settings())
+
+
+def build_limiter() -> Limiter:
+    """Construct the app limiter from settings."""
+    settings = get_settings()
+    storage_uri = settings.security.rate_limit_storage_uri
+    return Limiter(
+        key_func=rate_limit_key,
+        default_limits=[settings.security.rate_limit_default],
+        enabled=settings.security.rate_limit_enabled,
+        # slowapi falls back to in-memory when this is None; an unreachable
+        # Redis must never silently DISABLE the limit, which is why the fallback
+        # is storage-level rather than an `enabled = False` on error.
+        storage_uri=storage_uri or None,
+    )
+
+
+limiter = build_limiter()
+
+
+def rate_limit_handler(request: Request, exc: Exception) -> Response:
+    """Return 429 with Retry-After, and log the hit as a security event.
+
+    `security-standards.md` requires every 429 to be logged and to carry
+    Retry-After; slowapi's own handler does neither consistently, so the app
+    supplies one. The caller's key is logged (an address or an account id) —
+    never a credential, and never the request body.
+    """
+    retry_after = getattr(exc, "retry_after", None) or 60
+    key = rate_limit_key(request)
+    logger.warning(
+        "Rate limit exceeded",
+        extra={
+            "event": "rate_limit_exceeded",
+            "client_key": key,
+            "path": request.url.path,
+            "method": request.method,
+            "retry_after": retry_after,
+        },
+    )
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please retry later."},
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+__all__ = [
+    "RateLimitExceeded",
+    "SlowAPIMiddleware",
+    "build_limiter",
+    "limiter",
+    "rate_limit_handler",
+    "rate_limit_key",
+]

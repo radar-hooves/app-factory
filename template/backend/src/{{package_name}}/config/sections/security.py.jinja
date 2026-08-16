@@ -1,0 +1,83 @@
+"""Network-trust and rate-limiting configuration.
+
+Two settings that must be read together, because one is worthless without the
+other: ``trusted_proxy_networks`` decides whether a forwarded header may be
+believed at all, and ``rate_limit_*`` decides what to do with the address that
+falls out of it.
+
+Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
+    {{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS
+    {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_STORAGE_URI
+    {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_DEFAULT
+    {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED
+"""
+
+from __future__ import annotations
+
+import ipaddress
+
+from pydantic import computed_field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from {{ package_name }}.config.paths import env_file
+
+
+class SecuritySettings(BaseSettings):
+    """Trusted-proxy and rate-limit configuration."""
+
+    model_config = SettingsConfigDict(
+        env_file=env_file(),
+        env_prefix="{{ project_name | upper | replace('-', '_') }}_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Comma-separated CIDRs of reverse proxies whose X-Forwarded-* headers may
+    # be believed, e.g. "172.22.0.100/32". EMPTY IS THE SECURE DEFAULT: with no
+    # entry, no peer is trusted and a forwarded header can never move a caller
+    # into another rate-limit bucket.
+    #
+    # Set this to the proxy's address, never to a whole Docker range: every
+    # bridge network sits inside 172.16.0.0/12, so that value makes every
+    # neighbouring container a trusted hop. That exact mistake was a live
+    # privilege escalation in this estate (yggdrasil#210).
+    # Env: {{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS
+    trusted_proxy_networks: str = ""
+
+    # Storage for rate-limit counters. Empty -> in-memory, which is per-worker,
+    # so N gunicorn workers admit N x the configured limit. Set a Redis URL
+    # (redis://host:6379/0) wherever the count must hold across workers.
+    # Env: {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_STORAGE_URI
+    rate_limit_storage_uri: str = ""
+
+    # Default limit applied to routes that do not declare their own, in the
+    # limits-library grammar ("100/minute", "5/second").
+    # Env: {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_DEFAULT
+    rate_limit_default: str = "100/minute"
+
+    # Env: {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED
+    rate_limit_enabled: bool = True
+
+    @field_validator("trusted_proxy_networks")
+    @classmethod
+    def _validate_networks(cls, v: str) -> str:
+        """Reject an unparseable CIDR at startup rather than at first request.
+
+        A typo here fails open in the most confusing way possible — the header
+        is silently disbelieved and every caller shares one bucket — so it is
+        worth refusing to boot over.
+        """
+        for entry in (part.strip() for part in v.split(",")):
+            if entry:
+                ipaddress.ip_network(entry, strict=False)
+        return v
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def trusted_proxy_network_list(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        """Parsed trusted-proxy networks (empty when none are configured)."""
+        return [
+            ipaddress.ip_network(entry.strip(), strict=False)
+            for entry in self.trusted_proxy_networks.split(",")
+            if entry.strip()
+        ]
