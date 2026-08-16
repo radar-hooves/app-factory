@@ -8,7 +8,7 @@
     ".github/workflows/python-ci.yaml": "8b8f06847fcdddac",
     ".github/workflows/security.yaml": "9e08972038720ffa",
     ".gitleaks.toml": "1b7c88c74306f1c6",
-    ".pre-commit-config.yaml": "6f4886e89db716cc",
+    ".pre-commit-config.yaml": "f5c7063e84d9e8dd",
     ".vscode/extensions.json": "3a0005a77860d54d",
     "Dockerfile": "04ed8bf5f1918139",
     "backend/alembic.ini": "fc9b4a245e2122fc",

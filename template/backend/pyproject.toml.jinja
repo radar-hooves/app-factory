@@ -74,9 +74,9 @@ show_error_codes = true
 # A freshly-stamped app has no debt, so this file is empty and the gate is a
 # plain "no type errors". An app carrying debt records it here and the gate
 # then fails only on errors the change itself introduced — shrink it as debt
-# is paid, never grow it — the gate passes `--no-allow-unsynced` so a resolved
-# entry left in the file fails rather than merely nagging, which is what keeps
-# it shrinking and stops a fixed error silently becoming permitted again.
+# is paid, never grow it — a resolved entry left in the file FAILS the gate by
+# default, which is what keeps it shrinking and stops a fixed error silently
+# becoming permitted again. Do not pass `--allow-unsynced`; it opts out of that.
 baseline_path = "mypy-baseline.txt"
 sort_baseline = true
 

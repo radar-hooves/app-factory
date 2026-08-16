@@ -85,11 +85,11 @@ repos:
   # and craft gates already use. Pay debt down, then re-sync with
   # `cd backend && uv run mypy src | uv run mypy-baseline sync`.
   #
-  # --no-allow-unsynced makes the baseline a RATCHET: without it the default is
-  # to merely nag when an entry has been resolved, so the file never shrinks and
-  # a fixed error silently becomes permitted again. Measured safe — the baseline
-  # matches on error content, not line numbers, so drift from editing above a
-  # banked error does not trip it.
+  # The baseline is a RATCHET by default: mypy-baseline fails when an entry has
+  # been RESOLVED but left in the file, so it cannot stop shrinking and a fixed
+  # error cannot silently become permitted again. Do NOT add --allow-unsynced;
+  # that opts out of exactly that property. Measured safe — matching is on error
+  # content, not line numbers, so editing above a banked error does not trip it.
   #
   # pipefail is deliberately absent: the pipeline must exit on mypy-baseline's
   # verdict, and mypy's own non-zero on a filtered-out error would mask it.
@@ -101,7 +101,7 @@ repos:
     hooks:
       - id: mypy
         name: 'python - Type-check with mypy'
-        entry: bash -c 'cd backend && uv run mypy src | uv run mypy-baseline filter --no-allow-unsynced'
+        entry: bash -c 'cd backend && uv run mypy src | uv run mypy-baseline filter'
         language: system
         pass_filenames: false
         files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock|mypy-baseline\.txt)$
