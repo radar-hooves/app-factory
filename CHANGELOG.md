@@ -4,6 +4,12 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+### Fixed
+
+- **Three exception call sites passed a `str` to a `details` parameter typed `dict[str, Any] | None`, so a freshly stamped app failed its own mypy gate on the first backend commit.** `BackendBaseException.__init__` serialises `details` straight into the JSON error body, and its docstring is explicit that a bare sentence goes in `message`, not `details` — so the fix keeps the dict contract rather than widening the type. The system health probe's database-unreachable raise now wraps the exception text as `details={"reason": str(exc)}`; the two MCP actor-gate refusals in `mcp/auth.py` move the bare sentence into `message` and carry their structured fields in `context`. The template's pre-commit mypy hook runs bare (`cd backend && uv run mypy src`) with no baseline, so a newly stamped app could not commit any backend change at all until these were corrected by hand. Verified on 2026-08-17 by stamping at tag `v2026.8.13` and running `uv run mypy src`: exactly three `arg-type` errors, no others. Refs poodle64/master-project#207.
+
 ## [2026.8.13] - 2026-08-14
 
 ### Removed
