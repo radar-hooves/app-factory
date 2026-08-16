@@ -31,17 +31,16 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 		);
 	}
 
+	// The STATUS CODE is the whole contract, deliberately — no assertion on the
+	// body. `/api/system/health` raises 503 when the database is unreachable and
+	// its docstring commits to that being the only outcome that changes the code,
+	// with every other dependency degrading the body instead. So a 2xx already
+	// proves what this gate needs, and reading the body would couple every app's
+	// E2E suite to a payload shape it is free to enrich.
 	if (!response.ok) {
 		throw new Error(
 			`{{ project_name }} health check at ${healthURL} returned HTTP ${response.status}. ` +
-				`Is the backend booted?`
-		);
-	}
-
-	const body = (await response.json()) as { status?: string; db?: string };
-	if (body.status !== 'ok' || body.db !== 'ok') {
-		throw new Error(
-			`{{ project_name }} reported an unhealthy status at ${healthURL}: ${JSON.stringify(body)}`
+				`A 503 means the backend is up but cannot reach its database.`
 		);
 	}
 }
