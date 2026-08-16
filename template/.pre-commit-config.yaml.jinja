@@ -79,6 +79,21 @@ repos:
   # files, so it takes the whole tree exactly as CI does; `files` still gates
   # WHETHER it runs. Warm-cache cost is a fraction of a second.
   #
+  # Piped through mypy-baseline so the gate fails on errors this change
+  # INTRODUCES, not on debt the repo already carried. A gate that fails on the
+  # day it lands gets disabled — the same baselined-debt discipline the drift
+  # and craft gates already use. Pay debt down, then re-sync with
+  # `cd backend && uv run mypy src | uv run mypy-baseline sync`.
+  #
+  # --no-allow-unsynced makes the baseline a RATCHET: without it the default is
+  # to merely nag when an entry has been resolved, so the file never shrinks and
+  # a fixed error silently becomes permitted again. Measured safe — the baseline
+  # matches on error content, not line numbers, so drift from editing above a
+  # banked error does not trip it.
+  #
+  # pipefail is deliberately absent: the pipeline must exit on mypy-baseline's
+  # verdict, and mypy's own non-zero on a filtered-out error would mask it.
+  #
   # Never name a specific app in a template file: the parity normaliser rewrites
   # an app's own name to a placeholder wherever it appears, so a comment naming
   # one makes that app — and only that app — fail the gate forever.
@@ -86,10 +101,10 @@ repos:
     hooks:
       - id: mypy
         name: 'python - Type-check with mypy'
-        entry: bash -c 'cd backend && uv run mypy src'
+        entry: bash -c 'cd backend && uv run mypy src | uv run mypy-baseline filter --no-allow-unsynced'
         language: system
         pass_filenames: false
-        files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock)$
+        files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock|mypy-baseline\.txt)$
 {%- if has_frontend %}
 
   # Prettier is the frontend's only formatter, as ruff-format is the backend's.
