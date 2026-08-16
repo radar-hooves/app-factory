@@ -48,9 +48,10 @@ def resolve_actor() -> Actor:
     """Resolve the calling actor from the registry.
 
     Fails closed: a missing client identity is a typed refusal, never a silent
-    default to a privileged identity. The only exception is an explicitly
-    configured ``local-console`` mapping in the registry for a trusted
-    in-process caller.
+    default to a privileged identity. ``local-console`` — the privileged
+    identity :class:`~.actors.ActorRegistry` seeds unconditionally for the
+    trusted in-process caller — is reserved for stdio and refused over HTTP,
+    whether or not ``config/actors.yaml`` lists it.
 
     The identity SOURCE is chosen by transport, because only one source is
     trustworthy per transport:
