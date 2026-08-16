@@ -11,6 +11,12 @@ const E2E_UID = 'e2e-uid';
 
 export default defineConfig({
 	testDir: 'tests/e2e',
+	// The webServer below boots the FRONTEND only; the backend and its backing
+	// services are booted separately. global-setup.ts fails fast with a clear
+	// message when they are not, rather than letting every spec fail on its own
+	// connection-refused. Extend that file for app-specific preconditions —
+	// seeding, a stamp check, an asset build — rather than adding a second one.
+	globalSetup: './tests/e2e/global-setup.ts',
 	timeout: CI ? 90_000 : 30_000,
 	expect: { timeout: CI ? 20_000 : 5_000 },
 	// Deliberately no CI retry: a retry turns a real intermittent failure into a green build.

@@ -39,7 +39,7 @@
     "frontend/.prettierrc": "daec45a55e1f3ad7",
     "frontend/components.json": "3192c135e1a87e3e",
     "frontend/eslint.config.js": "ec8bd6f91501f9d5",
-    "frontend/playwright.config.ts": "dae8d7cc1491dbcc",
+    "frontend/playwright.config.ts": "f39a98b18da17fd1",
     "frontend/src/hooks.client.ts": "47c2a7e9e4423e6c",
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",

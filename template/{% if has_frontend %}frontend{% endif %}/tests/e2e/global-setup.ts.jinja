@@ -1,0 +1,47 @@
+import type { FullConfig } from '@playwright/test';
+
+/**
+ * Fails fast, with a clear message, if the backend this suite depends on isn't
+ * booted — rather than letting every spec fail individually with an opaque
+ * connection-refused error.
+ *
+ * The webServer in playwright.config.ts boots the FRONTEND only; the backend
+ * and its backing services are booted separately. So the commonest way to run
+ * this suite wrong — forgetting the backend — otherwise reads as every spec
+ * being broken, which is the failure mode this exists to stop.
+ *
+ * Extend it with app-specific preconditions (seeding, a stamp check, an asset
+ * build step) rather than adding a second globalSetup beside it.
+ */
+export default async function globalSetup(config: FullConfig): Promise<void> {
+	const baseURL = config.projects[0]?.use.baseURL;
+	if (!baseURL) {
+		throw new Error('No baseURL configured; playwright.config.ts sets one from E2E_PORT.');
+	}
+	const healthURL = new URL('/api/system/health', baseURL).toString();
+
+	let response: Response;
+	try {
+		response = await fetch(healthURL);
+	} catch (cause) {
+		const message = cause instanceof Error ? cause.message : String(cause);
+		throw new Error(
+			`{{ project_name }} is not reachable at ${healthURL}. Boot the backend first ` +
+				`(see the header comment in playwright.config.ts). Original error: ${message}`
+		);
+	}
+
+	if (!response.ok) {
+		throw new Error(
+			`{{ project_name }} health check at ${healthURL} returned HTTP ${response.status}. ` +
+				`Is the backend booted?`
+		);
+	}
+
+	const body = (await response.json()) as { status?: string; db?: string };
+	if (body.status !== 'ok' || body.db !== 'ok') {
+		throw new Error(
+			`{{ project_name }} reported an unhealthy status at ${healthURL}: ${JSON.stringify(body)}`
+		);
+	}
+}
