@@ -72,6 +72,15 @@ def build_limiter() -> Limiter:
         # slowapi falls back to in-memory when this is None; an unreachable
         # Redis must never silently DISABLE the limit, which is why the fallback
         # is storage-level rather than an `enabled = False` on error.
+        #
+        # BEFORE YOU SET THIS to a Redis URL, read on. That fallback covers
+        # "no URL configured", NOT "URL configured and Redis dies mid-request" —
+        # in which case slowapi raises and the request 500s, so the limiter takes
+        # the app down with it. No household app sets this today, which is the
+        # only reason the gap is unreached. The first app that wants shared
+        # counters across workers has to solve degrade-to-in-memory-on-error
+        # HERE, in the factory, for every app at once; a per-app fallback flag is
+        # exactly the divergence master-project#277 existed to end.
         storage_uri=storage_uri or None,
     )
 
