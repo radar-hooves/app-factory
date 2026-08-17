@@ -46,9 +46,7 @@ def _settings(networks: str = "", storage: str = "", default: str = "100/minute"
     return SimpleNamespace(
         security=SimpleNamespace(
             trusted_proxy_network_list=[
-                __import__("ipaddress").ip_network(n.strip(), strict=False)
-                for n in networks.split(",")
-                if n.strip()
+                __import__("ipaddress").ip_network(n.strip(), strict=False) for n in networks.split(",") if n.strip()
             ],
             rate_limit_storage_uri=storage,
             rate_limit_default=default,
@@ -105,9 +103,7 @@ class TestTrustBoundary:
 
 
 class TestStorageFallback:
-    def test_empty_storage_uri_builds_an_in_memory_limiter_still_enabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_storage_uri_builds_an_in_memory_limiter_still_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No Redis must mean in-memory counters, NEVER a disabled limit."""
         import {{ package_name }}.rate_limit as module
 
@@ -118,9 +114,7 @@ class TestStorageFallback:
     def test_redis_uri_is_passed_through_to_storage(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import {{ package_name }}.rate_limit as module
 
-        monkeypatch.setattr(
-            module, "get_settings", lambda: _settings(storage="memory://")
-        )
+        monkeypatch.setattr(module, "get_settings", lambda: _settings(storage="memory://"))
         limiter = build_limiter()
         assert limiter.enabled is True
 
