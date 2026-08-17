@@ -26,7 +26,7 @@ from pathlib import Path
 {% endif -%}
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 {% if has_frontend -%}
 from fastapi.staticfiles import StaticFiles
@@ -45,7 +45,7 @@ from {{ package_name }}.logging import configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from {{ package_name }}.mcp.server import create_mcp_server
 from {{ package_name }}.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
-from {{ package_name }}.rate_limit import RateLimitExceeded, SlowAPIMiddleware, limiter, rate_limit_handler
+from {{ package_name }}.rate_limit import RateLimitExceeded, enforce_default_rate_limit, limiter, rate_limit_handler
 
 _log = logging.getLogger(__name__)
 {% if has_frontend %}
@@ -164,13 +164,17 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
 
-    # The one rate limiter (master-project#277). SlowAPIMiddleware applies the
-    # default limit to every route; @limiter.limit() overrides it per route.
-    # Registered before the middleware block below so a 429 is still wrapped by
-    # RequestID and the security headers.
+    # The one rate limiter (master-project#277). The configured default limit is
+    # applied by enforce_default_rate_limit, wired as a dependency on the API
+    # router below; @limiter.limit() opts a route out with its own limit. This is
+    # NOT slowapi's SlowAPIMiddleware: that scans the app's top-level routes for a
+    # handler to limit, and since FastAPI 0.141 an include_router() is one opaque
+    # _IncludedRouter with no handler to find, so the middleware limited nothing
+    # (master-project#286). app.state.limiter and the RateLimitExceeded handler
+    # are still registered here — the handler turns the dependency's 429 into a
+    # response wrapped by RequestID and the security headers.
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
-    app.add_middleware(SlowAPIMiddleware)
 
     # Middleware order: added last wraps outermost (runs first). Execution
     # order is RequestID -> RequestLogging -> SecurityHeaders -> CORS -> handler,
@@ -191,8 +195,12 @@ def create_app() -> FastAPI:
     # The agent endpoint is POST /mcp/ (trailing slash required).
     app.mount("/mcp", gated_mcp_app)
 
-    # API routes at /api
-    app.include_router(api_router, prefix="/api")
+    # API routes at /api. The default rate limit binds here, once, for every
+    # vertical slice the router aggregates — no per-route opt-in. Routes that
+    # need a different limit carry their own @limiter.limit(); the dependency
+    # defers to them. The /mcp and SPA surfaces below are mounted sub-apps, not
+    # router routes, and are gated on their own terms rather than by this limit.
+    app.include_router(api_router, prefix="/api", dependencies=[Depends(enforce_default_rate_limit)])
 {% if has_frontend %}
     # Serve the SPA — must be last so API routes take precedence.
     # Skip mounting if the frontend has not been built yet (dev-only path).

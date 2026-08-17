@@ -33,7 +33,7 @@
     "backend/src/{package}/mcp/http_auth.py": "c0819bae7151f0c8",
     "backend/src/{package}/middleware.py": "71bf6a952f198399",
     "backend/src/{package}/proxy_trust.py": "08d278f6e13f0306",
-    "backend/src/{package}/rate_limit.py": "15478d1171cd39f8",
+    "backend/src/{package}/rate_limit.py": "9f746b8357eaa537",
     "backend/src/{package}/server.py": "85a9d5b4d9600758",
     "backend/src/{package}/services/fanout.py": "be4df5c3a76a531d",
     "compose.yaml": "97bcb2338aa26cd8",

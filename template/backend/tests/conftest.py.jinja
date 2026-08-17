@@ -19,6 +19,13 @@ import pytest
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEBUG", "true")
 
+# The rate limiter keys on the caller's address, and the whole suite presents as
+# one synthetic client — so an enabled default limit would eventually throttle
+# the suite against itself as the number of endpoint tests grows. Off by default
+# here; test_rate_limit.py turns it on explicitly, with its own low limit, to
+# prove the default actually binds (master-project#286).
+os.environ.setdefault("{{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED", "false")
+
 # ── Required env vars — set BEFORE any {{ package_name }} import ────────────
 # The suite brings its OWN database server and never inherits one. Deferring
 # to whatever a developer's shell happens to export made every run depend on

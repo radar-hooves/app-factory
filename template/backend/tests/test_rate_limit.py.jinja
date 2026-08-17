@@ -10,20 +10,26 @@ fails in one of two ways, and both are silent: key on the proxy and every
 caller shares one bucket (a self-inflicted denial of service), or believe an
 untrusted X-Forwarded-For and any caller can move itself to a fresh bucket at
 will, which is the limiter not existing.
+
+`TestDefaultLimitBinds` covers `master-project#286`: the default limit must
+actually 429 a route that carries no `@limiter.limit()`, DRIVEN through a real
+app rather than asserted against the wiring. That distinction is the whole
+point — the bug shipped precisely because a unit test proved the wiring while
+the limit fired against nothing in production.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
 
 import pytest
+from fastapi import APIRouter, Depends, FastAPI, Request
+from httpx import ASGITransport, AsyncClient
+from slowapi import Limiter
 
+import {{ package_name }}.rate_limit as rate_limit
 from {{ package_name }}.proxy_trust import client_ip, peer_is_trusted
-from {{ package_name }}.rate_limit import build_limiter, rate_limit_handler
-
-if TYPE_CHECKING:
-    from starlette.requests import Request
+from {{ package_name }}.rate_limit import RateLimitExceeded, build_limiter, rate_limit_handler, rate_limit_key
 
 
 def _request(peer: str | None, headers: dict[str, str] | None = None) -> Request:
@@ -138,3 +144,92 @@ class TestRateLimitResponse:
         with caplog.at_level("WARNING"):
             rate_limit_handler(req, SimpleNamespace(retry_after=5))  # type: ignore[arg-type]
         assert any(r.message == "Rate limit exceeded" for r in caplog.records)
+
+
+class TestDefaultLimitBinds:
+    """master-project#286: the default limit must bind on a route with no decorator.
+
+    Driven, not asserted against the wiring. `enforce_default_rate_limit` reads
+    the module-global `limiter`, so each test swaps in a fresh low-limit one via
+    monkeypatch; the suite's own limiter is disabled in conftest so these are the
+    only tests that throttle.
+    """
+
+    @pytest.mark.integration
+    async def test_default_429s_a_route_carrying_no_limiter_decorator(
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """/api/system/health has no `@limiter.limit()`. Under a 3/minute default,
+        the 4th request in a window must be a 429 — the exact case that returned
+        200 to 140 requests against the live app.
+        """
+        monkeypatch.setattr(
+            rate_limit,
+            "limiter",
+            Limiter(key_func=rate_limit_key, default_limits=["3/minute"], enabled=True),
+        )
+
+        codes = [(await client.get("/api/system/health")).status_code for _ in range(6)]
+
+        assert codes.count(200) == 3, f"default limit did not bind: {codes}"
+        assert codes.count(429) == 3, f"default limit did not bind: {codes}"
+
+    @pytest.mark.integration
+    async def test_disabled_limiter_never_throttles(self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A disabled limiter must let every request through — the dependency
+        returns before touching the counter, so `rate_limit_enabled=False` is a
+        real off switch, not merely a high ceiling.
+        """
+        monkeypatch.setattr(
+            rate_limit,
+            "limiter",
+            Limiter(key_func=rate_limit_key, default_limits=["3/minute"], enabled=False),
+        )
+
+        codes = [(await client.get("/api/system/health")).status_code for _ in range(6)]
+
+        assert codes == [200] * 6
+
+    async def test_per_route_and_exempt_coexist_with_the_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The default binds, a `@limiter.limit()` route uses its OWN limit (not
+        also the default), and a `@limiter.exempt` route is never limited — all
+        through the real `enforce_default_rate_limit` dependency on one app.
+
+        This guards the per-route path the same way #286 guards the default: a
+        change that silently stopped `@limiter.limit()` from firing would look
+        exactly like the bug that shipped.
+        """
+        test_limiter = Limiter(key_func=lambda request: "one-bucket", default_limits=["3/minute"], enabled=True)
+        monkeypatch.setattr(rate_limit, "limiter", test_limiter)
+
+        app = FastAPI()
+        app.state.limiter = test_limiter
+        app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+
+        router = APIRouter()
+
+        @router.get("/plain")
+        async def plain() -> dict[str, bool]:  # no decorator -> inherits the default
+            return {"ok": True}
+
+        @router.get("/cheap")
+        @test_limiter.limit("2/minute")  # its own limit, tighter than the default
+        async def cheap(request: Request) -> dict[str, bool]:
+            return {"ok": True}
+
+        @router.get("/status")
+        @test_limiter.exempt  # deliberately unlimited
+        async def status() -> dict[str, bool]:
+            return {"ok": True}
+
+        app.include_router(router, prefix="/api", dependencies=[Depends(rate_limit.enforce_default_rate_limit)])
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            plain_codes = [(await ac.get("/api/plain")).status_code for _ in range(6)]
+            cheap_codes = [(await ac.get("/api/cheap")).status_code for _ in range(6)]
+            status_codes = [(await ac.get("/api/status")).status_code for _ in range(6)]
+
+        assert plain_codes.count(200) == 3, f"default did not bind on an undecorated route: {plain_codes}"
+        assert cheap_codes.count(200) == 2, f"per-route limit not honoured (or double-counted): {cheap_codes}"
+        assert status_codes == [200] * 6, f"exempt route was throttled: {status_codes}"
