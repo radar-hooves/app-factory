@@ -101,6 +101,15 @@ COPY --chown=1000:1000 backend/alembic.ini ./backend/alembic.ini
 COPY --chown=1000:1000 backend/entrypoint.sh ./backend/entrypoint.sh
 RUN chmod +x ./backend/entrypoint.sh
 
+# entrypoint.sh's final line is `gunicorn --config backend/gunicorn.conf.py`, so
+# this file is REQUIRED at runtime, not optional tuning. It is a plain file read
+# at startup, not part of the installed wheel — it lives at backend/, not under
+# src/{{ package_name }}/ — so the venv copied above does NOT carry it. Miss this
+# COPY and the build still succeeds, then gunicorn exits immediately with
+# "'backend/gunicorn.conf.py' doesn't exist" and the container crashloops behind
+# migrations that themselves ran fine — a quiet, misleading failure.
+COPY --chown=1000:1000 backend/gunicorn.conf.py ./backend/gunicorn.conf.py
+
 # The MCP actor registry (mcp/actors.py) — maps an Authentik-authenticated
 # identity to an actor id; {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH points at it.
 COPY --chown=1000:1000 config ./config
