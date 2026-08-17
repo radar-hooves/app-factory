@@ -27,9 +27,10 @@ key from it.
 The DEFAULT limit (`rate_limit_default`) binds through `enforce_default_rate_limit`,
 wired as a dependency on the API router in `main.py` — NOT through slowapi's
 `SlowAPIMiddleware`. slowapi's middleware finds the route handler by scanning the
-app's top-level routes for one exposing an `.endpoint`; since FastAPI 0.141 an
+app's top-level routes for one exposing an `.endpoint`; by FastAPI 0.139 an
 `include_router()` call is a single opaque `_IncludedRouter` route with no
-`.endpoint`, so the scan returns nothing, the middleware treats every included
+`.endpoint` (absent at 0.136.3; the exact minor version in between is
+untested), so the scan returns nothing, the middleware treats every included
 route as exempt, and the default silently never fires (master-project#286 — it
 returned 200 to 140 requests against a 100/minute limit). The dependency runs
 AFTER FastAPI has resolved the route, reads the real endpoint from
