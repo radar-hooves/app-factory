@@ -3,6 +3,7 @@ import svelte from 'eslint-plugin-svelte';
 import tailwind from 'eslint-plugin-tailwindcss';
 import globals from 'globals';
 import ts from 'typescript-eslint';
+import debt from './eslint.debt.js';
 
 // A template governs the STARTING state and can say nothing about what is
 // authored afterwards. A rule governs authoring, but only when a model chooses
@@ -209,5 +210,10 @@ export default ts.config(
 	},
 	{
 		ignores: ['build/', '.svelte-kit/', 'dist/']
-	}
+	},
+
+	// App-owned lint debt, banked in eslint.debt.js and spread LAST so each block
+	// there overrides a rule above it for its named pre-existing files. Ships
+	// empty (a no-op); see that file for the grammar and the no-growth discipline.
+	...debt
 );

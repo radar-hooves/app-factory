@@ -9,6 +9,10 @@ _skip_if_exists:
   - DESIGN.md
   - frontend/.design-craft-baseline.json
   - frontend/.ui-drift-baseline.json
+  # App-owned lint debt (frontend/eslint.config.js spreads it). Template-shipped
+  # empty, then grows as the app banks pre-existing findings — an update must
+  # never wipe the debt banked, exactly like the design/ui-drift baselines above.
+  - frontend/eslint.debt.js
 
 project_name:
   type: str
