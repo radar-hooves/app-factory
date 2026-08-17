@@ -41,7 +41,7 @@
     "frontend/.prettierignore": "9bc58f14bf2d6e80",
     "frontend/.prettierrc": "daec45a55e1f3ad7",
     "frontend/components.json": "3192c135e1a87e3e",
-    "frontend/eslint.config.js": "259fc1d42585433f",
+    "frontend/eslint.config.js": "af8e87ebdb0d0e6c",
     "frontend/playwright.config.ts": "f39a98b18da17fd1",
     "frontend/src/hooks.client.ts": "47c2a7e9e4423e6c",
     "frontend/stylelint.config.js": "de21be27446e5e91",

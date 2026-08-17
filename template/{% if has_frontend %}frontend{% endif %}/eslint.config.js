@@ -174,6 +174,15 @@ export default ts.config(
 		rules: {
 			'svelte/no-navigation-without-resolve': 'off',
 
+			// svelte/no-at-html-tags (on via svelte.configs.recommended) stays ON.
+			// The one sanctioned `{@html}` is DOMPurify-sanitised markdown; suppress
+			// it INLINE at each use site, never with a file- or config-level
+			// exemption that also blesses the next unsanitised `{@html}` added there:
+			//   <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is DOMPurify.sanitize() output -->
+			//   {@html html}
+			// The reason clause is required — a bare disable is indistinguishable
+			// from forgetting to sanitise (master-project#274).
+
 			// The package ships Table/TableHeader/TableBody/TableRow/TableHead/
 			// TableCell. A hand-written <table> is the drift that compiles,
 			// renders and type-checks, and is only wrong when a human opens it
