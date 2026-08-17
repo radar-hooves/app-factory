@@ -201,7 +201,11 @@ async def _drive_health_check(client: httpx.AsyncClient, token: str) -> dict[str
         },
     )
     assert init.status_code == 200, init.text
-    session = {"Mcp-Session-Id": init.headers["mcp-session-id"]}
+    # Stateless streamable-HTTP (main.py mounts /mcp with stateless_http=True) issues
+    # no mcp-session-id header; a stateful mount does. Carry it only when present so the
+    # handshake drives either mount — hard-indexing it KeyErrors under the shipped default.
+    session_id = init.headers.get("mcp-session-id")
+    session = {"Mcp-Session-Id": session_id} if session_id else {}
     await client.post(
         "/mcp/", headers={**headers, **session}, json={"jsonrpc": "2.0", "method": "notifications/initialized"}
     )
