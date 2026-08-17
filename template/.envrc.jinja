@@ -2,7 +2,20 @@
 
 # Cascade shared config/secrets from the master project's .envrc.local.
 source_up
-
+{% if postgres_host %}
+# The database. Committed on purpose: the fleet host publishes {{ project_name }}'s
+# Postgres on its TAILNET address, which is the same from the LAN, from a cafe, from
+# anywhere an enrolled node sits — so there is nothing machine-specific left to
+# configure and nothing to start. A fresh clone works as-is.
+#
+# This is production's database; there is no dev one (stacks/dev-environment.md).
+# Set POSTGRES_HOST in .envrc.local only to point somewhere else deliberately (it is
+# sourced after this, so it still wins). Extra service URLs an app needs in dev
+# (Redis, Qdrant, an embedding endpoint) belong beside these two — the app's own
+# remainder, not the template's concern.
+export POSTGRES_HOST="${POSTGRES_HOST:-{{ postgres_host }}}"
+export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
+{% endif %}
 [[ -f .envrc.local ]] && source .envrc.local
 
 # Keep direnv's cache out of the tree (core/direnv.md): an in-tree .direnv/
