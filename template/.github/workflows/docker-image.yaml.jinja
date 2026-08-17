@@ -1,0 +1,65 @@
+name: Build and Push Docker Image
+
+# Golden docker-image build/publish caller (rules-library/core/ci-workflow-standard.md).
+# Thin caller of the shared reusable: build the production image with Buildx,
+# Trivy-scan it, BOOT THE SERVER and poll /openapi.json for 200, then publish it
+# to ghcr.io with the CalVer tag AND :latest (Watchtower auto-deploys :latest).
+#
+# The smoke probe is the gate this workflow exists for (full-stack-app-template#4).
+# A green `docker build`, a clean Trivy scan and a caller-supplied import-only
+# smoke check all passed an image whose gunicorn died on startup because
+# backend/gunicorn.conf.py was never COPYd into the runtime stage — it reached
+# production and took a live service down on its first deploy. None of those
+# gates can see "does the image actually boot and serve"; this one can, and it
+# is the SAME probe every app gets, not a per-app hand-roll (which the umbrella
+# rule forbids and which is exactly what shipped the broken image).
+#
+# The probe is DB-free by construction: create_app() defers all DB access to a
+# lazy lifespan (get_engine only calls create_engine, which never connects), so
+# booting `{{ package_name }}.server:app --config backend/gunicorn.conf.py`
+# (bypassing the entrypoint's DB-dependent migrate/stamp) serves /openapi.json
+# with 200 on an image with no database in reach — the same /openapi.json probe
+# compose.yaml's healthcheck uses. One probe catches a missing runtime file, an
+# import error and a worker-boot failure alike.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    uses: poodle64/master-project/.github/workflows/docker-image-simple.yaml@main
+    with:
+      image-name: {{ project_name }}
+      # On a v* tag the version is the tag; a manual run falls back to this file
+      # (the app's pyproject lives under backend/, not the repo root default).
+      version-file: backend/pyproject.toml
+      smoke-command: |
+        set -eu
+        # Boot the production server the way the runtime image will, but bypass
+        # entrypoint.sh's DB-dependent migrate/stamp — the app boots and serves
+        # /openapi.json with no database in reach (see this workflow's header).
+        name="smoke-{{ project_name }}-$$"
+        docker run -d --name "$name" "$IMAGE" \
+          gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py
+        trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+        for _ in $(seq 1 30); do
+          if [ -z "$(docker ps -q -f name="^${name}$" -f status=running)" ]; then
+            echo "smoke: container exited before serving — the server failed to boot"
+            exit 1
+          fi
+          # stderr silenced: an early poll before the workers bind raises a
+          # benign ConnectionRefused; the real diagnosis on failure is the
+          # container's own log, dumped by the trap above.
+          if docker exec "$name" python3 -c 'import urllib.request, sys; sys.exit(0 if urllib.request.urlopen("http://localhost:{{ backend_port }}/openapi.json", timeout=5).getcode() == 200 else 1)' 2>/dev/null; then
+            echo "smoke: {{ project_name }} booted and served /openapi.json 200"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "smoke: {{ project_name }} never served /openapi.json 200 within the timeout — image will NOT be published"
+        exit 1
