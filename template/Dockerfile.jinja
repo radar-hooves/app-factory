@@ -32,11 +32,27 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=0
 WORKDIR /app/backend
 
+# The builder can read the household private index (pypi.example.com) when an app
+# depends on a sibling published there (ragify, core-memory, redactyl-core, …).
+# The read credential arrives as a BuildKit secret mounted at /root/.netrc, and
+# NETRC points uv at it explicitly — the same env var the CI runner sets for
+# host-run uv, fed to the build by the golden docker-image caller's
+# build-secret-files input.
+#
+# An app with only PUBLIC dependencies builds unchanged, with nothing to pass or
+# configure: a BuildKit secret mount is OPTIONAL by default, so an absent `netrc`
+# secret simply leaves /root/.netrc missing, and uv treats a NETRC that names a
+# nonexistent file as "no netrc" rather than an error — verified by building this
+# image both with no secret passed and with a dummy netrc mounted.
+# The secret is mounted only for this RUN, so the credential never enters image
+# history the way a build ARG would; the default build network reaches the index.
+#
 # --no-editable copies the source into the venv (no dangling .pth pointers) so
 # the runtime stage's copied venv is fully self-contained.
 COPY backend/ ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-default-groups --no-dev --no-editable
+    --mount=type=secret,id=netrc,target=/root/.netrc \
+    NETRC=/root/.netrc uv sync --frozen --no-default-groups --no-dev --no-editable
 
 # Stage {% if has_frontend %}3{% else %}2{% endif %}: Runtime
 FROM python:3.14-slim-bookworm
