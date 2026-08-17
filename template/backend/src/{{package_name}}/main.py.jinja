@@ -106,7 +106,22 @@ def create_app() -> FastAPI:
     # ASGI callable carrying an .aclose attribute; the module is a byte-identical
     # copy of the household's canonical gate and is not edited per app.
     mcp = create_mcp_server()
-    raw_mcp_app = mcp.http_app(path="/")
+    # stateless_http: the streamable-HTTP session manager keeps each session's
+    # live transport (an anyio task group plus in-memory object streams) in a
+    # per-PROCESS dict, keyed by Mcp-Session-Id. Gunicorn runs a worker POOL
+    # (WEB_CONCURRENCY, default 5) with no shared store and no sticky routing, so
+    # a request carrying a session id only succeeds on the worker that created it
+    # — roughly 1-in-workers — and every other worker returns JSON-RPC -32600
+    # "Session not found". A shared backing store cannot fix this: the transport
+    # holds a running task and memory streams, not serialisable state, so it can
+    # never leave the process that owns it. Single-worker would fix /mcp but throw
+    # away the pool the human /api + SPA surface needs; proxy stickiness is
+    # cross-repo and still drops sessions on worker recycle (max_requests).
+    # Stateless mode removes the coupling entirely — a fresh transport per request,
+    # no session to lose — and is correct here because the embedded /mcp is a
+    # request/response tool surface: no cross-request session state, no
+    # server-initiated streaming. (In-request progress still works.)
+    raw_mcp_app = mcp.http_app(path="/", stateless_http=True)
     gated_mcp_app: Any = require_bearer_auth(
         raw_mcp_app,
         userinfo_url=settings.mcp.oidc_userinfo_url,
