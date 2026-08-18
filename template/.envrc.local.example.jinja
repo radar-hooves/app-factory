@@ -1,0 +1,21 @@
+# Machine-local settings for {{ project_name }}. Copy to `.envrc.local`, fill in,
+# then `direnv allow`. Gitignored — it is the ONE place a machine-specific value
+# belongs, and direnv exports it, so the backend and the Vite dev server both see it.
+#
+#   cp .envrc.local.example .envrc.local
+#
+# Without it the app stops at the first missing value rather than inventing one.
+# That is deliberate: the dev server talks to the REAL database, so a defaulted
+# identity writes real rows under a user nobody chose.
+
+# The database password. Each app has its own Postgres instance on its own port,
+# so this is per-app, not shared. It lives in the household vault; vend it rather
+# than copying it around by hand.
+export POSTGRES_PASSWORD=
+
+# Your own identity, as the forward-auth proxy would supply it in production.
+# Development runs the same get_current_user path as production, and the backend
+# upserts a user by this key on every request — so this must be YOU, not a made-up
+# value, or you are developing against someone who does not exist. The E2E suite
+# overrides it with an identity of its own; nothing else should.
+export {{ project_name | upper | replace('-', '_') }}_DEV_UID=
