@@ -24,12 +24,6 @@ export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
 # shellcheck disable=SC2034  # read by direnv's stdlib as a shell variable, not exported
 direnv_layout_dir="${XDG_CACHE_HOME:-$HOME/.cache}/direnv/layouts/$(echo -n "$PWD" | shasum | cut -d' ' -f1)"
 
-# Prefer Nix when a flake is present (core/direnv.md). Falls through silently
-# off-Nix so the uv path below still works.
-if has nix && [[ -f flake.nix ]]; then
-  use flake
-fi
-
 if ! has uv; then
   echo "direnv: 'uv' not found on PATH; install it (nix-darwin) before working here" >&2
   return 0
