@@ -41,7 +41,7 @@
     "backend/gunicorn.conf.py": "2af94d0fb1640c9f",
     "backend/src/{package}/api/system/router.py": "91994ff367b2e36d",
     "backend/src/{package}/api/system/schemas.py": "c8e1ea3bec21c82a",
-    "backend/src/{package}/config/paths.py": "13e0af3b244999ab",
+    "backend/src/{package}/config/paths.py": "a2bc0a1dcd0c0b55",
     "backend/src/{package}/config/sections/database.py": "36d9115db59b4d6e",
     "backend/src/{package}/config/sections/mcp.py": "4ca78362e44fb267",
     "backend/src/{package}/db/base.py": "e22cbb4d531bc913",
