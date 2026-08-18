@@ -1,15 +1,26 @@
 name: Frontend CI
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
+#
+# A committed OpenAPI contract is a frontend input as much as any file under
+# frontend/. An app that checks its spec in and gates the generated TS types
+# against it does that gating HERE, in the unit suite — so a spec-only change,
+# where the backend contract is regenerated and docs/development/openapi.json is
+# touched but no file under frontend/ is, must still trigger this workflow or
+# stale types slip past on that PR. The path is inert for an app that commits no
+# such file: it simply never matches, which is why this is factory content
+# rather than a per-app exception (poodle64/portcullis was carrying one).
 on:
   push:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'docs/development/openapi.json'
       - '.github/workflows/frontend-ci.yaml'
   pull_request:
     paths:
       - 'frontend/**'
+      - 'docs/development/openapi.json'
       - '.github/workflows/frontend-ci.yaml'
   workflow_dispatch:
 
