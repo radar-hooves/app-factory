@@ -47,7 +47,11 @@ def explicit_server_url(explicit: dict[str, str], dbname: str) -> str:
     """
     username = quote_plus(explicit["user"])
     password = quote_plus(explicit["password"])
-    return f"postgresql://{username}:{password}@{explicit['host']}:{explicit['port']}/{dbname}"
+    # Mirrors DatabaseSettings.database_url, so the scheme moves with it:
+    # +psycopg names psycopg3, which this template ships. See that property for
+    # the rationale — kept here too only so a future editor does not "helpfully"
+    # revert this one while leaving database.py correct.
+    return f"postgresql+psycopg://{username}:{password}@{explicit['host']}:{explicit['port']}/{dbname}"
 
 
 def refuse_if_explicit_server_is_production(explicit: dict[str, str]) -> None:

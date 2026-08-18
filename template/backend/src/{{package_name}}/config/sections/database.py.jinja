@@ -51,4 +51,7 @@ class DatabaseSettings(BaseSettings):
         """
         user = quote_plus(self.postgres_user)
         password = quote_plus(self.postgres_password)
-        return f"postgresql://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        # +psycopg names psycopg3 explicitly: a bare postgresql:// resolves to
+        # psycopg2, and this template ships psycopg[binary] (psycopg3), not
+        # psycopg2-binary. Do not "simplify" the scheme back to postgresql://.
+        return f"postgresql+psycopg://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

@@ -83,7 +83,7 @@ class TestExplicitServerUrl:
     def test_builds_expected_url_and_quotes_special_characters(self):
         explicit = {"host": "db.example", "port": "5433", "user": "te st", "password": "p@ss/word"}
         url = guard.explicit_server_url(explicit, "postgres")
-        assert url == "postgresql://te+st:p%40ss%2Fword@db.example:5433/postgres"
+        assert url == "postgresql+psycopg://te+st:p%40ss%2Fword@db.example:5433/postgres"
 
 
 @pytest.mark.unit
