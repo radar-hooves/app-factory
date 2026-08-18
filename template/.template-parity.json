@@ -13,7 +13,7 @@
     ".vscode/extensions.json": "3a0005a77860d54d",
     "Dockerfile": "339e84def6ed45c2",
     "backend/alembic.ini": "fc9b4a245e2122fc",
-    "backend/alembic/env.py": "96013c18e1511f9e",
+    "backend/alembic/env.py": "0a58667e166cc1ab",
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
     "backend/entrypoint.sh": "6bbe92d24a02f57c",
     "backend/gunicorn.conf.py": "2af94d0fb1640c9f",
