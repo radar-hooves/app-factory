@@ -9,7 +9,10 @@ name: Frontend CI
 # touched but no file under frontend/ is, must still trigger this workflow or
 # stale types slip past on that PR. The path is inert for an app that commits no
 # such file: it simply never matches, which is why this is factory content
-# rather than a per-app exception (poodle64/portcullis was carrying one).
+# rather than the per-app exception an app was carrying for it. No app NAME in
+# this comment, deliberately: the parity gate rewrites an app's own name wherever
+# it appears, so naming one here hashes differently in that app than in every
+# other and the file reads as drift on an otherwise identical copy.
 on:
   push:
     branches: [main]

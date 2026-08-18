@@ -5,7 +5,7 @@
     ".github/workflows/canonical-shape.yaml": "2e0ec4404fd389ba",
     ".github/workflows/cleanup-container-images.yaml": "2ed676ac47be1996",
     ".github/workflows/docker-image.yaml": "7e5a28c3d344277a",
-    ".github/workflows/frontend-ci.yaml": "8a20cadca509639b",
+    ".github/workflows/frontend-ci.yaml": "571b2fdc5910b0f1",
     ".github/workflows/python-ci.yaml": "8b8f06847fcdddac",
     ".github/workflows/security.yaml": "9e08972038720ffa",
     ".gitleaks.toml": "1b7c88c74306f1c6",
