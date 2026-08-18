@@ -47,7 +47,7 @@
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",
     "frontend/tsconfig.json": "5ba6072319c60e79",
-    "frontend/vite.config.ts": "756eac9fd77e260b",
+    "frontend/vite.config.ts": "51c9b11dcc693461",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
     "renovate.json": "cbac5a95b942ac92"
   }
