@@ -164,14 +164,14 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
 
-    # The one rate limiter (master-project#277). The configured default limit is
+    # The one rate limiter. The configured default limit is
     # applied by enforce_default_rate_limit, wired as a dependency on the API
     # router below; @limiter.limit() opts a route out with its own limit. This is
     # NOT slowapi's SlowAPIMiddleware: that scans the app's top-level routes for a
     # handler to limit, and by FastAPI 0.139 an include_router() is one opaque
     # _IncludedRouter with no handler to find (absent at 0.136.3; the exact
-    # minor version in between is untested), so the middleware limited nothing
-    # (master-project#286). app.state.limiter and the RateLimitExceeded handler
+    # minor version in between is untested), so the middleware limits nothing.
+    # app.state.limiter and the RateLimitExceeded handler
     # are still registered here — the handler turns the dependency's 429 into a
     # response wrapped by RequestID and the security headers.
     app.state.limiter = limiter

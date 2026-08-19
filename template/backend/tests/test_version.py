@@ -6,9 +6,8 @@ about what version that artefact is. Nothing enforces that by construction: the
 release step edits two files, and a missed one is invisible until someone reads the
 shipped image's frontend manifest.
 
-Measured 2026-08-19 across the nine stamped apps: seven had drifted, five of them
-still carrying the scaffold's 0.0.1 while the backend was on CalVer. This test is
-what stops the tenth.
+Drift here is silent and it is the norm, not the exception — which is why this
+asserts rather than trusting the release step.
 """
 
 import json

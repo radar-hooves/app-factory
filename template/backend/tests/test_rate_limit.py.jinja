@@ -1,9 +1,8 @@
 """Tests for the app's one rate limiter and its trusted-proxy boundary.
 
-Covers `master-project#277`'s stated Test Requirements: a 429 carrying
-Retry-After, the counter keyed on the forwarded client address rather than the
-proxy's, and in-memory storage engaging rather than the limit silently
-disabling.
+Covers a 429 carrying Retry-After, the counter keyed on the forwarded client
+address rather than the proxy's, and in-memory storage engaging rather than the
+limit silently disabling.
 
 The trust tests matter more than they look. A limiter keyed on the wrong field
 fails in one of two ways, and both are silent: key on the proxy and every
@@ -11,11 +10,10 @@ caller shares one bucket (a self-inflicted denial of service), or believe an
 untrusted X-Forwarded-For and any caller can move itself to a fresh bucket at
 will, which is the limiter not existing.
 
-`TestDefaultLimitBinds` covers `master-project#286`: the default limit must
-actually 429 a route that carries no `@limiter.limit()`, DRIVEN through a real
-app rather than asserted against the wiring. That distinction is the whole
-point — the bug shipped precisely because a unit test proved the wiring while
-the limit fired against nothing in production.
+`TestDefaultLimitBinds` asserts that the default limit actually 429s a route
+carrying no `@limiter.limit()`, DRIVEN through a real app rather than asserted
+against the wiring. Keep that distinction: a unit test can prove the wiring
+while the limit fires against nothing in production.
 """
 
 from __future__ import annotations
@@ -141,7 +139,7 @@ class TestRateLimitResponse:
 
 
 class TestDefaultLimitBinds:
-    """master-project#286: the default limit must bind on a route with no decorator.
+    """The default limit must bind on a route carrying no decorator.
 
     Driven, not asserted against the wiring. `enforce_default_rate_limit` reads
     the module-global `limiter`, so each test swaps in a fresh low-limit one via

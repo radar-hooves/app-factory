@@ -181,7 +181,7 @@ export default ts.config(
 			//   <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is DOMPurify.sanitize() output -->
 			//   {@html html}
 			// The reason clause is required — a bare disable is indistinguishable
-			// from forgetting to sanitise (master-project#274).
+			// from forgetting to sanitise.
 
 			// The package ships Table/TableHeader/TableBody/TableRow/TableHead/
 			// TableCell. A hand-written <table> is the drift that compiles,

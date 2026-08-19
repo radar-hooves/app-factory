@@ -23,7 +23,7 @@ os.environ.setdefault("DEBUG", "true")
 # one synthetic client — so an enabled default limit would eventually throttle
 # the suite against itself as the number of endpoint tests grows. Off by default
 # here; test_rate_limit.py turns it on explicitly, with its own low limit, to
-# prove the default actually binds (master-project#286).
+# prove the default actually binds.
 os.environ.setdefault("{{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED", "false")
 
 # ── Required env vars — set BEFORE any {{ package_name }} import ────────────

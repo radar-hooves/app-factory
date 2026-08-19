@@ -27,6 +27,6 @@ jobs:
       # overrides onto sibling checkouts that exist only beside a developer's
       # clone; taking the defaults in CI resolves those to paths that are not
       # there. Dropping them resolves the same packages from the household index
-      # instead, which is the one sanctioned mechanism (master-project#275).
+      # instead, which is the one sanctioned mechanism.
       # `dev` is then asked for by name, or there is no pytest to run.
       sync-args: '--no-default-groups --group dev'

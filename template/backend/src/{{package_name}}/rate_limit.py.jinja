@@ -7,10 +7,9 @@ they are in-memory. That is `security-standards.md`'s "Redis-backed counters
 with in-memory fallback" satisfied by the library, which is why an app without
 Redis does not need one and an app with Redis needs no extra code.
 
-Do NOT hand-roll a second limiter beside this one. Four apps in this estate
-each wrote their own — one of them 586 lines — and six had none at all
-(master-project#277). Per-route limits and a per-app `key_func` are the
-supported ways to differ; a parallel implementation is not.
+Do NOT hand-roll a second limiter beside this one. Per-route limits and a
+per-app `key_func` are the supported ways to differ; a parallel implementation
+is not.
 
 Usage:
 
@@ -31,8 +30,7 @@ app's top-level routes for one exposing an `.endpoint`; by FastAPI 0.139 an
 `include_router()` call is a single opaque `_IncludedRouter` route with no
 `.endpoint` (absent at 0.136.3; the exact minor version in between is
 untested), so the scan returns nothing, the middleware treats every included
-route as exempt, and the default silently never fires (master-project#286 — it
-returned 200 to 140 requests against a 100/minute limit). The dependency runs
+route as exempt, and the default silently never fires. The dependency runs
 AFTER FastAPI has resolved the route, reads the real endpoint from
 `request.scope["endpoint"]`, and applies the default unless that endpoint carries
 its own `@limiter.limit()` or `@limiter.exempt`. Per-route decorators are
@@ -93,7 +91,7 @@ def build_limiter() -> Limiter:
         # only reason the gap is unreached. The first app that wants shared
         # counters across workers has to solve degrade-to-in-memory-on-error
         # HERE, in the factory, for every app at once; a per-app fallback flag is
-        # exactly the divergence master-project#277 existed to end.
+        # exactly the divergence one shared factory exists to end.
         storage_uri=storage_uri or None,
     )
 
@@ -106,9 +104,9 @@ async def enforce_default_rate_limit(request: Request) -> None:
 
     Wired as a dependency on the API router (`main.py`) rather than left to
     slowapi's `SlowAPIMiddleware`, which cannot see routes mounted through
-    FastAPI's `include_router()` and so applied the default to nothing
-    (master-project#286). This runs after FastAPI has resolved the route, so
-    the real endpoint is on the scope and the default genuinely binds.
+    FastAPI's `include_router()` and so applies the default to nothing. This runs
+    after FastAPI has resolved the route, so the real endpoint is on the scope
+    and the default genuinely binds.
 
     Defers to any per-route opt-out so the route is limited once, not twice:
     a `@limiter.limit()` decorator (static -> ``_route_limits``, dynamic ->
