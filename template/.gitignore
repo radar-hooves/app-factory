@@ -113,6 +113,14 @@ logs/
 *.log
 
 # ============================================================================
+# Runtime state
+# ============================================================================
+# The app's own writable directory (config/paths.py data_dir()). Ignored in
+# every app, which is the same statement as: nothing a fresh clone needs lives
+# here. Anything a clone DOES need belongs in the repo.
+data/
+
+# ============================================================================
 # Project-Specific
 # ============================================================================
 # Raw dictation carries names that can't be scrubbed (core/pii-in-documents.md).

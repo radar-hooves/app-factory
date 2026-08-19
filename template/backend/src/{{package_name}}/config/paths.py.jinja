@@ -14,6 +14,7 @@ which is how a container supplies configuration anyway. A deployment that keeps
 its actor registry elsewhere sets the path explicitly.
 """
 
+import os
 from pathlib import Path
 
 
@@ -45,3 +46,39 @@ def frontend_build_dir() -> Path:
         if candidate.is_dir():
             return candidate
     return project_root() / "frontend" / "build"
+
+
+def data_dir() -> Path:
+    """Return the app's runtime-state directory, creating it if absent.
+
+    THE one place an app writes state it did not receive from its database: a
+    cache it can rebuild, an import staging area, an export, a SQLite file a
+    subsystem insists on. One name (`data/`), one override (`DATA_DIR`), in every
+    app — because the factory having no opinion here is what produced six
+    different answers. Measured 2026-08-19: six apps had each invented their own
+    directory name, settings field and environment variable for exactly this, and
+    three of them independently reached for SQLite underneath it.
+
+    Resolution mirrors `frontend_build_dir()` — deployment first, then the source
+    tree — with one addition that removes the ambiguity rather than resolving it:
+    the container sets `DATA_DIR` explicitly (compose mounts `./data` at
+    `/app/data`), so the walk below is only ever exercised by a dev checkout.
+    Without that, an unmounted volume would fall through to the installed package
+    in site-packages and the app would happily write state into its own wheel.
+
+    Subdirectories under here are the app's own domain and the factory has no
+    view on them; the ROOT is the shared decision. It is gitignored in every app,
+    which means it holds nothing a fresh clone needs — anything a clone DOES need
+    belongs in the repo, not here.
+    """
+    if override := os.environ.get("DATA_DIR", "").strip():
+        resolved = Path(override).expanduser()
+    else:
+        for candidate in (Path.cwd() / "data", project_root() / "data"):
+            if candidate.is_dir():
+                resolved = candidate
+                break
+        else:
+            resolved = project_root() / "data"
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved

@@ -25,8 +25,16 @@ services:
       # keep a fresh clone working unconfigured while leaving an override open.
       POSTGRES_HOST: ${POSTGRES_HOST:-{{ postgres_host }}}
       POSTGRES_PORT: ${POSTGRES_PORT:-{{ postgres_port }}}
+      # Named explicitly rather than left to the resolver's walk: the installed
+      # package lives in site-packages here, so an unmounted volume would fall
+      # through to it and the app would write its state inside its own wheel.
+      DATA_DIR: /app/data
     env_file:
       - ./backend/.env
+    volumes:
+      # The app's runtime state, on the host so a container rebuild does not take
+      # it with it. Same directory the dev server uses (config/paths.py).
+      - ./data:/app/data
     stop_grace_period: 30s
     healthcheck:
       test:
