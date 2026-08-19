@@ -45,7 +45,7 @@
     "backend/src/{package}/api/system/router.py": "91994ff367b2e36d",
     "backend/src/{package}/api/system/schemas.py": "c8e1ea3bec21c82a",
     "backend/src/{package}/config/paths.py": "c96eabb1489a7a97",
-    "backend/src/{package}/config/sections/database.py": "39f19c8d82d21bc3",
+    "backend/src/{package}/config/sections/database.py": "337394e51cdd6e2e",
     "backend/src/{package}/config/sections/mcp.py": "e5c0a23b962187f5",
     "backend/src/{package}/db/base.py": "e22cbb4d531bc913",
     "backend/src/{package}/db/environment.py": "10ff3ec24835a11d",
