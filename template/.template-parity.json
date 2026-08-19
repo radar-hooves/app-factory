@@ -69,7 +69,6 @@
     "backend/src/{package}/server.py": "85a9d5b4d9600758",
     "backend/src/{package}/services/__init__.py": "78789af00aa29960",
     "backend/src/{package}/services/fanout.py": "be4df5c3a76a531d",
-    "backend/system-packages.txt": "1044d193616d43c0",
     "backend/tests/__init__.py": "29df19411b5f9516",
     "backend/tests/conftest.py": "159320bde5e28bcf",
     "backend/tests/support/__init__.py": "b9d099fe8af01df9",
