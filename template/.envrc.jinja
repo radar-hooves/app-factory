@@ -7,10 +7,7 @@
 # environment, which is why a shell-only home for these values leaves every
 # launch configuration starting with no database password at all.
 source_up
-{% if postgres_host %}
-export POSTGRES_HOST="${POSTGRES_HOST:-{{ postgres_host }}}"
-export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
-{% endif %}
+
 # Present, always: compose declares backend/.env as a required env_file, so a
 # fresh clone that has not been filled in yet must still have the file rather
 # than fail before it can report what is missing.
@@ -33,6 +30,23 @@ unset _new_keys
 
 watch_file backend/.env
 dotenv_if_exists backend/.env
+
+# A blank value in a dotenv file is NOT the same as unset, and the difference is
+# a crash rather than a default: uvicorn reads os.environ["WEB_CONCURRENCY"]
+# directly and dies on int(""), so the example's own documented-but-blank keys
+# take the process down the moment they are exported. Blank means "not set" —
+# which is also what the example means by leaving one blank — so make it so.
+while IFS= read -r _key; do
+  [[ -z "${!_key:-}" ]] && unset "$_key"
+done < <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env | tr -d '=')
+unset _key
+{% if postgres_host %}
+# After the dotenv load, not before it: a blank POSTGRES_HOST in an env file
+# would otherwise override this and drop the app onto the code default, which is
+# localhost, which is nowhere. `:-` still lets a real value win.
+export POSTGRES_HOST="${POSTGRES_HOST:-{{ postgres_host }}}"
+export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
+{% endif %}
 
 # shellcheck disable=SC2034  # read by direnv's stdlib as a shell variable, not exported
 direnv_layout_dir="${XDG_CACHE_HOME:-$HOME/.cache}/direnv/layouts/$(echo -n "$PWD" | shasum | cut -d' ' -f1)"
