@@ -12,6 +12,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # The private-index read credential, as the same optional `netrc` BuildKit
+      # secret the Dockerfile mounts and the docker-image caller passes in CI —
+      # one mechanism, declared by every app whether or not it has a private
+      # dependency, because a per-app knob is the divergence three apps recorded
+      # separately for one credential.
+      secrets:
+        - netrc
     container_name: {{ project_name }}
     restart: always
     ports:
@@ -56,3 +63,13 @@ services:
         max-size: '10m'
         max-file: '3'
         tag: '{{ '{{' }}.Name{{ '}}' }}'
+
+secrets:
+  # Sourced from NETRC, which is a PATH the workstation already exports at a
+  # boot-lifetime file (yggdrasil `devpi-netrc.nix`) — so the credential never
+  # becomes a shell VALUE here. `/dev/null` is the fallback rather than a home
+  # path because a MISSING file hard-fails the build outright, verified
+  # 2026-08-20, while an empty one leaves /root/.netrc empty and `uv` treats it
+  # as no credential — which is the property the Dockerfile is written around.
+  netrc:
+    file: ${NETRC:-/dev/null}
