@@ -42,13 +42,33 @@ jobs:
       # On a v* tag the version is the tag; a manual run falls back to this file
       # (the app's pyproject lives under backend/, not the repo root default).
       version-file: backend/pyproject.toml
+      # The household private-index read credential, mounted into the build as a
+      # BuildKit secret (never a build arg) so it stays out of image history. The
+      # Dockerfile's `uv sync` reads it at /root/.netrc to fetch a sibling
+      # published to the private index. Passed by EVERY app, not only the ones
+      # that need it: the secret mount is optional on the Dockerfile side, so an
+      # app with only public dependencies mounts a file `uv` never consults, and
+      # the alternative — a per-app knob — is a divergence three apps had to
+      # record separately for one credential the shared runner always has.
+      build-secret-files: |
+        netrc=/run/github-runner/devpi-read.netrc
+      # No GHA cache export. Every app builds on the household's own persistent
+      # self-hosted runner, whose Docker daemon already keeps the layer cache
+      # between runs, so the export is a SECOND cache path that buys nothing here
+      # and has cost real builds: one spent 61 minutes exporting after the layers
+      # were done, then died on a 403 when its one-hour cache token expired.
+      cache-to: ''
       smoke-command: |
         set -eu
         # Boot the production server the way the runtime image will, but bypass
         # entrypoint.sh's DB-dependent migrate/stamp — the app boots and serves
         # /openapi.json with no database in reach (see this workflow's header).
         name="smoke-{{ project_name }}-$$"
-        docker run -d --name "$name" "$IMAGE" \
+        # POSTGRES_PASSWORD: the probe reaches no database and never uses this
+        # value, but an app whose settings validate eagerly cannot be CONSTRUCTED
+        # without one — it fails as a boot failure and proves nothing. One token
+        # here costs nothing and covers every app that tightens that validation.
+        docker run -d --name "$name" -e POSTGRES_PASSWORD=smoke "$IMAGE" \
           gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py
         trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
         for _ in $(seq 1 30); do
