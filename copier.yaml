@@ -18,19 +18,17 @@ project_name:
   type: str
   help: 'Project name (kebab-case, e.g. my-app)'
 
+# Derived, never asked: nine apps produced nine distinct values and not one
+# overrode the default. `when: false` keeps it available to every template that
+# references it while removing the prompt.
 package_name:
   type: str
-  help: 'Python package name (snake_case). Defaults to project_name with hyphens replaced by underscores.'
+  when: false
   default: "{{ project_name | replace('-', '_') }}"
 
 description:
   type: str
   help: 'One-sentence description of the project'
-
-has_frontend:
-  type: bool
-  help: 'Include a SvelteKit frontend? (default: yes)'
-  default: true
 
 backend_port:
   type: int
@@ -42,9 +40,8 @@ frontend_port:
 
 postgres_host:
   type: str
-  default: ''
   help: >-
-    Tailnet address of the fleet host running this app's Postgres. There is no development database (stacks/dev-environment.md) — dev points at the real one, and the tailnet makes one address correct on any network. Left empty the compose file carries no default and a fresh clone must set POSTGRES_HOST.
+    Tailnet address of the fleet host running this app's Postgres. There is no development database (stacks/dev-environment.md) — dev points at the real one, and the tailnet makes one address correct on any network. Required: left optional, three of nine apps answered blank and their dev path fell through to a code default pointing at localhost, which is nowhere.
 
 
 postgres_port:

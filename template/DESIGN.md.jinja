@@ -9,7 +9,7 @@ status: 'draft — stamped defaults; update as {{ project_name }}''s visual iden
 # {{ project_name }} Design
 
 ## Current state
-{% if has_frontend %}
+
 Freshly stamped from the household's canonical full-stack template. The
 frontend consumes `@poodle64/design-tokens` and `@poodle64/ui` as shipped —
 no local overrides beyond the primary accent below.
@@ -54,9 +54,3 @@ To change the accent colour or shell variant:
 2. Pass `variant="header"` to `AppShell` in `+layout.svelte` if primary
    navigation should live in the top bar instead of a rail.
 3. Update this file's `status` frontmatter field once the identity is settled.
-{% else %}
-Backend-only ({{ project_name }} was stamped with no frontend). This file has
-nothing to record yet — if a frontend is added later, restamp or copy
-`@poodle64/design-tokens`'s `templates/DESIGN.md.template` and follow the
-adoption path there.
-{% endif -%}

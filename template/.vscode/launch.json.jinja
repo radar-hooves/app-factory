@@ -13,7 +13,7 @@
       "justMyCode": false,
       "preLaunchTask": "Kill Port {{ backend_port }}",
       "presentation": { "group": "1_backend", "order": 1 }
-    }{% if has_frontend %},
+    },
     {
       "name": "Frontend: Dev",
       "type": "node",
@@ -24,8 +24,8 @@
       "serverReadyAction": { "pattern": "Local:.*(https?://.*)", "action": "openExternally" },
       "preLaunchTask": "Kill Port {{ frontend_port }}",
       "presentation": { "group": "2_frontend", "order": 1 }
-    }{% endif %}
-  ]{% if has_frontend %},
+    }
+  ],
   "compounds": [
     {
       "name": "Full Stack",
@@ -33,5 +33,5 @@
       "stopAll": true,
       "presentation": { "group": "0_fullstack", "order": 1 }
     }
-  ]{% endif %}
+  ]
 }

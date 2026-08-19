@@ -105,7 +105,6 @@ repos:
         language: system
         pass_filenames: false
         files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock|mypy-baseline\.txt)$
-{%- if has_frontend %}
 
   # Prettier is the frontend's only formatter, as ruff-format is the backend's.
   # Needs `pnpm install` in frontend/, like the two design gates below.
@@ -161,4 +160,3 @@ repos:
         language: system
         files: '^frontend/src/.*\.svelte$'
         pass_filenames: false
-{%- endif %}

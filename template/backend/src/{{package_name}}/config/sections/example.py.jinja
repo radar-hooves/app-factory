@@ -11,14 +11,12 @@ Example .env:
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import env_file
 
 
 class ExampleSettings(BaseSettings):
     """Settings for the example domain."""
 
     model_config = SettingsConfigDict(
-        env_file=env_file(),
         env_prefix="EXAMPLE_",
         case_sensitive=False,
         extra="ignore",

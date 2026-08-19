@@ -28,16 +28,11 @@ def project_root() -> Path:
     return backend_dir().parent
 
 
-def env_file() -> str:
-    """Return the absolute path to the shared `.env` file (`backend/.env`)."""
-    return str(backend_dir() / ".env")
-
-
 def frontend_build_dir() -> Path:
     """Return the built SPA directory, in the source tree or the container.
 
     `project_root()` above is documented as landing nowhere in a container, which
-    is harmless for a missing `.env` and silently fatal here: the image ships the
+    is harmless for the settings lookup it was written for and silently fatal here: the image ships the
     built SPA at `/app/frontend/build` and the walk looks for it beside the
     installed package in site-packages, so the mount is skipped and every request
     for the app itself answers 404 while the container reports healthy.

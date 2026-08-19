@@ -2,8 +2,8 @@ name: Security
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md):
 # secret scan (gitleaks), Python dependency audit (pip-audit over the hashed
-# lockfile), Trivy filesystem scan, and a CycloneDX SBOM artefact{% if has_frontend %} —
-# plus a Node/pnpm audit over frontend/{% endif %}.
+# lockfile), Trivy filesystem scan, and a CycloneDX SBOM artefact —
+# plus a Node/pnpm audit over frontend/.
 on:
   push:
     branches: [main]
@@ -18,6 +18,4 @@ jobs:
     uses: poodle64/master-project/.github/workflows/security-checks.yaml@main
     with:
       working-directory: backend
-{%- if has_frontend %}
       node-dir: frontend
-{%- endif %}

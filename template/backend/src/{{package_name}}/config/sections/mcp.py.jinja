@@ -24,7 +24,7 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import env_file, project_root
+from {{ package_name }}.config.paths import project_root
 
 
 def _default_actors_path() -> Path:
@@ -36,7 +36,6 @@ class MCPSettings(BaseSettings):
     """Inbound-auth configuration for the embedded MCP server's HTTP surface."""
 
     model_config = SettingsConfigDict(
-        env_file=env_file(),
         env_prefix="{{ project_name | upper | replace('-', '_') }}_",
         case_sensitive=False,
         extra="ignore",

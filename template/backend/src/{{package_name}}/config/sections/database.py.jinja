@@ -5,7 +5,6 @@ from urllib.parse import quote_plus
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import env_file
 
 
 class DatabaseSettings(BaseSettings):
@@ -14,12 +13,11 @@ class DatabaseSettings(BaseSettings):
     Standard env var names: POSTGRES_USER, POSTGRES_PASSWORD, etc.
     case_sensitive=False (default) maps them from the environment automatically.
 
-    extra="ignore" because this section shares one .env with every other
-    section; keys it does not own belong to them, not to nobody.
+    extra="ignore" because every section reads the same process environment;
+    keys it does not own belong to a sibling section, not to nobody.
     """
 
     model_config = SettingsConfigDict(
-        env_file=env_file(),
         case_sensitive=False,
         extra="ignore",
     )

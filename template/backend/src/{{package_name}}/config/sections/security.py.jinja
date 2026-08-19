@@ -19,14 +19,12 @@ import ipaddress
 from pydantic import computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import env_file
 
 
 class SecuritySettings(BaseSettings):
     """Trusted-proxy and rate-limit configuration."""
 
     model_config = SettingsConfigDict(
-        env_file=env_file(),
         env_prefix="{{ project_name | upper | replace('-', '_') }}_",
         case_sensitive=False,
         extra="ignore",

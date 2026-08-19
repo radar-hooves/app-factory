@@ -7,13 +7,13 @@
       "command": "lsof -ti :{{ backend_port }} | xargs kill 2>/dev/null; echo 'Port {{ backend_port }} cleared'",
       "presentation": { "reveal": "silent", "panel": "shared", "close": true },
       "problemMatcher": []
-    }{% if has_frontend %},
+    },
     {
       "label": "Kill Port {{ frontend_port }}",
       "type": "shell",
       "command": "lsof -ti :{{ frontend_port }} | xargs kill 2>/dev/null; echo 'Port {{ frontend_port }} cleared'",
       "presentation": { "reveal": "silent", "panel": "shared", "close": true },
       "problemMatcher": []
-    }{% endif %}
+    }
   ]
 }

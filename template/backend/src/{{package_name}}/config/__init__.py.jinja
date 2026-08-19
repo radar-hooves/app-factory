@@ -15,7 +15,6 @@ from functools import lru_cache
 from pydantic import Field, ValidationError, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import env_file
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
@@ -46,7 +45,6 @@ class Settings(BaseSettings):
     # SECTION owns (POSTGRES_*, EXAMPLE_*, the MCP auth block) — which is
     # exactly what .env.example ships, so `cp .env.example .env` was fatal.
     model_config = SettingsConfigDict(
-        env_file=env_file(),
         case_sensitive=False,
         env_nested_delimiter="__",
         extra="ignore",

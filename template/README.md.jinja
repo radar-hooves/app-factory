@@ -12,21 +12,19 @@ _{{ description }}_
 
 ## Installation
 
-**Prerequisites:** Python 3.14+, PostgreSQL (the app's own database — there is no development instance to start), direnv{% if has_frontend %}, Node.js 22+, pnpm{% endif %}
+**Prerequisites:** Python 3.14+, PostgreSQL (the app's own database — there is no development instance to start), direnv, Node.js 22+, pnpm
 
 ```bash
 git clone git@github.com:poodle64/{{ project_name }}.git
 cd {{ project_name }}
 direnv allow
-cp backend/.env.example backend/.env   # set POSTGRES_PASSWORD and friends
+cp .envrc.local.example .envrc.local   # set POSTGRES_PASSWORD and your dev identity
 uv run --project backend alembic upgrade head
 ```
 
 ```bash
 uv run --project backend uvicorn {{ package_name }}.server:app --reload --port {{ backend_port }}   # backend
-{% if has_frontend -%}
 pnpm -C frontend dev   # frontend, http://localhost:{{ frontend_port }}
-{% endif -%}
 ```
 
 ## Tech Stack
@@ -34,9 +32,7 @@ pnpm -C frontend dev   # frontend, http://localhost:{{ frontend_port }}
 | Layer | Choice |
 | --- | --- |
 | Backend | FastAPI, SQLAlchemy + Alembic, PostgreSQL |
-{%- if has_frontend %}
 | Frontend | SvelteKit (Svelte 5), TypeScript, Tailwind CSS v4, `@poodle64/ui` |
-{%- endif %}
 | Shape | household canonical full-stack template — see `DESIGN.md` and `rules-library/platform/canonical-app-shape.md` |
 
 <div align="center">
