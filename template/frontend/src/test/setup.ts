@@ -40,22 +40,40 @@ Object.defineProperty(globalThis, 'matchMedia', {
 	}))
 });
 
-// Mock ResizeObserver
-globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
-	observe: vi.fn(),
-	unobserve: vi.fn(),
-	disconnect: vi.fn()
-}));
+// Mock ResizeObserver and IntersectionObserver. Both must be CONSTRUCTIBLE:
+// floating-ui — which every popover, dropdown and Select in the UI kit sits on
+// — calls `new ResizeObserver(...)` while positioning its layer, and an arrow
+// function returning an object is not a constructor. A mock that only answers
+// `ResizeObserver()` throws there instead, and the failure surfaces a long way
+// from here as a portalled listbox that never renders.
+class MockResizeObserver implements ResizeObserver {
+	observe = vi.fn();
+	unobserve = vi.fn();
+	disconnect = vi.fn();
+}
+globalThis.ResizeObserver = MockResizeObserver;
 
-// Mock IntersectionObserver
-globalThis.IntersectionObserver = vi.fn().mockImplementation(() => ({
-	observe: vi.fn(),
-	unobserve: vi.fn(),
-	disconnect: vi.fn()
-}));
+class MockIntersectionObserver implements IntersectionObserver {
+	readonly root = null;
+	readonly rootMargin = '';
+	readonly thresholds: readonly number[] = [];
+	observe = vi.fn();
+	unobserve = vi.fn();
+	disconnect = vi.fn();
+	takeRecords = vi.fn(() => []);
+}
+globalThis.IntersectionObserver = MockIntersectionObserver;
 
 // Mock Element.scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
+
+// Mock the Pointer Capture API. jsdom implements none of it, and the bits-ui
+// Select trigger calls hasPointerCapture() in its own pointerdown handler
+// before it opens the listbox — so without these the popup never renders and
+// every query for one of its options fails as though the component were broken.
+Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+Element.prototype.setPointerCapture = vi.fn();
+Element.prototype.releasePointerCapture = vi.fn();
 
 // Mock Element.animate
 Element.prototype.animate = vi.fn().mockReturnValue({
