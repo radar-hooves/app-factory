@@ -142,6 +142,22 @@ repos:
         files: '^frontend/src/.*\.(svelte|css|ts)$'
         pass_filenames: false
 
+  # The shadcn colour surface is the one class of breakage every other gate is
+  # blind to: drop either load-bearing line from src/app.css and `build`, `lint`,
+  # `lint:css` and `check` all still pass while bg-card, bg-muted, bg-accent,
+  # bg-popover and border-input compile to no rule at all. That is
+  # poodle64/design-system#3, which reached every app before anyone saw it.
+  # Fast (no build, no browser): compiles app.css in-process and asserts the
+  # utilities emit a real declaration and the package is still scanned.
+  - repo: local
+    hooks:
+      - id: colour-surface
+        name: 'design - The shadcn colour surface resolves'
+        entry: node frontend/scripts/check-colour-surface.mjs
+        language: system
+        files: '^frontend/(src/app\.css|package\.json)$'
+        pass_filenames: false
+
   # Catches the app hand-rolling what @poodle64/ui already ships — a local
   # component duplicating a shipped one, or a route writing its own <h1>
   # instead of composing the shared PageHeader. It compiles, renders,
