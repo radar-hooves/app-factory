@@ -81,9 +81,12 @@ class TestPartialQuartetWarning:
 @pytest.mark.unit
 class TestExplicitServerUrl:
     def test_builds_expected_url_and_quotes_special_characters(self):
-        explicit = {"host": "db.example", "port": "5433", "user": "te st", "password": "p@ss/word"}
+        # 12345 rather than a plausible port: the parity gate normalises an app's
+        # own answered port wherever it appears, so a literal inside any allocated
+        # band reads as drift in exactly the app that answered that number.
+        explicit = {"host": "db.example", "port": "12345", "user": "te st", "password": "p@ss/word"}
         url = guard.explicit_server_url(explicit, "postgres")
-        assert url == "postgresql+psycopg://te+st:p%40ss%2Fword@db.example:5433/postgres"
+        assert url == "postgresql+psycopg://te+st:p%40ss%2Fword@db.example:12345/postgres"
 
 
 @pytest.mark.unit
