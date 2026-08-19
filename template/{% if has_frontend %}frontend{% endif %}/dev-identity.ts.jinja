@@ -1,0 +1,85 @@
+/**
+ * Who the dev server says you are, and whether it may start at all.
+ *
+ * Production puts an Authentik forward-auth proxy in front of the app: the proxy
+ * authenticates, injects `x-authentik-uid`, and the app trusts it. The app itself
+ * holds no authentication code (platform/proxy-delegated-auth.md), and must not
+ * grow any for development — a security-relevant path that only ever runs in dev
+ * is worse than no path at all.
+ *
+ * So dev keeps the same division of labour and swaps only what stands in front:
+ *
+ *   behind the proxy   nginx authenticates against Authentik and sets the real
+ *                      headers; this file injects NOTHING, because Vite merges a
+ *                      proxy's static `headers` object LAST and would overwrite
+ *                      the operator's own identity on every request.
+ *   nothing in front   there is no identity to read, so an explicit one must be
+ *                      supplied. That is the E2E and headless case.
+ *   neither            refuse to start. There is no development database: the dev
+ *                      server points at the app's REAL one and the backend upserts
+ *                      a user by this key on every request, so a defaulted uid
+ *                      writes a real row under a person who does not exist.
+ *
+ * Split out of vite.config.ts so it can be tested directly — importing the config
+ * itself drags in esbuild, which cannot run under the suite's jsdom environment.
+ */
+
+export interface DevIdentityEnv {
+	/** `<APP>_DEV_BEHIND_PROXY` — only the literal 'true' counts. */
+	readonly behindProxy?: string;
+	/** `<APP>_DEV_UID` — the stable Authentik uid, never a display name. */
+	readonly devUid?: string;
+	/** `<APP>_DEV_ENTITLEMENTS` — optional, absent in most apps. */
+	readonly devEntitlements?: string;
+	/** `<APP>_DEV_PUBLIC_HOST` — the hostname the proxy serves this on. */
+	readonly publicHost?: string;
+}
+
+export interface DevIdentity {
+	/** True when a real proxy is in front and supplies the identity per request. */
+	readonly behindProxy: boolean;
+	/** Why `vite dev` must not start, or null when it may. */
+	readonly refusal: string | null;
+	/** Headers to inject on the /api proxy, or undefined to inject none. */
+	readonly proxyHeaders: Record<string, string> | undefined;
+	/** `server` fields needed when reached through a public origin. */
+	readonly serverOptions: Record<string, unknown>;
+}
+
+const APP = '{{ project_name | upper | replace('-', '_') }}';
+
+export function resolveDevIdentity(env: DevIdentityEnv): DevIdentity {
+	// Exactly 'true'. A truthy-ish '1' or 'yes' would silently drop the app into
+	// the branch that injects no identity, and every request would then 401
+	// against a proxy that is not there.
+	const behindProxy = env.behindProxy === 'true';
+
+	const refusal =
+		behindProxy || env.devUid
+			? null
+			: `${APP}_DEV_UID is not set and ${APP}_DEV_BEHIND_PROXY is not true. The dev server ` +
+				'talks to the real database, so it needs a real identity rather than an invented one. ' +
+				`Either run behind the Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true), ` +
+				`or set ${APP}_DEV_UID in .envrc.local.`;
+
+	// The stable uid ONLY. Display fields are deliberately not injected: the
+	// backend updates mutable fields on every upsert, so a placeholder username
+	// overwrites the real profile in the real database.
+	const proxyHeaders = behindProxy
+		? undefined
+		: {
+				'x-authentik-uid': env.devUid ?? '',
+				...(env.devEntitlements ? { 'x-authentik-entitlements': env.devEntitlements } : {})
+			};
+
+	// Vite rejects a Host header it does not know, and HMR would otherwise dial
+	// localhost from a browser that reached this server through the public origin.
+	const serverOptions = env.publicHost
+		? {
+				allowedHosts: [env.publicHost],
+				hmr: { protocol: 'wss', host: env.publicHost, clientPort: 443 }
+			}
+		: {};
+
+	return { behindProxy, refusal, proxyHeaders, serverOptions };
+}

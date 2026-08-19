@@ -2,6 +2,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
+import { resolveDevIdentity } from './dev-identity';
+
 export default defineConfig(({ command, isPreview }) => {
 	const plugins = [tailwindcss(), sveltekit()];
 
@@ -15,13 +17,18 @@ export default defineConfig(({ command, isPreview }) => {
 		return { plugins };
 	}
 
-	// NO DEFAULT, deliberately. There is no development database
-	// (stacks/dev-environment.md): the dev server points at the app's REAL one, and
-	// the backend upserts a user by this key on every request — so a defaulted uid
-	// silently writes a real user row into production. Refusing to start is the
-	// cheaper failure. Overridable so playwright.config.ts's E2E suite
-	// authenticates as its own identity — see its comment.
-	const devUid = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID;
+	// Who dev says you are, and whether it may start at all. The reasoning — and
+	// why injecting behind the proxy would overwrite the real identity — lives in
+	// dev-identity.ts, which is unit-tested directly.
+	const identity = resolveDevIdentity({
+		behindProxy: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BEHIND_PROXY,
+		devUid: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID,
+		// Optional, and absent in most apps. Production's forward-auth proxy forwards
+		// whatever entitlements Authentik holds for the user; an app that gates modules
+		// on them needs the same header in dev or every gated module vanishes.
+		devEntitlements: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS,
+		publicHost: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_PUBLIC_HOST
+	});
 
 	// Asserted in configureServer, NOT in the config body. The `command`
 	// discriminator above is not sufficient on its own: svelte-check loads this
@@ -32,20 +39,11 @@ export default defineConfig(({ command, isPreview }) => {
 	const requireDevIdentity = {
 		name: 'require-dev-identity',
 		configureServer() {
-			if (!devUid) {
-				throw new Error(
-					'{{ project_name | upper | replace('-', '_') }}_DEV_UID is not set. The dev server talks to the real database, ' +
-						'so it needs your own identity rather than an invented one. Set it in .envrc.local.'
-				);
+			if (identity.refusal) {
+				throw new Error(identity.refusal);
 			}
 		}
 	};
-
-	// Optional, and absent in most apps. Production's forward-auth proxy forwards
-	// whatever entitlements Authentik holds for the user; an app that gates modules
-	// on them needs the same header in dev or every gated module vanishes. Unset,
-	// the header is simply not sent, which is what an app that gates nothing wants.
-	const devEntitlements = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS;
 
 	// Defaults to the app's registered backend port. Overridable so an isolated
 	// E2E harness can point this proxy at its own ephemeral backend, rather than
@@ -57,6 +55,7 @@ export default defineConfig(({ command, isPreview }) => {
 		plugins: [...plugins, requireDevIdentity],
 		server: {
 			port: {{ frontend_port }},
+			...identity.serverOptions,
 			// This is the frontend port, allocated in the household registry; failing
 			// beats silently moving off it onto one another app owns.
 			strictPort: true,
@@ -71,13 +70,9 @@ export default defineConfig(({ command, isPreview }) => {
 					// the backend updates mutable fields on every upsert
 					// (platform/proxy-delegated-auth.md), so sending a placeholder
 					// username overwrites the real profile in the real database.
-					headers: {
-						// `?? ''` only satisfies the type: configureServer above aborts
-						// `vite dev` before a server exists, so an unset uid never reaches
-						// a request. It is not a fallback identity.
-						'x-authentik-uid': devUid ?? '',
-						...(devEntitlements ? { 'x-authentik-entitlements': devEntitlements } : {})
-					}
+					// Undefined behind the proxy, where the real headers are already on
+					// the request and this object would overwrite them — Vite merges it last.
+					headers: identity.proxyHeaders
 				},
 				// /mcp is proxied so an MCP client can reach the dev backend through this
 				// origin. It gets no identity headers: /mcp validates an Authentik Bearer

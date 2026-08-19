@@ -1,0 +1,78 @@
+/**
+ * The dev server must never invent an identity, and never overwrite a real one.
+ *
+ * There is no development database: `vite dev` proxies to the app's REAL backend,
+ * and the backend upserts a user by the injected uid on every request. Both failure
+ * modes guarded here are therefore writes to production under the wrong person — a
+ * defaulted uid creating a user nobody chose, and a synthetic uid overwriting the
+ * operator's own headers when the Authentik proxy has already supplied them.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import { resolveDevIdentity } from '../dev-identity';
+
+describe('with nothing in front', () => {
+	it('refuses to start when no identity is supplied', () => {
+		const { refusal } = resolveDevIdentity({});
+		expect(refusal).toMatch(/DEV_UID is not set/);
+		expect(refusal).toMatch(/DEV_BEHIND_PROXY is not true/);
+	});
+
+	it('injects exactly the uid it was given, and no display fields', () => {
+		const { refusal, proxyHeaders } = resolveDevIdentity({ devUid: 'e2e-identity' });
+		expect(refusal).toBeNull();
+		expect(proxyHeaders).toEqual({ 'x-authentik-uid': 'e2e-identity' });
+	});
+
+	it('adds entitlements only when the app asks for them', () => {
+		expect(resolveDevIdentity({ devUid: 'u', devEntitlements: 'reports' }).proxyHeaders).toEqual({
+			'x-authentik-uid': 'u',
+			'x-authentik-entitlements': 'reports'
+		});
+	});
+});
+
+describe('behind the Authentik forward-auth proxy', () => {
+	it('starts with no identity to look up — nginx supplies it per request', () => {
+		expect(resolveDevIdentity({ behindProxy: 'true' }).refusal).toBeNull();
+	});
+
+	it('injects NO headers, so the operator’s real identity survives', () => {
+		// devUid set as well, to prove the proxy branch WINS rather than merely
+		// filling a gap: Vite merges a proxy's static headers last, so injecting
+		// here would overwrite the real identity on every request.
+		const { proxyHeaders } = resolveDevIdentity({
+			behindProxy: 'true',
+			devUid: 'synthetic-would-overwrite-the-real-one'
+		});
+		expect(proxyHeaders).toBeUndefined();
+	});
+
+	it('treats any value but the literal "true" as NOT behind the proxy', () => {
+		// A truthy-ish '1' silently taking the proxy branch would inject nothing
+		// while nothing was in front, and every request would 401.
+		for (const value of ['1', 'yes', 'True', 'TRUE', '']) {
+			const { behindProxy, refusal } = resolveDevIdentity({ behindProxy: value });
+			expect(behindProxy).toBe(false);
+			expect(refusal).toMatch(/DEV_UID is not set/);
+		}
+	});
+});
+
+describe('the public origin', () => {
+	it('leaves the host check and HMR alone until a public host is named', () => {
+		expect(resolveDevIdentity({ devUid: 'u' }).serverOptions).toEqual({});
+	});
+
+	it('allows the host and points HMR at the public origin', () => {
+		const { serverOptions } = resolveDevIdentity({
+			behindProxy: 'true',
+			publicHost: '{{ project_name }}-dev.example.test'
+		});
+		expect(serverOptions).toEqual({
+			allowedHosts: ['{{ project_name }}-dev.example.test'],
+			hmr: { protocol: 'wss', host: '{{ project_name }}-dev.example.test', clientPort: 443 }
+		});
+	});
+});
