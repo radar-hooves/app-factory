@@ -56,7 +56,6 @@ def test_max_workers_bounds_concurrency():
         time.sleep(0.05)
         with lock:
             active -= 1
-        return None
 
     run_fanout([_tracked for _ in range(6)], max_workers=2)
     assert peak <= 2
