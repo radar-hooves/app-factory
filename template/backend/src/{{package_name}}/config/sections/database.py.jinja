@@ -21,11 +21,10 @@ class DatabaseSettings(BaseSettings):
         extra="ignore",
     )
 
-    # The app's own role, not the superuser: every deployed database in the fleet
-    # was created with a role named for its app and no `postgres` login at all,
-    # so the old default could not connect anywhere — measured 2026-08-19 across
-    # seven live databases, of which exactly one (godswood) answers to `postgres`
-    # and carries the override in its own env file.
+    # The app's own role, not the superuser: a deployed database is created with a
+    # role named for its app and usually carries no `postgres` login at all, so a
+    # superuser default cannot connect. An app whose database differs records
+    # POSTGRES_USER in its own env file.
     postgres_user: str = "{{ project_name | replace('-', '_') }}"
     postgres_password: str = ""  # required — must be overridden in .env or environment
     postgres_host: str = "localhost"
