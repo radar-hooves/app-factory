@@ -32,6 +32,7 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 import { compile } from 'tailwindcss';
@@ -39,7 +40,10 @@ import { compile } from 'tailwindcss';
 /** Semantic names the package registers; each must emit a real declaration. */
 const REGISTERED = ['bg-card', 'bg-muted', 'bg-accent', 'bg-popover', 'border-input'];
 const PACKAGE = '@poodle64/ui';
-const ENTRY = resolve('src/app.css');
+// Relative to THIS file, not the working directory: `pnpm lint:colour` runs from
+// frontend/ and the pre-commit hook runs from the repo root.
+const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ENTRY = resolve(FRONTEND, 'src/app.css');
 
 /**
  * Resolve a stylesheet the way the bundler does.
