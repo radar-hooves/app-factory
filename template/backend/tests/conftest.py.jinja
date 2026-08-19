@@ -126,6 +126,41 @@ os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
 os.environ["POSTGRES_PASSWORD"] = _TEST_SERVER["password"]
 os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
+# ── THE extension point for this file (canonical-app-shape.md §Extension Points)
+# conftest.py is the factory's and is owed byte-identical, so an app's own test
+# surface lives in tests/app_fixtures.py. Imported HERE, deliberately: after the
+# test server is resolved and every POSTGRES_* is assigned, so a module that
+# imports the app gets the throwaway database — and before the first app import
+# below, so a module that must set an environment variable ahead of the app
+# reading it still can. The module body runs once, at this line.
+from tests import app_fixtures as _app_fixtures  # noqa: E402
+
+
+def _adopt_app_fixtures() -> None:
+    """Bind the app's own test surface into this module's namespace.
+
+    Not `from … import *`, which was the first attempt: star-import skips every
+    underscore-prefixed name, and an autouse fixture is conventionally named
+    `_like_this`, so exactly the fixtures that must apply to every test were the
+    ones that silently did not arrive.
+
+    `pytest_*` is refused on purpose. A hook defined in the app's module would
+    REPLACE the factory's — measured 2026-08-20, an app file that accidentally
+    carried `pytest_sessionfinish` took the factory's teardown with it and every
+    test in the suite errored. App work that must run once belongs in
+    `app_session_start()`, which the factory calls at a defined point.
+    """
+    globals().update(
+        {
+            name: value
+            for name, value in vars(_app_fixtures).items()
+            if not name.startswith("__") and not name.startswith("pytest_")
+        }
+    )
+
+
+_adopt_app_fixtures()
+
 from httpx import ASGITransport, AsyncClient  # noqa: E402 -- must follow the env-var resolution above
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
@@ -210,6 +245,9 @@ def pytest_sessionstart(session) -> None:
     session-start hook precedes every fixture, so there is no race to lose.
     """
     _ensure_test_database_ready()
+    # Whatever this app needs doing once, after the schema exists and before any
+    # test runs (tests/app_fixtures.py). No-op unless the app defines one.
+    app_session_start()
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
@@ -281,3 +319,13 @@ async def client(app, session: Session) -> AsyncGenerator[AsyncClient]:
     ) as ac:
         yield ac
     app.dependency_overrides.pop(get_session, None)
+
+
+# ── The app's surface, bound a second time (see _adopt_app_fixtures above) ────
+# Nothing re-runs; this only re-binds the names. It is what lets an app REPLACE
+# one of the factory's defaults rather than only add beside it — the identity
+# headers its client fixture sends, say. At the first call the factory's own
+# definitions land afterwards and win; here the app's win, which is the right way
+# round for a file the app is extending. Two calls because an app's suite has two
+# needs at two different moments, and one seam cannot serve both.
+_adopt_app_fixtures()

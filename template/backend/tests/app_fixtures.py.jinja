@@ -1,0 +1,35 @@
+"""{{ project_name }}'s own test fixtures — the extension point for conftest.py.
+
+`conftest.py` belongs to the factory and is owed byte-identical, so everything
+this suite needs beyond it lives here. conftest star-imports this module at the
+one point where both of its guarantees hold: the throwaway test database is
+resolved and every ``POSTGRES_*`` is assigned, and no app module has been
+imported yet.
+
+Which means both shapes work, and neither has to fight the file that carries
+them:
+
+- an environment variable this app must set BEFORE it is first imported —
+  assign it at module level here, not with ``setdefault``, if a run must never
+  inherit whatever a shell happens to export;
+- a fixture, a factory, a second authenticated client, a constant its tests
+  share — define it here and every test sees it, exactly as if it sat in
+  conftest.
+
+Empty by default, and an app with nothing to add leaves it that way.
+"""
+
+
+def app_session_start() -> None:
+    """This app's own once-per-run setup, called by conftest's session-start hook.
+
+    Runs AFTER the test database exists and is migrated to head, which is the
+    only order that can work for anything touching tables. Seeding the one
+    identity every request must resolve is the usual reason to want it.
+
+    A named entry point rather than a second ``pytest_sessionstart`` here,
+    because this module is star-imported into conftest: a hook of the same name
+    would REPLACE the factory's and silently skip building the database.
+
+    No-op by default.
+    """
