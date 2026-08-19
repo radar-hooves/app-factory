@@ -62,12 +62,20 @@ uv sync --project backend --quiet
 export VIRTUAL_ENV="$PWD/backend/.venv"
 PATH_add "$PWD/backend/.venv/bin"
 
+# Estate-wide fallback, resolved AFTER backend/.env so that file still wins.
+# The umbrella's own .envrc.local (sourced by `source_up` above) may carry
+# {{ project_name | upper | replace('-', '_') }}_POSTGRES_PASSWORD and a single DEV_UID for every app at
+# once — one file filled in once, rather than the same identity pasted into nine
+# repos and a fresh clone of any of them dead until someone remembers to.
+export POSTGRES_PASSWORD="{{ '${' }}POSTGRES_PASSWORD:-{{ '${' }}{{ project_name | upper | replace('-', '_') }}_POSTGRES_PASSWORD:-}}"
+export {{ project_name | upper | replace('-', '_') }}_DEV_UID="{{ '${' }}{{ project_name | upper | replace('-', '_') }}_DEV_UID:-{{ '${' }}DEV_UID:-}}"
+
 # Report a missing value HERE, where the fix is, rather than letting it surface
 # as a pydantic validation error at the first request or as a debugger that
 # exits before printing anything useful.
 for _required in POSTGRES_PASSWORD {{ project_name | upper | replace('-', '_') }}_DEV_UID; do
   if [[ -z "${!_required:-}" ]]; then
-    echo "direnv: $_required is not set — fill it in at backend/.env (see backend/.env.example)" >&2
+    echo "direnv: $_required is not set — fill it in at backend/.env, or estate-wide in the umbrella's .envrc.local" >&2
   fi
 done
 unset _required
