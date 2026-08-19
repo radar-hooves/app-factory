@@ -60,7 +60,7 @@ export function resolveDevIdentity(env: DevIdentityEnv): DevIdentity {
 			: `${APP}_DEV_UID is not set and ${APP}_DEV_BEHIND_PROXY is not true. The dev server ` +
 				'talks to the real database, so it needs a real identity rather than an invented one. ' +
 				`Either run behind the Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true), ` +
-				`or set ${APP}_DEV_UID in .envrc.local.`;
+				`or set ${APP}_DEV_UID in backend/.env.`;
 
 	// The stable uid ONLY. Display fields are deliberately not injected: the
 	// backend updates mutable fields on every upsert, so a placeholder username

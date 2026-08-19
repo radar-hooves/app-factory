@@ -18,7 +18,7 @@ _{{ description }}_
 git clone git@github.com:poodle64/{{ project_name }}.git
 cd {{ project_name }}
 direnv allow
-cp .envrc.local.example .envrc.local   # set POSTGRES_PASSWORD and your dev identity
+cp backend/.env.example backend/.env   # set POSTGRES_PASSWORD and your dev identity
 uv run --project backend alembic upgrade head
 ```
 

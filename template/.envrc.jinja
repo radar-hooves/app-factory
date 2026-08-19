@@ -1,11 +1,23 @@
-# uv-managed dev environment. Machine-local values live in .envrc.local
-# (copy .envrc.local.example) — the one place they go.
+# uv-managed dev environment.
+#
+# Machine-local values live in ONE file, backend/.env (copy backend/.env.example).
+# Three consumers read that same file and no other: direnv exports it into the
+# shell here, the .vscode launch configurations name it as their `envFile`, and
+# compose.yaml mounts it as `env_file`. A debugger cannot see a direnv
+# environment, which is why a shell-only home for these values leaves every
+# launch configuration starting with no database password at all.
 source_up
 {% if postgres_host %}
 export POSTGRES_HOST="${POSTGRES_HOST:-{{ postgres_host }}}"
 export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
 {% endif %}
-[[ -f .envrc.local ]] && source .envrc.local
+# Present, always: compose declares backend/.env as a required env_file, so a
+# fresh clone that has not been filled in yet must still have the file rather
+# than fail before it can report what is missing.
+[[ -f backend/.env ]] || cp backend/.env.example backend/.env
+
+watch_file backend/.env
+dotenv_if_exists backend/.env
 
 # shellcheck disable=SC2034  # read by direnv's stdlib as a shell variable, not exported
 direnv_layout_dir="${XDG_CACHE_HOME:-$HOME/.cache}/direnv/layouts/$(echo -n "$PWD" | shasum | cut -d' ' -f1)"
@@ -20,3 +32,13 @@ uv sync --project backend --quiet
 
 export VIRTUAL_ENV="$PWD/backend/.venv"
 PATH_add "$PWD/backend/.venv/bin"
+
+# Report a missing value HERE, where the fix is, rather than letting it surface
+# as a pydantic validation error at the first request or as a debugger that
+# exits before printing anything useful.
+for _required in POSTGRES_PASSWORD {{ project_name | upper | replace('-', '_') }}_DEV_UID; do
+  if [[ -z "${!_required:-}" ]]; then
+    echo "direnv: $_required is not set — fill it in at backend/.env (see backend/.env.example)" >&2
+  fi
+done
+unset _required
