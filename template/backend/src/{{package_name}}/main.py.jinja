@@ -32,6 +32,7 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from {{ package_name }}.api.main import api_router
+from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.paths import frontend_build_dir
 from {{ package_name }}.db.session import get_engine
@@ -132,7 +133,14 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
-            async with _db_lifespan(app), raw_mcp_app.lifespan(raw_mcp_app):
+            # app_hooks.lifespan_tasks is composed INNERMOST: the engine is warm
+            # and /mcp is up before this app's own pollers start, and they are
+            # torn down before either goes away.
+            async with (
+                _db_lifespan(app),
+                raw_mcp_app.lifespan(raw_mcp_app),
+                lifespan_tasks(app),
+            ):
                 yield
         finally:
             # Close the gate's userinfo httpx client so its connection pool does
@@ -147,7 +155,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="{{ project_name }}",
-        description="{{ description }}",
+        # app_hooks supplies the long form once this app has enough surface to
+        # want one; the one-line copier description is the default.
+        description=API_DESCRIPTION or "{{ description }}",
+        openapi_tags=OPENAPI_TAGS or None,
         lifespan=lifespan,
         # Hardcoded, not settings.debug: the flag installs Starlette's
         # interactive error page, which ServerErrorMiddleware checks BEFORE the
@@ -197,6 +208,12 @@ def create_app() -> FastAPI:
     # defers to them. The /mcp and SPA surfaces below are mounted sub-apps, not
     # router routes, and are gated on their own terms rather than by this limit.
     app.include_router(api_router, prefix="/api", dependencies=[Depends(enforce_default_rate_limit)])
+
+    # This app's own middleware and exception handlers. Last, so anything added
+    # wraps outermost and runs first — a Host-header or body-size guard has to
+    # see the request before the factory's stack does. An app with nothing to add
+    # calls a function that does nothing, which is why main.py stays identical.
+    register(app, settings)
 
     # Serve the SPA — must be last so API routes take precedence.
     # Skip mounting if the frontend has not been built yet (dev-only path).

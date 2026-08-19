@@ -1,0 +1,51 @@
+"""What THIS app adds to the factory's application object.
+
+`main.py` belongs to the factory and is byte-identical in every household app
+(rules-library/platform/canonical-app-shape.md §Extension Points). Everything an
+app genuinely needs to contribute to its own FastAPI instance arrives through
+this module instead, so `main.py` never has to be edited and never has to be
+excepted. That is the whole point: an exemption that rested on PART of a file is
+how nine apps ended up with nine different application factories while every gate
+read green.
+
+Every hook here is a no-op by default. Add only what this app needs; do not
+delete a hook you are not using, because `main.py` imports all four by name.
+"""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI
+
+from {{ package_name }}.config import Settings
+
+# Swagger UI tag order and descriptions. Empty means FastAPI derives them from
+# the routers, which is right until this app has enough surface to want an order.
+OPENAPI_TAGS: list[dict[str, Any]] = []
+
+# The long-form API description rendered at the top of the docs page. Empty falls
+# back to the app's one-line copier description, which is the same string the
+# FastAPI title carries.
+API_DESCRIPTION: str = ""
+
+
+@asynccontextmanager
+async def lifespan_tasks(app: FastAPI) -> AsyncGenerator[None]:
+    """This app's own startup/shutdown work — pollers, collectors, warm caches.
+
+    Composed INSIDE the factory's database and MCP lifespans, so the engine is
+    already warm here and is disposed after this exits. Anything opened here is
+    this app's to close in the `finally`.
+    """
+    yield
+
+
+def register(app: FastAPI, settings: Settings) -> None:
+    """This app's own middleware and exception handlers.
+
+    Called after the factory's stack is in place, so middleware added here wraps
+    OUTERMOST and runs FIRST — which is what a Host-header or request-size guard
+    needs. An exception handler added here sits alongside the canonical
+    hierarchy rather than replacing any of it.
+    """
