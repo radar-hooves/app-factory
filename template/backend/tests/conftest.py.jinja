@@ -135,6 +135,14 @@ os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 # reading it still can. The module body runs once, at this line.
 from tests import app_fixtures as _app_fixtures  # noqa: E402
 
+# Imported by NAME, not left to the namespace copy below, so a linter can see
+# it: `globals().update()` is invisible to static analysis, and ruff rejected
+# the call site as an undefined name. Naming it also makes the contract
+# explicit — every app's app_fixtures.py defines this, the factory stamps a
+# no-op, and an app that deletes it breaks its own suite loudly rather than
+# silently skipping its setup.
+from tests.app_fixtures import app_session_start  # noqa: E402
+
 
 def _adopt_app_fixtures() -> None:
     """Bind the app's own test surface into this module's namespace.
