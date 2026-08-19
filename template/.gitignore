@@ -11,7 +11,9 @@ desktop.ini
 # ============================================================================
 .idea/
 # Share the four VS Code config files; !.vscode/ re-includes the directory under a
-# global ignore. *.jinja is for THIS repo: without it copier stamps apps debug-less.
+# global ignore. The *.jinja line earns its place in the template repo, where this
+# same file governs the unstamped sources — drop it and copier stamps apps with no
+# launch configuration at all. Inert once stamped; kept so both copies are one file.
 !.vscode/
 .vscode/*
 !.vscode/*.jinja
@@ -118,10 +120,25 @@ logs/
 # The app's own writable directory (config/paths.py data_dir()). Ignored in
 # every app, which is the same statement as: nothing a fresh clone needs lives
 # here. Anything a clone DOES need belongs in the repo.
-data/
+# ANCHORED, and it has to be: bare `data/` matches at every depth, so it swallows
+# frontend/src/lib/components/data/ and any other directory that happens to share
+# the name — silently, since git never reports a file it was told to ignore.
+/data/
 
 # ============================================================================
-# Project-Specific
+# Household policy
 # ============================================================================
 # Raw dictation carries names that can't be scrubbed (core/pii-in-documents.md).
 docs/development/voice-memos/
+
+# ============================================================================
+# App-owned
+# ============================================================================
+# Everything above this block is the factory's and is compared byte-for-byte;
+# everything below it is this app's. Almost nothing belongs below: runtime state
+# has one home (`/data/`, already ignored), and a rule about content the app
+# tracks selectively is still this app's to write. What genuinely lands here is a
+# file the app writes to the repo ROOT, which no other mechanism can reach —
+# because git has no include directive, so this is the extension point.
+# One reason per line, so a stale rule can be retired by someone who did not add it.
+# App-owned below this line; the factory owns everything above it.

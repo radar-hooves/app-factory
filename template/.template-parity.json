@@ -32,7 +32,7 @@
     ".github/workflows/frontend-ci.yaml": "571b2fdc5910b0f1",
     ".github/workflows/python-ci.yaml": "9a3167f55f751e7b",
     ".github/workflows/security.yaml": "9e08972038720ffa",
-    ".gitignore": "43f54c85a3adcaf2",
+    ".gitignore": "fda24db22a3ea684",
     ".gitleaks.toml": "1b7c88c74306f1c6",
     ".pre-commit-config.yaml": "975a805d2782a379",
     ".vscode/extensions.json": "3a0005a77860d54d",
