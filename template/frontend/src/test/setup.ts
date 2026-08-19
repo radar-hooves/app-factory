@@ -46,14 +46,21 @@ Object.defineProperty(globalThis, 'matchMedia', {
 // function returning an object is not a constructor. A mock that only answers
 // `ResizeObserver()` throws there instead, and the failure surfaces a long way
 // from here as a portalled listbox that never renders.
-class MockResizeObserver implements ResizeObserver {
+//
+// Deliberately NOT `implements ResizeObserver` / `implements IntersectionObserver`:
+// the DOM lib grows members (`scrollMargin` arrived and broke two apps that were
+// a TypeScript version ahead), and a mock that promises the whole interface has
+// to chase every one. What the runtime needs is `new`-ability and the three
+// methods the observers are actually called with, so the cast at assignment is
+// the honest boundary rather than a widening lie in the class body.
+class MockResizeObserver {
 	observe = vi.fn();
 	unobserve = vi.fn();
 	disconnect = vi.fn();
 }
-globalThis.ResizeObserver = MockResizeObserver;
+globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-class MockIntersectionObserver implements IntersectionObserver {
+class MockIntersectionObserver {
 	readonly root = null;
 	readonly rootMargin = '';
 	readonly thresholds: readonly number[] = [];
@@ -62,7 +69,8 @@ class MockIntersectionObserver implements IntersectionObserver {
 	disconnect = vi.fn();
 	takeRecords = vi.fn(() => []);
 }
-globalThis.IntersectionObserver = MockIntersectionObserver;
+globalThis.IntersectionObserver =
+	MockIntersectionObserver as unknown as typeof IntersectionObserver;
 
 // Mock Element.scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();

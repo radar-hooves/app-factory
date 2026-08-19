@@ -93,7 +93,7 @@
     "frontend/src/hooks.client.test.ts": "95273bf47e3f7c8a",
     "frontend/src/hooks.client.ts": "47c2a7e9e4423e6c",
     "frontend/src/test/setup.test.ts": "18d3fe71f4f76deb",
-    "frontend/src/test/setup.ts": "b5034a06af2ab106",
+    "frontend/src/test/setup.ts": "9f75638f2246590d",
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",
     "frontend/tsconfig.json": "5ba6072319c60e79",
