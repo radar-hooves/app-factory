@@ -16,6 +16,21 @@ export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
 # than fail before it can report what is missing.
 [[ -f backend/.env ]] || cp backend/.env.example backend/.env
 
+# Carry across any key the example has grown since this env file was written.
+# Without it a new setting is silently absent from every existing checkout, and
+# a REQUIRED one surfaces as a process that will not start — the same class of
+# failure as the missing file itself, one release later. Key names only ever
+# leave this pipeline; values are appended by `grep -f`, never printed.
+_new_keys=$(comm -23 \
+  <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env.example | sort -u) \
+  <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env | sort -u))
+if [[ -n "$_new_keys" ]]; then
+  { echo; echo "# Added from backend/.env.example on $(date +%F)."; } >> backend/.env
+  grep -E -f <(echo "$_new_keys" | sed 's/^/^/') backend/.env.example >> backend/.env
+  echo "direnv: backend/.env gained $(echo "$_new_keys" | wc -l | tr -d ' ') key(s) the example documents" >&2
+fi
+unset _new_keys
+
 watch_file backend/.env
 dotenv_if_exists backend/.env
 

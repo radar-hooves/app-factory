@@ -22,6 +22,7 @@
     "uvicorn": ">=0.49.0"
   },
   "files": {
+    ".envrc": "39188e48db8c7979",
     ".gitattributes": "e753774a5c6c845d",
     ".github/workflows/auto-label-issues.yaml": "5c7fac564fe0c97d",
     ".github/workflows/canonical-shape.yaml": "2e0ec4404fd389ba",
@@ -33,6 +34,8 @@
     ".gitleaks.toml": "1b7c88c74306f1c6",
     ".pre-commit-config.yaml": "975a805d2782a379",
     ".vscode/extensions.json": "3a0005a77860d54d",
+    ".vscode/launch.json": "04902e966fdbfa64",
+    ".vscode/tasks.json": "f26e0acdfda08ca3",
     "Dockerfile": "339e84def6ed45c2",
     "backend/alembic.ini": "fc9b4a245e2122fc",
     "backend/alembic/env.py": "0a58667e166cc1ab",
