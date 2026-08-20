@@ -22,7 +22,7 @@
     "uvicorn": ">=0.49.0"
   },
   "files": {
-    ".dockerignore": "7b6934f54a1cca33",
+    ".dockerignore": "f67a334034d73217",
     ".envrc": "c900c5a07aafebe3",
     ".gitattributes": "e753774a5c6c845d",
     ".github/workflows/auto-label-issues.yaml": "5c7fac564fe0c97d",
@@ -39,7 +39,7 @@
     ".vscode/launch.json": "04902e966fdbfa64",
     ".vscode/settings.json": "b9d17314461d1d02",
     ".vscode/tasks.json": "f26e0acdfda08ca3",
-    "Dockerfile": "339e84def6ed45c2",
+    "Dockerfile": "7be4851f35b94836",
     "backend/.python-version": "a876e0b10411037a",
     "backend/alembic.ini": "fc9b4a245e2122fc",
     "backend/alembic/env.py": "0a58667e166cc1ab",

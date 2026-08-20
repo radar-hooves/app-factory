@@ -55,3 +55,10 @@ tests/
 # OS
 .DS_Store
 Thumbs.db
+
+# The build context's own extension point, and the sibling of the Dockerfile's.
+# `docs/` is excluded above because no app ships its documentation in an image —
+# but an app whose Dockerfile COPYs something from an excluded path must
+# re-include it HERE or the build fails on a source that is not in the context.
+# One reason per line.
+# App-owned below this line; the factory owns everything above it.

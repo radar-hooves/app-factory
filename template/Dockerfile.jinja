@@ -22,7 +22,15 @@ RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
-RUN pnpm build
+
+# The heap ceiling is pinned rather than inherited. node:22-slim gives V8 about
+# 2096 MB by default, and a client bundle carrying the usual rich-content set
+# (a diagram renderer, a syntax highlighter, a PDF writer, a chart library)
+# peaks within a few percent of it — one app's build died with "Ineffective
+# mark-compacts near heap limit" while the floating base tag it had previously
+# used happened to hand out 2240 MB and just fit. That margin was inherited, not
+# chosen. The flag costs nothing where the default already suffices.
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 
 
 # Stage 2: Backend dependency build (uv-native)
@@ -140,3 +148,14 @@ USER 1000:1000
 EXPOSE {{ backend_port }}
 
 CMD ["./backend/entrypoint.sh"]
+
+# A Dockerfile has no include directive, so app image content takes the same
+# terminal extension point `.gitignore` does: everything above this marker is
+# owed byte-identical, and an app appends its own COPY/ENV below it with a
+# reason per line. After CMD on purpose — CMD is metadata, so a trailing COPY
+# still lands in the image, and app content invalidating only the last layers is
+# the cache order you want. Two constraints: USER is already set, so a tail step
+# runs as uid 1000 (use `COPY --chown=1000:1000`, not a root RUN); and anything
+# the FRONTEND or BUILDER stage needs cannot live here — that is a real
+# exception, not a tail.
+# App-owned below this line; the factory owns everything above it.
