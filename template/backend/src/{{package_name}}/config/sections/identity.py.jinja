@@ -15,6 +15,8 @@ Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USERNAME_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_EMAIL_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ENTITLEMENTS_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USER_TYPE_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_SERVICE_ACCOUNT_TYPE
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ACTS_AS_HEADER
 """
 
@@ -44,6 +46,19 @@ class IdentitySettings(BaseSettings):
     # Absent is NOT the same as empty: absent means the outpost is not sending
     # them and every non-admin module gate closes, which is the safe reading.
     authentik_entitlements_header: str = "x-authentik-entitlements"
+
+    # The principal type the identity provider asserts, where it is configured to
+    # send one. ABSENCE MEANS PERSON, always: this claim comes from a custom scope
+    # mapping, and a token minted WITHOUT the proxy scope carries the outpost's
+    # base claims and none of the custom ones — so the header is missing on
+    # precisely the request it exists to catch. It can therefore only ever ADD a
+    # refusal, never narrow the ordinary human path (godswood#701).
+    # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USER_TYPE_HEADER
+    authentik_user_type_header: str = "x-authentik-user-type"
+
+    # The value that header carries for a machine principal.
+    # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_SERVICE_ACCOUNT_TYPE
+    authentik_service_account_type: str = "service_account"
 
     # Set by a machine caller delegating to a human identity. Its ABSENCE on a
     # caller that did not traverse the human proxy is what distinguishes "a

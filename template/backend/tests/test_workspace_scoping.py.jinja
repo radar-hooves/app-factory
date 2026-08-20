@@ -7,15 +7,17 @@ regression test for the defect the primitive exists to fix (master-project#291):
 second household member signing in and seeing an empty app.
 """
 
+from typing import cast
+
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import String, Table, select
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from {{ package_name }}.api.example.models import ExampleItem
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
-from {{ package_name }}.db.base import Base, WorkspaceScoped
+from {{ package_name }}.db.base import Base, SharedReference, WorkspaceScoped
 from {{ package_name }}.db.registry import WORKSPACE_EXEMPT
 from {{ package_name }}.db.scoping import (
     CrossWorkspaceWriteError,
@@ -23,6 +25,28 @@ from {{ package_name }}.db.scoping import (
     bind_session,
     unscoped,
 )
+
+
+class TaxonomyEntry(Base, SharedReference):
+    """A shared taxonomy, for proving the third bucket behaves.
+
+    Declared here rather than in the app so the factory ships no table nobody
+    asked for — and at module level so it registers with Base, which makes the
+    coverage test accept `SharedReference` in practice and not just in its
+    assertion text.
+    """
+
+    __tablename__ = "taxonomy_entries_test"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+@pytest.fixture
+def taxonomy_table(session: Session) -> None:
+    """Create the throwaway taxonomy table inside the test's own transaction."""
+    # cast: the declarative __table__ is typed as FromClause, which has no create().
+    cast(Table, TaxonomyEntry.__table__).create(session.connection())
 
 
 def _make_user(session: Session, uid: str) -> User:
@@ -55,7 +79,7 @@ def test_every_model_is_scoped_or_exempt_with_a_reason() -> None:
     unaccounted = []
     for mapper in Base.registry.mappers:
         model = mapper.class_
-        if issubclass(model, WorkspaceScoped):
+        if issubclass(model, WorkspaceScoped | SharedReference):
             continue
         if model in WORKSPACE_EXEMPT:
             assert WORKSPACE_EXEMPT[model].strip(), f"{model.__name__} is exempt with no reason given"
@@ -63,9 +87,11 @@ def test_every_model_is_scoped_or_exempt_with_a_reason() -> None:
         unaccounted.append(model.__name__)
 
     assert not unaccounted, (
-        f"These models are neither WorkspaceScoped nor in WORKSPACE_EXEMPT: {sorted(unaccounted)}. "
-        "A domain model takes the mixin — including a child table, whose workspace_id is "
-        "denormalised down. Only identity tables and genuinely global reference data are exempt."
+        f"These models are in none of the three buckets: {sorted(unaccounted)}. "
+        "A domain model takes WorkspaceScoped — including a child table, whose workspace_id "
+        "is denormalised down. A taxonomy every workspace reads and any may add to takes "
+        "SharedReference. Only identity tables and reference data with no per-workspace half "
+        "are exempt."
     )
 
 
@@ -300,3 +326,78 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
         },
     )
     assert refused.status_code == 403
+
+
+# ── 7. The third bucket: a shared taxonomy, stated rather than inferred ──────
+
+
+def test_a_shared_reference_shows_global_rows_and_this_workspace_s_own(session: Session, taxonomy_table: None) -> None:
+    """The wider predicate: global rows PLUS the bound workspace's additions."""
+    user = _make_user(session, "taxonomist")
+    mine = _make_workspace(session, "mine-ws", user)
+    theirs = _make_workspace(session, "theirs-ws", user)
+
+    with unscoped(session):
+        session.add(TaxonomyEntry(label="global", workspace_id=None))
+        session.add(TaxonomyEntry(label="mine", workspace_id=mine.id))
+        session.add(TaxonomyEntry(label="theirs", workspace_id=theirs.id))
+        session.flush()
+
+    bind_session(session, workspace_id=mine.id, created_by_id=user.id)
+    labels = sorted(e.label for e in session.execute(select(TaxonomyEntry)).scalars().all())
+    assert labels == ["global", "mine"]
+
+
+def test_a_bound_session_cannot_edit_a_global_taxonomy_row(session: Session, taxonomy_table: None) -> None:
+    """Editing the estate's shared list is a deliberate unscoped act, not a side effect."""
+    user = _make_user(session, "meddler")
+    workspace = _make_workspace(session, "meddler-ws", user)
+
+    with unscoped(session):
+        entry = TaxonomyEntry(label="global", workspace_id=None)
+        session.add(entry)
+        session.flush()
+
+    bind_session(session, workspace_id=workspace.id, created_by_id=user.id)
+    entry.label = "vandalised"
+    with pytest.raises(CrossWorkspaceWriteError):
+        session.flush()
+
+
+def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session, taxonomy_table: None) -> None:
+    """A workspace adding to the list adds to ITS half; it cannot mint a global row."""
+    user = _make_user(session, "adder")
+    workspace = _make_workspace(session, "adder-ws", user)
+
+    bind_session(session, workspace_id=workspace.id, created_by_id=user.id)
+    entry = TaxonomyEntry(label="ours")
+    session.add(entry)
+    session.flush()
+
+    assert entry.workspace_id == workspace.id
+
+
+# ── 8. A machine principal may use an identity, never mint one ──────────────
+
+
+async def test_a_declared_machine_principal_is_not_given_a_user_row(client: AsyncClient) -> None:
+    """godswood#701's shape, refused at the factory rather than per app."""
+    refused = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "some-service-account",
+            "x-authentik-username": "some-service-account",
+            "x-authentik-user-type": "service_account",
+        },
+    )
+    assert refused.status_code == 401
+
+
+async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(client: AsyncClient) -> None:
+    """The header is absent on exactly the request it exists to catch, so its
+    absence must never narrow the ordinary human path."""
+    admitted = await client.get(
+        "/api/example/",
+        headers={"x-authentik-uid": "an-ordinary-person", "x-authentik-username": "an-ordinary-person"},
+    )
+    assert admitted.status_code == 200

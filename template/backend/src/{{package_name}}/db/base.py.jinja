@@ -75,3 +75,42 @@ class WorkspaceScoped:
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+
+class SharedReference:
+    """Marks a taxonomy every workspace reads and any workspace may add to.
+
+    A NULL ``workspace_id`` means GLOBAL — visible to every workspace; a non-NULL
+    one means that workspace's own addition to the same list. The rule is stated
+    HERE, in the model's declaration, rather than implied by whether a column
+    happens to be null: a visibility rule nobody declared is the defect this whole
+    layer exists to end, and this mixin is what keeps it declared while still
+    being injected automatically by the same session hooks.
+
+    Reach for it ONLY for a genuine shared taxonomy that other rows point at with
+    a foreign key. The alternative — splitting into a global table and a scoped
+    one — was measured against godswood's two instances on 2026-08-20 and costs
+    more than it buys: both are foreign-key TARGETS, so a split leaves a
+    referencing row unable to name its parent with one foreign key, forcing
+    either two nullable columns and a CHECK (doubling the join on every read) or
+    a bare integer and a discriminator, which takes referential integrity off a
+    financial ledger. One of the two is NOT NULL today, so a split would demote a
+    database-enforced invariant to a check constraint.
+
+    A row with a workspace behaves exactly like a WorkspaceScoped one. A GLOBAL
+    row is estate-wide reference data: writing one is a deliberate act inside an
+    ``unscoped()`` block, which is greppable and baselined, because within a bound
+    session the flush hook can only ever stamp a row into the session's own
+    workspace.
+    """
+
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )

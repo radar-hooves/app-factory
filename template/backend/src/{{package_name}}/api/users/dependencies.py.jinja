@@ -76,6 +76,21 @@ def get_identity(
     if not uid:
         raise AuthenticationError("Missing identity headers — is the proxy configured?")
 
+    # A machine principal may USE an identity someone linked to it; it may not
+    # bring a new one into existence. Creating a user is a human's first sight of
+    # the app, and a machine reaching the human surface without delegating is a
+    # misconfiguration whose signature is a user row nobody made.
+    #
+    # Deliberately narrow: it refuses only MINTING, and only when the provider
+    # positively says "machine". An unset header means person, so a provider that
+    # sends nothing behaves exactly as before.
+    declared_type = request.headers.get(identity_settings.authentik_user_type_header)
+    is_machine = declared_type == identity_settings.authentik_service_account_type
+    if is_machine and users_service.get_by_uid(session, uid) is None:
+        raise AuthenticationError(
+            "A machine principal has no user in this app. Link one, or call the /mcp surface.",
+        )
+
     user = users_service.upsert_from_identity(
         session,
         authentik_uid=uid,

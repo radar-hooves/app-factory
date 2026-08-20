@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 def list_items(session: Session) -> list[ExampleItem]:
-    """Return all ExampleItems ordered by id."""
+    """Return this workspace's ExampleItems, ordered by id.
+
+    No workspace filter appears here and none should: the session is bound, so
+    the criterion is injected for every scoped model. A filter written by hand
+    would be a second, forgettable copy of a rule the session already enforces.
+    """
     return list(session.execute(select(ExampleItem).order_by(ExampleItem.id)).scalars().all())
 
 
@@ -29,12 +34,20 @@ def get_item(session: Session, item_id: int) -> ExampleItem:
     """
     item = session.execute(select(ExampleItem).where(ExampleItem.id == item_id)).scalar_one_or_none()
     if item is None:
+        # Also the answer for an id belonging to ANOTHER workspace — it is
+        # invisible to this session, so the probe gets 404 rather than 403.
+        # That is the better answer as well as the automatic one: a 403 confirms
+        # the id exists.
         raise NotFoundError(f"ExampleItem {item_id} not found")
     return item
 
 
 def create_item(session: Session, data: ExampleItemCreate) -> ExampleItem:
-    """Persist a new ExampleItem and return the created instance."""
+    """Persist a new ExampleItem in this workspace and return it.
+
+    Neither workspace_id nor created_by_id is set here — the flush hook stamps
+    both from the bound session.
+    """
     item = ExampleItem(title=data.title, body=data.body)
     session.add(item)
     session.flush()

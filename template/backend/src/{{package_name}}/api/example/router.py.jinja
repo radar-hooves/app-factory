@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ExampleItemRead], operation_id="listExampleItems")
 def list_items(session: SessionDep, _workspace: CurrentWorkspace) -> list[ExampleItemRead]:
-    """List all example items."""
+    """List the example items in the caller's workspace."""
     items = service.list_items(session)
     return [ExampleItemRead.model_validate(item) for item in items]
 

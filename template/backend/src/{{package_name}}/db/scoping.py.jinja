@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, Final
 from sqlalchemy import event
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
-from {{ package_name }}.db.base import WorkspaceScoped
+from {{ package_name }}.db.base import SharedReference, WorkspaceScoped
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import UOWTransaction
@@ -111,7 +111,7 @@ def unscoped(session: Session) -> Generator[Session]:
 
 
 def _is_scoped_class(candidate: Any) -> bool:
-    return isinstance(candidate, type) and issubclass(candidate, WorkspaceScoped)
+    return isinstance(candidate, type) and issubclass(candidate, WorkspaceScoped | SharedReference)
 
 
 def _touches_scoped_model(state: ORMExecuteState) -> bool:
@@ -159,15 +159,23 @@ def _scope_or_refuse(state: ORMExecuteState) -> None:
             WorkspaceScoped,
             lambda cls: cls.workspace_id == workspace_id,
             include_aliases=True,
-        )
+        ),
+        # A shared taxonomy answers a wider predicate on purpose: the global rows
+        # PLUS this workspace's own additions. Stated by the model carrying
+        # SharedReference, never inferred from a column being nullable.
+        with_loader_criteria(
+            SharedReference,
+            lambda cls: (cls.workspace_id.is_(None)) | (cls.workspace_id == workspace_id),
+            include_aliases=True,
+        ),
     )
 
 
 @event.listens_for(Session, "before_flush")
 def _stamp_or_refuse(session: Session, flush_context: UOWTransaction, instances: object) -> None:
     """Stamp new scoped rows with the session's workspace; refuse a foreign write."""
-    pending = [obj for obj in session.new if isinstance(obj, WorkspaceScoped)]
-    changing = [obj for obj in (*session.dirty, *session.deleted) if isinstance(obj, WorkspaceScoped)]
+    pending = [obj for obj in session.new if isinstance(obj, WorkspaceScoped | SharedReference)]
+    changing = [obj for obj in (*session.dirty, *session.deleted) if isinstance(obj, WorkspaceScoped | SharedReference)]
     if not pending and not changing:
         return
 
@@ -198,6 +206,14 @@ def _stamp_or_refuse(session: Session, flush_context: UOWTransaction, instances:
             )
 
     for obj in changing:
+        # A global shared-reference row belongs to no workspace, so a bound
+        # session may not touch it: editing the estate's taxonomy is an
+        # unscoped(), admin-gated act, not something a request does in passing.
+        if isinstance(obj, SharedReference) and obj.workspace_id is None:
+            raise CrossWorkspaceWriteError(
+                f"Refusing to modify the GLOBAL {type(obj).__name__} row from a workspace-bound "
+                "session. Editing shared reference data is an explicit unscoped() operation."
+            )
         if obj.workspace_id != workspace_id:
             raise CrossWorkspaceWriteError(
                 f"Refusing to modify a {type(obj).__name__} belonging to workspace "
