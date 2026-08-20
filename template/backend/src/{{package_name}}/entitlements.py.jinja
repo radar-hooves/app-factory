@@ -1,0 +1,91 @@
+"""Module entitlements — may this ACCOUNT use module M, and at what grade.
+
+The middle of the three layers (`rules-library/platform/tenancy.md`): identity
+answers who is calling, this answers what they may use, and workspace membership
+answers whose data is in scope. Entitlement is per ACCOUNT and does not vary by
+workspace — it is licensing, not scoping. What a caller sees is the intersection:
+a module they are entitled to, showing rows of the workspace they are in.
+
+Grades are provisioned at the identity provider as Application Entitlements and
+arrive pipe-delimited on every request:
+
+    property                 -> may READ the property module
+    property:write           -> may read AND mutate it
+
+DEFAULT-DENY IS THE POINT. A bare key grants read only, and mutation needs the
+explicit ``:write`` grade, so a grant issued in a hurry gives away the smaller
+thing. The inverse (bare = read+write, ``:read`` for read-only) needs no
+re-provisioning on cutover day and was rejected for that reason: forgetting to
+add ``:read`` would silently hand someone write access to a household ledger,
+where forgetting ``:write`` merely produces a 403 someone reports.
+
+``is_admin`` deliberately does NOT bypass these gates. It has one job —
+estate-wide administration of GLOBAL reference data — and letting it stand in for
+a module grant is how it becomes the super-role every authorisation question ends
+up asking, which is exactly the shape this file exists to avoid.
+"""
+
+import logging
+from collections.abc import Callable
+
+from fastapi import Depends
+
+from {{ package_name }}.api.users.dependencies import CurrentIdentity, Identity
+from {{ package_name }}.exceptions import ForbiddenError
+
+logger = logging.getLogger(__name__)
+
+WRITE_SUFFIX = ":write"
+
+
+def has_module(entitlements: tuple[str, ...], module: str, *, write: bool = False) -> bool:
+    """True when these entitlements admit ``module`` at the requested grade.
+
+    The write grade implies read, so a caller holding only ``property:write`` can
+    read the property module — the alternative would make every write grant a
+    two-key affair for no gain.
+    """
+    if write:
+        return f"{module}{WRITE_SUFFIX}" in entitlements
+    return module in entitlements or f"{module}{WRITE_SUFFIX}" in entitlements
+
+
+def require_module(module: str, *, write: bool = False) -> Callable[[Identity], Identity]:
+    """FastAPI dependency factory gating a route on a module entitlement.
+
+    Usage:
+        router = APIRouter(dependencies=[Depends(require_module("property"))])
+
+        @router.post("/", dependencies=[Depends(require_module("property", write=True))])
+        def create_property(...): ...
+
+    Gate the ROUTER on read and each mutating route on write, so a new route
+    added to an existing router inherits the read gate rather than none.
+    """
+
+    def _check(identity: CurrentIdentity) -> Identity:
+        if has_module(identity.entitlements, module, write=write):
+            return identity
+
+        if not identity.entitlements:
+            # Names the likely cause: an outpost not configured to forward
+            # entitlements looks identical to a user with none, and the second
+            # explanation sends someone hunting in the wrong system.
+            logger.warning(
+                "Refused a module the caller has no entitlements at all for — is the "
+                "identity provider forwarding the entitlements header?",
+                extra={"module": module, "user_id": identity.user.id},
+            )
+
+        grade = "write" if write else "read"
+        raise ForbiddenError(
+            f"You do not have {grade} access to the {module} module",
+            details={"module": module, "grade": grade},
+        )
+
+    return _check
+
+
+def module_dependency(module: str, *, write: bool = False) -> object:
+    """``Depends(require_module(...))``, for a router's ``dependencies=[…]`` list."""
+    return Depends(require_module(module, write=write))

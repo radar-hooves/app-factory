@@ -1,0 +1,105 @@
+"""Identity resolution — who is calling.
+
+The first of the three layers a request passes through
+(`rules-library/platform/tenancy.md`). It lives in the users slice rather than in
+``deps.py`` so the dependency graph flows ONE way: ``deps.py`` imports the slices
+and re-exports their aliases, and no slice imports ``deps.py`` back. The cost is
+that this module spells out its own session annotation rather than using
+``SessionDep``; the alternative was a genuine import cycle whose failure depended
+on which module Python reached first.
+"""
+
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from starlette.requests import Request
+
+from {{ package_name }}.api.users import service as users_service
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.workspaces import service as workspaces_service
+from {{ package_name }}.config import Settings, get_settings
+from {{ package_name }}.config.sections.identity import IdentitySettings
+from {{ package_name }}.db.session import get_session
+from {{ package_name }}.exceptions import AuthenticationError
+
+
+@dataclass(frozen=True, slots=True)
+class Identity:
+    """Who is calling, and what THIS REQUEST carried.
+
+    ``entitlements`` is not persisted anywhere and is true only of the request
+    that carried it — the identity provider re-asserts it on every call. Storing
+    it would let a revoked grant keep working until something noticed.
+    """
+
+    user: User
+    entitlements: tuple[str, ...]
+
+
+def _parse_entitlements(request: Request, identity_settings: IdentitySettings) -> tuple[str, ...]:
+    """Split the pipe-delimited Application Entitlements header.
+
+    An ABSENT header is not an empty one: it means the outpost is not sending
+    entitlements at all, which closes every module gate. That is the safe reading,
+    and ``require_module`` logs the distinction when it bites so a misconfigured
+    outpost surfaces as a named cause rather than as an app that shows nothing.
+    """
+    raw = request.headers.get(identity_settings.authentik_entitlements_header, "")
+    return tuple(part.strip() for part in raw.split("|") if part.strip())
+
+
+def get_identity(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Identity:
+    """Resolve the caller from the forward-auth headers, upserting the local record.
+
+    Tier 1a (proxy-delegated): the proxy verifies the session and injects these
+    headers, and NETWORK ISOLATION is the security boundary — a request reaching
+    this app without traversing the proxy could set them itself
+    (`rules-library/platform/proxy-delegated-auth.md`).
+
+    Headers are read from ``request.headers`` rather than through FastAPI's
+    ``Header()`` parameter because their names are configurable
+    (``config/sections/identity.py``), and ``Header(alias=…)`` needs its alias at
+    function-definition time.
+
+    Raises:
+        AuthenticationError: 401 when the stable identity header is absent (the
+            request did not come through the proxy), or the account is inactive.
+    """
+    identity_settings = settings.identity
+    uid = request.headers.get(identity_settings.authentik_uid_header)
+    if not uid:
+        raise AuthenticationError("Missing identity headers — is the proxy configured?")
+
+    user = users_service.upsert_from_identity(
+        session,
+        authentik_uid=uid,
+        username=request.headers.get(identity_settings.authentik_username_header) or uid,
+        email=request.headers.get(identity_settings.authentik_email_header),
+    )
+
+    if not user.is_active:
+        raise AuthenticationError("This account is not active")
+
+    # Same transaction as the upsert, so every authenticated user always holds at
+    # least one membership and workspace resolution has no zero-membership branch
+    # to handle. The org-of-one is the default condition, not an edge case.
+    workspaces_service.ensure_personal_workspace(session, user)
+
+    return Identity(user=user, entitlements=_parse_entitlements(request, identity_settings))
+
+
+CurrentIdentity = Annotated[Identity, Depends(get_identity)]
+
+
+def get_current_user(identity: CurrentIdentity) -> User:
+    """The caller's local user row, for a route that needs nothing else."""
+    return identity.user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]

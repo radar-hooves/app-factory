@@ -1,0 +1,53 @@
+"""Pydantic schemas for the workspace primitive."""
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from {{ package_name }}.api.workspaces.models import WorkspaceRole
+
+
+class WorkspaceRead(BaseModel):
+    """A workspace as the API exposes it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+
+
+class MembershipRead(BaseModel):
+    """One of the caller's memberships, with the workspace it grants.
+
+    This is what the SPA's workspace switcher renders, and what tells it whether
+    to render at all: a caller with one membership never sees a switcher.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    workspace: WorkspaceRead
+    role: WorkspaceRole
+
+
+class WorkspaceCreate(BaseModel):
+    """Request body for creating a workspace. The creator becomes its owner."""
+
+    name: str = Field(min_length=1, max_length=255)
+
+
+class WorkspaceRename(BaseModel):
+    """Request body for renaming a workspace. Owner only."""
+
+    name: str = Field(min_length=1, max_length=255)
+
+
+class MemberAdd(BaseModel):
+    """Request body for granting someone membership of a workspace.
+
+    Identified by the app's own user id rather than an Authentik uid: the caller
+    granting access is choosing from people the app already knows, and accepting
+    a provider key here would let a client mint a membership for an identity the
+    app has never authenticated.
+    """
+
+    user_id: int
+    role: WorkspaceRole = WorkspaceRole.MEMBER

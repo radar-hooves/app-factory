@@ -1,0 +1,72 @@
+"""Business logic for the local user record."""
+
+import datetime
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.exceptions import NotFoundError
+
+logger = logging.getLogger(__name__)
+
+
+def get_by_uid(session: Session, authentik_uid: str) -> User | None:
+    """Return the user with this Authentik uid, or None."""
+    return session.execute(select(User).where(User.authentik_uid == authentik_uid)).scalar_one_or_none()
+
+
+def get_by_id(session: Session, user_id: int) -> User:
+    """Return a user by primary key.
+
+    Raises:
+        NotFoundError: when no such user exists.
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise NotFoundError(f"User {user_id} not found")
+    return user
+
+
+def upsert_from_identity(
+    session: Session,
+    *,
+    authentik_uid: str,
+    username: str,
+    email: str | None = None,
+) -> User:
+    """Match a user on the stable Authentik uid, creating the row on first sight.
+
+    Matching is on ``authentik_uid`` alone, never on username or email: both are
+    mutable at the identity provider, and matching on a mutable field silently
+    splits one person into two rows the day they change their name.
+
+    A first sight creates an INERT user — no entitlements (those arrive per
+    request in a header and this row stores none), no admin, and only their own
+    empty personal workspace. That inertness is what makes just-in-time creation
+    safe on a surface that cannot tell a person's first login from a machine
+    caller that should have been refused: both produce a row that can read
+    nothing. It is logged at WARNING so a row nobody expected is visible rather
+    than merely harmless (master-project#291, godswood#701).
+    """
+    user = get_by_uid(session, authentik_uid)
+    now = datetime.datetime.now(datetime.UTC)
+
+    if user is None:
+        user = User(authentik_uid=authentik_uid, username=username, email=email, last_seen_at=now)
+        session.add(user)
+        session.flush()
+        logger.warning(
+            "Created a local user record on first sight of an authenticated identity",
+            extra={"user_id": user.id, "username": username},
+        )
+        return user
+
+    # Re-sync the mutable fields every request: the identity provider is the
+    # source of truth for them and a stale local copy is a support ticket.
+    user.username = username
+    if email is not None:
+        user.email = email
+    user.last_seen_at = now
+    return user

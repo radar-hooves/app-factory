@@ -1,0 +1,93 @@
+"""ORM models for the workspace primitive — the access boundary.
+
+A workspace is a set of people who share a body of data
+(`rules-library/platform/tenancy.md`). It is the noun the fleet was missing
+between "person" and "everyone": scoping rows to the person who created them
+makes a second household member see an empty app, and scoping nothing makes
+every caller see every row.
+
+What an app CALLS a workspace in its UI is its own vocabulary (the
+``workspace_label`` copier answer). In code it is a workspace, in every app.
+"""
+
+import enum
+
+from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from {{ package_name }}.db.base import Base, TimestampMixin
+
+
+class WorkspaceRole(enum.StrEnum):
+    """A member's standing IN a workspace — never what they may do in a module.
+
+    Module read/write is an entitlement grade provisioned at the identity
+    provider; this is administration of the workspace itself. Keeping the two
+    apart is what stops a third authorisation source appearing.
+    """
+
+    OWNER = "owner"
+    MEMBER = "member"
+
+
+class Workspace(Base, TimestampMixin):
+    """A body of shared data and the people who may reach it.
+
+    NOT itself workspace-scoped — it is the thing rows are scoped TO — and named
+    in the identity exemption in db/registry.py for that reason.
+    """
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Stable machine identifier. Personal workspaces are minted as
+    # "personal-<user id>", which is unique by construction and needs no
+    # collision handling on a name a person can change freely.
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+
+    # Display name, editable by an owner.
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class WorkspaceMembership(Base, TimestampMixin):
+    """One person's standing in one workspace.
+
+    Many-to-many deliberately: a person belongs to the household that owns the
+    ledgers AND the circle that owns the family stories, while a reader belongs
+    only to the circle.
+
+    Membership is an EXPLICIT row an owner writes. It is never derived from an
+    identity-provider group, an entitlement, or the ability to sign in — two
+    people sharing a proxy is not evidence they share a ledger. Sharing is a
+    grant, not an inference.
+    """
+
+    __tablename__ = "workspace_memberships"
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_workspace_memberships_workspace_user"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # CASCADE on both sides is correct HERE and wrong on a domain row: deleting a
+    # workspace or a user should retract the grant, never destroy the data the
+    # grant reached. Domain rows use RESTRICT/SET NULL for exactly that reason
+    # (see WorkspaceScoped in db/base.py).
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # native_enum=False emits VARCHAR + CHECK rather than a Postgres ENUM type:
+    # adding a value to a native enum is an ALTER TYPE that cannot run inside a
+    # transactional migration on older servers, and the check constraint gives
+    # the same guarantee with none of that.
+    role: Mapped[WorkspaceRole] = mapped_column(
+        Enum(WorkspaceRole, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=WorkspaceRole.MEMBER,
+    )
+
+    # Eager by default: a membership is almost never useful without the
+    # workspace it grants — the switcher renders its name, and resolution reads
+    # its id — so the alternative is an N+1 on the one query every request makes.
+    workspace: Mapped[Workspace] = relationship(lazy="joined")

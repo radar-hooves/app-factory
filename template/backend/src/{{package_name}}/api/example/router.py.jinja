@@ -8,27 +8,32 @@ from fastapi import APIRouter
 
 from {{ package_name }}.api.example import service
 from {{ package_name }}.api.example.schemas import ExampleItemCreate, ExampleItemRead
-from {{ package_name }}.deps import CurrentUser, SessionDep
+from {{ package_name }}.deps import CurrentWorkspace, SessionDep
 
 router = APIRouter()
 
+# Every route takes CurrentWorkspace, and that is what makes the service functions
+# below scope-free: the dependency binds the session, so `select(ExampleItem)` is
+# already this workspace's. A route that omitted it would get an unbound session
+# and raise on contact with the model, rather than returning every workspace's rows.
+
 
 @router.get("/", response_model=list[ExampleItemRead], operation_id="listExampleItems")
-def list_items(session: SessionDep, _user: CurrentUser) -> list[ExampleItemRead]:
+def list_items(session: SessionDep, _workspace: CurrentWorkspace) -> list[ExampleItemRead]:
     """List all example items."""
     items = service.list_items(session)
     return [ExampleItemRead.model_validate(item) for item in items]
 
 
 @router.get("/{item_id}", response_model=ExampleItemRead, operation_id="getExampleItem")
-def get_item(item_id: int, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+def get_item(item_id: int, session: SessionDep, _workspace: CurrentWorkspace) -> ExampleItemRead:
     """Get a single example item by id."""
     item = service.get_item(session, item_id)
     return ExampleItemRead.model_validate(item)
 
 
 @router.post("/", response_model=ExampleItemRead, status_code=201, operation_id="createExampleItem")
-def create_item(data: ExampleItemCreate, session: SessionDep, _user: CurrentUser) -> ExampleItemRead:
+def create_item(data: ExampleItemCreate, session: SessionDep, _workspace: CurrentWorkspace) -> ExampleItemRead:
     """Create a new example item."""
     item = service.create_item(session, data)
     return ExampleItemRead.model_validate(item)

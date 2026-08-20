@@ -1,0 +1,52 @@
+"""Identity-header configuration for the Tier 1a human surface.
+
+The forward-auth proxy asserts who is calling by injecting headers; this
+section names them. They are settings rather than literals because the header
+prefix is an Authentik outpost configuration, not a property of this app
+(`rules-library/platform/proxy-delegated-auth.md`: "must make header names
+configurable via application settings").
+
+The consequence is that identity is read from ``request.headers`` rather than
+through FastAPI's ``Header()`` parameter, which needs its alias at function
+definition time and so cannot take a configured name. See ``deps.py``.
+
+Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_UID_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USERNAME_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_EMAIL_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ENTITLEMENTS_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ACTS_AS_HEADER
+"""
+
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class IdentitySettings(BaseSettings):
+    """Names of the identity headers the forward-auth proxy injects."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="{{ project_name | upper | replace('-', '_') }}_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # The stable, immutable key. Everything else about a person may change;
+    # this is what a user row is matched on, for the life of the account.
+    authentik_uid_header: str = "x-authentik-uid"
+
+    # Mutable display fields, re-synced onto the user row on every request.
+    authentik_username_header: str = "x-authentik-username"
+    authentik_email_header: str = "x-authentik-email"
+
+    # Pipe-delimited Application Entitlements, e.g. "property|travel:read".
+    # Absent is NOT the same as empty: absent means the outpost is not sending
+    # them and every non-admin module gate closes, which is the safe reading.
+    authentik_entitlements_header: str = "x-authentik-entitlements"
+
+    # Set by a machine caller delegating to a human identity. Its ABSENCE on a
+    # caller that did not traverse the human proxy is what distinguishes "a
+    # person signing in for the first time" from "a machine that should have
+    # been refused" — see deps.py and master-project#291.
+    authentik_acts_as_header: str = "x-authentik-acts-as"

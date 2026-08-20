@@ -1,0 +1,76 @@
+"""Workspace resolution — the one code path that decides whose data is in scope.
+
+Resolution always runs. The ``X-Workspace-Id`` header is a DISAMBIGUATOR for a
+caller who belongs to more than one workspace, never a second path into the app:
+a sole membership needs no header, and an ambiguous request without one is
+refused with the list of choices rather than silently defaulted. A silent default
+is how household data lands in a personal workspace.
+"""
+
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import Depends, Header
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.dependencies import CurrentIdentity
+from {{ package_name }}.api.workspaces import service
+from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from {{ package_name }}.db.scoping import bind_session
+from {{ package_name }}.db.session import get_session
+from {{ package_name }}.exceptions import ConflictError, ForbiddenError
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceContext:
+    """The workspace this request is operating in, and the caller's standing in it."""
+
+    workspace: Workspace
+    membership: WorkspaceMembership
+
+    @property
+    def id(self) -> int:
+        return self.workspace.id
+
+    @property
+    def is_owner(self) -> bool:
+        return self.membership.role is WorkspaceRole.OWNER
+
+
+def get_current_workspace(
+    identity: CurrentIdentity,
+    session: Annotated[Session, Depends(get_session)],
+    x_workspace_id: Annotated[int | None, Header(alias="x-workspace-id")] = None,
+) -> WorkspaceContext:
+    """Resolve the request's workspace and BIND the session to it.
+
+    Binding is the whole point: from here on every ORM statement is filtered and
+    every insert stamped by the session hooks, so no service writes a scoping
+    filter and none can forget one. A route that does not depend on this gets an
+    unbound session, and an unbound session refuses to touch a scoped model.
+    """
+    memberships = service.list_memberships(session, identity.user.id)
+
+    if x_workspace_id is not None:
+        chosen = next((m for m in memberships if m.workspace_id == x_workspace_id), None)
+        if chosen is None:
+            # Not 404: distinguishing "no such workspace" from "not yours" would
+            # confirm the existence of workspaces the caller cannot reach.
+            raise ForbiddenError("You are not a member of that workspace")
+    elif len(memberships) == 1:
+        chosen = memberships[0]
+    else:
+        raise ConflictError(
+            "This request could be for more than one workspace; send X-Workspace-Id to choose",
+            details={
+                "workspaces": [
+                    {"id": m.workspace.id, "slug": m.workspace.slug, "name": m.workspace.name} for m in memberships
+                ]
+            },
+        )
+
+    bind_session(session, workspace_id=chosen.workspace_id, created_by_id=identity.user.id)
+    return WorkspaceContext(workspace=chosen.workspace, membership=chosen)
+
+
+CurrentWorkspace = Annotated[WorkspaceContext, Depends(get_current_workspace)]

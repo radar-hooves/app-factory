@@ -3,10 +3,35 @@ can discover all tables via Base.metadata.
 
 Add one import per model module as the domain grows:
     from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+
+This file also carries WORKSPACE_EXEMPT: every mapped model must either take the
+``WorkspaceScoped`` mixin or be named here with a reason, and
+``tests/test_workspace_scoping.py`` fails on a model in neither place. That is
+what stops a new table quietly shipping with no access predicate
+(`rules-library/platform/tenancy.md`).
 """
 
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
 from {{ package_name }}.db.base import Base
-from {{ package_name }}.db.environment import DeploymentEnvironmentMarker  # noqa: F401
+from {{ package_name }}.db.environment import DeploymentEnvironmentMarker
 
-__all__ = ["Base"]
+# Models that legitimately carry no workspace_id, each with the reason it does
+# not. Two kinds qualify and no third: the identity tables that workspace
+# resolution is performed FROM, and genuinely global reference data every
+# workspace reads the same.
+#
+# A CHILD table is NOT a third kind. "Reached only through its scoped parent" is
+# a claim about how callers happen to behave, and nothing stops a bare
+# select(ChildRow) — so a child row takes the mixin too, with workspace_id
+# denormalised down. The exemption list is for tables that genuinely have no
+# workspace, not for tables whose workspace is inconvenient to reach.
+WORKSPACE_EXEMPT: dict[type, str] = {
+    User: "identity — a user exists before any workspace, and membership is resolved from this table",
+    Workspace: "the workspace itself — rows are scoped TO it",
+    WorkspaceMembership: "the grant that resolution reads; scoping it by workspace would be circular",
+    DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
+}
+
+__all__ = ["WORKSPACE_EXEMPT", "Base"]

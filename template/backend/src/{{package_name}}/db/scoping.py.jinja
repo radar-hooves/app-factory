@@ -1,0 +1,205 @@
+"""Workspace scoping, enforced by the session rather than by every query.
+
+Postgres row-level security is the textbook layer and is deliberately deferred
+(`rules-library/platform/tenancy.md`): with every workspace held by mutually
+trusting household members its value is near zero, while its costs —
+transaction-scoped GUC discipline through the connection pool, an
+alembic-as-owner bypass, a suite that must connect as the app role — are
+permanent. What replaces it is here.
+
+Two hooks, both on the Session class, so they apply to every session in the
+process including the test suite's:
+
+- ``do_orm_execute`` injects the workspace criterion into every ORM statement
+  touching a ``WorkspaceScoped`` model, using SQLAlchemy's documented global
+  WHERE / ON criteria recipe. Because it is applied at the top level it
+  propagates into relationship and lazy loads too.
+- ``before_flush`` stamps new scoped instances with the session's workspace and
+  creator, and refuses a write aimed at a different workspace.
+
+Both FAIL CLOSED. A session nobody bound — a route that forgot
+``CurrentWorkspace``, a background job that took a bare session — raises on
+contact with a scoped model instead of returning every workspace's rows. The
+failure mode of forgetting is an exception, in production as well as in tests.
+
+The one hole, named rather than hidden: these hooks see ORM statements. Raw
+``text()`` SQL and Core statements carrying no ORM entity bypass them, as does
+anything reading the database from outside the app. The rule forbids raw SQL
+against a workspace-scoped table for that reason, and closing it mechanically
+is what the deferred RLS ratchet is for.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Generator
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Final
+
+from sqlalchemy import event
+from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
+
+from {{ package_name }}.db.base import WorkspaceScoped
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import UOWTransaction
+
+logger = logging.getLogger(__name__)
+
+# session.info keys. Strings rather than a dataclass on purpose: session.info is
+# a plain dict SQLAlchemy hands to every listener, and a scalar is the cheapest
+# thing to read inside a hook that runs on every statement.
+WORKSPACE_KEY: Final = "workspace_id"
+CREATOR_KEY: Final = "created_by_id"
+
+
+class _Unscoped:
+    """Sentinel for a session deliberately released from scoping."""
+
+    def __repr__(self) -> str:
+        return "UNSCOPED"
+
+
+UNSCOPED: Final = _Unscoped()
+
+
+class UnscopedQueryError(RuntimeError):
+    """Raised when an unbound session executes a statement against a scoped model.
+
+    This is the fail-closed path, and it is a programming error rather than a
+    caller error: the route or job needs the workspace dependency, or an explicit
+    ``unscoped()`` block if it genuinely spans workspaces.
+    """
+
+
+class CrossWorkspaceWriteError(RuntimeError):
+    """Raised when a flush would write a row into a workspace the session is not bound to."""
+
+
+def bind_session(session: Session, *, workspace_id: int, created_by_id: int | None = None) -> None:
+    """Bind a session to a workspace for the rest of its life.
+
+    Called once per request by the ``CurrentWorkspace`` dependency, after
+    membership has been checked. Everything downstream — services, relationship
+    loads, flushes — is scoped from this point without mentioning it.
+    """
+    session.info[WORKSPACE_KEY] = workspace_id
+    session.info[CREATOR_KEY] = created_by_id
+
+
+@contextmanager
+def unscoped(session: Session) -> Generator[Session]:
+    """Release a session from workspace scoping for a genuinely cross-workspace read.
+
+    A system sweep, an estate-wide admin report, a migration helper. Every use is
+    greppable and counted against ``.unscoped-baseline.json`` — a new call site
+    fails the baseline check until it is argued in, the same debt discipline the
+    UI-drift and design-craft gates use.
+
+    Restores the previous binding on exit, including "unbound", so a block cannot
+    silently leave a request-scoped session open afterwards.
+    """
+    previous = session.info.get(WORKSPACE_KEY, None)
+    session.info[WORKSPACE_KEY] = UNSCOPED
+    try:
+        yield session
+    finally:
+        if previous is None:
+            session.info.pop(WORKSPACE_KEY, None)
+        else:
+            session.info[WORKSPACE_KEY] = previous
+
+
+def _is_scoped_class(candidate: Any) -> bool:
+    return isinstance(candidate, type) and issubclass(candidate, WorkspaceScoped)
+
+
+def _touches_scoped_model(state: ORMExecuteState) -> bool:
+    """True when a scoped model appears at the top level of this statement.
+
+    ``all_mappers`` is SQLAlchemy's own answer to "what is this statement about",
+    and it reads the compiled statement rather than the text — so a model that
+    inherits its columns from a mixin via ``declared_attr`` is found exactly like
+    one that declares them inline. A source-text check would miss those, which is
+    a live shape in this estate.
+    """
+    return any(_is_scoped_class(mapper.class_) for mapper in state.all_mappers)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _scope_or_refuse(state: ORMExecuteState) -> None:
+    """Filter every statement by the session's workspace, or refuse it."""
+    # A relationship or column load is a continuation of a top-level statement
+    # that has already been through this hook, and with_loader_criteria applied
+    # there propagates into it. Re-applying would double the criterion; refusing
+    # would reject a lazy load whose parent was legitimately fetched.
+    if state.is_column_load or state.is_relationship_load:
+        return
+
+    workspace_id = state.session.info.get(WORKSPACE_KEY)
+
+    if workspace_id is UNSCOPED:
+        return
+
+    if workspace_id is None:
+        if _touches_scoped_model(state):
+            raise UnscopedQueryError(
+                "This session is not bound to a workspace, and the statement touches a "
+                "workspace-scoped model. A route needs the CurrentWorkspace dependency; a "
+                "background job needs bind_session(); a genuinely cross-workspace read needs "
+                "an explicit unscoped() block."
+            )
+        return
+
+    if not (state.is_select or state.is_update or state.is_delete):
+        return
+
+    state.statement = state.statement.options(
+        with_loader_criteria(
+            WorkspaceScoped,
+            lambda cls: cls.workspace_id == workspace_id,
+            include_aliases=True,
+        )
+    )
+
+
+@event.listens_for(Session, "before_flush")
+def _stamp_or_refuse(session: Session, flush_context: UOWTransaction, instances: object) -> None:
+    """Stamp new scoped rows with the session's workspace; refuse a foreign write."""
+    pending = [obj for obj in session.new if isinstance(obj, WorkspaceScoped)]
+    changing = [obj for obj in (*session.dirty, *session.deleted) if isinstance(obj, WorkspaceScoped)]
+    if not pending and not changing:
+        return
+
+    workspace_id = session.info.get(WORKSPACE_KEY)
+
+    if workspace_id is UNSCOPED:
+        # A deliberate cross-workspace block may write, but it must say which
+        # workspace each row belongs to: the NOT NULL column is the backstop and
+        # a missing value fails loudly at the database rather than defaulting.
+        return
+
+    if workspace_id is None:
+        raise UnscopedQueryError(
+            "This session is not bound to a workspace and the flush carries workspace-scoped "
+            "rows. Bind the session before writing."
+        )
+
+    for obj in pending:
+        if obj.workspace_id is None:
+            obj.workspace_id = workspace_id
+            if obj.created_by_id is None:
+                obj.created_by_id = session.info.get(CREATOR_KEY)
+        elif obj.workspace_id != workspace_id:
+            raise CrossWorkspaceWriteError(
+                f"Refusing to insert a {type(obj).__name__} into workspace {obj.workspace_id} "
+                f"from a session bound to workspace {workspace_id}. A row is always written to "
+                "the ACTIVE workspace."
+            )
+
+    for obj in changing:
+        if obj.workspace_id != workspace_id:
+            raise CrossWorkspaceWriteError(
+                f"Refusing to modify a {type(obj).__name__} belonging to workspace "
+                f"{obj.workspace_id} from a session bound to workspace {workspace_id}."
+            )

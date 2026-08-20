@@ -7,11 +7,16 @@ includes the table in autogenerate.
 from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from {{ package_name }}.db.base import Base, TimestampMixin
+from {{ package_name }}.db.base import Base, TimestampMixin, WorkspaceScoped
 
 
-class ExampleItem(Base, TimestampMixin):
-    """Example item — replace with the first real domain entity."""
+class ExampleItem(Base, TimestampMixin, WorkspaceScoped):
+    """Example item — replace with the first real domain entity.
+
+    Carries WorkspaceScoped, which is the default answer for a domain model:
+    workspace_id and created_by_id arrive from the mixin, the session filters
+    every query on them, and the service below never mentions either.
+    """
 
     __tablename__ = "example_items"
 

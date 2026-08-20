@@ -1,0 +1,22 @@
+"""HTTP routes for the local user record."""
+
+from fastapi import APIRouter
+
+from {{ package_name }}.api.users.schemas import CurrentUserRead, UserRead
+from {{ package_name }}.deps import CurrentIdentity
+
+router = APIRouter()
+
+
+@router.get("/me", response_model=CurrentUserRead, operation_id="getCurrentUser")
+def read_current_user(identity: CurrentIdentity) -> CurrentUserRead:
+    """Return the caller's own user record and this request's entitlements.
+
+    The SPA calls this once at startup to populate its auth store. There is no
+    route to list or read OTHER users: the app is not a directory, and the
+    identity provider already is one.
+    """
+    return CurrentUserRead(
+        **UserRead.model_validate(identity.user).model_dump(),
+        entitlements=list(identity.entitlements),
+    )

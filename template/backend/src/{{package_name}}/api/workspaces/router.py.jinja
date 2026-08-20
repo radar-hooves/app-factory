@@ -1,0 +1,83 @@
+"""HTTP routes for the workspace primitive.
+
+None of these routes depends on ``CurrentWorkspace``: they are how a caller
+discovers and administers the workspaces they belong to, so they run before a
+workspace has been chosen. They are also the only routes in the app that read
+across workspaces, and they do it through membership rather than through the
+scoping hooks — which is why no ``unscoped()`` block appears here.
+"""
+
+from fastapi import APIRouter, status
+
+from {{ package_name }}.api.workspaces import service
+from {{ package_name }}.api.workspaces.schemas import (
+    MemberAdd,
+    MembershipRead,
+    WorkspaceCreate,
+    WorkspaceRead,
+    WorkspaceRename,
+)
+from {{ package_name }}.deps import CurrentIdentity, SessionDep
+
+router = APIRouter()
+
+
+@router.get("/me", response_model=list[MembershipRead], operation_id="listMyWorkspaces")
+def list_my_workspaces(session: SessionDep, identity: CurrentIdentity) -> list[MembershipRead]:
+    """List the workspaces the caller belongs to, with their role in each.
+
+    Always at least one — every user is provisioned a personal workspace on first
+    sight. The SPA calls this at startup and renders a switcher only when the
+    list has more than one entry.
+    """
+    memberships = service.list_memberships(session, identity.user.id)
+    return [MembershipRead.model_validate(m) for m in memberships]
+
+
+@router.post("/", response_model=MembershipRead, status_code=status.HTTP_201_CREATED, operation_id="createWorkspace")
+def create_workspace(data: WorkspaceCreate, session: SessionDep, identity: CurrentIdentity) -> MembershipRead:
+    """Create a workspace. The caller becomes its owner."""
+    membership = service.create_workspace(session, owner=identity.user, name=data.name)
+    return MembershipRead.model_validate(membership)
+
+
+@router.patch("/{workspace_id}", response_model=WorkspaceRead, operation_id="renameWorkspace")
+def rename_workspace(
+    workspace_id: int, data: WorkspaceRename, session: SessionDep, identity: CurrentIdentity
+) -> WorkspaceRead:
+    """Rename a workspace. Owner only. The slug is stable and does not follow."""
+    service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
+    workspace = service.rename_workspace(session, workspace_id=workspace_id, name=data.name)
+    return WorkspaceRead.model_validate(workspace)
+
+
+@router.post(
+    "/{workspace_id}/members",
+    response_model=MembershipRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="addWorkspaceMember",
+)
+def add_member(workspace_id: int, data: MemberAdd, session: SessionDep, identity: CurrentIdentity) -> MembershipRead:
+    """Grant someone membership of a workspace. Owner only.
+
+    This is the act the whole primitive exists for: sharing is a grant somebody
+    makes, never something the app infers from two people using the same proxy.
+    """
+    service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
+    membership = service.add_member(session, workspace_id=workspace_id, user_id=data.user_id, role=data.role)
+    return MembershipRead.model_validate(membership)
+
+
+@router.delete(
+    "/{workspace_id}/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="removeWorkspaceMember",
+)
+def remove_member(workspace_id: int, user_id: int, session: SessionDep, identity: CurrentIdentity) -> None:
+    """Retract someone's membership. Owner only.
+
+    Their rows stay with the workspace and their attribution stays on them; only
+    the grant goes.
+    """
+    service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
+    service.remove_member(session, workspace_id=workspace_id, user_id=user_id)

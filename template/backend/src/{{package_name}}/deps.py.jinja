@@ -2,42 +2,54 @@
 
 Import these instead of writing Depends(...) inline in route signatures.
 Add project-specific aliases here as the domain grows.
+
+The three layers a request passes through, each answering exactly ONE question
+(`rules-library/platform/tenancy.md`):
+
+  CurrentIdentity   — who is calling            (proxy headers -> local user row)
+  require_module    — may they use this module  (entitlement grade; entitlements.py)
+  CurrentWorkspace  — whose data is in scope    (membership; BINDS the session)
+
+Conflating any two of them is how an app comes to define "person" as "tenant" and
+a second household member signs in to an empty app.
+
+The identity and workspace dependencies are DEFINED in their own slices and
+re-exported here, so routes have one import while the dependency graph still
+flows one way (slices never import this module).
 """
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from {{ package_name }}.api.users.dependencies import (
+    CurrentIdentity,
+    CurrentUser,
+    Identity,
+    get_current_user,
+    get_identity,
+)
+from {{ package_name }}.api.workspaces.dependencies import (
+    CurrentWorkspace,
+    WorkspaceContext,
+    get_current_workspace,
+)
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.db.session import get_session
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
-
-async def get_current_user(
-    x_authentik_uid: Annotated[str | None, Header(alias="x-authentik-uid")] = None,
-    x_authentik_username: Annotated[str | None, Header(alias="x-authentik-username")] = None,
-) -> dict[str, str]:
-    """Extract the authenticated user from Authentik forward-auth headers.
-
-    Tier 1a (proxy-delegated) auth: the proxy injects these headers after
-    verifying the user's session. The app trusts the headers; network isolation
-    is the security boundary (see rules-library/platform/proxy-delegated-auth.md).
-
-    Returns:
-        dict with 'uid' (stable identifier) and 'username' (display name).
-
-    Raises:
-        HTTPException: 401 when headers are absent (request bypassed the proxy).
-    """
-    if not x_authentik_uid:
-        raise HTTPException(status_code=401, detail="Missing identity headers — is the proxy configured?")
-    return {
-        "uid": x_authentik_uid,
-        "username": x_authentik_username or x_authentik_uid,
-    }
-
-
-CurrentUser = Annotated[dict[str, str], Depends(get_current_user)]
+__all__ = [
+    "CurrentIdentity",
+    "CurrentUser",
+    "CurrentWorkspace",
+    "Identity",
+    "SessionDep",
+    "SettingsDep",
+    "WorkspaceContext",
+    "get_current_user",
+    "get_current_workspace",
+    "get_identity",
+]

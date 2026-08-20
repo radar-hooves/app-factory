@@ -1,0 +1,184 @@
+"""Business logic for the workspace primitive.
+
+These functions run on an UNBOUND session by design: they are what resolves the
+workspace, so they cannot already be scoped to one. Neither model here is
+``WorkspaceScoped``, so the session hooks stay out of their way.
+"""
+
+import logging
+import re
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from {{ package_name }}.exceptions import ConflictError, ForbiddenError, NotFoundError
+
+logger = logging.getLogger(__name__)
+
+_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify(name: str) -> str:
+    return _SLUG_STRIP.sub("-", name.strip().lower()).strip("-")[:48] or "workspace"
+
+
+def _unique_slug(session: Session, base: str) -> str:
+    """Return ``base``, or ``base-2``, ``base-3``… until it is free.
+
+    Slugs are few and created by hand, so a loop is honest here; a random suffix
+    would make every workspace URL unreadable to save a query nobody runs often.
+    """
+    candidate = base
+    suffix = 1
+    while session.execute(select(Workspace.id).where(Workspace.slug == candidate)).scalar_one_or_none() is not None:
+        suffix += 1
+        candidate = f"{base}-{suffix}"
+    return candidate
+
+
+def list_memberships(session: Session, user_id: int) -> list[WorkspaceMembership]:
+    """Return every membership this user holds, workspace loaded, oldest first.
+
+    Never empty for a user who has been through ``ensure_personal_workspace`` —
+    which is every authenticated user — so workspace resolution has no
+    zero-membership branch to handle.
+    """
+    stmt = select(WorkspaceMembership).where(WorkspaceMembership.user_id == user_id).order_by(WorkspaceMembership.id)
+    return list(session.execute(stmt).scalars().all())
+
+
+def get_membership(session: Session, *, workspace_id: int, user_id: int) -> WorkspaceMembership | None:
+    """Return this user's membership of this workspace, or None."""
+    stmt = select(WorkspaceMembership).where(
+        WorkspaceMembership.workspace_id == workspace_id,
+        WorkspaceMembership.user_id == user_id,
+    )
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def get_workspace(session: Session, workspace_id: int) -> Workspace:
+    """Return a workspace by id.
+
+    Raises:
+        NotFoundError: when it does not exist.
+    """
+    workspace = session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise NotFoundError(f"Workspace {workspace_id} not found")
+    return workspace
+
+
+def ensure_personal_workspace(session: Session, user: User) -> WorkspaceMembership:
+    """Give a user their own workspace if they hold no membership at all.
+
+    Runs in the same transaction as the user upsert, so every authenticated user
+    always holds at least one membership and the org-of-one is the DEFAULT
+    condition rather than an edge case — there is no "personal mode", no second
+    branch, and nothing to test twice.
+
+    The slug is derived from the user id rather than their name: it is unique by
+    construction and survives a rename.
+    """
+    existing = session.execute(
+        select(WorkspaceMembership).where(WorkspaceMembership.user_id == user.id).limit(1)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    workspace = Workspace(slug=f"personal-{user.id}", name=user.username)
+    session.add(workspace)
+    session.flush()
+
+    membership = WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.OWNER)
+    session.add(membership)
+    session.flush()
+    logger.info("Provisioned a personal workspace", extra={"user_id": user.id, "workspace_id": workspace.id})
+    return membership
+
+
+def create_workspace(session: Session, *, owner: User, name: str) -> WorkspaceMembership:
+    """Create a workspace with this user as its owner.
+
+    Creating one makes the creator its owner; that is the whole bootstrap, and
+    the reason there is no separate "grant the first owner" step to forget.
+    """
+    workspace = Workspace(slug=_unique_slug(session, _slugify(name)), name=name)
+    session.add(workspace)
+    session.flush()
+
+    membership = WorkspaceMembership(workspace_id=workspace.id, user_id=owner.id, role=WorkspaceRole.OWNER)
+    session.add(membership)
+    session.flush()
+    return membership
+
+
+def require_owner(session: Session, *, workspace_id: int, user_id: int) -> WorkspaceMembership:
+    """Return the caller's OWNER membership of this workspace, or refuse.
+
+    Raises:
+        ForbiddenError: when the caller is not an owner — including when they are
+            not a member at all, which is deliberately the same answer: a
+            distinct 404 would confirm the workspace exists.
+    """
+    membership = get_membership(session, workspace_id=workspace_id, user_id=user_id)
+    if membership is None or membership.role is not WorkspaceRole.OWNER:
+        raise ForbiddenError("Only an owner of this workspace may do that")
+    return membership
+
+
+def rename_workspace(session: Session, *, workspace_id: int, name: str) -> Workspace:
+    """Change a workspace's display name. The slug is stable and does not follow."""
+    workspace = get_workspace(session, workspace_id)
+    workspace.name = name
+    session.flush()
+    return workspace
+
+
+def add_member(session: Session, *, workspace_id: int, user_id: int, role: WorkspaceRole) -> WorkspaceMembership:
+    """Grant someone membership of a workspace.
+
+    Raises:
+        NotFoundError: when no such user exists.
+        ConflictError: when they are already a member — re-granting is not a
+            silent role change, because a silent role change is how someone
+            gains ownership nobody decided to give them.
+    """
+    if session.get(User, user_id) is None:
+        raise NotFoundError(f"User {user_id} not found")
+
+    if get_membership(session, workspace_id=workspace_id, user_id=user_id) is not None:
+        raise ConflictError("That user is already a member of this workspace")
+
+    membership = WorkspaceMembership(workspace_id=workspace_id, user_id=user_id, role=role)
+    session.add(membership)
+    session.flush()
+    logger.info("Granted workspace membership", extra={"workspace_id": workspace_id, "member_user_id": user_id})
+    return membership
+
+
+def remove_member(session: Session, *, workspace_id: int, user_id: int) -> None:
+    """Retract someone's membership.
+
+    Their rows stay with the workspace and their attribution stays on them; only
+    the grant goes. Refuses to remove the last owner, which would leave a
+    workspace nobody can administer.
+    """
+    membership = get_membership(session, workspace_id=workspace_id, user_id=user_id)
+    if membership is None:
+        raise NotFoundError("That user is not a member of this workspace")
+
+    if membership.role is WorkspaceRole.OWNER:
+        owners = session.execute(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.role == WorkspaceRole.OWNER,
+            )
+        ).scalars()
+        if len(list(owners)) == 1:
+            raise ConflictError("A workspace must keep at least one owner")
+
+    session.delete(membership)
+    session.flush()
+    logger.info("Retracted workspace membership", extra={"workspace_id": workspace_id, "member_user_id": user_id})

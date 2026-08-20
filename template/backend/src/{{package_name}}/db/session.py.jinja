@@ -13,6 +13,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from {{ package_name }}.config import get_settings
 
+# Imported for its side effect: db/scoping.py registers the workspace hooks on
+# the Session CLASS, so they apply to every session in the process including the
+# test suite's own factory. Importing it HERE means any code path that can make
+# a session has already armed them — there is no window in which a session
+# exists unguarded.
+from {{ package_name }}.db import scoping  # noqa: F401
+
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
 
