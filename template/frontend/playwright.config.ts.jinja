@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { appWebServer } from './tests/e2e/app-web-server';
+
 const CI = !!process.env.CI;
 
 // There is one database and no staging environment (dev-environment.md
@@ -8,6 +10,7 @@ const CI = !!process.env.CI;
 // session already running, or writing under the identity that session uses.
 const E2E_PORT = {{ frontend_e2e_port }}; // not {{ frontend_port }}: this app's own row in the registry's Frontend E2E band, so it collides with no interactive dev server and nothing else can be allocated over it. Derived offsets landed outside every band.
 const E2E_UID = 'e2e-uid';
+const APP_WEB_SERVER = appWebServer(E2E_PORT);
 
 export default defineConfig({
 	testDir: 'tests/e2e',
@@ -42,14 +45,20 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		command: `vite dev --port ${E2E_PORT}`,
+		// The three seams an app may take are its own file's, so this stanza
+		// stays byte-identical everywhere: `command` and `timeout` replace,
+		// `env` merges over the identity variable below (tests/e2e/app-web-server.ts).
+		command: APP_WEB_SERVER.command ?? `vite dev --port ${E2E_PORT}`,
 		// Read by vite.config.ts's dev-identity header; keeps this suite's
 		// writes off whatever the interactive `dev-uid` identity owns.
-		env: { {{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID },
+		env: { {{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID, ...APP_WEB_SERVER.env },
 		port: E2E_PORT,
 		// Never reuse — the whole point of the separate port and identity is
 		// that this suite controls the server it runs against.
 		reuseExistingServer: false,
+		// Playwright's own default, stated rather than inherited so an app that
+		// needs longer has somewhere to say so.
+		timeout: APP_WEB_SERVER.timeout ?? 60_000,
 		stdout: 'pipe',
 		stderr: 'pipe'
 	}

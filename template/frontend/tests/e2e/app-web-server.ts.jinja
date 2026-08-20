@@ -1,0 +1,24 @@
+/**
+ * {{ project_name }}'s own webServer settings — the extension point for playwright.config.ts.
+ *
+ * `playwright.config.ts` belongs to the factory and is owed byte-identical, so
+ * an app that needs the E2E dev server started differently says so here. Three
+ * seams, because three are what apps actually needed: a `command` that has to
+ * run something before vite (a generated asset the SPA imports statically), an
+ * `env` entry the dev server reads, and a `timeout` where a cold CI start
+ * genuinely takes longer than Playwright's 60s default.
+ *
+ * `env` MERGES over the factory's — the identity variable it sets is what keeps
+ * this suite's writes off the interactive session's — while `command` and
+ * `timeout` REPLACE. Returning `{}` (the default) leaves the factory's stanza
+ * exactly as stamped.
+ */
+export type AppWebServer = {
+	command?: string;
+	env?: Record<string, string>;
+	timeout?: number;
+};
+
+export function appWebServer(_port: number): AppWebServer {
+	return {};
+}

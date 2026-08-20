@@ -90,7 +90,7 @@
     "frontend/dev-identity.ts": "d522f79bbe3281f7",
     "frontend/eslint.config.js": "e15123bb88de8777",
     "frontend/eslint.debt.js": "5821db5d2c566583",
-    "frontend/playwright.config.ts": "bb7887617cb81992",
+    "frontend/playwright.config.ts": "e603a08103d857fb",
     "frontend/scripts/check-colour-surface.mjs": "b027bf4e3a8892e2",
     "frontend/scripts/check-design-craft.mjs": "7a37fe16d01f4193",
     "frontend/scripts/check-ui-drift.mjs": "652729249736109b",
