@@ -16,7 +16,7 @@ describe('with nothing in front', () => {
 	it('refuses to start when no identity is supplied', () => {
 		const { refusal } = resolveDevIdentity({});
 		expect(refusal).toMatch(/DEV_UID is not set/);
-		expect(refusal).toMatch(/DEV_BEHIND_PROXY is not true/);
+		expect(refusal).toMatch(/DEV_BEHIND_PROXY=true/);
 	});
 
 	it('injects exactly the uid it was given, and no display fields', () => {

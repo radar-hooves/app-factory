@@ -11,6 +11,7 @@ Usage:
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, ValidationError, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +38,11 @@ def _describe_config_error(exc: ValidationError) -> str:
     return f"{exc.error_count()} validation error(s) for {exc.title} — " + "; ".join(parts)
 
 
+def _running_from_checkout() -> bool:
+    """True when this package is imported from a source tree, not an installed wheel."""
+    return (Path(__file__).resolve().parents[3] / "pyproject.toml").is_file()
+
+
 class Settings(BaseSettings):
     """Root settings; composes section sub-models."""
 
@@ -51,7 +57,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    debug: bool = False
+    # A source checkout IS the development environment — there is no env file to
+    # say so, and asking the developer to set one is how `Run > Full Stack` ends
+    # up refusing to start. The installed package in the production image has no
+    # pyproject.toml above it, so a container cannot fall into this branch by
+    # forgetting a variable; DEBUG=... still overrides either way.
+    debug: bool = Field(default_factory=lambda: _running_from_checkout())
     secret_key: str = "changeme"
 
     # Comma-separated: CORS needs exact origin strings, not a parsed URL —

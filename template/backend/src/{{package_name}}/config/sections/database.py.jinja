@@ -1,9 +1,13 @@
 """Database connection settings."""
 
+from typing import Self
+
 from urllib.parse import quote_plus
 
-from pydantic import computed_field
+from pydantic import computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from {{ package_name }}.config.vend import vend
 
 
 class DatabaseSettings(BaseSettings):
@@ -23,11 +27,18 @@ class DatabaseSettings(BaseSettings):
 
     # The app's own role, not the superuser: a deployed database is created with a
     # role named for its app and usually carries no `postgres` login at all, so a
-    # superuser default cannot connect. An app whose database differs records
-    # POSTGRES_USER in its own env file.
+    # superuser default cannot connect. An app whose role differs changes THIS
+    # default — never an env file, which the debugger does not read.
     postgres_user: str = "{{ project_name | replace('-', '_') }}"
-    postgres_password: str = ""  # required — must be overridden in .env or environment
-    postgres_host: str = "localhost"
+    # Empty means "vend it" (see _vend_password), not "no password". Only a
+    # deployment that supplies POSTGRES_PASSWORD itself leaves this set.
+    postgres_password: str = ""
+    # The answered fleet-host address, NOT localhost: there is no development
+    # database, so every consumer of this default — the dev server, the debugger,
+    # a script — points at the app's real Postgres. This lived only in `.envrc`
+    # until 2026-08-20, which meant a shell had it and the VS Code debugger did
+    # not, and `Run > Full Stack` dialled localhost and refused to start.
+    postgres_host: str = "{{ postgres_host }}"
     # The app's registry-allocated port, not PostgreSQL's own default: the host
     # runs one server per app and the registry is what stops two of them
     # colliding (registry-ports.md). This once hardcoded the default while still
@@ -37,6 +48,18 @@ class DatabaseSettings(BaseSettings):
     # file, so a number here reads as drift on an otherwise identical copy.
     postgres_port: int = {{ postgres_port }}
     postgres_db: str = "{{ project_name | replace('-', '_') }}"
+
+    @model_validator(mode="after")
+    def _vend_password(self) -> Self:
+        """Fetch the password from the broker when the environment did not supply one.
+
+        This is what lets development hold no env file at all. A deployment that
+        sets POSTGRES_PASSWORD (compose does) never reaches the broker; the test
+        suite assigns its own against a throwaway container, so it does not either.
+        """
+        if not self.postgres_password:
+            self.postgres_password = vend("{{ project_name }}-db", "password")
+        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property

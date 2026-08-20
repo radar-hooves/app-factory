@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-import { resolveDevIdentity } from './dev-identity';
+import { resolveDevIdentity, vendDevUid } from './dev-identity';
 
 export default defineConfig(({ command, isPreview }) => {
 	const plugins = [tailwindcss(), sveltekit()];
@@ -22,7 +22,9 @@ export default defineConfig(({ command, isPreview }) => {
 	// dev-identity.ts, which is unit-tested directly.
 	const identity = resolveDevIdentity({
 		behindProxy: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BEHIND_PROXY,
-		devUid: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID,
+		// The broker is the source; the env var is an override for a machine
+		// without signet (CI, a container-only E2E run).
+		devUid: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? vendDevUid(),
 		// Optional, and absent in most apps. Production's forward-auth proxy forwards
 		// whatever entitlements Authentik holds for the user; an app that gates modules
 		// on them needs the same header in dev or every gated module vanishes.

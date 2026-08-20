@@ -24,6 +24,57 @@
  * itself drags in esbuild, which cannot run under the suite's jsdom environment.
  */
 
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const BROKER_URL = process.env.PORTCULLIS_URL ?? 'https://portcullis.example.com';
+
+/** This app's enrolled signet identity — the same one the backend vends with. */
+const APP_SLUG = '{{ project_name }}';
+
+/**
+ * The operator's Authentik uid, from the household broker.
+ *
+ * Nothing machine-local is needed to develop this app: the uid is the one thing
+ * a checkout cannot know about the person at the keyboard, and it vends against
+ * this app's enrolled signet identity like the backend's database password does.
+ * Returns undefined rather than throwing, so a machine without signet still gets
+ * the explicit refusal below instead of a stack trace out of a Vite config.
+ *
+ * `vend-to-file`, never stdout: a value on stdout reaches a shell history and
+ * every log that captures the dev server's output.
+ */
+export function vendDevUid(): string | undefined {
+	const directory = mkdtempSync(join(tmpdir(), 'dev-identity-'));
+	try {
+		const destination = join(directory, 'uid');
+		execFileSync(
+			'signet',
+			[
+				'vend-to-file',
+				'--broker',
+				BROKER_URL,
+				'--identity',
+				APP_SLUG,
+				'--field',
+				'uid',
+				'--mode',
+				'0600',
+				'dev-identity',
+				destination
+			],
+			{ stdio: 'pipe' }
+		);
+		return readFileSync(destination, 'utf8').trim() || undefined;
+	} catch {
+		return undefined;
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
 export interface DevIdentityEnv {
 	/** `<APP>_DEV_BEHIND_PROXY` — only the literal 'true' counts. */
 	readonly behindProxy?: string;
@@ -57,10 +108,12 @@ export function resolveDevIdentity(env: DevIdentityEnv): DevIdentity {
 	const refusal =
 		behindProxy || env.devUid
 			? null
-			: `${APP}_DEV_UID is not set and ${APP}_DEV_BEHIND_PROXY is not true. The dev server ` +
-				'talks to the real database, so it needs a real identity rather than an invented one. ' +
-				`Either run behind the Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true), ` +
-				`or set ${APP}_DEV_UID in backend/.env.`;
+			: 'No dev identity: the broker could not vend one and ' +
+				`${APP}_DEV_UID is not set. The dev server talks to the real database, so it needs a ` +
+				'real identity rather than an invented one. Check the broker is reachable and ' +
+				`unlocked and that this app's signet identity ('signet verify --broker ${BROKER_URL} ` +
+				`--credential dev-identity --identity ${APP_SLUG}') resolves — or run behind the ` +
+				`Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true).`;
 
 	// The stable uid ONLY. Display fields are deliberately not injected: the
 	// backend updates mutable fields on every upsert, so a placeholder username

@@ -1,0 +1,77 @@
+"""Fetch a secret from the household broker at startup.
+
+Development holds no env file. Every fact a checkout can know is stamped into
+this app's own config defaults; the one it cannot — the database password — is
+vended here, keyed by this app's enrolled signet identity. A fresh clone needs
+nothing filled in, and there is no per-consumer copy of the value to drift.
+
+`signet` writes to a file rather than stdout, so a vended value cannot land in a
+log, a shell history, or an agent transcript. Keep it that way: nothing in this
+module may return, log, or interpolate a value into a message.
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+#: The one machine-local fact that cannot itself be vended — where the broker is.
+#: Overridable per host; the default is the household's own broker.
+BROKER_URL = os.environ.get("PORTCULLIS_URL", "https://portcullis.example.com")
+
+#: This app's enrolled consumer identity. One per app per machine, enrolled once
+#: (`signet enrol --identity <app>`), granted only the credentials it needs.
+SIGNET_IDENTITY = os.environ.get("PORTCULLIS_SIGNET_IDENTITY", "{{ project_name }}")
+
+_TIMEOUT_SECONDS = 30
+
+
+class VendError(RuntimeError):
+    """A value the app cannot start without could not be vended."""
+
+
+def vend(credential: str, field: str) -> str:
+    """Return one field of a broker credential.
+
+    Raises VendError with the broker's own diagnostic rather than falling back to
+    an empty value: a blank password fails later, somewhere else, as a connection
+    error that names neither the cause nor the fix.
+    """
+    signet = shutil.which("signet")
+    if signet is None:
+        raise VendError(
+            f"signet is not on PATH, so '{credential}' cannot be vended. Install signet and enrol "
+            f"this app's identity ('signet enrol --identity {SIGNET_IDENTITY}'), or supply the "
+            "value in the environment."
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        destination = Path(tmp) / field
+        result = subprocess.run(
+            [
+                signet,
+                "vend-to-file",
+                "--broker",
+                BROKER_URL,
+                "--identity",
+                SIGNET_IDENTITY,
+                "--field",
+                field,
+                "--mode",
+                "0600",
+                credential,
+                str(destination),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT_SECONDS,
+            check=False,
+        )
+        if result.returncode != 0:
+            # signet's diagnostics carry no value — the value only ever reaches
+            # the destination file — so this is safe to surface and is usually
+            # the whole answer ("broker locked", "credential out of scope").
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise VendError(f"could not vend '{credential}.{field}' from {BROKER_URL}: {detail}")
+        return destination.read_text().strip()

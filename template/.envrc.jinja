@@ -1,52 +1,16 @@
 # uv-managed dev environment.
 #
-# Machine-local values live in ONE file, backend/.env (copy backend/.env.example).
-# Three consumers read that same file and no other: direnv exports it into the
-# shell here, the .vscode launch configurations name it as their `envFile`, and
-# compose.yaml mounts it as `env_file`. A debugger cannot see a direnv
-# environment, which is why a shell-only home for these values leaves every
-# launch configuration starting with no database password at all.
+# There is deliberately no env file here and nothing to fill in. Every fact this
+# app needs is stamped into its own config defaults (database host, port, user,
+# ports); the two values a checkout cannot know — the database password and the
+# operator's Authentik uid — are vended from the household broker at startup,
+# by the backend's config/vend.py and the frontend's dev-identity.ts.
+#
+# That is what makes the debugger work. Values that live only in a shell reach a
+# terminal and nothing else: `Run > Full Stack` starts VS Code's own processes,
+# which never see a direnv environment, and an env file named as the launch
+# configuration's `envFile` still has to be filled in by hand on every clone.
 source_up
-
-# Present, always: compose declares backend/.env as a required env_file, so a
-# fresh clone that has not been filled in yet must still have the file rather
-# than fail before it can report what is missing.
-[[ -f backend/.env ]] || cp backend/.env.example backend/.env
-
-# Carry across any key the example has grown since this env file was written.
-# Without it a new setting is silently absent from every existing checkout, and
-# a REQUIRED one surfaces as a process that will not start — the same class of
-# failure as the missing file itself, one release later. Key names only ever
-# leave this pipeline; values are appended by `grep -f`, never printed.
-_new_keys=$(comm -23 \
-  <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env.example | sort -u) \
-  <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env | sort -u))
-if [[ -n "$_new_keys" ]]; then
-  { echo; echo "# Added from backend/.env.example on $(date +%F)."; } >> backend/.env
-  grep -E -f <(echo "$_new_keys" | sed 's/^/^/') backend/.env.example >> backend/.env
-  echo "direnv: backend/.env gained $(echo "$_new_keys" | wc -l | tr -d ' ') key(s) the example documents" >&2
-fi
-unset _new_keys
-
-watch_file backend/.env
-dotenv_if_exists backend/.env
-
-# A blank value in a dotenv file is NOT the same as unset, and the difference is
-# a crash rather than a default: uvicorn reads os.environ["WEB_CONCURRENCY"]
-# directly and dies on int(""), so the example's own documented-but-blank keys
-# take the process down the moment they are exported. Blank means "not set" —
-# which is also what the example means by leaving one blank — so make it so.
-while IFS= read -r _key; do
-  [[ -z "${!_key:-}" ]] && unset "$_key"
-done < <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' backend/.env | tr -d '=')
-unset _key
-{% if postgres_host %}
-# After the dotenv load, not before it: a blank POSTGRES_HOST in an env file
-# would otherwise override this and drop the app onto the code default, which is
-# localhost, which is nowhere. `:-` still lets a real value win.
-export POSTGRES_HOST="${POSTGRES_HOST:-{{ postgres_host }}}"
-export POSTGRES_PORT="${POSTGRES_PORT:-{{ postgres_port }}}"
-{% endif %}
 
 # shellcheck disable=SC2034  # read by direnv's stdlib as a shell variable, not exported
 direnv_layout_dir="${XDG_CACHE_HOME:-$HOME/.cache}/direnv/layouts/$(echo -n "$PWD" | shasum | cut -d' ' -f1)"
@@ -61,21 +25,3 @@ uv sync --project backend --quiet
 
 export VIRTUAL_ENV="$PWD/backend/.venv"
 PATH_add "$PWD/backend/.venv/bin"
-
-# Estate-wide fallback, resolved AFTER backend/.env so that file still wins.
-# The umbrella's own .envrc.local (sourced by `source_up` above) may carry
-# {{ project_name | upper | replace('-', '_') }}_POSTGRES_PASSWORD and a single DEV_UID for every app at
-# once — one file filled in once, rather than the same identity pasted into nine
-# repos and a fresh clone of any of them dead until someone remembers to.
-export POSTGRES_PASSWORD="{{ '${' }}POSTGRES_PASSWORD:-{{ '${' }}{{ project_name | upper | replace('-', '_') }}_POSTGRES_PASSWORD:-}}"
-export {{ project_name | upper | replace('-', '_') }}_DEV_UID="{{ '${' }}{{ project_name | upper | replace('-', '_') }}_DEV_UID:-{{ '${' }}DEV_UID:-}}"
-
-# Report a missing value HERE, where the fix is, rather than letting it surface
-# as a pydantic validation error at the first request or as a debugger that
-# exits before printing anything useful.
-for _required in POSTGRES_PASSWORD {{ project_name | upper | replace('-', '_') }}_DEV_UID; do
-  if [[ -z "${!_required:-}" ]]; then
-    echo "direnv: $_required is not set — fill it in at backend/.env, or estate-wide in the umbrella's .envrc.local" >&2
-  fi
-done
-unset _required

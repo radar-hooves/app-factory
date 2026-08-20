@@ -9,7 +9,6 @@
       "args": ["{{ package_name }}.server:app", "--reload", "--host", "0.0.0.0", "--port", "{{ backend_port }}"],
       "cwd": "${workspaceFolder}/backend",
       "python": "${workspaceFolder}/backend/.venv/bin/python",
-      "envFile": "${workspaceFolder}/backend/.env",
       "justMyCode": false,
       "preLaunchTask": "Kill Port {{ backend_port }}",
       "presentation": { "group": "1_backend", "order": 1 }
@@ -19,7 +18,6 @@
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}/frontend",
-      "envFile": "${workspaceFolder}/backend/.env",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "dev"],
       "serverReadyAction": { "pattern": "Local:.*(https?://.*)", "action": "openExternally" },

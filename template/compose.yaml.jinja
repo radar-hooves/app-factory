@@ -37,7 +37,11 @@ services:
       # through to it and the app would write its state inside its own wheel.
       DATA_DIR: /app/data
     env_file:
-      - ./backend/.env
+      # Deployment's own values (POSTGRES_PASSWORD and anything host-specific).
+      # Optional on purpose: development holds no env file — it vends instead —
+      # so a required one would stop `docker compose` in a working checkout.
+      - path: ./backend/.env
+        required: false
     volumes:
       # The app's runtime state, on the host so a container rebuild does not take
       # it with it. Same directory the dev server uses (config/paths.py).
