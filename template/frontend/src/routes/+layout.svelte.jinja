@@ -35,9 +35,11 @@
 
 <!-- No nav yet — a fresh app has one route. Pass `nav` once there is more
      than one page to link between (rules-library/stacks/sveltekit-frontend.md). -->
-<!-- measure left at its `full` default — @poodle64/ui's AppShell dropped the
-     old `content` prop this used to pass "standard" to; pick a measure once
-     a page needs a narrower cap (see the component's own doc comment). -->
+<!-- The house floor and the rail's collapse control arrive by default from
+     @poodle64/ui 2026.8.8 — do not pass `texture` or `collapsible` to ask for
+     them, and do not hand-roll a dot-grid class in app.css. `measure` is left
+     at its `full` default; pick one once a page needs a narrower cap (see the
+     component's own doc comment). -->
 <AppShell brandTitle="{% endraw %}{{ project_name }}{% raw %}" currentPath={page.url.pathname}>
 	{@render children()}
 </AppShell>
