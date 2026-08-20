@@ -27,6 +27,15 @@ from {{ package_name }}.db.environment import DeploymentEnvironmentMarker
 # select(ChildRow) — so a child row takes the mixin too, with workspace_id
 # denormalised down. The exemption list is for tables that genuinely have no
 # workspace, not for tables whose workspace is inconvenient to reach.
+#
+# Nor is a SHARED TAXONOMY — a global list every workspace reads, which a
+# workspace may add its own entries to. The tempting shape is one table with a
+# nullable owner where NULL means "everyone's"; it is wrong here, because
+# workspace_id is the access predicate and a nullable predicate is a silent
+# visibility rule rather than a stated one. Split it: a global table on this
+# list, admin-gated for writes, plus a workspace-scoped table for a workspace's
+# own additions. Two tables and a union in one query, against one table whose
+# NULLs nobody can see the meaning of.
 WORKSPACE_EXEMPT: dict[type, str] = {
     User: "identity — a user exists before any workspace, and membership is resolved from this table",
     Workspace: "the workspace itself — rows are scoped TO it",
