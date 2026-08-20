@@ -17,6 +17,33 @@ export const api = createClient<paths>({
 	credentials: 'include'
 });
 
+// The workspace this browser is acting in, held HERE rather than in the auth
+// store so the store can import the client without a cycle. A value of null
+// sends no header, which is correct for a caller holding exactly one membership:
+// the backend resolves it without being told. It is only once someone belongs to
+// two workspaces that the header becomes load-bearing, and until it is set the
+// backend answers 409 with the choices rather than guessing.
+let activeWorkspaceId: number | null = null;
+
+export function setActiveWorkspaceId(id: number | null) {
+	activeWorkspaceId = id;
+}
+
+export function getActiveWorkspaceId(): number | null {
+	return activeWorkspaceId;
+}
+
+// Sent on every request rather than threaded through call sites: scoping is not
+// a parameter any one caller should be able to forget or fake.
+const workspaceMiddleware: Middleware = {
+	async onRequest({ request }) {
+		if (activeWorkspaceId !== null) {
+			request.headers.set('X-Workspace-Id', String(activeWorkspaceId));
+		}
+		return request;
+	}
+};
+
 // Track timeout IDs by request identity (survives request.clone()).
 const timeoutIds = new WeakMap<Request, ReturnType<typeof setTimeout>>();
 
@@ -89,6 +116,7 @@ const authMiddleware: Middleware = {
 	}
 };
 
+api.use(workspaceMiddleware);
 api.use(timeoutMiddleware);
 api.use(authMiddleware);
 // Last: it turns a throw into a Response, so every middleware above sees a

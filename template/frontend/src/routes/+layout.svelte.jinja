@@ -7,8 +7,20 @@
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
+	import { auth } from '$lib/auth.svelte';
 
 	let { children } = $props();
+
+	// Load the caller and their workspace memberships once, at startup
+	// (rules-library/platform/authentication.md §Frontend Auth Store Contract).
+	// It resolves which workspace every subsequent request acts in, so it runs
+	// here rather than per-route — a page that fetched before this settled would
+	// send no workspace header and, for anyone holding two memberships, be
+	// answered 409.
+	onMount(() => {
+		void auth.init();
+	});
 
 	// Page title: "Page Name — {% endraw %}{{ project_name }}{% raw %}" or bare app name.
 	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_name }}{% raw %}` : '{% endraw %}{{ project_name }}{% raw %}');

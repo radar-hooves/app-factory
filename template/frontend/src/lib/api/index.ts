@@ -1,2 +1,2 @@
-export { api, redirectToAuthentik } from './client';
+export { api, redirectToAuthentik, getActiveWorkspaceId, setActiveWorkspaceId } from './client';
 export { extractApiError, type ApiErrorInfo } from './error';
