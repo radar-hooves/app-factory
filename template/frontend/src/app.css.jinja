@@ -110,7 +110,21 @@
 	}
 
 	html {
-		font-size: var(--base-font-size, 14px);
+		/* The house scale. Every shared dimension in @poodle64/ui is rem-based —
+		   `--ds-shell-rail-width: 15.5rem` among them — so this one line decides
+		   how wide the shell's rail renders, not just how large the text is.
+
+		   100%, not a px value, for two reasons. The package's own harness sets
+		   no root size, so every shipped component is designed and drive-verified
+		   at the browser default; a px root also OVERRIDES a reader's own browser
+		   font-size preference, which a percentage respects.
+
+		   Density is a declared knob, not a rewrite of this rule: an app that
+		   genuinely needs a different scale sets `--base-font-size` in its
+		   `:root` with its reason beside it. */
+		font-size: var(--base-font-size, 100%);
+		/* Stops mobile Safari/Chrome inflating text on rotation. */
+		text-size-adjust: 100%;
 	}
 
 	body {
