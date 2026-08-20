@@ -50,6 +50,28 @@ def _parse_entitlements(request: Request, identity_settings: IdentitySettings) -
     return tuple(part.strip() for part in raw.split("|") if part.strip())
 
 
+def _is_machine_principal(request: Request, identity_settings: IdentitySettings) -> bool:
+    """Whether the provider positively declares this caller a machine.
+
+    Two markers, either sufficient, because they catch DISJOINT failures. The
+    type claim comes from a custom scope mapping, so it is absent from a token
+    minted without that scope — which is exactly the request that creates a
+    phantom user. The group list is one of the outpost's base headers and
+    survives it. Neither present means PERSON: absence must never narrow the
+    ordinary human path.
+    """
+    if request.headers.get(identity_settings.authentik_user_type_header) == (
+        identity_settings.authentik_service_account_type
+    ):
+        return True
+
+    machine_group = identity_settings.authentik_machine_group
+    if not machine_group:
+        return False
+    groups = request.headers.get(identity_settings.authentik_groups_header, "")
+    return machine_group in (part.strip() for part in groups.split("|"))
+
+
 def get_identity(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
@@ -84,9 +106,7 @@ def get_identity(
     # Deliberately narrow: it refuses only MINTING, and only when the provider
     # positively says "machine". An unset header means person, so a provider that
     # sends nothing behaves exactly as before.
-    declared_type = request.headers.get(identity_settings.authentik_user_type_header)
-    is_machine = declared_type == identity_settings.authentik_service_account_type
-    if is_machine and users_service.get_by_uid(session, uid) is None:
+    if _is_machine_principal(request, identity_settings) and users_service.get_by_uid(session, uid) is None:
         raise AuthenticationError(
             "A machine principal has no user in this app. Link one, or call the /mcp surface.",
         )

@@ -17,6 +17,8 @@ Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ENTITLEMENTS_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USER_TYPE_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_SERVICE_ACCOUNT_TYPE
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_GROUPS_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_MACHINE_GROUP
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ACTS_AS_HEADER
 """
 
@@ -59,6 +61,23 @@ class IdentitySettings(BaseSettings):
     # The value that header carries for a machine principal.
     # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_SERVICE_ACCOUNT_TYPE
     authentik_service_account_type: str = "service_account"
+
+    # The provider's group list, pipe-delimited. Unlike the type claim above this
+    # is one of the outpost's BASE headers, so it survives an under-scoped token —
+    # which is the whole reason both markers exist. They catch DISJOINT failures:
+    # the type claim catches a correctly-scoped machine that was never given a
+    # delegation attribute, the group catches an under-scoped one carrying no
+    # custom claims at all.
+    # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_GROUPS_HEADER
+    authentik_groups_header: str = "x-authentik-groups"
+
+    # Name of the identity-provider group whose members are machine callers.
+    # EMPTY BY DEFAULT, meaning disabled: an app that has not created such a group
+    # must not have a machine marker invented for it, and the empty default keeps
+    # the coupling honest — this is the one place the app knows a provider group
+    # by name.
+    # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_MACHINE_GROUP
+    authentik_machine_group: str = ""
 
     # Set by a machine caller delegating to a human identity. Its ABSENCE on a
     # caller that did not traverse the human proxy is what distinguishes "a

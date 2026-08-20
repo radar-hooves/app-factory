@@ -376,6 +376,19 @@ def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session
 
     assert entry.workspace_id == workspace.id
 
+    # An EXPLICIT workspace_id=None is stamped exactly the same way, and that is
+    # the trap worth naming: code intending to seed a GLOBAL row from a
+    # request-bound session silently creates one workspace's private copy
+    # instead, with nothing raised. Measured in godswood 2026-08-20, where a
+    # category service lazily seeded the estate's 22 ATO rows from a GET path.
+    # Seeding global reference data belongs in a migration or an explicit
+    # unscoped() block, never on a read path.
+    explicit = TaxonomyEntry(label="meant-to-be-global", workspace_id=None)
+    session.add(explicit)
+    session.flush()
+
+    assert explicit.workspace_id == workspace.id
+
 
 # ── 8. A machine principal may use an identity, never mint one ──────────────
 
@@ -401,3 +414,23 @@ async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(clien
         headers={"x-authentik-uid": "an-ordinary-person", "x-authentik-username": "an-ordinary-person"},
     )
     assert admitted.status_code == 200
+
+
+async def test_a_caller_in_the_machine_group_is_not_given_a_user_row(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second marker: present even when an under-scoped token carries no custom claims."""
+    from {{ package_name }}.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings.identity, "authentik_machine_group", "app-machines")
+
+    refused = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "under-scoped-token",
+            "x-authentik-username": "under-scoped-token",
+            "x-authentik-groups": "everyone|app-machines",
+        },
+    )
+    assert refused.status_code == 401
