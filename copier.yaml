@@ -26,6 +26,18 @@ package_name:
   when: false
   default: "{{ project_name | replace('-', '_') }}"
 
+# Derived, never asked, for the same reason as package_name: the app's HUMAN
+# name, for the two surfaces a person reads it on — the browser tab and the
+# shell's brand. Both previously stamped `project_name`, so every app shipped
+# its kebab-case slug as its display name and four of nine were hand-corrected
+# in one surface but not the other, which is the drift this closes. Deriving it
+# rather than asking keeps one home for the value: `mission-command` becomes
+# `Mission Command` in both places or in neither.
+project_title:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', ' ') | title }}"
+
 description:
   type: str
   help: 'One-sentence description of the project'
@@ -42,6 +54,7 @@ frontend_e2e_port:
   type: int
   help: >-
     Playwright's own Vite dev port — allocate from the port registry (band 5200-5229). Asked rather than derived: the E2E server used to be frontend_port + 1000, which lands outside every band the registry defines, so nothing could tell you it was free and no row recorded it.
+
 
 postgres_host:
   type: str
