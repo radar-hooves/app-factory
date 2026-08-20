@@ -1,10 +1,28 @@
 # Tenancy — the workspace primitive
 
-Status: **proposed 20/08/2026, awaiting operator approval.** Nothing here is built. Implementation belongs with the shared-domains factory work (`canonical-app-shape.md` §Shared Domains Belong to the Factory, master-project#288): the workspaces slice shares the local user record with `auth`, `users` and `admin`, and the four land as one decision. The binding rule text this design proposes for `rules-library/platform/tenancy.md` is in the appendix — the shared pool is enacted through the sunset review, not mid-task, so it ships here verbatim for that sitting.
+Status: **backend built and landed 20/08/2026 (`ef6cdd6`); frontend and rule text still to come.** The primitive, both slices, the scoping hooks and the entitlement grades are in `template/`, verified on a clean copier render. What has NOT landed: the frontend half (client header, auth store, shell switcher), the `workspace_label` copier answer, and the rule text in the appendix. Implementation sits with the shared-domains factory work (`canonical-app-shape.md` §Shared Domains Belong to the Factory, master-project#288): the workspaces slice shares the local user record with `auth`, `users` and `admin`.
+
+**Three decisions were settled by the master session on 20/08/2026, as SME calls rather than operator approval.** The operator's own outstanding decision is godswood's cutover window, and nothing below pre-empts it.
+
+1. **The noun is `workspace`, and godswood's renter-`tenant` does NOT get renamed to make room for the industry term.** The operator asked whether it should. In Queensland the statutory party to a residential tenancy agreement IS the "tenant" (Residential Tenancies and Rooming Accommodation Act 2008); "renter" is Victorian statutory language, adopted there in 2021. Renaming godswood's domain term would import the wrong jurisdiction's word into a Queensland property portfolio in order to free up an infrastructure noun — domain vocabulary wins, and the infrastructure noun is the one free to move. Recognisability is bought back by naming `tenant` in the rule as the industry term for what `workspace` implements, so anyone searching for multi-tenancy finds it.
+
+2. **Entitlement grades are default-deny: bare `<module>` = READ, `<module>:write` = mutation.** This reverses §Left to the operator's recommendation. The deciding fact is measured, not philosophical: `require_module` passes admins unconditionally in godswood (`entitlements.py:51`) and the first user is auto-admin, so the operator is unaffected by the default either way. The only accounts a re-provisioning touches are non-admin ones — i.e. the second household member who cannot use the app at all today. The "no existing grant is re-provisioned" convenience is therefore worth close to nothing, while bare=write means a forgotten `:read` silently grants ledger write. The ~16 keys are an authentik-MCP provisioning task, not an operator afternoon.
+
+3. **`is_admin` does not bypass module gates, and there is no first-user-becomes-admin bootstrap.** Godswood has both. The first is what turns `is_admin` into the super-role every authorisation question ends up asking; the second makes whichever caller reaches a fresh database first an admin, and a machine caller can be first. Both are behaviour changes godswood must sequence deliberately rather than discover.
+
+### Three corrections to this document, from building it
+
+- **The table count was wrong, and the wrong way.** "62 of ~70" is measured, at godswood `135b1bf9`, as **103 tables, 81 carrying an ownership column, 22 without**. Five of the 81 (`travel_stays`, `travel_transfers`, `travel_activities`, `travel_hires`, `travel_passes`) do not declare `user_id` in their own class body at all — they inherit it from a mixin via `declared_attr` (`api/travel/components/models.py:34-36`). A generator reading source text misses them and they silently keep a user-scoped column after the sweep. The factory's own `_touches_scoped_model` reads SQLAlchemy's mapper metadata (`ORMExecuteState.all_mappers`) for exactly this reason; godswood's migration generator must do the same.
+
+- **The registry test needed a third answer, and giving it one was wrong.** Of the 22 tables with no ownership column only ~11 are genuinely global reference data; the rest are CHILD rows reached through a parent FK (`groceries_purchase_lines`, `networth_account_balances`, `pipeline_events`, `superannuation_statement_figures`…). A child row fits neither bucket honestly: `with_loader_criteria` cannot see a model without the mixin, so a bare `select(ChildRow)` returns every workspace's rows, and exempting it with "reached only via a scoped parent" is a discipline claim inside a design whose thesis is that discipline does not work. **Child rows take the mixin**, `workspace_id` denormalised down — one column and one index each, mechanical coverage everywhere, and the RLS ratchet becomes a pure add. `db/registry.py`'s comment says so and the registry test enforces it.
+
+- **`CurrentIdentity` and `CurrentWorkspace` cannot live in `deps.py`.** §What the factory ships puts them there; that is a genuine import cycle (`deps` imports the workspaces slice, the slice imports `deps`) which resolves or fails depending on which module Python reaches first. They are defined in their own slices and `deps.py` imports and re-exports them, so routes keep one import point while the graph flows one way.
+
+- **Auto-provisioning does NOT need a machine-caller carve-out** — an earlier reading of godswood#701 said it did. A just-in-time user row is inert: no entitlements (nothing is persisted; they arrive per request), no admin, and only its own empty personal workspace. That matches #701's own measured blast radius — two phantom rows owning zero rows. It is a hygiene problem, not a leak, and caller-classification machinery to prevent it would be an unrequested control. The factory logs the creation at WARNING naming the uid, and drops the first-user-admin rule, which was the part that was genuinely hazardous.
 
 ## The missing noun
 
-The factory has no concept between "person" and "everyone", and the fleet answered the gap both wrong ways at once. godswood scopes 62 of ~70 tables to the individual who created each row (`user_id` as the access predicate, filtered in every service function), so the operator's wife signs in through the same SSO and sees an empty app — the app defines "person" as "tenant", and a second person in the same household reads as a second, empty tenant. tapestry scopes nothing — `list_subjects(session)` returns every row to every caller — which is only correct while everyone the proxy admits belongs to one circle, and makes its data model irreconcilable with godswood's the day it becomes a module there.
+The factory has no concept between "person" and "everyone", and the fleet answered the gap both wrong ways at once. godswood scopes 81 of its 103 tables to the individual who created each row (`user_id` as the access predicate, filtered in every service function — measured from mapper metadata at godswood 135b1bf9, 20/08/2026), so the operator's wife signs in through the same SSO and sees an empty app — the app defines "person" as "tenant", and a second person in the same household reads as a second, empty tenant. tapestry scopes nothing — `list_subjects(session)` returns every row to every caller — which is only correct while everyone the proxy admits belongs to one circle, and makes its data model irreconcilable with godswood's the day it becomes a module there.
 
 Both are one missing noun: **a set of people who share a body of data**. The primitive is that noun, shipped by the factory so every stamped app inherits it and no app answers the question locally again.
 
@@ -32,7 +50,7 @@ Module entitlement stays per ACCOUNT — it is licensing, not scoping, and does 
 
 The estate already runs two role sources: tapestry gates its writer on an IdP group (`tapestry-weavers`), godswood has only an estate-wide `is_admin`. This design deliberately picks **neither a new in-app role table nor a per-app group check**, because the two role questions are different questions:
 
-- **Per-module read/write** is an entitlement GRADE, provisioned in the IdP on the existing rail: a bare `<module>` key grants read and write — the unchanged meaning of every grant already issued, so nothing is re-provisioned — and `<module>:read` grants read only. `require_module("property")` gates read (accepts either form); `require_module("property", write=True)` gates mutation (requires the bare grant). The pipe-delimited header, the parser and the dependency shape are exactly today's; the grade is vocabulary, not machinery. Tapestry's precedent is preserved as a *provisioning* pattern: the `tapestry-weavers` group becomes the group that grants the bare `tapestry` entitlement in Authentik, readers get `tapestry:read` via the members group, and the in-app group check retires — one authorisation source where there were two.
+- **Per-module read/write** is an entitlement GRADE, provisioned in the IdP on the existing rail: a bare `<module>` key grants READ, and `<module>:write` grants mutation. `require_module("property")` gates read; `require_module("property", write=True)` gates mutation and requires the `:write` grant. (Settled default-deny — decision 2 above; this paragraph originally proposed the inverse.) The pipe-delimited header, the parser and the dependency shape are exactly today's; the grade is vocabulary, not machinery. Tapestry's precedent is preserved as a *provisioning* pattern: the `tapestry-weavers` group becomes the group that grants the bare `tapestry` entitlement in Authentik, readers get `tapestry:read` via the members group, and the in-app group check retires — one authorisation source where there were two.
 - **Workspace administration** (invite, remove, rename, delete) is the membership row's `role`: `owner` or `member`. It must be in-app because the workspace is an in-app noun — Authentik does not know what a workspace is, and a global group cannot say "owner of THIS workspace" once a person belongs to two. Creating a workspace makes the creator its owner; that is the whole bootstrap.
 
 There is no third source. `is_admin` keeps its one legitimate job — estate-wide administration of global reference data (godswood's `document_types` precedent) — and stops standing in for roles it was never shaped for.
@@ -65,13 +83,64 @@ created_by_id   int FK users.id       NULL      ON DELETE SET NULL
 Four properties are load-bearing:
 
 - `workspace_id` is THE access predicate. A person's id never appears in an access predicate again; `created_by_id` is attribution only, never authorisation.
-- `RESTRICT` on the domain rows: deleting a workspace must not silently cascade a financial ledger. This also corrects a live hazard — godswood's 72 existing `users.id` foreign keys are `ondelete="CASCADE"`, so deleting one user row today would destroy the ledger; under the new shape a departed member's rows remain the workspace's and their attribution nulls out.
+- `RESTRICT` on the domain rows: deleting a workspace must not silently cascade a financial ledger. This also corrects a live hazard — all 80 of godswood's existing `users.id` foreign keys are `ondelete="CASCADE"` (measured: the histogram has exactly one entry), so deleting one user row today would destroy the ledger; under the new shape a departed member's rows remain the workspace's and their attribution nulls out.
 - Membership is many-to-many: the operator belongs to the household that owns the ledgers and the circle that owns the stories; the cousin belongs only to the circle.
 - Membership is an **explicit row, written by an owner** — never derived from an IdP group, an entitlement, or the ability to log in. Two people sharing a proxy is not evidence they share a ledger; sharing is a grant the operator makes, not an inference the app draws (the same posture godswood's rule 79 takes about data provenance). This is why the wife correctly sees an empty personal workspace until the operator grants household membership — the fix is that the grant EXISTS, not that the app guesses.
 
-**Personal workspace auto-provisioning:** the user upsert (which already runs on every authenticated request) creates, in the same transaction on first sight of a user, a personal workspace and an owner membership. Every user therefore always holds at least one membership, resolution never has a zero-membership state, and the org-of-one is the default condition rather than an edge case.
+**Personal workspace auto-provisioning:** the user upsert (which already runs on every authenticated request) creates, in the same transaction on first sight of a user, a personal workspace and an owner membership. Every user therefore always holds at least one membership, resolution never has a zero-membership state, and the org-of-one is the default condition rather than an edge case. It carries no machine-caller carve-out, for the reasons in the corrections above; refusing a machine principal is an app's own business where a tracked defect asks for it, and godswood does it in `deps.py` under #701 without the factory needing to know.
 
 **Writes always land in the ACTIVE workspace.** The primitive has no per-row privacy grade and no write-to-another-workspace path; data a member wants private belongs in their personal workspace, which they already have.
+
+## What takes the mixin — four categories, not two
+
+The registry test offers two buckets: `WorkspaceScoped`, or exempt with a reason. Measured against godswood's 103 tables (mapper metadata, 20/08/2026), a third and a fourth exist, and each breaks a different half of the thesis.
+
+| Category | Count | Treatment |
+| --- | --- | --- |
+| Already scoped per user | 79 | `WorkspaceScoped`; `user_id` becomes `created_by_id` |
+| Child rows, reached only through a parent FK | 10 | `WorkspaceScoped` too — denormalised, see below |
+| Shared reference with a per-workspace override | 2 | `SharedReference` — nullable `workspace_id`, OR-criterion |
+| Genuinely global reference and identity | 12 | Exempt, with a reason each |
+
+That is 89 tables taking the mixin, 2 taking a second marker, 12 exempt. The 81/22 split in the corrections above resolves as 79 + 2 and 10 + 12.
+
+### Child rows cannot be exempted honestly
+
+Ten tables carry no ownership column and are reached transitively through a parent that does: `groceries_purchase_lines`, `networth_account_balances`, `networth_ownership_allocations`, `pipeline_events`, `property_execution_links`, `property_inspection_action_items`, `property_manager_assignments`, `property_refinance_delivery_documents`, `property_transaction_attachments`, `superannuation_statement_figures`.
+
+Neither bucket fits. `with_loader_criteria` cannot see them — no mixin, so no criterion is injected — and a bare `select(PurchaseLine)` therefore returns every workspace's rows. Exempting them as "reached only via a scoped parent" is a *discipline* claim inside a design whose entire thesis is that discipline does not work; the exemption would be a promise that no query ever starts at the child, which is exactly the promise the fail-closed hooks exist to stop anyone having to make.
+
+So child rows take the mixin too, `workspace_id` denormalised down: one column and one index per child table, mechanical coverage everywhere, and the exempt list shrinks to tables that are actually global. The denormalisation is also what makes the RLS ratchet a pure add rather than a redesign — a policy needs the column on the row it protects. The cost is that a child's `workspace_id` must agree with its parent's; the flush hook already refuses a cross-workspace write, so the disagreement is caught where it is made rather than discovered later.
+
+### Shared reference is the category that fails silently
+
+Two tables use a **nullable** ownership column to mean something the design has no room for: `networth_account_types` (11 rows, all NULL) and `property_categories` (22 rows, all NULL). NULL there does not mean "owner unknown" — it means **global row, visible to everyone**, with a non-NULL row being one user's private addition to the same taxonomy. Both models say so in their own docstrings, and `get_categories` reads `WHERE user_id IS NULL OR user_id = :user`.
+
+Give those tables the plain mixin and the enforcement stack does the wrong thing perfectly quietly. `workspace_id NOT NULL` cannot express the global row at all, and the injected criterion `workspace_id == :ws` matches none of them — so every caller in every workspace loses the entire ATO rental-expense taxonomy the property P&L is built on, and the net-worth account types with it. Nothing raises. The fail-closed hooks protect against a *leak*; this is the opposite failure, over-filtering, and they are blind to it by construction.
+
+They need their own marker — `SharedReference`: `workspace_id` **nullable**, criterion `workspace_id == :ws OR workspace_id IS NULL`, and a flush rule that only an admin may write a NULL (a global row is estate-wide reference data, the one job `is_admin` keeps). It is a small addition and it belongs in the factory rather than in godswood, because "seeded taxonomy plus per-tenant additions" is a shape any stamped app grows.
+
+**The alternative — split each table into a global one and a scoped one — was weighed and rejected on measured grounds.** It is the more orthodox answer, and its objection to this one is real: a nullable access predicate is a visibility rule you have to know to read. But that objection lands on making `WorkspaceScoped.workspace_id` nullable, which is not what is proposed; a distinct marker STATES the rule in the model's own declaration and the registry test enforces three stated buckets exactly as mechanically as it enforces two. Against that, both tables are foreign-key targets:
+
+| Referencing column | Nullable | On delete |
+| --- | --- | --- |
+| `property_transactions.category_id` | yes | `SET NULL` |
+| `networth_accounts.account_type_id` | **no** | `RESTRICT` |
+
+A split leaves each referencing row unable to name its parent with one foreign key. The choices are two nullable FK columns plus a CHECK that exactly one is populated — doubling the join on every read of a transaction's category — or dropping the constraint for a bare integer and a discriminator, which removes referential integrity from a financial ledger. `networth_accounts.account_type_id` is NOT NULL today; a split demotes that database-enforced invariant to a check constraint. One nullable column on a reference table is a smaller price than either.
+
+`fc_document_types` is sometimes cited as the precedent for splitting. It is not: it has no ownership column at all and never had a per-user half, so it is a worked example of the *exempt* bucket, not of a mixed table being separated. Nothing in the estate has yet split one.
+
+The general lesson for the registry test: a table's category is not readable from whether it has an ownership column. Two of godswood's 81 "scoped" tables are not scoped at all, and no schema fact distinguishes them — only the nullability, and what the app means by it.
+
+### How the generator must enumerate
+
+The sweep generator reads the **SQLAlchemy mapper metadata**, and there are two misses in opposite directions, so neither view alone is sufficient:
+
+- **Source text misses inherited columns** — the five travel tables inheriting `user_id` from a mixin via `declared_attr`, recorded in the corrections above.
+- **Foreign keys alone miss unconstrained columns.** `audit_logs.user_id` is a bare `INTEGER` with no foreign key at all, so an FK-driven metadata sweep does not see it — while a source-text sweep does. That single table is the whole difference between 80 and 81: eighty tables carry a `users.id` foreign key, an eighty-first carries the column without one.
+
+Enumerate the column *and* its constraints from the mapper registry, and reconcile the two answers rather than trusting either. A sweep that disagrees with itself by one table will miss the next one silently.
 
 ## What the factory ships / what an app fills in
 
@@ -195,7 +264,9 @@ Two revisions, one deploy. godswood's database is production with no dev copy, s
 
 **Revision A — the slice.** Create `workspaces` and `workspace_memberships`; then, for every existing `users` row, insert a personal workspace and an owner membership. This is the auto-provision invariant applied retroactively: after A, every user has exactly one membership.
 
-**Revision B — the sweep (script-generated, hand-reviewed).** For each of the 62 `user_id`-scoped tables, in order: add `workspace_id` nullable; backfill it through the membership join (unambiguous, because A guarantees exactly one membership per user at this moment — B must run before any shared membership exists, which sequencing guarantees since no UI to create one has served a request yet); set NOT NULL, add the RESTRICT FK and index; rename `user_id` to `created_by_id`, replace its CASCADE FK with SET NULL and make it nullable; translate any UNIQUE constraint or index containing `user_id` to `workspace_id`, each translation listed in the revision for review. The generator enumerates the catalogue rather than trusting a hand-written table list. **Pre-flight checkpoint:** enumerate rows with NULL `user_id` in the two nullable-FK tables first — if any exist, whose workspace they belong to is a provenance question the operator settles before the migration, never a default.
+**Revision B — the sweep (script-generated, hand-reviewed).** For each of the 89 tables that take the mixin, in order: add `workspace_id` nullable; backfill it through the membership join (unambiguous, because A guarantees exactly one membership per user at this moment — B must run before any shared membership exists, which sequencing guarantees since no UI to create one has served a request yet); set NOT NULL, add the RESTRICT FK and index; rename `user_id` to `created_by_id`, replace its CASCADE FK with SET NULL and make it nullable; translate any UNIQUE constraint or index containing `user_id` to `workspace_id`, each translation listed in the revision for review. The generator reads the SQLAlchemy mapper metadata, never source text and never foreign keys alone — see **How the generator must enumerate** below, where both halves of that rule are a measured miss.
+
+**Pre-flight checkpoint — run 20/08/2026, and it found no question to ask.** The five nullable ownership columns (not two: `loans`, `networth_account_types`, `property_categories`, `property_leases`, `property_valuations`) were counted against production. `loans` (9 rows), `property_valuations` (6) and `audit_logs` (1) hold zero NULLs; `property_leases` is empty; their columns tighten to NOT NULL with no decision to make. `networth_account_types` (11 of 11 NULL) and `property_categories` (22 of 22 NULL) are not orphans at all — every row is NULL, because in those two tables NULL *means* something, which is the fourth category below.
 
 **Code sweep, same change set.** Service functions lose their `user_id` scoping parameters and hand-written filters (the session scopes); ownership-validation helpers are deleted; routers swap to `CurrentWorkspace`; the entitlement gates are untouched; test fixtures gain the workspace binding; the MCP context binds the actor's workspace. Response schemas that expose `user_id` are sequenced per the live-consumer rule: the field is served under both names while the n8n schedule and watchers are moved, then the old name is removed — a cutover sequence, not a kept legacy path.
 
@@ -212,16 +283,15 @@ Nothing to migrate. The example slice's model ships with the mixin so the first 
 ## What it costs
 
 - **The factory:** the workspaces slice, the scoping module and its hooks, the entitlements promotion with grades, the registry test, the baseline check, the shell switcher and client header, the copier question — and proving the fail-closed behaviour by driving a real violation through it, per the estate's own gate discipline. Three to five focused sessions.
-- **godswood:** the largest single change since inception, and it touches every query in the app. 57 model files carry the `users.id` FK (72 columns); essentially every service function in 62 domain slices loses a parameter and a filter; the two-revision migration rewrites 62 tables' columns, constraints and indexes in one deploy against production with no dev database; the ownership helpers, the test fixtures, the MCP context and every schema exposing `user_id` are all touched. The sweep is script-generated but the review is not. Plan multiple sessions and a deliberate deploy window with the image-dispatch dance godswood's own CLAUDE.md records. The compensation is that the result is smaller than the current code: scoping becomes zero lines per service.
+- **godswood:** the largest single change since inception, and it touches every query in the app. 80 tables carry a `users.id` FK, one column each; essentially every service function loses a parameter and a filter; the two-revision migration rewrites 89 tables' columns, constraints and indexes in one deploy against production with no dev database (81 that already scope, plus the 10 child tables and minus the 2 that become shared reference); the ownership helpers, the test fixtures, the MCP context and every schema exposing `user_id` are all touched. The sweep is script-generated but the review is not. Plan multiple sessions and a deliberate deploy window with the image-dispatch dance godswood's own CLAUDE.md records. The compensation is that the result is smaller than the current code: scoping becomes zero lines per service.
 - **tapestry:** small. One slice adoption, one stamp revision, one bootstrap command; no service signature changes.
 - **Ongoing:** every new model takes the mixin or argues its exemption into the reviewed list; multi-membership users see a switcher (single-membership users never do); machine actors serving one workspace pin it in `actors.yaml`.
 
 ## Left to the operator
 
-1. **Approve the noun** (`workspace`, per-app labels) and **the grade vocabulary** — bare `<module>` = read+write was chosen so no existing grant is re-provisioned; the alternative (bare = read, `:write` grants mutation) is safer-by-default but re-provisions every grant in Authentik on cutover day. Either works; the design recommends the first for a household-sized estate.
-2. **Schedule godswood's cutover** and settle any NULL-owner rows the pre-flight enumeration finds.
-3. **Perform the two grants that realise the fix** after the deploy: rename the household workspace, add the wife's membership.
-4. **Enact the rule** (appendix below) through the sunset review — the shared rules pool is deliberately fenced from mid-task writes, so the text ships here ready rather than landed.
+1. **Schedule godswood's cutover.** The only open decision. The noun, the grade default and the shape are SME calls, recorded above as settled rather than awaiting approval — and the NULL-owner pre-flight this list used to defer to him has been run: it found no question to ask.
+2. **Perform the two grants that realise the fix** after the deploy: rename the household workspace, add the wife's membership.
+3. **Enact the rule** (appendix below) through the sunset review — the shared rules pool is deliberately fenced from mid-task writes, so the text ships here ready rather than landed.
 
 ---
 
@@ -244,7 +314,7 @@ answers how identity arrives. Factory delivery rides `canonical-app-shape.md` §
 Belong to the Factory (tracked with #288).
 
 The defect this closes: the fleet had no noun between "person" and "everyone". Measured
-2026-08-20: godswood scopes 62 of ~70 tables to the individual who created each row, so a
+2026-08-20: godswood scopes 81 of its 103 tables to the individual who created each row, so a
 second household member signing in through the same SSO sees an empty app; tapestry scopes
 nothing, so every caller sees every row. Both are the same missing noun — a set of people
 who share a body of data — answered two wrong ways.
@@ -274,9 +344,15 @@ Each question has exactly one answering layer.
   scoping; it does not vary by workspace. What a member sees is the intersection: a module
   they are entitled to, showing rows of the workspace they are in.
 - Must express the per-module read/write split as an entitlement GRADE, provisioned in the
-  IdP: a bare `<module>` key grants read and write (the unchanged meaning of every existing
-  grant); `<module>:read` grants read only. `require_module(<module>)` gates read;
-  `require_module(<module>, write=True)` gates mutation and requires the bare grant.
+  IdP, DEFAULT-DENY: a bare `<module>` key grants READ only; `<module>:write` grants
+  mutation and implies read. `require_module(<module>)` gates read;
+  `require_module(<module>, write=True)` gates mutation. The inverse (bare = read+write)
+  re-provisions nothing on cutover day and was rejected for it: forgetting `:read` would
+  silently hand out ledger write, where forgetting `:write` produces a 403 someone reports.
+- Must NOT let `is_admin` bypass a module gate, and must NOT grant admin implicitly to the
+  first account seen on a fresh database. The first makes `is_admin` the super-role every
+  authorisation question ends up asking; the second hands admin to whichever caller arrives
+  first, which can be a machine. Admin is granted deliberately or not at all.
 - Must NOT add a third role source. Workspace administration (invite, remove, rename) is
   the membership row's `role` (`owner`/`member`); module read/write is the entitlement
   grade; there is nothing else. An IdP group survives as what GRANTS an entitlement in
@@ -305,7 +381,11 @@ Each question has exactly one answering layer.
 Postgres RLS is deferred (below); what replaces it is fail-closed scoping in the session
 itself, so scoping is not a per-query discipline any developer or agent can forget.
 
-- Must mark every workspace-scoped model with the factory's `WorkspaceScoped` mixin.
+- Must mark every workspace-scoped model with the factory's `WorkspaceScoped` mixin,
+  INCLUDING a child table reached through a scoped parent — its `workspace_id` is
+  denormalised down. "Reached only via its parent" is a claim about how callers happen to
+  behave; nothing stops a bare `select(ChildRow)`, and the criteria hook cannot see a model
+  without the mixin. The exemption list is for tables that genuinely have no workspace.
 - Must bind the session to the resolved workspace (the `CurrentWorkspace` dependency) and
   inject the workspace criterion into every ORM statement against a `WorkspaceScoped`
   model from the factory's session hooks — services never write the filter by hand, and
