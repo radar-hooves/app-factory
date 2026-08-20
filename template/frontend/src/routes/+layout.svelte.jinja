@@ -22,8 +22,10 @@
 		void auth.init();
 	});
 
-	// Page title: "Page Name — {% endraw %}{{ project_name }}{% raw %}" or bare app name.
-	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_name }}{% raw %}` : '{% endraw %}{{ project_name }}{% raw %}');
+	// Page title: "Page Name — {% endraw %}{{ project_title }}{% raw %}" or bare app name. This is the
+	// title a reader actually sees; app.html's is only the pre-hydration fallback,
+	// so both take the same derived display name.
+	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
 </script>
 
 <svelte:head>
