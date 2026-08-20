@@ -6,7 +6,7 @@ const CI = !!process.env.CI;
 // "There Is No Development Database"), so this suite gets its own port and
 // its own identity — the two things that stop it colliding with a `pnpm dev`
 // session already running, or writing under the identity that session uses.
-const E2E_PORT = {{ frontend_port }} + 1000; // not {{ frontend_port }}: a fixed offset out of the whole frontend-dev port band so it can never collide with any app's interactive dev server.
+const E2E_PORT = {{ frontend_e2e_port }}; // not {{ frontend_port }}: this app's own row in the registry's Frontend E2E band, so it collides with no interactive dev server and nothing else can be allocated over it. Derived offsets landed outside every band.
 const E2E_UID = 'e2e-uid';
 
 export default defineConfig({

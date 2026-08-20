@@ -38,6 +38,11 @@ frontend_port:
   type: int
   help: 'Frontend Vite dev port — allocate from the port registry (band 5170-5199); never a framework default'
 
+frontend_e2e_port:
+  type: int
+  help: >-
+    Playwright's own Vite dev port — allocate from the port registry (band 5200-5229). Asked rather than derived: the E2E server used to be frontend_port + 1000, which lands outside every band the registry defines, so nothing could tell you it was free and no row recorded it.
+
 postgres_host:
   type: str
   help: >-
