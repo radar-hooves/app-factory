@@ -18,7 +18,7 @@ from pathlib import Path
 
 #: The one machine-local fact that cannot itself be vended — where the broker is.
 #: Overridable per host; the default is the household's own broker.
-BROKER_URL = os.environ.get("PORTCULLIS_URL", "https://portcullis.example.com")
+BROKER_URL = os.environ.get("PORTCULLIS_URL", "{{ portcullis_url }}")
 
 #: This app's enrolled consumer identity. One per app per machine, enrolled once
 #: (`signet enrol --identity <app>`), granted only the credentials it needs.

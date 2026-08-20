@@ -28,7 +28,7 @@ class DatabaseSettings(BaseSettings):
     # role named for its app and usually carries no `postgres` login at all, so a
     # superuser default cannot connect. An app whose role differs changes THIS
     # default — never an env file, which the debugger does not read.
-    postgres_user: str = "{{ project_name | replace('-', '_') }}"
+    postgres_user: str = "{{ postgres_user }}"
     # Empty means "vend it" (see _vend_password), not "no password". Only a
     # deployment that supplies POSTGRES_PASSWORD itself leaves this set.
     postgres_password: str = ""

@@ -49,6 +49,20 @@ postgres_host:
     Tailnet address of the fleet host running this app's Postgres. There is no development database (stacks/dev-environment.md) — dev points at the real one, and the tailnet makes one address correct on any network. Required: left optional, three of nine apps answered blank and their dev path fell through to a code default pointing at localhost, which is nowhere.
 
 
+portcullis_url:
+  type: str
+  default: https://portcullis.example.com
+  help: >-
+    Base URL of the household secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py and the frontend's dev-identity.ts both resolve the database password and the operator's dev identity through it. PORTCULLIS_URL still overrides at runtime.
+
+
+postgres_user:
+  type: str
+  default: "{{ project_name | replace('-', '_') }}"
+  help: >-
+    Role this app's database was CREATED with. Almost always the app's own name, but two of the fleet's databases were built with the superuser and answer to `postgres` — read it off the live server rather than assuming, because a wrong role fails as a password error and sends you hunting the wrong thing. It is an answer rather than a code default because development holds no env file: this value IS the configuration.
+
+
 postgres_port:
   type: int
   default: 5432
