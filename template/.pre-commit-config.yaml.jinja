@@ -122,6 +122,23 @@ repos:
         language: system
         files: '^frontend/.*\.(svelte|ts|js|mjs|cjs|css|json|html)$'
 
+  # Stylelint is the CSS half of the same job, and it is here because CI runs it
+  # and nothing local did. Measured 2026-08-21: a root-font-size sweep put a
+  # comment directly under a declaration in every app's `app.css`, `pnpm check`
+  # (svelte-check) had nothing to say about it, and Frontend CI went red on main
+  # in NINE apps for a day over one missing blank line. A gate that runs only in
+  # CI is a gate the local loop cannot see.
+  #
+  # Same `cd` and prefix strip as prettier above, for the same reason: stylelint
+  # resolves its config's plugins against its own CWD.
+  - repo: local
+    hooks:
+      - id: stylelint
+        name: 'frontend - Lint CSS with stylelint'
+        entry: bash -c 'cd frontend && exec node_modules/.bin/stylelint --fix "${@#frontend/}"' --
+        language: system
+        files: '^frontend/.*\.(css|svelte)$'
+
   # Catches craft defects every other gate is blind to — a nested card, a
   # side-tab accent border, gradient-text on a heading, decorative slop. It
   # compiles, renders, type-checks and passes its tests; it is only wrong once
