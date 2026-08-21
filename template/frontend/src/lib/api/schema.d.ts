@@ -138,6 +138,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description List the people this app has seen, newest first.
+         *
+         *     A projection of the local user records, not a directory: the identity
+         *     provider is the directory, and a person appears here only once they have
+         *     signed in.
+         */
+        get: operations["adminListUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User
+         * @description Update a user's local standing — today, only the active flag.
+         */
+        patch: operations["adminUpdateUser"];
+        trace?: never;
+    };
     "/api/example/": {
         parameters: {
             query?: never;
@@ -147,7 +191,7 @@ export interface paths {
         };
         /**
          * List Items
-         * @description List all example items.
+         * @description List the example items in the caller's workspace.
          */
         get: operations["listExampleItems"];
         put?: never;
@@ -243,6 +287,65 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AdminUserList
+         * @description One page of the app's local user records.
+         */
+        AdminUserList: {
+            /** Users */
+            users: components["schemas"]["AdminUserRead"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * AdminUserRead
+         * @description A user as the admin area exposes them.
+         *
+         *     A superset of ``UserRead`` deliberately NOT derived from it: the two views
+         *     answer different questions ("who am I" versus "who has this app seen"), and
+         *     coupling them means a field added for one silently widens the other.
+         *     ``authentik_uid`` stays absent here too — the operator correlates people in
+         *     Authentik by username or email, and echoing the provider's key back widens
+         *     what a compromised admin session learns.
+         */
+        AdminUserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+        };
+        /**
+         * AdminUserUpdate
+         * @description Request body for updating a user's local standing.
+         *
+         *     ``is_active`` is the only mutable field: everything else on the row is the
+         *     identity provider's, re-synced from the headers on every request, so a
+         *     local edit would be overwritten on the person's next sign-in.
+         */
+        AdminUserUpdate: {
+            /** Is Active */
+            is_active: boolean;
+        };
+        /**
          * CurrentUserRead
          * @description The caller's own record, plus the entitlements this request carried.
          *
@@ -252,14 +355,17 @@ export interface components {
          *     never the gate. The gate is ``require_module()`` on the server.
          */
         CurrentUserRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Username */
             username: string;
+            /** Display Name */
+            display_name: string | null;
             /** Email */
             email: string | null;
-            /** Is Admin */
-            is_admin: boolean;
             /** Last Seen At */
             last_seen_at: string | null;
             /** Entitlements */
@@ -327,8 +433,11 @@ export interface components {
          *     app has never authenticated.
          */
         MemberAdd: {
-            /** User Id */
-            user_id: number;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
             /** @default member */
             role: components["schemas"]["WorkspaceRole"];
         };
@@ -552,7 +661,7 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: number;
-                user_id: number;
+                user_id: string;
             };
             cookie?: never;
         };
@@ -564,6 +673,79 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListUsers: {
+        parameters: {
+            query?: {
+                /** @description Page size */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+                /** @description Case-insensitive substring of username, display name or email */
+                search?: string | null;
+                /** @description Filter by the local active flag */
+                active?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminUpdateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRead"];
+                };
             };
             /** @description Validation Error */
             422: {

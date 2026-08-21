@@ -35,7 +35,7 @@ shape this file exists to avoid.
 import logging
 from collections.abc import Callable
 
-from fastapi import Depends, params
+from fastapi import params
 
 from {{ package_name }}.api.users.dependencies import CurrentIdentity, Identity
 from {{ package_name }}.exceptions import ForbiddenError
@@ -99,8 +99,8 @@ def require_module(module: str, *, write: bool = False) -> Callable[[Identity], 
 def module_dependency(module: str, *, write: bool = False) -> params.Depends:
     """``Depends(require_module(...))``, for a router's ``dependencies=[…]`` list.
 
-    Returns ``params.Depends`` — what ``Depends(...)`` actually constructs —
-    rather than ``object``, because a ``dependencies=[…]`` list is typed for it
-    and an opaque return makes every call site a type error.
+    Constructs ``params.Depends`` directly — it is what ``Depends(...)``
+    returns, but the helper is typed ``-> Any`` and the class is not, and a
+    ``dependencies=[…]`` list is typed for the class.
     """
-    return Depends(require_module(module, write=write))
+    return params.Depends(require_module(module, write=write))
