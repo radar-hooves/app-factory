@@ -57,6 +57,8 @@ Everything below landed after `v2026.8.15` was tagged the same day, and is recor
 
   The gap that let this land is the one worth closing: nothing asserted the shims were present, so a convergence could drop one and the only evidence appeared in an unrelated app's component tests. `frontend/src/test/setup.test.ts` now asserts the harness contract directly — Pointer Capture on `Element`, both observers constructible, `scrollIntoView`, `animate`, `matchMedia`, `localStorage` — and is parity-gated alongside the file it guards (85 → 86). Proven in both directions: with the shims reverted, three of its five tests go red naming the missing API.
 
+- **`frontend/tests/e2e/global-setup.ts` did not fail closed (issue #13 item 3).** The suite only checked the backend was reachable; the household's canonical shape deliberately points the dev server at the app's real database, so an E2E suite that writes, run against it, destroyed real data and nothing stopped it — the highest-consequence finding of the 2026-08-22 fleet convergence wave. A consumer app had already carried the fix as a permanent `.canonical-exceptions` line for being more correct than the template. Adopted as the default: read the already-shipped `GET /api/system/database-environment` and refuse to run unless it answers `local`; unreachable or unstamped both read as production, fail-closed, mirroring `db/stamp.py`'s own guard. Proven in both directions against a stamped probe app, driven directly through the file with `node --experimental-strip-types`: unstamped (defaults to production) throws, an unreachable backend throws, stamped `local` proceeds.
+
 
 ## [2026.8.15] - 2026-08-19
 
