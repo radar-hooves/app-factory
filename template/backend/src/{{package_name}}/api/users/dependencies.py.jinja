@@ -115,6 +115,7 @@ def get_identity(
         session,
         authentik_uid=uid,
         username=request.headers.get(identity_settings.authentik_username_header) or uid,
+        display_name=request.headers.get(identity_settings.authentik_name_header),
         email=request.headers.get(identity_settings.authentik_email_header),
     )
 

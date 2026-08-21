@@ -19,10 +19,17 @@ re-provisioning on cutover day and was rejected for that reason: forgetting to
 add ``:read`` would silently hand someone write access to a household ledger,
 where forgetting ``:write`` merely produces a 403 someone reports.
 
-``is_admin`` deliberately does NOT bypass these gates. It has one job —
-estate-wide administration of GLOBAL reference data — and letting it stand in for
-a module grant is how it becomes the super-role every authorisation question ends
-up asking, which is exactly the shape this file exists to avoid.
+The module name ``admin`` is RESERVED by the factory: the admin area
+(``api/admin/``) is gated by ``require_module("admin")`` exactly as a domain
+module is gated by its own name, and ``admin:write`` is what acting there needs.
+Admin is deliberately NOT a stored flag. A boolean column is a second
+authorisation mechanism beside this one; it needs bootstrap machinery the day
+the database is fresh (and on a fresh database the first caller can be a
+machine); and it keeps working after the operator revokes it at the identity
+provider. Provisioned as an Application Entitlement like every other module, a
+grant or a revocation is effective on the caller's next request — and no admin
+grant bypasses any other module's gate, because a super-role is exactly the
+shape this file exists to avoid.
 """
 
 import logging
