@@ -118,7 +118,7 @@
     "frontend/src/test/mocks/app-state.ts": "0e7832cdfdead246",
     "frontend/src/test/mocks/app-stores.ts": "e23a4c6e75ef65e7",
     "frontend/src/test/setup.test.ts": "18d3fe71f4f76deb",
-    "frontend/src/test/setup.ts": "9f75638f2246590d",
+    "frontend/src/test/setup.ts": "0b90a2b8b4be75fa",
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",
     "frontend/tests/e2e/global-setup.ts": "c329359abf2cab0c",

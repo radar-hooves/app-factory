@@ -2,7 +2,25 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/svelte';
 import { afterEach, vi } from 'vitest';
 
-afterEach(() => cleanup());
+afterEach(async () => {
+	cleanup();
+
+	// bits-ui's body-scroll-lock releases 24ms AFTER its last lock goes, so
+	// unmounting a Dialog leaves a timer behind. Let it fire while jsdom is still
+	// alive: once the environment is torn down the same callback reaches for
+	// `document` and vitest reports an unhandled `ReferenceError` — attributed to
+	// whichever file happened to be running rather than the one that opened the
+	// dialog, which is why it names an innocent test. It had Frontend CI red on
+	// main while the suite passed on every workstation: the timer wins the race
+	// on a fast machine and loses it on a loaded runner.
+	//
+	// Gated on the lock's own marker, so the tests that never open an overlay pay
+	// nothing for it: `overflow: hidden` on <body> is what the lock sets and what
+	// its deferred cleanup takes away.
+	if (document.body.style.overflow === 'hidden') {
+		await new Promise((resolve) => setTimeout(resolve, 40));
+	}
+});
 
 // Mock localStorage
 const localStorageMock = (() => {
