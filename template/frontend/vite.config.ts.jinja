@@ -47,11 +47,11 @@ export default defineConfig(({ command, isPreview }) => {
 		}
 	};
 
-	// Defaults to the app's registered backend port. Overridable so an isolated
-	// E2E harness can point this proxy at its own ephemeral backend, rather than
-	// the dev backend — which is the one talking to the real database.
-	const backendPort = process.env.{{ project_name | upper | replace('-', '_') }}_BACKEND_PORT ?? '{{ backend_port }}';
-	const backendTarget = `http://localhost:${backendPort}`;
+	// The app's registered backend port. Not overridable: no app has needed a
+	// second target, and an override nobody reaches for is untested machinery
+	// (issue #13 item 4) — an app that genuinely needs one adds it back with a
+	// use to prove it against, rather than carrying it speculatively.
+	const backendTarget = `http://localhost:{{ backend_port }}`;
 
 	return {
 		plugins: [...plugins, requireDevIdentity],
@@ -75,12 +75,11 @@ export default defineConfig(({ command, isPreview }) => {
 					// Undefined behind the proxy, where the real headers are already on
 					// the request and this object would overwrite them — Vite merges it last.
 					headers: identity.proxyHeaders
-				},
-				// /mcp is proxied so an MCP client can reach the dev backend through this
-				// origin. It gets no identity headers: /mcp validates an Authentik Bearer
-				// token app-side and is closed until
-				// {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set. See backend mcp/http_auth.py.
-				'/mcp': backendTarget
+				}
+				// No /mcp proxy: an MCP client names a full URL, not a same-origin
+				// path the way the SPA's own fetch calls do (that is what /api above
+				// is for), so it reaches the backend on {{ backend_port }} directly —
+				// proxying it here had no consumer in nine apps (issue #13 item 4).
 			}
 		}
 	};
