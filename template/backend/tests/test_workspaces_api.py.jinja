@@ -1,0 +1,167 @@
+"""The workspace SLICE, driven through HTTP.
+
+`test_workspace_scoping.py` proves the session hooks and is owed by every app.
+This file proves the whole chain a real request takes — proxy headers, user
+upsert, personal-workspace provisioning, membership resolution, session binding —
+because that is the chain the defect actually lived in, and a green unit test on
+the hooks would not have caught it.
+
+It needs the slice, so it exists only in an app that adopted tenancy
+(`rules-library/platform/tenancy.md` §Applicability) and is sanctioned per-app in
+`canonical-app-shape.md` for the same reason `test_example.py` is: an app that
+deleted the code deletes its test with it.
+"""
+
+import pytest
+from httpx import AsyncClient, Response
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.models import User
+
+
+async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
+    return await client.post(
+        "/api/example/",
+        json={"title": title},
+        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+    )
+
+
+async def _list_items(client: AsyncClient, uid: str) -> Response:
+    return await client.get(
+        "/api/example/",
+        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+    )
+
+
+# ── The wall, over HTTP ──────────────────────────────────────────────────────
+
+
+async def test_two_people_signing_in_do_not_see_each_others_items(client: AsyncClient) -> None:
+    """Each gets their own auto-provisioned workspace, and the wall holds over HTTP."""
+    assert (await _create_item(client, "person-one", "one's item")).status_code == 201
+    assert (await _create_item(client, "person-two", "two's item")).status_code == 201
+
+    titles_one = [item["title"] for item in (await _list_items(client, "person-one")).json()]
+    titles_two = [item["title"] for item in (await _list_items(client, "person-two")).json()]
+
+    assert titles_one == ["one's item"]
+    assert titles_two == ["two's item"]
+
+
+async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
+    client: AsyncClient, session: Session
+) -> None:
+    """master-project#291, driven end to end.
+
+    The operator creates something; his partner signs in through the same SSO and
+    sees it — because he granted her membership. Before the primitive existed she
+    saw an empty app and there was no grant to make.
+    """
+    assert (await _create_item(client, "the-operator", "the household's item")).status_code == 201
+
+    memberships = (
+        await client.get(
+            "/api/workspaces/me",
+            headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
+        )
+    ).json()
+    assert len(memberships) == 1
+    household_id = memberships[0]["workspace"]["id"]
+
+    # The partner signs in for the first time: a user row and her own empty workspace.
+    assert (await _list_items(client, "the-partner")).json() == []
+    partner = session.execute(select(User).where(User.authentik_uid == "the-partner")).scalar_one()
+
+    # The grant — the act the whole primitive exists for.
+    granted = await client.post(
+        f"/api/workspaces/{household_id}/members",
+        # str(): user ids are UUIDs, which the JSON encoder will not take raw.
+        json={"user_id": str(partner.id), "role": "member"},
+        headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
+    )
+    assert granted.status_code == 201
+
+    # She now belongs to two workspaces, so a bare request is ambiguous and is
+    # refused with the choices rather than silently defaulted.
+    ambiguous = await _list_items(client, "the-partner")
+    assert ambiguous.status_code == 409
+    assert len(ambiguous.json()["details"]["workspaces"]) == 2
+
+    shared = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "the-partner",
+            "x-authentik-username": "the-partner",
+            "x-workspace-id": str(household_id),
+        },
+    )
+    assert [item["title"] for item in shared.json()] == ["the household's item"]
+
+
+async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: AsyncClient) -> None:
+    """The header disambiguates among the caller's OWN memberships; it grants nothing."""
+    await _create_item(client, "insider", "private item")
+    memberships = (
+        await client.get(
+            "/api/workspaces/me", headers={"x-authentik-uid": "insider", "x-authentik-username": "insider"}
+        )
+    ).json()
+    insider_workspace = memberships[0]["workspace"]["id"]
+
+    refused = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "outsider",
+            "x-authentik-username": "outsider",
+            "x-workspace-id": str(insider_workspace),
+        },
+    )
+    assert refused.status_code == 403
+
+
+# ── A machine principal may use an identity, never mint one ─────────────────
+
+
+async def test_a_declared_machine_principal_is_not_given_a_user_row(client: AsyncClient) -> None:
+    """godswood#701's shape, refused at the factory rather than per app."""
+    refused = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "some-service-account",
+            "x-authentik-username": "some-service-account",
+            "x-authentik-user-type": "service_account",
+        },
+    )
+    assert refused.status_code == 401
+
+
+async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(client: AsyncClient) -> None:
+    """The header is absent on exactly the request it exists to catch, so its
+    absence must never narrow the ordinary human path."""
+    admitted = await client.get(
+        "/api/example/",
+        headers={"x-authentik-uid": "an-ordinary-person", "x-authentik-username": "an-ordinary-person"},
+    )
+    assert admitted.status_code == 200
+
+
+async def test_a_caller_in_the_machine_group_is_not_given_a_user_row(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second marker: present even when an under-scoped token carries no custom claims."""
+    from {{ package_name }}.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings.identity, "authentik_machine_group", "app-machines")
+
+    refused = await client.get(
+        "/api/example/",
+        headers={
+            "x-authentik-uid": "under-scoped-token",
+            "x-authentik-username": "under-scoped-token",
+            "x-authentik-groups": "everyone|app-machines",
+        },
+    )
+    assert refused.status_code == 401

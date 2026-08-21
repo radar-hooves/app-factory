@@ -2,21 +2,28 @@
 
 Each test here corresponds to one clause of `rules-library/platform/tenancy.md`
 §Enforcement. Together they are what lets the rule claim a forgotten filter is
-impossible rather than merely discouraged — and the shared-visibility test is the
-regression test for the defect the primitive exists to fix (master-project#291): a
-second household member signing in and seeing an empty app.
+impossible rather than merely discouraged.
+
+SELF-CONTAINED ON PURPOSE. This file is owed byte-identical by every app, and
+most apps never adopt the workspace SLICE — they have no `users` table, no
+`workspaces` table, and no `api/example` (`rules-library/platform/tenancy.md`
+§Applicability). So it imports nothing from `api/` and touches no application
+table: it declares its own throwaway models and binds sessions to plain integer
+ids. The hooks read exactly two attributes off a scoped instance, which is why
+that is enough to prove them.
+
+The slice's own behaviour — proxy headers, user upsert, membership resolution,
+the 409 disambiguation, the machine-principal refusal — is HTTP-level and needs
+the slice to exist, so it lives in `test_workspaces_api.py`, which an app that
+does not adopt tenancy does not carry.
 """
 
 from typing import cast
 
 import pytest
-from httpx import AsyncClient, Response
-from sqlalchemy import String, Table, select
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy import Integer, String, Table, inspect, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from {{ package_name }}.api.example.models import ExampleItem
-from {{ package_name }}.api.users.models import User
-from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
 from {{ package_name }}.db.base import Base, SharedReference, WorkspaceScoped
 from {{ package_name }}.db.registry import WORKSPACE_EXEMPT
 from {{ package_name }}.db.scoping import (
@@ -26,55 +33,93 @@ from {{ package_name }}.db.scoping import (
     unscoped,
 )
 
+# Synthetic ids. Nothing here resolves a membership or reads an identity table —
+# binding takes an integer, and these stand in for two workspaces and the two
+# people who belong to them.
+HOUSEHOLD = 1
+ELSEWHERE = 2
+OPERATOR = 10
+PARTNER = 11
 
-class TaxonomyEntry(Base, SharedReference):
-    """A shared taxonomy, for proving the third bucket behaves.
 
-    Declared here rather than in the app so the factory ships no table nobody
-    asked for — and at module level so it registers with Base, which makes the
-    coverage test accept `SharedReference` in practice and not just in its
-    assertion text.
+class ProbeBase(DeclarativeBase):
+    """A declarative base of its own, deliberately NOT the app's.
+
+    Every throwaway model below sits here rather than on ``Base``, and that is
+    load-bearing in two directions. It keeps test-only tables out of
+    ``Base.metadata``, which an app's own conftest legitimately enumerates — one
+    app TRUNCATEs every table in it between tests, and a table that exists only
+    inside a single test's transaction made that teardown fail. And it lets
+    ``PlainRow`` carry neither mixin without failing the coverage test above,
+    which is correct: that sweep exists to grade the APP's models, not the
+    suite's fixtures.
     """
 
-    __tablename__ = "taxonomy_entries_test"
+
+class ScopedRow(ProbeBase, WorkspaceScoped):
+    """A throwaway workspace-scoped model, so the factory ships no table nobody asked for.
+
+    ``workspace_id`` and ``created_by_id`` are redeclared WITHOUT the mixin's
+    foreign keys. That is deliberate and it is the whole reason this file runs
+    everywhere: the session hooks read those two attributes and nothing else,
+    while the foreign keys are the SCHEMA's business — exercised by the app that
+    adopts the slice and has a `workspaces` table for them to point at.
+
+    Alembic never sees it either way — `env.py` imports `db/registry.py`, never
+    the suite — but the conftest does, which is why ProbeBase exists.
+    """
+
+    __tablename__ = "scoped_rows_test"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(64), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    created_by_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TaxonomyRow(ProbeBase, SharedReference):
+    """A shared taxonomy, for proving the third bucket behaves. Same treatment."""
+
+    __tablename__ = "taxonomy_rows_test"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_by_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class PlainRow(ProbeBase):
+    """An unscoped model, standing in for an identity or reference table."""
+
+    __tablename__ = "plain_rows_test"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 @pytest.fixture
-def taxonomy_table(session: Session) -> None:
-    """Create the throwaway taxonomy table inside the test's own transaction."""
+def tables(session: Session) -> None:
+    """Create the throwaway tables inside the test's own transaction."""
     # cast: the declarative __table__ is typed as FromClause, which has no create().
-    cast(Table, TaxonomyEntry.__table__).create(session.connection())
-
-
-def _make_user(session: Session, uid: str) -> User:
-    user = User(authentik_uid=uid, username=uid)
-    session.add(user)
-    session.flush()
-    return user
-
-
-def _make_workspace(session: Session, slug: str, *members: User) -> Workspace:
-    workspace = Workspace(slug=slug, name=slug)
-    session.add(workspace)
-    session.flush()
-    for user in members:
-        session.add(WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.MEMBER))
-    session.flush()
-    return workspace
+    cast(Table, ScopedRow.__table__).create(session.connection())
+    cast(Table, TaxonomyRow.__table__).create(session.connection())
+    cast(Table, PlainRow.__table__).create(session.connection())
 
 
 # ── 1. Coverage: no model ships without an access predicate ──────────────────
 
 
 def test_every_model_is_scoped_or_exempt_with_a_reason() -> None:
-    """A new model must take the mixin or be argued into the exemption list.
+    """A new model must take a mixin or be argued into the exemption list.
 
     This is the check that fails the day someone adds a table and forgets, which
     is the only moment the mistake is cheap to fix. An exemption with an empty
     reason is not an exemption.
+
+    An app with no workspace-scoped models at all passes this by exempting every
+    one of its tables with a stated reason, and that is a finished state rather
+    than an unfinished migration — the point is that each table was CLASSIFIED,
+    never that some of them ended up scoped.
     """
     unaccounted = []
     for mapper in Base.registry.mappers:
@@ -88,113 +133,155 @@ def test_every_model_is_scoped_or_exempt_with_a_reason() -> None:
 
     assert not unaccounted, (
         f"These models are in none of the three buckets: {sorted(unaccounted)}. "
-        "A domain model takes WorkspaceScoped — including a child table, whose workspace_id "
-        "is denormalised down. A taxonomy every workspace reads and any may add to takes "
-        "SharedReference. Only identity tables and reference data with no per-workspace half "
-        "are exempt."
+        "A shared domain model takes WorkspaceScoped — including a child table, whose "
+        "workspace_id is denormalised down. A taxonomy every workspace reads and any may "
+        "add to takes SharedReference. Exemption is for identity tables, reference data "
+        "with no per-workspace half, and personal-subject data — see "
+        "rules-library/platform/tenancy.md §Classification."
+    )
+
+
+def test_a_personal_subject_exemption_declares_and_carries_its_own_predicate() -> None:
+    """The third bucket is the one with an incentive to abuse it, so it is checked.
+
+    Exempting a table as personal-subject removes it from the session hooks
+    entirely — which is right for a record OF one person, and is also the
+    cheapest way for an agent to dodge a migration: declare every `user_id`
+    table personal-subject, write a plausible sentence, go green, and skip the
+    operator ratification a disclosure migration needs
+    (`rules-library/platform/tenancy.md` §Classification).
+
+    So the claim has to be true rather than merely stated. A personal-subject
+    exemption must say WHO the row is about, and the model must actually carry
+    the NOT NULL user_id it claims as its predicate. Both are readable off the
+    mapper; neither was checked while the rule only asked for them in prose.
+    """
+    malformed: list[str] = []
+    unpredicated: list[str] = []
+
+    for model, reason in WORKSPACE_EXEMPT.items():
+        if not reason.strip().startswith("personal-subject:"):
+            continue
+
+        if not reason.strip().removeprefix("personal-subject:").strip():
+            malformed.append(f"{model.__name__}: says 'personal-subject:' but names nobody")
+            continue
+
+        columns = inspect(model).columns
+        if "user_id" not in columns:
+            unpredicated.append(f"{model.__name__}: no user_id column to scope by")
+        elif columns["user_id"].nullable:
+            unpredicated.append(f"{model.__name__}: user_id is nullable, so the predicate can be skipped")
+
+    assert not malformed, (
+        f"A personal-subject exemption must name whose row it is: {malformed}. "
+        "The reason reads 'personal-subject: <who the row is about>'."
+    )
+    assert not unpredicated, (
+        f"These models claim personal-subject but carry no enforced predicate: {unpredicated}. "
+        "The exemption records a DIFFERENT declared predicate, never the absence of one — so the "
+        "model needs a NOT NULL user_id its service filters on. If it has no such column, the row "
+        "is not personal-subject and belongs in WorkspaceScoped."
     )
 
 
 # ── 2. Fail closed: an unbound session refuses, it does not return everything ─
 
 
-def test_unbound_session_refuses_to_read_a_scoped_model(session: Session) -> None:
+def test_unbound_session_refuses_to_read_a_scoped_model(session: Session, tables: None) -> None:
     """The failure mode of forgetting is an exception, never all-rows."""
     with pytest.raises(UnscopedQueryError):
-        session.execute(select(ExampleItem)).scalars().all()
+        session.execute(select(ScopedRow)).scalars().all()
 
 
-def test_unbound_session_refuses_to_write_a_scoped_model(session: Session) -> None:
+def test_unbound_session_refuses_to_write_a_scoped_model(session: Session, tables: None) -> None:
     """The flush guard is the write-side half of the same property."""
-    user = _make_user(session, "unbound-writer")
-    workspace = _make_workspace(session, "unbound-ws", user)
-
-    session.add(ExampleItem(title="orphan", workspace_id=workspace.id))
+    session.add(ScopedRow(title="orphan", workspace_id=HOUSEHOLD))
     with pytest.raises(UnscopedQueryError):
         session.flush()
 
 
-def test_unbound_session_still_reads_unscoped_models(session: Session) -> None:
-    """Identity tables must stay readable before a workspace has been resolved.
+def test_unbound_session_still_reads_unscoped_models(session: Session, tables: None) -> None:
+    """Unscoped models must stay readable before a workspace has been resolved.
 
-    Workspace resolution reads memberships, so if the guard fired on every model
-    the app could never resolve anything — this is the test that keeps the guard
-    narrow enough to be usable.
+    Workspace resolution reads the identity and membership tables, so if the
+    guard fired on every model the app could never resolve anything — this is the
+    test that keeps the guard narrow enough to be usable.
     """
-    user = _make_user(session, "identity-reader")
-    found = session.execute(select(User).where(User.id == user.id)).scalar_one()
-    assert found.authentik_uid == "identity-reader"
+    session.add(PlainRow(label="readable"))
+    session.flush()
+
+    found = session.execute(select(PlainRow)).scalars().all()
+    assert [row.label for row in found] == ["readable"]
 
 
 # ── 3. Isolation, and the defect's own regression test ───────────────────────
 
 
-def test_members_of_different_workspaces_see_nothing_of_each_others_rows(session: Session) -> None:
-    alice = _make_user(session, "alice")
-    bob = _make_user(session, "bob")
-    alice_ws = _make_workspace(session, "alice-ws", alice)
-    bob_ws = _make_workspace(session, "bob-ws", bob)
-
-    bind_session(session, workspace_id=alice_ws.id, created_by_id=alice.id)
-    session.add(ExampleItem(title="alice's note"))
+def test_members_of_different_workspaces_see_nothing_of_each_others_rows(session: Session, tables: None) -> None:
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    session.add(ScopedRow(title="the household's note"))
     session.flush()
 
-    bind_session(session, workspace_id=bob_ws.id, created_by_id=bob.id)
-    session.add(ExampleItem(title="bob's note"))
+    bind_session(session, workspace_id=ELSEWHERE, created_by_id=PARTNER)
+    session.add(ScopedRow(title="somebody else's note"))
     session.flush()
 
-    titles = [item.title for item in session.execute(select(ExampleItem)).scalars().all()]
-    assert titles == ["bob's note"]
+    titles = [row.title for row in session.execute(select(ScopedRow)).scalars().all()]
+    assert titles == ["somebody else's note"]
 
 
-def test_two_members_of_the_same_workspace_see_the_same_rows(session: Session) -> None:
+def test_two_members_of_the_same_workspace_see_the_same_rows(session: Session, tables: None) -> None:
     """THE regression test for master-project#291.
 
     Under the per-user model this could never pass: the second household member
     signed in through the same SSO and saw an empty app, because the row belonged
-    to whoever created it. Here the row belongs to the workspace, so it does not
-    matter which member is looking.
+    to whoever created it. Here the row belongs to the WORKSPACE, so it does not
+    matter which member is looking — which is exactly what the two different
+    creator ids against one workspace id assert.
     """
-    operator = _make_user(session, "operator")
-    partner = _make_user(session, "partner")
-    household = _make_workspace(session, "household", operator, partner)
-
-    bind_session(session, workspace_id=household.id, created_by_id=operator.id)
-    session.add(ExampleItem(title="the household's note"))
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    session.add(ScopedRow(title="the household's note"))
     session.flush()
     session.expunge_all()
 
     # The same workspace, a different member looking.
-    bind_session(session, workspace_id=household.id, created_by_id=partner.id)
-    items = session.execute(select(ExampleItem)).scalars().all()
-    assert [item.title for item in items] == ["the household's note"]
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=PARTNER)
+    rows = session.execute(select(ScopedRow)).scalars().all()
+    assert [row.title for row in rows] == ["the household's note"]
 
 
 # ── 4. Stamping and cross-workspace writes ───────────────────────────────────
 
 
-def test_a_new_row_is_stamped_with_the_bound_workspace_and_creator(session: Session) -> None:
+def test_a_new_row_is_stamped_with_the_bound_workspace_and_creator(session: Session, tables: None) -> None:
     """The service said nothing about either; the session supplied both."""
-    user = _make_user(session, "stamper")
-    workspace = _make_workspace(session, "stamp-ws", user)
-
-    bind_session(session, workspace_id=workspace.id, created_by_id=user.id)
-    item = ExampleItem(title="stamped")
-    session.add(item)
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    row = ScopedRow(title="stamped")
+    session.add(row)
     session.flush()
 
-    assert item.workspace_id == workspace.id
-    assert item.created_by_id == user.id
+    assert row.workspace_id == HOUSEHOLD
+    assert row.created_by_id == OPERATOR
 
 
-def test_a_write_aimed_at_another_workspace_is_refused(session: Session) -> None:
+def test_a_write_aimed_at_another_workspace_is_refused(session: Session, tables: None) -> None:
     """A row is always written to the ACTIVE workspace; there is no other path."""
-    user = _make_user(session, "crosser")
-    here = _make_workspace(session, "here-ws", user)
-    elsewhere = _make_workspace(session, "elsewhere-ws", user)
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    session.add(ScopedRow(title="misdirected", workspace_id=ELSEWHERE))
+    with pytest.raises(CrossWorkspaceWriteError):
+        session.flush()
 
-    bind_session(session, workspace_id=here.id, created_by_id=user.id)
-    session.add(ExampleItem(title="misdirected", workspace_id=elsewhere.id))
+
+def test_an_edit_of_another_workspaces_row_is_refused(session: Session, tables: None) -> None:
+    """The guard covers UPDATE as well as INSERT, or the wall has a door in it."""
+    with unscoped(session):
+        row = ScopedRow(title="theirs", workspace_id=ELSEWHERE)
+        session.add(row)
+        session.flush()
+
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    row.title = "vandalised"
     with pytest.raises(CrossWorkspaceWriteError):
         session.flush()
 
@@ -202,179 +289,68 @@ def test_a_write_aimed_at_another_workspace_is_refused(session: Session) -> None
 # ── 5. The escape hatch is explicit, and it restores what it borrowed ────────
 
 
-def test_unscoped_sees_every_workspace_and_restores_the_binding(session: Session) -> None:
-    alice = _make_user(session, "unscoped-alice")
-    bob = _make_user(session, "unscoped-bob")
-    alice_ws = _make_workspace(session, "unscoped-alice-ws", alice)
-    bob_ws = _make_workspace(session, "unscoped-bob-ws", bob)
-
-    bind_session(session, workspace_id=alice_ws.id, created_by_id=alice.id)
-    session.add(ExampleItem(title="a"))
+def test_unscoped_sees_every_workspace_and_restores_the_binding(session: Session, tables: None) -> None:
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    session.add(ScopedRow(title="ours"))
     session.flush()
-    bind_session(session, workspace_id=bob_ws.id, created_by_id=bob.id)
-    session.add(ExampleItem(title="b"))
+    bind_session(session, workspace_id=ELSEWHERE, created_by_id=PARTNER)
+    session.add(ScopedRow(title="theirs"))
     session.flush()
 
     with unscoped(session):
-        assert len(session.execute(select(ExampleItem)).scalars().all()) == 2
+        assert len(session.execute(select(ScopedRow)).scalars().all()) == 2
 
-    # Still bob's after the block — an escape hatch that leaked its release would
-    # be worse than no escape hatch at all.
-    assert [i.title for i in session.execute(select(ExampleItem)).scalars().all()] == ["b"]
-
-
-# ── 6. The same properties, driven through HTTP ──────────────────────────────
-#
-# The tests above prove the session hooks. These prove the whole chain a real
-# request takes — proxy headers, user upsert, personal-workspace provisioning,
-# membership resolution, session binding — because that is the chain the defect
-# actually lived in, and a green unit test on the hooks would not have caught it.
+    # Still ELSEWHERE after the block — an escape hatch that leaked its release
+    # would be worse than no escape hatch at all.
+    assert [r.title for r in session.execute(select(ScopedRow)).scalars().all()] == ["theirs"]
 
 
-async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
-    return await client.post(
-        "/api/example/",
-        json={"title": title},
-        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
-    )
+def test_unscoped_restores_an_unbound_session_to_unbound(session: Session, tables: None) -> None:
+    """Leaving the block must not silently leave a background job scoped."""
+    with unscoped(session):
+        session.execute(select(ScopedRow)).scalars().all()
+
+    with pytest.raises(UnscopedQueryError):
+        session.execute(select(ScopedRow)).scalars().all()
 
 
-async def _list_items(client: AsyncClient, uid: str) -> Response:
-    return await client.get(
-        "/api/example/",
-        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
-    )
+# ── 6. The third bucket: a shared taxonomy, stated rather than inferred ──────
 
 
-async def test_two_people_signing_in_do_not_see_each_others_items(client: AsyncClient) -> None:
-    """Each gets their own auto-provisioned workspace, and the wall holds over HTTP."""
-    assert (await _create_item(client, "person-one", "one's item")).status_code == 201
-    assert (await _create_item(client, "person-two", "two's item")).status_code == 201
-
-    titles_one = [item["title"] for item in (await _list_items(client, "person-one")).json()]
-    titles_two = [item["title"] for item in (await _list_items(client, "person-two")).json()]
-
-    assert titles_one == ["one's item"]
-    assert titles_two == ["two's item"]
-
-
-async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
-    client: AsyncClient, session: Session
-) -> None:
-    """master-project#291, driven end to end.
-
-    The operator creates something; his partner signs in through the same SSO and
-    sees it — because he granted her membership. Before the primitive existed she
-    saw an empty app and there was no grant to make.
-    """
-    assert (await _create_item(client, "the-operator", "the household's item")).status_code == 201
-
-    memberships = (
-        await client.get(
-            "/api/workspaces/me",
-            headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
-        )
-    ).json()
-    assert len(memberships) == 1
-    household_id = memberships[0]["workspace"]["id"]
-
-    # The partner signs in for the first time: a user row and her own empty workspace.
-    assert (await _list_items(client, "the-partner")).json() == []
-    partner = session.execute(select(User).where(User.authentik_uid == "the-partner")).scalar_one()
-
-    # The grant — the act the whole primitive exists for.
-    granted = await client.post(
-        f"/api/workspaces/{household_id}/members",
-        json={"user_id": partner.id, "role": "member"},
-        headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
-    )
-    assert granted.status_code == 201
-
-    # She now belongs to two workspaces, so a bare request is ambiguous and is
-    # refused with the choices rather than silently defaulted.
-    ambiguous = await _list_items(client, "the-partner")
-    assert ambiguous.status_code == 409
-    assert len(ambiguous.json()["details"]["workspaces"]) == 2
-
-    shared = await client.get(
-        "/api/example/",
-        headers={
-            "x-authentik-uid": "the-partner",
-            "x-authentik-username": "the-partner",
-            "x-workspace-id": str(household_id),
-        },
-    )
-    assert [item["title"] for item in shared.json()] == ["the household's item"]
-
-
-async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: AsyncClient) -> None:
-    """The header disambiguates among the caller's OWN memberships; it grants nothing."""
-    await _create_item(client, "insider", "private item")
-    memberships = (
-        await client.get(
-            "/api/workspaces/me", headers={"x-authentik-uid": "insider", "x-authentik-username": "insider"}
-        )
-    ).json()
-    insider_workspace = memberships[0]["workspace"]["id"]
-
-    refused = await client.get(
-        "/api/example/",
-        headers={
-            "x-authentik-uid": "outsider",
-            "x-authentik-username": "outsider",
-            "x-workspace-id": str(insider_workspace),
-        },
-    )
-    assert refused.status_code == 403
-
-
-# ── 7. The third bucket: a shared taxonomy, stated rather than inferred ──────
-
-
-def test_a_shared_reference_shows_global_rows_and_this_workspace_s_own(session: Session, taxonomy_table: None) -> None:
+def test_a_shared_reference_shows_global_rows_and_this_workspace_s_own(session: Session, tables: None) -> None:
     """The wider predicate: global rows PLUS the bound workspace's additions."""
-    user = _make_user(session, "taxonomist")
-    mine = _make_workspace(session, "mine-ws", user)
-    theirs = _make_workspace(session, "theirs-ws", user)
-
     with unscoped(session):
-        session.add(TaxonomyEntry(label="global", workspace_id=None))
-        session.add(TaxonomyEntry(label="mine", workspace_id=mine.id))
-        session.add(TaxonomyEntry(label="theirs", workspace_id=theirs.id))
+        session.add(TaxonomyRow(label="global", workspace_id=None))
+        session.add(TaxonomyRow(label="ours", workspace_id=HOUSEHOLD))
+        session.add(TaxonomyRow(label="theirs", workspace_id=ELSEWHERE))
         session.flush()
 
-    bind_session(session, workspace_id=mine.id, created_by_id=user.id)
-    labels = sorted(e.label for e in session.execute(select(TaxonomyEntry)).scalars().all())
-    assert labels == ["global", "mine"]
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    labels = sorted(row.label for row in session.execute(select(TaxonomyRow)).scalars().all())
+    assert labels == ["global", "ours"]
 
 
-def test_a_bound_session_cannot_edit_a_global_taxonomy_row(session: Session, taxonomy_table: None) -> None:
+def test_a_bound_session_cannot_edit_a_global_taxonomy_row(session: Session, tables: None) -> None:
     """Editing the estate's shared list is a deliberate unscoped act, not a side effect."""
-    user = _make_user(session, "meddler")
-    workspace = _make_workspace(session, "meddler-ws", user)
-
     with unscoped(session):
-        entry = TaxonomyEntry(label="global", workspace_id=None)
+        entry = TaxonomyRow(label="global", workspace_id=None)
         session.add(entry)
         session.flush()
 
-    bind_session(session, workspace_id=workspace.id, created_by_id=user.id)
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
     entry.label = "vandalised"
     with pytest.raises(CrossWorkspaceWriteError):
         session.flush()
 
 
-def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session, taxonomy_table: None) -> None:
+def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session, tables: None) -> None:
     """A workspace adding to the list adds to ITS half; it cannot mint a global row."""
-    user = _make_user(session, "adder")
-    workspace = _make_workspace(session, "adder-ws", user)
-
-    bind_session(session, workspace_id=workspace.id, created_by_id=user.id)
-    entry = TaxonomyEntry(label="ours")
+    bind_session(session, workspace_id=HOUSEHOLD, created_by_id=OPERATOR)
+    entry = TaxonomyRow(label="ours")
     session.add(entry)
     session.flush()
 
-    assert entry.workspace_id == workspace.id
+    assert entry.workspace_id == HOUSEHOLD
 
     # An EXPLICIT workspace_id=None is stamped exactly the same way, and that is
     # the trap worth naming: code intending to seed a GLOBAL row from a
@@ -383,54 +359,8 @@ def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session
     # category service lazily seeded the estate's 22 ATO rows from a GET path.
     # Seeding global reference data belongs in a migration or an explicit
     # unscoped() block, never on a read path.
-    explicit = TaxonomyEntry(label="meant-to-be-global", workspace_id=None)
+    explicit = TaxonomyRow(label="meant-to-be-global", workspace_id=None)
     session.add(explicit)
     session.flush()
 
-    assert explicit.workspace_id == workspace.id
-
-
-# ── 8. A machine principal may use an identity, never mint one ──────────────
-
-
-async def test_a_declared_machine_principal_is_not_given_a_user_row(client: AsyncClient) -> None:
-    """godswood#701's shape, refused at the factory rather than per app."""
-    refused = await client.get(
-        "/api/example/",
-        headers={
-            "x-authentik-uid": "some-service-account",
-            "x-authentik-username": "some-service-account",
-            "x-authentik-user-type": "service_account",
-        },
-    )
-    assert refused.status_code == 401
-
-
-async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(client: AsyncClient) -> None:
-    """The header is absent on exactly the request it exists to catch, so its
-    absence must never narrow the ordinary human path."""
-    admitted = await client.get(
-        "/api/example/",
-        headers={"x-authentik-uid": "an-ordinary-person", "x-authentik-username": "an-ordinary-person"},
-    )
-    assert admitted.status_code == 200
-
-
-async def test_a_caller_in_the_machine_group_is_not_given_a_user_row(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The second marker: present even when an under-scoped token carries no custom claims."""
-    from {{ package_name }}.config import get_settings
-
-    settings = get_settings()
-    monkeypatch.setattr(settings.identity, "authentik_machine_group", "app-machines")
-
-    refused = await client.get(
-        "/api/example/",
-        headers={
-            "x-authentik-uid": "under-scoped-token",
-            "x-authentik-username": "under-scoped-token",
-            "x-authentik-groups": "everyone|app-machines",
-        },
-    )
-    assert refused.status_code == 401
+    assert explicit.workspace_id == HOUSEHOLD

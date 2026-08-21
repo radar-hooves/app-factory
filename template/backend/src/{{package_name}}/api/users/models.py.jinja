@@ -8,8 +8,9 @@ request.
 """
 
 import datetime
+import uuid
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from {{ package_name }}.db.base import Base, TimestampMixin
@@ -25,7 +26,11 @@ class User(Base, TimestampMixin):
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    # UUID, not a serial: this row mirrors an identity Authentik owns, so a local
+    # sequence buys nothing, and a single key type across the fleet is what lets
+    # db/base.py's mixins be byte-identical in every app
+    # (`rules-library/platform/tenancy.md` §Every App, The Same Shape).
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, server_default=func.gen_random_uuid())
 
     # The stable, immutable key Authentik asserts. Unique and never reused:
     # every other field on this row may change over an account's life, so

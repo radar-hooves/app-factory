@@ -22,11 +22,22 @@ Both FAIL CLOSED. A session nobody bound — a route that forgot
 contact with a scoped model instead of returning every workspace's rows. The
 failure mode of forgetting is an exception, in production as well as in tests.
 
-The one hole, named rather than hidden: these hooks see ORM statements. Raw
-``text()`` SQL and Core statements carrying no ORM entity bypass them, as does
-anything reading the database from outside the app. The rule forbids raw SQL
-against a workspace-scoped table for that reason, and closing it mechanically
-is what the deferred RLS ratchet is for.
+The holes, named rather than hidden — there are three, and an earlier draft of
+this docstring claimed one:
+
+1. Raw ``text()`` SQL and Core statements carrying no ORM entity never reach
+   these hooks.
+2. Anything reading the database from outside the app is beyond them entirely.
+3. An ORM-enabled BULK insert (``session.execute(insert(Model), [...])``)
+   reaches ``do_orm_execute`` but returns early at the select/update/delete
+   guard below, and never reaches ``before_flush`` because no flush happens —
+   so from a BOUND session it is neither stamped nor refused. From an unbound
+   session the fail-closed path still catches it. Left as-is deliberately: a
+   guard here would sit on the ordinary flush path, and the risk of breaking
+   every write in the app outweighs a hole no accident falls into.
+
+The rule forbids raw SQL against a workspace-scoped table for that reason, and
+closing all three mechanically is what the deferred RLS ratchet is for.
 """
 
 from __future__ import annotations
@@ -92,9 +103,11 @@ def unscoped(session: Session) -> Generator[Session]:
     """Release a session from workspace scoping for a genuinely cross-workspace read.
 
     A system sweep, an estate-wide admin report, a migration helper. Every use is
-    greppable and counted against ``.unscoped-baseline.json`` — a new call site
-    fails the baseline check until it is argued in, the same debt discipline the
-    UI-drift and design-craft gates use.
+    greppable, and NOTHING COUNTS THEM: there is no baseline file and no gate, so
+    a new call site lands silently and review is by eye. That is a gap, stated
+    here rather than implied — an earlier draft of this docstring claimed a
+    ``.unscoped-baseline.json`` that has never existed, which is worse than no
+    gate at all because it reads as one.
 
     Restores the previous binding on exit, including "unbound", so a block cannot
     silently leave a request-scoped session open afterwards.
@@ -194,10 +207,16 @@ def _stamp_or_refuse(session: Session, flush_context: UOWTransaction, instances:
         )
 
     for obj in pending:
+        # Attribution is stamped whether or not the row already named its own
+        # workspace. Nesting it inside the branch below silently skipped it for a
+        # row added with workspace_id ALREADY set to the session's own workspace —
+        # a legitimate thing for a service to do — while db/base.py and the rule
+        # both present created_by_id as automatic.
+        if obj.created_by_id is None:
+            obj.created_by_id = session.info.get(CREATOR_KEY)
+
         if obj.workspace_id is None:
             obj.workspace_id = workspace_id
-            if obj.created_by_id is None:
-                obj.created_by_id = session.info.get(CREATOR_KEY)
         elif obj.workspace_id != workspace_id:
             raise CrossWorkspaceWriteError(
                 f"Refusing to insert a {type(obj).__name__} into workspace {obj.workspace_id} "

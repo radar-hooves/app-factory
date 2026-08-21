@@ -11,6 +11,7 @@ What an app CALLS a workspace in its UI is its own vocabulary (the
 """
 
 import enum
+import uuid
 
 from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -75,7 +76,7 @@ class WorkspaceMembership(Base, TimestampMixin):
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # native_enum=False emits VARCHAR + CHECK rather than a Postgres ENUM type:
     # adding a value to a native enum is an ALTER TYPE that cannot run inside a

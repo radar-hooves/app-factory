@@ -36,7 +36,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "users",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("authentik_uid", sa.String(length=255), nullable=False),
         sa.Column("username", sa.String(length=255), nullable=False),
         sa.Column("email", sa.String(length=320), nullable=True),
@@ -66,7 +66,7 @@ def upgrade() -> None:
         "workspace_memberships",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("workspace_id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Uuid(), nullable=False),
         # VARCHAR + CHECK rather than a native Postgres ENUM: adding a value to a
         # native enum is an ALTER TYPE that cannot run inside a transactional
         # migration on older servers, for no gain here.
@@ -92,7 +92,7 @@ def upgrade() -> None:
     # attribution only and SET NULL, so a departed member's rows stay the
     # workspace's.
     op.add_column("example_items", sa.Column("workspace_id", sa.Integer(), nullable=False))
-    op.add_column("example_items", sa.Column("created_by_id", sa.Integer(), nullable=True))
+    op.add_column("example_items", sa.Column("created_by_id", sa.Uuid(), nullable=True))
     op.create_index(op.f("ix_example_items_workspace_id"), "example_items", ["workspace_id"])
     op.create_foreign_key(
         "fk_example_items_workspace_id_workspaces",

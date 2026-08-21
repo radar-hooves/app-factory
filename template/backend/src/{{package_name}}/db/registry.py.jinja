@@ -21,8 +21,21 @@ from {{ package_name }}.db.base import Base
 from {{ package_name }}.db.environment import DeploymentEnvironmentMarker
 
 # Models that legitimately carry no workspace column at all, each with the reason
-# it does not. Two kinds qualify and no third: the identity tables that workspace
-# resolution is performed FROM, and reference data with no per-workspace half.
+# it does not. Three kinds qualify and no fourth
+# (`rules-library/platform/tenancy.md` §Classification): the identity tables that
+# workspace resolution is performed FROM; data with no per-workspace DIVISION
+# (external reference data, a deployment marker, an app-level settings row, or —
+# only while the app adopts no workspace slice at all — a domain table whose rows
+# belong to the whole deployment); and PERSONAL-SUBJECT data — a record OF one person, where a
+# fellow member of the same workspace seeing it would be a privacy breach rather
+# than a feature (their device, their API key, their per-person preference).
+#
+# The third kind is the one that can be abused, so it is decided by one test and
+# not by feel: would sharing this row with a fellow member be a breach, or the
+# point? A ledger entered by one person is shared-in-principle and takes the
+# mixin. A personal-subject table keeps a NOT NULL user_id filtered by the caller
+# in its service — the exemption records a DIFFERENT declared predicate, never
+# the absence of one, which is why its reason reads "personal-subject: <who>".
 #
 # A CHILD table is NOT a third kind. "Reached only through its scoped parent" is
 # a claim about how callers happen to behave, and nothing stops a bare

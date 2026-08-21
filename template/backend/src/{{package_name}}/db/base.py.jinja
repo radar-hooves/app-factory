@@ -5,6 +5,7 @@ the mixins for standard columns.
 """
 
 import datetime
+import uuid
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -71,7 +72,7 @@ class WorkspaceScoped:
     # — the moment one does, the app is back to defining "person" as "tenant".
     # SET NULL so a departed member's rows stay the workspace's rather than
     # cascading away with the account.
-    created_by_id: Mapped[int | None] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -110,7 +111,7 @@ class SharedReference:
         index=True,
     )
 
-    created_by_id: Mapped[int | None] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )

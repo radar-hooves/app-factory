@@ -1,5 +1,7 @@
 """Pydantic schemas for the workspace primitive."""
 
+import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from {{ package_name }}.api.workspaces.models import WorkspaceRole
@@ -49,5 +51,5 @@ class MemberAdd(BaseModel):
     app has never authenticated.
     """
 
-    user_id: int
+    user_id: uuid.UUID
     role: WorkspaceRole = WorkspaceRole.MEMBER
