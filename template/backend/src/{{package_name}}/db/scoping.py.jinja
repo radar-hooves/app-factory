@@ -43,6 +43,7 @@ closing all three mechanically is what the deferred RLS ratchet is for.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Final
@@ -87,7 +88,7 @@ class CrossWorkspaceWriteError(RuntimeError):
     """Raised when a flush would write a row into a workspace the session is not bound to."""
 
 
-def bind_session(session: Session, *, workspace_id: int, created_by_id: int | None = None) -> None:
+def bind_session(session: Session, *, workspace_id: int, created_by_id: uuid.UUID | None = None) -> None:
     """Bind a session to a workspace for the rest of its life.
 
     Called once per request by the ``CurrentWorkspace`` dependency, after

@@ -7,6 +7,8 @@ across workspaces, and they do it through membership rather than through the
 scoping hooks — which is why no ``unscoped()`` block appears here.
 """
 
+import uuid
+
 from fastapi import APIRouter, status
 
 from {{ package_name }}.api.workspaces import service
@@ -73,7 +75,7 @@ def add_member(workspace_id: int, data: MemberAdd, session: SessionDep, identity
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="removeWorkspaceMember",
 )
-def remove_member(workspace_id: int, user_id: int, session: SessionDep, identity: CurrentIdentity) -> None:
+def remove_member(workspace_id: int, user_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
     """Retract someone's membership. Owner only.
 
     Their rows stay with the workspace and their attribution stays on them; only

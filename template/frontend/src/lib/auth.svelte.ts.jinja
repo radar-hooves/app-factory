@@ -19,7 +19,7 @@ import { api, setActiveWorkspaceId } from './api/client';
 export const ACTIVE_WORKSPACE_STORAGE_KEY = '{{ project_name }}.activeWorkspaceId';
 
 export interface User {
-	id: number;
+	id: string;
 	username: string;
 	email: string | null;
 	is_admin: boolean;
