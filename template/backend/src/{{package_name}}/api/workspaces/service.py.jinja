@@ -5,10 +5,9 @@ workspace, so they cannot already be scoped to one. Neither model here is
 ``WorkspaceScoped``, so the session hooks stay out of their way.
 """
 
-import uuid
-
 import logging
 import re
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
