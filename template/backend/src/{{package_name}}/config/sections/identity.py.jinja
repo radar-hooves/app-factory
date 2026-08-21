@@ -13,6 +13,7 @@ definition time and so cannot take a configured name. See ``deps.py``.
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_UID_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USERNAME_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_NAME_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_EMAIL_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ENTITLEMENTS_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USER_TYPE_HEADER
@@ -41,7 +42,10 @@ class IdentitySettings(BaseSettings):
     authentik_uid_header: str = "x-authentik-uid"
 
     # Mutable display fields, re-synced onto the user row on every request.
+    # The name header carries the account's full name — one of the outpost's
+    # base headers, like username and email.
     authentik_username_header: str = "x-authentik-username"
+    authentik_name_header: str = "x-authentik-name"
     authentik_email_header: str = "x-authentik-email"
 
     # Pipe-delimited Application Entitlements, e.g. "property|travel:read".

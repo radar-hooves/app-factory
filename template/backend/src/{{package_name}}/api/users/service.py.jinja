@@ -35,6 +35,7 @@ def upsert_from_identity(
     *,
     authentik_uid: str,
     username: str,
+    display_name: str | None = None,
     email: str | None = None,
 ) -> User:
     """Match a user on the stable Authentik uid, creating the row on first sight.
@@ -56,7 +57,13 @@ def upsert_from_identity(
     now = datetime.datetime.now(datetime.UTC)
 
     if user is None:
-        user = User(authentik_uid=authentik_uid, username=username, email=email, last_seen_at=now)
+        user = User(
+            authentik_uid=authentik_uid,
+            username=username,
+            display_name=display_name,
+            email=email,
+            last_seen_at=now,
+        )
         session.add(user)
         session.flush()
         logger.warning(
@@ -68,6 +75,8 @@ def upsert_from_identity(
     # Re-sync the mutable fields every request: the identity provider is the
     # source of truth for them and a stale local copy is a support ticket.
     user.username = username
+    if display_name is not None:
+        user.display_name = display_name
     if email is not None:
         user.email = email
     user.last_seen_at = now

@@ -1,0 +1,48 @@
+"""Pydantic schemas for the admin area."""
+
+import datetime
+import uuid
+
+from pydantic import BaseModel, ConfigDict
+
+
+class AdminUserRead(BaseModel):
+    """A user as the admin area exposes them.
+
+    A superset of ``UserRead`` deliberately NOT derived from it: the two views
+    answer different questions ("who am I" versus "who has this app seen"), and
+    coupling them means a field added for one silently widens the other.
+    ``authentik_uid`` stays absent here too — the operator correlates people in
+    Authentik by username or email, and echoing the provider's key back widens
+    what a compromised admin session learns.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    display_name: str | None
+    email: str | None
+    is_active: bool
+    created_at: datetime.datetime
+    last_seen_at: datetime.datetime | None
+
+
+class AdminUserList(BaseModel):
+    """One page of the app's local user records."""
+
+    users: list[AdminUserRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminUserUpdate(BaseModel):
+    """Request body for updating a user's local standing.
+
+    ``is_active`` is the only mutable field: everything else on the row is the
+    identity provider's, re-synced from the headers on every request, so a
+    local edit would be overwritten on the person's next sign-in.
+    """
+
+    is_active: bool

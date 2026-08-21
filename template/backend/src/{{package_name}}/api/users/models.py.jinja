@@ -38,15 +38,14 @@ class User(Base, TimestampMixin):
     authentik_uid: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
 
     # Mutable display fields, re-synced from the headers on every request.
+    # There is deliberately NO stored admin flag beside them: administration is
+    # asserted per request by the identity provider through the reserved
+    # ``admin`` module entitlement (``entitlements.py``), so a revocation at
+    # Authentik is effective on the next request rather than whenever a local
+    # column catches up.
     username: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-
-    # Estate-wide administration of GLOBAL reference data only — never a stand-in
-    # for a workspace role, which is the membership row's job
-    # (`rules-library/platform/tenancy.md`). The first user to authenticate on a
-    # fresh database gets it, which is the whole bootstrap; behind the forward-auth
-    # proxy only an entitled person can be first.
-    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     # Set false to refuse a person the app still knows about. Deleting the row
     # is the wrong tool: domain rows reference it for attribution.

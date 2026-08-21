@@ -1,0 +1,67 @@
+"""HTTP routes for the admin area.
+
+Gated by the reserved ``admin`` module entitlement (``entitlements.py``), never
+by a stored flag: read to see the area, ``admin:write`` to act in it. Granting
+and revoking admin is an act at the identity provider, effective on the
+caller's next request — so there is no admin-granting route here and no
+bootstrap, and a fresh deployment's first admin is whoever the operator
+entitles in Authentik.
+"""
+
+import uuid
+
+from fastapi import APIRouter, Query
+
+from {{ package_name }}.api.admin import service
+from {{ package_name }}.api.admin.schemas import AdminUserList, AdminUserRead, AdminUserUpdate
+from {{ package_name }}.deps import CurrentIdentity, SessionDep
+from {{ package_name }}.entitlements import module_dependency
+
+# The ROUTER carries the read gate and each mutating route adds the write gate,
+# per entitlements.py: a new route added here inherits the read gate rather
+# than none.
+router = APIRouter(dependencies=[module_dependency("admin")])
+
+MAX_PAGE_SIZE = 100
+
+
+@router.get("/users", response_model=AdminUserList, operation_id="adminListUsers")
+def list_users(
+    session: SessionDep,
+    limit: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Page offset"),
+    search: str | None = Query(
+        default=None, description="Case-insensitive substring of username, display name or email"
+    ),
+    active: bool | None = Query(default=None, description="Filter by the local active flag"),
+) -> AdminUserList:
+    """List the people this app has seen, newest first.
+
+    A projection of the local user records, not a directory: the identity
+    provider is the directory, and a person appears here only once they have
+    signed in.
+    """
+    users, total = service.list_users(session, limit=limit, offset=offset, search=search, active=active)
+    return AdminUserList(
+        users=[AdminUserRead.model_validate(user) for user in users],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.patch(
+    "/users/{user_id}",
+    response_model=AdminUserRead,
+    dependencies=[module_dependency("admin", write=True)],
+    operation_id="adminUpdateUser",
+)
+def update_user(
+    user_id: uuid.UUID,
+    data: AdminUserUpdate,
+    session: SessionDep,
+    identity: CurrentIdentity,
+) -> AdminUserRead:
+    """Update a user's local standing — today, only the active flag."""
+    user = service.set_user_active(session, user_id=user_id, is_active=data.is_active, acting_user_id=identity.user.id)
+    return AdminUserRead.model_validate(user)

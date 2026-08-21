@@ -13,7 +13,7 @@ vi.mock('./api/client', () => ({
 	setActiveWorkspaceId: (...args: unknown[]) => setActiveWorkspaceId(...args)
 }));
 
-const USER = { id: 1, username: 'someone', email: null, is_admin: false, last_seen_at: null };
+const USER = { id: 1, username: 'someone', display_name: null, email: null, last_seen_at: null };
 
 function membership(id: number, name: string, role: 'owner' | 'member' = 'owner') {
 	return { workspace: { id, slug: name, name }, role };

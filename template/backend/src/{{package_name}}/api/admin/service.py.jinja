@@ -1,0 +1,78 @@
+"""Business logic for the admin area."""
+
+import logging
+import uuid
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users import service as users_service
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.exceptions import BadRequestError
+
+logger = logging.getLogger(__name__)
+
+
+def list_users(
+    session: Session,
+    *,
+    limit: int,
+    offset: int,
+    search: str | None = None,
+    active: bool | None = None,
+) -> tuple[list[User], int]:
+    """Return one page of the app's local user records, newest first.
+
+    ``search`` matches a case-insensitive substring of username, display name
+    or email — the three fields the identity provider syncs, so what the
+    operator sees on screen is what the filter searches.
+    """
+    query = select(User)
+    count_query = select(func.count(User.id))
+
+    if search:
+        pattern = f"%{search}%"
+        condition = or_(
+            User.username.ilike(pattern),
+            User.display_name.ilike(pattern),
+            User.email.ilike(pattern),
+        )
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    if active is not None:
+        query = query.where(User.is_active.is_(active))
+        count_query = count_query.where(User.is_active.is_(active))
+
+    total = session.execute(count_query).scalar_one()
+    users = list(session.execute(query.order_by(User.created_at.desc()).limit(limit).offset(offset)).scalars().all())
+    return users, total
+
+
+def set_user_active(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    is_active: bool,
+    acting_user_id: uuid.UUID,
+) -> User:
+    """Activate or deactivate a user's local record.
+
+    Deactivation is the refusal tool — the row survives so domain rows keep
+    their attribution, and the person's next request is answered 401
+    (``api/users/dependencies.py``). It is local to this app: their identity
+    provider account, and every other app, are untouched.
+
+    Raises:
+        NotFoundError: when no such user exists.
+        BadRequestError: when an admin tries to deactivate their own account —
+            the one lockout the app can see coming.
+    """
+    if user_id == acting_user_id and not is_active:
+        raise BadRequestError("Cannot deactivate your own account")
+
+    user = users_service.get_by_id(session, user_id)
+    user.is_active = is_active
+    session.flush()
+    logger.info("Admin set a user's active flag", extra={"user_id": str(user_id), "is_active": is_active})
+    return user

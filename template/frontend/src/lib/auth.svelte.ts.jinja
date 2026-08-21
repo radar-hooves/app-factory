@@ -21,8 +21,8 @@ export const ACTIVE_WORKSPACE_STORAGE_KEY = '{{ project_name }}.activeWorkspaceI
 export interface User {
 	id: string;
 	username: string;
+	display_name: string | null;
 	email: string | null;
-	is_admin: boolean;
 	last_seen_at: string | null;
 }
 
