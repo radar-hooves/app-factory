@@ -1,0 +1,125 @@
+"""The admin SLICE, driven through HTTP.
+
+Admin is the reserved ``admin`` module entitlement (``entitlements.py``), so
+these tests are also the entitlement machinery's own HTTP proof: the read gate
+on the router, the write grade on the mutation, and default-deny when the
+header is absent. The local ``is_active`` flag is proved end to end — a
+deactivated person's next request is refused — because that refusal is the
+whole reason the flag exists.
+"""
+
+from httpx import AsyncClient, Response
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.models import User
+
+
+def _headers(uid: str, entitlements: str | None = None) -> dict[str, str]:
+    headers = {"x-authentik-uid": uid, "x-authentik-username": uid}
+    if entitlements is not None:
+        headers["x-authentik-entitlements"] = entitlements
+    return headers
+
+
+async def _sign_in(client: AsyncClient, uid: str) -> Response:
+    """A first authenticated request — what creates the local user record."""
+    return await client.get("/api/users/me", headers=_headers(uid))
+
+
+# ── The gate ─────────────────────────────────────────────────────────────────
+
+
+async def test_a_caller_without_the_admin_entitlement_is_refused(client: AsyncClient) -> None:
+    """Default-deny: no entitlements header at all closes the admin area."""
+    refused = await client.get("/api/admin/users", headers=_headers("somebody"))
+    assert refused.status_code == 403
+    assert refused.json()["details"] == {"module": "admin", "grade": "read"}
+
+
+async def test_a_read_admin_can_look_but_not_act(client: AsyncClient, session: Session) -> None:
+    """A bare ``admin`` grant reads the area; mutation needs ``admin:write``."""
+    await _sign_in(client, "the-subject")
+    subject = session.execute(select(User).where(User.authentik_uid == "the-subject")).scalar_one()
+
+    listed = await client.get("/api/admin/users", headers=_headers("the-viewer", "admin"))
+    assert listed.status_code == 200
+
+    refused = await client.patch(
+        f"/api/admin/users/{subject.id}",
+        json={"is_active": False},
+        headers=_headers("the-viewer", "admin"),
+    )
+    assert refused.status_code == 403
+    assert refused.json()["details"] == {"module": "admin", "grade": "write"}
+
+
+# ── The list ─────────────────────────────────────────────────────────────────
+
+
+async def test_the_list_shows_who_has_signed_in(client: AsyncClient) -> None:
+    """A person appears once they have authenticated — the app is not a directory."""
+    await _sign_in(client, "person-one")
+    await _sign_in(client, "person-two")
+
+    page = (await client.get("/api/admin/users", headers=_headers("the-admin", "admin"))).json()
+    usernames = {user["username"] for user in page["users"]}
+    assert {"person-one", "person-two"} <= usernames
+    assert page["total"] >= 2
+
+
+async def test_search_matches_the_synced_display_fields(client: AsyncClient) -> None:
+    """The filter searches what the operator sees: username, display name, email."""
+    await client.get(
+        "/api/users/me",
+        headers={**_headers("uid-someone"), "x-authentik-name": "Some One", "x-authentik-email": "someone@example.test"},
+    )
+    await _sign_in(client, "uid-other")
+
+    found = (
+        await client.get(
+            "/api/admin/users", params={"search": "Some One"}, headers=_headers("the-admin", "admin")
+        )
+    ).json()
+    assert [user["display_name"] for user in found["users"]] == ["Some One"]
+
+
+# ── The active flag, end to end ──────────────────────────────────────────────
+
+
+async def test_deactivation_refuses_the_persons_next_request(client: AsyncClient, session: Session) -> None:
+    """``is_active`` is the refusal tool, and the refusal is what this proves."""
+    assert (await _sign_in(client, "the-refused")).status_code == 200
+    refused_user = session.execute(select(User).where(User.authentik_uid == "the-refused")).scalar_one()
+
+    deactivated = await client.patch(
+        f"/api/admin/users/{refused_user.id}",
+        json={"is_active": False},
+        headers=_headers("the-admin", "admin:write"),
+    )
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+
+    assert (await _sign_in(client, "the-refused")).status_code == 401
+
+    reinstated = await client.patch(
+        f"/api/admin/users/{refused_user.id}",
+        json={"is_active": True},
+        headers=_headers("the-admin", "admin:write"),
+    )
+    assert reinstated.status_code == 200
+    assert (await _sign_in(client, "the-refused")).status_code == 200
+
+
+async def test_an_admin_cannot_deactivate_their_own_account(client: AsyncClient, session: Session) -> None:
+    """The one lockout the app can see coming is refused with a named reason."""
+    await _sign_in(client, "the-admin")
+    admin_user = session.execute(select(User).where(User.authentik_uid == "the-admin")).scalar_one()
+
+    refused = await client.patch(
+        f"/api/admin/users/{admin_user.id}",
+        json={"is_active": False},
+        headers=_headers("the-admin", "admin:write"),
+    )
+    assert refused.status_code == 400
+    assert refused.json()["message"] == "Cannot deactivate your own account"

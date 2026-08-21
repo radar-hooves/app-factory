@@ -4,14 +4,23 @@ Include one sub-router per vertical domain slice. Each slice lives in
 api/<domain>/ with its own router.py, schemas.py, models.py, service.py,
 and dependencies.py.
 
-``users`` and ``workspaces`` come from the factory and are not this app's domain
-(`rules-library/platform/canonical-app-shape.md` §Shared Domains Belong to the
-Factory): identity and the access boundary are cross-cutting, and an app that
-builds its own is diverging on a solved problem.
+``users``, ``workspaces`` and ``admin`` come from the factory and are not this
+app's domain (`rules-library/platform/canonical-app-shape.md` §Shared Domains
+Belong to the Factory): identity, the access boundary and administration are
+cross-cutting, and an app that builds its own is diverging on a solved problem.
+
+There is deliberately NO ``api/auth`` slice, and an app must not add one.
+Authentication is the identity provider's (Tier 1a, proxy-delegated), so the
+auth domain ships distributed across the factory files that each own one part
+of it: identity resolution in ``api/users/dependencies.py``, module access in
+``entitlements.py``, the machine surface in ``mcp/``, and the header names in
+``config/sections/identity.py``. An auth slice is a rebuild of one of those —
+and app-issued API keys in particular lose to Authentik's own App Passwords.
 """
 
 from fastapi import APIRouter
 
+from {{ package_name }}.api.admin.router import router as admin_router
 from {{ package_name }}.api.example.router import router as example_router
 from {{ package_name }}.api.system.router import router as system_router
 from {{ package_name }}.api.users.router import router as users_router
@@ -20,5 +29,6 @@ from {{ package_name }}.api.workspaces.router import router as workspaces_router
 api_router = APIRouter()
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
+api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(example_router, prefix="/example", tags=["example"])
 api_router.include_router(system_router, prefix="/system", tags=["system"])
