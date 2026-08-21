@@ -118,7 +118,7 @@
     "frontend/src/test/setup.ts": "0b90a2b8b4be75fa",
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",
-    "frontend/tests/e2e/global-setup.ts": "c329359abf2cab0c",
+    "frontend/tests/e2e/global-setup.ts": "8c181580bbfb2c0d",
     "frontend/tsconfig.json": "5ba6072319c60e79",
     "frontend/vite.config.ts": "e0b355e014733276",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
