@@ -11,9 +11,9 @@ consumers). Any reverse proxy may gate requests at the edge; this middleware
 validates the SAME bearer against the Authentik userinfo endpoint and reads the
 configured identity claim (default ``preferred_username``, falling back to
 ``sub``) as the caller's client identity. That identity is written to the
-``x-client-id`` header, which the tool layer's ``_resolve_actor()`` reads —
-HTTP callers cannot self-declare identity, and no token value is ever logged
-or written to the config file.
+``x-client-id`` header, which the tool layer's ``ActorGateMiddleware``
+(``mcp/auth.py``) reads — HTTP callers cannot self-declare identity, and no
+token value is ever logged or written to the config file.
 
 A short-lived in-memory cache (keyed on a sha256 of the token, never the
 plaintext) avoids a userinfo round trip on every request from an
