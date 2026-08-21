@@ -355,7 +355,7 @@ def test_a_new_taxonomy_row_is_stamped_into_the_bound_workspace(session: Session
     # An EXPLICIT workspace_id=None is stamped exactly the same way, and that is
     # the trap worth naming: code intending to seed a GLOBAL row from a
     # request-bound session silently creates one workspace's private copy
-    # instead, with nothing raised. Measured in godswood 2026-08-20, where a
+    # instead, with nothing raised. Measured in a live app 2026-08-20, where a
     # category service lazily seeded the estate's 22 ATO rows from a GET path.
     # Seeding global reference data belongs in a migration or an explicit
     # unscoped() block, never on a read path.

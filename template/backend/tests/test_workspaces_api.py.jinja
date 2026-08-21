@@ -125,7 +125,7 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
 
 
 async def test_a_declared_machine_principal_is_not_given_a_user_row(client: AsyncClient) -> None:
-    """godswood#701's shape, refused at the factory rather than per app."""
+    """The just-in-time machine principal tenancy.md forbids, refused at the factory rather than per app."""
     refused = await client.get(
         "/api/example/",
         headers={

@@ -50,7 +50,8 @@ def upsert_from_identity(
     safe on a surface that cannot tell a person's first login from a machine
     caller that should have been refused: both produce a row that can read
     nothing. It is logged at WARNING so a row nobody expected is visible rather
-    than merely harmless (master-project#291, godswood#701).
+    than merely harmless (master-project#291; `rules-library/platform/tenancy.md`
+    §There Is No Machine Caller).
     """
     user = get_by_uid(session, authentik_uid)
     now = datetime.datetime.now(datetime.UTC)

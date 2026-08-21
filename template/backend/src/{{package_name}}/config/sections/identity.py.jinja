@@ -54,7 +54,8 @@ class IdentitySettings(BaseSettings):
     # mapping, and a token minted WITHOUT the proxy scope carries the outpost's
     # base claims and none of the custom ones — so the header is missing on
     # precisely the request it exists to catch. It can therefore only ever ADD a
-    # refusal, never narrow the ordinary human path (godswood#701).
+    # refusal, never narrow the ordinary human path
+    # (`rules-library/platform/tenancy.md` §There Is No Machine Caller).
     # Env: {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USER_TYPE_HEADER
     authentik_user_type_header: str = "x-authentik-user-type"
 
