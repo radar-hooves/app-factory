@@ -63,7 +63,5 @@ def update_user(
     identity: CurrentIdentity,
 ) -> AdminUserRead:
     """Update a user's local standing — today, only the active flag."""
-    user = service.set_user_active(
-        session, user_id=user_id, is_active=data.is_active, acting_user_id=identity.user.id
-    )
+    user = service.set_user_active(session, user_id=user_id, is_active=data.is_active, acting_user_id=identity.user.id)
     return AdminUserRead.model_validate(user)

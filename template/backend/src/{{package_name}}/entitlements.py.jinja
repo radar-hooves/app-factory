@@ -35,7 +35,7 @@ shape this file exists to avoid.
 import logging
 from collections.abc import Callable
 
-from fastapi import Depends
+from fastapi import Depends, params
 
 from {{ package_name }}.api.users.dependencies import CurrentIdentity, Identity
 from {{ package_name }}.exceptions import ForbiddenError
@@ -78,10 +78,13 @@ def require_module(module: str, *, write: bool = False) -> Callable[[Identity], 
             # Names the likely cause: an outpost not configured to forward
             # entitlements looks identical to a user with none, and the second
             # explanation sends someone hunting in the wrong system.
+            # The key is gated_module, not module: `module` is one of logging's
+            # own LogRecord attributes, and an extra that collides with one
+            # raises KeyError instead of logging.
             logger.warning(
                 "Refused a module the caller has no entitlements at all for — is the "
                 "identity provider forwarding the entitlements header?",
-                extra={"module": module, "user_id": identity.user.id},
+                extra={"gated_module": module, "user_id": identity.user.id},
             )
 
         grade = "write" if write else "read"
@@ -93,6 +96,11 @@ def require_module(module: str, *, write: bool = False) -> Callable[[Identity], 
     return _check
 
 
-def module_dependency(module: str, *, write: bool = False) -> object:
-    """``Depends(require_module(...))``, for a router's ``dependencies=[…]`` list."""
+def module_dependency(module: str, *, write: bool = False) -> params.Depends:
+    """``Depends(require_module(...))``, for a router's ``dependencies=[…]`` list.
+
+    Returns ``params.Depends`` — what ``Depends(...)`` actually constructs —
+    rather than ``object``, because a ``dependencies=[…]`` list is typed for it
+    and an opaque return makes every call site a type error.
+    """
     return Depends(require_module(module, write=write))

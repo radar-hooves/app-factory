@@ -72,14 +72,16 @@ async def test_search_matches_the_synced_display_fields(client: AsyncClient) -> 
     """The filter searches what the operator sees: username, display name, email."""
     await client.get(
         "/api/users/me",
-        headers={**_headers("uid-someone"), "x-authentik-name": "Some One", "x-authentik-email": "someone@example.test"},
+        headers={
+            **_headers("uid-someone"),
+            "x-authentik-name": "Some One",
+            "x-authentik-email": "someone@example.test",
+        },
     )
     await _sign_in(client, "uid-other")
 
     found = (
-        await client.get(
-            "/api/admin/users", params={"search": "Some One"}, headers=_headers("the-admin", "admin")
-        )
+        await client.get("/api/admin/users", params={"search": "Some One"}, headers=_headers("the-admin", "admin"))
     ).json()
     assert [user["display_name"] for user in found["users"]] == ["Some One"]
 
