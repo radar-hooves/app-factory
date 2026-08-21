@@ -84,7 +84,7 @@
     "backend/tests/test_rate_limit.py": "6a82372a6776c395",
     "backend/tests/test_system_health.py": "6eb595dd7d60e1b4",
     "backend/tests/test_version.py": "d65a99d12f4b85c6",
-    "backend/tests/test_workspace_scoping.py": "18f94a96c633ab06",
+    "backend/tests/test_workspace_scoping.py": "ebfaa0eabecafa6e",
     "compose.yaml": "9c862fdf4cb9f530",
     "frontend/.design-craft-baseline.json": "37517e5f3dc66819",
     "frontend/.npmrc": "93d7b61d9d1758fd",

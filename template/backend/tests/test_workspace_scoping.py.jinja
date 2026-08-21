@@ -4,18 +4,17 @@ Each test here corresponds to one clause of `rules-library/platform/tenancy.md`
 §Enforcement. Together they are what lets the rule claim a forgotten filter is
 impossible rather than merely discouraged.
 
-SELF-CONTAINED ON PURPOSE. This file is owed byte-identical by every app, and
-most apps never adopt the workspace SLICE — they have no `users` table, no
-`workspaces` table, and no `api/example` (`rules-library/platform/tenancy.md`
-§Applicability). So it imports nothing from `api/` and touches no application
-table: it declares its own throwaway models and binds sessions to plain integer
-ids. The hooks read exactly two attributes off a scoped instance, which is why
-that is enough to prove them.
+SELF-CONTAINED ON PURPOSE. This file is owed byte-identical by every app, and it
+must run in one that is still MIGRATING onto the shape — no `users` table yet, no
+`workspaces` table, no `api/example`. So it imports nothing from `api/` and
+touches no application table: it declares its own throwaway models and binds
+sessions to plain ids. The hooks read exactly two attributes off a scoped
+instance, which is why that is enough to prove them.
 
 The slice's own behaviour — proxy headers, user upsert, membership resolution,
 the 409 disambiguation, the machine-principal refusal — is HTTP-level and needs
-the slice to exist, so it lives in `test_workspaces_api.py`, which an app that
-does not adopt tenancy does not carry.
+the tables to exist, so it lives in `test_workspaces_api.py`, which an app that
+has not finished adopting does not yet carry.
 """
 
 from typing import cast

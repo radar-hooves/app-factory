@@ -6,10 +6,10 @@ upsert, personal-workspace provisioning, membership resolution, session binding 
 because that is the chain the defect actually lived in, and a green unit test on
 the hooks would not have caught it.
 
-It needs the slice, so it exists only in an app that adopted tenancy
-(`rules-library/platform/tenancy.md` §Applicability) and is sanctioned per-app in
-`canonical-app-shape.md` for the same reason `test_example.py` is: an app that
-deleted the code deletes its test with it.
+It needs the `users` and `workspaces` tables, so it exists only once an app has
+finished adopting, and is sanctioned per-app in `canonical-app-shape.md` for the
+same reason `test_example.py` is: an app that does not carry the code does not
+carry its test.
 """
 
 import pytest
