@@ -24,6 +24,48 @@ import type { FullConfig } from '@playwright/test';
  */
 const ALLOWED_ENVIRONMENT = 'local';
 
+/**
+ * Fetch the database-environment probe from the dev server, tolerating the
+ * IPv4/IPv6 split that breaks a naive `fetch('http://localhost:…')` in CI.
+ *
+ * The webServer stanza boots Vite as `vite dev --port <E2E_PORT>`, which binds
+ * `localhost`. On the Linux CI container `localhost` resolves to `::1` first,
+ * so Vite listens on IPv6 — but Node's `fetch('http://localhost:…')` resolves
+ * `localhost` to `127.0.0.1` (IPv4) and gets ECONNREFUSED. The suite itself is
+ * unaffected: the Chromium browser does happy-eyeballs and reaches Vite on
+ * either family. Only THIS Node-side probe is blind, so it tries each address
+ * family the dev server might have bound before giving up.
+ *
+ * A network error on one candidate is not a verdict — the server is up (the
+ * webServer port-check passed) but on a family this attempt did not try — so
+ * the probe falls through to the next candidate rather than failing closed on
+ * the first. Only when every family is unreachable does the caller treat it
+ * as "could not ask", which reads as production.
+ */
+async function probeDatabaseEnvironment(baseURL: string): Promise<Response> {
+	const target = new URL('/api/system/database-environment', baseURL);
+	const port = target.port || (target.protocol === 'https:' ? '443' : '80');
+	// Build the candidate host forms in reachability order: the configured host
+	// (what the operator's machine resolves, and what a browser would use), then
+	// the IPv4 and IPv6 loopback literals (one of which matches Vite's bind in a
+	// container where `localhost` and a Node `fetch` disagree on family).
+	const hosts =
+		target.hostname === 'localhost' ? [target.hostname, '127.0.0.1', '[::1]'] : [target.hostname];
+	let lastNetworkError: unknown;
+	for (const host of hosts) {
+		const url = new URL(`${target.protocol}//${host}:${port}${target.pathname}${target.search}`);
+		try {
+			// A response of ANY status is a verdict: the server answered, so return
+			// it and let the guard decide. Only a network-level failure (the
+			// TypeError `fetch` throws on ECONNREFUSED etc.) falls through.
+			return await fetch(url, { signal: AbortSignal.timeout(15_000) });
+		} catch (cause) {
+			lastNetworkError = cause;
+		}
+	}
+	throw lastNetworkError instanceof Error ? lastNetworkError : new Error(String(lastNetworkError));
+}
+
 export default async function globalSetup(config: FullConfig): Promise<void> {
 	const baseURL = config.projects[0]?.use.baseURL;
 	if (!baseURL) {
@@ -33,7 +75,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
 	let environment: string;
 	try {
-		const response = await fetch(endpoint, { signal: AbortSignal.timeout(15_000) });
+		const response = await probeDatabaseEnvironment(baseURL);
 		if (!response.ok) {
 			throw new Error(`${endpoint} answered HTTP ${response.status}`);
 		}
