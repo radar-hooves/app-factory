@@ -110,11 +110,14 @@ def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] 
 # Keys the logging module reserves on a LogRecord. Passing any of them through
 # `extra=` does not shadow the attribute — it raises KeyError inside makeRecord,
 # so a typed error carrying an innocuous context key like `name` stops being an
-# error response and becomes an unhandled 500. Measured in godswood 24/08/2026:
-# a duplicate-name save raised a clean, correct DatabaseError, and the handler
-# meant to report it crashed on `Attempt to overwrite 'name' in LogRecord`, so
-# the UI showed "an unexpected error occurred" for a condition the service had
-# diagnosed precisely.
+# error response and becomes an unhandled 500. Measured 24/08/2026 in a stamped
+# app: a duplicate-name save raised a clean, correct DatabaseError, and the
+# handler meant to report it crashed on `Attempt to overwrite 'name' in
+# LogRecord`, so the UI showed "an unexpected error occurred" for a condition
+# the service had diagnosed precisely. The app is not named here on purpose —
+# the parity checker rewrites an app's OWN name to a placeholder, so a factory
+# file naming one app can never hash equal in that app and is unconvergeable
+# there by construction.
 #
 # The workaround was previously per-call-site, which only holds until the next
 # author picks a colliding word. Prefixing here means a call site can put
