@@ -75,7 +75,7 @@ htmlcov/
 node_modules/
 .npm/
 .pnpm-store/
-coverage/
+/frontend/coverage/
 *.lcov
 
 # ============================================================================

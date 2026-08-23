@@ -107,8 +107,59 @@ def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] 
     return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
 
 
+# Keys the logging module reserves on a LogRecord. Passing any of them through
+# `extra=` does not shadow the attribute — it raises KeyError inside makeRecord,
+# so a typed error carrying an innocuous context key like `name` stops being an
+# error response and becomes an unhandled 500. Measured in godswood 24/08/2026:
+# a duplicate-name save raised a clean, correct DatabaseError, and the handler
+# meant to report it crashed on `Attempt to overwrite 'name' in LogRecord`, so
+# the UI showed "an unexpected error occurred" for a condition the service had
+# diagnosed precisely.
+#
+# The workaround was previously per-call-site, which only holds until the next
+# author picks a colliding word. Prefixing here means a call site can put
+# whatever it likes in `context`.
+_RESERVED_LOG_KEYS = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
+
+
+def safe_log_context(context: dict[str, object]) -> dict[str, object]:
+    """Rename any key logging reserves, so `extra=` can never raise.
+
+    A colliding key is prefixed `ctx_` rather than dropped: the value is the
+    diagnostic the author wanted in the log, and losing it silently would be a
+    quieter version of the same defect.
+    """
+    return {(f"ctx_{k}" if k in _RESERVED_LOG_KEYS else k): v for k, v in context.items()}
+
+
 def _log_exception(request: Request, exc: BackendBaseException) -> None:
-    log_context = {"path": request.url.path, "method": request.method, **exc.context}
+    log_context = safe_log_context({"path": request.url.path, "method": request.method, **exc.context})
     logger.error("%s: %s", exc.__class__.__name__, exc.message, extra=log_context)
 
 

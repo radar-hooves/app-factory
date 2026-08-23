@@ -30,6 +30,13 @@ repos:
         files: '^docs/development/handoffs/.*\.md$'
         pass_filenames: true
 
+      - id: check-handoff-retention
+        name: 'governance - A new handoff prunes its folder'
+        entry: python3 .claude/hooks/master/precommit/handoff-retention.py
+        language: system
+        files: '^docs/development/handoffs/.*\.md$'
+        pass_filenames: true
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
