@@ -190,7 +190,7 @@
 			"body": {
 				"$value": "'Avenir Next', 'Hanken Grotesk', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, sans-serif",
 				"$type": "fontFamily",
-				"$description": "UI / body copy. Local-font-first: Avenir Next is Apple's own system face and is not licensable for web embedding, so it is never bundled or vendored here; an Apple device already has it installed and renders it directly. Every other platform has no local match for that exact name and falls through to the self-hosted Hanken Grotesk Variable (`@fontsource-variable/hanken-grotesk`), unchanged from before this token gained a local-font lead. Everything textual: labels, buttons, descriptions, table cells, nav."
+				"$description": "UI / body copy. Local-font-first: Avenir Next leads and renders on any machine where it is INSTALLED, which is not only Apple's — the operator has ported it to non-Apple household machines, so do not describe this token as macOS-only (corrected 23/08/2026, on his own statement). It is still never bundled or vendored here: it is not licensable for web embedding, which is a licensing limit on serving the file, not a limit on where it renders. Hanken Grotesk Variable (`@fontsource-variable/hanken-grotesk`) is the self-hosted fallback for machines without it — in practice the Android devices, where a font cannot be installed. Everything textual: labels, buttons, descriptions, table cells, nav."
 			},
 			"code": {
 				"$value": "'JetBrains Mono', 'JetBrains Mono Variable', ui-monospace, 'SF Mono', monospace",
