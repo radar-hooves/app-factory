@@ -78,10 +78,18 @@ class WorkspaceMembership(Base, TimestampMixin):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # native_enum=False emits VARCHAR + CHECK rather than a Postgres ENUM type:
-    # adding a value to a native enum is an ALTER TYPE that cannot run inside a
-    # transactional migration on older servers, and the check constraint gives
-    # the same guarantee with none of that.
+    # native_enum=False stores a VARCHAR rather than a Postgres ENUM type: adding
+    # a value to a native enum is an ALTER TYPE that cannot run inside a
+    # transactional migration on older servers.
+    #
+    # It emits NO CHECK CONSTRAINT, and the absence is stated because this comment
+    # used to claim one. SQLAlchemy defaults `create_constraint=False`, so the
+    # column accepts any string up to its length — verified against a live
+    # Postgres on 2026-08-25, which took `role = 'sovereign'` without complaint.
+    # The enum binds in the ORM and in the request schema, which is where every
+    # write in the app actually passes; nothing outside it writes this table.
+    # Turning the constraint on is a schema change for every app already carrying
+    # the column, so it is a decision rather than a fix, and it is not made here.
     role: Mapped[WorkspaceRole] = mapped_column(
         Enum(WorkspaceRole, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
         nullable=False,
