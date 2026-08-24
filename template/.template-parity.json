@@ -121,7 +121,7 @@
     "frontend/svelte.config.js": "73908922c4ee5c3d",
     "frontend/tests/e2e/global-setup.ts": "f11d5f3e3e28ff35",
     "frontend/tsconfig.json": "5ba6072319c60e79",
-    "frontend/vite.config.ts": "ab2e04119d6f339c",
+    "frontend/vite.config.ts": "c5930977056aee32",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
     "renovate.json": "cbac5a95b942ac92"
   }

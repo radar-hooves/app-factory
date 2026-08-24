@@ -62,7 +62,14 @@ export default defineConfig(({ command, isPreview }) => {
 			// beats silently moving off it onto one another app owns.
 			strictPort: true,
 			proxy: {
-				'/api': {
+				// Anchored and trailing-slashed: a Vite proxy key is a PREFIX match, so
+				// the bare '/api' also swallows a top-level SPA route whose name merely
+				// starts with it. Measured in earworm on 2026-08-25: its own `/api-docs`
+				// page was proxied to the backend, which answered with the built SPA
+				// shell, and the route died on chunks the dev server cannot serve. A
+				// leading '^' makes Vite read the key as a RegExp; every real call is
+				// '/api/…', so nothing else changes.
+				'^/api/': {
 					target: backendTarget,
 					// Inject Authentik identity headers for the HUMAN surface, so dev runs
 					// the same backend code path production does. They belong on the PROXY,
