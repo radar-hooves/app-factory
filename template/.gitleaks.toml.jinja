@@ -13,3 +13,13 @@ useDefault = true
     '''your_password''',
     '''your_secret_key''',
   ]
+
+  # `.template-parity.json` is sha256 digests by construction — every value in it
+  # is a hash of a template-owned file, and a high-entropy hex string beside a
+  # path-shaped key is exactly what `generic-api-key` is built to catch. Measured
+  # 2026-08-25: one regenerated digest tripped it and blocked the commit. The
+  # file cannot contain a secret, so the path is allowed rather than the finding
+  # being pinned by fingerprint, which would go stale on the next re-stamp.
+  paths = [
+    '''\.template-parity\.json$''',
+  ]

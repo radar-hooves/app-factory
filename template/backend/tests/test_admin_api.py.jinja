@@ -68,9 +68,7 @@ async def test_the_list_shows_who_has_signed_in(client: AsyncClient) -> None:
     assert page["total"] >= 2
 
 
-async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(
-    client: AsyncClient, session: Session
-) -> None:
+async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(client: AsyncClient, session: Session) -> None:
     """An absent display header asserts nothing; it must not blank what is stored.
 
     The dev proxy sends the stable uid ALONE (``dev-identity.ts``), deliberately,

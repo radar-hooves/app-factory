@@ -1,0 +1,17 @@
+title = "full-stack-app-template gitleaks config"
+
+# `useDefault` is what loads gitleaks' ~170 built-in rules. Without it a config
+# carrying only an [allowlist] has NO rules at all, so every scan passes and the
+# secret gate is silently dead — in pre-commit, in CI, everywhere.
+[extend]
+useDefault = true
+
+[allowlist]
+  description = "Allowlist for the parity manifest, which is hashes by construction"
+  # This repo had no config of its own, so the template/ tree was scanned with
+  # the defaults alone. `template/.template-parity.json` is sha256 digests, and
+  # a regenerated one tripped `generic-api-key` on 2026-08-25. Stamped apps get
+  # the same allowance through template/.gitleaks.toml.jinja.
+  paths = [
+    '''\.template-parity\.json$''',
+  ]
