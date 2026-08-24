@@ -92,7 +92,7 @@
     "frontend/.prettierrc": "daec45a55e1f3ad7",
     "frontend/components.json": "3192c135e1a87e3e",
     "frontend/dev-identity.ts": "fb7dd048c1a8cf71",
-    "frontend/eslint.config.js": "e15123bb88de8777",
+    "frontend/eslint.config.js": "34b434c4bac6a045",
     "frontend/playwright.config.ts": "e603a08103d857fb",
     "frontend/scripts/check-colour-surface.mjs": "b027bf4e3a8892e2",
     "frontend/scripts/check-design-craft.mjs": "7a37fe16d01f4193",

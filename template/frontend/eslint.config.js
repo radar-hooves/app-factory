@@ -1,6 +1,5 @@
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
-import tailwind from 'eslint-plugin-tailwindcss';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 import debt from './eslint.debt.js';
@@ -19,9 +18,10 @@ import debt from './eslint.debt.js';
 // table "simple" or "complex", which columns to hide responsively — which no
 // linter can decide.
 //
-// eslint-plugin-tailwindcss's flat/recommended export crashes under Tailwind
-// v4 (no tailwind.config.js to introspect) — never import it; the
-// no-arbitrary-value rule below is wired directly instead.
+// No eslint-plugin-tailwindcss: no-arbitrary-value blocked every arbitrary
+// value, including layout no design token can express (grid-cols-[auto_1fr],
+// h-[calc(...)]). The frontend-ci.yaml grep gate is the single mechanism — it
+// scans *.svelte and *.ts for colour and size literals. master-project#309.
 export default ts.config(
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
@@ -195,22 +195,6 @@ export default ts.config(
 						'Use the shadcn table primitives from @poodle64/ui/table rather than raw table markup.'
 				}
 			]
-		}
-	},
-	{
-		// Wired directly rather than through the plugin's recommended export —
-		// see the top-of-file note. The frontend-ci.yaml grep gate
-		// (docs/master/templates/golden-patterns/app-shape-and-frontend.md
-		// §Enforcement) is the binding check for Svelte `class=` strings, which
-		// this rule cannot see; it catches TS/JS-authored class values instead.
-		plugins: { tailwindcss: tailwind },
-		settings: {
-			tailwindcss: {
-				cssConfigPath: './src/app.css'
-			}
-		},
-		rules: {
-			'tailwindcss/no-arbitrary-value': 'error'
 		}
 	},
 	{
