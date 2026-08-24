@@ -78,7 +78,7 @@
     "backend/tests/support/__init__.py": "b9d099fe8af01df9",
     "backend/tests/support/explicit_server_guard.py": "d4064b165e264d41",
     "backend/tests/test_admin_api.py": "4d1c6352208a3f9a",
-    "backend/tests/test_explicit_test_server_guard.py": "307e33d2e1ae9ba7",
+    "backend/tests/test_explicit_test_server_guard.py": "6854a79a874f38e9",
     "backend/tests/test_fanout.py": "b457bf979dd10a21",
     "backend/tests/test_mcp_auth.py": "5f7f09c9a8a4718f",
     "backend/tests/test_mcp_stateless.py": "db851241d3595410",

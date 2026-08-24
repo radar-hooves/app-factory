@@ -13,8 +13,6 @@ import pytest
 
 from tests.support import explicit_server_guard as guard
 
-from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, DatabaseSettings
-
 _EXPLICIT = {"host": "db.example", "port": "5432", "user": "tester", "password": "secret"}
 
 
@@ -88,7 +86,7 @@ class TestExplicitServerUrl:
         # band reads as drift in exactly the app that answered that number.
         explicit = {"host": "db.example", "port": "12345", "user": "te st", "password": "p@ss/word"}
         url = guard.explicit_server_url(explicit, "postgres")
-        assert url == f"{SQLALCHEMY_SCHEME}://te+st:p%40ss%2Fword@db.example:12345/postgres"
+        assert url == f"{guard.SQLALCHEMY_SCHEME}://te+st:p%40ss%2Fword@db.example:12345/postgres"
 
     def test_the_scheme_is_the_one_the_app_itself_connects_with(self):
         """The guard must MIRROR ``DatabaseSettings.database_url``, not merely claim to.
@@ -100,7 +98,14 @@ class TestExplicitServerUrl:
         before reaching a single test. Nothing caught it, because the
         ephemeral-container path never enters this function and no CI job sets
         the quartet. Asserting the RELATIONSHIP is what makes the docstring true.
+
+        Imported inside the test on purpose: at module level ruff sorts this
+        against ``tests.support`` in the same first-party block, so the file's
+        import order would depend on the app's own package name and no two apps
+        could hold it byte-identical.
         """
+        from {{ package_name }}.config.sections.database import DatabaseSettings
+
         app_scheme = DatabaseSettings(
             postgres_user="u", postgres_password="p", postgres_host="h", postgres_port=5432, postgres_db="d"
         ).database_url.split("://", 1)[0]
