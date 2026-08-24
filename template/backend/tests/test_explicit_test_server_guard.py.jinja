@@ -13,6 +13,8 @@ import pytest
 
 from tests.support import explicit_server_guard as guard
 
+from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, DatabaseSettings
+
 _EXPLICIT = {"host": "db.example", "port": "5432", "user": "tester", "password": "secret"}
 
 
@@ -86,7 +88,27 @@ class TestExplicitServerUrl:
         # band reads as drift in exactly the app that answered that number.
         explicit = {"host": "db.example", "port": "12345", "user": "te st", "password": "p@ss/word"}
         url = guard.explicit_server_url(explicit, "postgres")
-        assert url == "postgresql+psycopg://te+st:p%40ss%2Fword@db.example:12345/postgres"
+        assert url == f"{SQLALCHEMY_SCHEME}://te+st:p%40ss%2Fword@db.example:12345/postgres"
+
+    def test_the_scheme_is_the_one_the_app_itself_connects_with(self):
+        """The guard must MIRROR ``DatabaseSettings.database_url``, not merely claim to.
+
+        Both used to hard-code the dialect behind a comment telling the next
+        editor not to change it, which is a convention, not a mechanism: an app
+        pinning a different driver corrected one literal and left the other, so
+        every run that set the quartet died in the guard with ModuleNotFoundError
+        before reaching a single test. Nothing caught it, because the
+        ephemeral-container path never enters this function and no CI job sets
+        the quartet. Asserting the RELATIONSHIP is what makes the docstring true.
+        """
+        app_scheme = DatabaseSettings(
+            postgres_user="u", postgres_password="p", postgres_host="h", postgres_port=5432, postgres_db="d"
+        ).database_url.split("://", 1)[0]
+        guard_scheme = guard.explicit_server_url(
+            {"host": "h", "port": "5432", "user": "u", "password": "p"}, "d"
+        ).split("://", 1)[0]
+
+        assert guard_scheme == app_scheme
 
 
 @pytest.mark.unit

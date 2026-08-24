@@ -8,6 +8,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.vend import vend
 
+# The ONE place the SQLAlchemy dialect is named. `database_url` below builds the
+# app's URL from it, and `tests/support/explicit_server_guard.py` builds the
+# explicit-test-server URL from the same constant, so the two cannot drift.
+# +psycopg names psycopg3 explicitly; a bare postgresql:// resolves to psycopg2.
+# An app pinning a different driver in pyproject.toml changes THIS line — and
+# the guard follows it, rather than being edited to match and going stale.
+SQLALCHEMY_SCHEME = "postgresql+psycopg"
+
 
 class DatabaseSettings(BaseSettings):
     """PostgreSQL connection parameters.
@@ -74,7 +82,4 @@ class DatabaseSettings(BaseSettings):
         """
         user = quote_plus(self.postgres_user)
         password = quote_plus(self.postgres_password)
-        # +psycopg names psycopg3 explicitly: a bare postgresql:// resolves to
-        # psycopg2, and this template ships psycopg[binary] (psycopg3), not
-        # psycopg2-binary. Do not "simplify" the scheme back to postgresql://.
-        return f"postgresql+psycopg://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return f"{SQLALCHEMY_SCHEME}://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
