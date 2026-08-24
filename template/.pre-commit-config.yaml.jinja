@@ -30,6 +30,9 @@ repos:
         files: '^docs/development/handoffs/.*\.md$'
         pass_filenames: true
 
+      # Wired late: tracks-work and status-chain were wired here 21/08; this
+      # gate was not. Neither of the other two counts files, so drift past
+      # the retention window would pass with both green.
       - id: check-handoff-retention
         name: 'governance - A new handoff prunes its folder'
         entry: python3 .claude/hooks/master/precommit/handoff-retention.py
