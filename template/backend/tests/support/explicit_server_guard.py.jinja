@@ -6,6 +6,13 @@ testing, because its module-level code stands up a real ephemeral Postgres
 container (or connects to a real explicit server) as a side effect of
 import. This module has no side effects of its own -- only functions,
 called by ``conftest.py`` at the point it resolves the test server.
+
+That contract is no longer self-contained: importing ``SQLALCHEMY_SCHEME``
+below pulls in ``config/__init__.py``, which imports every settings section.
+All of them are import-safe today — class bodies and ``Path`` arithmetic only,
+with vending deferred to a model validator — and they must stay that way. A
+section that does real I/O at import breaks ``conftest.py`` before it has
+resolved a single env var, and nothing here would point at the cause.
 """
 
 from __future__ import annotations

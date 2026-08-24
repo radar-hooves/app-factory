@@ -84,9 +84,11 @@ class TestExplicitServerUrl:
         # 12345 rather than a plausible port: the parity gate normalises an app's
         # own answered port wherever it appears, so a literal inside any allocated
         # band reads as drift in exactly the app that answered that number.
+        from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME
+
         explicit = {"host": "db.example", "port": "12345", "user": "te st", "password": "p@ss/word"}
         url = guard.explicit_server_url(explicit, "postgres")
-        assert url == f"{guard.SQLALCHEMY_SCHEME}://te+st:p%40ss%2Fword@db.example:12345/postgres"
+        assert url == f"{SQLALCHEMY_SCHEME}://te+st:p%40ss%2Fword@db.example:12345/postgres"
 
     def test_the_scheme_is_the_one_the_app_itself_connects_with(self):
         """The guard must MIRROR ``DatabaseSettings.database_url``, not merely claim to.
@@ -114,6 +116,22 @@ class TestExplicitServerUrl:
         ).split("://", 1)[0]
 
         assert guard_scheme == app_scheme
+
+    def test_the_scheme_names_a_driver_this_app_actually_installs(self):
+        """The scheme must name a DBAPI that is importable here, not merely a valid one.
+
+        The test above proves the guard and the app agree; it cannot prove they
+        are RIGHT. An app whose pyproject pins one driver while this constant
+        names another builds two identical, identically-wrong URLs — both sides
+        agree, that test passes, and the failure surfaces as ModuleNotFoundError
+        out of create_engine at the moment someone points the suite at a real
+        server. This resolves the DBAPI the scheme names without connecting to
+        anything, so the pin and the scheme are checked against each other.
+        """
+        from sqlalchemy.engine.url import make_url
+
+        url = guard.explicit_server_url({"host": "h", "port": "5432", "user": "u", "password": "p"}, "d")
+        make_url(url).get_dialect().import_dbapi()
 
 
 @pytest.mark.unit
