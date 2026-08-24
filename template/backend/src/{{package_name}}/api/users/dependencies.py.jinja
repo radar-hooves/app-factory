@@ -111,10 +111,15 @@ def get_identity(
             "A machine principal has no user in this app. Link one, or call the /mcp surface.",
         )
 
+    # Each display header is passed through as-is, ABSENT included. Coalescing
+    # the username to the uid here would make an absent header indistinguishable
+    # from a person genuinely named after their uid, and the service would then
+    # overwrite a good username with it — which is exactly what the dev proxy
+    # provokes, because `dev-identity.ts` deliberately sends the uid alone.
     user = users_service.upsert_from_identity(
         session,
         authentik_uid=uid,
-        username=request.headers.get(identity_settings.authentik_username_header) or uid,
+        username=request.headers.get(identity_settings.authentik_username_header),
         display_name=request.headers.get(identity_settings.authentik_name_header),
         email=request.headers.get(identity_settings.authentik_email_header),
     )

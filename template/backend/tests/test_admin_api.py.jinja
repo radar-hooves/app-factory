@@ -68,6 +68,45 @@ async def test_the_list_shows_who_has_signed_in(client: AsyncClient) -> None:
     assert page["total"] >= 2
 
 
+async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(
+    client: AsyncClient, session: Session
+) -> None:
+    """An absent display header asserts nothing; it must not blank what is stored.
+
+    The dev proxy sends the stable uid ALONE (``dev-identity.ts``), deliberately,
+    so that a checkout pointed at the real database cannot overwrite a real
+    person's profile. That only holds if the upsert treats an absent header as
+    "nothing fresh to say" rather than as a value. Measured 2026-08-25: it did
+    not, and one such request replaced a person's username with their own uid.
+    """
+    # The username is deliberately NOT the uid: were they equal, the assertion
+    # below would pass with the defect in place.
+    await client.get(
+        "/api/users/me",
+        headers={
+            "x-authentik-uid": "uid-unchanged",
+            "x-authentik-username": "changeling",
+            "x-authentik-name": "Un Changed",
+            "x-authentik-email": "unchanged@example.test",
+        },
+    )
+
+    # Built and stripped rather than passed as a dict: per-request headers MERGE
+    # over the client's defaults, so a dict cannot express "this header is
+    # absent" — and absent is the whole case under test.
+    bare = client.build_request("GET", "/api/users/me", headers={"x-authentik-uid": "uid-unchanged"})
+    for header in ("x-authentik-username", "x-authentik-name", "x-authentik-email"):
+        bare.headers.pop(header, None)
+    assert (await client.send(bare)).status_code == 200
+
+    kept = session.execute(select(User).where(User.authentik_uid == "uid-unchanged")).scalar_one()
+    assert (kept.username, kept.display_name, kept.email) == (
+        "changeling",
+        "Un Changed",
+        "unchanged@example.test",
+    )
+
+
 async def test_search_matches_the_synced_display_fields(client: AsyncClient) -> None:
     """The filter searches what the operator sees: username, display name, email."""
     await client.get(

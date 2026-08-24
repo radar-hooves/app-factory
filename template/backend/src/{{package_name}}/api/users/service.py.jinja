@@ -34,7 +34,7 @@ def upsert_from_identity(
     session: Session,
     *,
     authentik_uid: str,
-    username: str,
+    username: str | None,
     display_name: str | None = None,
     email: str | None = None,
 ) -> User:
@@ -43,6 +43,15 @@ def upsert_from_identity(
     Matching is on ``authentik_uid`` alone, never on username or email: both are
     mutable at the identity provider, and matching on a mutable field silently
     splits one person into two rows the day they change their name.
+
+    A ``None`` display field means the request asserted NOTHING about it — an
+    outpost not forwarding that claim, or the dev proxy, which sends the stable
+    uid alone precisely so it cannot overwrite a real profile. None must
+    therefore leave the stored value alone rather than blanking it. ``username``
+    is NOT NULL, so a genuinely first-ever row with none at all falls back to the
+    uid; there has to be something to write on that one branch. Before this,
+    ``username`` alone was assigned unconditionally, and one uid-only request
+    replaced a person's name with their own uid in the real database.
 
     A first sight creates an INERT user — no entitlements (those arrive per
     request in a header and this row stores none), no admin, and only their own
@@ -59,7 +68,7 @@ def upsert_from_identity(
     if user is None:
         user = User(
             authentik_uid=authentik_uid,
-            username=username,
+            username=username or authentik_uid,
             display_name=display_name,
             email=email,
             last_seen_at=now,
@@ -68,13 +77,18 @@ def upsert_from_identity(
         session.flush()
         logger.warning(
             "Created a local user record on first sight of an authenticated identity",
-            extra={"user_id": user.id, "username": username},
+            extra={"user_id": user.id, "username": user.username},
         )
         return user
 
     # Re-sync the mutable fields every request: the identity provider is the
-    # source of truth for them and a stale local copy is a support ticket.
-    user.username = username
+    # source of truth for them and a stale local copy is a support ticket. Only
+    # where the request actually carried one — see the docstring.
+    # Truthiness, not `is not None`: an outpost sending the header with an empty
+    # value asserts nothing either, and this column is NOT NULL — writing "" into
+    # it is never the right answer.
+    if username:
+        user.username = username
     if display_name is not None:
         user.display_name = display_name
     if email is not None:
