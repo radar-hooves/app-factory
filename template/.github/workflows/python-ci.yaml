@@ -6,10 +6,17 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      # backend/tests/test_version.py reads frontend/package.json, so a release
+      # that bumps the frontend manifest alone gets no Python verdict at all and
+      # the last one on main stays whatever it was — including a failure the
+      # bump had just corrected. Measured on seshat 2026.8.20, where a tag was
+      # one command away from being cut against a stale red signal.
+      - 'frontend/package.json'
       - '.github/workflows/python-ci.yaml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'frontend/package.json'
       - '.github/workflows/python-ci.yaml'
   workflow_dispatch:
 

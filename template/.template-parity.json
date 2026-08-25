@@ -30,7 +30,7 @@
     ".github/workflows/cleanup-container-images.yaml": "2ed676ac47be1996",
     ".github/workflows/docker-image.yaml": "bcd0f4e070fa2fed",
     ".github/workflows/frontend-ci.yaml": "571b2fdc5910b0f1",
-    ".github/workflows/python-ci.yaml": "9a3167f55f751e7b",
+    ".github/workflows/python-ci.yaml": "2abf01867128d724",
     ".github/workflows/security.yaml": "9e08972038720ffa",
     ".gitignore": "c1b630eceb2bef58",
     ".gitleaks.toml": "22a71a03bc928434",
