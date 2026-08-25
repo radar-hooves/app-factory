@@ -7,6 +7,12 @@ gate, never that the module imports.
 
 The userinfo endpoint is faked with httpx.MockTransport, so no identity
 provider is needed to run these.
+
+The tool these drive is registered by THIS FILE (`_probe_tool`), never by the
+app. Driving `mcp/server.py`'s scaffold `health_check` is what made the factory's
+own gate test un-adoptable: that module is shape-gated because it enumerates the
+app's own dispatchers, so deleting the scaffold is the app doing the right thing,
+and the test punished it for that.
 """
 
 import json
@@ -18,6 +24,10 @@ from {{ package_name }}.mcp.actors import Actor, ActorRegistry
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 
 USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
+
+# The probe tool's wire name. Registered by _probe_tool below onto whatever
+# server the app builds, so nothing here depends on a tool the app may delete.
+PROBE_TOOL = "auth_gate_probe"
 
 
 async def _inner_app(scope, receive, send):
@@ -50,9 +60,15 @@ def _unreachable_transport() -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
+def _client(app: object) -> httpx.AsyncClient:
+    # localhost, not a made-up hostname: an app whose app_hooks.register adds a
+    # trusted-host middleware rejects anything else with 400 "Invalid host
+    # header" before routing, and this file is owed byte-identical to every app.
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost")
+
+
 async def _call(gated, headers: dict[str, str] | None = None) -> httpx.Response:
-    transport = httpx.ASGITransport(app=gated)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with _client(gated) as client:
         return await client.post("/", headers=headers or {}, content=b"")
 
 
@@ -164,8 +180,7 @@ async def test_mounted_mcp_surface_refuses_unauthenticated_request():
     from {{ package_name }}.main import create_app
 
     app = create_app()
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with _client(app) as client:
         response = await client.post(
             "/mcp/",
             headers={"content-type": "application/json", "accept": "application/json, text/event-stream"},
@@ -174,8 +189,48 @@ async def test_mounted_mcp_surface_refuses_unauthenticated_request():
     assert response.status_code == 401
 
 
-async def _drive_health_check(client: httpx.AsyncClient, token: str) -> dict[str, object]:
-    """Run the full MCP handshake and call health_check, returning the tool result.
+@pytest.fixture
+def _probe_tool(monkeypatch):
+    """Register a tool THIS FILE owns onto whatever MCP server the app builds.
+
+    The gate tests below need SOME tool to call, because a refusal can only be
+    observed at a tool call — `initialize` and `tools/list` are deliberately
+    ungated (mcp/auth.py). They used to call the scaffold `health_check` in
+    mcp/server.py, and that was the defect: that module is shape-gated
+    (canonical-app-shape.md §Extension Points) because it enumerates the app's
+    OWN dispatchers, so an app removing the scaffold is doing exactly what the
+    factory intends — and then failed a test it inherited from the factory.
+
+    The probe gates NOTHING. It never calls resolve_actor(); it echoes the
+    identity the bearer gate wrote and returns. That makes the two refusal tests
+    below a stronger statement than the scaffold could make: the middleware must
+    refuse an unregistered caller with no cooperation from the tool body, which
+    is the only thing that catches a dispatcher whose author forgot to ask.
+
+    `main.create_mcp_server` is the patch target because main.py is owed
+    byte-identical, so the name is there in every app whatever its server builds.
+    """
+    from {{ package_name }} import main as main_module
+
+    build_app_server = main_module.create_mcp_server
+
+    def _with_probe():
+        server = build_app_server()
+
+        @server.tool(name=PROBE_TOOL)
+        def _probe() -> dict[str, str]:
+            """Echo the identity the bearer gate injected. Authorises nothing."""
+            from fastmcp.server.dependencies import get_http_headers
+
+            return {"client_id": get_http_headers().get("x-client-id", "<absent>")}
+
+        return server
+
+    monkeypatch.setattr(main_module, "create_mcp_server", _with_probe)
+
+
+async def _drive_probe(client: httpx.AsyncClient, token: str) -> dict[str, object]:
+    """Run the full MCP handshake and call the probe, returning the tool result.
 
     Driving the real handshake is the point: it is the only way to reach a tool
     body, and therefore the only way to observe whether the allow-list actually
@@ -212,7 +267,7 @@ async def _drive_health_check(client: httpx.AsyncClient, token: str) -> dict[str
     called = await client.post(
         "/mcp/",
         headers={**headers, **session},
-        json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "health_check", "arguments": {}}},
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": PROBE_TOOL, "arguments": {}}},
     )
     assert called.status_code == 200, called.text
     payload = called.text.split("data: ", 1)[1]
@@ -221,7 +276,7 @@ async def _drive_health_check(client: httpx.AsyncClient, token: str) -> dict[str
 
 
 @pytest.fixture
-def _configured_idp(monkeypatch):
+def _configured_idp(monkeypatch, _probe_tool):
     """Point the app at a userinfo endpoint and answer it, with no live provider.
 
     `valid-registered` resolves to an identity listed in config/actors.yaml;
@@ -258,28 +313,32 @@ def _configured_idp(monkeypatch):
 
 @pytest.mark.integration
 async def test_registered_identity_reaches_the_tool(_configured_idp):
-    """A valid bearer for a REGISTERED identity reaches the tool and is named."""
+    """A valid bearer for a REGISTERED identity reaches the tool, named by the gate.
+
+    The identity asserted is the one the bearer gate resolved from the userinfo
+    claim and wrote into x-client-id — not an actor id, which is a mapping
+    config/actors.yaml owns per app. What must hold in every app is that the
+    caller the gate authenticated is the caller the tool sees.
+    """
     from {{ package_name }}.main import create_app
 
     app = create_app()
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            result = await _drive_health_check(client, "valid-registered")
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, "valid-registered")
     assert result["isError"] is False, result
-    assert result["structuredContent"]["actor"] == "claude-code"
+    assert result["structuredContent"]["client_id"] == "mcp-service"
 
 
 async def test_middleware_gates_a_tool_that_never_calls_resolve_actor(monkeypatch):
     """The middleware refuses without the tool body participating at all.
 
-    This is the whole reason ActorGateMiddleware exists, and it cannot be shown
-    with the shipped health_check: that tool calls resolve_actor() itself, so it
-    would refuse an unregistered caller with or without the middleware. What
-    needs proving is that a tool whose author FORGOT is still gated.
+    This is the whole reason ActorGateMiddleware exists. The HTTP tests above
+    drive it end to end through the probe, which gates nothing; this one pins the
+    middleware itself with no ASGI stack in the way, so a failure names the
+    middleware rather than the mount.
 
-    So call_next here is a stand-in for exactly that tool — it records whether
-    it ran and gates nothing. The assertion is that it never ran.
+    call_next here is a stand-in for a dispatcher whose author FORGOT to gate.
+    It records whether it ran, and the assertion is that it never did.
     """
     from fastmcp.exceptions import ToolError
 
@@ -323,15 +382,14 @@ async def test_valid_bearer_for_unregistered_identity_is_refused(_configured_idp
     The bearer VALIDATES here — the identity provider accepts it and the gate
     lets it through. What must still refuse it is config/actors.yaml. Asserting
     this against ActorRegistry alone would not notice the wiring between the two
-    breaking, which is the failure this test exists to catch.
+    breaking, which is the failure this test exists to catch. The probe tool
+    authorises nothing, so the refusal is the middleware's alone.
     """
     from {{ package_name }}.main import create_app
 
     app = create_app()
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            result = await _drive_health_check(client, "valid-unregistered")
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, "valid-unregistered")
     assert result["isError"] is True, result
     assert "not registered" in str(result["content"])
 
@@ -349,10 +407,8 @@ async def test_local_console_identity_is_not_reachable_over_http(_configured_idp
     from {{ package_name }}.main import create_app
 
     app = create_app()
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            result = await _drive_health_check(client, "valid-local-console")
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, "valid-local-console")
     assert result["isError"] is True, result
     assert "reserved for local in-process callers" in str(result["content"])
 
@@ -363,8 +419,7 @@ async def test_proxy_headers_do_not_open_the_mcp_surface():
     from {{ package_name }}.main import create_app
 
     app = create_app()
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with _client(app) as client:
         response = await client.post(
             "/mcp/",
             headers={
