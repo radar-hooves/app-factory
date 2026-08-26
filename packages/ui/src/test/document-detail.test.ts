@@ -102,3 +102,20 @@ describe('DocumentDetail — empty, loading, failed', () => {
 		expect(screen.getByText('This document is not in the catalogue.')).toBeInTheDocument();
 	});
 });
+
+describe('DocumentDetail — a 390px screen', () => {
+	// A grid or flex item defaults to min-width:auto, so it grows to its widest
+	// child and `truncate` can never shrink it. Without these the content hash
+	// pushed every VALUE off the side and left the labels alone on screen.
+	it('lets every long value shrink instead of stretching the card', () => {
+		render(DocumentDetail, { document: doc });
+
+		const label = screen.getByText('Content hash');
+		expect(label.className).toContain('shrink-0');
+
+		const value = label.parentElement?.querySelector('dd');
+		expect(value?.className).toContain('min-w-0');
+		expect(value?.className).toContain('truncate');
+		expect(value).toHaveAttribute('title');
+	});
+});

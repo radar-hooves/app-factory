@@ -15,6 +15,7 @@
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import Search from '@lucide/svelte/icons/search';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import X from '@lucide/svelte/icons/x';
 	import { Input } from '../input/index.js';
 	import Button from '../button/button.svelte';
@@ -110,6 +111,15 @@
 		}
 	}
 
+	/**
+	 * Whether the facet rail is revealed below `md`. The only state this
+	 * component owns, and deliberately so: it is a disclosure, not a filter.
+	 * The rail used to be `hidden md:block` with nothing to reveal it, so on a
+	 * phone the whole of filtering was simply absent — no drawer, no
+	 * disclosure, no way to reach it at all.
+	 */
+	let facetsOpen = $state(false);
+
 	const shownTotal = $derived(total ?? documents.length);
 	// Floored at 1 so a consumer's limit: 0 cannot put Infinity in the pager.
 	const pageSize = $derived(Math.max(1, limit));
@@ -161,11 +171,24 @@
 		</div>
 	{/if}
 
+	{#if facets.length > 0}
+		<Button
+			variant="outline"
+			size="sm"
+			class="w-fit md:hidden"
+			aria-expanded={facetsOpen}
+			onclick={() => (facetsOpen = !facetsOpen)}
+		>
+			<SlidersHorizontal class="size-4" />
+			{facetsOpen ? 'Hide filters' : 'Filters'}
+		</Button>
+	{/if}
+
 	<div
 		class={facets.length > 0 ? 'grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]' : 'grid gap-6'}
 	>
 		{#if facets.length > 0}
-			<aside class="hidden md:block" aria-label="Filters">
+			<aside class={facetsOpen ? 'block' : 'hidden md:block'} aria-label="Filters">
 				<FacetRail {facets} onChange={onFacetChange} />
 			</aside>
 		{/if}

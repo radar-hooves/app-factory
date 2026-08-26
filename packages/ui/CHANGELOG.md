@@ -2,6 +2,39 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.8.14] - 2026-08-26
+
+### Fixed
+
+- **The three library surfaces survive a 390px screen.** All of
+  `LibraryBrowse`, `DocumentTable` (shared with `CollectionDetail`) and
+  `DocumentDetail` were laid out for a desktop only, which the first consumer
+  found the moment it drove them at phone width. Three separate faults, one
+  class:
+
+  - `LibraryBrowse`'s facet rail was `hidden md:block` with nothing to reveal
+    it, so below `md` the whole of filtering was simply absent — no drawer, no
+    disclosure, no way to reach a facet at all. A `Filters` button now
+    discloses the rail below `md` and reports its state through
+    `aria-expanded`; the rail is unchanged from `md` up, and the button does
+    not render when there are no facets to disclose. It is the only state this
+    component owns, and a disclosure is presentation rather than a filter, so
+    the page still owns every selection.
+  - `DocumentTable` rendered all four columns at every width, so a real
+    catalogue took the table to 1,612px at 390px and every row scrolled
+    sideways inside its own scroller. Tags now drop below `xl` and Collections
+    below `lg` — the same breakpoints the raw-table idiom's `TH_HIDDEN_UNTIL_XL`
+    already used — and the title cell takes `max-w-0` with a `truncate`d link
+    carrying its full text as a `title`. The two go together: a bound with no
+    truncate overflows UNDER the next cell, which then swallows the link's
+    clicks, and truncate with no bound never shrinks at all.
+  - `DocumentDetail`'s identity list had `truncate` on values that could never
+    shrink: a grid or flex item defaults to `min-width: auto`, so a 64-character
+    content hash and a filesystem path stretched the card to 1,124px inside a
+    390px screen and pushed every VALUE off the side, leaving the labels alone
+    on it. `min-w-0` on the grid and each of its cells, `shrink-0` on each
+    label, and a `title` on each value so the truncated text stays readable.
+
 ## [2026.8.13] - 2026-08-22
 
 ### Fixed

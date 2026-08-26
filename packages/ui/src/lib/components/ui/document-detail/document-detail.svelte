@@ -69,17 +69,28 @@
 		<EmptyState title={notFoundTitle} description={notFoundDescription} />
 	{:else}
 		<DetailPanel eyebrow="Document" title={document.title} titleFace="display" footer={actions}>
-			<div class="grid gap-4 sm:grid-cols-2">
+			<!-- min-w-0 on the grid AND on every cell and value below: a grid or
+			     flex item defaults to min-width:auto, so it grows to its widest
+			     child and `truncate` can never shrink it. A 64-character content
+			     hash and a filesystem path therefore took this card to 1,124px
+			     inside a 390px screen and pushed every VALUE off the side, leaving
+			     the labels alone on it. -->
+			<div class="grid min-w-0 gap-4 sm:grid-cols-2">
 				{#if document.fields?.length}
-					<div>
+					<div class="min-w-0">
 						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
 							Details
 						</h3>
 						<dl class="space-y-1 text-sm">
 							{#each document.fields as field (field.label)}
 								<div class="flex justify-between gap-4">
-									<dt class="text-muted-foreground">{field.label}</dt>
-									<dd class={field.mono ? 'truncate font-mono text-xs' : 'text-right'}>
+									<dt class="text-muted-foreground shrink-0">{field.label}</dt>
+									<dd
+										class={field.mono
+											? 'min-w-0 truncate font-mono text-xs'
+											: 'min-w-0 truncate text-right'}
+										title={field.value}
+									>
 										{field.value}
 									</dd>
 								</div>
@@ -89,14 +100,16 @@
 				{/if}
 
 				{#if document.locations?.length}
-					<div>
+					<div class="min-w-0">
 						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
 							Locations
 						</h3>
 						<ul class="space-y-1 text-sm">
 							{#each document.locations as location (location.path)}
 								<li class="flex items-center justify-between gap-2">
-									<span class="truncate font-mono text-xs">{location.path}</span>
+									<span class="min-w-0 truncate font-mono text-xs" title={location.path}
+										>{location.path}</span
+									>
 									<div class="flex shrink-0 items-center gap-1">
 										{#if location.primary}
 											<Badge variant="secondary">primary</Badge>
@@ -112,7 +125,7 @@
 				{/if}
 
 				{#if document.tags?.length}
-					<div>
+					<div class="min-w-0">
 						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
 							Tags
 						</h3>
@@ -125,7 +138,7 @@
 				{/if}
 
 				{#if document.memberships?.length}
-					<div>
+					<div class="min-w-0">
 						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
 							Collections
 						</h3>

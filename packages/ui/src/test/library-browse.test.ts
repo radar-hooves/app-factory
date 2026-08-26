@@ -191,3 +191,55 @@ describe('LibraryBrowse — empty, loading, failed', () => {
 		expect(onQueryChange).toHaveBeenCalledWith('');
 	});
 });
+
+describe('LibraryBrowse — reachable on a phone', () => {
+	// The rail used to be `hidden md:block` with nothing to reveal it, so below
+	// md the whole of filtering was absent — the drawer is what makes a facet
+	// reachable at 390px rather than merely present in the DOM.
+	it('offers a Filters disclosure only when there are facets to disclose', () => {
+		const bare = render(LibraryBrowse, { documents });
+		expect(screen.queryByRole('button', { name: /Filters/ })).not.toBeInTheDocument();
+		bare.unmount();
+
+		render(LibraryBrowse, { documents, facets });
+		expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+	});
+
+	it('the disclosure reveals the rail and says which state it is in', async () => {
+		render(LibraryBrowse, { documents, facets });
+		const trigger = screen.getByRole('button', { name: 'Filters' });
+		const rail = screen.getByLabelText('Filters', { selector: 'aside' });
+
+		expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		expect(rail.className).toContain('hidden');
+
+		await fireEvent.click(trigger);
+		expect(screen.getByRole('button', { name: 'Hide filters' })).toHaveAttribute(
+			'aria-expanded',
+			'true'
+		);
+		expect(rail.className).not.toContain('hidden');
+	});
+});
+
+describe('DocumentTable — a phone-width catalogue', () => {
+	it('drops the secondary columns by breakpoint and truncates the title', () => {
+		render(LibraryBrowse, { documents, documentHref: (doc) => `/library/${doc.id}` });
+
+		// Tags below xl and Collections below lg are the two columns a phone has
+		// no room for; Title and Status stay at every width.
+		expect(screen.getByRole('columnheader', { name: 'Tags' }).className).toContain('xl:table-cell');
+		expect(screen.getByRole('columnheader', { name: 'Collections' }).className).toContain(
+			'lg:table-cell'
+		);
+		expect(screen.getByRole('columnheader', { name: 'Status' }).className).not.toContain('hidden');
+
+		// max-w-0 + truncate together: TableCell sets whitespace-nowrap, so a
+		// bound with no truncate overflows under the next cell and swallows the
+		// link's clicks, and truncate with no bound never shrinks at all.
+		const link = screen.getByRole('link', { name: 'Trust deed — Rivers Family Trust' });
+		expect(link.className).toContain('truncate');
+		expect(link.closest('td')?.className).toContain('max-w-0');
+		expect(link).toHaveAttribute('title', 'Trust deed — Rivers Family Trust');
+	});
+});

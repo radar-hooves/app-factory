@@ -4,6 +4,13 @@
 	// a consumer that passes no `collections` never sees an empty column —
 	// which is what lets one table serve both the whole-catalogue view and a
 	// single collection's slice.
+	//
+	// Columns also come and go with the VIEWPORT. The title is the only column
+	// a phone has room for, so the secondary ones drop by breakpoint rather
+	// than pushing the table into its own horizontal scroller — measured on a
+	// real catalogue at 390px, where four columns of full-length titles, tag
+	// lists and collection lists took the table to 1,612px and every row
+	// scrolled sideways.
 	import {
 		Table as TableRoot,
 		TableBody,
@@ -37,10 +44,10 @@
 			<TableRow>
 				<TableHead>Title</TableHead>
 				{#if hasTags}
-					<TableHead class="w-40">Tags</TableHead>
+					<TableHead class="hidden w-40 xl:table-cell">Tags</TableHead>
 				{/if}
 				{#if hasCollections}
-					<TableHead class="w-40">Collections</TableHead>
+					<TableHead class="hidden w-40 lg:table-cell">Collections</TableHead>
 				{/if}
 				{#if hasBadges}
 					<TableHead class="w-40 text-center">Status</TableHead>
@@ -50,11 +57,16 @@
 		<TableBody>
 			{#each documents as doc (doc.id)}
 				<TableRow>
-					<TableCell>
+					<!-- max-w-0 + truncate, together: TableCell sets whitespace-nowrap, so
+					     without a width bound this column stretches the table to its widest
+					     title, and with a bound but no truncate the text overflows UNDER the
+					     next cell — which then swallows the link's clicks. -->
+					<TableCell class="max-w-0">
 						{#if documentHref}
 							<a
 								href={documentHref(doc)}
-								class="font-medium hover:underline"
+								title={doc.title}
+								class="block truncate font-medium hover:underline"
 								onclick={() => onOpen?.(doc)}
 							>
 								{doc.title}
@@ -62,22 +74,29 @@
 						{:else if onOpen}
 							<button
 								type="button"
-								class="text-left font-medium hover:underline"
+								title={doc.title}
+								class="block w-full truncate text-left font-medium hover:underline"
 								onclick={() => onOpen(doc)}
 							>
 								{doc.title}
 							</button>
 						{:else}
-							<span class="font-medium">{doc.title}</span>
+							<span class="block truncate font-medium" title={doc.title}>{doc.title}</span>
 						{/if}
 					</TableCell>
 					{#if hasTags}
-						<TableCell class="text-muted-foreground text-xs">
+						<TableCell
+							class="text-muted-foreground hidden max-w-40 truncate text-xs xl:table-cell"
+							title={doc.tags?.join(', ')}
+						>
 							{doc.tags?.join(', ') || '—'}
 						</TableCell>
 					{/if}
 					{#if hasCollections}
-						<TableCell class="text-muted-foreground text-xs">
+						<TableCell
+							class="text-muted-foreground hidden max-w-40 truncate text-xs lg:table-cell"
+							title={doc.collections?.join(', ')}
+						>
 							{doc.collections?.join(', ') || '—'}
 						</TableCell>
 					{/if}
