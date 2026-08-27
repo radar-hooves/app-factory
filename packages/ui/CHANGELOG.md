@@ -2,6 +2,53 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.8.15] - 2026-08-27
+
+### Fixed
+
+- **`DocumentTable`'s wrapper paints a surface instead of drawing an empty
+  box.** It was `<div class="rounded-md border">`: an edge with nothing behind
+  it. Driven at 1440x900 on a real page, the table and every ancestor for six
+  levels computed `rgba(0, 0, 0, 0)` in BOTH themes, so the page's own
+  background texture showed straight through a container sitting beside cards
+  that computed `oklch(1 0 0)` — the exact inconsistency a consumer reported as
+  "you can see straight through them". The wrapper now carries
+  `bg-card border-border ds-edge overflow-hidden`, the same surface `Panel`,
+  `StatCard`, `StatList`, `DetailPanel`, `EmptyState`, `ErrorState` and
+  `DataTableTanstack` already use, and it is theme-aware because the token is:
+  measured after the fix at `oklch(1 0 0)` light and `oklch(0.215 0.02 260)`
+  dark.
+
+  `border-border` is half the fix on its own. A bare `border` resolves to
+  `currentColor` in Tailwind v4, so this hairline was being drawn in
+  full-strength foreground — `oklch(0.24 0.016 85)` light, `oklch(0.93 0.01 240)`
+  dark — where every other bordered surface in the package draws the border
+  token at `oklch(0.86 0.01 85)` / `oklch(0.3 0.02 260)`. `overflow-hidden`
+  comes with the surface as it does on every sibling: a row's
+  `hover:bg-muted/50` otherwise paints square corners over the radius, which was
+  invisible only while there was no surface to paint over.
+
+### Added
+
+- **A gate for the defect class: `src/test/bordered-surface.test.ts`.** No
+  other check in this repo can see a container that draws a border and paints
+  nothing. It type-checks, it renders, all 387 unit tests pass,
+  `theme-coverage.test.ts` is satisfied because the classes that ARE there
+  compile to real rules, and a screenshot on a plain page looks correct — the
+  defect only appears once the box sits on a surface it should have been
+  painting itself.
+
+  The rule is the one a person would state: a container that holds CONTENT and
+  draws a border needs a surface; a control does not. So it is scoped by
+  element — block-level content containers only — and never looks at a button,
+  an input, a switch or a badge, whose background legitimately comes from a
+  variant or a state. `tailwind-variants` bundles are followed, so `Alert`'s
+  bordered base passes on the `bg-card` its variants supply. No baseline and no
+  allow-list: the package sweeps clean, so a debt register would be machinery
+  for zero debt, and an allow-list is what a future bare-bordered container
+  would get quietly added to. What a green run does not prove is written out in
+  full at the foot of the file.
+
 ## [2026.8.14] - 2026-08-26
 
 ### Fixed
