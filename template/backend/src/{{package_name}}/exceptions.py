@@ -162,8 +162,39 @@ def safe_log_context(context: dict[str, object]) -> dict[str, object]:
 
 
 def _log_exception(request: Request, exc: BackendBaseException) -> None:
+    """Log one typed exception with everything that names WHY it was raised.
+
+    Three things reach the log, and each was missing at least once:
+
+    * ``exc.message`` and ``exc.context`` — as before.
+    * ``exc.details`` — the structured diagnostic. It is already serialised
+      into the JSON error body, so a caller can read it and the log could not;
+      that asymmetry is the defect, not a precaution.
+    * the CHAINED CAUSE, via ``exc_info``. Raise sites across these apps write
+      ``raise SomeError(...) from exc``, and none of that reached stdout: a
+      broker outage in godswood on 27/08/2026 logged nothing but
+      ``BrokerUnavailable: Live IBKR figures are unavailable`` for two hours,
+      and the actual cause (``signet is not on PATH``, carried on the
+      ``VendError`` underneath) had to be recovered by shelling into the
+      container. ``exc_info`` renders the whole ``__cause__`` chain under every
+      formatter here, including the plain one, where a structured ``extra=``
+      key is simply not printed.
+
+    Passed only when there IS a cause, so a self-contained 404 still logs as one
+    line. ``logging.py``'s formatters run ``redact()`` over the fully rendered
+    line — the traceback included — and Python renders no frame locals, so no
+    value can ride out on this path.
+    """
     log_context = safe_log_context({"path": request.url.path, "method": request.method, **exc.context})
-    logger.error("%s: %s", exc.__class__.__name__, exc.message, extra=log_context)
+    if exc.details:
+        log_context["details"] = exc.details
+    logger.error(
+        "%s: %s",
+        exc.__class__.__name__,
+        exc.message,
+        extra=log_context,
+        exc_info=exc.__cause__ if exc.__cause__ is not None else None,
+    )
 
 
 async def bad_request_error_handler(request: Request, exc: BadRequestError) -> JSONResponse:

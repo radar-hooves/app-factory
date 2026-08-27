@@ -60,7 +60,7 @@
     "backend/src/{package}/db/session.py": "892ffbb4ac3323b2",
     "backend/src/{package}/db/stamp.py": "24ec470513e88ee2",
     "backend/src/{package}/entitlements.py": "aadb210729bcdff0",
-    "backend/src/{package}/exceptions.py": "494cd214f7a59204",
+    "backend/src/{package}/exceptions.py": "65b2ccd6d5c023cb",
     "backend/src/{package}/logging.py": "6c6ff49f82abd75e",
     "backend/src/{package}/main.py": "9af1467956c71533",
     "backend/src/{package}/mcp/__init__.py": "01ba4719c80b6fe9",
