@@ -43,10 +43,16 @@ import path from 'node:path';
 import os from 'node:os';
 
 // Anchor to the frontend package, not the process cwd. pre-commit runs its
-// hooks from the repo root, but `pnpm lint:design` runs from frontend/ — the
+// hooks from the repo root, but `pnpm lint:design` runs from the frontend — the
 // script must resolve the same paths either way. The script lives at
-// frontend/scripts/, so the frontend root is its parent's parent.
+// <frontend>/scripts/, so the frontend root is its parent.
+//
+// INSTALL_DIR is derived the same way its sibling gate derives it, and for the
+// same reason: a full-stack app nests the frontend at `frontend/`, a Tauri
+// desktop app's SvelteKit app IS the repo root, and a hardcoded nested path
+// makes every desktop app hand-edit a factory file over one constant.
 const FRONTEND_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const INSTALL_DIR = path.basename(FRONTEND_ROOT) === 'frontend' ? 'frontend' : '.';
 const IMPECCABLE = path.join(FRONTEND_ROOT, 'node_modules/.bin/impeccable');
 const STATIC_TARGET = path.join(FRONTEND_ROOT, 'src');
 const BASELINE = path.join(FRONTEND_ROOT, '.design-craft-baseline.json');
@@ -89,7 +95,7 @@ const ADVISORY_RULES = new Set(['em-dash-overuse', 'marketing-buzzword', 'aphori
 
 if (!existsSync(IMPECCABLE)) {
 	console.error(
-		`impeccable not installed at ${path.relative(FRONTEND_ROOT, IMPECCABLE)} — run pnpm install in frontend/ first.`
+		`impeccable not installed at ${path.relative(FRONTEND_ROOT, IMPECCABLE)} — run pnpm install in ${INSTALL_DIR} first.`
 	);
 	process.exit(2);
 }
@@ -240,7 +246,7 @@ if (mode === 'static') {
 	if (!execPath) {
 		console.error(
 			'No Chromium executable found for impeccable’s live scan (checked PUPPETEER_EXECUTABLE_PATH and the Playwright cache).\n' +
-				'Run: pnpm exec playwright install chromium (from frontend/)'
+				`Run: pnpm exec playwright install chromium (from ${INSTALL_DIR})`
 		);
 		process.exit(2);
 	}
