@@ -10,7 +10,15 @@ Everything below landed after `v2026.8.15` was tagged the same day, and is recor
 
 ### Fixed
 
-- **A typed exception's chained cause and structured `details` now reach the log (godswood#—).** `_log_exception` in `exceptions.py` logged the class name, the message and `exc.context`, and dropped the other two things that say WHY the exception was raised. Every raise site across these apps writes `raise SomeError(...) from exc`; none of that chain reached stdout. Measured in godswood on 27/08/2026: both live broker endpoints answered 502 for two hours while the logs said only `BrokerUnavailable: Live IBKR figures are unavailable`, and the actual cause — `signet is not on PATH`, carried on the `VendError` underneath — had to be recovered by shelling into the container.
+- **`config/vend.py` reaches a warmed SESSION credential, and signs through a signet agent when it cannot reach the hardware itself.** Two additions, both strictly additive — an app that sets neither environment variable behaves exactly as before.
+
+  `vend()` covers a STATIC credential, whose value is one field written to a file. A session credential is not reducible that way: `signet vend-to-file` yields only `access_token`, while the identity constants a signing client needs sit under `material.connection`. `vend_envelope(name)` reads the same door the rest of the estate's consumers use — `GET /v1/credentials/{name}` — attesting through `signet auth`, and returns the parsed envelope. It carries secret material: hand it straight to the client that needs it. Nothing in the module renders a response body; a failure surfaces the HTTP status and the broker's own error token only.
+
+  `SIGNET_AGENT_SOCKET` is the second. A container has no path to the host's YubiKey, so the host runs ONE `signet agent` owning the token and binds a Unix socket per consumer, each pinned to that consumer's own PIV slot — the shape every containerised consumer on the fleet already uses. Unset on a workstation, where signet reaches the Secure Enclave directly and this changes nothing.
+
+  Promoted from godswood, which had carried both since its live broker surface landed and had been failing template parity on this file. Nothing about either is one app's: any app consuming a brokered session needs the envelope, and any app that ships in a container needs the socket.
+
+- **A typed exception's chained cause and structured `details` now reach the log.** `_log_exception` in `exceptions.py` logged the class name, the message and `exc.context`, and dropped the other two things that say WHY the exception was raised. Every raise site across these apps writes `raise SomeError(...) from exc`; none of that chain reached stdout. Measured in godswood on 27/08/2026: both live broker endpoints answered 502 for two hours while the logs said only `BrokerUnavailable: Live IBKR figures are unavailable`, and the actual cause — `signet is not on PATH`, carried on the `VendError` underneath — had to be recovered by shelling into the container.
 
   `exc.details` is the sharper half: it already ships in the JSON error body, so a caller could read the diagnostic the operator's own log could not. That asymmetry is the defect, not a precaution.
 

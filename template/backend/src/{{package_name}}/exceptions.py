@@ -172,13 +172,18 @@ def _log_exception(request: Request, exc: BackendBaseException) -> None:
       that asymmetry is the defect, not a precaution.
     * the CHAINED CAUSE, via ``exc_info``. Raise sites across these apps write
       ``raise SomeError(...) from exc``, and none of that reached stdout: a
-      broker outage in godswood on 27/08/2026 logged nothing but
-      ``BrokerUnavailable: Live IBKR figures are unavailable`` for two hours,
-      and the actual cause (``signet is not on PATH``, carried on the
-      ``VendError`` underneath) had to be recovered by shelling into the
-      container. ``exc_info`` renders the whole ``__cause__`` chain under every
-      formatter here, including the plain one, where a structured ``extra=``
-      key is simply not printed.
+      broker outage on 27/08/2026 logged nothing but ``BrokerUnavailable:
+      Live IBKR figures are unavailable`` for two hours, and the actual cause
+      (``signet is not on PATH``, carried on the ``VendError`` underneath) had
+      to be recovered by shelling into the running container. ``exc_info``
+      renders the whole ``__cause__`` chain under every formatter here,
+      including the plain one, where a structured ``extra=`` key is simply not
+      printed.
+
+      No app is named above on purpose: this file is factory-owned, and a file
+      that names one app hashes differently in THAT app once parity
+      normalisation replaces its name -- so the app the lesson came from is the
+      one app that could never take the file.
 
     Passed only when there IS a cause, so a self-contained 404 still logs as one
     line. ``logging.py``'s formatters run ``redact()`` over the fully rendered

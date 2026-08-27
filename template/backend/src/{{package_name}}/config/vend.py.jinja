@@ -10,11 +10,16 @@ log, a shell history, or an agent transcript. Keep it that way: nothing in this
 module may return, log, or interpolate a value into a message.
 """
 
+import json
 import os
 import shutil
 import subprocess
 import tempfile
+from http import HTTPStatus
 from pathlib import Path
+from typing import Any
+
+import httpx
 
 #: The one machine-local fact that cannot itself be vended — where the broker is.
 #: Overridable per host; the default is the household's own broker.
@@ -24,7 +29,28 @@ BROKER_URL = os.environ.get("PORTCULLIS_URL", "{{ portcullis_url }}")
 #: (`signet enrol --identity <app>`), granted only the credentials it needs.
 SIGNET_IDENTITY = os.environ.get("PORTCULLIS_SIGNET_IDENTITY", "{{ project_name }}")
 
+#: The signet-agent socket to sign through, when this process cannot reach the
+#: hardware itself. A container has no path to the host's YubiKey, so the host
+#: runs ONE `signet agent` owning the token and signing over a Unix socket per
+#: consumer, each bound to that consumer's own PIV slot -- the shape every other
+#: containerised consumer on the fleet already uses. Unset on a workstation,
+#: where signet reaches the Secure Enclave directly and this changes nothing.
+SIGNET_AGENT_SOCKET = os.environ.get("SIGNET_AGENT_SOCKET")
+
 _TIMEOUT_SECONDS = 30
+
+
+def _identity_flags() -> list[str]:
+    """Return the flags every signet subcommand here shares.
+
+    With an agent socket the backend and slot are the AGENT's concern -- it is
+    pinned to this consumer's slot and signs only as that identity -- so the
+    only thing to add is where to reach it.
+    """
+    flags = ["--identity", SIGNET_IDENTITY]
+    if SIGNET_AGENT_SOCKET:
+        flags += ["--agent", SIGNET_AGENT_SOCKET]
+    return flags
 
 
 class VendError(RuntimeError):
@@ -54,8 +80,7 @@ def vend(credential: str, field: str) -> str:
                 "vend-to-file",
                 "--broker",
                 BROKER_URL,
-                "--identity",
-                SIGNET_IDENTITY,
+                *_identity_flags(),
                 "--field",
                 field,
                 "--mode",
@@ -75,3 +100,72 @@ def vend(credential: str, field: str) -> str:
             detail = result.stderr.strip() or result.stdout.strip()
             raise VendError(f"could not vend '{credential}.{field}' from {BROKER_URL}: {detail}")
         return destination.read_text().strip()
+
+
+def _broker_auth_header() -> dict[str, str]:
+    """Return a fresh Portcullis Authorization header from ``signet auth``.
+
+    ``signet auth`` is a credential helper in the ``git credential`` /
+    ``credential_process`` shape: it attests in hardware, mints (or reuses its
+    cached) short-lived broker bearer, and prints ``{"Authorization": "Bearer
+    ..."}``. The bearer is held in this process and handed to the broker; it is
+    never logged, and no diagnostic below ever carries it.
+    """
+    signet = shutil.which("signet")
+    if signet is None:
+        raise VendError(
+            "signet is not on PATH, so the credential broker cannot be reached. Install signet "
+            f"and enrol this app's identity ('signet enrol --identity {SIGNET_IDENTITY}')."
+        )
+
+    result = subprocess.run(
+        [signet, "auth", *_identity_flags(), BROKER_URL],
+        capture_output=True,
+        text=True,
+        timeout=_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "signet auth failed"
+        raise VendError(f"could not attest to {BROKER_URL}: {detail}")
+    try:
+        header = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise VendError("signet auth returned output this app could not parse") from exc
+    if not isinstance(header, dict) or "Authorization" not in header:
+        raise VendError("signet auth returned no Authorization header")
+    return {"Authorization": str(header["Authorization"])}
+
+
+def vend_envelope(credential: str) -> dict[str, Any]:
+    """Return the broker's whole credential envelope for ``credential``.
+
+    ``vend`` covers a static credential, whose value is one field written to a
+    file. A SESSION credential is not reducible that way: ``signet
+    vend-to-file`` yields only ``access_token``, while the identity constants a
+    signing client needs sit under ``material.connection``. This reads the same
+    door the rest of the estate's consumers use --
+    ``GET /v1/credentials/{name}`` -- and returns the parsed JSON.
+
+    The return value CARRIES SECRET MATERIAL. Hand it straight to the client
+    that needs it; never log it, never put it in an exception message, and
+    never write it anywhere. Nothing in this module renders a response body: a
+    failure surfaces the HTTP status and the broker's own error token only.
+    """
+    response = httpx.get(
+        f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
+        headers=_broker_auth_header(),
+        timeout=_TIMEOUT_SECONDS,
+    )
+    if response.status_code != HTTPStatus.OK:
+        # Explicit key lookup, never the body: an error body is the only part
+        # of this response that is safe to quote, and only these two keys of it.
+        reason = "unknown"
+        try:
+            body = response.json()
+            if isinstance(body, dict):
+                reason = str(body.get("code") or body.get("error") or "unknown")
+        except ValueError:
+            reason = "unparseable"
+        raise VendError(f"broker refused '{credential}': HTTP {response.status_code} ({reason})")
+    return dict(response.json())
