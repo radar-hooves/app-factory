@@ -751,7 +751,11 @@ node harness/additivity.mjs ui-v2026.8.3
 Tailwind chain, exactly as a consuming app wires it — a class that generates no
 rule, a colour that resolves to nothing, a registered theme key nothing reads, a
 variant whose selector cannot match the DOM, and a sizing utility that has
-silently changed meaning all fail there rather than shipping.
+silently changed meaning all fail there rather than shipping. It also sweeps the
+source for the one craft defect none of those can see — a content container that
+draws a border and declares no surface, so it computes transparent and the page
+shows through it (`src/test/bordered-surface.test.ts`, which carries its own
+limits at the foot of the file).
 
 `pnpm run test:browser` is the leg nothing else can stand in for: jsdom applies
 no stylesheet and returns unresolved `var(…)` literals, so it passes just as
