@@ -38,7 +38,19 @@
 	const hasBadges = $derived(documents.some((d) => d.badges?.length));
 </script>
 
-<div class="rounded-md border">
+<!-- The card surface, not a bare border. This wrapper holds CONTENT, so it has
+     to paint one: with `border` alone the table and every ancestor computed
+     rgba(0,0,0,0) at 1440x900 in both themes, so the page background showed
+     straight through a container sitting beside opaque cards. `bg-card
+     border-border ds-edge` is the same trio Panel, StatCard, StatList,
+     DetailPanel, EmptyState and DataTableTanstack use — and `border-border`
+     matters on its own: a bare `border` resolves to currentColor, which was
+     drawing this hairline in full-strength foreground rather than the border
+     token. `overflow-hidden` comes with the surface, as it does on every
+     sibling: a row's `hover:bg-muted/50` otherwise paints square corners over
+     the wrapper's radius now that there is a surface to paint over.
+     Gated by src/test/bordered-surface.test.ts. -->
+<div class="bg-card border-border ds-edge overflow-hidden rounded-md border">
 	<TableRoot>
 		<TableHeader>
 			<TableRow>
