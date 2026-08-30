@@ -74,7 +74,7 @@
     "backend/src/{package}/services/__init__.py": "78789af00aa29960",
     "backend/src/{package}/services/fanout.py": "be4df5c3a76a531d",
     "backend/tests/__init__.py": "29df19411b5f9516",
-    "backend/tests/conftest.py": "159320bde5e28bcf",
+    "backend/tests/conftest.py": "27f64973e778780c",
     "backend/tests/support/__init__.py": "b9d099fe8af01df9",
     "backend/tests/support/explicit_server_guard.py": "923aa1b0fa26b13d",
     "backend/tests/test_admin_api.py": "4d1c6352208a3f9a",

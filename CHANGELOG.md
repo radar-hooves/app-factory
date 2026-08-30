@@ -10,6 +10,14 @@ Everything below landed after `v2026.8.15` was tagged the same day, and is recor
 
 ### Fixed
 
+- **The ephemeral Postgres is stopped by `atexit`, because testcontainers kills its own reaper on the way out (yggdrasil#276).** `conftest.py` deferred every unclean exit to the reaper sidecar, and the reaper is not there for most of them: `testcontainers.core.container` registers `Reaper.delete_instance` with `atexit`, and that handler STOPS the Ryuk container — so on any exit that runs Python's shutdown, testcontainers destroys the reaper before it can reap. Ryuk only ever covered a hard kill.
+
+  The window is real because the container starts at IMPORT and the stop was late: `pytest_sessionfinish` is not reached by a usage-error exit (code 4 — a conftest or collection failure), and a cancelled CI job lands in the same place, since the runner signals and Python turns that into a clean shutdown. Measured on the fleet's runner: nine orphaned containers over three weeks from one stamped app, and sixty more on the workstation, fifteen still running, each pinning image layers and an anonymous volume. Reproduced against the real failure — before, three containers left RUNNING; after, zero.
+
+  So the stop is registered with `atexit` beside the `start()` it undoes. Registered after the reaper's own handler it runs before it (LIFO), so the container goes while Ryuk is still alive to catch anything missed, and a SIGKILL still falls through to Ryuk as before. It claims the container out of its global first, so `pytest_sessionfinish` and the atexit path cannot both act on it and a second call is silent rather than a NotFound traceback on exit.
+
+  **The nine stamped apps do not have this yet** — it reaches them by convergence, one file, and every one of them leaks the same way until it does.
+
 - **`config/vend.py` reaches a warmed SESSION credential, and signs through a signet agent when it cannot reach the hardware itself.** Two additions, both strictly additive — an app that sets neither environment variable behaves exactly as before.
 
   `vend()` covers a STATIC credential, whose value is one field written to a file. A session credential is not reducible that way: `signet vend-to-file` yields only `access_token`, while the identity constants a signing client needs sit under `material.connection`. `vend_envelope(name)` reads the same door the rest of the estate's consumers use — `GET /v1/credentials/{name}` — attesting through `signet auth`, and returns the parsed envelope. It carries secret material: hand it straight to the client that needs it. Nothing in the module renders a response body; a failure surfaces the HTTP status and the broker's own error token only.

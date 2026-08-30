@@ -5,6 +5,7 @@ per-session Postgres testcontainer — the household hermetic-test pattern
 (`rules-library/stacks/python-testing.md` §Database Integration Tests).
 """
 
+import atexit
 import logging
 import os
 import secrets
@@ -54,10 +55,25 @@ def _start_ephemeral_postgres() -> dict[str, str]:
 
     testcontainers owns the parts that are easy to get subtly wrong: the
     readiness protocol, a random free host port, socket differences across
-    Docker/Colima/Podman, and — the reason it is worth a dependency — a reaper
-    sidecar that removes the container even when pytest is SIGKILLed. A
-    ``pytest_sessionfinish`` hook cannot do that last one, so a hand-rolled
-    ``docker run`` leaks a container on every hard kill, OOM or crashed runner.
+    Docker/Colima/Podman, and a reaper sidecar (Ryuk) that removes the container
+    when pytest is SIGKILLed — a ``pytest_sessionfinish`` hook cannot do that
+    one, so a hand-rolled ``docker run`` leaks on every hard kill.
+
+    The reaper covers ONLY the hard kill, and that is narrower than it sounds.
+    ``testcontainers.core.container`` registers ``Reaper.delete_instance`` with
+    ``atexit``, and that handler STOPS the Ryuk container — so on any exit that
+    runs Python's shutdown, testcontainers destroys its own reaper before the
+    reaper can reap. A run that dies between this function and
+    ``pytest_sessionfinish`` therefore leaves the container running with nothing
+    to reclaim it: pytest's usage-error exit (a conftest or collection failure,
+    exit code 4) never reaches ``pytest_sessionfinish``, and a cancelled CI job
+    arrives as a signal Python turns into a clean shutdown. Both happened on the
+    fleet's runner and both leaked (yggdrasil#276).
+
+    So the teardown is registered here with ``atexit`` as well, next to the
+    ``start()`` it undoes. Registered AFTER the reaper's own handler, it runs
+    BEFORE it (atexit is LIFO), so the container is stopped while Ryuk is still
+    alive to catch anything this misses.
 
     Random host port also sidesteps a CI runner's fixed-port collisions with
     always-on shared services (`core/ci-workflow-standard.md` §Shared Host
@@ -85,12 +101,33 @@ def _start_ephemeral_postgres() -> dict[str, str]:
         ) from exc
 
     _EPHEMERAL_POSTGRES = container
+    atexit.register(_stop_ephemeral_postgres)
     return {
         "host": container.get_container_host_ip(),
         "port": str(container.get_exposed_port(5432)),
         "user": container.username,
         "password": container.password,
     }
+
+
+def _stop_ephemeral_postgres() -> None:
+    """Stop the ephemeral Postgres if one is still running. Idempotent.
+
+    Claims the container before stopping it, so ``pytest_sessionfinish`` and the
+    ``atexit`` registration cannot both act on it and so a second call after a
+    successful stop is silent rather than a NotFound traceback on the way out.
+
+    Best-effort: a failure to tear down must not change the exit status of a run
+    whose tests have already passed.
+    """
+    global _EPHEMERAL_POSTGRES
+    container, _EPHEMERAL_POSTGRES = _EPHEMERAL_POSTGRES, None
+    if container is None:
+        return
+    try:
+        container.stop()
+    except Exception as exc:  # teardown must never fail a passing run
+        logging.warning("Could not stop the ephemeral test Postgres: %s", exc)
 
 
 def _resolve_test_server() -> dict[str, str]:
@@ -261,19 +298,11 @@ def pytest_sessionstart(session) -> None:
 def pytest_sessionfinish(session, exitstatus) -> None:
     """Stop the ephemeral Postgres, if this run started one.
 
-    The clean-exit path. testcontainers' reaper is what covers the unclean
-    ones (SIGKILL, OOM, a runner dying mid-suite), which is precisely why the
-    container lifecycle is not hand-rolled here.
-
-    Best-effort: a failure to tear down must not change the exit status of a
-    run whose tests have already passed.
+    The ordinary path. The same stop is registered with ``atexit`` by
+    ``_start_ephemeral_postgres`` for the exits that never reach this hook, and
+    it is a no-op once either caller has run.
     """
-    if _EPHEMERAL_POSTGRES is None:
-        return
-    try:
-        _EPHEMERAL_POSTGRES.stop()
-    except Exception as exc:  # teardown must never fail a passing run
-        logging.warning("Could not stop the ephemeral test Postgres: %s", exc)
+    _stop_ephemeral_postgres()
 
 
 @pytest.fixture(scope="session")
