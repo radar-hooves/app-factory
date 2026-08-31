@@ -1731,11 +1731,30 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await page.waitForSelector('#ds-main');
 
 		const measured = await page.evaluate((viewport) => {
+			/**
+			 * Content inside a box that scrolls sideways is CONTAINED, not
+			 * overflowing — a wide table in rendered prose is the intended
+			 * behaviour, and its cells legitimately sit past the viewport while
+			 * the page does not move. The exemption is narrow on purpose: the
+			 * scroller itself must fit, so a scroller that is ITSELF too wide is
+			 * still an offender and its contents are still counted through it.
+			 */
+			const containedByAScroller = (el) => {
+				for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+					const overflowX = getComputedStyle(node).overflowX;
+					if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
+					const box = node.getBoundingClientRect();
+					if (box.right <= viewport + 0.5 && box.left >= -0.5) return true;
+				}
+				return false;
+			};
+
 			const offenders = [];
 			for (const el of document.querySelectorAll('body *')) {
 				const rect = el.getBoundingClientRect();
 				if (rect.width === 0 && rect.height === 0) continue;
 				if (rect.right > viewport + 0.5 || rect.left < -0.5) {
+					if (containedByAScroller(el)) continue;
 					offenders.push({
 						tag: el.tagName.toLowerCase(),
 						cls: (el.getAttribute('class') ?? '').slice(0, 60),
@@ -2525,6 +2544,70 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	);
 
 	check('search-results: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// ── The prose face for HTML the app never authored (#32) ────────────────────
+// A compiled-CSS gate proves the rules exist; only an engine proves they REACH
+// content the app did not write, which is the whole case — three consumers had
+// each built one of these and typography degrades worst when re-derived.
+{
+	const { context, page } = await open('surface=measure&measure=wide', {
+		width: 2560,
+		height: 1440
+	});
+	await page.waitForSelector('[data-probe="prose"]');
+	await page.addStyleTag({ content: SETTLE });
+	await page.evaluate(() => document.fonts.ready);
+
+	const prose = await page.evaluate(() => {
+		const read = (probe) => document.querySelector(`[data-probe="${probe}"]`);
+		const table = read('prose-table');
+		return {
+			headingFamily: getComputedStyle(read('prose-h2')).fontFamily,
+			bodyFamily: getComputedStyle(read('prose')).fontFamily,
+			codeFamily: getComputedStyle(read('prose-code')).fontFamily,
+			listStyle: getComputedStyle(read('prose-list')).listStyleType,
+			quoteBorder: getComputedStyle(read('prose-quote')).borderInlineStartWidth,
+			linkColour: getComputedStyle(read('prose-link')).color,
+			tableScrolls: table.scrollWidth > table.clientWidth,
+			tableOverflowX: getComputedStyle(table).overflowX,
+			// The claim that matters most: a wide table must not take the PAGE
+			// sideways with it.
+			pageSideways: document.documentElement.scrollWidth - document.documentElement.clientWidth
+		};
+	});
+
+	check(
+		'prose: a heading in rendered content resolves the display face',
+		prose.headingFamily.includes('Fraunces') && prose.headingFamily !== prose.bodyFamily,
+		`heading ${prose.headingFamily}`
+	);
+	check(
+		'prose: inline code resolves the code face',
+		prose.codeFamily.includes('JetBrains Mono'),
+		prose.codeFamily
+	);
+	check(
+		'prose: a list keeps its marker despite the preflight reset',
+		prose.listStyle === 'disc',
+		`list-style-type ${prose.listStyle}`
+	);
+	check(
+		'prose: a blockquote takes a real rule and a link takes the accent',
+		parseFloat(prose.quoteBorder) >= 2 && prose.linkColour !== 'rgb(0, 0, 238)',
+		`quote rule ${prose.quoteBorder}, link ${prose.linkColour}`
+	);
+	check(
+		'prose: a table wider than the measure scrolls in its own box',
+		prose.tableScrolls && prose.tableOverflowX === 'auto',
+		`table scrollWidth > clientWidth: ${prose.tableScrolls}, overflow-x ${prose.tableOverflowX}`
+	);
+	check(
+		'prose: and does not take the page sideways with it',
+		prose.pageSideways === 0,
+		`document gained ${prose.pageSideways}px of sideways scroll`
+	);
 	await context.close();
 }
 

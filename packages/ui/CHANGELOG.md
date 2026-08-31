@@ -6,6 +6,34 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Added
 
+- **`.ds-prose`, the reading face for HTML the app never authored
+  (design-system#32).** Rendered markdown, an extracted document body, a
+  rich-text field. Headings in the display face at sizes relative to the body
+  copy around them, lists with the markers the preflight reset strips, links on
+  the accent, code in the mono face, figures on a surface with a border, and a
+  table wider than the measure scrolling in its own box rather than taking the
+  page sideways. Every value is a `--ds-*` token, so a palette moves the whole
+  face.
+
+  It carries **no measure**: a reading width and a reading face are two
+  decisions, and an app composes `class="ds-prose ds-measure"
+  data-measure="prose"`.
+
+  The package styles the content and does not render it — sanitising untrusted
+  HTML is a security boundary a package cannot see the inputs to, so the app
+  keeps the markdown-to-HTML seam.
+
+  Promoted on the half of #32 that meets the duplication bar. The `DocumentViewer`
+  the issue described is **not** shipped: one further consumer renders a
+  document body today and it covers only the markdown half, with no figure
+  plates. The prose face is the part three of nine consumers had each built, by
+  three different mechanisms, and one of them had already duplicated inside
+  itself.
+
+  Gated at 360px in a real browser and driven red: removing the table's
+  `overflow-x` pushes 901px of sideways scroll into the content region and fails
+  five checks.
+
 - **The Formsnap form wrapper set ships here (design-system#16).**
   `@poodle64/ui/form` exports `Field`, `Control`, `Label`, `Description`,
   `FieldErrors`, `Fieldset`, `Legend`, `ElementField` and `Button`, each also
@@ -59,6 +87,14 @@ All notable changes to this package are documented here. Format follows [Keep a 
   on one that does.
 
 ### Changed
+
+- **The 360px overflow walk exempts content inside a box that scrolls
+  sideways.** It counted every element past the viewport, which was right while
+  nothing on that surface scrolled; a wide table in rendered prose is contained
+  by design, not overflowing. The exemption is narrow — the scroller itself must
+  fit, so a scroller that is itself too wide is still an offender and its
+  contents are still counted through it — and the containment claim is asserted
+  separately rather than assumed.
 
 - **The README states the house answer for depth, and why there is no elevation
   scale (design-system#23).** `.ds-edge` plus `--ds-shadow-sm` is the whole of

@@ -539,6 +539,38 @@ Check that at ≥4.5:1 against `--ds-color-surface-1` (the chrome), not against
 darker of the two. `harness/drive.mjs` gates the default path across three
 palettes in both themes on every run.
 
+### `.ds-prose`: HTML the app did not author
+
+Rendered markdown, an extracted document body, a rich-text field — content whose
+tags the app did not write and cannot style at the call site:
+
+```svelte
+<div class="ds-prose ds-measure" data-measure="prose">
+	{@html sanitised}
+</div>
+```
+
+Headings take the display face at sizes relative to the body copy around them
+(an `<h1>` inside a document is not the page's `<h1>`), lists keep the markers
+the preflight reset strips, links take the accent, code takes the mono face, and
+a table wider than the measure **scrolls in its own box rather than taking the
+page sideways** — gated at 360px, and driven red by removing its `overflow-x`,
+which pushes 901px into the content region.
+
+The face carries no measure. A reading width and a reading face are two
+decisions, so compose it with [`.ds-measure`](#a-block-inside-the-page-ds-measure)
+as above.
+
+**The package styles this content; it does not render it.** Sanitising untrusted
+HTML is a security boundary, and a package cannot see the inputs the boundary is
+protecting — the app owns the markdown-to-HTML seam and hands the result in.
+
+It is here because three consumers had each built one, by three different
+mechanisms — a hand-written token-based block, the Tailwind typography plugin,
+and a second hand-written block one of them had already duplicated inside
+itself. Typography degrades worse than most things when it is re-derived per
+app.
+
 ### Depth: the ladder and one hairline, not an elevation scale
 
 A raised surface reads as raised from **the surface ladder plus a 1px inner

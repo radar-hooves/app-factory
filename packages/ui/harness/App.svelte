@@ -994,6 +994,33 @@
 			deliberate.
 		</p>
 
+		<!-- HTML the app did not author, wearing the shared reading face
+		     (design-system#32). Composed with `.ds-measure` rather than the face
+		     baking a measure in: a reading face and a reading width are two
+		     decisions. -->
+		<div
+			data-probe="prose"
+			class="ds-prose ds-measure mt-8"
+			data-measure="prose"
+		>
+			<h2 data-probe="prose-h2">An extracted heading</h2>
+			<p>Body copy as it arrives from a document, with <code data-probe="prose-code">inline code</code> and a <a href="#/overview" data-probe="prose-link">link</a>.</p>
+			<ul data-probe="prose-list">
+				<li>A bullet that must still show its marker</li>
+			</ul>
+			<blockquote data-probe="prose-quote">A quoted passage.</blockquote>
+			<div data-probe="prose-table-wrap">
+				<table data-probe="prose-table">
+					<thead>
+						<tr>{#each Array(14) as _, i (i)}<th>Column heading {i}</th>{/each}</tr>
+					</thead>
+					<tbody>
+						<tr>{#each Array(14) as _, i (i)}<td>A reasonably long cell {i}</td>{/each}</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
 		<!-- A prose block INSIDE the page, on a route that may legitimately be
 		     `wide` (design-system#22). `.ds-measure` caps it at the same 72ch the
 		     shell would use and leaves it where it is; `.ds-shell-measure` would

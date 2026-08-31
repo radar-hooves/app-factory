@@ -832,6 +832,152 @@
 		margin-inline: auto;
 	}
 
+	/* ── The prose face (design-system#32) ────────────────────────────────────
+	   Styling for HTML the app did NOT author — rendered markdown, an extracted
+	   document body, a description field that arrives as rich text.
+
+	   Three consumers had built one of these, by three different mechanisms: a
+	   hand-written token-based block, the Tailwind typography plugin, and a
+	   second hand-written block that one of them had already duplicated inside
+	   itself. Every consumer that renders a document body would otherwise derive
+	   it a fourth time, and typography degrades worse than most things when it
+	   is re-derived per app.
+
+	   The package styles it and does NOT render it: sanitising untrusted HTML is
+	   a security boundary, and a package cannot see the inputs the boundary is
+	   protecting. The app owns the markdown-to-HTML seam and hands the result in.
+
+	   It carries no measure. A reading measure and a reading face are two
+	   decisions, and an app composes them:
+
+	       <div class="ds-prose ds-measure" data-measure="prose">…</div>
+
+	   Nothing here reaches for a colour or a length that is not a --ds-* token,
+	   so a palette or a retune moves the whole face with it. */
+	.ds-prose {
+		color: var(--ds-color-foreground);
+		line-height: 1.7;
+	}
+
+	.ds-prose h1,
+	.ds-prose h2,
+	.ds-prose h3,
+	.ds-prose h4 {
+		font-family: var(--ds-font-display);
+		font-weight: 600;
+		line-height: 1.25;
+		margin-block: var(--ds-spacing-lg) var(--ds-spacing-sm);
+	}
+
+	/* `em` rather than the type scale: these headings sit INSIDE a document, so
+	   they are relative to the body copy around them, not to the page's own
+	   heading ramp. An <h1> in rendered content is not the page's <h1>. */
+	.ds-prose h1 {
+		font-size: 1.5em;
+	}
+
+	.ds-prose h2 {
+		font-size: 1.25em;
+	}
+
+	.ds-prose h3,
+	.ds-prose h4 {
+		font-size: 1.1em;
+	}
+
+	.ds-prose p,
+	.ds-prose ul,
+	.ds-prose ol,
+	.ds-prose blockquote {
+		margin-block: var(--ds-spacing-sm);
+	}
+
+	.ds-prose ul,
+	.ds-prose ol {
+		padding-inline-start: var(--ds-spacing-lg);
+	}
+
+	/* Restored explicitly: the preflight reset strips list markers, and rendered
+	   content is the one place a bullet carries meaning. */
+	.ds-prose ul {
+		list-style: disc;
+	}
+
+	.ds-prose ol {
+		list-style: decimal;
+	}
+
+	.ds-prose a {
+		color: var(--ds-color-primary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.ds-prose strong {
+		font-weight: 600;
+	}
+
+	.ds-prose code {
+		font-family: var(--ds-font-code);
+		font-size: 0.9em;
+	}
+
+	.ds-prose pre {
+		background: var(--ds-color-surface-1);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-sm);
+		overflow-x: auto;
+		padding: var(--ds-spacing-sm);
+	}
+
+	.ds-prose blockquote {
+		border-inline-start: 2px solid var(--ds-color-border-strong);
+		color: var(--ds-color-muted-foreground);
+		padding-inline-start: var(--ds-spacing-sm);
+	}
+
+	.ds-prose hr {
+		border: 0;
+		border-block-start: 1px solid var(--ds-color-border);
+		margin-block: var(--ds-spacing-lg);
+	}
+
+	/* A table in an extracted document is routinely wider than the measure around
+	   it. It scrolls in its OWN box rather than pushing the page sideways — the
+	   same rule the library surfaces learned at 390px. */
+	.ds-prose table {
+		border-collapse: collapse;
+		display: block;
+		font-size: 0.9em;
+		margin-block: var(--ds-spacing-md);
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	.ds-prose th,
+	.ds-prose td {
+		border: 1px solid var(--ds-color-border);
+		padding: var(--ds-spacing-xs) var(--ds-spacing-sm);
+		text-align: start;
+	}
+
+	.ds-prose th {
+		color: var(--ds-color-muted-foreground);
+		font-weight: 600;
+	}
+
+	/* A figure in a document is evidence, so it gets the surface and border a
+	   plate deserves, and never exceeds its column. */
+	.ds-prose img {
+		background: var(--ds-color-surface-2);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-sm);
+		display: block;
+		height: auto;
+		margin-block: var(--ds-spacing-md);
+		max-width: 100%;
+	}
+
 	/* The content texture: the house atmosphere, painted once by the shell on its
 	   own scrolling content region.
 
