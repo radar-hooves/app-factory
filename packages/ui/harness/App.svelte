@@ -993,6 +993,18 @@
 			up with six different answers to the same question and no way to tell which was
 			deliberate.
 		</p>
+
+		<!-- A prose block INSIDE the page, on a route that may legitimately be
+		     `wide` (design-system#22). `.ds-measure` caps it at the same 72ch the
+		     shell would use and leaves it where it is; `.ds-shell-measure` would
+		     also centre it, which is right for the content box and wrong here. -->
+		<div data-probe="measure-block-wrap" class="mt-6">
+			<p data-probe="measure-block" class="ds-measure text-sm" data-measure="prose">
+				A block set to the reading measure inside a page whose own measure is wider. The cap
+				comes from the same custom property the shell reads, so retuning the scale moves this
+				paragraph too, which a locally written max-width would not.
+			</p>
+		</div>
 	</AppShell>
 {:else if surface === 'texture'}
 	<!-- One shell, one very tall page, the texture the only variable. The body is

@@ -797,20 +797,39 @@
 	   the measure rather than outside it. That is the same arithmetic as the
 	   `mx-auto max-w-4xl px-6` idiom this replaces, and keeping it means one
 	   element rather than a second wrapper nobody asked for. */
-	.ds-shell-measure {
-		margin-inline: auto;
-	}
+	/* Two classes, because the MEASURE and the CENTRING are two decisions and
+	   only the shell's content box wants both (design-system#22).
 
+	   `.ds-measure` caps the width and nothing else. It is for a block INSIDE a
+	   page — the paragraph of explanatory prose on a route legitimately set to
+	   `wide`, which would otherwise inherit a 120rem measure and run to ~123
+	   characters a line. `.ds-shell-measure` is that plus `margin-inline: auto`,
+	   which is right for the content box and wrong for a block within a page:
+	   applied to a set of left-anchored paragraphs it indented them ~207px away
+	   from their own label, measured in a consumer and reverted.
+
+	   Same attribute, same custom properties, so a block retunes with the shell
+	   rather than drifting from it. That is the whole point: the alternative an
+	   app reaches for is a local `max-w-prose` or `max-w-[72ch]`, which is a
+	   number typed once that never hears about a retune — four apps had written
+	   ten of them between them, and not one matched this package's own 72ch. */
+	.ds-measure[data-measure='prose'],
 	.ds-shell-measure[data-measure='prose'] {
 		max-width: var(--ds-shell-measure-prose);
 	}
 
+	.ds-measure[data-measure='page'],
 	.ds-shell-measure[data-measure='page'] {
 		max-width: var(--ds-shell-measure-page);
 	}
 
+	.ds-measure[data-measure='wide'],
 	.ds-shell-measure[data-measure='wide'] {
 		max-width: var(--ds-shell-measure-wide);
+	}
+
+	.ds-shell-measure {
+		margin-inline: auto;
 	}
 
 	/* The content texture: the house atmosphere, painted once by the shell on its

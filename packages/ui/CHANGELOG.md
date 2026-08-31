@@ -4,6 +4,35 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [2026.8.17] - 2026-08-31
 
+### Added
+
+- **`.ds-measure`, the content measure without the centring
+  (design-system#22).** The scale solved "six different max-widths across nine
+  routes" at the page level, but a route legitimately set to `wide` usually
+  also carries explanatory prose, and that prose inherited the wide measure —
+  13 findings of text running to ~123 characters a line on a single route in
+  one consumer, against a stated reading measure of 72ch.
+
+  `.ds-shell-measure[data-measure="prose"]` looked like the answer, since it is
+  a plain class plus an attribute, but it carries `margin-inline: auto` and
+  visibly indented a set of left-anchored paragraphs ~207px from their own
+  label. Centring is correct for the shell's content box and wrong for a block
+  within a page, so the measure and the centring are now two classes rather
+  than one: `.ds-measure` caps, `.ds-shell-measure` caps and centres. Same
+  attribute, same custom properties, no component change and nothing to migrate.
+
+  It matters because of what apps do instead. Four of nine consumers had
+  written ten local `max-w-prose` / `max-w-[68ch]` / `max-w-[72ch]`
+  declarations between them and **not one matched this package's own 72ch** —
+  the exact drift the scale exists to prevent. One had already found the
+  workaround of reaching for `max-w-(--ds-shell-measure-prose)` directly, which
+  is right and is now a supported class instead of a trick.
+
+  Gated at 2560px on a `wide` route: the cap binds, the block stays on the
+  page's own left edge, and it follows a retune of `--ds-shell-measure-prose`.
+  The centring check was driven red by swapping the fixture to
+  `.ds-shell-measure`, which moved the block 620px inward.
+
 ### Fixed
 
 - **A clickable card has a hover state again (design-system#24).**

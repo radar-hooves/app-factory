@@ -345,6 +345,30 @@ Set it in the layout, not the page. A page reaching for `measure` is the habit
 this replaces; a route group that genuinely differs (a docs section inside an
 app of dashboards) gets its own layout, which is where a shared decision belongs.
 
+#### A block inside the page: `.ds-measure`
+
+A route legitimately set to `wide` — a dashboard, a table, a card grid — often
+also carries a paragraph of explanatory prose, and that prose inherits the wide
+measure. Cap the block, not the route:
+
+```svelte
+<p class="ds-measure" data-measure="prose">Explanatory running text…</p>
+```
+
+Same attribute and same custom properties as the shell's own measure, so the
+block retunes when the scale does. That is the point of it: the alternative an
+app reaches for is a local `max-w-prose` or `max-w-[72ch]`, a number typed once
+that never hears about a retune — four apps had written ten of them between
+them and not one matched this package's own `72ch`.
+
+`.ds-measure` caps and nothing else. `.ds-shell-measure`, which the shell puts
+on its own content box, is that plus `margin-inline: auto` — right for a content
+box, wrong for a block within a page, where it indented a set of left-anchored
+paragraphs ~207px away from their own label. Both halves are gated in
+`harness/drive.mjs` at 2560px on a `wide` route: the cap binds, the block stays
+on the page's own left edge, and it follows a retune of
+`--ds-shell-measure-prose`.
+
 ### The content texture
 
 The house atmosphere — a faint dot-grid floor with a soft accent vignette in the

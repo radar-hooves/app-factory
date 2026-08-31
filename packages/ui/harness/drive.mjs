@@ -1766,6 +1766,63 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	}
 }
 
+// ── The measure, on a block INSIDE a page (#22) ─────────────────────────────
+// The shell's own content box wants the measure AND the centring. A block
+// within a page wants only the measure: `.ds-shell-measure` applied to a set of
+// left-anchored paragraphs indented them ~207px from their own label in a
+// consuming app. Both halves of that are widths, so both are measured here.
+{
+	// `wide` on purpose — the route this is FOR is one legitimately set wide
+	// (a dashboard, a table) that also carries explanatory running text.
+	const { context, page } = await open('surface=measure&measure=wide', {
+		width: 2560,
+		height: 1440
+	});
+	await page.waitForSelector('[data-probe="measure-block"]');
+	await page.evaluate(() => document.fonts.ready);
+
+	const measured = await page.evaluate(() => {
+		const block = document.querySelector('[data-probe="measure-block"]');
+		const wrap = document.querySelector('[data-probe="measure-block-wrap"]');
+		const heading = document.querySelector('h1');
+		return {
+			blockWidth: block.getBoundingClientRect().width,
+			wrapWidth: wrap.getBoundingClientRect().width,
+			blockLeft: Math.round(block.getBoundingClientRect().left),
+			headingLeft: Math.round(heading.getBoundingClientRect().left),
+			marginInline: getComputedStyle(block).marginInlineStart,
+			resolvedCap: getComputedStyle(block).maxWidth,
+			family: getComputedStyle(block).fontFamily
+		};
+	});
+
+	check(
+		'.ds-measure caps a block inside a page',
+		measured.blockWidth < measured.wrapWidth &&
+			Math.abs(measured.blockWidth - parseFloat(measured.resolvedCap)) < 1,
+		`block ${measured.blockWidth.toFixed(0)}px inside a ${measured.wrapWidth.toFixed(0)}px page, cap resolved to ${measured.resolvedCap} (${measured.family})`
+	);
+	// The whole reason it is a second class. A centred block is the defect.
+	check(
+		'.ds-measure does NOT centre it — it stays on the page\'s own left edge',
+		measured.blockLeft === measured.headingLeft && measured.marginInline === '0px',
+		`block left ${measured.blockLeft}px vs heading left ${measured.headingLeft}px, margin-inline-start ${measured.marginInline}`
+	);
+	// It has to track the package's own property, or an app has gained nothing
+	// over the `max-w-[72ch]` it would otherwise have typed.
+	await page.addStyleTag({ content: ':root { --ds-shell-measure-prose: 40ch; }' });
+	await page.evaluate(() => document.fonts.ready);
+	const retuned = await page.evaluate(
+		() => document.querySelector('[data-probe="measure-block"]').getBoundingClientRect().width
+	);
+	check(
+		'.ds-measure retunes with --ds-shell-measure-prose',
+		retuned < measured.blockWidth,
+		`${measured.blockWidth.toFixed(0)}px at 72ch -> ${retuned.toFixed(0)}px at 40ch`
+	);
+	await context.close();
+}
+
 // ── The content texture ─────────────────────────────────────────────────────
 // Almost nothing this feature claims survives outside an engine. The picture is
 // a resolved `background-image` — two `color-mix()` gradients over the app's own
