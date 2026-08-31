@@ -2,6 +2,73 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.8.16] - 2026-08-31
+
+### Added
+
+- **The household's Australian value formatters, once: `@poodle64/ui/format`.**
+  Two apps had hand-rolled the same job — `godswood/frontend/src/lib/utils/
+  formatters.ts` (with its own tests) and `pebblestone/frontend/src/lib/utils/
+  format.ts` (still app-owned after its design-system adoption pass, precisely
+  because this package shipped nothing) — and had already drifted on every
+  decision that matters. All four disagreements are user-visible, and the fleet
+  is entirely Australian, so the divergence bought nothing:
+
+  | Decision | godswood | pebblestone | Shipped |
+  | --- | --- | --- | --- |
+  | Percentage input | `4.5` → `4.5%` | `0.045` → `4.5%` | Both, named apart: `formatPercentage` (points) and `formatRatioAsPercentage` (ratio) |
+  | Money input | dollars, `number \| string` | integer cents | Both: `formatCurrency` and `formatCurrencyFromCents` |
+  | Money decimals | 0 by default | 2 by default | 2 — dropping cents is a loss of fidelity the caller asks for, not the default that rounds $1,234.56 up to $1,235 |
+  | Date shape | `19 Dec 2024` | `19/12/2024` | Both, on one function: `formatDate(v, { format })`, default `short` |
+  | Missing value | `N/A` | `-` | `N/A`, with `fallback` on every formatter — beside a money column, `-` reads as a minus sign |
+  | Negative money | Intl's own | sign outside the symbol | Sign outside the symbol, everywhere, including `compactCurrency` (which rendered `A$-1.5m`) |
+
+  Also settled: a **negative-currency** and a **non-AUD** rendering. AUD stays a
+  bare `$`; a foreign currency renders disambiguated (`USD 1,234.56`) rather
+  than as a second `$`, because the app holding a foreign account is exactly the
+  one that must not confuse the two. `compactCurrency` now derives its prefix
+  from the same `Intl` call the full formatter uses, so the axis and the table
+  can no longer disagree about the symbol — the lifted version carried its own
+  `A$`/`US$` map.
+
+  **Timestamps are read in `Australia/Brisbane`**, not the browser's zone
+  (`timeZone` overrides it). The household's books are kept in AEST, so a laptop
+  in another zone should not renumber them; it also makes the output
+  deterministic, which is why the tests here assert exact strings where
+  godswood's had to settle for `toMatch(/19/)`. A **date-only** value gets no
+  zone conversion at all — a date is not an instant, and converting one is how a
+  booking dated the 1st shows as the 31st. That is a latent fix: the lifted
+  `formatDate` parsed `2024-01-01` as UTC midnight and then read local getters.
+
+  `parseApiDate` is exported alongside them. Both apps had independently found
+  the same trap — a backend storing naive UTC serialises with no offset, and
+  JavaScript reads that as LOCAL time, so in Brisbane anything after 2pm UTC
+  shows the wrong DAY — and pebblestone's is the better-guarded of the two.
+
+  Parsing is `Number`, not `parseFloat`, so `'12abc'` falls back instead of
+  rendering `$12`: corrupt data should not arrive looking plausible.
+
+  **Deliberately not promoted** — one consumer each, and a domain vocabulary
+  rather than a shared value class: file sizes, AI model names and loan
+  repayment frequencies (godswood); pager arithmetic and the per-line GST
+  recompute for bill approvals (pebblestone, and bound to Xero tax codes
+  besides — GST is arithmetic here, not formatting, and only one app does it).
+  Relative time is out for a second reason: it rides on `date-fns`, and a
+  display formatter is not worth making that a dependency of every consumer.
+  Also not promoted, and recorded so it is not re-litigated: a table pager and a
+  truncation component (pebblestone has them, godswood does not) and a
+  `PageHeader` icon slot (pebblestone uses one in 37 of 49 call sites, godswood
+  in none — that is pebblestone falling in line, not the package being
+  deficient).
+
+  Additive only: no existing export changes. `utils.ts` keeps `cn`, the shared
+  types and `titleCase`; the new module is a sibling subpath because value
+  formatting and class merging are different concerns reached at different call
+  sites. 65 tests in `src/test/format.test.ts`, starting from godswood's corpus
+  (the only one of the two with tests) and extended with pebblestone's cases;
+  green under `TZ=UTC` and `TZ=America/Chicago`, which is the point of pinning
+  the zone.
+
 ## [2026.8.15] - 2026-08-27
 
 ### Fixed
