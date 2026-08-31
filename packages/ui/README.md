@@ -31,6 +31,8 @@ shadcn surface follows; a consuming app writes no alias layer of its own.
 ```text
 src/lib/
   utils.ts              cn() (clsx + tailwind-merge) and the shared TS helper types
+  format.ts             the Australian value formatters: money, dates, percentages,
+                          numbers — en-AU, AUD, Australia/Brisbane
   styles.css            the component stylesheet: scale keys, .ds-edge, .ds-chip/.ds-dot,
                           the dialogue-section divider rule
   components/ui/         one directory per component: the shadcn-svelte primitives
@@ -735,6 +737,67 @@ differ on. An app using them registers them itself.
 `node_modules/@poodle64/ui/dist`, outside the app's own `src/`, so the default
 source scan misses them. Without it the components render unstyled (no build
 error, no lint hit; the classes just never reach the compiled CSS).
+
+## Australian value formatters
+
+```ts
+import { formatCurrency, formatDate, formatPercentage } from '@poodle64/ui/format';
+```
+
+Money, dates and times, percentages and plain numbers, in `en-AU` / AUD /
+`Australia/Brisbane`. No dependencies and no DOM — it is `Intl` and arithmetic,
+so it runs in a load function as happily as in a component.
+
+| Function                                                      | What it does                                                                                                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `formatCurrency(dollars, opts)`                                | `$1,234.56`. `decimals` (default 2), `currency` (default AUD), `fallback`.                                                                   |
+| `formatCurrencyFromCents(cents, opts)`                         | The same, for money stored as integer cents.                                                                                                 |
+| `formatCurrencyString(str, opts)`                              | Groups a money STRING without ever parsing it to a float — for a figure that reaches a tax return.                                            |
+| `compactCurrency(value, opts)`                                 | `$1.1m` / `$12k`, for a chart axis or a dense tile.                                                                                          |
+| `isNegativeMoney(value)`                                       | The sign, without a parse, for choosing a tone class.                                                                                        |
+| `dollarsToCents(dollars)`                                      | Whole cents.                                                                                                                                 |
+| `formatNumber(value, opts)`                                    | `1,234,567`.                                                                                                                                 |
+| `formatPercentage(value, opts)`                                | Value is already in percentage POINTS: `4.5` → `4.5%`.                                                                                       |
+| `formatRatioAsPercentage(value, opts)`                         | Value is a 0–1 RATIO: `0.045` → `4.5%`.                                                                                                      |
+| `formatDate(value, opts)`                                      | `19 Dec 2024`, `19 December 2024` (`format: 'long'`) or `19/12/2024` (`format: 'numeric'`).                                                   |
+| `formatDateTime(value, opts)`                                  | The same plus a 24-hour time: `19 Dec 2024, 14:05`.                                                                                          |
+| `parseApiDate(iso)`                                            | Reads an offset-less timestamp as UTC — the naive-UTC backend trap below.                                                                     |
+
+Four decisions worth knowing before a migration, because each was settled
+against an app that had decided it the other way:
+
+- **A missing value renders `N/A`**, and every formatter takes `fallback` to say
+  otherwise. `-` is deliberately not the default: beside a money column it reads
+  as a minus sign.
+- **Money keeps its cents by default.** Dropping them is a loss of fidelity the
+  caller asks for (`{ decimals: 0 }`), not the default that rounds $1,234.56 up
+  to $1,235.
+- **A negative carries its sign outside the symbol** — `-$1,234.56`, never
+  `$-1,234.56`.
+- **`formatPercentage` and `formatRatioAsPercentage` are named apart on
+  purpose.** The two apps had settled on `formatPercent` meaning opposite
+  things; reusing either spelling for both would make a 100x error a
+  one-character mistake.
+
+Timestamps are read in `Australia/Brisbane` unless a `timeZone` is passed. The
+household's books are kept in AEST, so a laptop in another zone should not
+renumber them — and it makes the output deterministic under CI. A date-only
+value (`YYYY-MM-DD`) gets no zone conversion at all: a date is not an instant,
+and converting one is how a booking dated the 1st shows as the 31st.
+
+`parseApiDate` exists because a backend that stores naive UTC
+(`datetime.now(UTC).replace(tzinfo=None)`) serialises it with no offset, and
+JavaScript reads that as LOCAL time. In Brisbane that lands every stored moment
+ten hours early, so anything after 2pm UTC shows the wrong DAY. `formatDate` and
+`formatDateTime` already go through it; call it directly when you need the
+`Date` itself.
+
+Deliberately not here: file sizes, AI model names, loan repayment frequencies,
+pager arithmetic and the per-line GST recompute for bill approvals. Each has one
+consumer and is a domain vocabulary rather than a shared value class; the GST
+one is bound to Xero tax codes besides. Relative time ("2 hours ago") is out
+too — it rides on `date-fns` in the one app that has it, and a display formatter
+is not worth making that a dependency of every consumer.
 
 ## Verifying a change
 
