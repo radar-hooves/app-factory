@@ -1,5 +1,5 @@
 {
-  "_note": "SEED — the ONLY hand-authored input to the component map. It carries the one thing a machine cannot derive from source: which SITUATION each composed component is the answer to (you cannot read 'a share of a bounded whole' out of arc-gauge.svelte). Everything else — the export name, the import path, the real prop list, and whether every shipped component is accounted for — is derived from source by generate-registry.mjs, which regenerates registry/component-map.{md,json} on every build (the outputs are gitignored like dist/ and shipped via package.json 'files'). The build FAILS if any shipped component is left out of this file, so a new component cannot ship unmapped: classify it under a situation, or name it a primitive, or the build is red. Props here are validated against the component's real $props(); a trailing '?' just marks a prop optional for the reader and is stripped before validation.",
+  "_note": "SEED — the ONLY hand-authored input to the component map. It carries the one thing a machine cannot derive from source: which SITUATION each composed component is the answer to (you cannot read 'a share of a bounded whole' out of arc-gauge.svelte). Everything else — the export name, the import path, the real prop list, and whether every shipped component is accounted for — is derived from source by generate-registry.mjs, which regenerates registry/component-map.{md,json} on every build (the outputs are gitignored like dist/ and shipped via package.json 'files'). The build FAILS if any shipped component is left out of this file, so a new component cannot ship unmapped: classify it under a situation, or name it a primitive, or the build is red. Props here are validated against the component's real $props(); a trailing '?' just marks a prop optional for the reader and is stripped before validation. A component that spreads ...rest onto another component of this package accepts that component's props too, and they validate the same way — FormButton is Button with the type fixed.",
   "situations": [
     {
       "key": "single-figure",
@@ -136,7 +136,7 @@
         },
         {
           "name": "FormControl",
-          "props": "",
+          "props": "children, id?",
           "insteadOf": "wiring id/aria-describedby/aria-invalid onto the input by hand"
         },
         {
@@ -171,7 +171,7 @@
         },
         {
           "name": "FormButton",
-          "props": "",
+          "props": "children, variant?, size?, disabled?, class?",
           "insteadOf": "remembering type=\"submit\" on every form's Button — it forwards every Button prop and sets the type"
         }
       ]
@@ -227,7 +227,7 @@
         },
         {
           "name": "PageHeader",
-          "props": "title?, eyebrow?, breadcrumbs?, subtitle?, info?, actions?",
+          "props": "title?, eyebrow?, breadcrumbs?, icon?, subtitle?, info?, meta?, actions?",
           "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
         },
         {

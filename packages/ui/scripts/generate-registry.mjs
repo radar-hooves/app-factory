@@ -116,12 +116,40 @@ function mainSvelte(dir, name) {
 }
 
 /**
+ * Where a `...rest` spread lands: the component whose props type this file
+ * annotates its `$props()` destructuring with. `form-button.svelte` says
+ * `let { ref, ...restProps }: ButtonProps = $props()` and imports ButtonProps
+ * from '../button/index.js', so its real prop surface is `ref` plus every prop
+ * of button.svelte. Only a relative import inside this components tree
+ * resolves — a props type from node_modules or a bare specifier returns null
+ * and nothing extra is accepted.
+ */
+function forwardTarget(svelteFile, src, typeName) {
+	const named = new RegExp(`\\b${typeName}\\b`);
+	const imp = [...src.matchAll(/import\s+([^;]*?)\s+from\s+['"]([^'"]+)['"]/g)].find(
+		(m) => named.test(m[1]) && m[2].startsWith('.')
+	);
+	if (!imp) return null;
+	let resolved = path.resolve(path.dirname(svelteFile), imp[2]);
+	if (/index\.[cm]?[jt]s$/.test(resolved)) resolved = path.dirname(resolved);
+	const dir = path.relative(COMPONENTS, resolved);
+	// A sibling component directory, and nothing else.
+	if (!dir || dir.startsWith('..') || dir.includes(path.sep)) return null;
+	return mainSvelte(dir, typeName.replace(/Props$/, ''));
+}
+
+/**
  * The set of prop names a component accepts, read from its `let { ... } =
  * $props()` destructuring — the authoritative list, so a prop named in the seed
  * that no longer exists fails the gate. Returns the source-facing keys: `icon:
  * Icon` -> `icon`, `class: className` -> `class`.
+ *
+ * A component that spreads `...rest` onto another component of this package
+ * accepts that component's props too, so those are unioned in (see
+ * forwardTarget). `seen` breaks a cycle between two mutual forwarders.
  */
-function propKeys(svelteFile) {
+function propKeys(svelteFile, seen = new Set()) {
+	seen.add(svelteFile);
 	const src = readFileSync(svelteFile, 'utf8');
 	const propsAt = src.indexOf('$props()');
 	if (propsAt === -1) return new Set();
@@ -171,13 +199,32 @@ function propKeys(svelteFile) {
 	parts.push(buf);
 
 	const keys = new Set();
+	let hasRest = false;
 	for (const part of parts) {
 		let entry = part.trim();
-		if (!entry || entry.startsWith('...')) continue;
+		if (!entry) continue;
+		if (entry.startsWith('...')) {
+			hasRest = true;
+			continue;
+		}
 		entry = entry.split('=')[0].trim(); // drop any default value
 		const key = (entry.includes(':') ? entry.split(':')[0] : entry).trim(); // `icon: Icon` -> icon
 		if (key) keys.add(key);
 	}
+
+	// The annotation between the pattern and `$props()` names what the rest
+	// spread forwards — `: ButtonProps = ` — so a pure forwarder can be
+	// documented by the props it really passes on rather than by `ref` alone.
+	if (hasRest) {
+		for (const [, typeName] of src
+			.slice(end + 1, propsAt)
+			.matchAll(/\b([A-Z][A-Za-z0-9_]*Props)\b/g)) {
+			const target = forwardTarget(svelteFile, src, typeName);
+			if (!target || seen.has(target)) continue;
+			for (const k of propKeys(target, seen)) keys.add(k);
+		}
+	}
+
 	return keys;
 }
 
@@ -215,6 +262,15 @@ function build() {
 				.split(',')
 				.map((p) => p.trim().replace(/\?$/, ''))
 				.filter(Boolean);
+			// An entry with no props is the same failure as an unclassified
+			// component: the map names something an agent cannot then use. CI
+			// asserts this on the shipped artefact; catching it here turns it
+			// red at `pnpm build`, before a tag is cut.
+			if (!listed.length) {
+				problems.push(
+					`${c.name}: no props listed in situations.json — name the props a consumer composes it with.`
+				);
+			}
 			if (real) {
 				for (const p of listed) {
 					if (!real.has(p)) {
