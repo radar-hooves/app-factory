@@ -83,7 +83,7 @@ rather than rebuilding it:
 
 | Import                                          | What it is                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` snippet, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                                                    |
+| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                        |
 | `panel`                                         | The generic titled card: optional icon, subtitle and trailing actions over a body that can opt out of padding.                                                                                                                                                                                                                                              |
 | `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                          |
 | `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select.                                                                                                                                                                                                                                                    |
@@ -465,6 +465,49 @@ Three things worth knowing before you set it:
   their own.
 
 Set it in the layout, once. That is the whole point of the prop.
+
+### The page header: `icon`, `meta`, and what `eyebrow` is for
+
+```svelte
+<PageHeader title="Rivers Family Trust" subtitle="Deed of variation">
+	{#snippet icon()}<FileText />{/snippet}
+	{#snippet meta()}
+		<span>Opened 12/03/2026</span>
+		<StatusBadge status="success" label="Active" />
+	{/snippet}
+	{#snippet actions()}<Button>Edit</Button>{/snippet}
+</PageHeader>
+```
+
+`icon` takes the **glyph alone**; the tinted square around it — its size, its
+radius, its alignment against the title — belongs to this component. That split
+is the whole reason the slot exists rather than each app placing its own icon:
+two apps had built the square and picked two sizes for it. `meta` is a wrapped
+row of facts under the title, in muted small text.
+
+Both are additive. A header that names neither renders exactly as it did
+before, asserted rather than assumed.
+
+They were promoted on **duplication, not on request**: three apps had
+hand-rolled the meta row and two the icon square, and one of them had
+reimplemented this entire component locally to get them, across 38 of its 49
+page headers. One app wanting something does not earn a shared slot; three
+apps having already built it does.
+
+#### `eyebrow` is an exception, not a slot to fill
+
+`eyebrow` renders a small uppercase kicker above the title, and a kicker above a
+heading is one of the more reliable visual tells of generated UI. In an app with
+a persistent nav rail it usually restates the section the rail already
+highlights, and it costs vertical space above every title in the app.
+
+It is kept because it is genuinely load-bearing in a few places, not because it
+is a good default — one audited app passed it on **all 17** of its page headers,
+including a home surface whose kicker read "AIR 6015 · CASPO Workbench" directly
+above a title reading "Workbench". Before reaching for it, check whether the
+fact belongs in `subtitle` (a short line), `info` (an explanation), `meta` (a
+fact about the page) or `breadcrumbs` (where you are). If one of those fits, use
+it.
 
 ### The active nav row: primary is a fill, never an ink
 

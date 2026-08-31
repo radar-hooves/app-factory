@@ -131,7 +131,20 @@
 <!-- A page header that is a breadcrumb bar: no title at all, which is the shape
      19 of one app's 22 headers take and the reason it could not adopt this
      component. The trail is the app's own routed links, as a snippet. -->
-<PageHeader>
+<!-- The icon + meta shape (design-system#21). Three apps had hand-rolled the
+     meta row and two the icon square; one reimplemented this whole component
+     locally to get them, across 38 of its 49 page headers. -->
+<PageHeader title="Ledger entry" subtitle="A short line." data-testid="page-header-icon">
+	{#snippet icon()}
+		<svg data-testid="header-glyph" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" /></svg>
+	{/snippet}
+	{#snippet meta()}
+		<span data-testid="meta-opened">Opened 12/03/2026</span>
+		<span data-testid="meta-status">Active</span>
+	{/snippet}
+</PageHeader>
+
+<PageHeader data-testid="page-header-trail">
 	{#snippet breadcrumbs()}
 		<a href="#/estate">Estate</a>
 		<span aria-hidden="true">/</span>

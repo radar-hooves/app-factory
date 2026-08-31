@@ -281,11 +281,14 @@ describe('PageHeader / Panel', () => {
 		// The whole point of making `title` optional: this shape must produce no
 		// heading. An empty <h1> would be worse than the component not adopting —
 		// it puts a nameless stop in the document outline of every such page.
-		expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-		expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName('Chrome harness');
+		//
+		// Scoped to THIS header rather than counting the h1s in the document: the
+		// claim is about the title-less shape, and a document-wide count changes
+		// meaning every time another fixture in this file grows a title.
+		const trail = screen.getByTestId('page-header-trail');
+		expect(trail.querySelectorAll('h1')).toHaveLength(0);
 
-		const trail = screen.getByTestId('crumb-current');
-		expect(trail).toBeInTheDocument();
+		expect(screen.getByTestId('crumb-current')).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: 'Estate' })).toBeInTheDocument();
 		// Actions still sit opposite the trail, so the title-less shape is the same
 		// header rather than a second component with its own spacing.
@@ -300,6 +303,46 @@ describe('PageHeader / Panel', () => {
 		// beneath it, never as a caption under it.
 		const trailRow = screen.getByTestId('crumb-current').closest('div');
 		expect(trailRow?.previousElementSibling).toBeNull();
+	});
+
+	it('renders the icon glyph inside the package\'s own tinted square', () => {
+		render(ChromeHarness);
+		const glyph = screen.getByTestId('header-glyph');
+		const square = glyph.parentElement;
+		// The app supplies the glyph; the TREATMENT is the package's, which is the
+		// half that drifts — two apps had picked two sizes for the same square.
+		expect(square?.className).toContain('bg-primary/10');
+		expect(square?.className).toContain('size-10');
+		// It never collapses when the title is long, and it is decorative: the
+		// glyph restates the heading beside it, so a screen reader already has it.
+		expect(square?.className).toContain('shrink-0');
+		expect(square).toHaveAttribute('aria-hidden', 'true');
+	});
+
+	it('renders meta items as one wrapped row under the title', () => {
+		render(ChromeHarness);
+		const opened = screen.getByTestId('meta-opened');
+		expect(opened).toBeInTheDocument();
+		expect(screen.getByTestId('meta-status')).toBeInTheDocument();
+		const row = opened.parentElement;
+		expect(row?.className).toContain('flex-wrap');
+		// `min-w-0` for the reason the actions row carries it: a flex item floors
+		// at its own min-content width, which wrapping cannot get below.
+		expect(row?.className).toContain('min-w-0');
+	});
+
+	it('leaves a header that names neither slot completely unchanged', () => {
+		render(ChromeHarness);
+		// Both are additive. The original header passes no icon and no meta, so it
+		// must render no square and no meta row at all — a promotion that quietly
+		// added an empty box to every existing header would be worse than none.
+		const original = screen.getByTestId('page-header-root');
+		expect(original.querySelector('span[class*="bg-primary/10"]')).toBeNull();
+		// The same query DOES find the square on the header that names the slot,
+		// so a null above is the absence of a square rather than a bad selector.
+		const withIcon = screen.getByTestId('page-header-icon');
+		expect(withIcon.querySelector('span[class*="bg-primary/10"]')).not.toBeNull();
+		expect(original.className).toContain('mb-6');
 	});
 
 	it('renders a Panel header with its subtitle above the body', () => {

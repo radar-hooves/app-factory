@@ -6,6 +6,43 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Added
 
+- **`PageHeader` gains `icon` and `meta` snippets (design-system#21).**
+  Promoted on duplication rather than on request, which is the household test:
+  three consumers had hand-rolled the meta row (a wrapped row of facts under
+  the title) and two the icon square, and one had reimplemented the whole
+  component locally to get them — 38 of its 49 page headers pass an icon, 12 a
+  meta row.
+
+  `icon` takes the **glyph alone**. The tinted square around it, its size, its
+  radius and its alignment against the title belong to this component, because
+  the treatment is the half that drifts: the two apps that built the square had
+  already picked two different sizes for it. `meta` renders as one wrapped row
+  in muted small text.
+
+  Both are additive and neither is a breaking change: a header that names
+  neither renders exactly as before, gated by a case that asserts the square is
+  absent from a header that does not ask for it while the same query finds it
+  on one that does.
+
+### Changed
+
+- **`eyebrow` stays, and is documented as an exception rather than an ordinary
+  slot (design-system#21).** The issue asked for a decision between retiring it
+  and documenting it, on the premise that the app which raised it had already
+  stopped passing it and nothing was lost. That premise did not survive a
+  census: **47+ call sites across seven of eight consumers** still pass it,
+  including two in the very app the report said had stopped. Retirement is
+  therefore a breaking change with live victims across the estate rather than a
+  free removal, and it is not one this package should make on its own.
+
+  What is real in the report is the default-ness. A kicker above a heading is
+  among the more reliable tells of generated UI, and one audited app passed it
+  on all 17 of its headers — one rendering "AIR 6015 · CASPO Workbench" above a
+  title reading "Workbench". So the README now says what it is for and lists
+  `subtitle`, `info`, `meta` and `breadcrumbs` as the places the fact usually
+  belongs instead. No code change, and no consumer has to move.
+
+
 - **`.ds-measure`, the content measure without the centring
   (design-system#22).** The scale solved "six different max-widths across nine
   routes" at the page level, but a route legitimately set to `wide` usually
