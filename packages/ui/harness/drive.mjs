@@ -996,16 +996,21 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	const { context, page } = await open('surface=theming');
 	await page.waitForSelector('[data-probe="root"] [data-slot="bg-background"]');
 
-	const SLOTS = [
+	// `bg-accent` is measured but held apart from the identical-value claim
+	// below. Since #24 it is a TINT of --ds-color-primary rather than an alias
+	// of a surface rung, so under an override that sets every key to one colour
+	// it lands on that colour at 12% alpha, not on the colour itself. It still
+	// has to follow the override, which is asserted separately.
+	const SURFACE_SLOTS = [
 		['bg-background', 'backgroundColor'],
 		['bg-card', 'backgroundColor'],
 		['bg-popover', 'backgroundColor'],
 		['bg-muted', 'backgroundColor'],
-		['bg-accent', 'backgroundColor'],
 		['bg-secondary', 'backgroundColor'],
 		['border-input', 'borderTopColor'],
 		['text-muted-foreground', 'color']
 	];
+	const SLOTS = [...SURFACE_SLOTS, ['bg-accent', 'backgroundColor']];
 
 	const measured = await page.evaluate((slots) => {
 		const read = (probe) => {
@@ -1023,11 +1028,22 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	// The scoped subtree set every --ds-color-* key these utilities read to the
 	// SAME single colour, so every slot inside it must resolve to that one
 	// value — both packages' halves of the surface, one documented lever.
-	const overrideValues = new Set(Object.values(measured.scopedDsColor));
+	const overrideValues = new Set(
+		SURFACE_SLOTS.map(([slot]) => measured.scopedDsColor[slot])
+	);
 	check(
-		'scoped --ds-color-* override: every shadcn utility in the subtree resolves to it',
+		'scoped --ds-color-* override: every shadcn surface utility in the subtree resolves to it',
 		overrideValues.size === 1,
 		JSON.stringify(measured.scopedDsColor)
+	);
+	// The accent tint reaches the override too — it just arrives carrying an
+	// alpha, so it is checked for the override's own colour rather than for
+	// equality with the opaque surfaces.
+	check(
+		'scoped --ds-color-* override: the accent tint follows it as well',
+		measured.scopedDsColor['bg-accent'] !== measured.root['bg-accent'] &&
+			/0\.55|55%/.test(measured.scopedDsColor['bg-accent']),
+		`${measured.root['bg-accent']} -> ${measured.scopedDsColor['bg-accent']}`
 	);
 	// And it must actually have moved something, not coincidentally matched
 	// the page default (which would pass the check above for the wrong reason).
@@ -2452,6 +2468,84 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	);
 
 	check('search-results: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// ── A clickable card's hover affordance (#24) ───────────────────────────────
+// The defect this gates compiles, type-checks, passes every structural test and
+// satisfies every contrast check on text. It is wrong only when a human moves a
+// mouse, because `--color-accent` and `--color-card` resolved to the same rung,
+// so `hover:bg-accent/50` mixed a colour at 50% over a ground identical to it.
+//
+// A rest-state screenshot cannot catch that, and neither can a test asserting on
+// the class list or on the custom property. This drives a real pointer and
+// compares two RESOLVED, COMPOSITED colours — the only comparison that can fail
+// when the two happen to be the same value.
+for (const scheme of ['light', 'dark']) {
+	const { context, page, errors } = await open(
+		'surface=palette',
+		{ width: 1440, height: 900 },
+		scheme
+	);
+	await page.waitForSelector('[data-probe="card-interactive"]');
+	// Deliberately NOT settled. `transition: none` is the right instrument
+	// everywhere else, but a hover fill that only ever exists mid-transition
+	// would then read as painted; each state is allowed to land on its own.
+	await page.addScriptTag({ content: PROBE });
+
+	const card = page.locator('[data-probe="card-interactive"]');
+	const paint = () =>
+		page.evaluate(() => {
+			const el = document.querySelector('[data-probe="card-interactive"]');
+			const { composite, stack } = window.__probe;
+			// Composite the element's own fill over everything behind it: a hover
+			// fill is usually translucent, so the declared value is not the colour
+			// a reader sees.
+			return composite([...stack(el, false), getComputedStyle(el).backgroundColor]).map((c) =>
+				Math.round(c * 255)
+			);
+		});
+
+	await page.mouse.move(5, 5);
+	await page.waitForTimeout(250);
+	const rest = await paint();
+	await card.hover();
+	await page.waitForTimeout(250);
+	const hover = await paint();
+
+	const distance = Math.max(...rest.map((c, i) => Math.abs(c - hover[i])));
+	check(
+		`card hover (${scheme}): the hovered fill is not the resting fill`,
+		JSON.stringify(rest) !== JSON.stringify(hover),
+		`rest rgb(${rest.join(' ')}) -> hover rgb(${hover.join(' ')})`
+	);
+	// Distinct-but-imperceptible is the failure mode one rung up from the original
+	// defect, and a strict inequality would sail straight past it.
+	check(
+		`card hover (${scheme}): the difference is big enough to see`,
+		distance >= 4,
+		`largest channel shift ${distance}/255`
+	);
+	// The check that actually pins the FIX rather than the symptom, and it exists
+	// because the first version of this gate passed against the broken build.
+	// Once the ladder lifted the card off the page, `bg-accent/50` differed from
+	// rest for the wrong reason — 50% alpha over a card whose fill equalled the
+	// accent simply let the PAGE show through, so the card faded toward the page
+	// on hover instead of taking a tint. Distinctness alone cannot tell those
+	// apart. Retuning the app's accent can: a hover fill that is really the
+	// accent moves with it, and a surface rung wearing the accent's name does not.
+	await page.addStyleTag({
+		content: ':root, .dark { --ds-color-primary: oklch(0.62 0.24 25) !important; }'
+	});
+	await page.waitForTimeout(250);
+	const retuned = await paint();
+	check(
+		`card hover (${scheme}): the hover fill follows the app's own accent`,
+		JSON.stringify(retuned) !== JSON.stringify(hover),
+		`hover rgb(${hover.join(' ')}) -> rgb(${retuned.join(' ')}) once --ds-color-primary is retuned`
+	);
+
+	check(`card hover (${scheme}): no page error`, errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }
 

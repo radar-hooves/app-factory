@@ -472,6 +472,40 @@ Check that at ≥4.5:1 against `--ds-color-surface-1` (the chrome), not against
 darker of the two. `harness/drive.mjs` gates the default path across three
 palettes in both themes on every run.
 
+### Making a surface interactive: `hover:bg-accent`
+
+A clickable card, row or tile takes the ordinary shadcn treatment, and it works:
+
+```svelte
+<Card class="hover:bg-accent/50 cursor-pointer">…</Card>
+```
+
+`bg-accent` is a **12% tint of `--ds-color-primary`**, the same fill the active
+nav row wears — so a hover reads as the same language as a selection, and it
+follows an app's own accent with no per-app CSS. Reach for it rather than
+writing a local `hover:border-primary`, which is what four apps had each
+arrived at separately.
+
+It has not always worked, and the way it failed is worth keeping. Until
+`2026.8.17`, `--color-accent` and `--color-card` both resolved to
+`--ds-color-surface-2` — the same rung — so `hover:bg-accent/50` on a card
+mixed a colour at 50% over a ground identical to it and could not move a pixel.
+Every app that made a card clickable shipped a control with no hover
+affordance, and nothing caught it: it compiled, type-checked, passed the
+component tests, and satisfied every contrast check on text. It was wrong only
+when a human moved a mouse.
+
+So the gate for it is a value comparison in a real browser rather than a
+structural one — `harness/drive.mjs` drives a pointer onto a card in both
+colour schemes, composites the resting and hovered fills, and asserts they
+differ, that the difference is large enough to see, and that **the hover fill
+moves when the app retunes `--ds-color-primary`**. That last check is the one
+that matters: the first two passed against the broken build.
+
+Depth is not the affordance. The household design language separates surfaces
+with the ladder and a hairline edge, not with a drop shadow that grows on
+hover — see `packages/design-tokens/README.md`.
+
 ### Measuring the content region
 
 About overflow, not width — for how wide the body is allowed to get, see

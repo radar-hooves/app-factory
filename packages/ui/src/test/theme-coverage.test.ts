@@ -134,7 +134,6 @@ describe('the shadcn semantic surface', () => {
 		['bg-card', 'background-color', '--ds-color-surface-2'],
 		['bg-popover', 'background-color', '--ds-color-surface-3'],
 		['bg-muted', 'background-color', '--ds-color-surface-1'],
-		['bg-accent', 'background-color', '--ds-color-surface-2'],
 		['bg-secondary', 'background-color', '--ds-color-surface-1'],
 		['border-input', 'border-color', '--ds-color-border'],
 		['text-card-foreground', 'color', '--ds-color-foreground'],
@@ -153,6 +152,35 @@ describe('the shadcn semantic surface', () => {
 		const expected = flatten(`var(${token})`, properties);
 		expect(expected, `${token} is not defined by the token package`).not.toBeNull();
 		expect(flatten(value!, properties)).toBe(expected);
+	});
+
+	// `bg-accent` is deliberately not in CASES above: since #24 it is not an
+	// alias of a surface rung at all. It was `--ds-color-surface-2` — the exact
+	// rung `--color-card` resolves to — which made `hover:bg-accent/50` on a card
+	// a no-op BY CONSTRUCTION, since mixing a colour at any opacity over a ground
+	// identical to it cannot move a pixel. Every structural gate in this file
+	// passed while that was true, which is why the two below assert VALUES.
+	it('bg-accent is a tint of the accent, not a surface rung', () => {
+		const emitted = compile(['bg-accent']);
+		const value = declaration(emitted, 'bg-accent', 'background-color');
+		expect(value, 'bg-accent generated no background-color').not.toBeNull();
+		// Reaching --ds-color-primary is the whole claim, and it holds in both
+		// branches Tailwind emits — the color-mix rule and the flat @supports
+		// fallback beside it. Asserting on the color-mix alone would pin whichever
+		// of the two `declaration` happens to return first.
+		expect(value!).toContain('--ds-color-primary');
+		expect(value!).not.toContain('--ds-color-surface');
+	});
+
+	it('bg-accent does not resolve to bg-card, so a card hover cannot be silent', () => {
+		// The #24 regression guard, as a value comparison. A structural check
+		// cannot make this claim: both utilities emit a perfectly good rule when
+		// they are the same colour.
+		const emitted = compile(['bg-accent', 'bg-card']);
+		const properties = customProperties(emitted);
+		const accent = declaration(emitted, 'bg-accent', 'background-color');
+		const card = declaration(emitted, 'bg-card', 'background-color');
+		expect(flatten(accent!, properties)).not.toBe(flatten(card!, properties));
 	});
 
 	it('a per-app palette override still flows all the way through', () => {
@@ -191,6 +219,13 @@ describe('the shadcn semantic surface', () => {
 				new RegExp(`--color-${name}\\s*:\\s*var\\(--${name},\\s*var\\(--ds-`)
 			);
 		}
+
+		// `accent` holds the same contract with one extra step: the bare name is
+		// still the escape hatch and the fallback still lands on a --ds- token,
+		// but it arrives through a color-mix because the accent is a tint (#24).
+		expect(stylesheet, '--accent is not mapped in the shipped stylesheet').toMatch(
+			/--color-accent\s*:\s*var\(--accent,[^;]*var\(--ds-/
+		);
 	});
 
 	it('has exactly one owner per theme key, across both packages', () => {

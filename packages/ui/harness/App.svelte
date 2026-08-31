@@ -542,7 +542,7 @@
 		<div data-probe="root">{@render probes('root')}</div>
 		<div
 			data-probe="scoped-ds-color"
-			style="--ds-color-background: oklch(0.55 0.2 30); --ds-color-surface-1: oklch(0.55 0.2 30); --ds-color-surface-2: oklch(0.55 0.2 30); --ds-color-surface-3: oklch(0.55 0.2 30); --ds-color-border: oklch(0.55 0.2 30); --ds-color-muted-foreground: oklch(0.55 0.2 30);"
+			style="--ds-color-background: oklch(0.55 0.2 30); --ds-color-surface-1: oklch(0.55 0.2 30); --ds-color-surface-2: oklch(0.55 0.2 30); --ds-color-surface-3: oklch(0.55 0.2 30); --ds-color-border: oklch(0.55 0.2 30); --ds-color-muted-foreground: oklch(0.55 0.2 30); --ds-color-primary: oklch(0.55 0.2 30);"
 		>
 			{@render probes('scoped-ds-color')}
 		</div>
@@ -910,6 +910,20 @@
 							<div class="bg-muted mt-3 rounded-md p-3" data-probe="card-nested">
 								<p class="text-muted-foreground text-sm">A nested well inside the card.</p>
 							</div>
+						</CardContent>
+					</Card>
+				</div>
+				<!-- A CLICKABLE card wearing the ordinary shadcn hover treatment
+				     (design-system#24). This is the one that has to change colour
+				     under a pointer; a rest-state screenshot cannot catch it. -->
+				<div class="w-80">
+					<Card class="hover:bg-accent/50 cursor-pointer" data-probe="card-interactive">
+						<CardHeader>
+							<CardTitle level={2}>Clickable card</CardTitle>
+							<CardDescription>Hover me.</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<p class="text-sm">The hover fill has to differ from the rest fill.</p>
 						</CardContent>
 					</Card>
 				</div>

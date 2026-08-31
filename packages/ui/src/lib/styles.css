@@ -198,7 +198,16 @@
 	--color-secondary: var(--secondary, var(--ds-color-surface-1));
 	--color-secondary-foreground: var(--secondary-foreground, var(--ds-color-foreground));
 	--color-muted: var(--muted, var(--ds-color-surface-1));
-	--color-accent: var(--accent, var(--ds-color-surface-2));
+	/* A SELECTION tint, not a surface rung (design-system#24). It was
+	   --ds-color-surface-2 — the same rung --color-card resolves to — which made
+	   `hover:bg-accent/50` on a card a no-op BY CONSTRUCTION: mixing a colour at
+	   any opacity over a ground it is identical to cannot change a pixel. It also
+	   left the menu/select/command highlight, the only thing this package's own
+	   components use `bg-accent` for, at 1.03:1 against the popover it sits on in
+	   light mode. A translucent tint of the accent composites over whatever
+	   ground it lands on, so one value serves both, and it is the idiom this
+	   package already ships for the SearchResults match highlight. */
+	--color-accent: var(--accent, color-mix(in oklch, var(--ds-color-primary) 12%, transparent));
 	--color-accent-foreground: var(--accent-foreground, var(--ds-color-foreground));
 	--color-input: var(--input, var(--ds-color-border));
 

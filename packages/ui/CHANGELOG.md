@@ -2,6 +2,61 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.8.17] - 2026-08-31
+
+### Fixed
+
+- **A clickable card has a hover state again (design-system#24).**
+  `--color-accent` and `--color-card` both resolved to `--ds-color-surface-2`,
+  so the standard `hover:bg-accent/50` treatment mixed a colour at 50% over a
+  ground identical to it — a no-op by construction, in every app that made a
+  card clickable. The reader got no confirmation that a card was interactive
+  before committing to a click.
+
+  `--color-accent` is now a **12% tint of `--ds-color-primary`**, which is not
+  a new invention: it is the fill the active nav row already wears, and the
+  same idiom as the `SearchResults` match highlight. A translucent tint
+  composites over whatever ground it lands on, so one value serves a card, a
+  row and a menu item, and it follows an app's own accent.
+
+  This also fixed a second, unreported case. `bg-accent` is what this package's
+  own dropdown, select and command items use for their highlight, and those sit
+  on a popover — which, once #17 gave the light ladder real steps, the old
+  accent would have matched at 1.03:1.
+
+- **`AppShell`'s `texture` prop is documented as defaulting to `grid`
+  (design-system#20).** The default moved in `2026.8.8` and the CHANGELOG
+  recorded it, but the README went on selling `none`-by-default as a feature in
+  two places, so the two contradicted each other. `collapsible`'s default is
+  stated there now too.
+
+### Added
+
+- **A pointer-driven hover gate in `harness/drive.mjs`**, in both colour
+  schemes. It composites the resting and hovered fills of a real card and
+  asserts they differ, that the largest channel shift is at least 4/255, and
+  that the hovered fill **moves when `--ds-color-primary` is retuned**.
+
+  The third assertion exists because the first two passed against the broken
+  build. Once #17 lifted the card off the page, `bg-accent/50` did differ from
+  rest — for the wrong reason, since 50% alpha over a card whose fill equalled
+  the accent simply let the page show through, fading the card toward the page
+  instead of tinting it. Distinctness alone cannot tell a tint from a hole.
+  Retuning the accent can.
+
+- Two unit-level guards in `theme-coverage.test.ts`: `bg-accent` derives from
+  `--ds-color-primary` rather than any surface rung, and does not resolve to
+  the same colour as `bg-card`. Both are value comparisons, because this defect
+  passes every structural check.
+
+### Changed
+
+- The scoped-theming gate holds `bg-accent` apart from its
+  "every utility resolves to the one override colour" claim and asserts
+  separately that the tint follows the override. Accent is no longer an alias
+  of a surface rung, so under an override setting every key to one colour it
+  lands on that colour **at 12% alpha** rather than on the colour itself.
+
 ## [2026.8.16] - 2026-08-31
 
 ### Added
