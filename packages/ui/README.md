@@ -617,6 +617,60 @@ but the same class on the `<th>` collapses the heading over its neighbour:
 { accessorKey: 'filename', header: 'Document', meta: { class: 'w-full', cellClass: 'max-w-0' } }
 ```
 
+## Hand-written forms
+
+The shadcn-svelte Formsnap wrapper set, over `sveltekit-superforms`:
+
+```svelte
+<script lang="ts">
+	import * as Form from '@poodle64/ui/form';
+	import { Input } from '@poodle64/ui/input';
+</script>
+
+<Form.Field {form} name="title">
+	<Form.Control>
+		{#snippet children({ props })}
+			<Form.Label>Title</Form.Label>
+			<Input {...props} bind:value={$formData.title} />
+		{/snippet}
+	</Form.Control>
+	<Form.Description>What the record is called.</Form.Description>
+	<Form.FieldErrors />
+</Form.Field>
+<Form.Button>Save</Form.Button>
+```
+
+`Field`, `Control`, `Label`, `Description`, `FieldErrors`, `Fieldset`, `Legend`,
+`ElementField` and `Button`, each also exported under a `Form`-prefixed alias
+(`FormField`, `FormLabel`, …) for a flat import.
+
+`formsnap` and `sveltekit-superforms` are **optional peer dependencies**. An app
+that renders no form installs neither and the other 54 components are
+unaffected; an app that does already has both, since these wrappers are useless
+without them.
+
+This is the sibling of [Server-described forms](#server-described-forms) below,
+and the two answer different questions: reach for these when the app knows the
+fields at build time, and for `SchemaForm` when the shape arrives at runtime.
+
+**Why it lives here.** Three apps had vendored the same nine files. The diff
+between two of them was quote style; between those and the third, which package
+the shared `cn` and `Label` were imported from. Nothing had diverged — but every
+one of them owned its own copy of the ARIA wiring, so a fix to how an error is
+announced, or to the `aria-describedby` chain, landed once per app or not at
+all.
+
+That is what the tests assert, rather than the markup: the label resolves `for`
+to the control's generated id, `aria-describedby` reaches both the description
+and the error node, an errored field flips `aria-invalid` and marks the label
+`data-fs-error`, and `Form.Button` is `type="submit"` without the call site
+saying so. Each was driven red before being kept. A test on the class strings
+would have passed against all three copies while any one of them quietly stopped
+pointing at its own error node.
+
+Consumers drop their local `form/` directory at their next frontend change set
+— there is no forced sweep, and their own `check-ui-drift.mjs` will name it.
+
 ## Server-described forms
 
 `<SchemaForm>` renders a config object whose shape arrives at runtime. It is the

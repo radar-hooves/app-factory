@@ -6,6 +6,40 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Added
 
+- **The Formsnap form wrapper set ships here (design-system#16).**
+  `@poodle64/ui/form` exports `Field`, `Control`, `Label`, `Description`,
+  `FieldErrors`, `Fieldset`, `Legend`, `ElementField` and `Button`, each also
+  under a `Form`-prefixed alias.
+
+  Three apps had vendored the same nine files. Reconciled before promoting
+  rather than picking one: the diff between two of them was **quote style**,
+  and between those and the third was which package the shared `cn` and `Label`
+  were imported from. Nothing had substantively diverged, so the union is one
+  copy — but each app owned its own ARIA wiring, which is the part that made
+  this worth owning centrally. The issue named three consumers; a fourth
+  (`pebblestone`, whose copy predates the issue by four months) was found while
+  reconciling, so the count was already understated when it was filed.
+
+  `formsnap` and `sveltekit-superforms` are **optional** peer dependencies: an
+  app that renders no form installs neither, and the other 54 components are
+  unaffected.
+
+  Classified as its own situation in the component map rather than added to
+  `primitives`. That is deliberate and load-bearing: the consumer-side
+  `check-ui-drift.mjs` gate treats a primitive as something an app may keep
+  locally, so filing it there would have shipped the component while
+  guaranteeing no app ever noticed it could drop its copy.
+
+  The tests assert the WIRING, not the markup — the label resolves `for` to the
+  control's generated id, `aria-describedby` reaches the description and the
+  error node, an errored field flips `aria-invalid` and marks the label
+  `data-fs-error`, and `Form.Button` carries `type="submit"` without the call
+  site saying so. Driven red first: removing `{...props}` from the label and
+  the type from the button failed three of the six. A test on class strings
+  would have passed against all three vendored copies while any one of them
+  silently stopped pointing at its own error node.
+
+
 - **`PageHeader` gains `icon` and `meta` snippets (design-system#21).**
   Promoted on duplication rather than on request, which is the household test:
   three consumers had hand-rolled the meta row (a wrapped row of facts under

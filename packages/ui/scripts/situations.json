@@ -1,272 +1,324 @@
 {
- "_note": "SEED — the ONLY hand-authored input to the component map. It carries the one thing a machine cannot derive from source: which SITUATION each composed component is the answer to (you cannot read 'a share of a bounded whole' out of arc-gauge.svelte). Everything else — the export name, the import path, the real prop list, and whether every shipped component is accounted for — is derived from source by generate-registry.mjs, which regenerates registry/component-map.{md,json} on every build (the outputs are gitignored like dist/ and shipped via package.json 'files'). The build FAILS if any shipped component is left out of this file, so a new component cannot ship unmapped: classify it under a situation, or name it a primitive, or the build is red. Props here are validated against the component's real $props(); a trailing '?' just marks a prop optional for the reader and is stripped before validation.",
- "situations": [
-  {
-   "key": "single-figure",
-   "title": "A single labelled figure",
-   "description": "One headline metric that earns a tile — a figure with a label, an optional unit, and the state of the thing it measures.",
-   "components": [
+  "_note": "SEED — the ONLY hand-authored input to the component map. It carries the one thing a machine cannot derive from source: which SITUATION each composed component is the answer to (you cannot read 'a share of a bounded whole' out of arc-gauge.svelte). Everything else — the export name, the import path, the real prop list, and whether every shipped component is accounted for — is derived from source by generate-registry.mjs, which regenerates registry/component-map.{md,json} on every build (the outputs are gitignored like dist/ and shipped via package.json 'files'). The build FAILS if any shipped component is left out of this file, so a new component cannot ship unmapped: classify it under a situation, or name it a primitive, or the build is red. Props here are validated against the component's real $props(); a trailing '?' just marks a prop optional for the reader and is stripped before validation.",
+  "situations": [
     {
-     "name": "StatCard",
-     "props": "label, value, unit?, sub?, status?, valueTone?, icon?",
-     "insteadOf": "a Card you hand-build with a label over a big number"
-    }
-   ]
-  },
-  {
-   "key": "compact-figures",
-   "title": "Several bare figures together",
-   "description": "A block of plain figures read at a glance — an 'at a glance' strip — where each number is too small to earn its own StatCard.",
-   "components": [
-    {
-     "name": "StatList",
-     "props": "items, title?, info?",
-     "insteadOf": "a hand-built <dl> or a stack of label/value <div>s"
-    }
-   ]
-  },
-  {
-   "key": "ranked-comparison",
-   "title": "Comparing magnitudes across rows",
-   "description": "A small ranked set of labelled bars — a per-lane usage table, a token-burn chart — where a full StatCard per row would be too heavy.",
-   "components": [
-    {
-     "name": "BarRow",
-     "props": "label, value, pct, color?, labelWidth?",
-     "insteadOf": "a <div> with an inline width:%% bar you style by hand"
-    }
-   ]
-  },
-  {
-   "key": "share-of-a-whole",
-   "title": "A share of a bounded whole",
-   "description": "A part of a fixed total — a percentage, a capacity, a rate-limit window — read as one 0–100 figure.",
-   "components": [
-    {
-     "name": "ArcGauge",
-     "props": "pct, tone?, size?, showLabel?, label?",
-     "insteadOf": "a hand-drawn SVG ring, or printing a bare \"72%\""
-    }
-   ]
-  },
-  {
-   "key": "trend-over-time",
-   "title": "A compact trend",
-   "description": "An inline time series in a row or card — a trend the eye reads at a glance, not a full Tier-1 chart.",
-   "components": [
-    {
-     "name": "Sparkline",
-     "props": "series, width, height, pad?",
-     "insteadOf": "a hand-built SVG polyline, or reaching for a charting library for a thumbnail"
-    }
-   ]
-  },
-  {
-   "key": "state-of-a-thing",
-   "title": "The state of a thing",
-   "description": "The health or status of something. One state reads as a chip; several independent states read as a dot strip.",
-   "components": [
-    {
-     "name": "StatusBadge",
-     "props": "status, label, pulse?",
-     "insteadOf": "a coloured <span> pill you tint by hand"
+      "key": "single-figure",
+      "title": "A single labelled figure",
+      "description": "One headline metric that earns a tile — a figure with a label, an optional unit, and the state of the thing it measures.",
+      "components": [
+        {
+          "name": "StatCard",
+          "props": "label, value, unit?, sub?, status?, valueTone?, icon?",
+          "insteadOf": "a Card you hand-build with a label over a big number"
+        }
+      ]
     },
     {
-     "name": "Scorecard",
-     "props": "scores",
-     "insteadOf": "a hand-built row of coloured dots for several on/off/warn checks"
+      "key": "compact-figures",
+      "title": "Several bare figures together",
+      "description": "A block of plain figures read at a glance — an 'at a glance' strip — where each number is too small to earn its own StatCard.",
+      "components": [
+        {
+          "name": "StatList",
+          "props": "items, title?, info?",
+          "insteadOf": "a hand-built <dl> or a stack of label/value <div>s"
+        }
+      ]
+    },
+    {
+      "key": "ranked-comparison",
+      "title": "Comparing magnitudes across rows",
+      "description": "A small ranked set of labelled bars — a per-lane usage table, a token-burn chart — where a full StatCard per row would be too heavy.",
+      "components": [
+        {
+          "name": "BarRow",
+          "props": "label, value, pct, color?, labelWidth?",
+          "insteadOf": "a <div> with an inline width:%% bar you style by hand"
+        }
+      ]
+    },
+    {
+      "key": "share-of-a-whole",
+      "title": "A share of a bounded whole",
+      "description": "A part of a fixed total — a percentage, a capacity, a rate-limit window — read as one 0–100 figure.",
+      "components": [
+        {
+          "name": "ArcGauge",
+          "props": "pct, tone?, size?, showLabel?, label?",
+          "insteadOf": "a hand-drawn SVG ring, or printing a bare \"72%\""
+        }
+      ]
+    },
+    {
+      "key": "trend-over-time",
+      "title": "A compact trend",
+      "description": "An inline time series in a row or card — a trend the eye reads at a glance, not a full Tier-1 chart.",
+      "components": [
+        {
+          "name": "Sparkline",
+          "props": "series, width, height, pad?",
+          "insteadOf": "a hand-built SVG polyline, or reaching for a charting library for a thumbnail"
+        }
+      ]
+    },
+    {
+      "key": "state-of-a-thing",
+      "title": "The state of a thing",
+      "description": "The health or status of something. One state reads as a chip; several independent states read as a dot strip.",
+      "components": [
+        {
+          "name": "StatusBadge",
+          "props": "status, label, pulse?",
+          "insteadOf": "a coloured <span> pill you tint by hand"
+        },
+        {
+          "name": "Scorecard",
+          "props": "scores",
+          "insteadOf": "a hand-built row of coloured dots for several on/off/warn checks"
+        }
+      ]
+    },
+    {
+      "key": "entity-detail",
+      "title": "The detail of one entity",
+      "description": "The surface for a single selected record — an eyebrow, a title, its status, and a close affordance over the body.",
+      "components": [
+        {
+          "name": "DetailPanel",
+          "props": "title, eyebrow?, status?, statusLabel?, onClose?, children",
+          "insteadOf": "a Card you hand-build with an eyebrow, a title row and a close button"
+        }
+      ]
+    },
+    {
+      "key": "catalogue-of-like-things",
+      "title": "A catalogue of like things",
+      "description": "An index of many peer items — a responsive tile wall, or a sortable/filterable table of records.",
+      "components": [
+        {
+          "name": "TileGrid",
+          "props": "children, min?, gap?, tag?",
+          "insteadOf": "a grid with fixed sm:grid-cols-* breakpoints you maintain per page"
+        },
+        {
+          "name": "DataTableTanstack",
+          "props": "table, selectable?, selectedId?, onSelect?, emptyMessage?",
+          "insteadOf": "a hand-built <table>, or the raw Table primitive wired to TanStack by hand"
+        },
+        {
+          "name": "DataTableToolbar",
+          "props": "searchValue, onSearch, searchPlaceholder?, chipGroups?, trailing?",
+          "insteadOf": "a hand-built search + filter-chip bar above a table"
+        }
+      ]
+    },
+    {
+      "key": "sectioning-card",
+      "title": "A titled section of a route",
+      "description": "The generic titled card every route reaches for — an optional header with icon, subtitle and actions over a body. The default answer to 'I need a card here'.",
+      "components": [
+        {
+          "name": "Panel",
+          "props": "children, title?, subtitle?, icon?, action?, pad?",
+          "insteadOf": "raw Card + CardHeader + CardTitle assembled by hand on every route"
+        }
+      ]
+    },
+    {
+      "key": "hand-written-form",
+      "title": "A form the app itself describes",
+      "description": "A form whose fields the app writes out itself, validated by superforms and wired for accessibility by Formsnap. These wrappers put the label/description/error rhythm and the ARIA wiring in one place; the schema-described renderer above is for the other case, where the shape arrives at runtime.",
+      "components": [
+        {
+          "name": "FormField",
+          "props": "form, name, class?",
+          "insteadOf": "a <div class=\"space-y-2\"> you rebuild per field, per app"
+        },
+        {
+          "name": "FormControl",
+          "props": "",
+          "insteadOf": "wiring id/aria-describedby/aria-invalid onto the input by hand"
+        },
+        {
+          "name": "FormLabel",
+          "props": "class?",
+          "insteadOf": "a <Label> that does not turn destructive when its field errors"
+        },
+        {
+          "name": "FormDescription",
+          "props": "class?",
+          "insteadOf": "helper text the field's aria-describedby never points at"
+        },
+        {
+          "name": "FormFieldErrors",
+          "props": "class?, errorClasses?",
+          "insteadOf": "hand-rendered {#each errors} blocks, styled differently in each app"
+        },
+        {
+          "name": "FormFieldset",
+          "props": "form, name, class?",
+          "insteadOf": "a bare <fieldset> with no error state"
+        },
+        {
+          "name": "FormLegend",
+          "props": "class?",
+          "insteadOf": "a <legend> styled per app"
+        },
+        {
+          "name": "FormElementField",
+          "props": "form, name, class?",
+          "insteadOf": "hand-indexing into an array field's errors"
+        },
+        {
+          "name": "FormButton",
+          "props": "",
+          "insteadOf": "remembering type=\"submit\" on every form's Button — it forwards every Button prop and sets the type"
+        }
+      ]
+    },
+    {
+      "key": "server-described-form",
+      "title": "A form the server described",
+      "description": "A config object whose shape arrives at runtime as a JSON Schema plus a JSON Forms UI Schema — the renderer walks both and dispatches to this package's widgets. Anything it cannot dispatch renders flagged, never blank.",
+      "components": [
+        {
+          "name": "SchemaForm",
+          "props": "schema, value, onChange, uischema?, disabled?, idPrefix?",
+          "insteadOf": "a hand-written renderer over a home-grown hint vocabulary, which is how a field goes missing in silence"
+        }
+      ]
+    },
+    {
+      "key": "library-data",
+      "title": "Library data the app fetched",
+      "description": "The estate's shared document-library surfaces — a faceted catalogue, one collection's detail, one document's detail, a ranked search answer — rendered from plain props the app maps its own API responses into. The package never fetches and never routes: the app owns the query, the offset and every link. Configuration is the schema-driven half (SchemaForm); library data is fixed components because its shape is stable.",
+      "components": [
+        {
+          "name": "LibraryBrowse",
+          "props": "documents, facets?, query?, total?, offset?, limit?, loading?, error?, onQueryChange?, onFacetChange?, onPageChange?, documentHref?, onOpenDocument?, toolbar?",
+          "insteadOf": "a hand-built catalogue page: search box, facet rail, filter chips, results table and pager re-derived per app"
+        },
+        {
+          "name": "CollectionDetail",
+          "props": "collection, stats?, documents?, documentsTotal?, loading?, error?, documentsLoading?, documentsError?, onPageChange?, documentHref?, onOpenDocument?, actions?, children?",
+          "insteadOf": "a bespoke collection page assembled from raw Card, a hand-built table and its own stat rows"
+        },
+        {
+          "name": "DocumentDetail",
+          "props": "document, loading?, error?, collectionHref?, onOpenCollection?, actions?, children?",
+          "insteadOf": "a bespoke document page: identity dl, locations, tags and memberships hand-laid-out per app"
+        },
+        {
+          "name": "SearchResults",
+          "props": "results, query?, total?, loading?, error?, resultHref?, onOpen?, onRetry?",
+          "insteadOf": "a hand-built ranked hit list minting its own highlight and relevance styling"
+        }
+      ]
+    },
+    {
+      "key": "page-frame",
+      "title": "The frame every route shares",
+      "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column.",
+      "components": [
+        {
+          "name": "AppShell",
+          "props": "nav, currentPath, brandTitle?, actions?, context?, children",
+          "insteadOf": "a bespoke nav rail + header layout per app"
+        },
+        {
+          "name": "PageHeader",
+          "props": "title?, eyebrow?, breadcrumbs?, subtitle?, info?, actions?",
+          "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
+        },
+        {
+          "name": "ContextColumn",
+          "props": "stats, statsTitle?, statsInfo?, detail?, ariaLabel?",
+          "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane"
+        }
+      ]
+    },
+    {
+      "key": "dialog-and-overlay",
+      "title": "A dialog or overlay",
+      "description": "A modal task and the pieces around it — the dialog frame, a section within its body, a ⌘K palette, an inline (i) hint.",
+      "components": [
+        {
+          "name": "AppDialog",
+          "props": "title, open, onOpenChange?, size?, children, footer?",
+          "insteadOf": "raw Dialog.* parts assembled into a frame by hand"
+        },
+        {
+          "name": "DialogSection",
+          "props": "children, label?",
+          "insteadOf": "hand-drawn dividers and section labels inside a dialog body"
+        },
+        {
+          "name": "CommandPalette",
+          "props": "nav, open, onNavigate?",
+          "insteadOf": "a bespoke ⌘K command menu wired to raw Command.*"
+        },
+        {
+          "name": "InfoTip",
+          "props": "text, side?, children?",
+          "insteadOf": "a standing explainer banner, or a raw Tooltip you wire per use"
+        }
+      ]
+    },
+    {
+      "key": "empty-loading-error",
+      "title": "Empty, loading, or failed",
+      "description": "A surface with nothing to show yet, still loading, or that failed to load — the three non-happy states every data view needs.",
+      "components": [
+        {
+          "name": "EmptyState",
+          "props": "title, icon?, description?, action?",
+          "insteadOf": "a hand-centred 'Nothing here' message"
+        },
+        {
+          "name": "LoadingState",
+          "props": "message?",
+          "insteadOf": "a bare spinner or 'Loading…' you place by hand"
+        },
+        {
+          "name": "ErrorState",
+          "props": "message, action?",
+          "insteadOf": "a hand-built error message with a retry button"
+        }
+      ]
     }
-   ]
+  ],
+  "primitives": {
+    "_note": "Standard shadcn-svelte / bits-ui primitives an agent already knows by name. Listed so the coverage gate can account for every shipped component, and so a consumer's drift gate could one day read this split from the shipped package instead of hardcoding it. Kept in lockstep with the PRIMITIVES set in the household check-ui-drift.mjs gate.",
+    "components": [
+      "alert",
+      "alert-dialog",
+      "avatar",
+      "badge",
+      "button",
+      "card",
+      "checkbox",
+      "command",
+      "data-table",
+      "dialog",
+      "dropdown-menu",
+      "input",
+      "input-group",
+      "label",
+      "password-input",
+      "popover",
+      "progress",
+      "select",
+      "separator",
+      "skeleton",
+      "sonner",
+      "switch",
+      "table",
+      "tabs",
+      "textarea",
+      "tooltip"
+    ]
   },
-  {
-   "key": "entity-detail",
-   "title": "The detail of one entity",
-   "description": "The surface for a single selected record — an eyebrow, a title, its status, and a close affordance over the body.",
-   "components": [
-    {
-     "name": "DetailPanel",
-     "props": "title, eyebrow?, status?, statusLabel?, onClose?, children",
-     "insteadOf": "a Card you hand-build with an eyebrow, a title row and a close button"
-    }
-   ]
-  },
-  {
-   "key": "catalogue-of-like-things",
-   "title": "A catalogue of like things",
-   "description": "An index of many peer items — a responsive tile wall, or a sortable/filterable table of records.",
-   "components": [
-    {
-     "name": "TileGrid",
-     "props": "children, min?, gap?, tag?",
-     "insteadOf": "a grid with fixed sm:grid-cols-* breakpoints you maintain per page"
-    },
-    {
-     "name": "DataTableTanstack",
-     "props": "table, selectable?, selectedId?, onSelect?, emptyMessage?",
-     "insteadOf": "a hand-built <table>, or the raw Table primitive wired to TanStack by hand"
-    },
-    {
-     "name": "DataTableToolbar",
-     "props": "searchValue, onSearch, searchPlaceholder?, chipGroups?, trailing?",
-     "insteadOf": "a hand-built search + filter-chip bar above a table"
-    }
-   ]
-  },
-  {
-   "key": "sectioning-card",
-   "title": "A titled section of a route",
-   "description": "The generic titled card every route reaches for — an optional header with icon, subtitle and actions over a body. The default answer to 'I need a card here'.",
-   "components": [
-    {
-     "name": "Panel",
-     "props": "children, title?, subtitle?, icon?, action?, pad?",
-     "insteadOf": "raw Card + CardHeader + CardTitle assembled by hand on every route"
-    }
-   ]
-  },
-  {
-   "key": "server-described-form",
-   "title": "A form the server described",
-   "description": "A config object whose shape arrives at runtime as a JSON Schema plus a JSON Forms UI Schema — the renderer walks both and dispatches to this package's widgets. Anything it cannot dispatch renders flagged, never blank.",
-   "components": [
-    {
-     "name": "SchemaForm",
-     "props": "schema, value, onChange, uischema?, disabled?, idPrefix?",
-     "insteadOf": "a hand-written renderer over a home-grown hint vocabulary, which is how a field goes missing in silence"
-    }
-   ]
-  },
-  {
-   "key": "library-data",
-   "title": "Library data the app fetched",
-   "description": "The estate's shared document-library surfaces — a faceted catalogue, one collection's detail, one document's detail, a ranked search answer — rendered from plain props the app maps its own API responses into. The package never fetches and never routes: the app owns the query, the offset and every link. Configuration is the schema-driven half (SchemaForm); library data is fixed components because its shape is stable.",
-   "components": [
-    {
-     "name": "LibraryBrowse",
-     "props": "documents, facets?, query?, total?, offset?, limit?, loading?, error?, onQueryChange?, onFacetChange?, onPageChange?, documentHref?, onOpenDocument?, toolbar?",
-     "insteadOf": "a hand-built catalogue page: search box, facet rail, filter chips, results table and pager re-derived per app"
-    },
-    {
-     "name": "CollectionDetail",
-     "props": "collection, stats?, documents?, documentsTotal?, loading?, error?, documentsLoading?, documentsError?, onPageChange?, documentHref?, onOpenDocument?, actions?, children?",
-     "insteadOf": "a bespoke collection page assembled from raw Card, a hand-built table and its own stat rows"
-    },
-    {
-     "name": "DocumentDetail",
-     "props": "document, loading?, error?, collectionHref?, onOpenCollection?, actions?, children?",
-     "insteadOf": "a bespoke document page: identity dl, locations, tags and memberships hand-laid-out per app"
-    },
-    {
-     "name": "SearchResults",
-     "props": "results, query?, total?, loading?, error?, resultHref?, onOpen?, onRetry?",
-     "insteadOf": "a hand-built ranked hit list minting its own highlight and relevance styling"
-    }
-   ]
-  },
-  {
-   "key": "page-frame",
-   "title": "The frame every route shares",
-   "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column.",
-   "components": [
-    {
-     "name": "AppShell",
-     "props": "nav, currentPath, brandTitle?, actions?, context?, children",
-     "insteadOf": "a bespoke nav rail + header layout per app"
-    },
-    {
-     "name": "PageHeader",
-     "props": "title?, eyebrow?, breadcrumbs?, subtitle?, info?, actions?",
-     "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
-    },
-    {
-     "name": "ContextColumn",
-     "props": "stats, statsTitle?, statsInfo?, detail?, ariaLabel?",
-     "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane"
-    }
-   ]
-  },
-  {
-   "key": "dialog-and-overlay",
-   "title": "A dialog or overlay",
-   "description": "A modal task and the pieces around it — the dialog frame, a section within its body, a ⌘K palette, an inline (i) hint.",
-   "components": [
-    {
-     "name": "AppDialog",
-     "props": "title, open, onOpenChange?, size?, children, footer?",
-     "insteadOf": "raw Dialog.* parts assembled into a frame by hand"
-    },
-    {
-     "name": "DialogSection",
-     "props": "children, label?",
-     "insteadOf": "hand-drawn dividers and section labels inside a dialog body"
-    },
-    {
-     "name": "CommandPalette",
-     "props": "nav, open, onNavigate?",
-     "insteadOf": "a bespoke ⌘K command menu wired to raw Command.*"
-    },
-    {
-     "name": "InfoTip",
-     "props": "text, side?, children?",
-     "insteadOf": "a standing explainer banner, or a raw Tooltip you wire per use"
-    }
-   ]
-  },
-  {
-   "key": "empty-loading-error",
-   "title": "Empty, loading, or failed",
-   "description": "A surface with nothing to show yet, still loading, or that failed to load — the three non-happy states every data view needs.",
-   "components": [
-    {
-     "name": "EmptyState",
-     "props": "title, icon?, description?, action?",
-     "insteadOf": "a hand-centred 'Nothing here' message"
-    },
-    {
-     "name": "LoadingState",
-     "props": "message?",
-     "insteadOf": "a bare spinner or 'Loading…' you place by hand"
-    },
-    {
-     "name": "ErrorState",
-     "props": "message, action?",
-     "insteadOf": "a hand-built error message with a retry button"
-    }
-   ]
-  }
- ],
- "primitives": {
-  "_note": "Standard shadcn-svelte / bits-ui primitives an agent already knows by name. Listed so the coverage gate can account for every shipped component, and so a consumer's drift gate could one day read this split from the shipped package instead of hardcoding it. Kept in lockstep with the PRIMITIVES set in the household check-ui-drift.mjs gate.",
-  "components": [
-   "alert",
-   "alert-dialog",
-   "avatar",
-   "badge",
-   "button",
-   "card",
-   "checkbox",
-   "command",
-   "data-table",
-   "dialog",
-   "dropdown-menu",
-   "input",
-   "input-group",
-   "label",
-   "password-input",
-   "popover",
-   "progress",
-   "select",
-   "separator",
-   "skeleton",
-   "sonner",
-   "switch",
-   "table",
-   "tabs",
-   "textarea",
-   "tooltip"
+  "typeOnly": [
+    "status"
   ]
- },
- "typeOnly": [
-  "status"
- ]
 }
