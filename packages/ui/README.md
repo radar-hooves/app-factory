@@ -539,6 +539,39 @@ Check that at ≥4.5:1 against `--ds-color-surface-1` (the chrome), not against
 darker of the two. `harness/drive.mjs` gates the default path across three
 palettes in both themes on every run.
 
+### Depth: the ladder and one hairline, not an elevation scale
+
+A raised surface reads as raised from **the surface ladder plus a 1px inner
+highlight**, applied by `.ds-edge` — which `DetailPanel`, `AppDialog`, `Panel`,
+`StatCard`, `StatList`, `EmptyState`, `ErrorState` and `DataTableTanstack`
+already carry, so most apps never write it. There is one knob:
+
+```css
+:root {
+	/* The drop shadow under .ds-edge. Neutral translucent black in both modes —
+	   a shadow is an absence of light, not a palette colour. */
+	--ds-shadow-sm: 0 1px 2px oklch(0 0 0 / 0.12);
+}
+```
+
+**There is deliberately no `sm`/`md`/`lg` elevation scale**, and that is a
+decision rather than a gap. A hairline border under a wide soft shadow is a
+recognised generated-UI tell, and a named ladder of shadows invites exactly it —
+so depth is declared once per surface, by the rung it sits on, and the edge does
+the rest.
+
+Measured across nine consumers before deciding: **two** declared their own
+shadows, not the "every app" the case for a scale assumed. One of the two
+already points `--ds-shadow-sm` at its own value, which is the supported path
+working as intended. The other had rebuilt `.ds-edge`'s exact formula under a
+different local name, which is a discoverability problem this section exists to
+fix, not an argument for more tokens.
+
+Motion is the same answer for a stronger reason: **no** consumer declares a
+duration or easing scale. What three of them do share, verbatim, is a
+`prefers-reduced-motion` block — an accessibility guard rather than a scale, and
+a better candidate for sharing than any easing curve.
+
 ### Making a surface interactive: `hover:bg-accent`
 
 A clickable card, row or tile takes the ordinary shadcn treatment, and it works:

@@ -60,6 +60,14 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Changed
 
+- **The README states the house answer for depth, and why there is no elevation
+  scale (design-system#23).** `.ds-edge` plus `--ds-shadow-sm` is the whole of
+  it; a named `sm`/`md`/`lg` ladder is deliberately absent, because a hairline
+  border under a wide soft shadow is a recognised generated-UI tell and a scale
+  invites it. The section exists because one consumer had rebuilt `.ds-edge`'s
+  exact formula under a local name, which is a discoverability failure rather
+  than a missing token.
+
 - **`eyebrow` stays, and is documented as an exception rather than an ordinary
   slot (design-system#21).** The issue asked for a decision between retiring it
   and documenting it, on the premise that the app which raised it had already
