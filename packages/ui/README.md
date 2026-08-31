@@ -149,7 +149,7 @@ That is the whole minimum. Everything below is optional.
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `nav`                                             | Bare `NavItem`s, `NavGroup`s, or a mix. Consecutive bare items collapse into one run; an emptied group renders nothing. |
 | `currentPath`                                     | Active state, and closing the mobile nav on navigation.                                                                 |
-| `collapsible`, `collapsed`                        | An icon-only rail collapse toggle whose state binds out so an app can persist it.                                       |
+| `collapsible`, `collapsed`                        | An icon-only rail collapse toggle whose state binds out so an app can persist it. `collapsible` defaults to `true`.     |
 | `brand` / `brandTitle` + `brandMark` / `homeHref` | Full control of the lockup, or the wordmark-plus-mark shorthand.                                                        |
 | `identity`                                        | The signed-in surface. Rendered once, at the end of the top bar.                                                        |
 | `context`, `actions`                              | Leading and trailing top-bar slots: a store/tenant switcher, app-level action buttons.                                  |
@@ -157,7 +157,7 @@ That is the whole minimum. Everything below is optional.
 | `onSearch`, `searchLabel`, `searchShortcut`       | Provide `onSearch` to render the search affordance at all.                                                              |
 | `themeToggle`, `onToggleTheme`                    | Defaults to `mode-watcher`. Set `themeToggle={false}` when the app puts theming inside its own user menu.               |
 | `measure`                                         | How wide the page body may get, from a named scale. Defaults to `full` (no cap).                                        |
-| `texture`                                         | The house atmosphere on the content region. Defaults to `none`.                                                         |
+| `texture`                                         | The house atmosphere on the content region. Defaults to `grid`; `none` is the opt-out.                                  |
 | `padded`, `mainClass`                             | Padding, and extra classes on the scrolling content container.                                                          |
 
 ### Nested navigation
@@ -351,30 +351,36 @@ The house atmosphere — a faint dot-grid floor with a soft accent vignette in t
 top-right — painted once, by the shell, on the region that scrolls:
 
 ```svelte
-<AppShell {nav} currentPath={page.url.pathname} texture="grid">
+<AppShell {nav} currentPath={page.url.pathname}>
 	{@render children()}
 </AppShell>
 ```
 
 | Value  | What it paints                                          | Reach for it when                                                        |
 | ------ | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `grid` | a dot-grid floor plus one accent vignette in the corner | the app wants the house "instrument-grade" surface rather than flat page |
-| `none` | nothing at all                                          | the default                                                              |
+| `grid` | a dot-grid floor plus one accent vignette in the corner | the default — the house "instrument-grade" surface                       |
+| `none` | nothing at all                                          | an app arguing a deliberate exception                                    |
 
-`none` is the default, so a shell that does not mention `texture` renders exactly
-as it did before the prop existed. Verified, not assumed, and reproducibly so:
+`grid` is the default since `2026.8.8`, so a shell that does not mention
+`texture` wears the house atmosphere. It shipped `none`-by-default in `2026.8.4`
+and the estate's answer to opt-in was measured a fortnight later: five of nine
+stamped apps wore it, three of them through a hand-rolled `*-dotgrid` class in
+their own `app.css` under three names. An opt-in house style measures who
+remembered, not what the house looks like.
+
+`texture="none"` is the complete opt-out and renders the region exactly as it
+was before the feature existed — gated, not assumed:
 
 ```sh
 node harness/additivity.mjs ui-v2026.8.3
 # 15 surface/viewport pairs, 105 compared fields (including the screenshot hash)
-# IDENTICAL on every field and every pixel — the change is additive.
+# IDENTICAL on every field and every pixel against an explicit texture="none".
 ```
 
 `harness/additivity.mjs` builds the package at any base ref in a throwaway git
 worktree, renders the five surfaces an existing consumer already has at 2560px,
 1440px and 360px, and diffs the markup, both attribute sets, the computed box and
-background properties, the geometry and the rendered pixels. Adoption is
-deliberate, one app at a time.
+background properties, the geometry and the rendered pixels.
 
 **Why it lives on the shell rather than being a class an app applies.** Because
 that is the entire defect it fixes. Two apps had built this same picture

@@ -1,6 +1,6 @@
 {
   "name": "@poodle64/design-tokens",
-  "version": "2026.8.0",
+  "version": "2026.8.1",
   "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
   "type": "module",
   "license": "MIT",

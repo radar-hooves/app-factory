@@ -2,6 +2,77 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.8.1] - 2026-08-31
+
+### Fixed
+
+- **Surfaces and borders now separate from the page they sit on
+  (design-system#17).** Measured across eight routes of a consuming app with
+  real content, 119 non-text checks: a card sat at **1.01-1.03:1** against the
+  page, card/input/table borders at **1.28-1.75:1**, the header rule at
+  1.31:1. Reproduced here directly from the token source, which is where it
+  came from: dark `surface-2` was 1.022:1 off the canvas and `border` 1.285:1
+  off the card it bounded. Light mode was the same flat ladder (1.04-1.11:1)
+  and went unnoticed only because a white card on a near-white page reads as
+  "clean" rather than as missing.
+
+  Every text check on those same routes passed — 618 nodes, zero AA failures —
+  which is exactly why this survived. The gate only ever looked at ink.
+
+  The neutral ladder's lightness steps moved; nothing was renamed, no token was
+  added to the semantic surface, and no palette gained a field. A palette
+  projects this ladder, so all twenty inherit the fix without being touched.
+
+  | Token | Light | Dark |
+  | --- | --- | --- |
+  | `background` | `0.985` → `0.905` | `0.205` (unchanged) |
+  | `surface-1` | `0.970` → `0.878` | `0.175` → `0.168` |
+  | `surface-2` | `1.000` → `0.990` | `0.215` → `0.278` |
+  | `surface-3` | `0.950` → `1.000` | `0.250` → `0.332` |
+  | `border` | `0.860` → `0.770` | `0.300` → `0.455` |
+  | `border-strong` | `0.780` → `0.588` | `0.380` → `0.605` |
+  | `muted-foreground` | `0.520` → `0.475` | `0.680` → `0.712` |
+
+  - **The dark canvas did not move.** `0.205` is a genuinely near-black ground
+    and it is the household's look; the issue named lifting the canvas as the
+    equally legitimate alternative, and this is the option that keeps the
+    character. What was wrong was never the darkness — it was that everything
+    meant to sit ON that canvas differed from it by 1.02:1. The surfaces came
+    up to meet it instead.
+  - **Light mode had nowhere to go, so the canvas came down.** A white card
+    cannot separate from a near-white page by getting whiter. The page is now
+    a light grey and pure white became the most elevated rung
+    (`surface-3`, popover) rather than the card. `surface-2` takes a new
+    `neutral.25`. This also fixes a direction error nobody had noticed: the
+    shipped light ladder had `surface-3` **darker** than `surface-2`, so the
+    most elevated surface read as the most recessed one.
+  - **`border` and `border-strong` carry different floors, and that is the
+    design decision rather than an inconsistency.** WCAG 1.4.11 sets 3:1 for
+    the visual boundary of a user-interface *component*; `border-strong` is
+    the token that bounds a control, so it carries that floor. `border` is the
+    hairline that separates content — table rules, card edges, dividers — which
+    1.4.11 does not reach, and putting a 3:1 hairline under every card is a
+    different design language, not this one. It carries 1.5:1: still a real
+    floor, because the shipped 1.28:1 was not a line anybody could see.
+  - **The surface floor is 1.2:1 and is perceptibility, not conformance.** A
+    fill is not a graphical object under 1.4.11. 1.02:1 is not elevation, it is
+    the same colour twice. `surface-1` is the recessed rung and keeps a lower
+    floor on purpose — a muted fill is meant to be subtle.
+
+### Added
+
+- **`test/non-text-contrast.test.js`**, so the ladder cannot go flat again.
+  Eight cases across both modes: surface separation, both border floors against
+  every surface each one bounds, and the direction of the climb. Driven red
+  before it was kept — restoring the old dark `surface-2` fails the separation
+  case, and restoring the old `border-strong` fails the 3:1 case as well.
+
+### Changed
+
+- `sd.config.js`'s `NEUTRAL_SURFACES` map follows the two repointed light
+  surfaces. It is asserted against the token source by `palettes.test.js`,
+  which is what caught the stale mapping here rather than a reviewer.
+
 ## [2026.8.0] - 2026-08-14
 
 ### Added

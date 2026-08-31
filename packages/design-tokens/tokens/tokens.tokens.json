@@ -14,37 +14,42 @@
 		"$description": "Raw OKLCH scale — primitives only, not for direct use in components. Consume via semantic tokens below.",
 
 		"neutral": {
-			"0": { "$value": "oklch(1.000 0.000 0)", "$type": "color", "$description": "absolute white" },
-			"50": {
-				"$value": "oklch(0.985 0.003 85)",
+			"0": { "$value": "oklch(1.000 0.000 0)", "$type": "color", "$description": "absolute white; surface-3 light" },
+			"25": {
+				"$value": "oklch(0.990 0.002 85)",
 				"$type": "color",
-				"$description": "warm white; app ground light"
+				"$description": "card light; surface-2"
+			},
+			"50": {
+				"$value": "oklch(0.905 0.005 85)",
+				"$type": "color",
+				"$description": "warm ground light — the page the cards sit ON, so it is a light grey rather than near-white (design-system#17)"
 			},
 			"100": {
-				"$value": "oklch(0.970 0.005 85)",
+				"$value": "oklch(0.878 0.007 85)",
 				"$type": "color",
-				"$description": "warm paper; surface-1 light"
+				"$description": "recessed fill light; surface-1"
 			},
 			"150": {
 				"$value": "oklch(0.950 0.007 85)",
 				"$type": "color",
-				"$description": "sunken; surface-2 light"
+				"$description": "spare rung"
 			},
 			"200": { "$value": "oklch(0.920 0.009 85)", "$type": "color" },
 			"300": {
-				"$value": "oklch(0.860 0.010 85)",
+				"$value": "oklch(0.770 0.011 85)",
 				"$type": "color",
-				"$description": "border light"
+				"$description": "border light — separates content, 1.5:1 floor against every surface it bounds (design-system#17)"
 			},
 			"400": {
-				"$value": "oklch(0.780 0.012 85)",
+				"$value": "oklch(0.588 0.015 85)",
 				"$type": "color",
-				"$description": "border-strong light"
+				"$description": "border-strong light — bounds a CONTROL, 3:1 floor per WCAG 1.4.11 (design-system#17)"
 			},
 			"500": {
-				"$value": "oklch(0.520 0.012 85)",
+				"$value": "oklch(0.475 0.013 85)",
 				"$type": "color",
-				"$description": "muted text light — 4.5:1 AA floor against every light surface (design-system#13); was 0.600 (3.41:1 on the worst surface)"
+				"$description": "muted text light — 4.5:1 AA floor against every light surface (design-system#13); 0.600 -> 0.520 for #13, then 0.475 when #17 deepened the recessed rung"
 			},
 			"600": { "$value": "oklch(0.450 0.015 85)", "$type": "color" },
 			"700": { "$value": "oklch(0.320 0.018 85)", "$type": "color" },
@@ -59,32 +64,32 @@
 				"$description": "app ground dark"
 			},
 			"900": {
-				"$value": "oklch(0.175 0.018 260)",
+				"$value": "oklch(0.168 0.017 260)",
 				"$type": "color",
-				"$description": "surface-1 dark"
+				"$description": "recessed fill dark; surface-1"
 			},
 			"920": {
-				"$value": "oklch(0.215 0.020 260)",
+				"$value": "oklch(0.278 0.020 260)",
 				"$type": "color",
-				"$description": "card dark; surface-2"
+				"$description": "card dark; surface-2 — lifted off the canvas so a card reads as elevated (design-system#17)"
 			},
 			"940": {
-				"$value": "oklch(0.250 0.022 260)",
+				"$value": "oklch(0.332 0.022 260)",
 				"$type": "color",
-				"$description": "elevated dark; surface-3"
+				"$description": "elevated dark; surface-3 — popover/dialogue, a further step above the card"
 			},
 			"950": {
-				"$value": "oklch(0.300 0.020 260)",
+				"$value": "oklch(0.455 0.024 260)",
 				"$type": "color",
 				"$description": "border dark"
 			},
 			"960": {
-				"$value": "oklch(0.380 0.022 260)",
+				"$value": "oklch(0.605 0.026 260)",
 				"$type": "color",
 				"$description": "border-strong dark"
 			},
 			"970": {
-				"$value": "oklch(0.680 0.015 250)",
+				"$value": "oklch(0.712 0.015 250)",
 				"$type": "color",
 				"$description": "muted foreground dark"
 			},
@@ -233,7 +238,7 @@
 			},
 			"surface-2": {
 				"light": {
-					"$value": "{palette.neutral.0}",
+					"$value": "{palette.neutral.25}",
 					"$type": "color",
 					"$description": "Default card surface (raised)."
 				},
@@ -241,7 +246,7 @@
 			},
 			"surface-3": {
 				"light": {
-					"$value": "{palette.neutral.150}",
+					"$value": "{palette.neutral.0}",
 					"$type": "color",
 					"$description": "Elevated: popover, dialogue, row hover."
 				},

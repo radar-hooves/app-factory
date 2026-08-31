@@ -250,8 +250,8 @@ const NEUTRAL_SURFACES = {
 		background: 'neutral.50',
 		foreground: 'neutral.800',
 		'surface-1': 'neutral.100',
-		'surface-2': 'neutral.0',
-		'surface-3': 'neutral.150',
+		'surface-2': 'neutral.25',
+		'surface-3': 'neutral.0',
 		'muted-foreground': 'neutral.500',
 		border: 'neutral.300',
 		'border-strong': 'neutral.400'
@@ -283,10 +283,12 @@ function ladderStep(tokens, ref) {
  * the palette's hue.
  *
  * A step at chroma 0 stays at chroma 0 and so keeps no hue of its own. That is
- * `surface-2` in light mode — `neutral.0`, named "absolute white" in the token
+ * `surface-3` in light mode — `neutral.0`, named "absolute white" in the token
  * source — and leaving it alone is the point rather than an oversight: it is
- * what gives a warm-surface palette its paper-on-desk read, a white card
- * sitting on a tinted ground.
+ * what gives a warm-surface palette its paper-on-desk read, an untinted
+ * overlay sitting on a tinted ground. It was `surface-2` until #17 lifted the
+ * light canvas off near-white, which needed a rung of its own between the card
+ * and absolute white.
  */
 function retone(step, tone, mode) {
 	const c = step.c * tone.chromaScale[mode];
