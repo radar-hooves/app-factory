@@ -132,6 +132,22 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Added
 
+- **A keyboard-focus gate on `Button` (design-system#18).** Drives real Tab
+  navigation and asserts the **computed** `box-shadow` paints a ring — not
+  `--tw-ring-shadow`, which reads correct whether or not anything is on screen.
+  Driven red by removing `focus-visible:ring-3`.
+
+  The report it came from — "the box-shadow never renders, regardless of ring
+  colour" — is not reproducible; the ring paints at `oklab(0.5 … / 0.5) 0 0 0
+  3px` with the border taking the ring colour, and a focused button photographs
+  differently from a blurred one. It was a measurement artefact worth recording:
+  `Button`'s base carries `transition-all` at 150ms, so a `getComputedStyle`
+  read taken in the same turn as the focus returns the transition's START value
+  — a transparent shadow and a transparent `border-top-color`, exactly the
+  symptom described, and one no change to the ring COLOUR can move, which is
+  why swapping it "had no effect". The gate is kept anyway: its absence is what
+  let the question be asked at all.
+
 - **A pointer-driven hover gate in `harness/drive.mjs`**, in both colour
   schemes. It composites the resting and hovered fills of a real card and
   asserts they differ, that the largest channel shift is at least 4/255, and

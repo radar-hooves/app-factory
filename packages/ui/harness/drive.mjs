@@ -2528,6 +2528,74 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	await context.close();
 }
 
+// ── The keyboard focus indicator on Button (#18) ────────────────────────────
+// Reported as "the box-shadow never renders, regardless of ring colour". It
+// does render. The report was a measurement artefact, and an instructive one:
+// Button's base carries `transition-all` at 150ms, so a `getComputedStyle` read
+// taken in the same turn as the focus returns the transition's START value —
+// a fully transparent shadow and a transparent border-top-color, which is
+// exactly the symptom described, and which no change to the ring COLOUR can
+// move. That is why swapping the ring colour "had no effect".
+//
+// The suggested guard is kept anyway, because it is the right one and its
+// absence is what let an afternoon go into this: assert the COMPUTED box-shadow
+// on a genuinely Tab-focused button, not the custom property. A test on
+// `--tw-ring-shadow` passes whether or not anything is painted.
+{
+	const { context, page } = await open('surface=palette');
+	await page.waitForSelector('[data-probe="button-default-default"]');
+
+	// A real keyboard traversal. `.focus()` does not reliably set the keyboard
+	// modality, so `:focus-visible` can fail to match and give a false negative.
+	await page.keyboard.press('Tab');
+	let reached = false;
+	for (let hop = 0; hop < 400 && !reached; hop += 1) {
+		reached = await page.evaluate(
+			() => document.activeElement?.getAttribute('data-probe') === 'button-default-default'
+		);
+		if (!reached) await page.keyboard.press('Tab');
+	}
+	// Deliberately not SETTLE-d, and deliberately waited out: the transition is
+	// the thing that produced the false report, so this check has to live with it
+	// rather than switch it off.
+	await page.waitForTimeout(400);
+
+	const focus = await page.evaluate(() => {
+		const el = document.activeElement;
+		const style = getComputedStyle(el);
+		return {
+			probe: el?.getAttribute('data-probe'),
+			focusVisible: el.matches(':focus-visible'),
+			boxShadow: style.boxShadow,
+			borderTopColor: style.borderTopColor,
+			// The property a naive test would have asserted on. Reported, never
+			// asserted, so the difference between the two stays visible here.
+			ringShadowProperty: style.getPropertyValue('--tw-ring-shadow').trim()
+		};
+	});
+
+	check(
+		'button focus: real Tab navigation matches :focus-visible',
+		focus.probe === 'button-default-default' && focus.focusVisible,
+		`focus on ${focus.probe}, :focus-visible ${focus.focusVisible}`
+	);
+	// The claim, and it is about the COMPUTED shadow: at least one layer with a
+	// non-zero spread and a colour that is not fully transparent.
+	const painted = /(?:rgba?|oklab|oklch)\([^)]*\)\s+0px 0px 0px [1-9]/.test(focus.boxShadow);
+	const transparent = /\/\s*0\)/.test(focus.boxShadow.split(',').find((l) => /[1-9]px/.test(l)) ?? '');
+	check(
+		'button focus: the computed box-shadow actually paints a ring',
+		painted && !transparent,
+		focus.boxShadow
+	);
+	check(
+		'button focus: the border takes the ring colour too',
+		!/\/\s*0\)|rgba\(0, 0, 0, 0\)/.test(focus.borderTopColor),
+		`border-top-color ${focus.borderTopColor} (--tw-ring-shadow resolved to "${focus.ringShadowProperty}", which is what a property-based test would have asserted on — it reads correct even when nothing is painted)`
+	);
+	await context.close();
+}
+
 // ── A clickable card's hover affordance (#24) ───────────────────────────────
 // The defect this gates compiles, type-checks, passes every structural test and
 // satisfies every contrast check on text. It is wrong only when a human moves a
