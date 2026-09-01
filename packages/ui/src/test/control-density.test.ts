@@ -138,9 +138,9 @@ describe('the button size ramp', () => {
 			.replace(/\[&_svg[\s\S]*?\]:size-[0-9]+/g, '')
 			.replace(/\/\/.*$/gm, '');
 
-		const offenders = [
-			...geometry.matchAll(/\b((?:h|size|px|pr|pl)-[0-9]+(?:\.[0-9]+)?)\b/g)
-		].map(([, utility]) => utility);
+		const offenders = [...geometry.matchAll(/\b((?:h|size|px|pr|pl)-[0-9]+(?:\.[0-9]+)?)\b/g)].map(
+			([, utility]) => utility
+		);
 
 		expect(offenders, 'hard-coded geometry classes in the button size table').toEqual([]);
 	});
@@ -177,6 +177,8 @@ describe('the button size ramp', () => {
 		expect(declaration(css, 'pr-\\(--ds-control-pad-icon-md\\)', 'padding-right')).toBe(
 			'var(--ds-control-pad-icon-md)'
 		);
-		expect(css).toMatch(/\.size-\\\(--ds-control-height-md\\\)\s*\{[^}]*width:\s*var\(--ds-control-height-md\)/);
+		expect(css).toMatch(
+			/\.size-\\\(--ds-control-height-md\\\)\s*\{[^}]*width:\s*var\(--ds-control-height-md\)/
+		);
 	});
 });
