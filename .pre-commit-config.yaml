@@ -57,8 +57,9 @@ repos:
   #                              Household PII scan                              #
   # ---------------------------------------------------------------------------- #
 
-  # The master check-pii hook, symlinked at .claude/hooks/master/precommit/pii.py
-  # (rules-library/core/pre-commit-config.md — never a per-repo copy).
+  # The master check-pii gate, on PATH as a command provisioned per machine
+  # (rules-library/core/pre-commit-config.md — never a per-repo copy, and never
+  # a path into master: that shape took 22 repos' gates down on 02/09/2026).
   - repo: local
     hooks:
       - id: check-pii
