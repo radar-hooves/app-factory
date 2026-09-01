@@ -18,18 +18,23 @@
 					'bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30',
 				link: 'text-primary underline-offset-4 hover:underline'
 			},
+			// Every geometry value here is a `--ds-control-*` token whose default is
+			// the class it replaced (`h-10` is 2.5rem, `px-4` is 1rem, …), so a
+			// consumer that names no density renders unchanged. The tokens, the two
+			// named densities and why the ramp is a table rather than a ratio are in
+			// styles.css §"Control geometry".
 			size: {
 				default:
-					'h-10 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-				xs: "h-7 gap-1 rounded-[min(var(--radius-md),10px)] px-2.5 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-				sm: "h-9 gap-1.5 rounded-[min(var(--radius-md),12px)] px-3.5 text-[0.85rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-4",
-				lg: 'h-11 gap-1.5 px-5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-				icon: 'size-10',
+					'h-(--ds-control-height-md) gap-1.5 px-(--ds-control-pad-md) has-data-[icon=inline-end]:pr-(--ds-control-pad-icon-md) has-data-[icon=inline-start]:pl-(--ds-control-pad-icon-md)',
+				xs: "h-(--ds-control-height-xs) gap-1 rounded-[min(var(--radius-md),10px)] px-(--ds-control-pad-xs) text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-(--ds-control-pad-icon-xs) has-data-[icon=inline-start]:pl-(--ds-control-pad-icon-xs) [&_svg:not([class*='size-'])]:size-3",
+				sm: "h-(--ds-control-height-sm) gap-1.5 rounded-[min(var(--radius-md),12px)] px-(--ds-control-pad-sm) text-[0.85rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-(--ds-control-pad-icon-sm) has-data-[icon=inline-start]:pl-(--ds-control-pad-icon-sm) [&_svg:not([class*='size-'])]:size-4",
+				lg: 'h-(--ds-control-height-lg) gap-1.5 px-(--ds-control-pad-lg) has-data-[icon=inline-end]:pr-(--ds-control-pad-icon-lg) has-data-[icon=inline-start]:pl-(--ds-control-pad-icon-lg)',
+				icon: 'size-(--ds-control-height-md)',
 				'icon-xs':
-					"size-7 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
+					"size-(--ds-control-height-xs) rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
 				'icon-sm':
-					'size-9 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg',
-				'icon-lg': 'size-11'
+					'size-(--ds-control-height-sm) rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg',
+				'icon-lg': 'size-(--ds-control-height-lg)'
 			}
 		},
 		defaultVariants: {

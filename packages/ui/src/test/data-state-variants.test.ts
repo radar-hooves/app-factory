@@ -43,20 +43,53 @@ import OverlayStates from './overlay-states.svelte';
  * Every shorthand data-variant this package is allowed to ship, and the
  * attribute its compiled rule must target.
  *
- * `data-open` / `data-closed` are the two that need a declaration, because the
- * attribute is `data-state` and the value is what distinguishes them. The rest
+ * The `data-state` family needs a declaration, because the attribute is
+ * `data-state` and the VALUE is what distinguishes one from another; the rest
  * are bare attributes — bits-ui writes them as empty-string-or-undefined, and
  * this package writes `data-inset` on its own menu items — so Tailwind's
  * default `&[data-x]` already matches and a declaration would only restate it.
+ *
+ * `data-checked` and `data-active` are here because they were NOT, and both
+ * cost a consuming app a live defect: every checked checkbox painted no fill,
+ * and every tab strip rendered its selected trigger identically to the rest.
+ * The whole `data-state` value set is now declared rather than the values that
+ * happen to have been caught, which is what stops the next one recurring.
  */
 const OWNED: Record<string, string> = {
 	'data-open': '[data-state="open"]',
 	'data-closed': '[data-state="closed"]',
+	'data-checked': '[data-state="checked"]',
+	'data-unchecked': '[data-state="unchecked"]',
+	'data-indeterminate': '[data-state="indeterminate"]',
+	'data-active': '[data-state="active"]',
+	'data-inactive': '[data-state="inactive"]',
 	'data-selected': '[data-selected]',
 	'data-highlighted': '[data-highlighted]',
 	'data-disabled': '[data-disabled]',
 	'data-placeholder': '[data-placeholder]',
 	'data-inset': '[data-inset]'
+};
+
+/**
+ * Every `data-state` value this package declares a variant for, and the
+ * declaration it must ship. The ATTRIBUTE half is checked against a real DOM
+ * below; this half is what says the stylesheet still carries the declaration,
+ * so an app that tidies its own app.css cannot take the mapping down with it.
+ *
+ * `data-active` is the one two-selector entry, and deliberately: bits-ui writes
+ * `data-state="active"` on a tabs trigger and a BARE `data-active` on a
+ * navigation-menu link, a slider thumb and a pin-input cell, and this package's
+ * own AppNav writes `data-active="true"` on every nav row. A single-selector
+ * declaration would fix tabs by breaking all four.
+ */
+const DECLARED: Record<string, string> = {
+	'data-open': "(&[data-state='open'])",
+	'data-closed': "(&[data-state='closed'])",
+	'data-checked': "(&[data-state='checked'])",
+	'data-unchecked': "(&[data-state='unchecked'])",
+	'data-indeterminate': "(&[data-state='indeterminate'])",
+	'data-active': "(&[data-state='active'], &[data-active])",
+	'data-inactive': "(&[data-state='inactive'])"
 };
 
 /** Shorthand `data-name:` variants (never the `data-[…]:` bracketed form). */
@@ -141,15 +174,55 @@ describe('the shorthand data-attribute variants', () => {
 		expect(wrong, 'variants whose compiled rule cannot match the DOM').toEqual([]);
 	});
 
-	it('ships the open/closed declarations rather than assuming the app has them', () => {
+	it('ships every data-state declaration rather than assuming the app has them', () => {
 		// The contract has to travel with the utilities, exactly as @custom-variant
 		// dark now does. An app that tidies its own app.css must not be able to
-		// take the package's overlay transitions down with it.
-		const stylesheet = readFileSync(join(distDir, 'styles.css'), 'utf8');
-		expect(stylesheet).toMatch(/@custom-variant\s+data-open\s*\(&\[data-state=['"]open['"]\]\)/);
-		expect(stylesheet).toMatch(
-			/@custom-variant\s+data-closed\s*\(&\[data-state=['"]closed['"]\]\)/
-		);
+		// take the package's overlay transitions — or its checked checkboxes —
+		// down with it.
+		//
+		// Asserted on the whole set rather than on the values some component
+		// happens to use today: the point of fixing this at the mapping is that
+		// the NEXT component to write `data-checked:` gets a rule that matches,
+		// and a gate that only checked shipped variants could not see that.
+		const stylesheet = normaliseQuotes(readFileSync(join(distDir, 'styles.css'), 'utf8'));
+		const missing = Object.entries(DECLARED)
+			.filter(([variant, selector]) => {
+				return !stylesheet.includes(`@custom-variant ${variant} ${normaliseQuotes(selector)}`);
+			})
+			.map(([variant, selector]) => `${variant} ${selector}`);
+
+		expect(missing, 'data-state variants the stylesheet no longer declares').toEqual([]);
+	});
+
+	it('compiles every declared variant to a rule, used by a component or not', () => {
+		// The companion to the assertion above: the declaration is in the file AND
+		// the compiler accepts it. A `@custom-variant` Tailwind cannot parse is
+		// dropped without an error, which would put the mapping right back where
+		// it started.
+		const candidates = Object.keys(DECLARED).map((variant) => `${variant}:hidden`);
+		const css = compile(candidates);
+
+		const wrong: string[] = [];
+		for (const variant of Object.keys(DECLARED)) {
+			const block = ruleBlock(css, `${variant}:hidden`);
+			if (block === null) {
+				wrong.push(`${variant} generated no rule at all`);
+				continue;
+			}
+			if (!normaliseQuotes(block).includes(normaliseQuotes(OWNED[variant]))) {
+				wrong.push(`${variant} does not target ${OWNED[variant]}`);
+			}
+		}
+
+		expect(wrong, 'declared variants whose compiled rule cannot match the DOM').toEqual([]);
+	});
+
+	it('keeps data-active matching the BARE attribute too', () => {
+		// The union's second half, asserted on its own because losing it is
+		// silent: tabs would go on working while every nav row, slider thumb and
+		// pin-input cell quietly stopped matching.
+		const css = compile(['data-active:hidden']);
+		expect(normaliseQuotes(ruleBlock(css, 'data-active:hidden') ?? '')).toContain('[data-active]');
 	});
 });
 
@@ -246,5 +319,50 @@ describe('what bits-ui actually puts in the DOM', () => {
 		render(OverlayStates);
 		const trigger = screen.getByTestId('overlay-select-trigger');
 		expect(trigger.hasAttribute('data-placeholder')).toBe(true);
+	});
+
+	// The half that was missing, and the reason two live defects shipped. Each
+	// case asserts BOTH directions: the value bits-ui writes into `data-state`,
+	// and that the bare attribute a naive `data-checked:` would have matched is
+	// absent. Without the second assertion the gate cannot tell a working mapping
+	// from a lucky one.
+	it.each([
+		['state-checkbox-checked', 'checked'],
+		['state-checkbox-unchecked', 'unchecked'],
+		['state-checkbox-indeterminate', 'indeterminate']
+	])('marks %s with data-state="%s", never a bare attribute', (testid, value) => {
+		render(OverlayStates);
+		const box = screen.getByTestId(testid);
+		expect(box.getAttribute('data-state')).toBe(value);
+		expect(box.hasAttribute(`data-${value}`)).toBe(false);
+	});
+
+	it.each([
+		['state-switch-checked', 'checked'],
+		['state-switch-unchecked', 'unchecked']
+	])('marks %s with data-state="%s", never a bare attribute', (testid, value) => {
+		render(OverlayStates);
+		const track = screen.getByTestId(testid);
+		expect(track.getAttribute('data-state')).toBe(value);
+		expect(track.hasAttribute(`data-${value}`)).toBe(false);
+	});
+
+	it.each([
+		['state-tab-active', 'active'],
+		['state-tab-inactive', 'inactive']
+	])('marks %s with data-state="%s"', (testid, value) => {
+		render(OverlayStates);
+		const trigger = screen.getByTestId(testid);
+		expect(trigger.getAttribute('data-state')).toBe(value);
+	});
+
+	it('does not put a bare data-active on a tabs trigger', () => {
+		// The union in the `data-active` declaration exists for the OTHER surfaces
+		// (nav rows, slider thumbs, pin-input cells). If bits-ui ever started
+		// writing a bare `data-active` on a tab as well, the union would still be
+		// correct — but the reason recorded for it would not be, and this is where
+		// that would surface.
+		render(OverlayStates);
+		expect(screen.getByTestId('state-tab-active').hasAttribute('data-active')).toBe(false);
 	});
 });

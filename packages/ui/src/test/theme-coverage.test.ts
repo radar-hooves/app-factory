@@ -127,6 +127,104 @@ describe('custom properties inherited from the React registry', () => {
 
 		expect(offenders, 'files referencing a Radix variable bits-ui does not set').toEqual([]);
 	});
+
+	it('reads only --bits-* variables the INSTALLED bits-ui actually sets', () => {
+		// The `--radix-*` check above catches a variable from the wrong library.
+		// This one catches the harder case: a plausible `--bits-*` name from the
+		// right library that no version of it ever set, or that a version bump
+		// renamed. Both fail identically and silently — an undefined custom
+		// property makes the declaration invalid at computed-value time, so the
+		// popover's height cap and zoom origin simply do not apply and nothing
+		// anywhere reports it.
+		//
+		// The allow-list is DERIVED from node_modules, never typed here, so it
+		// moves with the dependency rather than with someone's memory of it.
+		// bits-ui exposes two families: the `--bits-floating-*` set the floating
+		// layer writes on its wrapper, and the per-component aliases
+		// `getFloatingContentCSSVars(name)` writes on the content inside it. The
+		// component NAMES come out of that helper's call sites, so a component
+		// this package never mounts cannot lend its name to a variable either.
+		const bitsDir = join(packageRoot, 'node_modules', 'bits-ui', 'dist');
+		const bitsFiles = walk(bitsDir).filter((f) => /\.(js|svelte)$/.test(f));
+
+		const declared = new Set<string>();
+		const floatingNames = new Set<string>();
+		for (const file of bitsFiles) {
+			const text = readFileSync(file, 'utf8');
+			for (const [, name] of text.matchAll(/"(--bits-[a-z0-9-]+)"/g)) declared.add(name);
+			// Every string literal inside the call's parentheses, not just a bare
+			// argument: Select passes a ternary (`isCombobox ? "combobox" :
+			// "select"`), so a pattern expecting one literal silently missed three
+			// perfectly valid variables and reported them as fictions.
+			for (const [, args] of text.matchAll(/getFloatingContentCSSVars\(([^)]*)\)/g)) {
+				for (const [, name] of args.matchAll(/"([a-z][a-z-]*)"/g)) floatingNames.add(name);
+			}
+		}
+		// The five aliases the helper writes for each floating component.
+		for (const name of floatingNames) {
+			for (const suffix of [
+				'content-transform-origin',
+				'content-available-width',
+				'content-available-height',
+				'anchor-width',
+				'anchor-height'
+			]) {
+				declared.add(`--bits-${name}-${suffix}`);
+			}
+		}
+
+		// Guard the extractor: a regex that stopped matching would make the
+		// assertion below vacuously green.
+		expect(declared.size).toBeGreaterThan(20);
+		expect(declared.has('--bits-floating-available-height')).toBe(true);
+
+		const offenders: string[] = [];
+		for (const file of distFiles) {
+			for (const [, name] of readFileSync(file, 'utf8').matchAll(/(--bits-[a-z0-9-]+)/g)) {
+				if (!declared.has(name)) offenders.push(`${relative(packageRoot, file)}: ${name}`);
+			}
+		}
+
+		expect(
+			[...new Set(offenders)].sort(),
+			'--bits-* variables this package reads that the installed bits-ui never sets'
+		).toEqual([]);
+	});
+});
+
+describe('arbitrary values that name a custom property', () => {
+	it('uses the parenthesis form, never the square-bracket form', () => {
+		// `border-[--border-strong]` is not a syntax error and not a dead class: it
+		// compiles, and it compiles to `border-color: --border-strong`, which is
+		// not a colour. The declaration is dropped, the border falls back to
+		// `currentColor`, and a dropdown menu draws its edge in whatever ink the
+		// text happens to be. Tailwind v4's form for "the value is this custom
+		// property" is `border-(--border-strong)`; the bracket form means "the
+		// value is this literal", and a bare `--x` is not a valid literal for any
+		// property that takes a colour or a length.
+		//
+		// It survives every other gate for the usual reason — the class is in the
+		// DOM, a rule exists, and only its VALUE is nonsense. The colour gate above
+		// cannot see it either: `colourCandidates` skips anything with a bracket,
+		// because an arbitrary value normally carries its own colour.
+		//
+		// A registered theme name (`border-border-strong`) is better still where
+		// one exists, since it goes through @theme and follows a scoped override;
+		// this gate only refuses the form that cannot work at all.
+		const offenders: string[] = [];
+		for (const file of distFiles) {
+			for (const [, utility] of readFileSync(file, 'utf8').matchAll(
+				/\b([a-z][a-z-]*-\[--[a-zA-Z0-9-]+\])/g
+			)) {
+				offenders.push(`${relative(packageRoot, file)}: ${utility}`);
+			}
+		}
+
+		expect(
+			[...new Set(offenders)].sort(),
+			'arbitrary values naming a custom property with brackets — use the -(--name) form'
+		).toEqual([]);
+	});
 });
 
 describe('the shadcn semantic surface', () => {
