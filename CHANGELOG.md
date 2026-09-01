@@ -6,7 +6,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Everything below landed after `v2026.8.15` was tagged the same day, and is recorded here rather than given a number of its own: `core/git-workflow.md` §Release Cadence says a version is earned by reaching a consumer, and the nine stamped apps took these by direct convergence rather than by `copier update`, so nothing has shipped atop `v2026.8.15` that a second same-day tag would reach. The next release spends the number and carries all of it.
+## [2026.9.0] - 2026-09-01
+
+The number the previous block was waiting for. Everything below landed after `v2026.8.15` was tagged on 2026-08-19 and went unnumbered because `core/git-workflow.md` §Release Cadence earns a version by reaching a consumer, and the stamped apps had taken these by direct convergence rather than by `copier update`. That stopped being true today: `mission-command` reached for a `copier update` and found the newest TAG older than the files it already carried — `.envrc` among them — so an update to it would have taken the app backwards. A tag nobody can update to is not a release. This one carries all of it, and it is September, so the counter resets (`YYYY.M.x`).
 
 ### Fixed
 
