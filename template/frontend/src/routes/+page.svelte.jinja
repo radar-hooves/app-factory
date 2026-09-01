@@ -17,8 +17,19 @@
 </script>
 
 <!-- Compose the shared page-title treatment rather than a hand-rolled heading —
-     every route shares one header (canonical-app-shape.md, check-ui-drift.mjs). -->
-<PageHeader title="{% endraw %}{{ project_name }}{% raw %}" subtitle="{% endraw %}{{ description }}{% raw %}" />
+     every route shares one header (canonical-app-shape.md, check-ui-drift.mjs).
+
+     One attribute per line, and NOT because it reads better: both values are
+     rendered from copier answers, so the tag's width is the length of this app's
+     name plus its one-line description. On one line, an app whose sentence runs
+     long is past prettier's print width and `pnpm lint` fails on a freshly
+     stamped app that nobody has touched yet, while a terser app passes — the
+     same length-dependent trap main.py records against its own description
+     constant. Pre-wrapped, prettier leaves it alone at any length. -->
+<PageHeader
+	title="{% endraw %}{{ project_name }}{% raw %}"
+	subtitle="{% endraw %}{{ description }}{% raw %}"
+/>
 
 {#if status}
 	<p class="bg-card text-card-foreground mt-6 rounded-md border px-4 py-3 text-sm">

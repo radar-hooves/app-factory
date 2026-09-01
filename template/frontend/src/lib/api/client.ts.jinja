@@ -60,8 +60,17 @@ const timeoutMiddleware: Middleware = {
 		clearRequestTimeout(request);
 		return response;
 	},
-	// onResponse never runs when fetch rejects, so the timer is cleared here too
-	// or it leaks on every network failure.
+	// A belt to onResponse's braces, and only that — measured, not assumed.
+	// openapi-fetch runs onError in REVERSE registration order and breaks at the
+	// first hook returning a Response, so the normaliser registered last wins and
+	// this hook never runs as the stack stands. The timer is cleared by the
+	// onResponse above, which does run: the normaliser turns the rejection into a
+	// synthetic Response, and the onResponse pass then proceeds over it normally.
+	// Kept because it is the hook that would clear the timer if this app ever
+	// drops the normaliser or reorders the stack, and it costs nothing.
+	// client.test.ts asserts the OUTCOME — no pending timer — rather than which
+	// hook delivered it, so reordering the stack cannot silently reintroduce the
+	// leak.
 	async onError({ request }) {
 		clearRequestTimeout(request);
 	}
