@@ -44,6 +44,13 @@ Everything below landed after `v2026.8.15` was tagged the same day, and is recor
 
 ### Added
 
+- **ESLint runs in pre-commit, closing the third instance of "a gate that runs only in CI is a gate the local loop cannot see".** The stamped `.pre-commit-config.yaml` had prettier and stylelint but not ESLint, while `pnpm lint` is `prettier --check . && eslint .` — so a lint error could only ever be discovered by CI, after the push. Measured 2026-09-01 in a stamped app: a `@typescript-eslint/no-this-alias` violation in a *test* file put Frontend CI red for five days across nine consecutive runs, from the commit that introduced it to the one that fixed it.
+
+  The cost was not the red badge. `pnpm lint` is CI's FIRST step, so for those five days stylelint, `svelte-check`, both design gates and 582 unit tests never ran on `main` at all — one red step hid five green ones, and the repo had no signal that anything behind it still worked. The same shape had already been paid for once: stylelint was added to pre-commit on 2026-08-21 after a `root-font-size` sweep put nine apps' Frontend CI red for a day over one missing blank line.
+
+  Deliberately no `--fix`. Prettier and stylelint are formatters, so auto-applying them is safe; ESLint carries semantic rules whose fixes rewrite code that should be read first, and the violation that prompted this one was not auto-fixable anyway. Flags are kept to none so the hook matches CI's bare `eslint .` exactly — a local gate stricter than CI is its own kind of broken. Verified by driving the hook's own entry line against a file carrying the real violation: config resolves from `frontend/`, the rule fires, exit 1.
+
+
 - **A factory file must never name a stamped app, and the parity checker is why.** `normalise()` rewrites an app's OWN name to a placeholder before hashing, so a comment in a factory file naming one app hashes differently in that app than in the reference render — the file is unconvergeable there by construction, and that app's only route to green is a permanent exception nobody can retire. Found the same day the `safe_log_context` promotion landed carrying "Measured in godswood": the file was byte-identical to the factory's and still failed parity in the one app it was measured in. The note now says "a stamped app" and records the trap in place, beside the code it constrains.
 
 

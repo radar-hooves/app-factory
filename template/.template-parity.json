@@ -34,7 +34,7 @@
     ".github/workflows/security.yaml": "9e08972038720ffa",
     ".gitignore": "c1b630eceb2bef58",
     ".gitleaks.toml": "22a71a03bc928434",
-    ".pre-commit-config.yaml": "35a70be7fa6e728d",
+    ".pre-commit-config.yaml": "cf90f1edf39ec579",
     ".vscode/extensions.json": "3a0005a77860d54d",
     ".vscode/launch.json": "d03d93f3bc4cda0c",
     ".vscode/settings.json": "b9d17314461d1d02",
