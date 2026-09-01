@@ -15,6 +15,8 @@ import re
 import tomllib
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 CALVER = re.compile(r"^\d{4}\.\d{1,2}\.\d+$")
@@ -32,3 +34,18 @@ def test_backend_version_is_calendar_versioned():
 def test_frontend_manifest_matches_the_backend_version():
     package = json.loads((REPO_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
     assert package["version"] == _backend_version()
+
+
+@pytest.mark.integration
+def test_the_openapi_document_reports_the_backend_version(app):
+    """The published spec must not contradict the manifest either.
+
+    FastAPI's `version=` defaults to "0.1.0", so an app that forgets to pass one
+    serves — and, where it commits `docs/development/openapi.json`, publishes —
+    a document asserting a version the app has never been at. That is worse than
+    an absent value: the spec generates the frontend's `schema.d.ts` and any
+    published client, so a reader of either believes it. main.py resolves the
+    same installed package metadata GET /api/system/health does, and this pins
+    the whole chain back to the one manifest.
+    """
+    assert app.openapi()["info"]["version"] == _backend_version()

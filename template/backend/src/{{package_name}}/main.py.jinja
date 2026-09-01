@@ -21,6 +21,7 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,24 @@ _IMMUTABLE_ASSET_PREFIX = "_app/"
 # hitting a path that does not exist must get a 404 it can act on, not HTTP 200
 # and a page of HTML. Extend this when the app mounts a further API namespace.
 _API_PREFIXES = ("api/", "mcp/")
+
+
+def _version() -> str:
+    """Resolve this app's version from its installed package metadata.
+
+    The ONE source is `backend/pyproject.toml`, read back through the metadata
+    the install writes — the same lookup GET /api/system/health already does, so
+    the OpenAPI document and the health surface can never disagree. Without it
+    FastAPI defaults `info.version` to "0.1.0", which is not an absent value but
+    a wrong one: the spec is a committed, gated artefact that generates a
+    published client's types, and a reader of either would believe the API sits
+    at 0.1.0 while the app is CalVer. The fallback covers an uninstalled source
+    tree only (PYTHONPATH, no `uv sync`); a deployed app always has metadata.
+    """
+    try:
+        return version("{{ project_name }}")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 class _SPAStaticFiles(StaticFiles):
@@ -168,6 +187,7 @@ def create_app() -> FastAPI:
         # want one; the one-line copier description is the default.
         description=API_DESCRIPTION or _COPIER_DESCRIPTION,
         openapi_tags=OPENAPI_TAGS or None,
+        version=_version(),
         lifespan=lifespan,
         # Hardcoded, not settings.debug: the flag installs Starlette's
         # interactive error page, which ServerErrorMiddleware checks BEFORE the

@@ -10,6 +10,14 @@ Everything below landed after `v2026.8.15` was tagged the same day, and is recor
 
 ### Fixed
 
+- **`main.py` passes a `version`, so a stamped app's OpenAPI document stops claiming `0.1.0` (#12).** `FastAPI(...)` was constructed without `version=`, and FastAPI's default for that argument is the literal string `"0.1.0"` — so every app the factory has stamped serves an `info.version` that is not merely absent but WRONG, while the app itself is CalVer. That is the worse failure of the two: an absent value is read as unknown, a present one is believed.
+
+  It is believed by machines, not only readers. Where an app commits `docs/development/openapi.json` under a currency gate, the wrong version is published; the same document generates `frontend/src/lib/api/schema.d.ts` and any client built from the spec, so the claim propagates into the artefacts a consumer actually reads.
+
+  `_version()` resolves it from the INSTALLED package metadata — the identical lookup `GET /api/system/health` has always done — so this adds no second source of truth for the version and needs no copier answer: `backend/pyproject.toml` stays the one manifest, and the health surface and the spec cannot drift apart. The `PackageNotFoundError` fallback covers an uninstalled source tree only.
+
+  Retires the FACTORY GAP exception the broker app recorded against its own `main.py`, which had carried this helper alone since 2026-08-19 and named the factory as the place the fix belonged. **The nine stamped apps keep the wrong version until they re-stamp** — it is one file, and `main.py` is parity-gated, so it reaches them by ordinary convergence.
+
 - **The ephemeral Postgres is stopped by `atexit`, because testcontainers kills its own reaper on the way out (yggdrasil#276).** `conftest.py` deferred every unclean exit to the reaper sidecar, and the reaper is not there for most of them: `testcontainers.core.container` registers `Reaper.delete_instance` with `atexit`, and that handler STOPS the Ryuk container — so on any exit that runs Python's shutdown, testcontainers destroys the reaper before it can reap. Ryuk only ever covered a hard kill.
 
   The window is real because the container starts at IMPORT and the stop was late: `pytest_sessionfinish` is not reached by a usage-error exit (code 4 — a conftest or collection failure), and a cancelled CI job lands in the same place, since the runner signals and Python turns that into a clean shutdown. Measured on the fleet's runner: nine orphaned containers over three weeks from one stamped app, and sixty more on the workstation, fifteen still running, each pinning image layers and an anonymous volume. Reproduced against the real failure — before, three containers left RUNNING; after, zero.
