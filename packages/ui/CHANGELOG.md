@@ -2,6 +2,146 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.0] - 2026-09-01
+
+Five defects and gaps, each found by measurement in a consuming app that had
+re-pointed 323 imports onto this package and could not take nine directories
+with it. Batched into one version because they were found in one pass and four
+of them are the same shape: a class in the DOM with nothing behind it.
+
+### Fixed
+
+- **The `data-state` mapping covered two of its values, and the gap cost two
+  live defects.** `styles.css` declared `@custom-variant data-open` /
+  `data-closed` and nothing else. Tailwind v4 compiles a bare `data-checked:`
+  to `&[data-checked]`, and bits-ui 2.18.1 emits `data-state="checked"` and
+  never a bare `data-checked` — verified against the installed package, not
+  assumed. So in the adopting app every **checked checkbox** painted no primary
+  fill (grey border, dark tick on a transparent ground, nine on one route) and
+  every **tabs list** rendered all triggers identically, so the selected tab was
+  indistinguishable on eleven routes. Both confirmed in a browser before and
+  after.
+
+  Fixed at the mapping rather than at the two call sites: the whole `data-state`
+  value set this package can encounter is declared —
+  `open`/`closed`, `checked`/`unchecked`/`indeterminate`, `active`/`inactive` —
+  so the next component to reach for `data-checked:` gets a rule that matches.
+  An app may use the shorthands in its own components too.
+
+  `data-active` is a two-selector union, and that is load-bearing. bits-ui
+  writes BOTH forms under that name: `data-state="active"` on a tabs trigger,
+  and a bare `data-active` on a navigation-menu link, a slider thumb and a
+  pin-input cell — and this package's own `AppNav` writes `data-active="true"`
+  on every nav row. A single-selector declaration would have fixed tabs by
+  breaking four surfaces that were already working.
+
+  No component in this package relied on the unmapped attributes: all of them
+  used the bracketed long form, which is why the package itself looked fine
+  while apps that had vendored the shorthand did not. Checkbox, Switch and
+  TabsTrigger now use the shorthand, so the gate that pins each variant to a
+  real mounted DOM covers the new values for real rather than through a table.
+
+- **`dropdown-menu-content` drew its border in `currentColor`.**
+  `border-[--border-strong]` compiles — to `border-color: --border-strong`,
+  which is not a colour, so the declaration is dropped. It is
+  `border-border-strong` now, the registered theme name the rest of the package
+  uses, which also means it follows a scoped `--ds-color-border-strong`
+  override. The whole package was swept for the same square-bracket-versus-
+  parenthesis mistake; this was the only instance, and a gate now refuses the
+  form package-wide.
+
+- **An indeterminate checkbox painted no fill.** Same defect as the checked one,
+  one value along: it showed its dash in the foreground ink on a transparent
+  ground. It now paints the same fill as a checked box. **This changes how an
+  existing consumer renders** — the only such change in this release, and only
+  for a tri-state checkbox actually in its mixed state.
+
+### Added
+
+- **A density option, so an app can choose a denser control scale without
+  forking Button (`--ds-control-*` + `data-ds-density`).** `buttonVariants`
+  hard-coded its heights as Tailwind classes, so no token could reach them and
+  the only way to run controls at 28-32px was to fork the component — which
+  takes `dialog`, `alert-dialog`, `command`, `input-group` and `form` with it,
+  because each imports Button. One app carried all six for exactly that reason,
+  five of them otherwise identical to this package's, and pinned a height on 75
+  call sites across 20 files. Adopting the package scale would have sent 244
+  `size="sm"` sites to 36px and, on one route, widened buttons enough to add a
+  line of wrap to two of seven rows.
+
+  The shape is a token-driven ramp with two named presets, chosen over a `size`
+  variant (per-call-site, when the app wants a page-wide decision) and over a
+  prop (every call site again, plus a prop to thread through every wrapper).
+  An app names a density on any ancestor, ordinarily `<html>`:
+
+  ```html
+  <html data-ds-density="compact"></html>
+  ```
+
+  | Size | comfortable | compact |
+  | --- | --- | --- |
+  | `xs` | 28px | 24px |
+  | `sm` | 36px | 28px |
+  | `default` | 40px | 32px |
+  | `lg` | 44px | 36px |
+
+  Inline padding and the trim beside an icon move with the height; `icon-*`
+  stays a square of the same height. The attribute is honoured wherever it
+  appears, so a dense toolbar can carry it without the page doing so, and
+  `comfortable` on a subtree opts that subtree back out inside a compact page.
+
+  An app does not hand-write these values — that stays a deviation, on the same
+  principle as choosing a palette rather than a hex. `compact` is not a picked
+  scale either: this package's `Input` already renders at 32px and its `Select`
+  trigger at 32/28px, so a default Button beside an Input has always been 8px
+  taller. At `compact` they are the same height.
+
+  **Nothing moves for an app that names no density.** The defaults reproduce the
+  previous hard-coded classes exactly — 2.5rem is `h-10`, 1rem is `px-4`, and so
+  on down the ramp — measured in a real browser at every rung rather than
+  asserted, and `harness/additivity.mjs` is identical on every field and every
+  pixel against `ui-v2026.8.17`.
+
+- **Checkbox and Switch: the a11y affordances a consuming app had and this
+  package did not.** A transparent `::after` skirt lifts the pointer target over
+  WCAG 2.5.8's 24px minimum without moving a painted pixel — measured at 29x29px
+  around a 16x16px checkbox and 35x31px around a 36x20px switch track. Both take
+  `aria-invalid`, painting the destructive ring the inputs already use, so a
+  Formsnap-wired field marks itself. `Switch` takes `size="sm"`, a 28x16px track
+  that lines up with a `size="sm"` control row, and exports a `SwitchSize` type.
+
+  Indeterminate handling was already present on `Checkbox`; what was missing was
+  its fill, recorded under Fixed above.
+
+### Verified, not changed
+
+- **The `--bits-*` variable names are all correct for bits-ui 2.18.1.** Seven
+  are referenced across popover, dropdown-menu, select and tooltip, including
+  the three reported as fictions. The `--bits-floating-*` set is written on the
+  floating wrapper, and `getFloatingContentCSSVars(name)` aliases it per
+  component onto the content inside — so `--bits-popover-content-available-
+  height` and its siblings do exist and do resolve. Driven in a browser:
+  `max-height: 848px`, `transform-origin: 144px 0px`.
+
+  The report was made against 2.17.3, which is below this package's declared
+  peer floor of `^2.18.1`. Nothing was removed, and a gate now DERIVES the valid
+  `--bits-*` set from `node_modules` — the wrapper's own literals plus the
+  aliases the helper generates for each component name it is called with — so a
+  future rename fails here instead of silently dropping a height cap. Writing
+  that gate immediately caught the extractor's own blind spot: `Select` passes a
+  ternary to that helper, so a pattern expecting one string literal reported
+  three perfectly valid variables as fictions.
+
+### Notes for consumers
+
+- Update to `@poodle64/ui@2026.9.0`; no app-side change is needed for any of the
+  above. Adopt the density with one attribute in `app.html`.
+- An app that had declared `@custom-variant data-open` / `data-closed` in its own
+  `app.css` may now also delete them, or keep them — the declarations are
+  identical. The `checked`/`active` family was never an app's to declare.
+- The only render change without an opt-in is an **indeterminate checkbox**,
+  which now paints its fill.
+
 ## [2026.8.17] - 2026-08-31
 
 ### Added

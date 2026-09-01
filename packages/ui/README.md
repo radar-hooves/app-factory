@@ -940,14 +940,24 @@ unnoticed through a full app migration (#3).
 Second, what the variable layer does not cover: the `text-display` / `text-body` /
 `text-stat` / `tracking-eyebrow` scale keys, the `.ds-edge` card treatment, the
 `.ds-dialog-section` divider rule, the `.ds-chip` / `.ds-dot` / `.ds-ink` status
-classes, and the two things that make this package's overlays animate at all —
-`@custom-variant data-open` / `data-closed` (bits-ui emits `data-state="open"`,
-so a bare `data-open:` utility matches nothing without them) and an import of
+classes, the `--ds-control-*` geometry the density option turns (below), and the
+two things that make this package's overlays animate at all — a
+`@custom-variant` per `data-state` value (bits-ui emits `data-state="open"`, so
+a bare `data-open:` utility matches nothing without one) and an import of
 `tw-animate-css`, which defines `animate-in`, `fade-in-0`, `zoom-in-95` and
 `slide-in-from-*`. Both used to be the app's job, and an app that never did the
 job got dialogues, dropdowns, popovers and selects that opened with no
 transition, silently. A consuming app now declares neither; one that already
 declares them loses nothing, since the definitions are identical.
+
+The `data-state` set covers `open`/`closed`, `checked`/`unchecked`/
+`indeterminate` and `active`/`inactive`, so `data-checked:` and `data-active:`
+are usable shorthands in an app's own components too. Only `open`/`closed` were
+declared until 2026.9.0, and the gap was not theoretical: in one app every
+checked checkbox painted no primary fill and every tab strip rendered its
+selected trigger identically to the rest, on eleven routes, for months. Nothing
+fails when a variant is missing — the class is in the DOM, and only the rule is
+absent.
 
 It holds no palette. Every value resolves through a `--ds-*` token, so choosing a
 palette stays a matter of overriding `--ds-color-*` in your own `app.css`, and
@@ -963,6 +973,60 @@ differ on. An app using them registers them itself.
 `node_modules/@poodle64/ui/dist`, outside the app's own `src/`, so the default
 source scan misses them. Without it the components render unstyled (no build
 error, no lint hit; the classes just never reach the compiled CSS).
+
+### Control density
+
+An app that runs its controls denser than 40px used to have exactly one move
+available: fork `Button`. Its heights were hard-coded Tailwind classes, so no
+token could reach them — and forking Button takes `dialog`, `alert-dialog`,
+`command`, `input-group` and `form` with it, because each of those imports it.
+One app carried all six for that reason, five of them otherwise identical to
+this package's, and pinned a height on 75 call sites across 20 files.
+
+The knob is one attribute, on any ancestor — ordinarily `<html>`, in
+`app.html`:
+
+```html
+<html lang="en-AU" data-ds-density="compact"></html>
+```
+
+Two named values, `comfortable` (the default) and `compact`:
+
+| Size      | comfortable | compact |
+| --------- | ----------- | ------- |
+| `xs`      | 28px        | 24px    |
+| `sm`      | 36px        | 28px    |
+| `default` | 40px        | 32px    |
+| `lg`      | 44px        | 36px    |
+
+Inline padding and the trim beside an icon move with the height; the `icon-*`
+sizes stay squares of the same heights.
+
+`compact` is not a picked scale. This package's `Input` already renders at 32px
+and its `Select` trigger at 32/28px, so a default-size `Button` beside an
+`Input` has always been 8px taller than it. At `compact` they are the same
+height, which is the alignment the forking app was hand-pinning.
+
+The attribute is honoured wherever it appears, so a dense toolbar can carry it
+without the page doing so — and `data-ds-density="comfortable"` on a subtree
+returns that subtree to the default inside a compact page.
+
+Nothing moves for an app that names no density: the `--ds-control-*` defaults
+reproduce the previous hard-coded classes exactly, measured in a real browser
+(`harness/drive.md` §"The control density ramp") rather than asserted here.
+Hand-tuning an individual rung remains possible and remains a deviation — the
+sanctioned move is choosing a named density, as choosing a palette rather than a
+hex value is the sanctioned move for colour.
+
+### Checkbox and Switch
+
+Both carry a transparent `::after` skirt that lifts the pointer target over WCAG
+2.5.8's 24px minimum without moving a painted pixel — a 16px checkbox has a 29px
+target, a 36x20px switch track a 35x31px one. Both take `aria-invalid`, which
+paints the destructive ring the inputs already use, so a Formsnap-wired field
+marks itself. `Checkbox` binds `indeterminate` and now paints the same fill as a
+checked box for it, rather than a dash on a transparent ground. `Switch` takes
+`size="sm"`, a 28x16px track that lines up with a `size="sm"` control row.
 
 ## Australian value formatters
 
