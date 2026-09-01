@@ -2757,6 +2757,404 @@ for (const scheme of ['light', 'dark']) {
 	await context.close();
 }
 
+
+// ── The control density ramp (the fork this package was losing to) ──────────
+// Button's heights were hard-coded Tailwind classes, so no token could reach
+// them: an app whose controls run at 28-32px could not adopt this package's
+// Button without every one of its rows growing, and it forked six directories
+// rather than take that. The ramp is `--ds-control-*` tokens now, moved as a
+// set by `data-ds-density` on any ancestor.
+//
+// Two claims, and the second is the one that protects every existing consumer:
+// the compact preset moves every rung, and the DEFAULT is the previous scale to
+// the pixel. The comfortable numbers below are transcribed from the classes
+// this change deleted (h-10 is 40, px-4 is 16, pr-3 is 12) — so a "tidy-up" of
+// the ramp fails here rather than in somebody's app.
+//
+// Only an engine can make either claim: the value is a var() chain, and jsdom
+// hands back the literal `var(--ds-control-height-md)` for every one of them.
+{
+	const RAMP = {
+		comfortable: {
+			xs: { height: 28, pad: 10, trim: 6 },
+			sm: { height: 36, pad: 14, trim: 8 },
+			default: { height: 40, pad: 16, trim: 12 },
+			lg: { height: 44, pad: 20, trim: 12 }
+		},
+		compact: {
+			xs: { height: 24, pad: 8, trim: 4 },
+			sm: { height: 28, pad: 10, trim: 6 },
+			default: { height: 32, pad: 12, trim: 8 },
+			lg: { height: 36, pad: 16, trim: 10 }
+		}
+	};
+	const ICON_OF = { xs: 'icon-xs', sm: 'icon-sm', default: 'icon', lg: 'icon-lg' };
+
+	for (const [density, rungs] of Object.entries(RAMP)) {
+		const query =
+			density === 'comfortable' ? 'surface=palette' : `surface=palette&density=${density}`;
+		const { context, page, errors } = await open(query);
+		await page.waitForSelector('[data-probe="buttons"]');
+		await page.addStyleTag({ content: SETTLE });
+
+		const measured = await page.evaluate(() => {
+			const read = (probe) => {
+				const el = document.querySelector(`[data-probe="${probe}"]`);
+				if (!el) return null;
+				const style = getComputedStyle(el);
+				return {
+					height: Math.round(el.getBoundingClientRect().height),
+					padStart: Math.round(parseFloat(style.paddingInlineStart)),
+					padEnd: Math.round(parseFloat(style.paddingInlineEnd)),
+					width: Math.round(el.getBoundingClientRect().width)
+				};
+			};
+			const out = {};
+			for (const probe of document.querySelectorAll('[data-probe^="button-"]')) {
+				out[probe.getAttribute('data-probe')] = read(probe.getAttribute('data-probe'));
+			}
+			out.__input = read('input');
+			return out;
+		});
+
+		for (const [rung, want] of Object.entries(rungs)) {
+			const text = measured[`button-default-${rung}`];
+			check(
+				`density ${density}: a ${rung} button is ${want.height}px tall`,
+				text?.height === want.height,
+				`${text?.height}px`
+			);
+			check(
+				`density ${density}: a ${rung} button pads ${want.pad}px inline`,
+				text?.padStart === want.pad && text?.padEnd === want.pad,
+				`${text?.padStart}/${text?.padEnd}px`
+			);
+			// The rung that goes wrong quietly. A preset that moves the side padding
+			// and leaves the icon trim behind gives an icon MORE room than a word,
+			// which reads as a broken button rather than as a density.
+			const withIcon = measured[`button-icon-inline-end-${rung}`];
+			check(
+				`density ${density}: a ${rung} button trims to ${want.trim}px beside an icon`,
+				withIcon?.padEnd === want.trim,
+				`${withIcon?.padEnd}px (leading edge ${withIcon?.padStart}px)`
+			);
+			// An icon button is a square of the same height, so an icon button and a
+			// text button in one row cannot disagree about how tall a control is.
+			const icon = measured[`button-${ICON_OF[rung]}`];
+			check(
+				`density ${density}: the ${ICON_OF[rung]} button is a ${want.height}px square`,
+				icon?.height === want.height && icon?.width === want.height,
+				`${icon?.width}x${icon?.height}px`
+			);
+		}
+
+		// The knob is Button's, and only Button's. Input never read these tokens
+		// and must not start moving with them — if it did, "compact" would be a
+		// second, undeclared design rather than a density.
+		check(
+			`density ${density}: the text input stays at its own 32px`,
+			measured.__input?.height === 32,
+			`${measured.__input?.height}px`
+		);
+		check(`density ${density}: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	// Why the compact numbers are those numbers rather than picked ones: at
+	// `compact`, a default Button and an Input are the same height. That is the
+	// alignment the forking app was hand-pinning on 75 call sites.
+	{
+		const { context, page } = await open('surface=palette&density=compact');
+		await page.waitForSelector('[data-probe="buttons"]');
+		const pair = await page.evaluate(() => {
+			const h = (probe) =>
+				Math.round(
+					document.querySelector(`[data-probe="${probe}"]`).getBoundingClientRect().height
+				);
+			return { button: h('button-default-default'), input: h('input') };
+		});
+		check(
+			'density compact: a default button and a text input are the same height',
+			pair.button === pair.input,
+			`button ${pair.button}px, input ${pair.input}px`
+		);
+		await context.close();
+	}
+
+	// Scoped density. The rules declare on the element carrying the attribute
+	// rather than at :root, so a subtree can differ from its page — and an app
+	// that has gone compact can still render one ordinary control row. A cascade
+	// fact, so it needs an engine: nothing about the markup says which won.
+	{
+		const { context, page } = await open('surface=palette&density=compact');
+		await page.waitForSelector('[data-probe="buttons"]');
+		const before = await page.evaluate(() =>
+			Math.round(
+				document.querySelector('[data-probe="button-default-default"]').getBoundingClientRect()
+					.height
+			)
+		);
+		await page.evaluate(() => {
+			document
+				.querySelector('[data-probe="buttons"]')
+				.setAttribute('data-ds-density', 'comfortable');
+		});
+		// Deliberately a separate turn, and the reason is worth carrying: reading
+		// the box in the SAME task as the attribute write returns the old height
+		// while `getPropertyValue` already returns the new token — 2.5rem on the
+		// element, 32px in the layout. It reads exactly like a dead knob, and it
+		// is the measurement trap this file keeps rediscovering in a new costume
+		// (see SETTLE above, and the #18 focus-ring note below).
+		await page.waitForTimeout(200);
+		const after = await page.evaluate(() =>
+			Math.round(
+				document.querySelector('[data-probe="button-default-default"]').getBoundingClientRect()
+					.height
+			)
+		);
+		check(
+			'density: a comfortable subtree inside a compact page returns to 40px',
+			before === 32 && after === 40,
+			`${before}px -> ${after}px`
+		);
+		await context.close();
+	}
+}
+
+// ── The data-state values that were never mapped (checked, active) ──────────
+// `data-checked:` compiled to `&[data-checked]`, and bits-ui emits
+// `data-state="checked"`. So every checked checkbox in a consuming app painted
+// no fill — grey border, dark tick on a transparent ground — and every tab strip
+// rendered its selected trigger identically to the rest. Nine checkboxes on one
+// route, eleven routes of tabs, months in production, because the class was in
+// the DOM the whole time and only the rule was missing.
+//
+// Distinctness alone is not the claim, for the same reason it was not enough for
+// the card hover (#24): two things can differ for the wrong reason. Each state
+// is also retuned against `--ds-color-primary`, which a real primary fill
+// follows and a coincidence does not.
+for (const scheme of ['light', 'dark']) {
+	const { context, page, errors } = await open(
+		'surface=palette',
+		{ width: 1440, height: 900 },
+		scheme
+	);
+	await page.waitForSelector('[data-probe="checkbox"]');
+	await page.addStyleTag({ content: SETTLE });
+	await page.addScriptTag({ content: PROBE });
+
+	const fills = () =>
+		page.evaluate(() => {
+			const { composite, stack } = window.__probe;
+			const paint = (probe) => {
+				const el = document.querySelector(`[data-probe="${probe}"]`);
+				return composite([...stack(el, false), getComputedStyle(el).backgroundColor]).map((c) =>
+					Math.round(c * 255)
+				);
+			};
+			return {
+				checked: paint('checkbox'),
+				unchecked: paint('checkbox-unchecked'),
+				indeterminate: paint('checkbox-indeterminate'),
+				tabActive: paint('tab-active'),
+				tabInactive: paint('tab-inactive')
+			};
+		});
+
+	const rest = await fills();
+	const apart = (a, b) => Math.max(...a.map((c, i) => Math.abs(c - b[i])));
+
+	check(
+		`checkbox (${scheme}): a checked box does not paint the same as an unchecked one`,
+		apart(rest.checked, rest.unchecked) >= 16,
+		`checked rgb(${rest.checked.join(' ')}) vs unchecked rgb(${rest.unchecked.join(' ')})`
+	);
+	check(
+		`checkbox (${scheme}): an indeterminate box paints the same fill as a checked one`,
+		JSON.stringify(rest.indeterminate) === JSON.stringify(rest.checked),
+		`indeterminate rgb(${rest.indeterminate.join(' ')}) vs checked rgb(${rest.checked.join(' ')})`
+	);
+	check(
+		`tabs (${scheme}): the selected trigger does not paint the same as an unselected one`,
+		apart(rest.tabActive, rest.tabInactive) >= 8,
+		`active rgb(${rest.tabActive.join(' ')}) vs inactive rgb(${rest.tabInactive.join(' ')})`
+	);
+
+	// The check that pins the FIX rather than the symptom: a fill that is really
+	// the app's primary moves when the app's primary moves.
+	await page.addStyleTag({
+		content: ':root, .dark { --ds-color-primary: oklch(0.62 0.24 25) !important; }'
+	});
+	const retuned = await fills();
+	check(
+		`checkbox (${scheme}): the checked fill follows the app's own accent`,
+		JSON.stringify(retuned.checked) !== JSON.stringify(rest.checked),
+		`rgb(${rest.checked.join(' ')}) -> rgb(${retuned.checked.join(' ')})`
+	);
+	check(`checkbox (${scheme}): no page error`, errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// ── The pointer target on a 16px control ────────────────────────────────────
+// WCAG 2.5.8 asks for 24x24. A checkbox is 16 and a switch track is 20, and
+// neither is going to grow — the tick has to sit where a reader expects it and
+// the row's rhythm is built around the painted size. The answer is a
+// transparent `::after` skirt, and the only honest test of it is hit-testing: a
+// class assertion cannot tell a skirt that paints from one that receives a
+// click, and `getBoundingClientRect` cannot see a pseudo-element at all.
+//
+// The target is MEASURED rather than probed at a chosen offset. The first
+// version of this check hit-tested at ±14px and reported the switch as failing;
+// the skirt is inset from the PADDING box, so a `border-2` track's real reach is
+// 4px outside its border box, and ±14 was landing exactly on the boundary. A
+// number someone picks is a number that can be wrong about the thing it is
+// measuring — so this walks outward a pixel at a time and reports what it finds.
+{
+	const { context, page } = await open('surface=palette');
+	await page.waitForSelector('[data-probe="checkbox"]');
+
+	const probed = await page.evaluate(() => {
+		// `elementFromPoint` returns null outside the viewport, and null is
+		// indistinguishable from "nothing there", so every control is scrolled to
+		// the middle before it is walked.
+		const measure = (probe) => {
+			const el = document.querySelector(`[data-probe="${probe}"]`);
+			el.scrollIntoView({ block: 'center', inline: 'center' });
+			const r = el.getBoundingClientRect();
+			const cx = r.left + r.width / 2;
+			const cy = r.top + r.height / 2;
+			const hits = (x, y) => {
+				const at = document.elementFromPoint(x, y);
+				return at !== null && (at === el || el.contains(at));
+			};
+			const reach = (dx, dy) => {
+				let k = 0;
+				while (k < 60 && hits(cx + dx * (k + 1), cy + dy * (k + 1))) k += 1;
+				return k;
+			};
+			return {
+				painted: [Math.round(r.width), Math.round(r.height)],
+				target: [reach(-1, 0) + reach(1, 0), reach(0, -1) + reach(0, 1)]
+			};
+		};
+		return { checkbox: measure('checkbox'), switch: measure('switch') };
+	});
+
+	// The painted size is half the claim: a skirt that worked by growing the
+	// control would have solved the wrong problem.
+	check(
+		'checkbox: the painted control is still 16px',
+		JSON.stringify(probed.checkbox.painted) === '[16,16]',
+		`${probed.checkbox.painted.join('x')}px`
+	);
+	check(
+		'checkbox: the pointer target clears the 24px minimum on both axes',
+		probed.checkbox.target[0] >= 24 && probed.checkbox.target[1] >= 24,
+		`target ${probed.checkbox.target.join('x')}px around a ${probed.checkbox.painted.join('x')}px control`
+	);
+	check(
+		'switch: the painted track is still 36x20px',
+		JSON.stringify(probed.switch.painted) === '[36,20]',
+		`${probed.switch.painted.join('x')}px`
+	);
+	// The switch grows on the block axis only — it is already 36px wide, and an
+	// inline skirt would reach into the label beside it.
+	check(
+		'switch: the pointer target clears 24px on the block axis',
+		probed.switch.target[1] >= 24,
+		`target ${probed.switch.target.join('x')}px around a ${probed.switch.painted.join('x')}px track`
+	);
+	await context.close();
+}
+
+// ── The dropdown menu's edge, and the --bits-* variables ────────────────────
+// `border-[--border-strong]` compiles — to `border-color: --border-strong`,
+// which is not a colour. The declaration is dropped and the border falls back to
+// `currentColor`, so a dropdown menu drew its edge in whatever ink its text
+// happened to be. Nothing reports it: the class is in the DOM and a rule exists.
+// The only reading that can fail is the RESOLVED border colour, against the
+// resolved ink it would have taken.
+//
+// The `--bits-*` variables ride along here for the same reason. They are the
+// popover's documented height cap and zoom origin, and a name bits-ui does not
+// set makes the whole declaration invalid at computed-value time — the cap
+// simply does not apply, silently. `theme-coverage.test.ts` now derives the
+// valid names from node_modules; this is where they are shown to RESOLVE.
+{
+	const { context, page } = await open('surface=long-lists');
+	await page.getByText('Open menu', { exact: true }).click();
+	await page.waitForSelector('[data-slot="dropdown-menu-content"]');
+	await page.addStyleTag({ content: SETTLE });
+
+	const menu = await page.evaluate(() => {
+		const el = document.querySelector('[data-slot="dropdown-menu-content"]');
+		const style = getComputedStyle(el);
+		const probe = document.createElement('div');
+		probe.style.color = 'var(--ds-color-border-strong)';
+		el.appendChild(probe);
+		const wanted = getComputedStyle(probe).color;
+		probe.remove();
+		return {
+			borderTopColor: style.borderTopColor,
+			ink: style.color,
+			wanted,
+			maxHeight: style.maxHeight
+		};
+	});
+
+	check(
+		'dropdown menu: the border is not currentColor',
+		menu.borderTopColor !== menu.ink,
+		`border ${menu.borderTopColor}, ink ${menu.ink}`
+	);
+	check(
+		'dropdown menu: the border resolves to --ds-color-border-strong',
+		menu.borderTopColor === menu.wanted,
+		`border ${menu.borderTopColor}, token ${menu.wanted}`
+	);
+	// A `max-height` of `none` is exactly what an unset `--bits-*` name produces,
+	// and it is what let a long menu run off the bottom of the window.
+	check(
+		'dropdown menu: --bits-dropdown-menu-content-available-height resolves to a length',
+		/^[0-9.]+px$/.test(menu.maxHeight),
+		`max-height: ${menu.maxHeight}`
+	);
+	await context.close();
+}
+
+{
+	const { context, page } = await open('surface=long-lists');
+	await page.getByText('Open popover', { exact: true }).click();
+	await page.waitForSelector('[data-slot="popover-content"]');
+	await page.addStyleTag({ content: SETTLE });
+
+	const popover = await page.evaluate(() => {
+		const el = document.querySelector('[data-slot="popover-content"]');
+		const style = getComputedStyle(el);
+		return {
+			maxHeight: style.maxHeight,
+			transformOrigin: style.transformOrigin,
+			available: style.getPropertyValue('--bits-popover-content-available-height').trim(),
+			origin: style.getPropertyValue('--bits-popover-content-transform-origin').trim()
+		};
+	});
+
+	check(
+		'popover: --bits-popover-content-available-height resolves to a length',
+		/^[0-9.]+px$/.test(popover.available) && /^[0-9.]+px$/.test(popover.maxHeight),
+		`variable ${popover.available || '(empty)'}, max-height ${popover.maxHeight}`
+	);
+	// The origin is what makes the zoom grow out of the trigger rather than out
+	// of the box centre. bits-ui writes it as a pair of lengths; an unset name
+	// leaves the property at its 50% 50% default.
+	check(
+		'popover: --bits-popover-content-transform-origin resolves to a real origin',
+		popover.origin.length > 0 && !/^(?:50% 50%|)$/.test(popover.origin),
+		`variable "${popover.origin}", computed transform-origin ${popover.transformOrigin}`
+	);
+	await context.close();
+}
+
 await browser.close();
 server.close();
 

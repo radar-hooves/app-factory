@@ -955,6 +955,125 @@ through `var()` fallbacks at the point of use rather than aliased at `:root`
 `:root`, where a scoped override can never reach it), so what a non-adopting
 consumer's stylesheet gains is two rule sets whose selector matches nothing.
 
+## The control density ramp (`?surface=palette&density=<comfortable|compact>`)
+
+Button's heights were hard-coded Tailwind classes (`h-10`, `size-10`, `px-4`), so
+no token could reach them. The consequence was not a wrong pixel — it was a
+missing knob: an app whose controls run at 28-32px could not adopt this package's
+Button without every row growing, and it forked six directories rather than take
+that. Five of the six (`dialog`, `alert-dialog`, `command`, `input-group`,
+`form`) were identical to this package's but for which Button they import.
+
+The ramp is `--ds-control-*` tokens now, moved as a set by one attribute:
+
+```html
+<html data-ds-density="compact">
+```
+
+Two claims are driven, and the second protects every existing consumer:
+
+| Rung      | comfortable        | compact           |
+| --------- | ------------------ | ----------------- |
+| `xs`      | 28px / 10px / 6px  | 24px / 8px / 4px  |
+| `sm`      | 36px / 14px / 8px  | 28px / 10px / 6px |
+| `default` | 40px / 16px / 12px | 32px / 12px / 8px |
+| `lg`      | 44px / 20px / 12px | 36px / 16px / 10px |
+
+(height / inline padding / the trim beside an icon; the `icon-*` sizes are
+squares of the same heights.)
+
+The comfortable column is transcribed from the classes this change deleted —
+`h-10` is 40, `px-4` is 16, `pr-3` is 12 — so a later tidy-up of the ramp fails
+here rather than in somebody's app. Only an engine can read any of it: the value
+is a `var()` chain and jsdom hands back the literal `var(--ds-control-height-md)`
+for every one.
+
+Three further checks say what the knob does NOT do. `Input` stays at its own 32px
+under both densities, so `compact` is a density rather than a second undeclared
+design. A `data-ds-density="comfortable"` subtree inside a compact page returns
+to 40px, which is a cascade fact nothing in the markup states. And at `compact` a
+default Button and an Input are the same height — which is why the compact
+numbers are those numbers: it is the alignment the forking app was hand-pinning
+on 75 call sites.
+
+### The measurement trap, again, in a new costume
+
+Reading the box in the SAME task as the attribute write returns the OLD height
+while `getPropertyValue` already returns the new token — 2.5rem on the element,
+32px in the layout. It reads exactly like a dead knob. The check waits a turn,
+for the same family of reason as `SETTLE` and the #18 focus-ring note: a value
+read mid-recalc is not the value a reader sees.
+
+## The unmapped `data-state` values (`?surface=palette`)
+
+`data-checked:` compiles to `&[data-checked]`, and bits-ui emits
+`data-state="checked"` and never a bare `data-checked`. So in a consuming app
+every checked checkbox painted no fill — grey border, dark tick on a transparent
+ground, nine on one route — and every tab strip rendered its selected trigger
+identically to the rest, on eleven routes. Months in production, because the
+class was in the DOM the whole time and only the rule was missing.
+
+Driven in both schemes, as composited fills rather than class names:
+
+- a checked box does not paint the same as an unchecked one (≥16/255 apart);
+- an **indeterminate** box paints the same fill as a checked one — it carried
+  none before this release, so a tri-state checkbox showed its dash in the
+  foreground ink on a transparent ground, the identical defect one value along;
+- a selected tab does not paint the same as an unselected one (≥8/255 apart);
+- and the fill **follows `--ds-color-primary`** when the app retunes it.
+
+That last one is the check that pins the fix rather than the symptom, for the
+same reason it was needed for the card hover (#24): two colours can differ for
+the wrong reason, and only a retune tells a real primary fill from a coincidence.
+
+## The pointer target on a 16px control (`?surface=palette`)
+
+WCAG 2.5.8 asks for 24x24. A checkbox is 16 and a switch track is 20, and neither
+is going to grow — the tick has to sit where a reader expects it. The answer is a
+transparent `::after` skirt, and hit-testing is the only honest test of one: a
+class assertion cannot tell a skirt that paints from one that receives a click,
+and `getBoundingClientRect` cannot see a pseudo-element at all.
+
+Measured: **29x29px around a 16x16px checkbox**, and **35x31px around a 36x20px
+switch track**. The painted sizes are asserted too — a skirt that worked by
+growing the control would have solved the wrong problem.
+
+### The target is walked, not probed at a chosen offset
+
+The first version hit-tested at ±14px and reported the switch as failing. The
+skirt is inset from the PADDING box, and the track carries a 2px transparent
+border, so its real reach is the inset minus 2 on each side and ±14 was landing
+exactly on the boundary. The check now walks outward a pixel at a time and
+reports what it finds, which also caught that `-inset-1.5` gives a 25px target —
+clearing the 24px floor at a 16px root and missing it at a 14px one, since the
+floor is in absolute CSS pixels and the skirt is in rem. Both skirts are
+`-inset-2`.
+
+`elementFromPoint` returns `null` outside the viewport, and `null` is
+indistinguishable from "nothing there". Every control is scrolled to the middle
+of the viewport before it is walked; without that the switch read as having no
+skirt at all, purely because it sat 6px below the fold.
+
+## The dropdown edge and the `--bits-*` variables (`?surface=long-lists`)
+
+`border-[--border-strong]` is not a syntax error and not a dead class. It
+compiles — to `border-color: --border-strong`, which is not a colour — so the
+declaration is dropped and the border falls back to `currentColor`. A dropdown
+menu drew its edge in whatever ink its text happened to be, and nothing reported
+it, because the class is in the DOM and a rule exists. The only reading that can
+fail is the RESOLVED border colour, checked here against both the ink it would
+otherwise have taken and the token it should equal.
+
+The `--bits-*` variables ride along on the same page. They are the popover's
+documented height cap and zoom origin, and a name bits-ui does not set makes the
+whole declaration invalid at computed-value time — the cap simply does not apply.
+All seven names this package reads check out against bits-ui 2.18.1: the
+`--bits-floating-*` set is written on the floating wrapper, and
+`getFloatingContentCSSVars(name)` aliases it per component onto the content
+inside. `src/test/theme-coverage.test.ts` derives the valid set from
+`node_modules` rather than trusting a table; this is where they are shown to
+RESOLVE — `max-height: 848px`, `transform-origin: 144px 0px`.
+
 ## The Svelte/bits-ui pairing (no surface — a sweep)
 
 A report reached this package that **every** bits-ui overlay was silently dead on

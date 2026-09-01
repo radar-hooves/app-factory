@@ -29,6 +29,7 @@
 	import * as Select from '../dist/components/ui/select/index.js';
 	import * as Command from '../dist/components/ui/command/index.js';
 	import * as Table from '../dist/components/ui/table/index.js';
+	import * as Tabs from '../dist/components/ui/tabs/index.js';
 	import Avatar from '../dist/components/ui/avatar/avatar.svelte';
 	import AvatarImage from '../dist/components/ui/avatar/avatar-image.svelte';
 	import AvatarFallback from '../dist/components/ui/avatar/avatar-fallback.svelte';
@@ -440,6 +441,15 @@
 	if (surface === 'palette' && paletteParam) {
 		document.documentElement.dataset.dsPalette = paletteParam;
 	}
+	// `?density=compact` applies the density the way a consuming app does — one
+	// attribute on the root element, resolving `[data-ds-density='compact']` out
+	// of `@poodle64/ui/styles.css`. Set at module scope for the same reason the
+	// palette is: the first paint must already be the right density, or a driver
+	// measures a frame of the default and reports it as a dead knob.
+	const densityParam = params.get('density');
+	if (densityParam) {
+		document.documentElement.dataset.dsDensity = densityParam;
+	}
 	// The swatch grid the showcase had, kept because it is the one part of the
 	// page that names tokens rather than components: it gives the driver a stable
 	// element per token to read a RESOLVED colour off, which is what turns "the
@@ -462,7 +472,8 @@
 		'status-neutral'
 	] as const;
 	const BUTTON_VARIANTS = ['default', 'secondary', 'outline', 'ghost', 'destructive', 'link'] as const;
-	const BUTTON_SIZES = ['sm', 'default', 'lg'] as const;
+	const BUTTON_SIZES = ['xs', 'sm', 'default', 'lg'] as const;
+	const ICON_SIZES = ['icon-xs', 'icon-sm', 'icon', 'icon-lg'] as const;
 
 	let overlayDialogOpen = $state(false);
 	// A 1x1 transparent GIF, inline: the harness serves no assets and the claim
@@ -856,8 +867,39 @@
 						<Button variant="default" {size} disabled data-probe="button-disabled-{size}">
 							disabled
 						</Button>
+						<!-- The icon-adjacent trim is a separate rung of the ramp, and it
+						     is the one that goes wrong quietly: a density that moves the
+						     side padding but not the trim leaves an icon button with MORE
+						     room beside its glyph than beside a word. -->
+						<Button variant="outline" {size} data-probe="button-icon-inline-end-{size}">
+							with icon
+							<Package data-icon="inline-end" />
+						</Button>
 					</div>
 				{/each}
+				<div class="flex flex-wrap items-center gap-2">
+					{#each ICON_SIZES as size (size)}
+						<Button variant="outline" {size} data-probe="button-{size}" aria-label={size}>
+							<Package />
+						</Button>
+					{/each}
+				</div>
+			</section>
+
+			<!-- design-system: the tab strip. Its selected trigger is painted
+			     entirely by `data-active:` utilities, which matched nothing until the
+			     mapping covered the value — so every trigger rendered identically and
+			     the strip told a reader nothing. That is a claim about a COMPOSITED
+			     fill, not about a class, so it is measured here rather than in jsdom. -->
+			<section data-probe="tabs">
+				<Tabs.Root value="one">
+					<Tabs.List>
+						<Tabs.Trigger value="one" data-probe="tab-active">Selected</Tabs.Trigger>
+						<Tabs.Trigger value="two" data-probe="tab-inactive">Not selected</Tabs.Trigger>
+					</Tabs.List>
+					<Tabs.Content value="one">The selected panel.</Tabs.Content>
+					<Tabs.Content value="two">The other panel.</Tabs.Content>
+				</Tabs.Root>
 			</section>
 
 			<section class="flex flex-wrap items-end gap-4" data-probe="form">
@@ -874,8 +916,28 @@
 					<Label for="palette-check">Checked</Label>
 				</div>
 				<div class="flex items-center gap-2">
+					<Checkbox id="palette-uncheck" data-probe="checkbox-unchecked" />
+					<Label for="palette-uncheck">Unchecked</Label>
+				</div>
+				<div class="flex items-center gap-2">
+					<Checkbox id="palette-mixed" indeterminate data-probe="checkbox-indeterminate" />
+					<Label for="palette-mixed">Mixed</Label>
+				</div>
+				<div class="flex items-center gap-2">
+					<Checkbox id="palette-invalid" aria-invalid="true" data-probe="checkbox-invalid" />
+					<Label for="palette-invalid">Invalid</Label>
+				</div>
+				<div class="flex items-center gap-2">
 					<Switch id="palette-switch" checked data-probe="switch" />
 					<Label for="palette-switch">On</Label>
+				</div>
+				<div class="flex items-center gap-2">
+					<Switch id="palette-switch-sm" size="sm" checked data-probe="switch-sm" />
+					<Label for="palette-switch-sm">On, small</Label>
+				</div>
+				<div class="flex items-center gap-2">
+					<Switch id="palette-switch-invalid" aria-invalid="true" data-probe="switch-invalid" />
+					<Label for="palette-switch-invalid">Invalid</Label>
 				</div>
 			</section>
 

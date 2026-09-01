@@ -38,17 +38,21 @@
   running an 18px root, say) compensates in its own override layer, not here.
 
   The track is 20px tall (16px at `sm`), under WCAG 2.5.8's 24px minimum, so a
-  transparent `::after` skirt takes the pointer target to 32px (28px at `sm`).
-  It grows the BLOCK axis only: the track is already 36px wide, so there is
-  nothing to win horizontally and an inline skirt would reach into the label
-  beside it.
+  transparent `::after` skirt lifts the pointer target over it. It grows the
+  BLOCK axis only: the track is already 36px wide, so there is nothing to win
+  horizontally and an inline skirt would reach into the label beside it.
+
+  The skirt is inset from the PADDING box, and this track carries a 2px
+  transparent border, so its real reach is the inset minus 2 on each side —
+  which is why the number here is not the number in the target. The target is
+  measured in `harness/drive.mjs`, not calculated.
 -->
 <SwitchPrimitive.Root
 	bind:ref
 	bind:checked
 	class={cn(
 		'peer relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors',
-		'after:absolute after:inset-x-0 after:-inset-y-1.5',
+		'after:absolute after:inset-x-0 after:-inset-y-2',
 		'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
 		'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 aria-invalid:ring-3',
 		'disabled:cursor-not-allowed disabled:opacity-50',

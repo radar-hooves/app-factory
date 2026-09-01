@@ -16,9 +16,15 @@
 <!--
   The box is 16px, which is what a checkbox has always looked like and is also
   well under WCAG 2.5.8's 24px minimum target. The `::after` overlay is the
-  standard answer: a transparent 6px skirt on every side takes the POINTER
-  target to 28px without moving a pixel of the control, so the tick still sits
-  where a reader expects it and the row's rhythm is unchanged. It stops 2px
+  standard answer: a transparent skirt on every side takes the POINTER target to
+  a measured 29px without moving a pixel of the control, so the tick still sits where a
+  reader expects it and the row's rhythm is unchanged. `harness/drive.mjs`
+  measures that by walking outward from the centre until the hit test stops
+  returning this element, rather than by trusting the arithmetic here.
+
+  The inset is 2 rather than 1.5 for margin, not neatness: 1.5 measured 25px,
+  which clears the 24px floor at a 16px root and misses it at a 14px one — and
+  the floor is in absolute CSS pixels while the skirt is in rem. It stops 1px
   short of a `gap-2` label, and a click that lands on the label toggles the box
   through the label's own `for` anyway, so the enlarged area can never steal an
   interaction from something else.
@@ -35,7 +41,7 @@
 	bind:indeterminate
 	data-slot="checkbox"
 	class={cn(
-		'peer border-border focus-visible:ring-ring data-checked:bg-primary data-checked:text-primary-foreground data-checked:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground data-indeterminate:border-primary aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 relative size-4 shrink-0 rounded-sm border shadow-none transition-shadow after:absolute after:-inset-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3',
+		'peer border-border focus-visible:ring-ring data-checked:bg-primary data-checked:text-primary-foreground data-checked:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground data-indeterminate:border-primary aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 relative size-4 shrink-0 rounded-sm border shadow-none transition-shadow after:absolute after:-inset-2 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3',
 		className
 	)}
 	{...restProps}
