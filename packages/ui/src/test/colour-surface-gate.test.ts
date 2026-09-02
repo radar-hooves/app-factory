@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
 const bin = join(packageRoot, 'bin', 'check-colour-surface.mjs');
@@ -35,9 +35,12 @@ function makeApp(appCss: string) {
 	return dir;
 }
 
-function run(cwd: string) {
+function run(cwd: string, args: string[] = []) {
 	try {
-		return { status: 0, output: execFileSync(process.execPath, [bin], { cwd, encoding: 'utf8' }) };
+		return {
+			status: 0,
+			output: execFileSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' })
+		};
 	} catch (error) {
 		const e = error as { status: number; stdout: string; stderr: string };
 		return { status: e.status, output: `${e.stdout}${e.stderr}` };
@@ -46,7 +49,9 @@ function run(cwd: string) {
 
 const COMPLETE = ["@import 'tailwindcss';", IMPORT_LINE, SOURCE_LINE, ''].join('\n');
 
-describe('the colour-surface gate', () => {
+// Each case spawns a process that compiles real Tailwind — ~1s warm, ~4s cold
+// against vitest's 5s default, which two of these lost under parallel load.
+describe('the colour-surface gate', { timeout: 60_000 }, () => {
 	it('passes an app that keeps both load-bearing lines', () => {
 		const dir = makeApp(COMPLETE);
 		try {
@@ -76,6 +81,50 @@ describe('the colour-surface gate', () => {
 			const { status, output } = run(dir);
 			expect(status).toBe(1);
 			expect(output).toContain('no @source covers @poodle64/ui');
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('takes --entry from a repo root, which is where a pre-commit hook runs', () => {
+		// The nine vendored copies this replaces resolved relative to their own
+		// file and were invoked from the repo root. Resolving Tailwind from the
+		// working directory instead of the stylesheet broke exactly that shape.
+		const dir = makeApp(COMPLETE);
+		try {
+			const { status, output } = run(dirname(dir), [
+				'--entry',
+				join(basename(dir), 'src', 'app.css')
+			]);
+			expect(output).toContain('semantic utilities resolve');
+			expect(status).toBe(0);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('refuses --entry with no path', () => {
+		const dir = makeApp(COMPLETE);
+		try {
+			const { status, output } = run(dir, ['--entry']);
+			expect(status).toBe(1);
+			expect(output).toContain('--entry needs a path');
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('names what it could not resolve when the app has no Tailwind', () => {
+		// Which of the two resolutions fails first depends on what happens to sit
+		// above the temp directory, so this asserts the contract both share: exit
+		// 1, naming tailwindcss, rather than a stack trace or a pass.
+		const dir = mkdtempSync(join(tmpdir(), 'ds-colour-notw-'));
+		try {
+			mkdirSync(join(dir, 'src'), { recursive: true });
+			writeFileSync(join(dir, 'src', 'app.css'), COMPLETE);
+			const { status, output } = run(dir);
+			expect(status).toBe(1);
+			expect(output).toMatch(/ds-check-colour-surface: .*resolve.*tailwindcss/);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

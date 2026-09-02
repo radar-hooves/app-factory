@@ -1095,9 +1095,13 @@ The package ships the gate that proves its own surface actually resolves in the
 consuming app:
 
 ```bash
-pnpm exec ds-check-colour-surface            # default entry is src/app.css
-pnpm exec ds-check-colour-surface --entry src/styles/app.css
+pnpm exec ds-check-colour-surface                          # entry: src/app.css
+pnpm exec ds-check-colour-surface --entry frontend/src/app.css   # from a repo root
 ```
+
+Tailwind and this package are both resolved from the STYLESHEET's directory, not
+the working directory, so the second form works from a repo root — which is where
+a pre-commit hook runs, and how the vendored copies this replaces were invoked.
 
 An app's `app.css` carries two load-bearing lines, and dropping either breaks
 nothing any other gate can see — `build`, `lint`, `lint:css` and `check` all

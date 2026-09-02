@@ -93,15 +93,20 @@ function resolveStylesheet(id, base) {
  * itself declares is reachable; the compiler that matters is the one the app
  * builds with, and compiling against a different copy would prove nothing about
  * the app's own output.
+ *
+ * Resolution starts at the STYLESHEET, not the working directory, so
+ * `--entry frontend/src/app.css` works from a repo root — which is where a
+ * pre-commit hook runs, and where the nine vendored copies this replaces were
+ * invoked from.
  */
-async function loadCompiler(cwd) {
-	const require = createRequire(resolve(cwd, '_'));
+async function loadCompiler(from) {
+	const require = createRequire(resolve(from, '_'));
 	let manifestPath;
 	try {
 		manifestPath = require.resolve('tailwindcss/package.json');
 	} catch {
 		throw new Error(
-			`tailwindcss is not resolvable from ${cwd} — this gate compiles the app's own ` +
+			`tailwindcss is not resolvable from ${from} — this gate compiles the app's own ` +
 				'stylesheet, so it needs the compiler the app builds with'
 		);
 	}
@@ -168,7 +173,7 @@ export async function checkColourSurface({ cwd = process.cwd(), entry } = {}) {
 	}
 
 	const failures = [];
-	const compiler = await buildCompiler(await loadCompiler(cwd), entryPath);
+	const compiler = await buildCompiler(await loadCompiler(dirname(entryPath)), entryPath);
 
 	// 1. Registration — the @import.
 	const registeredCss = compiler.build(REGISTERED);

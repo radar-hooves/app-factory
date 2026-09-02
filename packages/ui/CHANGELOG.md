@@ -27,6 +27,12 @@ All notable changes to this package are documented here. Format follows [Keep a 
   script once on this version; the shared frontend-CI workflow prefers the
   shipped bin and keeps the vendored path only as a fallback.
 
+  Tailwind and this package resolve from the STYLESHEET's directory rather than
+  the working directory, so `--entry frontend/src/app.css` works from a repo
+  root — the shape a pre-commit hook uses, and how the vendored copies were
+  invoked. Resolving from the working directory instead, as this first did,
+  broke exactly that case.
+
   Verified by driving rather than building: green in ten real consumers, and red
   in each when either load-bearing line is stripped from a real `app.css`.
 

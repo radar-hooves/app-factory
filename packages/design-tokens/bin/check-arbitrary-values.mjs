@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 /** Extensions that can carry a Tailwind class. `.css` included for `@apply`. */
-const SCANNED = /\.(svelte|ts|js|mjs|css)$/;
+const SCANNED = /\.(svelte|ts|js|mjs|css|html)$/;
 
 /** Never descend into these. */
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', '.svelte-kit', '.git']);
@@ -54,43 +54,71 @@ const EXEMPT_PATH = `lib${sep}components${sep}ui${sep}`;
 const COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb|color|color-mix)\(/;
 
 /**
- * Length notations. `%` and unitless values are NOT here: a percentage is a
- * layout proportion with no token scale behind it, so gating it would report
- * noise rather than divergence.
- */
-const LENGTH = /-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em|pt|ch|ex|cm|mm|in|q|v[hw]|vmin|vmax|[dsl]v[hw])\b/i;
-
-/** Bracket content that is only a variable reference is the token layer working. */
-const VARIABLE_ONLY = /^(?:var\(\s*--[\w-]+\s*(?:,[^)]*)?\)|--[\w-]+)$/;
-
-/**
- * A layout expression: a grid template, or a length computed against something
- * the author cannot know. Its LENGTHS are exempt, because there is no token to
- * reach for instead — Tailwind has no grid-template scale, and no scale can
- * express `100dvh` minus a header. Its COLOURS are not exempt: `color-mix()` is
- * not in this list, so a hand-rolled tint is still caught.
+ * The CSS named colours. `bg-[red]` is a hand-written colour exactly as
+ * `bg-[#ff0000]` is, and it is the likelier of the two to be typed — but it is
+ * a bare word, so no notation pattern can see it.
  *
- * Gating these would report a divergence with no legal fix, and a gate that
- * cannot be satisfied is one an app turns off.
+ * `transparent`, `currentColor` and the CSS-wide keywords are NOT here: they
+ * name a behaviour rather than pick a colour, and an app is right to use them.
  */
-const LAYOUT_EXPRESSION = /\b(?:minmax|repeat|fit-content|calc|clamp|min|max)\(/;
+const NAMED_COLOURS = new Set(
+	`aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue
+	 blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk
+	 crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki
+	 darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen
+	 darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue
+	 dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite
+	 gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki
+	 lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan
+	 lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen
+	 lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen
+	 magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen
+	 mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream
+	 mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid
+	 palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum
+	 powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown
+	 seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen
+	 steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow
+	 yellowgreen`.split(/\s+/)
+);
 
 /**
- * What to reach for instead. Ordered: the first matching rule wins, so the
- * specific advice beats the general.
+ * Lengths the token scale can actually express — absolute and font-relative.
+ *
+ * Viewport, container-query and line-height units are deliberately ABSENT.
+ * There is no token for `85vh` or `50cqw`, so flagging one reports a
+ * divergence whose only advice is "raise an issue", and a gate that cannot be
+ * satisfied is one an app turns off. The divergence is still real — one app
+ * carries 85vh, 85dvh, 70vh, 60vh, 58vh, 56vh and 55vh for the same job — but
+ * it belongs in a token proposal, not in a build failure.
  */
-const GUIDANCE = [
-	[
-		/(?:\d+\.?\d*|\.\d+)(?:ch|ex)\b/i,
-		'a reading measure is `.ds-measure` with data-measure="prose" (@poodle64/ui >= 2026.8.17)'
-	],
-	[
-		/(?:\d+\.?\d*|\.\d+)(?:v[hw]|vmin|vmax|[dsl]v[hw])\b/i,
-		'no viewport-length token exists — if this recurs across apps, raise it on poodle64/design-system'
-	],
-	[COLOUR, 'use a semantic colour (bg-card, text-muted-foreground) or a --ds-color-* token'],
-	[LENGTH, 'use the spacing/size scale (p-4, text-sm, gap-2) rather than a literal']
-];
+const LENGTH = /(?:^|[^\w.-])-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em|pt|pc|ch|ex|cap|ic|cm|mm|in|q)\b/i;
+
+/**
+ * A term the scale cannot replace, which makes every length beside it
+ * structural rather than a spacing choice: a grid track, or a length computed
+ * against the viewport, the container or the reader's own settings.
+ *
+ * This is the test rather than "does it contain a function call", because that
+ * form exempted `p-[calc(13px)]` and `gap-[min(7px,7px)]` — wrapping a literal
+ * in `min()` was a one-character bypass — while still failing
+ * `grid-cols-[16rem_1fr]`, a bare grid template with no function in it at all.
+ */
+const UNEXPRESSIBLE =
+	/\b(?:minmax|repeat)\(|\d(?:fr|%)|\b(?:auto|min-content|max-content|stretch|fit-content)\b|\d(?:v[hwib]|vmin|vmax|[dsl]v[hwib]|[dsl]vmin|[dsl]vmax|cq[whibs]|cqmin|cqmax|lh|rlh)\b/i;
+
+const COLOUR_ADVICE =
+	'use a semantic colour (bg-card, text-muted-foreground) or a --ds-color-* token';
+const MEASURE = /(?:\d+\.?\d*|\.\d+)(?:ch|ex)\b/i;
+
+/** What to reach for instead of this value. */
+function adviceFor(residue, colour) {
+	if (colour) return COLOUR_ADVICE;
+	if (MEASURE.test(residue)) {
+		return 'a reading measure is `.ds-measure` with data-measure="prose" (@poodle64/ui >= 2026.8.17)';
+	}
+	return 'use the spacing/size scale (p-4, text-sm, gap-2) rather than a literal';
+}
 
 /**
  * Every arbitrary value in `text`, as `{ index, body }`.
@@ -119,6 +147,14 @@ function arbitraryValues(text) {
 		const body = text.slice(i + 1, j - 1);
 		const isProperty = /^[a-zA-Z-]+:/.test(body);
 		if (!isUtility && !isProperty) continue;
+		// A `:` straight after the closing bracket makes this a VARIANT, not a
+		// value: `max-[600px]:hidden` is a media condition and `[&>*]:mt-2` a
+		// selector. Flagging the first told an author to reach for the spacing
+		// scale, which cannot express a breakpoint.
+		if (text[j] === ':') {
+			i = j - 1;
+			continue;
+		}
 		found.push({ index: i, body });
 		i = j - 1;
 	}
@@ -138,23 +174,43 @@ export function violationsIn(text) {
 	for (const { index, body } of arbitraryValues(text)) {
 		// Tailwind writes a space as `_` inside an arbitrary value.
 		const value = body.replace(/^[a-zA-Z-]+:/, '').replaceAll('_', ' ').trim();
-		if (VARIABLE_ONLY.test(value)) continue;
-		const colour = COLOUR.test(value);
-		const length = LENGTH.test(value) && !LAYOUT_EXPRESSION.test(value);
+
+		// Strike out every custom-property REFERENCE, then judge what survives.
+		// Treating `var(...)` as wholesale proof of the token layer let a
+		// literal ride in the fallback slot — `bg-[var(--brand,#ff0000)]` and
+		// `max-w-[var(--m,70ch)]` both read as clean — and the fallback is
+		// exactly where a value hides when the token does not exist yet.
+		const residue = value.replace(/var\(\s*--[\w-]+/g, '').replace(/^--[\w-]+$/, '');
+
+		const colour =
+			COLOUR.test(residue) || NAMED_COLOURS.has(residue.trim().toLowerCase());
+		const length = LENGTH.test(residue) && !UNEXPRESSIBLE.test(residue);
 		if (!colour && !length) continue;
-		const advice = GUIDANCE.find(([pattern]) => pattern.test(value))?.[1] ?? '';
-		out.push({ line: lineOf(text, index), body, advice });
+		out.push({ line: lineOf(text, index), body, advice: adviceFor(residue, colour) });
 	}
 	return out;
+}
+
+/** Whether `path` resolves to a directory; false for a broken link. */
+function isDirectory(path) {
+	try {
+		return statSync(path).isDirectory();
+	} catch {
+		return false;
+	}
 }
 
 /** Every scannable file under `root`, depth-first. */
 function filesUnder(root, acc = []) {
 	for (const entry of readdirSync(root, { withFileTypes: true })) {
-		if (entry.isDirectory()) {
-			if (!SKIPPED_DIRS.has(entry.name)) filesUnder(join(root, entry.name), acc);
+		const path = join(root, entry.name);
+		// isDirectory() is false for a SYMLINK to one, so a linked-in source
+		// tree would have been skipped in silence rather than scanned.
+		const directory = entry.isDirectory() || (entry.isSymbolicLink() && isDirectory(path));
+		if (directory) {
+			if (!SKIPPED_DIRS.has(entry.name)) filesUnder(path, acc);
 		} else if (SCANNED.test(entry.name)) {
-			acc.push(join(root, entry.name));
+			acc.push(path);
 		}
 	}
 	return acc;
@@ -207,7 +263,10 @@ function main(roots) {
 			if (advice) console.error(`    ${advice}`);
 		}
 		console.error(
-			'\nAn app picks a palette and an accent; every other value comes from the token layer.\n'
+			'\nAn app picks a palette and an accent; every other value comes from the token layer.\n' +
+				'This gate sees arbitrary values only. It does NOT see Tailwind\'s own default\n' +
+				'palette (bg-stone-50, text-black), inline style attributes, or a viewport length\n' +
+				'the scale cannot express — a pass is not a clean bill of health.\n'
 		);
 		return 1;
 	}

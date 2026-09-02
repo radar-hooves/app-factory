@@ -83,22 +83,37 @@ pnpm exec ds-check-arbitrary-values src     # default root is src
 ```
 
 It fails on a colour or size literal hand-written into an arbitrary Tailwind
-value — `text-[#ff0000]`, `[color:#ff0000]`, `max-w-[70ch]`,
-`bg-[color-mix(...)]`, `h-[55vh]`, `p-[.5rem]` — in `.svelte`, `.ts`, `.js` and
-`.css` under the root, and names what to reach for instead. A value that IS the
-token layer (`bg-[var(--ds-color-primary)]`) passes.
+value — `text-[#ff0000]`, `[color:#ff0000]`, `bg-[red]`,
+`bg-[color-mix(...)]`, `max-w-[70ch]`, `p-[.5rem]`, and a literal hiding in a
+`var()` fallback such as `bg-[var(--brand,#ff0000)]` — across `.svelte`, `.ts`,
+`.js`, `.css` and `.html` under the root, and names what to reach for instead. A
+value that IS the token layer (`bg-[var(--ds-color-primary)]`) passes, as do
+`transparent` and `currentColor`, which name a behaviour rather than pick a
+colour.
 
-Two deliberate exemptions:
+**What it deliberately does not gate**, because the rule is "you hand-wrote a
+value the token layer already supplies" and these have no token to supply them:
 
-- **Vendored primitives** under `lib/components/ui/` are upstream's source,
-  restyled through the token layer rather than authored in the app. Matched on
-  the path.
-- **Layout expressions** — `minmax()`, `repeat()`, `calc()`, `clamp()`,
-  `fit-content()`, `min()`, `max()` — are exempt from the *length* rule and not
-  from the *colour* rule. Tailwind has no grid-template scale and no scale can
-  express `100dvh` minus a header, so gating those would report a divergence
-  with no legal fix, and a gate that cannot be satisfied is one an app turns
-  off.
+- **Viewport, container-query and line-height lengths** — `h-[55vh]`,
+  `w-[50cqw]`, `leading-[3lh]`. Worth a token proposal, not a build failure.
+- **A length beside a term the scale cannot replace** — a grid track (`fr`,
+  `auto`, `min-content`), a percentage, or a viewport unit. So
+  `grid-cols-[16rem_1fr]` and `h-[calc(100dvh-19rem)]` pass, while
+  `p-[calc(13px)]` does not: the exemption is the unexpressible *term*, never
+  the presence of a function, or wrapping a literal in `min()` would be a
+  one-character bypass.
+- **Variants** — `max-[600px]:hidden` is a media condition, `[&>*]:mt-2` a
+  selector.
+- **Vendored primitives** under `lib/components/ui/`, matched on the path: they
+  are upstream's source, restyled through the token layer rather than authored
+  in the app.
+
+A gate that reports a divergence with no legal fix is one an app turns off, so
+everything it does flag has somewhere to go.
+
+It also does not see Tailwind's own default palette (`bg-stone-50`,
+`text-black`) or an inline `style` attribute — a pass is not a clean bill of
+health, and the failure message says so.
 
 It exits non-zero when it cannot run — no such root, nothing scannable — rather
 than reporting there was nothing to do, and prints the file count on a pass so

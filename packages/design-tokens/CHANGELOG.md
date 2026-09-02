@@ -32,6 +32,20 @@ All notable changes to this package are documented here. Format follows [Keep a 
   — rather than reporting there was nothing to do, and prints the file count on
   a pass so the log shows it could have acted.
 
+  An adversarial review before release closed five further bypasses it shipped
+  with — named colours (`bg-[red]`, the likeliest of all to be typed by hand),
+  a literal riding in a `var()` fallback slot, a literal wrapped in `min()` or
+  `calc()`, `.html`, and a symlinked source directory — and cut two classes it
+  should never have flagged. Viewport, container-query and line-height lengths
+  are now out of scope: there is no token for `85vh`, so the advice was "raise
+  an issue", and a gate that cannot be satisfied is one an app turns off. The
+  layout exemption keys off the unexpressible TERM (`fr`, `auto`, a percentage,
+  a viewport unit) rather than the presence of a function, which had exempted
+  `p-[calc(13px)]` while still failing the bare grid template
+  `grid-cols-[16rem_1fr]`. Measured on the app that carried the most findings:
+  19 before, of which 17 were unfixable or wrong; 2 after, both `ch` measures
+  with `.ds-measure` waiting for them.
+
 ## [2026.8.1] - 2026-08-31
 
 ### Fixed

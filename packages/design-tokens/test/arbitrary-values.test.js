@@ -38,12 +38,6 @@ test('catches a ch measure — the value .ds-measure exists to supply', () => {
 	assert.match(violationsIn('<p class="max-w-[70ch]">')[0].advice, /ds-measure/);
 });
 
-test('catches viewport lengths, and says plainly that no token answers them', () => {
-	// godswood carried 85vh, 85dvh, 70vh, 60vh, 58vh, 56vh and 55vh for the same job.
-	assert.deepEqual(caught('<div class="max-h-[85dvh] h-[55vh]">'), ['85dvh', '55vh']);
-	assert.match(violationsIn('<div class="h-[55vh]">')[0].advice, /no viewport-length token/);
-});
-
 test('catches an arbitrary PROPERTY, which has no dash before the bracket', () => {
 	assert.deepEqual(caught('<p class="[color:#ff0000]">'), ['color:#ff0000']);
 	assert.deepEqual(caught('<p class="[padding:12px]">'), ['padding:12px']);
@@ -60,14 +54,60 @@ test('passes a value that IS the token layer', () => {
 	assert.deepEqual(caught('<p class="[color:var(--ds-color-primary)]">'), []);
 });
 
-test('passes a layout expression, whose lengths have no token to reach for', () => {
+test('passes a length the scale cannot replace, whatever wraps it', () => {
+	// The exemption is the unexpressible TERM, not the presence of a function.
 	assert.deepEqual(caught('<div class="grid-cols-[minmax(0,20rem)_1fr]">'), []);
-	assert.deepEqual(caught('<div class="h-[calc(100dvh-19rem)]">'), []);
 	assert.deepEqual(caught('<div class="grid-cols-[repeat(3,12rem)]">'), []);
+	assert.deepEqual(caught('<div class="h-[calc(100dvh-19rem)]">'), []);
+	assert.deepEqual(caught('<div class="text-[clamp(0.875rem,2vw,1.25rem)]">'), []);
+	// A bare grid template has no function at all and must be exempt too.
+	assert.deepEqual(caught('<div class="grid-cols-[16rem_1fr]">'), []);
+	assert.deepEqual(caught('<div class="grid-cols-[3rem_1.25rem_auto]">'), []);
+});
+
+test('a function around a plain literal is not an exemption', () => {
+	// Wrapping a literal in min() was a one-character bypass.
+	assert.deepEqual(caught('<div class="p-[calc(13px)]">'), ['calc(13px)']);
+	assert.deepEqual(caught('<div class="gap-[min(7px,7px)]">'), ['min(7px,7px)']);
 });
 
 test('a colour inside a layout expression is still a colour', () => {
 	assert.equal(caught('<div class="bg-[min(#fff,#000)]">').length, 1);
+});
+
+test('catches a named colour, the likeliest one to be typed by hand', () => {
+	assert.deepEqual(caught('<p class="bg-[red] text-[white]">'), ['red', 'white']);
+	assert.deepEqual(caught('<p class="[color:rebeccapurple]">'), ['color:rebeccapurple']);
+	// And says it is a COLOUR: a named one carries no notation for the advice
+	// to key off, so it read as a size and pointed at the spacing scale.
+	assert.match(violationsIn('<p class="bg-[red]">')[0].advice, /semantic colour/);
+});
+
+test('passes the colour keywords that name a behaviour, not a choice', () => {
+	assert.deepEqual(caught('<p class="bg-[transparent] text-[currentColor]">'), []);
+});
+
+test('catches a literal hiding in a var() fallback slot', () => {
+	// var() used to be wholesale proof of the token layer, so the fallback —
+	// exactly where a value hides when the token does not exist yet — rode in.
+	assert.deepEqual(caught('<p class="bg-[var(--brand,#ff0000)]">'), ['var(--brand,#ff0000)']);
+	assert.deepEqual(caught('<p class="max-w-[var(--m,70ch)]">'), ['var(--m,70ch)']);
+});
+
+test('passes a viewport or container length, which no token expresses', () => {
+	// Deliberate scope, not an oversight: the advice would have been "raise an
+	// issue", and a gate that cannot be satisfied is one an app turns off.
+	assert.deepEqual(caught('<div class="h-[55vh] max-h-[85dvh] w-[50cqw] leading-[3lh]">'), []);
+});
+
+test('passes an arbitrary variant — a breakpoint is not a spacing choice', () => {
+	assert.deepEqual(caught('<p class="max-[600px]:hidden min-[900px]:flex">'), []);
+	assert.deepEqual(caught('<p class="[&>*]:mt-2 supports-[display:grid]:grid">'), []);
+	assert.deepEqual(caught('<p class="data-[state=open]:bg-accent">'), []);
+});
+
+test('still catches a real value carried by a variant', () => {
+	assert.deepEqual(caught('<p class="hover:text-[#abc] dark:md:p-[12px]">'), ['#abc', '12px']);
 });
 
 test('passes brackets that are not Tailwind values at all', () => {
