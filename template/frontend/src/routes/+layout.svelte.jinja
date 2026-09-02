@@ -5,8 +5,10 @@
 	import '@fontsource-variable/jetbrains-mono';
 	import { ModeWatcher } from 'mode-watcher';
 	import { AppShell } from '@poodle64/ui/app-shell';
+	import { CommandPalette } from '@poodle64/ui/command-palette';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
 
@@ -25,7 +27,20 @@
 	// Page title: "Page Name — {% endraw %}{{ project_title }}{% raw %}" or bare app name. This is the
 	// title a reader actually sees; app.html's is only the pre-hydration fallback,
 	// so both take the same derived display name.
-	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
+	// Wrapped the way prettier wants it once the name is long: a hyphenated app's
+	// project_title pushes the single-line form past the 100-column print width,
+	// so a fresh stamp of one failed `pnpm lint` on its first commit.
+	let pageTitle = $derived(
+		page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}'
+	);
+
+	// The global search affordance canonical-app-shape.md requires in the top bar,
+	// and the palette it opens. @poodle64/ui ships both halves; composing them is
+	// what the factory had never done, so four apps wrote these same three lines
+	// four times and three shipped no top-bar search at all
+	// (full-stack-app-template#23). ⌘K is bound by CommandPalette itself — do not
+	// add a keydown handler here.
+	let paletteOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -35,14 +50,26 @@
 <ModeWatcher />
 <Toaster richColors closeButton position="top-right" />
 
-<!-- No nav yet — a fresh app has one route. Pass `nav` once there is more
-     than one page to link between (rules-library/stacks/sveltekit-frontend.md). -->
+<!-- No nav yet — a fresh app has one route. Once there is more than one page to
+     link between (rules-library/stacks/sveltekit-frontend.md), declare the nav
+     ONCE and pass the same value to BOTH the shell and the palette below: one
+     config feeds the rail and the search results, and a palette handed none
+     finds nothing while looking like it works. -->
 <!-- The house floor and the rail's collapse control arrive by default from
      @poodle64/ui 2026.8.8 — do not pass `texture` or `collapsible` to ask for
      them, and do not hand-roll a dot-grid class in app.css. `measure` is left
      at its `full` default; pick one once a page needs a narrower cap (see the
      component's own doc comment). -->
-<AppShell brandTitle="{% endraw %}{{ project_title }}{% raw %}" currentPath={page.url.pathname}>
+<AppShell
+	brandTitle="{% endraw %}{{ project_title }}{% raw %}"
+	currentPath={page.url.pathname}
+	onSearch={() => (paletteOpen = true)}
+>
 	{@render children()}
 </AppShell>
+
+<!-- Routes are the app's own (the parity gate frees frontend/src/routes/), so an
+     app with palette ACTIONS as well as pages adds them as a child command group
+     right here — one app does, which is not enough consumers to earn a seam. -->
+<CommandPalette bind:open={paletteOpen} onNavigate={goto} />
 {% endraw -%}

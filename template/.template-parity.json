@@ -121,6 +121,7 @@
     "frontend/stylelint.config.js": "de21be27446e5e91",
     "frontend/svelte.config.js": "73908922c4ee5c3d",
     "frontend/tests/e2e/global-setup.ts": "ec257ef1e1a0a0e3",
+    "frontend/tests/e2e/shell.spec.ts": "639ee47d08300089",
     "frontend/tsconfig.json": "5ba6072319c60e79",
     "frontend/vite.config.ts": "c5930977056aee32",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
