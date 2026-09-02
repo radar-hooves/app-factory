@@ -10,6 +10,7 @@
     "access": "public"
   },
   "files": [
+    "bin",
     "dist",
     "lib",
     "tokens",
@@ -30,6 +31,9 @@
       "types": "./dist/palettes.d.ts",
       "default": "./dist/palettes.js"
     }
+  },
+  "bin": {
+    "ds-check-arbitrary-values": "./bin/check-arbitrary-values.mjs"
   },
   "scripts": {
     "build": "style-dictionary build --config sd.config.js",

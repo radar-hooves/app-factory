@@ -10,6 +10,7 @@
     "access": "public"
   },
   "files": [
+    "bin",
     "dist",
     "registry"
   ],
@@ -28,6 +29,9 @@
       "types": "./dist/components/ui/*/index.d.ts",
       "svelte": "./dist/components/ui/*/index.js"
     }
+  },
+  "bin": {
+    "ds-check-colour-surface": "./bin/check-colour-surface.mjs"
   },
   "peerDependencies": {
     "bits-ui": "^2.18.1",
