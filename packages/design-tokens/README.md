@@ -73,6 +73,43 @@ import { DS_COLOR_STATUS_SUCCESS_LIGHT } from '@poodle64/design-tokens';
 
 Fonts are self-hosted per app: add `@fontsource-variable/fraunces`, `@fontsource-variable/hanken-grotesk`, and `@fontsource-variable/jetbrains-mono` and import them in the root layout. The package declares the family stacks; the app supplies the font files. The body face leads with Avenir Next, Apple's own system font; it needs no package (never bundled, not licensable for web embedding) and simply renders on a device that already has it, falling through to the self-hosted Hanken Grotesk Variable everywhere else.
 
+## The gate: `ds-check-arbitrary-values`
+
+The package ships the gate that keeps an app inside the token layer. It is a
+binary, so a consumer picks up a fix with the version bump it already takes:
+
+```bash
+pnpm exec ds-check-arbitrary-values src     # default root is src
+```
+
+It fails on a colour or size literal hand-written into an arbitrary Tailwind
+value — `text-[#ff0000]`, `[color:#ff0000]`, `max-w-[70ch]`,
+`bg-[color-mix(...)]`, `h-[55vh]`, `p-[.5rem]` — in `.svelte`, `.ts`, `.js` and
+`.css` under the root, and names what to reach for instead. A value that IS the
+token layer (`bg-[var(--ds-color-primary)]`) passes.
+
+Two deliberate exemptions:
+
+- **Vendored primitives** under `lib/components/ui/` are upstream's source,
+  restyled through the token layer rather than authored in the app. Matched on
+  the path.
+- **Layout expressions** — `minmax()`, `repeat()`, `calc()`, `clamp()`,
+  `fit-content()`, `min()`, `max()` — are exempt from the *length* rule and not
+  from the *colour* rule. Tailwind has no grid-template scale and no scale can
+  express `100dvh` minus a header, so gating those would report a divergence
+  with no legal fix, and a gate that cannot be satisfied is one an app turns
+  off.
+
+It exits non-zero when it cannot run — no such root, nothing scannable — rather
+than reporting there was nothing to do, and prints the file count on a pass so
+the log shows it could have acted.
+
+`eslint-plugin-tailwindcss` does not cover this: its no-arbitrary-value rule
+does not see Svelte class attributes on Tailwind v4, which is why the gate is a
+scanner rather than a lint rule. The estate's shared frontend-CI workflow calls
+this bin when the installed version carries it, and falls back to a weaker
+inline grep when it does not.
+
 ## Per-app customisation
 
 An app's personality is exactly two knobs: its **accent**, and optionally a

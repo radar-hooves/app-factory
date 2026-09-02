@@ -1089,6 +1089,38 @@ one is bound to Xero tax codes besides. Relative time ("2 hours ago") is out
 too — it rides on `date-fns` in the one app that has it, and a display formatter
 is not worth making that a dependency of every consumer.
 
+## The gate: `ds-check-colour-surface`
+
+The package ships the gate that proves its own surface actually resolves in the
+consuming app:
+
+```bash
+pnpm exec ds-check-colour-surface            # default entry is src/app.css
+pnpm exec ds-check-colour-surface --entry src/styles/app.css
+```
+
+An app's `app.css` carries two load-bearing lines, and dropping either breaks
+nothing any other gate can see — `build`, `lint`, `lint:css` and `check` all
+still pass while `bg-card`, `bg-muted`, `bg-accent`, `bg-popover` and
+`border-input` compile to no rule at all:
+
+```css
+@import '@poodle64/ui/styles.css';            /* registers the surface */
+@source '../node_modules/@poodle64/ui/dist';  /* puts it in the scan   */
+```
+
+They fail differently, so the gate asserts them differently: it compiles the
+semantic utilities and requires each to emit a real declaration (the `@import`),
+then asks the compiler which sources it resolved and requires this package's own
+classes to appear and compile (the `@source`). Tailwind comes from the app, not
+from this package's tree, so what it compiles is what the app ships.
+
+It was vendored into nine apps as a byte-identical `scripts/check-colour-surface.mjs`
+and absent from three. If an app still carries that copy, delete it and the
+`lint:colour` script that calls it once the app is on this version or later —
+the estate's shared frontend-CI workflow prefers the shipped bin and keeps the
+vendored path only as a fallback.
+
 ## Verifying a change
 
 ```bash

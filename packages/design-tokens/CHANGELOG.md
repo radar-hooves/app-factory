@@ -2,6 +2,36 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.0] - 2026-09-02
+
+### Added
+
+- **`ds-check-arbitrary-values`, the token-discipline gate, now ships from the
+  package.** It lived as an inline `grep` in the estate's shared frontend-CI
+  workflow, where a fix reached a consumer only when someone edited
+  master-project. Measured against all twelve consumers on 02/09/2026, that grep
+  reported green on 44 real breaches across three apps:
+
+  | Shape | Why the grep missed it | Seen in |
+  | --- | --- | --- |
+  | `[color:#f00]` | an arbitrary PROPERTY has no `-` before the bracket, and the pattern anchored on `-\[` | the idiomatic Tailwind v4 form |
+  | `max-w-[70ch]` | unit list was px/rem/em only | 11 in one app, 3 in another — the value `.ds-measure` has supplied since ui 2026.8.17 |
+  | `bg-[color-mix(...)]` | `color-mix(` was not in the function list | one app's hand-rolled tint ladder, at 4/5/10/12/16% |
+  | `h-[55vh]`, `max-h-[85dvh]` | viewport units were not in the unit list | one app carries seven different values for the same job |
+  | `p-[.5rem]`, `mt-[-4px]` | the number had to start with a digit and be positive | — |
+  | any line naming `lib/components/ui/` | `grep -v` filtered the matching LINE, not the path | — |
+
+  It is a scanner rather than a tighter regex because the `color-mix()` case
+  nests commas and parentheses inside the brackets. Layout expressions
+  (`minmax`, `repeat`, `calc`, `clamp`, `fit-content`, `min`, `max`) are exempt
+  from the length rule and NOT from the colour rule: there is no grid-template
+  scale to reach for, and a gate that reports a divergence with no legal fix is
+  one an app turns off.
+
+  It exits non-zero when it cannot run — no such source root, nothing scannable
+  — rather than reporting there was nothing to do, and prints the file count on
+  a pass so the log shows it could have acted.
+
 ## [2026.8.1] - 2026-08-31
 
 ### Fixed

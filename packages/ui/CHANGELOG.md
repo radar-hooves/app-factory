@@ -2,6 +2,34 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.1] - 2026-09-02
+
+### Added
+
+- **`ds-check-colour-surface` now ships from the package.** The gate that proves
+  this package's surface actually resolves in a consuming app was vendored into
+  nine apps as a byte-identical 179-line `frontend/scripts/check-colour-surface.mjs`
+  (sha1 `9d48def2a3`) and absent from three. A gate for the failure that no other
+  gate can see — `build`, `lint`, `lint:css` and `check` all pass while
+  `bg-card`, `bg-muted`, `bg-accent`, `bg-popover` and `border-input` compile to
+  no rule at all (design-system#3) — either needed nine edits or did not run.
+
+  The logic is unchanged; what moved is where it looks. The app root comes from
+  the working directory or `--entry`, because the script no longer lives in the
+  app. Tailwind is resolved from the CONSUMER: under pnpm a bin runs from inside
+  the store, and compiling against a different copy would prove nothing about the
+  app's own output. That resolution has to name the ESM condition explicitly —
+  `require.resolve('tailwindcss')` picks the CJS bundle, whose `compile` is not
+  an ESM named export, and the resulting `undefined` surfaces several frames
+  later as `compile is not a function`.
+
+  An app carrying the vendored copy should delete it and its `lint:colour`
+  script once on this version; the shared frontend-CI workflow prefers the
+  shipped bin and keeps the vendored path only as a fallback.
+
+  Verified by driving rather than building: green in ten real consumers, and red
+  in each when either load-bearing line is stripped from a real `app.css`.
+
 ## [2026.9.0] - 2026-09-01
 
 Five defects and gaps, each found by measurement in a consuming app that had
