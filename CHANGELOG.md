@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.1] - 2026-09-02
+
+### Changed
+
+- **The four household commit gates are named as PATH commands, not as a path into the master checkout.** A stamped app's `.pre-commit-config.yaml` reached `check-pii` and the three handoff gates through `.claude/hooks/master/precommit/*.py` — a relative path that escaped the app's own root. The template dropped its own `.claude/hooks/master` symlink in the same series, so a freshly stamped app named a file that did not exist and its gate did not run; a public app also shipped a private path to everyone who cloned it. The entries are now `household-precommit-{pii,handoff-tracking,handoff-status,handoff-retention}`, provisioned per machine by the same home-manager module that delivers `~/.claude/rules`, and the wrappers exec the live scripts so a tightened gate still reaches every app on its next commit.
+
+  The same shape took the gates down in 22 repos on 02/09/2026 — a sweep had measured only that no Claude Code *session* needed the link, and pre-commit is not a session. Nothing in a stamped tree now points outside itself.
+
 ## [2026.9.0] - 2026-09-01
 
 The number the previous block was waiting for. Everything below landed after `v2026.8.15` was tagged on 2026-08-19 and went unnumbered because `core/git-workflow.md` §Release Cadence earns a version by reaching a consumer, and the stamped apps had taken these by direct convergence rather than by `copier update`. That stopped being true today: `mission-command` reached for a `copier update` and found the newest TAG older than the files it already carried — `.envrc` among them — so an update to it would have taken the app backwards. A tag nobody can update to is not a release. This one carries all of it, and it is September, so the counter resets (`YYYY.M.x`).
