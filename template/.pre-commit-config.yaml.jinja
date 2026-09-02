@@ -235,3 +235,34 @@ repos:
         language: system
         files: '^frontend/src/.*\.svelte$'
         pass_filenames: false
+
+  # ────────────────────────── App-owned hooks ──────────────────────────────
+  #
+  # THE extension point for this file, and the reason nothing above needs an
+  # exception. pre-commit has no include directive, so this file takes the same
+  # terminal marker .gitignore, Dockerfile and .dockerignore already carry
+  # (canonical-app-shape.md §Extension Points): everything above the line is the
+  # factory's and is compared byte-for-byte in every app, and the app writes
+  # only below it. Measured 03/09/2026: this was the single most-drifted file in
+  # the fleet — four apps' Canonical Shape gate red on it alone, and three more
+  # excepting the WHOLE file to carry one hook each.
+  #
+  # The tail is ENUMERATED, not open, and `check-canonical-shape.py` enforces
+  # the enumeration rather than trusting this comment. Exactly three things are
+  # true below the marker:
+  #
+  #   1. Only `- repo: local` entries. A tail is not a place to pin third-party
+  #      tooling; a hook worth a supply-chain dependency is worth the template.
+  #   2. No top-level key. YAML would happily accept an `exclude:` at column 0
+  #      down here, and it would silently disarm every factory hook above — a
+  #      far bigger hole than the one this closes.
+  #   3. No hook `id:` that already appears above. A list entry cannot delete an
+  #      earlier one, but a re-declared id is how "add a hook" becomes "soften a
+  #      factory hook". A factory hook that is wrong for this app is wrong for
+  #      the fleet: take it to the template, not below this line.
+  #
+  # Give each hook its reason, the way the factory's own do. A rule several apps
+  # carry is a rule the factory should have — the tail is a derived dimension of
+  # the fleet divergence report for exactly that reason.
+  #
+  # App-owned below this line; the factory owns everything above it.
