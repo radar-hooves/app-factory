@@ -1,17 +1,31 @@
 /**
- * {{ project_name }}'s own webServer settings — the extension point for playwright.config.ts.
+ * {{ project_name }}'s own E2E extension points.
  *
- * `playwright.config.ts` belongs to the factory and is owed byte-identical, so
- * an app that needs the E2E dev server started differently says so here. Three
- * seams, because three are what apps actually needed: a `command` that has to
- * run something before vite (a generated asset the SPA imports statically), an
- * `env` entry the dev server reads, and a `timeout` where a cold CI start
+ * `playwright.config.ts` and `tests/e2e/global-setup.ts` both belong to the
+ * factory and are owed byte-identical, so what an app needs of either is written
+ * HERE. The file is named for the first of the two jobs it took; both are the
+ * same thing — this app's own contribution to how its E2E suite boots.
+ *
+ * ── webServer (playwright.config.ts) ───────────────────────────────────────
+ *
+ * Three seams, because three are what apps actually needed: a `command` that has
+ * to run something before vite (a generated asset the SPA imports statically),
+ * an `env` entry the dev server reads, and a `timeout` where a cold CI start
  * genuinely takes longer than Playwright's 60s default.
  *
  * `env` MERGES over the factory's — the identity variable it sets is what keeps
  * this suite's writes off the interactive session's — while `command` and
  * `timeout` REPLACE. Returning `{}` (the default) leaves the factory's stanza
  * exactly as stamped.
+ *
+ * ── preconditions (global-setup.ts) ────────────────────────────────────────
+ *
+ * global-setup's own header invited app-specific preconditions for weeks without
+ * giving them anywhere to go, and four apps excepted the whole file rather than
+ * argue with it. `appPreconditions` is that somewhere. Measured 03/09/2026: two
+ * apps had independently written a route pre-warm, so that Vite's first-request
+ * dependency optimisation is not paid inside the first timed spec's assertion
+ * budget.
  */
 export type AppWebServer = {
 	command?: string;
@@ -22,3 +36,17 @@ export type AppWebServer = {
 export function appWebServer(_port: number): AppWebServer {
 	return {};
 }
+
+/**
+ * Anything this app must do before its first spec runs — seeding, a route
+ * pre-warm, an asset build.
+ *
+ * Runs AFTER the factory's database-environment guard has passed, never before:
+ * a precondition that writes must not touch a database not yet proved throwaway.
+ *
+ * THROWING ABORTS THE RUN, and the factory does not catch for you. That is the
+ * right default for a precondition (a seed that failed is a suite about to fail
+ * confusingly) and the wrong one for an optimisation — a pre-warm that could not
+ * reach a route has cost nothing, so catch inside this function and return.
+ */
+export async function appPreconditions(_baseURL: string): Promise<void> {}

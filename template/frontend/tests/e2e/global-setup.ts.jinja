@@ -1,5 +1,7 @@
 import type { FullConfig } from '@playwright/test';
 
+import { appPreconditions } from './app-web-server';
+
 /**
  * Refuses to run the E2E suite against a database that is not a throwaway.
  *
@@ -19,8 +21,12 @@ import type { FullConfig } from '@playwright/test';
  * here — an exemption keyed on `CI` would be one environment variable away
  * from disarming the guard on a laptop.
  *
- * Extend this file with further app-specific preconditions (seeding, an asset
- * build step) rather than adding a second globalSetup beside it.
+ * App-specific preconditions — seeding, a route pre-warm, an asset build — go in
+ * `appPreconditions` in tests/e2e/app-web-server.ts, which this file calls once
+ * the guard below has passed. THIS file is owed byte-identical. It invited those
+ * preconditions for weeks while giving them nowhere to go, and four apps
+ * excepted the whole file rather than argue with it
+ * (full-stack-app-template#21).
  */
 const ALLOWED_ENVIRONMENT = 'local';
 
@@ -101,4 +107,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 				`throwaway database. Claim one with: python -m {{ package_name }}.db.stamp local`
 		);
 	}
+
+	// Only now: a precondition that seeds or warms must never touch a database
+	// this guard has not already proved is a throwaway one.
+	await appPreconditions(baseURL);
 }
