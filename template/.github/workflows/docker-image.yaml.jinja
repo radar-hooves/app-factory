@@ -26,6 +26,12 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# cancel-in-progress stays FALSE: this builds and pushes a release image, and
+# killing it mid-push leaves a partial artefact -- worse than queueing behind it.
+{% raw %}concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false{% endraw %}
+
 permissions:
   contents: read
   packages: write

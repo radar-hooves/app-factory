@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Changed
+
+- **Every stamped workflow declares a `concurrency` group, so a superseded run stops holding a runner the next one needs.** Runners are allocated per repo (a personal account has no org pool), so a queued job with no verdict left to give directly delays a real one — measured 02/09/2026, six queued runs on six successive `main` SHAs in one repo while another's release image build waited. The split is by workflow class, per `rules-library/core/ci-workflow-standard.md`: `canonical-shape`, `frontend-ci`, `python-ci` and `security` cancel a superseded run; `docker-image` and `cleanup-container-images` serialise and finish, because killing a half-done registry push or version delete leaves a partial artefact. `cancel-in-progress: false` still bounds the queue — GitHub keeps at most one pending run per group. `auto-label-issues` gets no group; a ref-keyed one would collide across every open issue.
+
+  Gated files, so an app takes it with a `copier update` plus the re-stamped manifest — both halves, or the parity gate lies.
+
 ### Fixed
 
 - **`backend/mypy-baseline.txt` joins `_skip_if_exists`, so a `copier update` cannot wipe an app's banked type debt.** It is the fourth file of a class the other three already handle — shipped empty, grown by the app, and never to be overwritten by an update: `frontend/.design-craft-baseline.json`, `frontend/.ui-drift-baseline.json` and `frontend/eslint.debt.js`. It was missed when they were added.

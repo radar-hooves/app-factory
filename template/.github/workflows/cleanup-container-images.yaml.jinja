@@ -5,6 +5,12 @@ on:
   schedule:
     - cron: '0 0 * * 0'
 
+# cancel-in-progress stays FALSE: the job deletes registry versions, so two
+# runs racing (or one killed part-way) is worse than queueing.
+{% raw %}concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false{% endraw %}
+
 permissions:
   packages: write
   contents: read
