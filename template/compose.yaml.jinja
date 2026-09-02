@@ -8,7 +8,13 @@
 # {{ backend_port }} before bringing this up; both bind the same host port.
 
 services:
-  {{ package_name }}:
+  # The service and its container_name are ONE string, hyphenated
+  # (canonical-app-shape.md §Service and container naming). This rendered from
+  # `package_name` until 03/09/2026, so a hyphenated app shipped a service
+  # `mission_command` beside a container `mission-command` — invisible in the
+  # eight one-word apps, and unfixable per app because the file is owed
+  # byte-identical.
+  {{ project_name }}:
     build:
       context: .
       dockerfile: Dockerfile
