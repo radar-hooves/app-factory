@@ -4,9 +4,9 @@
  * `vite.config.ts` belongs to the factory and is owed byte-identical, so an app
  * whose backend answers on a prefix other than `/api/` says so HERE. Measured
  * 03/09/2026: six of nine apps held an exception on the whole ninety-line file,
- * and three of them named this one gap independently — earworm proxies the
- * ListenBrainz-compatible surface its `app_hooks.py` mounts at the root,
- * portcullis proxies five broker prefixes, and godswood and library each add
+ * and three of them named this one gap independently — one proxies the
+ * scrobble-protocol surface its `app_hooks.py` mounts at the root, one proxies
+ * five broker prefixes and uses `/api` for none of them, and two more each add
  * `/mcp`.
  *
  * ONE seam, and it is additive: the returned entries are merged BESIDE the

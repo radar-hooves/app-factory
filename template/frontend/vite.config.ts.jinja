@@ -74,7 +74,7 @@ export default defineConfig(({ command, isPreview }) => {
 			proxy: {
 				// Anchored and trailing-slashed: a Vite proxy key is a PREFIX match, so
 				// the bare '/api' also swallows a top-level SPA route whose name merely
-				// starts with it. Measured in earworm on 2026-08-25: its own `/api-docs`
+				// starts with it. Measured 2026-08-25 in a stamped app: its own `/api-docs`
 				// page was proxied to the backend, which answered with the built SPA
 				// shell, and the route died on chunks the dev server cannot serve. A
 				// leading '^' makes Vite read the key as a RegExp; every real call is
