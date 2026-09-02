@@ -104,8 +104,16 @@ repos:
   # that opts out of exactly that property. Measured safe — matching is on error
   # content, not line numbers, so editing above a banked error does not trip it.
   #
-  # pipefail is deliberately absent: the pipeline must exit on mypy-baseline's
-  # verdict, and mypy's own non-zero on a filtered-out error would mask it.
+  # Not a bare pipe: bash reports the LAST stage's status, so
+  # `mypy | mypy-baseline filter` hands back the FILTER's verdict, and the filter
+  # exits 0 on empty stdin — a mypy that crashed passed the gate, having never
+  # type-checked anything. `set -o pipefail` is not the fix either, because mypy
+  # exits 1 on every error it finds, including the banked ones the baseline exists
+  # to permit. mypy's own exit code is what separates the two: 0 and 1 are
+  # mypy-baseline's call, 2 and above (a usage error, an INTERNAL ERROR, or uv
+  # failing to launch mypy at all) are nobody's, so the hook exits with mypy's
+  # status and reprints its stdout. The crash banner itself is on stderr and
+  # reaches the terminal either way.
   #
   # Never name a specific app in a template file: the parity normaliser rewrites
   # an app's own name to a placeholder wherever it appears, so a comment naming
@@ -114,7 +122,7 @@ repos:
     hooks:
       - id: mypy
         name: 'python - Type-check with mypy'
-        entry: bash -c 'cd backend && uv run mypy src | uv run mypy-baseline filter'
+        entry: bash -c 'cd backend || exit; rc=0; out=$(uv run mypy src) || rc=$?; if [ "$rc" -ge 2 ]; then printf "%s\n" "$out"; exit "$rc"; fi; printf "%s\n" "$out" | uv run mypy-baseline filter'
         language: system
         pass_filenames: false
         files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock|mypy-baseline\.txt)$
