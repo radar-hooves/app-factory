@@ -6,6 +6,36 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.3] - 2026-09-03
+
+The five template gaps the 03/09/2026 canonical-conformance measurement found:
+each was a factory defect rather than an app preference, and the evidence in
+every case was several apps independently writing the same exception reason.
+
+### Added
+
+- **A global search affordance in the stamped shell, wired to the command palette.** `canonical-app-shape.md` requires one in the top bar and `@poodle64/ui` ships both halves — `AppShell`'s `onSearch` hook and the `CommandPalette` it opens — but the factory composed neither. Measured across the fleet: casefile, earworm, mission-command and core-memory had each written the same handful of lines for themselves, and eight, library and pebblestone had no top-bar search at all, in breach through no fault of their own. Three lines in `+layout.svelte` close it.
+
+  Deliberately NO app-owned commands module. `frontend/src/routes/` is domain code the parity gate already frees, so an app adds palette ACTIONS in the layout itself — and exactly one app in the fleet has any, which is not enough consumers to earn a seam and a sanctioned-file entry. `tests/e2e/shell.spec.ts` drives the affordance rather than looking at it: a search button wired to nothing is identical in a screenshot, which is how three apps shipped an empty top bar with nothing going red. That spec is the factory's, not the scaffold's to delete.
+
+- **`frontend/app-proxy.ts` — the one seam on `vite.config.ts`.** Six of nine apps held an exception on the whole ninety-line file and three named this exact gap independently: the factory's proxy stanza has a single anchored `^/api/` key and nowhere for an app whose backend answers elsewhere. earworm proxies the ListenBrainz-compatible surface its `app_hooks.py` mounts at the root; portcullis proxies five broker prefixes and uses `/api` for none of them; godswood and library each add `/mcp`. `appProxy(backendTarget)` returns extra entries merged BESIDE the factory's `^/api/`, never over it — that entry carries the dev identity headers the human surface authenticates with, and replacing it 401s every call.
+
+- **`appPreconditions()` in `frontend/tests/e2e/app-web-server.ts`.** `global-setup.ts`'s own header invited app-specific preconditions for weeks while the file was owed byte-identical, and four apps excepted the whole file rather than argue with it — eight to pre-warm chart routes past Vite's cold dependency-optimisation cost, cadmus to warm seventeen routes twice. It runs AFTER the database-environment guard passes and never before: a precondition that seeds must not touch a database not yet proved throwaway. It joins the file `canonical-app-shape.md` already sanctions for this suite's app-owned half rather than a new one, so it works on the next stamp rather than after a governance line lands.
+
+  The promotion the report asked for is already in the factory: `46385ac` took the non-production guard and `575263d` the IPv4/IPv6 probe, and both are stronger than the versions cadmus and godswood converged on, which use a single-family `fetch`.
+
+- **An app-owned tail on `.pre-commit-config.yaml`, and it is enumerated rather than open.** This was the single most-drifted file in the fleet: all four repos whose Canonical Shape gate was red on `main` failed on this file alone, and three more excepted the whole file to carry one hook each. Every one gave the same reason — pre-commit has no include directive. `canonical-app-shape.md` §Extension Points already answers that and says a file in this position needs no new mechanism and no code change: the terminal marker `.gitignore`, `Dockerfile` and `.dockerignore` carry, which `check-template-parity.py` truncates at for any file. godswood has been running the marker on this very file since 27/08.
+
+  A tail where anything may be appended is close to no constraint at all, so three things hold below the marker and `check-canonical-shape.py`'s new `pre-commit-tail` check enforces them rather than the comment asking nicely: only `- repo: local` entries; no top-level key (YAML takes an `exclude:` at column 0 down there and it silently disarms every factory hook ABOVE the marker); and no re-declared hook id, which is the only way a YAML list can soften an earlier entry.
+
+### Fixed
+
+- **A hyphenated app shipped two names for one container.** `compose.yaml` rendered the service from `package_name` (underscored) and `container_name` from `project_name` (hyphenated). For a one-word app the two strings coincide and nothing shows; mission-command shipped service `mission_command` beside container `mission-command`, and `canonical-app-shape.md` §Service and container naming requires one hyphenated string for both, saying of this exact mismatch: "fix it in the template, not per app". Verified on a stamped `reference-render`: service == `container_name` == `reference-render`. The invariant now also has an instrument — master-project's `compose-naming` check, which had never existed, so the one live mismatch had to be found by a person reading nine compose files.
+
+- **The dev proxy dials the literal `127.0.0.1` rather than `localhost`.** The dev backend binds `0.0.0.0` (`gunicorn.conf.py`, `.vscode/launch.json`), which is IPv4-only, while `localhost` resolves to `::1` first on a Linux container and a Node dial to a bare hostname is not guaranteed to fall through. Landed on that construction — a literal cannot be worse than a name against an IPv4 bind — rather than on earworm's CI-image measurement, which was not reproduced here. The underlying asymmetry did reproduce on a workstation while verifying this release: `vite preview` bound `[::1]` only, and a dial to `127.0.0.1` was refused.
+
+- **`pageTitle` is wrapped to prettier's print width.** A hyphenated app's `project_title` pushed the single-line `$derived` past 100 columns, so a fresh stamp of one failed `pnpm lint` on its first commit. Invisible in the eight one-word apps, like the compose defect above.
+
 ## [2026.9.2] - 2026-09-03
 
 ### Changed
