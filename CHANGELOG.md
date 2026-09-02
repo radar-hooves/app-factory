@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **`backend/mypy-baseline.txt` joins `_skip_if_exists`, so a `copier update` cannot wipe an app's banked type debt.** It is the fourth file of a class the other three already handle — shipped empty, grown by the app, and never to be overwritten by an update: `frontend/.design-craft-baseline.json`, `frontend/.ui-drift-baseline.json` and `frontend/eslint.debt.js`. It was missed when they were added.
+
+  The same omission cost a parity point on the governance side, where `canonical-app-shape.md`'s sanctioned-per-app block requires a superset of this list: the factory ships the mypy-baseline ratchet AND an empty baseline, so byte parity is unsatisfiable for any app that banks a finding. Latent across the fleet until an app actually banked one — every other stamped app carries an empty baseline and matches. Fixed in master-project `b6a7c897`.
+
 ## [2026.9.1] - 2026-09-02
 
 ### Changed

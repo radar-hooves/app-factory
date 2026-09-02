@@ -13,6 +13,10 @@ _skip_if_exists:
   # empty, then grows as the app banks pre-existing findings — an update must
   # never wipe the debt banked, exactly like the design/ui-drift baselines above.
   - frontend/eslint.debt.js
+  # App-owned TYPE debt, same contract as the three baselines above: shipped
+  # empty, grown by the app as it banks pre-existing mypy findings, and an
+  # update must never wipe it. Missed when the others were added.
+  - backend/mypy-baseline.txt
 
 project_name:
   type: str
