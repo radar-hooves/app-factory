@@ -1,0 +1,35 @@
+/**
+ * {{ project_name }}'s own dev-proxy routes — the extension point for vite.config.ts.
+ *
+ * `vite.config.ts` belongs to the factory and is owed byte-identical, so an app
+ * whose backend answers on a prefix other than `/api/` says so HERE. Measured
+ * 03/09/2026: six of nine apps held an exception on the whole ninety-line file,
+ * and three of them named this one gap independently — earworm proxies the
+ * ListenBrainz-compatible surface its `app_hooks.py` mounts at the root,
+ * portcullis proxies five broker prefixes, and godswood and library each add
+ * `/mcp`.
+ *
+ * ONE seam, and it is additive: the returned entries are merged BESIDE the
+ * factory's `^/api/`, never over it. Do not return `^/api/` or `/api` — that
+ * entry carries the dev identity headers the human surface authenticates with,
+ * and replacing it 401s every call. Unlike the `.pre-commit-config.yaml` tail,
+ * this one is documented rather than machine-checked: a wrong answer here takes
+ * the dev server down in front of you, and a seam whose failure is loud does not
+ * need a gate to make it visible.
+ *
+ * Returning `{}` (the default) leaves the factory's proxy exactly as stamped.
+ *
+ *     export function appProxy(backendTarget: string) {
+ *         return { '/mcp': backendTarget };
+ *     }
+ *
+ * `backendTarget` is passed in rather than rebuilt here so an app cannot drift
+ * onto a second address for one backend.
+ */
+import type { ProxyOptions } from 'vite';
+
+export type AppProxy = Record<string, string | ProxyOptions>;
+
+export function appProxy(_backendTarget: string): AppProxy {
+	return {};
+}

@@ -2,6 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
+import { appProxy } from './app-proxy';
 import { resolveDevIdentity, vendDevUid } from './dev-identity';
 
 export default defineConfig(({ command, isPreview }) => {
@@ -47,11 +48,20 @@ export default defineConfig(({ command, isPreview }) => {
 		}
 	};
 
-	// The app's registered backend port. Not overridable: no app has needed a
-	// second target, and an override nobody reaches for is untested machinery
-	// (issue #13 item 4) — an app that genuinely needs one adds it back with a
-	// use to prove it against, rather than carrying it speculatively.
-	const backendTarget = `http://localhost:{{ backend_port }}`;
+	// The app's registered backend port, as the literal IPv4 loopback rather than
+	// the hostname. The dev backend binds `0.0.0.0` (gunicorn.conf.py, and the
+	// launch configurations), which is IPv4-only — while on a Linux container
+	// `localhost` resolves to `::1` first, and a Node dial to a bare hostname is
+	// not guaranteed to fall through to the other family. The literal address
+	// removes the resolution from the path rather than depending on its order.
+	// This is a construction argument, not a benchmark: `127.0.0.1` cannot be
+	// worse than `localhost` against a socket bound to `0.0.0.0`, on any machine.
+	//
+	// Not overridable: no app has needed a second target, and an override nobody
+	// reaches for is untested machinery (issue #13 item 4) — an app that
+	// genuinely needs one adds it back with a use to prove it against, rather
+	// than carrying it speculatively.
+	const backendTarget = `http://127.0.0.1:{{ backend_port }}`;
 
 	return {
 		plugins: [...plugins, requireDevIdentity],
@@ -82,11 +92,19 @@ export default defineConfig(({ command, isPreview }) => {
 					// Undefined behind the proxy, where the real headers are already on
 					// the request and this object would overwrite them — Vite merges it last.
 					headers: identity.proxyHeaders
-				}
-				// No /mcp proxy: an MCP client names a full URL, not a same-origin
-				// path the way the SPA's own fetch calls do (that is what /api above
-				// is for), so it reaches the backend on {{ backend_port }} directly —
-				// proxying it here had no consumer in nine apps (issue #13 item 4).
+				},
+				// This app's own prefixes, from frontend/app-proxy.ts — the one seam
+				// on this file, and the reason the file itself stays byte-identical.
+				// Declared AFTER `^/api/` so the factory's entry keeps routing
+				// precedence; the seam adds prefixes, it does not replace ours.
+				//
+				// No /mcp proxy in the factory: an MCP client names a full URL, not a
+				// same-origin path the way the SPA's own fetch calls do (that is what
+				// /api above is for), so it reaches the backend on {{ backend_port }}
+				// directly. Four apps carry one anyway, which is a question for the
+				// factory rather than a default to reinstate untested — until it is
+				// answered, `/mcp` is one line in app-proxy.ts.
+				...appProxy(backendTarget)
 			}
 		}
 	};

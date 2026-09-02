@@ -89,6 +89,7 @@
     "frontend/.npmrc": "93d7b61d9d1758fd",
     "frontend/.prettierignore": "9bc58f14bf2d6e80",
     "frontend/.prettierrc": "daec45a55e1f3ad7",
+    "frontend/app-proxy.ts": "4c85c24663b8fc10",
     "frontend/components.json": "3192c135e1a87e3e",
     "frontend/dev-identity.ts": "fb7dd048c1a8cf71",
     "frontend/eslint.config.js": "34b434c4bac6a045",
@@ -123,7 +124,7 @@
     "frontend/tests/e2e/global-setup.ts": "ec257ef1e1a0a0e3",
     "frontend/tests/e2e/shell.spec.ts": "639ee47d08300089",
     "frontend/tsconfig.json": "5ba6072319c60e79",
-    "frontend/vite.config.ts": "c5930977056aee32",
+    "frontend/vite.config.ts": "ad22ab1f496e85ee",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
     "renovate.json": "de881ee5d6d42db9"
   }
