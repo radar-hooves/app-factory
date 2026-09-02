@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.4] - 2026-09-03
+
+A same-day follow-up to 2026.9.3, which is its own tag rather than a fold into
+that entry because `copier` resolves this template by its latest tag: an
+untagged fix is not reachable by a fresh stamp.
+
+### Fixed
+
+- **Four factory files could never match the app they name.** `check-template-parity.py` normalises an app's own name to `APP` wherever it appears, so a template comment naming one app hashes differently in that app alone — the file is byte-identical and the gate reports drift, in the one repo whose session cannot see why. The template's own `.pre-commit-config.yaml` has carried the rule since 2026-08-25 ("Never name a specific app in a template file"); four files broke it anyway, and one of them was added in 2026.9.3 that morning. Measured while re-stamping earworm: it took `vite.config.ts` verbatim and still failed the gate, on one comment line. `vite.config.ts` cost earworm, `app-proxy.ts` cost earworm, portcullis, godswood and library, `.pre-commit-config.yaml` cost godswood, and `compose.yaml` cost mission-command and eight. The anecdotes keep their evidence and lose the names.
+
+  Two related occurrences are NOT prose and stay: the `gwcr.`/`pypi.example.com` hostnames in `docker-image.yaml` and the `Dockerfile`, and `PORTCULLIS_URL`/`PORTCULLIS_SIGNET_IDENTITY` in `vend.py` and `dev-identity.ts`. Those are real identifiers, so the fix belongs in the normaliser, which already carries this exact carve-out for `portcullis_url`'s VALUE and needs the household domain and the env prefix beside it.
+
 ## [2026.9.3] - 2026-09-03
 
 The five template gaps the 03/09/2026 canonical-conformance measurement found:
