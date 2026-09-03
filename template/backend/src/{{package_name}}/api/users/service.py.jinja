@@ -85,7 +85,9 @@ def upsert_from_identity(
         # store loaded a user with no memberships, and the menu offered a choice
         # of nothing until a reload. The insert therefore runs in a SAVEPOINT,
         # and a refusal means the row exists now — read it and carry on as the
-        # re-sync below would have.
+        # re-sync below would have. That read relies on READ COMMITTED, which
+        # is Postgres's default and the engine sets nothing else: each statement
+        # takes a fresh snapshot, so the winner's committed row is visible.
         try:
             with session.begin_nested():
                 user = User(

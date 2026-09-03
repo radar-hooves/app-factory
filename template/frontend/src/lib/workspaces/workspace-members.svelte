@@ -81,6 +81,15 @@
 	let adding = $state(false);
 	const chosenPerson = $derived(candidates.find((p) => p.id === chosenUserId));
 
+	// Reset on OPEN, not on success: a cancelled dialog otherwise reopens with
+	// the last person and role still chosen, and "owner" left over from an
+	// abandoned attempt is a privilege nobody decided to grant.
+	function openAdd() {
+		chosenUserId = '';
+		chosenRole = 'member';
+		addOpen = true;
+	}
+
 	async function addMember(event: SubmitEvent) {
 		event.preventDefault();
 		if (!workspace || !chosenUserId) return;
@@ -99,8 +108,6 @@
 			description: `${chosenPerson ? displayName(chosenPerson) : 'They'} can now see everything in ${workspace.name}.`
 		});
 		addOpen = false;
-		chosenUserId = '';
-		chosenRole = 'member';
 		await load();
 	}
 
@@ -191,7 +198,7 @@
 				</Button>
 				<Button
 					size="sm"
-					onclick={() => (addOpen = true)}
+					onclick={openAdd}
 					aria-label="Add member"
 					title="Add member"
 					data-testid="workspace-add-member"
@@ -224,9 +231,10 @@
 						</Table.Cell>
 						{#if isOwner}
 							<Table.Cell class="text-right">
-								<!-- Never your own row: an owner leaving is the one retraction
-								     with a lockout in it, and the backend's last-owner refusal
-								     is the guard, so the control is simply not offered. -->
+								<!-- Never your own row. Leaving is a different act from being
+								     removed — a member is not an owner, so it would need its own
+								     route — and nobody has asked for it; the backend's last-owner
+								     refusal covers the one lockout, so the control is not offered. -->
 								{#if member.user.id !== auth.user?.id}
 									<Button
 										variant="ghost"

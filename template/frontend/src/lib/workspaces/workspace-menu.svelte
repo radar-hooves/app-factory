@@ -48,6 +48,12 @@
 	let newName = $state('');
 	let creating = $state(false);
 
+	// Reset on open: a name typed and then cancelled must not reappear.
+	function openCreate() {
+		newName = '';
+		createOpen = true;
+	}
+
 	async function createWorkspace(event: SubmitEvent) {
 		event.preventDefault();
 		const name = newName.trim();
@@ -71,9 +77,10 @@
 </script>
 
 <DropdownMenu.Root>
+	<!-- No aria-label: the visible text IS the accessible name, so a voice-control
+	     user can say the workspace's name to open it (WCAG 2.5.3). -->
 	<DropdownMenu.Trigger
 		class={buttonVariants({ variant: 'outline', size: 'sm' })}
-		aria-label="{label} menu"
 		data-testid="workspace-menu"
 	>
 		<span class="max-w-48 truncate" data-testid="workspace-menu-name">
@@ -102,7 +109,7 @@
 		<DropdownMenu.Item onSelect={() => goto(membersHref)} data-testid="workspace-menu-members">
 			<Users /> Members
 		</DropdownMenu.Item>
-		<DropdownMenu.Item onSelect={() => (createOpen = true)} data-testid="workspace-menu-create">
+		<DropdownMenu.Item onSelect={openCreate} data-testid="workspace-menu-create">
 			<Plus /> New {noun}…
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
