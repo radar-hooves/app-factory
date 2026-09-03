@@ -1,10 +1,119 @@
-import { expect, test } from '@playwright/test';
+import { expect, request, test } from '@playwright/test';
 
 // The scaffold's example E2E spec — delete it once this app has real ones.
 // It exists so a freshly stamped app has a playwright run that passes, and
 // proves the harness (dedicated port, synthetic identity, no server reuse)
 // actually drives the app.
+//
+// The second test is the scaffold's copy of the tenancy proof, on the example
+// slice: the factory's own workspaces.spec.ts drives the menu, the chooser and
+// the grant, but only a workspace-scoped table can show data staying where it
+// belongs, and the only one a fresh stamp has is example_items. When this
+// app's first real domain replaces the slice, carry the shape of that test
+// with it — two people, each seeing their own rows and neither the other's,
+// then a grant, then the shared rows appearing under the chosen workspace.
+const BACKEND = 'http://127.0.0.1:{{ backend_port }}';
+const PARTNER = { 'x-authentik-uid': 'e2e-partner', 'x-authentik-username': 'e2e-partner' };
+
+type Membership = {
+	workspace: { id: number; slug: string; name: string };
+	role: 'owner' | 'member';
+};
+
+test.beforeEach(async ({ page }) => {
+	// The same self-healing the factory's workspaces.spec.ts does, for the same
+	// reason: nothing deletes a workspace, so a run that aborted mid-way leaves
+	// the suite's person holding a seat the partner granted — and a person with
+	// two memberships is asked to choose rather than shown the home page, which
+	// fails the first test here for a reason it did not cause. Retract any such
+	// seat before either test looks.
+	const partner = await request.newContext({ baseURL: BACKEND, extraHTTPHeaders: PARTNER });
+	try {
+		await page.goto('/');
+		const me = (await (await page.request.get('/api/users/me')).json()) as { id: string };
+		const held = (await (await partner.get('/api/workspaces/me')).json()) as Membership[];
+		for (const membership of held) {
+			if (membership.role === 'owner' && !membership.workspace.slug.startsWith('personal-')) {
+				await partner.delete(`/api/workspaces/${membership.workspace.id}/members/${me.id}`);
+			}
+		}
+	} finally {
+		await partner.dispose();
+	}
+});
+
 test('the home route renders the shared page header', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('heading', { level: 1, name: '{{ project_name }}' })).toBeVisible();
+});
+
+test('two people each see their own items, and a granted member sees the shared ones', async ({
+	page
+}) => {
+	const partner = await request.newContext({ baseURL: BACKEND, extraHTTPHeaders: PARTNER });
+	const stamp = Date.now();
+	// The partner may hold several workspaces from earlier runs (nothing deletes
+	// one), so their scoped calls name the personal one explicitly rather than
+	// relying on a sole membership the way a fresh identity can.
+	const partnerHome = (await (await partner.get('/api/workspaces/me')).json()) as Membership[];
+	const home = partnerHome.find((m) => m.workspace.slug.startsWith('personal-'))!.workspace;
+	const inHome = { 'x-workspace-id': String(home.id) };
+	const titles = async (res: Promise<{ json(): Promise<{ title: string }[]> }>) =>
+		(await (await res).json()).map((item) => item.title);
+
+	try {
+		await page.goto('/');
+		const me = (await (await page.request.get('/api/users/me')).json()) as { id: string };
+
+		// Each writes into their own workspace; each sees only their own row.
+		const mineTitle = `mine ${stamp}`;
+		const theirsTitle = `theirs ${stamp}`;
+		expect(
+			(await page.request.post('/api/example/', { data: { title: mineTitle } })).status()
+		).toBe(201);
+		expect(
+			(
+				await partner.post('/api/example/', { data: { title: theirsTitle }, headers: inHome })
+			).status()
+		).toBe(201);
+
+		const mine = await titles(page.request.get('/api/example/'));
+		const theirs = await titles(partner.get('/api/example/', { headers: inHome }));
+		expect(mine).toContain(mineTitle);
+		expect(mine).not.toContain(theirsTitle);
+		expect(theirs).toContain(theirsTitle);
+		expect(theirs).not.toContain(mineTitle);
+
+		// The page reports the caller's own workspace, and the count it holds.
+		await page.goto('/');
+		await expect(page.getByText(`Connected — ${mine.length} example items in`)).toBeVisible();
+
+		// The grant: the partner shares a workspace holding one item. Chosen from
+		// the chooser, that is what the page shows — and what the API, asked with
+		// the same choice, returns.
+		const sharedName = `Shared ${stamp}`;
+		const shared = (
+			(await (
+				await partner.post('/api/workspaces/', { data: { name: sharedName } })
+			).json()) as Membership
+		).workspace;
+		await partner.post(`/api/workspaces/${shared.id}/members`, {
+			data: { user_id: me.id, role: 'member' }
+		});
+		const inShared = { 'x-workspace-id': String(shared.id) };
+		await partner.post('/api/example/', { data: { title: `shared ${stamp}` }, headers: inShared });
+
+		await page.goto('/');
+		await page.getByRole('button', { name: sharedName }).click();
+		await expect(page.getByText(`Connected — 1 example items in ${sharedName}.`)).toBeVisible();
+		expect(await titles(page.request.get('/api/example/', { headers: inShared }))).toEqual([
+			`shared ${stamp}`
+		]);
+
+		// The seat is retracted and the shared row is gone from this person's view.
+		await partner.delete(`/api/workspaces/${shared.id}/members/${me.id}`);
+		expect((await page.request.get('/api/example/', { headers: inShared })).status()).toBe(403);
+	} finally {
+		await partner.dispose();
+	}
 });

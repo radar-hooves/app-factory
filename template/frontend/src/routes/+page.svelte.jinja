@@ -1,18 +1,20 @@
 {% raw %}<script lang="ts">
 	import { onMount } from 'svelte';
 	import PageHeader from '@poodle64/ui/page-header';
+	import { api, extractApiError } from '$lib/api';
+	import { auth } from '$lib/auth.svelte';
 
 	let status = $state<string | null>(null);
 
+	// Through the api client, never a bare fetch(): the client is what stamps
+	// every call with the workspace the caller chose. A bare fetch carries no
+	// such header, so it is answered 409 the moment the caller belongs to two —
+	// which is the first thing that happens once someone shares with them.
 	onMount(async () => {
-		try {
-			const res = await fetch('/api/example/');
-			if (!res.ok) throw new Error(`${res.status}`);
-			const items = await res.json();
-			status = `Connected — ${items.length} example items in the database.`;
-		} catch (err) {
-			status = `Could not reach the API: ${err}`;
-		}
+		const { data, error } = await api.GET('/api/example/');
+		status = error
+			? `Could not reach the API: ${extractApiError(error).description}`
+			: `Connected — ${data.length} example items in ${auth.activeWorkspace?.name ?? 'this workspace'}.`;
 	});
 </script>
 

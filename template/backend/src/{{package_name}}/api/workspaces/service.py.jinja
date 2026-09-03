@@ -10,7 +10,7 @@ import re
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
@@ -47,6 +47,22 @@ def list_memberships(session: Session, user_id: uuid.UUID) -> list[WorkspaceMemb
     zero-membership branch to handle.
     """
     stmt = select(WorkspaceMembership).where(WorkspaceMembership.user_id == user_id).order_by(WorkspaceMembership.id)
+    return list(session.execute(stmt).scalars().all())
+
+
+def list_members(session: Session, workspace_id: int) -> list[WorkspaceMembership]:
+    """Return every membership OF this workspace, user loaded, oldest first.
+
+    The other direction from ``list_memberships``: that is one person's
+    workspaces, this is one workspace's people. It is what the members surface
+    renders, and the reason ``WorkspaceMembership.user`` exists.
+    """
+    stmt = (
+        select(WorkspaceMembership)
+        .where(WorkspaceMembership.workspace_id == workspace_id)
+        .options(selectinload(WorkspaceMembership.user))
+        .order_by(WorkspaceMembership.id)
+    )
     return list(session.execute(stmt).scalars().all())
 
 
@@ -112,6 +128,20 @@ def create_workspace(session: Session, *, owner: User, name: str) -> WorkspaceMe
     membership = WorkspaceMembership(workspace_id=workspace.id, user_id=owner.id, role=WorkspaceRole.OWNER)
     session.add(membership)
     session.flush()
+    return membership
+
+
+def require_member(session: Session, *, workspace_id: int, user_id: uuid.UUID) -> WorkspaceMembership:
+    """Return the caller's membership of this workspace, or refuse.
+
+    Raises:
+        ForbiddenError: when the caller is not a member. The same answer
+            ``require_owner`` gives, for the same reason: a distinct 404 would
+            confirm the workspace exists.
+    """
+    membership = get_membership(session, workspace_id=workspace_id, user_id=user_id)
+    if membership is None:
+        raise ForbiddenError("You are not a member of that workspace")
     return membership
 
 

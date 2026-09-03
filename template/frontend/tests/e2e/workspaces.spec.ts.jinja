@@ -1,0 +1,136 @@
+import { expect, request, test, type APIRequestContext } from '@playwright/test';
+
+// The tenancy surface, driven end to end — the factory's, like shell.spec.ts,
+// and not the scaffold's to delete. It proves what master-project#291 asked
+// for from the running app rather than from a unit test: a second person is
+// granted a seat, chooses the shared workspace from the chooser, every request
+// the SPA then makes carries that choice, and the grant itself can be made and
+// retracted from the screen an owner reaches through the menu.
+//
+// Two identities. The browser is the suite's own `e2e-uid`, injected by the
+// dev proxy. The second person cannot come through that proxy — Vite merges
+// its identity headers LAST and would overwrite theirs — so they speak to the
+// backend directly, on this app's own port, carrying the headers the proxy
+// would have set. Nothing here touches the example slice, so an app that has
+// deleted it still runs this file.
+const BACKEND = 'http://127.0.0.1:{{ backend_port }}';
+const PARTNER = { 'x-authentik-uid': 'e2e-partner', 'x-authentik-username': 'e2e-partner' };
+
+type Membership = {
+	workspace: { id: number; slug: string; name: string };
+	role: 'owner' | 'member';
+};
+type Person = { id: string; username: string };
+
+let partner: APIRequestContext;
+
+const memberships = async (ctx: APIRequestContext) =>
+	(await (await ctx.get('/api/workspaces/me')).json()) as Membership[];
+
+test.beforeAll(async () => {
+	partner = await request.newContext({ baseURL: BACKEND, extraHTTPHeaders: PARTNER });
+});
+
+test.afterAll(async () => {
+	await partner.dispose();
+});
+
+test.beforeEach(async ({ page }) => {
+	// Self-healing, not merely tidy: there is no route to delete a workspace,
+	// so every run leaves the partner owning one more, and a run that aborted
+	// mid-way leaves the suite's person still holding a seat in it. Retract any
+	// such seat first, so the assertions below start from the org-of-one every
+	// fresh identity is.
+	await page.goto('/');
+	const me = (await (await page.request.get('/api/users/me')).json()) as Person;
+	for (const held of await memberships(partner)) {
+		if (held.role === 'owner' && !held.workspace.slug.startsWith('personal-')) {
+			await partner.delete(`/api/workspaces/${held.workspace.id}/members/${me.id}`);
+		}
+	}
+});
+
+test('a person granted a seat chooses the shared workspace, and every request carries it', async ({
+	page
+}) => {
+	await page.goto('/');
+	const me = (await (await page.request.get('/api/users/me')).json()) as Person;
+	const mine = await memberships(page.request);
+	expect(mine).toHaveLength(1);
+	const own = mine[0]!.workspace;
+
+	// One membership: the menu names it and offers no switch.
+	await expect(page.getByTestId('workspace-menu-name')).toHaveText(own.name);
+	await page.getByTestId('workspace-menu').click();
+	await expect(page.getByTestId('workspace-menu-members')).toBeVisible();
+	await expect(page.getByTestId('workspace-menu-option')).toHaveCount(0);
+	await page.keyboard.press('Escape');
+
+	// The partner makes a workspace and grants this person a seat in it.
+	const shared = `Shared ${Date.now()}`;
+	const created = (await (
+		await partner.post('/api/workspaces/', { data: { name: shared } })
+	).json()) as Membership;
+	const grant = await partner.post(`/api/workspaces/${created.workspace.id}/members`, {
+		data: { user_id: me.id, role: 'member' }
+	});
+	expect(grant.status()).toBe(201);
+
+	// Two memberships and nothing remembered: a choice, never a silent default.
+	await page.goto('/');
+	await expect(page.getByTestId('workspace-chooser')).toBeVisible();
+	await page.getByRole('button', { name: shared }).click();
+	await expect(page.getByTestId('workspace-menu-name')).toHaveText(shared);
+
+	// The members surface, reached from the menu. The request it makes is the
+	// proof the SPA now stamps its calls with the chosen workspace: a header,
+	// not a screenshot.
+	const stamped = page.waitForRequest(
+		(req) =>
+			req.url().includes('/api/workspaces/') &&
+			req.headers()['x-workspace-id'] === String(created.workspace.id)
+	);
+	await page.getByTestId('workspace-menu').click();
+	await page.getByTestId('workspace-menu-members').click();
+	await stamped;
+
+	// Both people, with their roles — and no owner controls for a member.
+	const rows = page.getByTestId('workspace-member-row');
+	await expect(rows).toHaveCount(2);
+	await expect(rows.filter({ hasText: 'e2e-partner' })).toContainText('owner');
+	await expect(rows.filter({ hasText: me.username })).toContainText('member');
+	await expect(page.getByTestId('workspace-add-member')).toHaveCount(0);
+
+	// Switch back from the menu; the page remounts on the other workspace, where
+	// this person is the owner and the controls appear.
+	await page.getByTestId('workspace-menu').click();
+	await page.getByTestId('workspace-menu-option').filter({ hasText: own.name }).click();
+	await expect(page.getByTestId('workspace-menu-name')).toHaveText(own.name);
+	await expect(page.getByTestId('workspace-add-member')).toBeVisible();
+	await expect(rows).toHaveCount(1);
+
+	// The grant, from the screen: pick the partner from the people the app knows.
+	await page.getByTestId('workspace-add-member').click();
+	await page.getByTestId('workspace-add-person').click();
+	await page.getByRole('option', { name: 'e2e-partner' }).click();
+	await page.getByTestId('workspace-add-submit').click();
+	await expect(rows).toHaveCount(2);
+	expect((await memberships(partner)).map((m) => m.workspace.id)).toContain(own.id);
+
+	// And retracted, confirmed. The partner's own view agrees.
+	await rows.filter({ hasText: 'e2e-partner' }).getByTestId('workspace-remove-member').click();
+	await page.getByTestId('workspace-remove-confirm').click();
+	await expect(rows).toHaveCount(1);
+	expect((await memberships(partner)).map((m) => m.workspace.id)).not.toContain(own.id);
+
+	// Rename follows through to the menu, then is put back.
+	const renamed = `${own.name} (renamed)`;
+	await page.getByTestId('workspace-rename').click();
+	await page.getByTestId('workspace-rename-name').fill(renamed);
+	await page.getByTestId('workspace-rename-submit').click();
+	await expect(page.getByTestId('workspace-menu-name')).toHaveText(renamed);
+	await page.getByTestId('workspace-rename').click();
+	await page.getByTestId('workspace-rename-name').fill(own.name);
+	await page.getByTestId('workspace-rename-submit').click();
+	await expect(page.getByTestId('workspace-menu-name')).toHaveText(own.name);
+});

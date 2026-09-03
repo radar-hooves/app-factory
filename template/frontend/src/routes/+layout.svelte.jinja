@@ -6,20 +6,23 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
+	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
+	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
+	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
 
 	let { children } = $props();
 
 	// Load the caller and their workspace memberships once, at startup
 	// (rules-library/platform/authentication.md §Frontend Auth Store Contract).
 	// It resolves which workspace every subsequent request acts in, so it runs
-	// here rather than per-route — a page that fetched before this settled would
-	// send no workspace header and, for anyone holding two memberships, be
-	// answered 409.
+	// here rather than per-route — and the page below is NOT rendered until it
+	// has settled: a page that fetched first would send no workspace header
+	// and, for anyone holding two memberships, be answered 409.
 	onMount(() => {
 		void auth.init();
 	});
@@ -65,7 +68,28 @@
 	currentPath={page.url.pathname}
 	onSearch={() => (paletteOpen = true)}
 >
-	{@render children()}
+	<!-- The workspace menu: which body of data every request acts in, the
+	     switch between them, the members surface and sign-out. The factory owns
+	     the component; this is where the app mounts it, and the one place to say
+	     what THIS app calls a workspace — pass label="Household" here and on the
+	     members route (rules-library/platform/tenancy.md). -->
+	{#snippet context()}
+		<WorkspaceMenu />
+	{/snippet}
+
+	{#if auth.isLoading}
+		<LoadingState />
+	{:else if auth.needsWorkspaceChoice}
+		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
+		<WorkspaceChooser />
+	{:else}
+		<!-- Keyed on the workspace, so switching remounts the page and it fetches
+		     again. A page therefore never has to know a switch happened, and can
+		     never keep showing the previous workspace's rows. -->
+		{#key auth.activeWorkspace?.id}
+			{@render children()}
+		{/key}
+	{/if}
 </AppShell>
 
 <!-- Routes are the app's own (the parity gate frees frontend/src/routes/), so an

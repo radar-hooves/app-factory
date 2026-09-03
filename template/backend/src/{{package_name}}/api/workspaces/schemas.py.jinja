@@ -30,6 +30,35 @@ class MembershipRead(BaseModel):
     role: WorkspaceRole
 
 
+class MemberUserRead(BaseModel):
+    """The person a membership belongs to, as the members list shows them.
+
+    id, username and display name only — enough to render a row and to name
+    who is being removed. Email and last-seen are the person's own
+    (``GET /api/users/me``) and the admin area's, never every fellow member's.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    display_name: str | None
+
+
+class MemberRead(BaseModel):
+    """One member OF a workspace, with their standing in it.
+
+    The other direction from ``MembershipRead``: that is one person's
+    workspaces, this is one workspace's people — what the members surface
+    renders, and what an owner reads before granting or retracting.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user: MemberUserRead
+    role: WorkspaceRole
+
+
 class WorkspaceCreate(BaseModel):
     """Request body for creating a workspace. The creator becomes its owner."""
 

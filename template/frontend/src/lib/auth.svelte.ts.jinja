@@ -64,10 +64,38 @@ function rememberWorkspaceId(id: number | null) {
 	}
 }
 
+/** Make a workspace the one every request acts in. In-memory only; see below. */
 function selectWorkspace(next: Workspace | null) {
 	activeWorkspace = next;
 	setActiveWorkspaceId(next?.id ?? null);
-	rememberWorkspaceId(next?.id ?? null);
+}
+
+/**
+ * Pick the workspace every request should act in, from what is preferred and
+ * what is actually held. Shared by init() and refreshWorkspaces() so a rename,
+ * a grant or a retraction reconciles exactly the way a fresh load does.
+ *
+ * A preference is honoured only if it is still a membership: a workspace
+ * someone was removed from must not keep being sent, or every request 403s
+ * with no way for the user to see why. Such a preference is forgotten here.
+ *
+ * A sole membership is selected but NOT remembered, because selecting the only
+ * option is not a choice. Measured 03/09/2026 driving the grant end to end:
+ * remembering it meant a person who signed in before being granted a seat
+ * reloaded into their old, empty workspace with the new one tucked behind a
+ * menu — the very symptom this layer exists to end, one grant later. Left
+ * unremembered, the next load finds two memberships and nothing preferred, and
+ * the layout asks. Only setActiveWorkspace() — a person choosing — remembers.
+ */
+function reconcileActiveWorkspace(preferred: number | null) {
+	const remembered = memberships.find((m) => m.workspace.id === preferred);
+	if (remembered) {
+		selectWorkspace(remembered.workspace);
+		return;
+	}
+	rememberWorkspaceId(null);
+	const sole = memberships.length === 1 ? memberships.at(0) : undefined;
+	selectWorkspace(sole?.workspace ?? null);
 }
 
 export const auth = {
@@ -93,6 +121,18 @@ export const auth = {
 	get canSwitchWorkspace() {
 		return memberships.length > 1;
 	},
+	/**
+	 * True while several workspaces are held and none is chosen. The layout
+	 * renders the chooser instead of a page, because a page fetched in that
+	 * state is answered 409 — deliberately (see the module comment).
+	 */
+	get needsWorkspaceChoice() {
+		return memberships.length > 1 && activeWorkspace === null;
+	},
+	/** The caller's standing in the active workspace, or null before one is chosen. */
+	get activeRole() {
+		return memberships.find((m) => m.workspace.id === activeWorkspace?.id)?.role ?? null;
+	},
 
 	/**
 	 * Load the caller and their memberships. Call once at app startup.
@@ -117,23 +157,39 @@ export const auth = {
 			entitlements = (me.data as { entitlements?: string[] }).entitlements ?? [];
 			memberships = (mine.data as Membership[]) ?? [];
 
-			const stored = restoreStoredWorkspaceId();
-			const remembered = memberships.find((m) => m.workspace.id === stored);
-			// One membership needs no choice; several with nothing remembered is a
-			// choice only the person can make, so nothing is selected and the
-			// backend's 409 is what prompts them.
-			const sole = memberships.length === 1 ? memberships.at(0) : undefined;
-			selectWorkspace(remembered?.workspace ?? sole?.workspace ?? null);
+			reconcileActiveWorkspace(restoreStoredWorkspaceId());
 		} finally {
 			isLoading = false;
 		}
 	},
 
-	/** Switch the workspace every subsequent request acts in. */
+	/**
+	 * Re-read the caller's memberships after something changed them — a
+	 * workspace created or renamed, a membership granted or retracted. The
+	 * active workspace is kept while it is still held (its name may have
+	 * changed), dropped when it is gone, and chosen for them when only one
+	 * remains. Cheaper than init(): the user record has not changed and the
+	 * page must not flicker through the loading state.
+	 */
+	async refreshWorkspaces() {
+		const mine = await api.GET('/api/workspaces/me');
+		if (mine.error || !mine.data) return;
+		memberships = mine.data as Membership[];
+		reconcileActiveWorkspace(activeWorkspace?.id ?? restoreStoredWorkspaceId());
+	},
+
+	/**
+	 * Switch the workspace every subsequent request acts in.
+	 *
+	 * Only the store changes here. The layout keys the page on the active
+	 * workspace, so the page remounts and fetches again; no page has to know a
+	 * switch happened, and none can show the previous workspace's rows.
+	 */
 	setActiveWorkspace(workspaceId: number) {
 		const membership = memberships.find((m) => m.workspace.id === workspaceId);
 		if (!membership) return;
 		selectWorkspace(membership.workspace);
+		rememberWorkspaceId(membership.workspace.id);
 	},
 
 	/**
@@ -155,6 +211,7 @@ export const auth = {
 		entitlements = [];
 		memberships = [];
 		selectWorkspace(null);
+		rememberWorkspaceId(null);
 		window.location.href = '/outpost.goauthentik.io/sign_out';
 	}
 };

@@ -14,6 +14,7 @@ from fastapi import APIRouter, status
 from {{ package_name }}.api.workspaces import service
 from {{ package_name }}.api.workspaces.schemas import (
     MemberAdd,
+    MemberRead,
     MembershipRead,
     WorkspaceCreate,
     WorkspaceRead,
@@ -51,6 +52,18 @@ def rename_workspace(
     service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
     workspace = service.rename_workspace(session, workspace_id=workspace_id, name=data.name)
     return WorkspaceRead.model_validate(workspace)
+
+
+@router.get("/{workspace_id}/members", response_model=list[MemberRead], operation_id="listWorkspaceMembers")
+def list_members(workspace_id: int, session: SessionDep, identity: CurrentIdentity) -> list[MemberRead]:
+    """List who shares a workspace. Any member may look.
+
+    Membership, not ownership, is the gate: the people whose data you share are
+    not a secret from you. A non-member gets the same 403 a non-owner gets from
+    the routes below, so the answer never confirms a workspace exists.
+    """
+    service.require_member(session, workspace_id=workspace_id, user_id=identity.user.id)
+    return [MemberRead.model_validate(m) for m in service.list_members(session, workspace_id)]
 
 
 @router.post(

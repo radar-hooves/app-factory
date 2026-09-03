@@ -23,6 +23,24 @@ class UserRead(BaseModel):
     last_seen_at: datetime.datetime | None
 
 
+class UserSummary(BaseModel):
+    """A person as the grant picker shows them: the minimum needed to choose one.
+
+    id, username and display name — nothing else. This is the ONE projection
+    of other people the app serves to an ordinary member, and it exists for
+    exactly one act: an owner choosing, from the people the app already knows,
+    who to grant workspace membership to (`rules-library/platform/tenancy.md`
+    — sharing is a grant an owner makes). Email and last-seen stay with the
+    admin area, which is gated separately.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    display_name: str | None
+
+
 class CurrentUserRead(UserRead):
     """The caller's own record, plus the entitlements this request carried.
 

@@ -15,6 +15,11 @@ export default {
 			true,
 			{ ignoreAtRules: ['theme', 'source', 'custom-variant', 'apply', 'utility', 'plugin'] }
 		],
+		// `@apply border-border outline-ring/50` is a list of Tailwind utilities,
+		// not a CSS prelude, and stylelint-config-standard 40 started checking
+		// preludes it cannot parse. Without this every fresh stamp fails its own
+		// app.css on the two @apply lines the factory ships.
+		'at-rule-prelude-no-invalid': [true, { ignoreAtRules: ['apply'] }],
 		// app.css's five-block structure (docs/master/templates/golden-patterns/
 		// app-shape-and-frontend.md §"Token consumption") deliberately repeats
 		// `:root`/`.dark` once per block for readability.

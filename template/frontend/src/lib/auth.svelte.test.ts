@@ -46,6 +46,22 @@ describe('auth store — workspace resolution', () => {
 		expect(auth.activeWorkspace?.id).toBe(7);
 		expect(auth.canSwitchWorkspace).toBe(false);
 		expect(setActiveWorkspaceId).toHaveBeenCalledWith(7);
+		// Selected, not remembered: the only option was never a choice, so the
+		// day a second membership arrives the next load asks rather than
+		// reloading into the old, empty workspace.
+		expect(localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)).toBeNull();
+	});
+
+	it('remembers a workspace the person actually chose', async () => {
+		respondWith({ ...USER, entitlements: [] }, [
+			membership(7, 'household'),
+			membership(8, 'circle')
+		]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		auth.setActiveWorkspace(8);
+		expect(localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)).toBe('8');
 	});
 
 	it('selects NOTHING when two are reachable and none is remembered', async () => {
@@ -84,6 +100,7 @@ describe('auth store — workspace resolution', () => {
 		await auth.init();
 
 		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)).toBeNull();
 	});
 
 	it('switches only to a workspace the caller actually belongs to', async () => {
@@ -99,6 +116,83 @@ describe('auth store — workspace resolution', () => {
 
 		auth.setActiveWorkspace(8);
 		expect(auth.activeWorkspace?.id).toBe(8);
+	});
+});
+
+describe('auth store — a choice is asked for, never defaulted', () => {
+	it('needs a choice only while several are held and none is chosen', async () => {
+		respondWith({ ...USER, entitlements: [] }, [
+			membership(7, 'household'),
+			membership(8, 'circle')
+		]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.needsWorkspaceChoice).toBe(true);
+		expect(auth.activeRole).toBeNull();
+
+		auth.setActiveWorkspace(8);
+		expect(auth.needsWorkspaceChoice).toBe(false);
+		expect(auth.activeRole).toBe('owner');
+	});
+
+	it('never needs a choice for an org-of-one', async () => {
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1', 'member')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.needsWorkspaceChoice).toBe(false);
+		expect(auth.activeRole).toBe('member');
+	});
+});
+
+describe('auth store — refreshing memberships after a grant, a rename or a retraction', () => {
+	it('keeps the active workspace and follows its new name', async () => {
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'the family')]);
+		await auth.refreshWorkspaces();
+
+		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.activeWorkspace?.name).toBe('the family');
+	});
+
+	it('drops an active workspace the caller was removed from, and selects the sole remaining one', async () => {
+		localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, '8');
+		respondWith({ ...USER, entitlements: [] }, [
+			membership(7, 'household'),
+			membership(8, 'circle')
+		]);
+		const auth = await freshAuth();
+		await auth.init();
+		expect(auth.activeWorkspace?.id).toBe(8);
+
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		await auth.refreshWorkspaces();
+
+		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(setActiveWorkspaceId).toHaveBeenLastCalledWith(7);
+	});
+
+	it('leaves nothing chosen when a grant makes the held set ambiguous', async () => {
+		// The person had one workspace and was auto-selected into it; a grant
+		// arrives. Their existing choice stands — the new one is offered by the
+		// switcher, never silently switched to.
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		respondWith({ ...USER, entitlements: [] }, [
+			membership(7, 'household'),
+			membership(8, 'circle', 'member')
+		]);
+		await auth.refreshWorkspaces();
+
+		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.canSwitchWorkspace).toBe(true);
+		expect(auth.needsWorkspaceChoice).toBe(false);
 	});
 });
 

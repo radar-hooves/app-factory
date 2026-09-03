@@ -26,6 +26,12 @@ export default defineConfig({
 	expect: { timeout: CI ? 20_000 : 5_000 },
 	// Deliberately no CI retry: a retry turns a real intermittent failure into a green build.
 	retries: 0,
+	// One worker. The suite has one database and ONE identity (E2E_UID below),
+	// and the tenancy specs change what that identity belongs to — a grant made
+	// in one file is a second membership seen by another running beside it,
+	// which turns "the menu offers no switch" into a coin toss. Serial is the
+	// only honest answer while the identity is singular.
+	workers: 1,
 	reporter: CI
 		? [
 				['list'],

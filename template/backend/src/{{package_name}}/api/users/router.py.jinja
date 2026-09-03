@@ -2,19 +2,33 @@
 
 from fastapi import APIRouter
 
-from {{ package_name }}.api.users.schemas import CurrentUserRead, UserRead
-from {{ package_name }}.deps import CurrentIdentity
+from {{ package_name }}.api.users import service
+from {{ package_name }}.api.users.schemas import CurrentUserRead, UserRead, UserSummary
+from {{ package_name }}.deps import CurrentIdentity, SessionDep
 
 router = APIRouter()
+
+
+@router.get("/", response_model=list[UserSummary], operation_id="listUsers")
+def list_users(session: SessionDep, _identity: CurrentIdentity) -> list[UserSummary]:
+    """List the people this app has seen, for choosing who to grant membership to.
+
+    The app is not a directory — the identity provider is one — and this is
+    not an attempt to be: a person appears only once they have signed in, and
+    the projection is the three fields a picker needs. It exists because a
+    grant names a user id (``POST /api/workspaces/{id}/members``), and an
+    owner has to be able to find that id somewhere other than the database.
+    """
+    return [UserSummary.model_validate(user) for user in service.list_active(session)]
 
 
 @router.get("/me", response_model=CurrentUserRead, operation_id="getCurrentUser")
 def read_current_user(identity: CurrentIdentity) -> CurrentUserRead:
     """Return the caller's own user record and this request's entitlements.
 
-    The SPA calls this once at startup to populate its auth store. There is no
-    route to list or read OTHER users: the app is not a directory, and the
-    identity provider already is one.
+    The SPA calls this once at startup to populate its auth store. The only
+    other view of people here is the grant picker's summary above; there is
+    no route to read another person's full record.
     """
     return CurrentUserRead(
         **UserRead.model_validate(identity.user).model_dump(),

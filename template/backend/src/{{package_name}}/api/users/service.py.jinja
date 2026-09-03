@@ -5,6 +5,7 @@ import logging
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.users.models import User
@@ -28,6 +29,16 @@ def get_by_id(session: Session, user_id: uuid.UUID) -> User:
     if user is None:
         raise NotFoundError(f"User {user_id} not found")
     return user
+
+
+def list_active(session: Session) -> list[User]:
+    """Every active user, by username — the pool an owner grants membership from.
+
+    Unpaginated on purpose: this is a household's handful of people, and the
+    admin area already carries the paginated, searchable form for the day that
+    stops being true.
+    """
+    return list(session.execute(select(User).where(User.is_active.is_(True)).order_by(User.username)).scalars().all())
 
 
 def upsert_from_identity(
@@ -66,20 +77,37 @@ def upsert_from_identity(
     now = datetime.datetime.now(datetime.UTC)
 
     if user is None:
-        user = User(
-            authentik_uid=authentik_uid,
-            username=username or authentik_uid,
-            display_name=display_name,
-            email=email,
-            last_seen_at=now,
-        )
-        session.add(user)
-        session.flush()
-        logger.warning(
-            "Created a local user record on first sight of an authenticated identity",
-            extra={"user_id": user.id, "username": user.username},
-        )
-        return user
+        # Two first-sight requests can race: the SPA opens with a pair of
+        # concurrent calls, and on a person's very first load BOTH find no row
+        # and both insert. Postgres makes the loser wait on the unique index
+        # until the winner commits, then refuses it. Measured 03/09/2026 driving
+        # a fresh identity end to end: one of the two startup calls 500'd, the
+        # store loaded a user with no memberships, and the menu offered a choice
+        # of nothing until a reload. The insert therefore runs in a SAVEPOINT,
+        # and a refusal means the row exists now — read it and carry on as the
+        # re-sync below would have.
+        try:
+            with session.begin_nested():
+                user = User(
+                    authentik_uid=authentik_uid,
+                    username=username or authentik_uid,
+                    display_name=display_name,
+                    email=email,
+                    last_seen_at=now,
+                )
+                session.add(user)
+                session.flush()
+        except IntegrityError:
+            user = get_by_uid(session, authentik_uid)
+            if user is None:  # pragma: no cover - the constraint that refused us guarantees the row
+                raise
+            logger.info("A concurrent request created this user first", extra={"user_id": user.id})
+        else:
+            logger.warning(
+                "Created a local user record on first sight of an authenticated identity",
+                extra={"user_id": user.id, "username": user.username},
+            )
+            return user
 
     # Re-sync the mutable fields every request: the identity provider is the
     # source of truth for them and a stale local copy is a support ticket. Only

@@ -4,6 +4,32 @@
  */
 
 export interface paths {
+    "/api/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description List the people this app has seen, for choosing who to grant membership to.
+         *
+         *     The app is not a directory — the identity provider is one — and this is
+         *     not an attempt to be: a person appears only once they have signed in, and
+         *     the projection is the three fields a picker needs. It exists because a
+         *     grant names a user id (``POST /api/workspaces/{id}/members``), and an
+         *     owner has to be able to find that id somewhere other than the database.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me": {
         parameters: {
             query?: never;
@@ -15,9 +41,9 @@ export interface paths {
          * Read Current User
          * @description Return the caller's own user record and this request's entitlements.
          *
-         *     The SPA calls this once at startup to populate its auth store. There is no
-         *     route to list or read OTHER users: the app is not a directory, and the
-         *     identity provider already is one.
+         *     The SPA calls this once at startup to populate its auth store. The only
+         *     other view of people here is the grant picker's summary above; there is
+         *     no route to read another person's full record.
          */
         get: operations["getCurrentUser"];
         put?: never;
@@ -99,7 +125,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Members
+         * @description List who shares a workspace. Any member may look.
+         *
+         *     Membership, not ownership, is the gate: the people whose data you share are
+         *     not a secret from you. A non-member gets the same 403 a non-owner gets from
+         *     the routes below, so the answer never confirms a workspace exists.
+         */
+        get: operations["listWorkspaceMembers"];
         put?: never;
         /**
          * Add Member
@@ -442,6 +476,37 @@ export interface components {
             role: components["schemas"]["WorkspaceRole"];
         };
         /**
+         * MemberRead
+         * @description One member OF a workspace, with their standing in it.
+         *
+         *     The other direction from ``MembershipRead``: that is one person's
+         *     workspaces, this is one workspace's people — what the members surface
+         *     renders, and what an owner reads before granting or retracting.
+         */
+        MemberRead: {
+            user: components["schemas"]["MemberUserRead"];
+            role: components["schemas"]["WorkspaceRole"];
+        };
+        /**
+         * MemberUserRead
+         * @description The person a membership belongs to, as the members list shows them.
+         *
+         *     id, username and display name only — enough to render a row and to name
+         *     who is being removed. Email and last-seen are the person's own
+         *     (``GET /api/users/me``) and the admin area's, never every fellow member's.
+         */
+        MemberUserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string | null;
+        };
+        /**
          * MembershipRead
          * @description One of the caller's memberships, with the workspace it grants.
          *
@@ -451,6 +516,28 @@ export interface components {
         MembershipRead: {
             workspace: components["schemas"]["WorkspaceRead"];
             role: components["schemas"]["WorkspaceRole"];
+        };
+        /**
+         * UserSummary
+         * @description A person as the grant picker shows them: the minimum needed to choose one.
+         *
+         *     id, username and display name — nothing else. This is the ONE projection
+         *     of other people the app serves to an ordinary member, and it exists for
+         *     exactly one act: an owner choosing, from the people the app already knows,
+         *     who to grant workspace membership to (`rules-library/platform/tenancy.md`
+         *     — sharing is a grant an owner makes). Email and last-seen stay with the
+         *     admin area, which is gated separately.
+         */
+        UserSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -512,6 +599,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSummary"][];
+                };
+            };
+        };
+    };
     getCurrentUser: {
         parameters: {
             query?: never;
@@ -607,6 +714,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listWorkspaceMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"][];
                 };
             };
             /** @description Validation Error */

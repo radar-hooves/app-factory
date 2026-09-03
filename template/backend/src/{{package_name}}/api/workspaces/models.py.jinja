@@ -16,6 +16,7 @@ import uuid
 from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from {{ package_name }}.api.users.models import User
 from {{ package_name }}.db.base import Base, TimestampMixin
 
 
@@ -100,3 +101,9 @@ class WorkspaceMembership(Base, TimestampMixin):
     # workspace it grants — the switcher renders its name, and resolution reads
     # its id — so the alternative is an N+1 on the one query every request makes.
     workspace: Mapped[Workspace] = relationship(lazy="joined")
+
+    # NOT eager, unlike the workspace above: resolution runs on every request and
+    # needs the workspace, never the person. The members list is the one reader
+    # that wants the user row, and it asks for it with an explicit selectinload
+    # rather than making every request pay a join it never reads.
+    user: Mapped[User] = relationship()

@@ -6,6 +6,39 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.5] - 2026-09-03
+
+The tenancy surface, closing poodle64/master-project#291 on the factory's side: a
+second household member could sign in to a stamped app and see an empty app,
+and although the backend primitive had shipped on 20/08/2026 the grant that
+fixes it could only be made by an API call carrying a UUID read off the
+database, and a person who received one was then answered 409 by every request
+with no control on screen to choose. Its own tag, like 2026.9.4, because
+`copier` resolves this template by its latest tag and this is what the next
+stamp must carry. Driven, not asserted: two signed-in identities against a
+rendered app, each seeing only their own rows, then a grant made from the
+screen, the chooser chosen from, and the shared rows appearing under the chosen
+workspace — `tests/e2e/workspaces.spec.ts` and the scaffold's `example.spec.ts`
+carry the drive, and it ran twice.
+
+### Added
+
+- **`WorkspaceMenu`, `WorkspaceChooser` and `WorkspaceMembers` in `src/lib/workspaces/`.** The menu sits in the shell's `context` slot for every caller — an org-of-one included, because the org-of-one is exactly who has to reach Members to make the first grant — and carries the active workspace's name, the switch as a radio group once there are two, Members, New workspace and Sign out. The chooser renders instead of a page while several workspaces are held and none chosen. The members surface lists who shares the workspace with their role, and for an owner adds a member from the people the app has seen, removes one behind a confirmation, and renames. All three are factory-owned and parity-gated; the stamped `+layout.svelte` and a new `routes/workspace/` mount them, and an app that calls a workspace "Household" passes `label` at those two mount points rather than answering a copier question — the `workspace_label` question the design proposed is not added.
+- **`GET /api/workspaces/{id}/members`** (any member) and **`GET /api/users/`** (the three-field summary an owner grants from). The users router's line that there is no route to list other people is rewritten to say what the one listing is for.
+- **`auth.needsWorkspaceChoice`, `auth.activeRole`, `auth.refreshWorkspaces()`** on the store, with unit tests.
+
+### Changed
+
+- **Only an explicit choice of workspace is remembered.** Selecting a sole membership is not a choice, and remembering it meant a person who signed in before being granted a seat reloaded into their old, empty workspace with the new one behind a menu — the original symptom, one grant later. Measured while driving the grant end to end; the store now forgets a preference that no longer resolves and asks when two are held and none was chosen.
+- **The stamped layout does not render a page until the auth store has settled**, and keys the page on the active workspace, so a switch remounts the page and no page has to know a switch happened.
+- **`playwright.config.ts` runs one worker.** The suite has one identity, and the tenancy specs change what it belongs to; two files running beside one another turned "the menu offers no switch" into a coin toss.
+
+### Fixed
+
+- **Two concurrent first-sight requests raced to create the same user, and one 500'd.** The SPA opens with a pair of calls; on a person's very first load both found no row and both inserted, Postgres refused the loser, and the store loaded a user with no memberships until a reload. `upsert_from_identity` now inserts inside a savepoint and, refused, reads the row the winner made. Reproduced deterministically in `test_workspaces_api.py`, and live: six fresh identities, both calls fired concurrently, twelve 200s, six recoveries logged.
+- **The scaffold home page fetched with a bare `fetch()`**, so it never carried the workspace header and would be answered 409 for anyone holding two memberships. It goes through the api client and names the workspace it counted in.
+- **A fresh stamp failed its own stylelint on two lines the factory ships.** `stylelint-config-standard` 40 checks at-rule preludes, and `@apply border-border outline-ring/50` is a list of Tailwind utilities, not a prelude; `at-rule-prelude-no-invalid` now ignores `@apply`. The one comment in `app.css` without a blank line before it gets one, so the pre-commit `--fix` stops rewriting the file on every app's first commit.
+
 ## [2026.9.4] - 2026-09-03
 
 A same-day follow-up to 2026.9.3, which is its own tag rather than a fold into

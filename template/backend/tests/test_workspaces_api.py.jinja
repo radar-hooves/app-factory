@@ -17,6 +17,7 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.users.models import User
 
 
@@ -100,6 +101,48 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
     assert [item["title"] for item in shared.json()] == ["the household's item"]
 
 
+async def test_a_member_can_see_who_shares_the_workspace_and_a_stranger_cannot(
+    client: AsyncClient, session: Session
+) -> None:
+    """The members surface's two reads: who is in here, and who may I add.
+
+    Both are what makes the grant something a person can do from the app rather
+    than something an agent does with a UUID read off the database.
+    """
+    operator = {"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"}
+    partner = {"x-authentik-uid": "the-partner", "x-authentik-username": "the-partner"}
+    stranger = {"x-authentik-uid": "a-stranger", "x-authentik-username": "a-stranger"}
+
+    household_id = (await client.get("/api/workspaces/me", headers=operator)).json()[0]["workspace"]["id"]
+    # Everyone signs in once, so the app knows them.
+    assert (await client.get("/api/workspaces/me", headers=partner)).status_code == 200
+    assert (await client.get("/api/workspaces/me", headers=stranger)).status_code == 200
+
+    # The grant picker: the people the app has seen, and ONLY the three fields a
+    # picker needs. Email and last-seen are deliberately not here.
+    people = (await client.get("/api/users/", headers=operator)).json()
+    by_username = {person["username"]: person for person in people}
+    assert {"the-operator", "the-partner", "a-stranger"} <= set(by_username)
+    assert set(by_username["the-partner"]) == {"id", "username", "display_name"}
+
+    granted = await client.post(
+        f"/api/workspaces/{household_id}/members",
+        json={"user_id": by_username["the-partner"]["id"], "role": "member"},
+        headers=operator,
+    )
+    assert granted.status_code == 201
+
+    # A member — not only an owner — may see who shares the data.
+    members = (await client.get(f"/api/workspaces/{household_id}/members", headers=partner)).json()
+    assert [(m["user"]["username"], m["role"]) for m in members] == [
+        ("the-operator", "owner"),
+        ("the-partner", "member"),
+    ]
+
+    # A stranger gets the same 403 the owner-only routes give, never a 404.
+    assert (await client.get(f"/api/workspaces/{household_id}/members", headers=stranger)).status_code == 403
+
+
 async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: AsyncClient) -> None:
     """The header disambiguates among the caller's OWN memberships; it grants nothing."""
     await _create_item(client, "insider", "private item")
@@ -119,6 +162,37 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
         },
     )
     assert refused.status_code == 403
+
+
+# ── First sight is race-safe ────────────────────────────────────────────────
+
+
+def test_two_first_sight_requests_racing_share_one_user_row(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The SPA's two startup calls both arrive before either has inserted.
+
+    Reproduced deterministically: the row exists, but this request's own
+    lookup is made to miss it — exactly what the loser of the race sees — so
+    its insert is refused by the unique index. It must recover onto the
+    existing row rather than 500, and leave the session usable afterwards.
+    """
+    winner = users_service.upsert_from_identity(session, authentik_uid="raced-uid", username="raced")
+    session.flush()
+
+    real_lookup = users_service.get_by_uid
+    misses = iter([True])
+
+    def lookup_that_misses_once(db: Session, authentik_uid: str) -> User | None:
+        if next(misses, False):
+            return None
+        return real_lookup(db, authentik_uid)
+
+    monkeypatch.setattr(users_service, "get_by_uid", lookup_that_misses_once)
+
+    loser = users_service.upsert_from_identity(session, authentik_uid="raced-uid", username="raced")
+
+    assert loser.id == winner.id
+    # The session survived the refused insert: a further statement still works.
+    assert session.execute(select(User).where(User.authentik_uid == "raced-uid")).scalar_one().id == winner.id
 
 
 # ── A machine principal may use an identity, never mint one ─────────────────
