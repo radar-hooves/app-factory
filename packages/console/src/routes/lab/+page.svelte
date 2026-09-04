@@ -109,6 +109,34 @@
 	}
 	let showUnused = $state(false);
 	let textured = $state(true);
+	// The package default is 30px. Adjustable here because the right pitch is a
+	// judgement made by looking, not by argument, and whatever wins becomes the
+	// token's new default rather than a per-app override.
+	let pitch = $state(30);
+	// A cursor-tracked glow, after Google Stitch. Pointer position is written to
+	// CSS custom properties and the gradient reads them, so the browser does the
+	// painting and JS only ever sets two numbers.
+	let glow = $state(false);
+	let glowX = $state(50);
+	let glowY = $state(50);
+	let glowRaf = 0;
+
+	function trackGlow(e: PointerEvent) {
+		if (!glow) return;
+		// Coalesced through rAF: a pointermove fires far more often than the screen
+		// refreshes, and writing a custom property on every one of them invalidates
+		// paint for a full-viewport gradient each time.
+		if (glowRaf) return;
+		const el = e.currentTarget as HTMLElement;
+		const r = el.getBoundingClientRect();
+		const x = ((e.clientX - r.left) / r.width) * 100;
+		const y = ((e.clientY - r.top) / r.height) * 100;
+		glowRaf = requestAnimationFrame(() => {
+			glowX = x;
+			glowY = y;
+			glowRaf = 0;
+		});
+	}
 	// Global affordances — create, help, notifications. Grafana carries all three
 	// beside its search; ours carries none, which is a large part of why the bar
 	// reads empty. Off by default so the comparison is one click.
@@ -299,6 +327,17 @@
 				{/each}
 			</div>
 
+			{@render lbl('Dots')}
+			<div class="flex gap-1">
+				{#each [14, 18, 22, 26, 30] as n (n)}
+					<button
+						onclick={() => (pitch = n)}
+						aria-pressed={pitch === n}
+						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
+					>{n}</button>
+				{/each}
+			</div>
+
 			{@render lbl('Show')}
 			<div class="flex gap-1">
 				{#each [['unused', () => (showUnused = !showUnused), () => showUnused], ['collapse rail', () => (railCollapsed = !railCollapsed), () => railCollapsed], ['texture', () => (textured = !textured), () => textured]] as [t, fn, on] (t)}
@@ -308,6 +347,11 @@
 						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
 					>{t}</button>
 				{/each}
+				<button
+					onclick={() => (glow = !glow)}
+					aria-pressed={glow}
+					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
+				>cursor glow</button>
 				<button
 					onclick={() => (globals = !globals)}
 					aria-pressed={globals}
@@ -539,7 +583,11 @@
 
 				<main
 					bind:this={scrollEl}
-					class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto {textured ? 'ds-shell-texture' : ''}"
+					onpointermove={trackGlow}
+					style="--ds-shell-texture-grid-pitch: {pitch}px; --lab-glow-x: {glowX}%; --lab-glow-y: {glowY}%"
+					class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto {textured
+						? 'ds-shell-texture'
+						: ''} {glow ? 'lab-glow' : ''}"
 					data-texture={textured ? 'grid' : undefined}
 				>
 					<div
@@ -778,3 +826,35 @@
 		['Notification address', 'Where alerts are sent']
 	];
 </script>
+
+<style>
+	/* Cursor glow, after Google Stitch. It is a pseudo-element rather than a
+	   fourth background layer because .ds-shell-texture already owns
+	   background-image on this element, and appending to that shorthand from
+	   outside the package is exactly the local fork this repo exists to stop.
+
+	   `position: fixed` so it tracks the viewport rather than the scrolled
+	   content: the glow follows the cursor, and the cursor does not scroll away.
+	   `pointer-events: none` so it never eats a click, and it sits at z-index 0
+	   under content that establishes its own stacking. */
+	:global(.lab-glow::before) {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			22rem 22rem at var(--lab-glow-x, 50%) var(--lab-glow-y, 50%),
+			color-mix(in oklch, var(--ds-color-primary) 14%, transparent),
+			transparent 70%
+		);
+		transition: opacity 200ms ease;
+	}
+
+	/* Someone who has asked for less motion has asked for less of this. */
+	@media (prefers-reduced-motion: reduce) {
+		:global(.lab-glow::before) {
+			display: none;
+		}
+	}
+</style>
