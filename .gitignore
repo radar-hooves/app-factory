@@ -106,3 +106,12 @@ dist/
 packages/ui/registry/
 # pnpm pack output
 *.tgz
+
+# Research dumps: reference screenshots and dossiers gathered while designing.
+# This is a PUBLIC repo and research is where household-specific material
+# accumulates by accident, so the folder is local-only rather than policed
+# file by file.
+docs/research/
+# The shell lab's app profiles — real household app names, nav trees and
+# copy. The lab itself is committed and app-agnostic; this is its private data.
+packages/ui/lab/apps.local.js
