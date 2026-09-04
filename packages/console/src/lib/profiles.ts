@@ -1,6 +1,9 @@
 /**
  * Shell-lab app profiles.
  *
+ * Moved here from packages/ui/lab/apps.js when the lab became a console route:
+ * a typed module the route imports, rather than a global a script tag sets.
+ *
  * An app is a brand plus SECTIONS. A section is one primary nav destination and
  * everything contextual that belongs to it — its peer views, its scope controls,
  * its actions, and the content archetype it renders. Clicking the rail switches
@@ -18,7 +21,35 @@
  * have nothing contextual, and a rail zone that collapses to nothing must not
  * leave a hole where it was.
  */
-window.SHELL_LAB_APPS = [
+
+export interface Peer { label: string; count?: string; active?: boolean }
+export interface Scope { k: string; v: string }
+export interface Action { label: string; primary?: boolean }
+export interface Section {
+	label: string;
+	icon: string;
+	crumb: string[];
+	content: 'dashboard' | 'table' | 'tiles' | 'form' | 'prose';
+	peers?: Peer[];
+	scope?: Scope[];
+	actions?: Action[];
+}
+export interface AppProfile {
+	id: string;
+	name: string;
+	mark: string;
+	hue: number;
+	initials: string;
+	who: string;
+	searchLabel: string;
+	sections: Section[];
+}
+
+/** Does this section have anything for the rail's contextual zone to carry? */
+export const hasContext = (s: Section): boolean =>
+	(s.peers?.length ?? 0) + (s.scope?.length ?? 0) + (s.actions?.length ?? 0) > 0;
+
+export const PROFILES: AppProfile[] = [
 	{
 		id: 'godswood',
 		name: 'Godswood',

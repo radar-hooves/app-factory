@@ -6,9 +6,9 @@
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r run build",
-    "test": "pnpm -r run test",
     "check": "pnpm -r --if-present run check",
-    "lab": "python3 -m http.server 8903 --bind 127.0.0.1 --directory packages"
+    "dev": "pnpm --filter @poodle64/console run dev",
+    "test": "pnpm -r run test"
   },
   "packageManager": "pnpm@10.28.0"
 }
