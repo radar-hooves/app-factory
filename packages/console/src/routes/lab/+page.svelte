@@ -35,8 +35,85 @@
 	let contentOverride = $state<Content | null>(null);
 	let frameWidth = $state<number | null>(null);
 	let railCollapsed = $state(false);
+
+	// Rail width is a PERSONAL preference, not an app setting, so it lives in
+	// localStorage rather than in a token or a profile: the same app on two
+	// machines can reasonably want two widths, and nobody else should see mine.
+	const RAIL_KEY = 'ds-lab-rail-width';
+	const RAIL_MIN = 200;
+	const RAIL_MAX = 420;
+	const RAIL_DEFAULT = 248; // 15.5rem, the package's own --ds-shell-rail-width
+	// Below this a drag stops resizing and collapses instead, so collapse is the
+	// far end of the same gesture rather than a second mechanism.
+	const RAIL_SNAP = 170;
+
+	let railWidth = $state(RAIL_DEFAULT);
+	let dragging = $state(false);
+	// Which sections are rolled open. A section opens on becoming active and can
+	// then be toggled independently, so an open one stays open while you look
+	// somewhere else — the behaviour a disclosure has everywhere else.
+	let openSections = $state<Set<number>>(new Set([0]));
+
+	$effect(() => {
+		try {
+			const v = localStorage.getItem(RAIL_KEY);
+			if (v === 'collapsed') railCollapsed = true;
+			else if (v) railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, Number(v) || RAIL_DEFAULT));
+		} catch {
+			// Private windows and blocked site data throw on read. A lab that will
+			// not open because it could not remember a width is worse than one that
+			// forgets, so this is swallowed deliberately.
+		}
+	});
+
+	function persistRail() {
+		try {
+			localStorage.setItem(RAIL_KEY, railCollapsed ? 'collapsed' : String(Math.round(railWidth)));
+		} catch {
+			/* see the read above */
+		}
+	}
+
+	function startDrag(e: PointerEvent) {
+		dragging = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function onDrag(e: PointerEvent) {
+		if (!dragging) return;
+		const left = (e.currentTarget as HTMLElement).closest('aside')!.getBoundingClientRect().left;
+		const w = e.clientX - left;
+		if (w < RAIL_SNAP) {
+			railCollapsed = true;
+		} else {
+			railCollapsed = false;
+			railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, w));
+		}
+	}
+
+	function endDrag(e: PointerEvent) {
+		if (!dragging) return;
+		dragging = false;
+		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		persistRail();
+	}
+
+	function toggleRail() {
+		railCollapsed = !railCollapsed;
+		persistRail();
+	}
+
+	function toggleSection(i: number) {
+		const next = new Set(openSections);
+		next.has(i) ? next.delete(i) : next.add(i);
+		openSections = next;
+	}
 	let showUnused = $state(false);
 	let textured = $state(true);
+	// Global affordances — create, help, notifications. Grafana carries all three
+	// beside its search; ours carries none, which is a large part of why the bar
+	// reads empty. Off by default so the comparison is one click.
+	let globals = $state(false);
 
 	const app = $derived(PROFILES[appIx]);
 	const section = $derived(app.sections[Math.min(secIx, app.sections.length - 1)]);
@@ -66,6 +143,7 @@
 	function pickSection(i: number) {
 		secIx = i;
 		contentOverride = null;
+		if (!openSections.has(i)) openSections = new Set(openSections).add(i);
 	}
 
 	function pickPeer(i: number) {
@@ -236,6 +314,11 @@
 						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
 					>{t}</button>
 				{/each}
+				<button
+					onclick={() => (globals = !globals)}
+					aria-pressed={globals}
+					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
+				>global actions</button>
 				<button onclick={toggleMode} class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white">theme</button>
 			</div>
 		</div>
@@ -253,41 +336,71 @@
 			<!-- Rail -->
 			<aside
 				bind:this={railEl}
-				class="bg-surface-1 border-border flex flex-none flex-col border-r transition-[width] duration-150 {railCollapsed
+				style={railCollapsed ? '' : `width:${railWidth}px`}
+				class="bg-surface-1 border-border relative flex flex-none flex-col border-r {railCollapsed
 					? 'w-14'
-					: 'w-[15.5rem]'}"
+					: ''} {dragging ? '' : 'transition-[width] duration-150'}"
 			>
 				<div class="flex h-14 flex-none items-center gap-2.5 px-4 {railCollapsed ? 'justify-center px-0' : ''}">
-					<span class="border-border bg-background grid size-7 flex-none place-items-center rounded-md border text-sm">{app.mark}</span>
-					{#if !railCollapsed}
-						<span class="font-display text-[15px] font-semibold tracking-tight">{app.name}</span>
+					{#if railCollapsed}
+						<!-- Collapsed, the mark IS the way back. A collapse control that
+						     renders only while expanded strands the rail: there is nothing
+						     left on screen to press. -->
 						<button
-							onclick={() => (railCollapsed = true)}
+							onclick={toggleRail}
+							aria-label="Expand rail"
+							title="Expand rail"
+							class="border-border bg-background hover:border-border-strong grid size-7 flex-none place-items-center rounded-md border text-sm"
+						>{app.mark}</button>
+					{:else}
+						<span class="border-border bg-background grid size-7 flex-none place-items-center rounded-md border text-sm">{app.mark}</span>
+						<span class="font-display truncate text-[15px] font-semibold tracking-tight">{app.name}</span>
+						<button
+							onclick={toggleRail}
 							aria-label="Collapse rail"
-							class="text-muted-foreground hover:bg-surface-2 hover:text-foreground ml-auto grid size-7 place-items-center rounded-sm"
+							title="Collapse rail"
+							class="text-muted-foreground hover:bg-surface-2 hover:text-foreground ml-auto grid size-7 flex-none place-items-center rounded-sm"
 						>▮|</button>
 					{/if}
 				</div>
 
 				<nav bind:this={navEl} class="overflow-x-hidden overflow-y-auto px-2.5 py-1.5">
 					{#each app.sections as s, i (s.label)}
-						<button
-							onclick={() => pickSection(i)}
-							class="hover:bg-surface-2 flex h-[34px] w-full items-center gap-2.5 rounded-md px-2 text-[13.5px] whitespace-nowrap {i ===
-							secIx
-								? 'bg-surface-2 font-semibold'
-								: ''} {railCollapsed ? 'justify-center px-0' : ''}"
-						>
-							<span class="w-4 flex-none text-center text-[13px] opacity-75">{s.icon}</span>
-							{#if !railCollapsed}<span>{s.label}</span>{/if}
-						</button>
-						{#if inlineZone && i === secIx && !railCollapsed}
+						{@const rolls = inZone && zone === 'inline' && hasContext(s)}
+						{@const open = openSections.has(i)}
+						<div class="flex items-center">
+							<button
+								onclick={() => pickSection(i)}
+								title={railCollapsed ? s.label : undefined}
+								class="hover:bg-surface-2 flex h-[34px] min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-[13.5px] {i ===
+								secIx
+									? 'bg-surface-2 font-semibold'
+									: ''} {railCollapsed ? 'justify-center px-0' : ''}"
+							>
+								<span class="w-4 flex-none text-center text-[13px] opacity-75">{s.icon}</span>
+								{#if !railCollapsed}<span class="truncate">{s.label}</span>{/if}
+							</button>
+							{#if rolls && !railCollapsed}
+								<!-- The roll-out is its own control, so opening a section and
+								     navigating to it are separable — the thing a chevron that
+								     doubles as the nav link takes away. -->
+								<button
+									onclick={() => toggleSection(i)}
+									aria-expanded={open}
+									aria-label={open ? `Collapse ${s.label}` : `Expand ${s.label}`}
+									class="text-muted-foreground hover:bg-surface-2 hover:text-foreground grid size-6 flex-none place-items-center rounded-sm text-[10px] transition-transform {open
+										? 'rotate-90'
+										: ''}"
+								>›</button>
+							{/if}
+						</div>
+						{#if rolls && open && !railCollapsed}
 							{@render zoneBody(true)}
 						{/if}
 					{/each}
 				</nav>
 
-				{#if inZone && !inlineZone && !railCollapsed}
+				{#if inZone && zone === 'block' && !railCollapsed}
 					<div bind:this={zoneEl} class="border-border mt-2.5 border-t px-2.5 pt-1.5 pb-3.5">
 						<div class="text-muted-foreground px-2 pt-1.5 pb-1.5 text-[9.5px] tracking-[0.11em] uppercase">
 							{section.label}
@@ -295,6 +408,27 @@
 						{@render zoneBody(false)}
 					</div>
 				{/if}
+
+				<!-- Drag to resize; drag past the snap point and it collapses, so
+				     collapse is the far end of one gesture rather than a second
+				     mechanism. Double-click restores the package's 15.5rem. -->
+				<div
+					role="separator"
+					aria-orientation="vertical"
+					aria-label="Resize rail"
+					onpointerdown={startDrag}
+					onpointermove={onDrag}
+					onpointerup={endDrag}
+					onpointercancel={endDrag}
+					ondblclick={() => {
+						railCollapsed = false;
+						railWidth = RAIL_DEFAULT;
+						persistRail();
+					}}
+					class="hover:bg-primary/40 absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize {dragging
+						? 'bg-primary/60'
+						: ''}"
+				></div>
 			</aside>
 
 			<!-- Pane -->
@@ -325,6 +459,16 @@
 								<span>⌕</span><span class="truncate">{app.searchLabel}</span>
 								<span class="border-border font-mono ml-auto rounded-sm border px-1.5 py-0.5 text-[10px]">⌘K</span>
 							</div>
+						{/if}
+						{#if globals}
+							{#each [['+', 'Create'], ['?', 'Help'], ['◔', 'Notifications']] as [glyph, label] (label)}
+								<button
+									aria-label={label}
+									title={label}
+									class="border-border text-muted-foreground hover:text-foreground grid size-[34px] flex-none place-items-center rounded-md border"
+								>{glyph}</button>
+							{/each}
+							<div class="bg-border mx-0.5 h-5 w-px flex-none"></div>
 						{/if}
 						<button
 							onclick={toggleMode}
