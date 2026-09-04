@@ -51,6 +51,23 @@ export interface Section {
 	controls?: Control[];
 	actions?: Action[];
 }
+/**
+ * The signed-in user, in the field names the stamped template's auth store
+ * already uses (`frontend/src/lib/auth.svelte.ts`: User, Membership). Matching
+ * them is deliberate — a menu designed against invented fields would need
+ * rewriting to consume the real ones, and every field below is already
+ * populated from the identity provider today. Nothing renders them: the
+ * template's own layout passes no `identity` snippet at all.
+ */
+export interface Identity {
+	username: string;
+	display_name: string | null;
+	email: string | null;
+	workspace: string;
+	role: 'owner' | 'member';
+	entitlements: string[];
+}
+
 export interface AppProfile {
 	id: string;
 	name: string;
@@ -59,6 +76,7 @@ export interface AppProfile {
 	initials: string;
 	who: string;
 	searchLabel: string;
+	identity: Identity;
 	sections: Section[];
 }
 
@@ -69,6 +87,7 @@ export const hasContext = (s: Section): boolean =>
 export const PROFILES: AppProfile[] = [
 	{
 		id: 'godswood',
+		identity: { username: 'poodle64', display_name: 'Operator', email: 'operator@example.invalid', workspace: 'Household', role: 'owner', entitlements: ['admin', 'securities', 'property'] },
 		name: 'Godswood',
 		mark: '◈',
 		hue: 150,
@@ -206,6 +225,7 @@ export const PROFILES: AppProfile[] = [
 		// Scope control, no peer views — the case that proves a rail zone must take
 		// either axis on its own.
 		id: 'portcullis',
+		identity: { username: 'poodle64', display_name: 'Operator', email: 'operator@example.invalid', workspace: 'Estate', role: 'owner', entitlements: ['admin', 'broker'] },
 		name: 'Portcullis',
 		mark: '▢',
 		hue: 75,
@@ -262,6 +282,7 @@ export const PROFILES: AppProfile[] = [
 		// Renders no identity at all today, and its table truncates columns while
 		// ~640px sits unused either side at 3360.
 		id: 'library',
+		identity: { username: 'poodle64', display_name: null, email: 'operator@example.invalid', workspace: 'Estate knowledge', role: 'member', entitlements: ['read'] },
 		name: 'the library',
 		mark: '▤',
 		hue: 250,
@@ -304,6 +325,7 @@ export const PROFILES: AppProfile[] = [
 		// Every section bare — the app with nothing contextual anywhere, which is
 		// what a rail zone has to disappear cleanly for.
 		id: 'cadmus',
+		identity: { username: 'poodle64', display_name: 'Operator', email: null, workspace: 'Defence', role: 'member', entitlements: [] },
 		name: 'Cadmus',
 		mark: '✦',
 		hue: 250,
@@ -329,6 +351,7 @@ export const PROFILES: AppProfile[] = [
 	{
 		// Already builds the context row by hand, in the page body.
 		id: 'earworm',
+		identity: { username: 'poodle64', display_name: 'Operator', email: 'operator@example.invalid', workspace: 'Household', role: 'owner', entitlements: ['scrobble'] },
 		name: 'Earworm',
 		mark: '♫',
 		hue: 300,

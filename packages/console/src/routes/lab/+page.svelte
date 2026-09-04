@@ -19,6 +19,8 @@
 	 */
 	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
+	import * as DropdownMenu from '@poodle64/ui/dropdown-menu';
+	import * as Avatar from '@poodle64/ui/avatar';
 
 	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
@@ -474,15 +476,85 @@
 							class="border-border text-muted-foreground hover:text-foreground grid size-[34px] flex-none place-items-center rounded-md border"
 						>◐</button>
 						{#if identity !== 'none'}
-							<div class="hover:bg-surface-2 flex h-[34px] cursor-pointer items-center gap-2 rounded-md py-0 pr-2.5 pl-1.5">
-								<span class="bg-primary text-primary-foreground grid size-6.5 flex-none place-items-center rounded-full text-[11px] font-bold">
-									{app.initials}
-								</span>
-								{#if identity === 'full'}
-									<span class="text-[13px] whitespace-nowrap">{app.who}</span>
-									<span class="text-muted-foreground text-[10px]">▾</span>
-								{/if}
-							</div>
+							{@const who = app.identity}
+							{@const shown = who.display_name ?? who.username}
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger>
+									{#snippet child({ props })}
+										<button
+											{...props}
+											aria-label="Account"
+											class="hover:bg-surface-2 flex h-[34px] cursor-pointer items-center gap-2 rounded-md py-0 pr-1.5 pl-1.5 {identity ===
+											'full'
+												? 'pr-2.5'
+												: ''}"
+										>
+											<Avatar.Root class="size-6.5 flex-none">
+												<Avatar.Fallback
+													class="bg-primary text-primary-foreground text-[11px] font-bold"
+												>
+													{app.initials}
+												</Avatar.Fallback>
+											</Avatar.Root>
+											{#if identity === 'full'}
+												<span class="text-[13px] whitespace-nowrap">{shown}</span>
+												<span class="text-muted-foreground text-[10px]">▾</span>
+											{/if}
+										</button>
+									{/snippet}
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content align="end" class="w-72">
+									<!-- Identity first, because the question the menu answers is
+									     "who am I signed in as" — a menu that opens on a list of
+									     actions makes you infer that from the avatar you just
+									     clicked. -->
+									<div class="flex items-start gap-3 px-2 py-1.5">
+										<Avatar.Root class="size-9 flex-none">
+											<Avatar.Fallback class="bg-primary text-primary-foreground text-[13px] font-bold">
+												{app.initials}
+											</Avatar.Fallback>
+										</Avatar.Root>
+										<div class="min-w-0">
+											<div class="truncate text-[13.5px] font-semibold">{shown}</div>
+											<!-- Username shown separately whenever it is not already the
+											     displayed name: it is what an audit log and a support
+											     question use, and it is not always the display name. -->
+											{#if who.display_name}
+												<div class="text-muted-foreground truncate font-mono text-[11px]">
+													{who.username}
+												</div>
+											{/if}
+											{#if who.email}
+												<div class="text-muted-foreground truncate text-[12px]">{who.email}</div>
+											{/if}
+										</div>
+									</div>
+									<DropdownMenu.Separator />
+									<DropdownMenu.Label class="text-muted-foreground text-[10px] tracking-[0.1em] uppercase">
+										Workspace
+									</DropdownMenu.Label>
+									<div class="flex items-center justify-between gap-2 px-2 pb-1.5">
+										<span class="truncate text-[13px]">{who.workspace}</span>
+										<span class="border-border text-muted-foreground rounded-full border px-1.5 py-px text-[10px] capitalize">
+											{who.role}
+										</span>
+									</div>
+									{#if who.entitlements.length}
+										<div class="flex flex-wrap gap-1 px-2 pb-2">
+											{#each who.entitlements as e (e)}
+												<span class="bg-surface-2 text-muted-foreground font-mono rounded px-1.5 py-px text-[10px]">
+													{e}
+												</span>
+											{/each}
+										</div>
+									{/if}
+									<DropdownMenu.Separator />
+									<DropdownMenu.Item onclick={toggleMode}>Switch theme</DropdownMenu.Item>
+									<DropdownMenu.Item>Account settings</DropdownMenu.Item>
+									<DropdownMenu.Separator />
+									<DropdownMenu.Item class="text-status-error">Sign out</DropdownMenu.Item>
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
 						{/if}
 					</div>
 				</header>
