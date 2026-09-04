@@ -4,6 +4,7 @@
 	import '@fontsource-variable/hanken-grotesk';
 	import '@fontsource-variable/jetbrains-mono';
 	import { ModeWatcher } from 'mode-watcher';
+	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
 	import { LoadingState } from '@poodle64/ui/loading-state';
@@ -75,6 +76,24 @@
 	     members route (rules-library/platform/tenancy.md). -->
 	{#snippet context()}
 		<WorkspaceMenu />
+	{/snippet}
+
+	<!-- Who is signed in, and the way out — rendered once, at the end of the
+	     top bar (rules-library/platform/authentication.md §Frontend Auth Store
+	     Contract). Waits for auth.user rather than passing it a null one; the
+	     loading and workspace-choice states below still get full shell chrome,
+	     just not yet an avatar. onAccountSettings is left unset until this app
+	     has a settings route to send it to — the item still renders, inert. -->
+	{#snippet identity()}
+		{#if auth.user}
+			<AppIdentity
+				user={auth.user}
+				workspace={auth.activeWorkspace?.name}
+				role={auth.activeRole}
+				entitlements={auth.entitlements}
+				onSignOut={() => void auth.logout()}
+			/>
+		{/if}
 	{/snippet}
 
 	{#if auth.isLoading}
