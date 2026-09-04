@@ -643,14 +643,18 @@ function renderApp() {
 }
 
 function renderShape() {
-  const now = S.shape === 'now', a = APPS[S.app], hasPeers = (a.peers ?? []).length > 0;
+  const now = S.shape === 'now', a = APPS[S.app];
+  // The row earns its place on EITHER axis. Portcullis has a store switcher and
+  // no peer views; gating on peers alone left its only scope control homeless.
+  const hasPeers = (a.peers ?? []).length > 0;
+  const hasCtx = hasPeers || (a.scope ?? []).length > 0;
   $('search-lead').hidden = !now;
   $('bar-gap').hidden = !now;
   $('crumb').hidden = now;
   $('search-trail').hidden = now;
-  $('ctxrow').hidden = !(S.shape === 'b' && hasPeers);
-  $('inpage-a').hidden = !(S.shape === 'a' && hasPeers);
-  $('inpage-c').hidden = !(S.shape === 'c' && hasPeers);
+  $('ctxrow').hidden = !(S.shape === 'b' && hasCtx);
+  $('inpage-a').hidden = !(S.shape === 'a' && hasCtx);
+  $('inpage-c').hidden = !(S.shape === 'c' && hasCtx);
   // Peer views live in the rail everywhere except B, which lifts them out.
   const kids = $('rail-children');
   if (kids) kids.style.display = S.shape === 'b' ? 'none' : '';
