@@ -27,9 +27,21 @@ name: Publish Package
 # (403, measured 2026-08-14), so there is no unattended path to recreate it.
 #
 # Deviation from 10-ci-workflow-standard (jobs on [self-hosted, atlas]),
-# dated 2026-07-03: this repo is PUBLIC, and exposing a self-hosted runner
-# to a public repo is a fork-PR execution risk. GitHub-hosted is the
-# by-exception choice here, matching the public thoth repo.
+# dated 2026-07-03, REASON REPLACED 2026-09-04: the original reason was that
+# this repo was public and exposing a self-hosted runner to a public repo is a
+# fork-PR execution risk. The repo is private as of 2026-09-04, so that reason
+# is gone — but the deviation stands on a stronger and permanent one: npm
+# trusted publishing does not support self-hosted runners at all
+# (docs.npmjs.com/trusted-publishers, "Supported CI/CD providers": GitHub-hosted
+# runners only, self-hosted "not currently supported"). An OIDC publish from
+# [self-hosted, atlas] fails ENEEDAUTH. This job cannot move to atlas until npm
+# ships that support.
+#
+# Going private also disabled provenance: npm generates attestations
+# automatically under trusted publishing, but only from a PUBLIC repo, so both
+# packages now set publishConfig.provenance=false to say so deliberately rather
+# than rely on npm silently skipping it. The packages themselves stay public on
+# npm and still install with no token.
 
 on:
   push:

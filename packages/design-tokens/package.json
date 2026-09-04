@@ -7,7 +7,8 @@
   "repository": "github:poodle64/design-system",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public"
+    "access": "public",
+    "provenance": false
   },
   "files": [
     "bin",

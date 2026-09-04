@@ -1,8 +1,15 @@
 name: CI
 
 # Verifies both workspace packages on every push/PR so Renovate PRs and
-# token/component edits carry a real signal. GitHub-hosted for the same
-# public-repo reason as publish.yaml (dated 2026-07-03).
+# token/component edits carry a real signal.
+#
+# Runner: GitHub-hosted (ubuntu-latest) was a by-exception choice dated
+# 2026-07-03 because this repo was public and a self-hosted runner exposed to
+# fork PRs is an execution risk. The repo went PRIVATE on 2026-09-04 and that
+# reason no longer holds, so this job SHOULD move to [self-hosted, atlas] —
+# the standard every private household repo uses. Not yet done: the move needs
+# a real run to verify, tracked rather than changed in the same commit that
+# flipped visibility. Unlike publish.yaml, nothing here blocks the move.
 
 on:
   push:
