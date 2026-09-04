@@ -2,12 +2,13 @@
   "name": "design-system",
   "private": true,
   "type": "module",
-  "description": "Household web design-language factory — pnpm workspace: @poodle64/design-tokens + @poodle64/ui.",
+  "description": "Household web design-language factory \u2014 pnpm workspace: @poodle64/design-tokens + @poodle64/ui.",
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
-    "check": "pnpm -r --if-present run check"
+    "check": "pnpm -r --if-present run check",
+    "lab": "python3 -m http.server 8903 --bind 127.0.0.1 --directory packages"
   },
   "packageManager": "pnpm@10.28.0"
 }

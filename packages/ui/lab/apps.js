@@ -1,20 +1,22 @@
 /**
  * Shell-lab app profiles.
  *
- * Real household app names, nav trees and copy, transcribed from the live apps
- * on 04/09/2026. Tracked, because this repo is private; the lab still falls
- * back to a neutral demo profile without this file, so the tool stays usable
- * on its own.
+ * An app is a brand plus SECTIONS. A section is one primary nav destination and
+ * everything contextual that belongs to it — its peer views, its scope controls,
+ * its actions, and the content archetype it renders. Clicking the rail switches
+ * section, so the lab can be walked the way the real app is rather than posed.
  *
  * Chrome only. No financial values, account identifiers or household member
- * names belong here — the shape of an app's navigation is not its data, and
- * the pre-commit PII gate blocks a real name regardless of repo visibility.
- * Identity renders as a role. Name LENGTH is a real layout variable, so vary
- * `who` by hand when testing how the chip behaves against a long one.
+ * names belong here — the shape of an app's navigation is not its data, and the
+ * pre-commit PII gate blocks a real name regardless of repo visibility.
+ * Identity renders a role. Name LENGTH is a real layout variable, so vary `who`
+ * by hand when testing the chip against a long one.
  *
- * Add an app by copying a block. Fields: id, name, mark, hue (OKLCH hue for
- * --ds-color-primary), initials, who, searchLabel, nav[{group,items[]}],
- * crumb[], eyebrow, peers[], scope[], title, subtitle, actions[].
+ * Section fields: label, icon, crumb[], content, and optionally peers[],
+ * scope[], actions[]. A section with none of those last three is the bare case,
+ * and the bare case is the one worth looking at — most sections of most apps
+ * have nothing contextual, and a rail zone that collapses to nothing must not
+ * leave a hole where it was.
  */
 window.SHELL_LAB_APPS = [
 	{
@@ -25,54 +27,91 @@ window.SHELL_LAB_APPS = [
 		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search Godswood…',
-		nav: [
+		sections: [
+			{ label: 'Home', icon: '⌂', crumb: ['Home'], content: 'tiles' },
+
 			{
-				group: null,
-				items: [
-					{ label: 'Home', icon: '⌂' },
-					{ label: 'Essentialism', icon: '▤' },
-					{ label: 'Groceries', icon: '▦' },
-					{ label: 'Budget', icon: '◎' },
-					{ label: 'Property', icon: '⌂' },
-					{ label: 'Net Worth', icon: '◐' },
-					{
-						label: 'Securities',
-						icon: '▥',
-						active: true,
-						children: ['Overview', 'Investing', 'Trading', 'Live', 'P&L', 'Coverage', 'Ledger']
-					},
-					{ label: 'Superannuation', icon: '▣' },
-					{ label: 'Travel', icon: '✈' },
-					{ label: 'Fixxxer', icon: '⚒' },
-					{ label: 'Tapestry', icon: '⌘' },
-					{ label: 'Fat Controller', icon: '▩' },
-					{ label: 'Admin', icon: '⛨' }
-				]
+				label: 'Budget',
+				icon: '◎',
+				crumb: ['Budget', 'This month'],
+				content: 'dashboard',
+				peers: [
+					{ label: 'This month', active: true },
+					{ label: 'Categories' },
+					{ label: 'Recurring' },
+					{ label: 'Forecast' }
+				],
+				scope: [
+					{ k: 'Entity', v: 'Household' },
+					{ k: 'Period', v: 'Sep 2026' }
+				],
+				actions: [{ label: 'Add transaction', primary: true }, { label: 'Import' }]
+			},
+
+			{
+				label: 'Property',
+				icon: '⌂',
+				crumb: ['Property', 'Portfolio'],
+				content: 'tiles',
+				peers: [
+					{ label: 'Portfolio', active: true },
+					{ label: 'Valuations' },
+					{ label: 'Loans' },
+					{ label: 'Expenses' },
+					{ label: 'Documents', count: '412' }
+				],
+				scope: [
+					{ k: 'Entity', v: 'All entities' },
+					{ k: 'Status', v: 'Held' }
+				],
+				actions: [{ label: 'Add property', primary: true }]
+			},
+
+			{
+				label: 'Net Worth',
+				icon: '◐',
+				crumb: ['Net Worth'],
+				content: 'dashboard',
+				scope: [{ k: 'Period', v: 'FY26' }]
+			},
+
+			{
+				label: 'Securities',
+				icon: '▥',
+				crumb: ['Securities', 'Investing'],
+				content: 'dashboard',
+				peers: [
+					{ label: 'Overview' },
+					{ label: 'Investing', active: true },
+					{ label: 'Trading' },
+					{ label: 'Live' },
+					{ label: 'P&L' },
+					{ label: 'Coverage' },
+					{ label: 'Ledger', count: '4,318' }
+				],
+				scope: [
+					{ k: 'Entity', v: 'All entities' },
+					{ k: 'Period', v: 'FY26' }
+				],
+				actions: [{ label: 'Add account', primary: true }, { label: 'Export' }]
+			},
+
+			{ label: 'Superannuation', icon: '▣', crumb: ['Superannuation'], content: 'dashboard' },
+			{ label: 'Travel', icon: '✈', crumb: ['Travel'], content: 'tiles' },
+			{
+				label: 'Admin',
+				icon: '⛨',
+				crumb: ['Admin', 'Settings'],
+				content: 'form',
+				peers: [{ label: 'Settings', active: true }, { label: 'Users' }, { label: 'Audit' }],
+				actions: [{ label: 'Save changes', primary: true }, { label: 'Cancel' }]
 			}
-		],
-		crumb: ['Securities', 'Investing'],
-		eyebrow: null,
-		peers: [
-			{ label: 'Overview' },
-			{ label: 'Investing', active: true },
-			{ label: 'Trading' },
-			{ label: 'Live' },
-			{ label: 'P&L' },
-			{ label: 'Coverage' },
-			{ label: 'Ledger', count: '4,318' }
-		],
-		scope: [
-			{ k: 'Entity', v: 'All entities' },
-			{ k: 'Period', v: 'FY26' }
-		],
-		title: 'Investing',
-		subtitle: 'Realised, in AUD · 12 accounts · 4,318 ledger events',
-		actions: [{ label: 'Export' }, { label: 'Add account', primary: true }]
+		]
 	},
+
 	{
-		// The only app currently using the shell's `context` slot (store switcher),
-		// and the only one with an eyebrow — "SECRETS BROKER", which restates the
-		// brand two inches to its left.
+		// Scope control, no peer views — the case that proves a rail zone must take
+		// either axis on its own.
 		id: 'portcullis',
 		name: 'Portcullis',
 		mark: '▢',
@@ -80,37 +119,55 @@ window.SHELL_LAB_APPS = [
 		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search credentials, identities, vendors…',
-		nav: [
-			{ group: null, items: [{ label: 'Overview', icon: '▦', active: true }] },
+		sections: [
 			{
-				group: 'Access',
-				items: [
-					{ label: 'Credentials', icon: '▣' },
-					{ label: 'Identities', icon: '⚿' }
-				]
+				label: 'Overview',
+				icon: '▦',
+				crumb: ['Portcullis', 'Overview'],
+				content: 'dashboard',
+				scope: [{ k: 'Store', v: 'Bitwarden' }],
+				actions: [{ label: 'Enrol identity', primary: true }, { label: 'Connect store' }]
 			},
-			{ group: 'Stores', items: [{ label: 'Connections', icon: '▤' }] },
-			{ group: 'Activity', items: [{ label: 'Audit', icon: '▥' }] },
 			{
-				group: 'Settings',
-				items: [
-					{ label: 'Authentication', icon: '⛨' },
-					{ label: 'Doctor', icon: '⚕' },
-					{ label: 'Guide', icon: '◈' }
-				]
-			}
-		],
-		crumb: ['Portcullis', 'Overview'],
-		eyebrow: 'Secrets broker',
-		peers: [],
-		scope: [{ k: 'Store', v: 'Bitwarden' }],
-		title: 'Overview',
-		subtitle: 'Broker health, recent vends and what needs attention.',
-		actions: [{ label: 'Connect store' }, { label: 'Enrol identity', primary: true }]
+				label: 'Credentials',
+				icon: '▣',
+				crumb: ['Credentials'],
+				content: 'table',
+				scope: [
+					{ k: 'Collection', v: 'All' },
+					{ k: 'State', v: 'Active' }
+				],
+				actions: [{ label: 'New credential', primary: true }]
+			},
+			{
+				label: 'Identities',
+				icon: '⚿',
+				crumb: ['Identities'],
+				content: 'table',
+				actions: [{ label: 'Enrol', primary: true }]
+			},
+			{
+				label: 'Audit',
+				icon: '▥',
+				crumb: ['Audit'],
+				content: 'table',
+				peers: [{ label: 'Reads', active: true }, { label: 'Refusals' }, { label: 'Admin' }],
+				scope: [{ k: 'Window', v: 'Last 24h' }]
+			},
+			{
+				label: 'Authentication',
+				icon: '⛨',
+				crumb: ['Settings', 'Authentication'],
+				content: 'form',
+				actions: [{ label: 'Save', primary: true }]
+			},
+			{ label: 'Guide', icon: '◈', crumb: ['Guide'], content: 'prose' }
+		]
 	},
+
 	{
-		// Renders NO identity at all today. Its table truncates Tags and
-		// Collections while ~640px sits unused either side at 3360.
+		// Renders no identity at all today, and its table truncates columns while
+		// ~640px sits unused either side at 3360.
 		id: 'library',
 		name: 'the library',
 		mark: '▤',
@@ -118,33 +175,41 @@ window.SHELL_LAB_APPS = [
 		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search…',
-		nav: [
+		sections: [
+			{ label: 'Reading Room', icon: '▤', crumb: ['Reading Room'], content: 'prose' },
 			{
-				group: null,
-				items: [
-					{ label: 'Reading Room', icon: '▤' },
-					{ label: 'Agent', icon: '✦' },
-					{ label: 'Search', icon: '⌕' },
-					{ label: 'Library', icon: '▥', active: true, children: ['Documents', 'Saved', 'Recent'] },
-					{ label: 'Collections', icon: '▦' },
-					{ label: 'Projects', icon: '▣' },
-					{ label: 'Operations', icon: '◐' },
-					{ label: 'Metrics', icon: '▩' }
-				]
-			}
-		],
-		crumb: ['Library', 'Documents'],
-		eyebrow: null,
-		peers: [{ label: 'Documents', active: true }, { label: 'Saved' }, { label: 'Recent' }],
-		scope: [
-			{ k: 'Collection', v: 'All' },
-			{ k: 'Status', v: 'Indexed' }
-		],
-		title: 'Documents',
-		subtitle: '2,310 documents · page 1 of 93',
-		actions: [{ label: 'Ingest', primary: true }]
+				label: 'Library',
+				icon: '▥',
+				crumb: ['Library', 'Documents'],
+				content: 'table',
+				peers: [{ label: 'Documents', active: true }, { label: 'Saved' }, { label: 'Recent' }],
+				scope: [
+					{ k: 'Collection', v: 'All' },
+					{ k: 'Status', v: 'Indexed' }
+				],
+				actions: [{ label: 'Ingest', primary: true }]
+			},
+			{
+				label: 'Collections',
+				icon: '▦',
+				crumb: ['Collections'],
+				content: 'tiles',
+				actions: [{ label: 'New collection', primary: true }]
+			},
+			{
+				label: 'Operations',
+				icon: '◐',
+				crumb: ['Operations'],
+				content: 'dashboard',
+				scope: [{ k: 'Window', v: 'Last 7d' }]
+			},
+			{ label: 'Metrics', icon: '▩', crumb: ['Metrics'], content: 'dashboard' }
+		]
 	},
+
 	{
+		// Every section bare — the app with nothing contextual anywhere, which is
+		// what a rail zone has to disappear cleanly for.
 		id: 'cadmus',
 		name: 'Cadmus',
 		mark: '✦',
@@ -152,57 +217,58 @@ window.SHELL_LAB_APPS = [
 		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search Cadmus',
-		nav: [
+		sections: [
+			{ label: 'Workbench', icon: '▦', crumb: ['Workbench'], content: 'tiles' },
+			{ label: 'Library', icon: '▥', crumb: ['Library'], content: 'table' },
 			{
-				group: null,
-				items: [
-					{ label: 'Digital ACP Market…', icon: '▤' },
-					{ label: 'Library', icon: '▥' },
-					{ label: 'Education', icon: '▦', active: true, children: ['Modules', 'Research'] },
-					{ label: 'Leave', icon: '▩' },
-					{ label: 'Intelligence', icon: '◈' },
-					{ label: 'ID26', icon: '▣' }
-				]
-			}
-		],
-		crumb: ['Cadmus', 'Workbench'],
-		eyebrow: null,
-		peers: [],
-		scope: [],
-		title: 'Workbench',
-		subtitle: 'Your Defence day-job sections, gathered in one place.',
-		actions: []
+				label: 'Education',
+				icon: '▤',
+				crumb: ['Education', 'Modules'],
+				content: 'tiles',
+				peers: [{ label: 'Modules', active: true }, { label: 'Research' }]
+			},
+			{ label: 'Leave', icon: '▩', crumb: ['Leave'], content: 'dashboard' },
+			{ label: 'Intelligence', icon: '◈', crumb: ['Intelligence'], content: 'prose' },
+			{ label: 'ID26', icon: '▣', crumb: ['ID26'], content: 'table' }
+		]
 	},
+
 	{
-		// Already builds the context row by hand, in the page body: Top Music /
-		// Skipped Music tabs on the left, Week/Month/Year/All on the right.
+		// Already builds the context row by hand, in the page body.
 		id: 'earworm',
 		name: 'Earworm',
 		mark: '♫',
 		hue: 300,
 		initials: 'PG',
-		who: '',
+		who: 'Operator',
 		searchLabel: 'Jump to a page…',
-		nav: [
+		sections: [
 			{
-				group: null,
-				items: [
-					{ label: 'Dashboard', icon: '▦', active: true, children: ['Top Music', 'Skipped Music'] },
-					{ label: 'History', icon: '↻' },
-					{ label: 'Year in Review', icon: '▣' },
-					{ label: 'API Docs', icon: '▤' }
+				label: 'Dashboard',
+				icon: '▦',
+				crumb: ['Dashboard'],
+				content: 'dashboard',
+				peers: [{ label: 'Top Music', active: true }, { label: 'Skipped Music' }],
+				scope: [
+					{ k: 'Range', v: 'All' },
+					{ k: 'View', v: 'Chart' }
 				]
-			}
-		],
-		crumb: ['Earworm', 'Dashboard'],
-		eyebrow: null,
-		peers: [{ label: 'Top Music', active: true }, { label: 'Skipped Music' }],
-		scope: [
-			{ k: 'Range', v: 'All' },
-			{ k: 'View', v: 'Chart' }
-		],
-		title: 'Dashboard',
-		subtitle: 'Listening across every scrobbled source.',
-		actions: []
+			},
+			{
+				label: 'History',
+				icon: '↻',
+				crumb: ['History'],
+				content: 'table',
+				scope: [{ k: 'Range', v: 'Last 30d' }]
+			},
+			{
+				label: 'Year in Review',
+				icon: '▣',
+				crumb: ['Year in Review'],
+				content: 'dashboard',
+				scope: [{ k: 'Year', v: '2026' }]
+			},
+			{ label: 'API Docs', icon: '▤', crumb: ['API Docs'], content: 'prose' }
+		]
 	}
 ];
