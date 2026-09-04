@@ -16,9 +16,9 @@
  * by hand when testing the chip against a long one.
  *
  * Section fields: label, icon, crumb[], content, and optionally peers[],
- * scope[], actions[].
+ * controls[], actions[].
  *
- * `peers` are the section's OTHER views, never its default one. A module's own
+ * `peers` are the section's other SUB-ROUTES, never its default one. A module's own
  * root is its dashboard — clicking Securities lands on the Securities dashboard
  * — so an "Overview" peer would be the section listed as a child of itself
  * (operator ruling, 04/09/2026). A section with no peers is the common case and
@@ -27,7 +27,20 @@
  */
 
 export interface Peer { label: string; count?: string; active?: boolean }
-export interface Scope { k: string; v: string }
+/**
+ * A control in the TOP RAIL. These change the view of the page you are already
+ * on — a financial year, an entity, a chart/table toggle — and never navigate
+ * anywhere. That is the whole distinction from `peers`, which are sub-routes and
+ * live in the sidebar (operator ruling, 04/09/2026): different axis, different
+ * home, and a control listed in both places is the same thing twice.
+ *
+ * `options` makes it a segmented toggle; without it, it is a dropdown.
+ */
+export interface Control {
+	k: string;
+	v: string;
+	options?: string[];
+}
 export interface Action { label: string; primary?: boolean }
 export interface Section {
 	label: string;
@@ -35,7 +48,7 @@ export interface Section {
 	crumb: string[];
 	content: 'dashboard' | 'table' | 'tiles' | 'form' | 'prose';
 	peers?: Peer[];
-	scope?: Scope[];
+	controls?: Control[];
 	actions?: Action[];
 }
 export interface AppProfile {
@@ -51,7 +64,7 @@ export interface AppProfile {
 
 /** Does this section have anything for the rail's contextual zone to carry? */
 export const hasContext = (s: Section): boolean =>
-	(s.peers?.length ?? 0) + (s.scope?.length ?? 0) + (s.actions?.length ?? 0) > 0;
+	(s.peers?.length ?? 0) + (s.controls?.length ?? 0) + (s.actions?.length ?? 0) > 0;
 
 export const PROFILES: AppProfile[] = [
 	{
@@ -75,7 +88,7 @@ export const PROFILES: AppProfile[] = [
 					{ label: 'Recurring' },
 					{ label: 'Forecast' }
 				],
-				scope: [
+				controls: [
 					{ k: 'Entity', v: 'Household' },
 					{ k: 'Period', v: 'Sep 2026' }
 				],
@@ -93,7 +106,7 @@ export const PROFILES: AppProfile[] = [
 					{ label: 'Expenses' },
 					{ label: 'Documents', count: '412' }
 				],
-				scope: [
+				controls: [
 					{ k: 'Entity', v: 'All entities' },
 					{ k: 'Status', v: 'Held' }
 				],
@@ -105,7 +118,7 @@ export const PROFILES: AppProfile[] = [
 				icon: '◐',
 				crumb: ['Net Worth'],
 				content: 'dashboard',
-				scope: [{ k: 'Period', v: 'FY26' }]
+				controls: [{ k: 'Period', v: 'FY26' }]
 			},
 
 			{
@@ -121,9 +134,9 @@ export const PROFILES: AppProfile[] = [
 					{ label: 'Coverage' },
 					{ label: 'Ledger', count: '4,318' }
 				],
-				scope: [
+				controls: [
 					{ k: 'Entity', v: 'All entities' },
-					{ k: 'Period', v: 'FY26' }
+					{ k: 'FY', v: 'FY26', options: ['FY24', 'FY25', 'FY26'] }
 				],
 				actions: [{ label: 'Add account', primary: true }, { label: 'Export' }]
 			},
@@ -157,7 +170,7 @@ export const PROFILES: AppProfile[] = [
 				icon: '▦',
 				crumb: ['Portcullis'],
 				content: 'dashboard',
-				scope: [{ k: 'Store', v: 'Bitwarden' }],
+				controls: [{ k: 'Store', v: 'Bitwarden' }],
 				actions: [{ label: 'Enrol identity', primary: true }, { label: 'Connect store' }]
 			},
 			{
@@ -165,7 +178,7 @@ export const PROFILES: AppProfile[] = [
 				icon: '▣',
 				crumb: ['Credentials'],
 				content: 'table',
-				scope: [
+				controls: [
 					{ k: 'Collection', v: 'All' },
 					{ k: 'State', v: 'Active' }
 				],
@@ -184,7 +197,7 @@ export const PROFILES: AppProfile[] = [
 				crumb: ['Audit'],
 				content: 'table',
 				peers: [{ label: 'Refusals' }, { label: 'Admin' }],
-				scope: [{ k: 'Window', v: 'Last 24h' }]
+				controls: [{ k: 'Window', v: 'Last 24h' }]
 			},
 			{
 				label: 'Authentication',
@@ -215,7 +228,7 @@ export const PROFILES: AppProfile[] = [
 				crumb: ['Library'],
 				content: 'table',
 				peers: [{ label: 'Saved' }, { label: 'Recent' }],
-				scope: [
+				controls: [
 					{ k: 'Collection', v: 'All' },
 					{ k: 'Status', v: 'Indexed' }
 				],
@@ -233,7 +246,7 @@ export const PROFILES: AppProfile[] = [
 				icon: '◐',
 				crumb: ['Operations'],
 				content: 'dashboard',
-				scope: [{ k: 'Window', v: 'Last 7d' }]
+				controls: [{ k: 'Window', v: 'Last 7d' }]
 			},
 			{ label: 'Metrics', icon: '▩', crumb: ['Metrics'], content: 'dashboard' }
 		]
@@ -280,10 +293,10 @@ export const PROFILES: AppProfile[] = [
 				icon: '▦',
 				crumb: ['Dashboard'],
 				content: 'dashboard',
-				peers: [{ label: 'Skipped Music' }],
-				scope: [
-					{ k: 'Range', v: 'All' },
-					{ k: 'View', v: 'Chart' }
+				controls: [
+					{ k: 'Slice', v: 'Top Music', options: ['Top Music', 'Skipped Music'] },
+					{ k: 'Range', v: 'All', options: ['Week', 'Month', 'Year', 'All'] },
+					{ k: 'View', v: 'Chart', options: ['Chart', 'Table'] }
 				]
 			},
 			{
@@ -291,14 +304,14 @@ export const PROFILES: AppProfile[] = [
 				icon: '↻',
 				crumb: ['History'],
 				content: 'table',
-				scope: [{ k: 'Range', v: 'Last 30d' }]
+				controls: [{ k: 'Range', v: 'Last 30d' }]
 			},
 			{
 				label: 'Year in Review',
 				icon: '▣',
 				crumb: ['Year in Review'],
 				content: 'dashboard',
-				scope: [{ k: 'Year', v: '2026' }]
+				controls: [{ k: 'Year', v: '2026' }]
 			},
 			{ label: 'API Docs', icon: '▤', crumb: ['API Docs'], content: 'prose' }
 		]

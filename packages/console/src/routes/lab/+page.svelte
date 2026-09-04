@@ -20,14 +20,14 @@
 	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
 
-	type Shape = 'today' | 'tabs' | 'tabs-scope';
+	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
 	type Identity = 'full' | 'avatar' | 'none';
 	type Content = Section['content'];
 
 	let appIx = $state(0);
 	let secIx = $state(0);
-	let shape = $state<Shape>('tabs');
+	let shape = $state<Shape>('sidebar');
 	let measure = $state<Measure>('wide');
 	let identity = $state<Identity>('full');
 	let contentOverride = $state<Content | null>(null);
@@ -115,27 +115,38 @@
 	let globals = $state(false);
 
 	const app = $derived(PROFILES[appIx]);
+
+	// Reset the section when the app changes. Clamping alone silently lands you
+	// on whatever section happens to share the old index, which reads as the app
+	// having chosen a page for you.
+	let lastApp = $state(0);
+	$effect(() => {
+		if (appIx !== lastApp) {
+			lastApp = appIx;
+			secIx = 0;
+			contentOverride = null;
+			openSections = new Set([0]);
+		}
+	});
 	const section = $derived(app.sections[Math.min(secIx, app.sections.length - 1)]);
 	const peers = $derived(section.peers ?? []);
-	const scope = $derived(section.scope ?? []);
+	const controls = $derived(section.controls ?? []);
 	const actions = $derived(section.actions ?? []);
 	// Anything contextual at all — used only by the `today` baseline now.
-	const ctx = $derived(peers.length + scope.length + actions.length > 0);
+	const ctx = $derived(peers.length + controls.length + actions.length > 0);
 	const content = $derived(contentOverride ?? section.content);
 	// The roll-out carries the section's PEER VIEWS and nothing else. Actions
 	// left the sidebar for the page (operator ruling, 04/09/2026): a sidebar
 	// carrying navigation, actions and scope at once is the sidebar doing too
 	// much, and an action belongs beside the thing it acts on.
 	const inZone = $derived(shape !== 'today' && peers.length > 0);
-	const scopeInBar = $derived(shape === 'tabs-scope');
+
 
 	const NOTES: Record<Shape, string> = {
 		today:
-			'What the apps ship now. Search pinned left, identity right, nothing between, no location anywhere in the chrome — several apps render no page title either. The baseline the other two have to beat.',
-		tabs:
-			'Tabs in the top rail, scope in the sidebar. One row of chrome: no breadcrumb, no second row, no page title. The top rail answers WHICH VIEW; the sidebar carries the section’s scope and actions. The strip needs 531px on Securities and gets all of it at 1512 — it clips only at 1280.',
-		'tabs-scope':
-			'The same, with scope raised out of the sidebar into the top rail beside the tabs. The open fork: it puts every contextual control on one line and empties the sidebar zone, at the cost of the one row having to carry both an unbounded set (tabs) and a bounded one (scope).'
+			'What the apps ship now. Search pinned left, identity right, nothing between, no location anywhere in the chrome — several apps render no page title either.',
+		sidebar:
+			'Sub-routes live in the sidebar under their section, and nowhere else — a peer view listed in both the rail and the top bar is the same six items twice. The top rail carries the bounded things: the section’s scope, then search, globals and identity. Actions sit on the page beside what they act on. One 56px row of chrome, no breadcrumb, no page title.'
 	};
 
 	const MEASURE_CLASS: Record<Measure, string> = {
@@ -226,7 +237,7 @@
 
 			{@render lbl('Shape')}
 			<div class="flex gap-1">
-				{#each [['today', 'Today'], ['tabs', 'Tabs in rail'], ['tabs-scope', 'Tabs + scope in rail']] as [v, t] (v)}
+				{#each [['today', 'Today'], ['sidebar', 'Sidebar sub-routes']] as [v, t] (v)}
 					<button
 						onclick={() => (shape = v as Shape)}
 						aria-pressed={shape === v}
@@ -426,24 +437,18 @@
 							<span class="border-border font-mono ml-auto rounded-sm border px-1.5 py-0.5 text-[10px]">⌘K</span>
 						</div>
 					{:else}
-						<!-- No breadcrumb. At section depth it only repeated the lit
-						     sidebar item and the active tab, and the ~157px it cost is what
-						     lets the strip fit at 1512.
-						     OPEN: the one thing it did earn was naming a record you have
-						     drilled into, and nothing here replaces that yet — on a record
-						     page this bar still lights the list's tab. Measured 04/09/2026;
-						     the answer belongs to the page, not the chrome. -->
-						<div bind:this={leftEl} class="flex min-w-0 items-center overflow-x-auto">
-							{#if ctx}
-								{@render peerTabs()}
+						<!-- No breadcrumb and no peer tabs. Sub-routes live in the sidebar
+						     under their section; listing them here too is the same six items
+						     twice (operator ruling, 04/09/2026). What rises into the top rail
+						     is only what is BOUNDED — a scope control or two — which is why
+						     it still fits at 1280 where a seven-tab strip did not. -->
+						<div bind:this={leftEl} class="flex min-w-0 flex-none items-center gap-2">
+							{#if controls.length}
+								{@render pageControls()}
 							{:else}
 								<span class="text-muted-foreground text-sm">{section.label}</span>
 							{/if}
 						</div>
-						{#if scopeInBar && scope.length}
-							<div class="bg-border mx-2 h-5 w-px flex-none"></div>
-							<div class="flex flex-none items-center gap-2">{@render scopeChips()}</div>
-						{/if}
 					{/if}
 
 					<div bind:this={rightEl} class="ml-auto flex flex-none items-center gap-2.5">
@@ -526,14 +531,10 @@
 							     peer views and scope today, each in its own way. -->
 							<div class="mb-5">
 								<div class="border-border flex gap-0.5 border-b">{@render peerTabs()}</div>
-								{#if scope.length}
-									<div class="mt-3.5 flex gap-2">{@render scopeChips()}</div>
+								{#if controls.length}
+									<div class="mt-3.5 flex gap-2">{@render pageControls()}</div>
 								{/if}
 							</div>
-						{/if}
-
-						{#if shape === 'tabs' && scope.length}
-							<div class="mb-5 flex flex-wrap gap-2">{@render scopeChips()}</div>
 						{/if}
 
 						{@render body()}
@@ -566,12 +567,26 @@
 	{/each}
 {/snippet}
 
-{#snippet scopeChips()}
-	{#each scope as c (c.k)}
-		<button class="border-border bg-surface-1 hover:border-border-strong flex h-[30px] items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] whitespace-nowrap">
-			<span class="text-muted-foreground">{c.k}</span><span>{c.v}</span>
-			<span class="text-muted-foreground text-[9px]">▾</span>
-		</button>
+{#snippet pageControls()}
+	{#each controls as c (c.k)}
+		{#if c.options}
+			<!-- Segmented: a small fixed set, so showing every option costs less
+			     than hiding them behind a dropdown. -->
+			<div class="border-border bg-surface-1 flex h-[30px] items-center gap-0.5 rounded-md border p-0.5">
+				{#each c.options as o (o)}
+					<button
+						onclick={() => (c.v = o)}
+						aria-pressed={c.v === o}
+						class="text-muted-foreground hover:text-foreground h-[24px] rounded-[0.3rem] px-2 text-[12px] whitespace-nowrap aria-pressed:bg-[var(--ds-color-surface-3)] aria-pressed:text-[var(--ds-color-foreground)] aria-pressed:font-semibold"
+					>{o}</button>
+				{/each}
+			</div>
+		{:else}
+			<button class="border-border bg-surface-1 hover:border-border-strong flex h-[30px] items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] whitespace-nowrap">
+				<span class="text-muted-foreground">{c.k}</span><span>{c.v}</span>
+				<span class="text-muted-foreground text-[9px]">▾</span>
+			</button>
+		{/if}
 	{/each}
 {/snippet}
 
