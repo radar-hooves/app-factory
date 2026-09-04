@@ -20,7 +20,7 @@
 	import { PROFILES, hasContext, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
 
-	type Shape = 'now' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f';
+	type Shape = 'now' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
 	type Zone = 'block' | 'inline';
 	type Identity = 'full' | 'avatar' | 'none';
@@ -115,10 +115,16 @@
 	// beside its search; ours carries none, which is a large part of why the bar
 	// reads empty. Off by default so the comparison is one click.
 	let globals = $state(false);
+	// Drill-down: one record beneath the active peer view. The dossier's line is
+	// that a drill-down is NOT a peer — it extends the breadcrumb rather than
+	// joining the tabs — so this is the case that decides whether a breadcrumb
+	// earns its place.
+	let drilled = $state(false);
 
 	const app = $derived(PROFILES[appIx]);
 	const section = $derived(app.sections[Math.min(secIx, app.sections.length - 1)]);
 	const peers = $derived(section.peers ?? []);
+	const crumb = $derived(drilled ? [...section.crumb, 'Broker A 1000001'] : section.crumb);
 	const scope = $derived(section.scope ?? []);
 	const actions = $derived(section.actions ?? []);
 	const ctx = $derived(hasContext(section));
@@ -131,6 +137,7 @@
 		a: 'A · one row. Location left, search right. Peer views and scope sit in the page body under the title, so they scroll away.',
 		b: 'B · two rows. A 44px context row beneath the bar carries peer views and scope, aligned to the measure and sticky. Costs a permanent second band of chrome.',
 		c: 'C · shipped toolbar. A’s chrome, but the tab-and-scope row ships as one boxed component under the title. Still scrolls away.',
+		g: 'G · no breadcrumb. The top rail carries the peer views alone, on the argument that at section depth the breadcrumb only repeats what the lit sidebar item and the active tab already say. Turn on "drill in" to see what it costs: a record is not a peer view, so nothing on screen names the record you are in or gets you back up.',
 		f: 'F · breadcrumb, then the app’s slot. The shell already ships two top-bar slots — `context` (leading, a context switcher) and `actions` (trailing, app-level buttons); Portcullis is the only app using either. This adds the breadcrumb in front and a rule between, so the boundary reads. The slot takes SCOPE, which is bounded at a control or two; peer views stay in the content column, because seven of them is what breaks E.',
 		e: 'E · peer views in the top rail. Tabs beside the breadcrumb — the one arrangement no reference uses. GitHub puts them on a SECOND row and has no sidebar; Vercel, Attio and Linear put them in the content column beside a full-height rail. Narrow the viewport to 1280 and watch: the breadcrumb and the tabs are both variable-width and both want the same run.',
 		d: 'D · rail zone. No page title and no page actions — the breadcrumb and the lit rail say where you are, and the rail carries the section’s peer views, actions and scope. Walk the rail: most sections have nothing contextual, and the zone must vanish cleanly for those.'
@@ -224,7 +231,7 @@
 
 			{@render lbl('Shape')}
 			<div class="flex gap-1">
-				{#each [['now', 'Current'], ['a', 'A one-row'], ['b', 'B two-row'], ['c', 'C toolbar'], ['d', 'D rail zone'], ['e', 'E tabs in rail'], ['f', 'F crumb + slot']] as [v, t] (v)}
+				{#each [['now', 'Current'], ['a', 'A one-row'], ['b', 'B two-row'], ['c', 'C toolbar'], ['d', 'D rail zone'], ['e', 'E tabs in rail'], ['f', 'F crumb + slot'], ['g', 'G no breadcrumb']] as [v, t] (v)}
 					<button
 						onclick={() => (shape = v as Shape)}
 						aria-pressed={shape === v}
@@ -317,6 +324,11 @@
 						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
 					>{t}</button>
 				{/each}
+				<button
+					onclick={() => (drilled = !drilled)}
+					aria-pressed={drilled}
+					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
+				>drill in</button>
 				<button
 					onclick={() => (globals = !globals)}
 					aria-pressed={globals}
@@ -445,10 +457,16 @@
 							<span>⌕</span><span class="truncate">{app.searchLabel}</span>
 							<span class="border-border font-mono ml-auto rounded-sm border px-1.5 py-0.5 text-[10px]">⌘K</span>
 						</div>
+					{:else if shape === 'g'}
+						<div bind:this={leftEl} class="flex min-w-0 items-center overflow-x-auto">
+							{#if ctx}{@render peerTabs()}{:else}
+								<span class="text-muted-foreground text-sm">{section.label}</span>
+							{/if}
+						</div>
 					{:else}
 						<div bind:this={leftEl} class="flex min-w-0 items-center gap-2 text-sm">
-							{#each section.crumb as c, i (c)}
-								{#if i < section.crumb.length - 1}
+							{#each crumb as c, i (c)}
+								{#if i < crumb.length - 1}
 									<span class="text-muted-foreground hover:text-foreground cursor-pointer hover:underline">{c}</span>
 									<span class="text-muted-foreground/60">›</span>
 								{:else}<span class="font-semibold">{c}</span>{/if}
@@ -502,7 +520,7 @@
 					</div>
 				</header>
 
-				{#if (shape === 'b' || shape === 'f') && ctx}
+				{#if (shape === 'b' || shape === 'f' || shape === 'g') && ctx}
 					<div class="bg-background border-border flex h-11 flex-none border-b">
 						<div class="mx-auto flex w-full min-w-0 items-center gap-0.5 px-8 {MEASURE_CLASS[measure]}">
 							{@render peerTabs()}
