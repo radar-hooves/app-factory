@@ -24,14 +24,12 @@
 
 	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
-	type Identity = 'full' | 'avatar' | 'none';
 	type Content = Section['content'];
 
 	let appIx = $state(0);
 	let secIx = $state(0);
 	let shape = $state<Shape>('sidebar');
 	let measure = $state<Measure>('wide');
-	let identity = $state<Identity>('full');
 	let contentOverride = $state<Content | null>(null);
 	let frameWidth = $state<number | null>(null);
 	let railCollapsed = $state(false);
@@ -133,6 +131,8 @@
 	const section = $derived(app.sections[Math.min(secIx, app.sections.length - 1)]);
 	const peers = $derived(section.peers ?? []);
 	const controls = $derived(section.controls ?? []);
+	const who = $derived(app.identity);
+	const shown = $derived(who.display_name ?? who.username);
 	const actions = $derived(section.actions ?? []);
 	// Anything contextual at all — used only by the `today` baseline now.
 	const ctx = $derived(peers.length + controls.length + actions.length > 0);
@@ -184,7 +184,7 @@
 
 	$effect(() => {
 		// Re-read after any state that moves the layout, and on resize.
-		void [shape, measure, appIx, secIx, railCollapsed, frameWidth, identity, content];
+		void [shape, measure, appIx, secIx, railCollapsed, frameWidth, content];
 		const bump = () => tick++;
 		requestAnimationFrame(bump);
 		addEventListener('resize', bump);
@@ -296,17 +296,6 @@
 						aria-pressed={content === v}
 						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
 					>{v}</button>
-				{/each}
-			</div>
-
-			{@render lbl('Identity')}
-			<div class="flex gap-1">
-				{#each [['full', 'avatar + name'], ['avatar', 'avatar only'], ['none', 'none']] as [v, t] (v)}
-					<button
-						onclick={() => (identity = v as Identity)}
-						aria-pressed={identity === v}
-						class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
-					>{t}</button>
 				{/each}
 			</div>
 
@@ -475,19 +464,13 @@
 							aria-label="Toggle theme"
 							class="border-border text-muted-foreground hover:text-foreground grid size-[34px] flex-none place-items-center rounded-md border"
 						>◐</button>
-						{#if identity !== 'none'}
-							{@const who = app.identity}
-							{@const shown = who.display_name ?? who.username}
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger>
 									{#snippet child({ props })}
 										<button
 											{...props}
 											aria-label="Account"
-											class="hover:bg-surface-2 flex h-[34px] cursor-pointer items-center gap-2 rounded-md py-0 pr-1.5 pl-1.5 {identity ===
-											'full'
-												? 'pr-2.5'
-												: ''}"
+											class="hover:bg-surface-2 grid size-[34px] cursor-pointer place-items-center rounded-md"
 										>
 											<Avatar.Root class="size-6.5 flex-none">
 												<Avatar.Fallback
@@ -496,10 +479,6 @@
 													{app.initials}
 												</Avatar.Fallback>
 											</Avatar.Root>
-											{#if identity === 'full'}
-												<span class="text-[13px] whitespace-nowrap">{shown}</span>
-												<span class="text-muted-foreground text-[10px]">▾</span>
-											{/if}
 										</button>
 									{/snippet}
 								</DropdownMenu.Trigger>
@@ -555,14 +534,13 @@
 									<DropdownMenu.Item class="text-status-error">Sign out</DropdownMenu.Item>
 								</DropdownMenu.Content>
 							</DropdownMenu.Root>
-						{/if}
 					</div>
 				</header>
 
 				<main
 					bind:this={scrollEl}
 					class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto {textured ? 'ds-shell-texture' : ''}"
-					data-texture={textured ? 'dots' : undefined}
+					data-texture={textured ? 'grid' : undefined}
 				>
 					<div
 						bind:this={measureEl}
