@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Top rail — design options</title>
+<style>
+/* ── Tokens, copied from packages/design-tokens/dist/tokens.css ─────────────
+   A copy so this file opens standalone. If it disagrees with the package,
+   the package is right.                                                     */
+:root {
+  --ds-radius-sm: .225rem; --ds-radius-md: .425rem; --ds-radius-lg: .625rem;
+  --ds-radius-xl: .825rem; --ds-radius-full: 9999px;
+  --ds-text-2xs: .6875rem;
+  --ds-font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --ds-font-body: 'Avenir Next', 'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --ds-font-code: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --ds-color-background: oklch(.905 .005 85);
+  --ds-color-foreground: oklch(.240 .016 85);
+  --ds-color-surface-1: oklch(.878 .007 85);
+  --ds-color-surface-2: oklch(.990 .002 85);
+  --ds-color-surface-3: oklch(1 0 0);
+  --ds-color-muted-foreground: oklch(.475 .013 85);
+  --ds-color-border: oklch(.770 .011 85);
+  --ds-color-border-strong: oklch(.588 .015 85);
+  --ds-color-primary: oklch(.50 .155 250);
+  --ds-color-primary-foreground: oklch(.99 .005 250);
+  --ds-color-status-success: oklch(.50 .155 150);
+  --ds-color-status-warning: oklch(.52 .130 68);
+  --ds-color-status-error: oklch(.53 .200 27);
+  --ds-shell-rail-width: 15.5rem;
+  --ds-shell-measure-wide: 120rem;
+  --ds-shell-measure-page: 80rem;
+  --ds-shell-texture-grid-pitch: 24px;
+  --ds-shell-texture-grid-ink: oklch(.68 .02 250 / .5);
+}
+.dark {
+  --ds-color-background: oklch(.205 .015 260);
+  --ds-color-foreground: oklch(.930 .010 240);
+  --ds-color-surface-1: oklch(.168 .017 260);
+  --ds-color-surface-2: oklch(.278 .020 260);
+  --ds-color-surface-3: oklch(.332 .022 260);
+  --ds-color-muted-foreground: oklch(.712 .015 250);
+  --ds-color-border: oklch(.455 .024 260);
+  --ds-color-border-strong: oklch(.605 .026 260);
+  --ds-color-primary: oklch(.70 .140 250);
+  --ds-color-primary-foreground: oklch(.20 .030 250);
+  --ds-color-status-success: oklch(.76 .150 150);
+  --ds-color-status-warning: oklch(.82 .140 75);
+  --ds-color-status-error: oklch(.70 .180 25);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; font-family: var(--ds-font-body); font-size: 14px;
+  background: var(--ds-color-background); color: var(--ds-color-foreground);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── The control strip. Not part of the design — the harness around it. ──── */
+#controls {
+  flex: none; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 8px 16px; background: #14161c; color: #d7dbe3;
+  font: 12px var(--ds-font-code); border-bottom: 2px solid #2b2f3a;
+}
+#controls .grp { display: flex; align-items: center; gap: 6px; }
+#controls .lbl { color: #7d8494; text-transform: uppercase; letter-spacing: .09em; font-size: 10px; }
+#controls button {
+  font: inherit; padding: 5px 11px; border-radius: 5px; cursor: pointer;
+  background: #22262f; color: #d7dbe3; border: 1px solid #363b47;
+}
+#controls button:hover { background: #2c313c; }
+#controls button[aria-pressed="true"] { background: var(--ds-color-primary); border-color: var(--ds-color-primary); color: #fff; }
+#readout { margin-left: auto; color: #98a0b0; }
+#readout b { color: #f2c14e; font-weight: 600; }
+
+/* ── Shell ───────────────────────────────────────────────────────────────── */
+#shell { flex: 1; min-height: 0; display: flex; }
+
+.rail {
+  width: var(--ds-shell-rail-width); flex: none; display: flex; flex-direction: column;
+  background: var(--ds-color-surface-1); border-right: 1px solid var(--ds-color-border);
+}
+.rail-head {
+  height: 56px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+}
+.brand-mark {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+  background: var(--ds-color-background); font-size: 14px;
+}
+.brand-name { font-family: var(--ds-font-display); font-weight: 600; letter-spacing: -.01em; font-size: 15px; }
+.rail-toggle {
+  margin-left: auto; width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: var(--ds-radius-sm); color: var(--ds-color-muted-foreground); cursor: pointer;
+}
+.rail-toggle:hover { background: var(--ds-color-surface-2); }
+.rail-nav { padding: 6px 10px; overflow-y: auto; }
+.nav-head {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ds-color-muted-foreground); padding: 14px 8px 5px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px;
+  border-radius: var(--ds-radius-md); color: var(--ds-color-foreground);
+  font-size: 13.5px; cursor: pointer;
+}
+.nav-item:hover { background: var(--ds-color-surface-2); }
+.nav-item.active { background: var(--ds-color-surface-2); font-weight: 600; }
+.nav-item .ico { width: 16px; text-align: center; opacity: .75; font-size: 13px; }
+
+.pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── Global bar ──────────────────────────────────────────────────────────── */
+.bar {
+  height: 56px; flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; background: var(--ds-color-surface-1);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+.crumb { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.crumb .sep { color: var(--ds-color-muted-foreground); opacity: .6; }
+.crumb .up { color: var(--ds-color-muted-foreground); cursor: pointer; }
+.crumb .up:hover { color: var(--ds-color-foreground); text-decoration: underline; }
+.crumb .here { font-weight: 600; }
+
+.bar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+.search {
+  display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 11px;
+  width: clamp(200px, 24vw, 420px);
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+  background: var(--ds-color-background); color: var(--ds-color-muted-foreground);
+  font-size: 13px; cursor: pointer;
+}
+.search:hover { border-color: var(--ds-color-border-strong); }
+.search .kbd {
+  margin-left: auto; font: 10px var(--ds-font-code); padding: 2px 5px;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm);
+}
+.iconbtn {
+  width: 34px; height: 34px; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+  color: var(--ds-color-muted-foreground); cursor: pointer; background: transparent;
+}
+.iconbtn:hover { color: var(--ds-color-foreground); border-color: var(--ds-color-border-strong); }
+.identity {
+  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 9px 0 5px;
+  border-radius: var(--ds-radius-md); cursor: pointer;
+}
+.identity:hover { background: var(--ds-color-surface-2); }
+.avatar {
+  width: 26px; height: 26px; flex: none; border-radius: var(--ds-radius-full);
+  display: grid; place-items: center; background: var(--ds-color-primary);
+  color: var(--ds-color-primary-foreground); font-size: 11px; font-weight: 700;
+  letter-spacing: .02em;
+}
+.identity .who { font-size: 13px; }
+.identity .caret { color: var(--ds-color-muted-foreground); font-size: 10px; }
+
+/* ── Context row (option B) ──────────────────────────────────────────────── */
+.ctx {
+  height: 44px; flex: none; display: flex;
+  background: var(--ds-color-background);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+/* The row aligns to the CONTENT measure, not the pane edges. Anchored to the
+   pane, the scope chips sat ~1100px right of the table they scope. */
+.ctx-inner {
+  width: 100%; margin-inline: auto; padding-inline: 32px;
+  display: flex; align-items: center; gap: 4px;
+}
+body[data-measure="wide"] .ctx-inner { max-width: var(--ds-shell-measure-wide); }
+body[data-measure="page"] .ctx-inner { max-width: var(--ds-shell-measure-page); }
+body[data-measure="full"] .ctx-inner { max-width: none; }
+.tab {
+  position: relative; height: 44px; display: flex; align-items: center; padding: 0 12px;
+  font-size: 13.5px; color: var(--ds-color-muted-foreground); cursor: pointer;
+}
+.tab:hover { color: var(--ds-color-foreground); }
+.tab.active { color: var(--ds-color-foreground); font-weight: 600; }
+.tab.active::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px;
+  height: 2px; background: var(--ds-color-primary); border-radius: 2px 2px 0 0;
+}
+.tab .count {
+  margin-left: 7px; font: 10px var(--ds-font-code);
+  background: var(--ds-color-surface-2); color: var(--ds-color-muted-foreground);
+  padding: 1px 5px; border-radius: var(--ds-radius-full);
+}
+.ctx-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.chip {
+  display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-1); font-size: 12.5px; cursor: pointer;
+}
+.chip:hover { border-color: var(--ds-color-border-strong); }
+.chip .k { color: var(--ds-color-muted-foreground); }
+.chip .caret { color: var(--ds-color-muted-foreground); font-size: 9px; }
+
+/* ── Scroller + measure ──────────────────────────────────────────────────── */
+.scroll {
+  flex: 1; min-height: 0; overflow-y: auto; position: relative;
+  background-image: radial-gradient(var(--ds-shell-texture-grid-ink) .5px, transparent .5px);
+  background-size: var(--ds-shell-texture-grid-pitch) var(--ds-shell-texture-grid-pitch);
+  background-attachment: local;
+}
+.measure { width: 100%; margin-inline: auto; padding: 26px 32px 60px; }
+body[data-measure="wide"] .measure { max-width: var(--ds-shell-measure-wide); }
+body[data-measure="page"] .measure { max-width: var(--ds-shell-measure-page); }
+body[data-measure="full"] .measure { max-width: none; }
+
+/* Dead-space overlay */
+body[data-dead="on"] .scroll { position: relative; }
+body[data-dead="on"] .measure { position: relative; }
+body[data-dead="on"] .measure::before,
+body[data-dead="on"] .measure::after {
+  content: 'dead'; position: absolute; top: 0; bottom: 0; width: 100vw;
+  font: 10px var(--ds-font-code); color: oklch(.60 .18 27 / .85);
+  letter-spacing: .3em; text-transform: uppercase;
+  writing-mode: vertical-rl; display: grid; place-items: center;
+  background: repeating-linear-gradient(135deg,
+     oklch(.60 .18 27 / .10) 0 6px, transparent 6px 12px);
+  pointer-events: none;
+}
+body[data-dead="on"] .measure::before { right: 100%; }
+body[data-dead="on"] .measure::after  { left: 100%; }
+body[data-dead="on"] .bar-gap { outline: 1px dashed oklch(.60 .18 27 / .5); }
+
+/* ── Page header + content ───────────────────────────────────────────────── */
+.pagehead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.eyebrow {
+  font-size: var(--ds-text-2xs); text-transform: uppercase; letter-spacing: .14em;
+  color: var(--ds-color-primary); font-weight: 600; margin-bottom: 5px;
+}
+h1 {
+  font-family: var(--ds-font-display); font-size: 28px; font-weight: 600;
+  letter-spacing: -.02em; line-height: 1.15; margin: 0;
+}
+.sub { color: var(--ds-color-muted-foreground); font-size: 13.5px; margin-top: 6px; }
+.pagehead-actions { margin-left: auto; display: flex; gap: 8px; flex: none; }
+.btn {
+  height: 34px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-1); font-size: 13px; cursor: pointer;
+  color: var(--ds-color-foreground); font-family: inherit;
+}
+.btn:hover { border-color: var(--ds-color-border-strong); }
+.btn.primary {
+  background: var(--ds-color-primary); border-color: var(--ds-color-primary);
+  color: var(--ds-color-primary-foreground); font-weight: 600;
+}
+
+/* In-page context (options A and C) */
+.inpage-ctx { margin-bottom: 20px; }
+.inpage-ctx.card {
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface-1); padding: 4px 12px;
+  display: flex; align-items: center; gap: 4px;
+}
+.inpage-tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--ds-color-border); }
+.inpage-tabs .tab { height: 38px; }
+.inpage-scope { display: flex; gap: 8px; margin-top: 14px; }
+.inpage-ctx.card .ctx-right { margin-left: auto; }
+.inpage-ctx.card .tab { height: 38px; }
+.inpage-ctx.card .tab.active::after { bottom: 0; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stat {
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface-2); padding: 15px 17px;
+}
+.stat .k {
+  font-size: var(--ds-text-2xs); text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ds-color-muted-foreground); margin-bottom: 7px;
+}
+.stat .v { font: 600 21px/1.1 var(--ds-font-code); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.stat .v.neg { color: var(--ds-color-status-error); }
+.stat .v.pos { color: var(--ds-color-status-success); }
+
+.card {
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface-2); overflow: hidden;
+}
+.card-head { padding: 15px 18px 13px; border-bottom: 1px solid var(--ds-color-border); }
+.card-head .t { font-weight: 600; font-size: 14.5px; }
+.card-head .d { color: var(--ds-color-muted-foreground); font-size: 12.5px; margin-top: 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; font-size: var(--ds-text-2xs); text-transform: uppercase;
+  letter-spacing: .09em; color: var(--ds-color-muted-foreground); font-weight: 500;
+  padding: 10px 18px; border-bottom: 1px solid var(--ds-color-border);
+}
+td { padding: 11px 18px; border-bottom: 1px solid var(--ds-color-border); }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--ds-color-surface-1); }
+td.num { font-family: var(--ds-font-code); font-variant-numeric: tabular-nums; text-align: right; }
+td.num.neg { color: var(--ds-color-status-error); }
+td.num.pos { color: var(--ds-color-status-success); }
+.tag {
+  display: inline-block; font: 10px var(--ds-font-code); letter-spacing: .04em;
+  padding: 2px 6px; margin-left: 8px; border-radius: var(--ds-radius-sm);
+  border: 1px solid var(--ds-color-border); color: var(--ds-color-muted-foreground);
+}
+.note {
+  margin-top: 26px; padding: 13px 16px; font-size: 12.5px; line-height: 1.55;
+  border-left: 3px solid var(--ds-color-primary); background: var(--ds-color-surface-1);
+  color: var(--ds-color-muted-foreground); border-radius: 0 var(--ds-radius-md) var(--ds-radius-md) 0;
+}
+.note b { color: var(--ds-color-foreground); font-weight: 600; }
+
+[hidden] { display: none !important; }
+</style>
+</head>
+<body class="dark" data-measure="wide" data-dead="off">
+
+<div id="controls">
+  <div class="grp">
+    <span class="lbl">Option</span>
+    <button data-opt="now" aria-pressed="true">Current</button>
+    <button data-opt="a">A · one row</button>
+    <button data-opt="b">B · two rows</button>
+    <button data-opt="c">C · shipped toolbar</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">Measure</span>
+    <button data-measure="wide" aria-pressed="true">wide 120rem</button>
+    <button data-measure="page">page 80rem</button>
+    <button data-measure="full">full</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">Show</span>
+    <button data-toggle="dead">Dead space</button>
+    <button data-toggle="theme" aria-pressed="true">Dark</button>
+  </div>
+  <div id="readout"></div>
+</div>
+
+<div id="shell">
+  <!-- ── Rail ──────────────────────────────────────────────────────────── -->
+  <aside class="rail">
+    <div class="rail-head">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">Godswood</span>
+      <span class="rail-toggle" title="Collapse rail">▮|</span>
+    </div>
+    <nav class="rail-nav">
+      <div class="nav-item"><span class="ico">⌂</span>Home</div>
+      <div class="nav-item"><span class="ico">▤</span>Essentialism</div>
+      <div class="nav-item"><span class="ico">▦</span>Groceries</div>
+      <div class="nav-item"><span class="ico">◎</span>Budget</div>
+      <div class="nav-item"><span class="ico">⌂</span>Property</div>
+      <div class="nav-item"><span class="ico">◐</span>Net Worth</div>
+      <div class="nav-item active"><span class="ico">▥</span>Securities</div>
+      <!-- Option A/C keep the 7 peer views in the rail, as today -->
+      <div id="rail-children">
+        <div class="nav-item" style="padding-left:30px">Overview</div>
+        <div class="nav-item" style="padding-left:30px;font-weight:600">Investing</div>
+        <div class="nav-item" style="padding-left:30px">Trading</div>
+        <div class="nav-item" style="padding-left:30px">Live</div>
+        <div class="nav-item" style="padding-left:30px">P&amp;L</div>
+        <div class="nav-item" style="padding-left:30px">Coverage</div>
+        <div class="nav-item" style="padding-left:30px">Ledger</div>
+      </div>
+      <div class="nav-item"><span class="ico">▣</span>Superannuation</div>
+      <div class="nav-item"><span class="ico">✈</span>Travel</div>
+      <div class="nav-item"><span class="ico">⚒</span>Fixxxer</div>
+      <div class="nav-item"><span class="ico">⛨</span>Admin</div>
+    </nav>
+  </aside>
+
+  <div class="pane">
+    <!-- ── Global bar ──────────────────────────────────────────────────── -->
+    <header class="bar">
+      <!-- CURRENT: search hugs the left, nothing says where you are -->
+      <div id="now-left" class="search" style="margin-right:auto">
+        <span>⌕</span><span>Search Godswood…</span><span class="kbd">⌘K</span>
+      </div>
+      <div id="now-gap" class="bar-gap" style="flex:1"></div>
+
+      <!-- A / B / C: location on the left -->
+      <div id="crumb" class="crumb" hidden>
+        <span class="up">Securities</span>
+        <span class="sep">›</span>
+        <span class="here">Investing</span>
+      </div>
+
+      <div class="bar-right">
+        <div id="search-right" class="search" hidden>
+          <span>⌕</span><span>Search Godswood…</span><span class="kbd">⌘K</span>
+        </div>
+        <button class="iconbtn" title="Theme">◐</button>
+        <div class="identity">
+          <span class="avatar">PG</span>
+          <span class="who">Operator</span>
+          <span class="caret">▾</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Context row — option B only ─────────────────────────────────── -->
+    <div id="ctxrow" class="ctx" hidden>
+      <div class="ctx-inner">
+        <div class="tab">Overview</div>
+        <div class="tab active">Investing</div>
+        <div class="tab">Trading</div>
+        <div class="tab">Live</div>
+        <div class="tab">P&amp;L</div>
+        <div class="tab">Coverage</div>
+        <div class="tab">Ledger<span class="count">4,318</span></div>
+        <div class="ctx-right">
+          <div class="chip"><span class="k">Entity</span><span>All entities</span><span class="caret">▾</span></div>
+          <div class="chip"><span class="k">Period</span><span>FY26</span><span class="caret">▾</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Scroller ────────────────────────────────────────────────────── -->
+    <main class="scroll">
+      <div class="measure">
+
+        <div class="pagehead">
+          <div style="min-width:0">
+            <div id="eyebrow" class="eyebrow">Securities</div>
+            <h1>Investing</h1>
+            <div class="sub">Realised, in AUD · 12 accounts · 4,318 ledger events</div>
+          </div>
+          <div class="pagehead-actions">
+            <button class="btn">Export</button>
+            <button class="btn primary">Add account</button>
+          </div>
+        </div>
+
+        <!-- In-page context — options A and C -->
+        <div id="inpage-a" class="inpage-ctx" hidden>
+          <div class="inpage-tabs">
+            <div class="tab">Overview</div><div class="tab active">Investing</div>
+            <div class="tab">Trading</div><div class="tab">Live</div>
+            <div class="tab">P&amp;L</div><div class="tab">Coverage</div><div class="tab">Ledger</div>
+          </div>
+          <div class="inpage-scope">
+            <div class="chip"><span class="k">Entity</span><span>All entities</span><span class="caret">▾</span></div>
+            <div class="chip"><span class="k">Period</span><span>FY26</span><span class="caret">▾</span></div>
+          </div>
+        </div>
+
+        <div id="inpage-c" class="inpage-ctx card" hidden>
+          <div class="tab">Overview</div><div class="tab active">Investing</div>
+          <div class="tab">Trading</div><div class="tab">Live</div>
+          <div class="tab">P&amp;L</div><div class="tab">Coverage</div><div class="tab">Ledger</div>
+          <div class="ctx-right">
+            <div class="chip"><span class="k">Entity</span><span>All entities</span><span class="caret">▾</span></div>
+            <div class="chip"><span class="k">Period</span><span>FY26</span><span class="caret">▾</span></div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="k">Contributed</div><div class="v">$420,000.00</div></div>
+          <div class="stat"><div class="k">Withdrawn</div><div class="v">$318,450.00</div></div>
+          <div class="stat"><div class="k">Net gain</div><div class="v pos">$41,275.60</div></div>
+          <div class="stat"><div class="k">Return on capital</div><div class="v pos">9.8%</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="t">Accounts</div>
+            <div class="d">Select an account to see its ledger and detail.</div>
+          </div>
+          <table>
+            <thead><tr>
+              <th style="width:34%">Account</th><th>Platform</th><th>Owner</th>
+              <th style="text-align:right">Realised P&amp;L</th><th style="text-align:right">Events</th>
+            </tr></thead>
+            <tbody>
+              <!-- Fabricated rows. Real account numbers, holder names and balances
+                   are never written into this repo, which is public. The shape is
+                   what the mockup needs; the values are invented. -->
+              <tr><td>Broker A 1000001<span class="tag">USD</span></td><td>cTrader</td><td>Trust</td><td class="num pos">321,857.83</td><td class="num">2,014</td></tr>
+              <tr><td>Broker B 1000002</td><td>NA</td><td>Individual</td><td class="num pos">210,088.98</td><td class="num">156</td></tr>
+              <tr><td>Broker A 1000003</td><td>IRESS</td><td>Individual</td><td class="num pos">28,332.48</td><td class="num">759</td></tr>
+              <tr><td>Broker A 1000004</td><td>IRESS</td><td>Joint</td><td class="num pos">17,903.76</td><td class="num">783</td></tr>
+              <tr><td>Broker A 1000005</td><td>MT5</td><td>Trust</td><td class="num pos">4,758.16</td><td class="num">41</td></tr>
+              <tr><td>Broker A 1000006</td><td>IRESS</td><td>SMSF</td><td class="num neg">−4,159.25</td><td class="num">118</td></tr>
+              <tr><td>Broker B 1000007</td><td>NA</td><td>Joint</td><td class="num neg">−66,724.75</td><td class="num">11</td></tr>
+              <tr><td>Broker C 1000008<span class="tag">TWS</span></td><td>TWS</td><td>Trust</td><td class="num neg">−255,044.77</td><td class="num">646</td></tr>
+              <tr><td>Broker B 1000009</td><td>NA</td><td>Individual</td><td class="num neg">−280,964.98</td><td class="num">206</td></tr>
+              <tr><td>Broker B 1000010</td><td>NA</td><td>SMSF</td><td class="num neg">−472,465.78</td><td class="num">69</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="note" class="note"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const NOTES = {
+  now: "<b>Current.</b> Search hugs the left, identity the right, and nothing between them. Nothing in the chrome says where you are — Securities/Investing renders no page title at all in the live app. Turn on <b>Dead space</b> to see what the 120rem cap leaves unused at your width.",
+  a:   "<b>A · one row.</b> Breadcrumb takes the left of the bar, search moves right beside identity. Peer views and scope stay in the page body, under the title — so they scroll away, and each app still decides how to draw them.",
+  b:   "<b>B · two rows.</b> Global bar for location and global controls; a second 44px row, spanning the content column only, for peer views and the scope chips. Sticky, so Entity/Period stay put while you scroll 4,318 events. Peer views leave the rail, which loses the nested tree. The eyebrow is gone — the breadcrumb says it.",
+  c:   "<b>C · shipped toolbar.</b> A's chrome, but the tab+scope row ships as one component under the title so every app draws it identically. Still scrolls away with the content."
+};
+const $ = (s) => document.querySelector(s);
+const show = (el, on) => { if (el) el.hidden = !on; };
+let opt = 'now';
+
+function render() {
+  const isNow = opt === 'now';
+  show($('#now-left'), isNow);
+  show($('#now-gap'), isNow);
+  show($('#crumb'), !isNow);
+  show($('#search-right'), !isNow);
+  show($('#ctxrow'), opt === 'b');
+  show($('#inpage-a'), opt === 'a');
+  show($('#inpage-c'), opt === 'c');
+  // B takes the peer views out of the rail; the others leave them there.
+  show($('#rail-children'), opt !== 'b');
+  // The eyebrow only survives where nothing else states the section.
+  show($('#eyebrow'), isNow);
+  $('#note').innerHTML = NOTES[opt];
+  measure();
+}
+
+function measure() {
+  const bar = document.querySelector('.bar');
+  const m = document.querySelector('.measure');
+  const sc = document.querySelector('.scroll');
+  const right = document.querySelector('.bar-right');
+  const leftEl = opt === 'now' ? $('#now-left') : $('#crumb');
+  const lb = leftEl.getBoundingClientRect(), rb = right.getBoundingClientRect();
+  const gap = Math.round(rb.left - lb.right);
+  const region = Math.round(sc.clientWidth);
+  const content = Math.round(m.getBoundingClientRect().width);
+  const dead = region - content;
+  $('#readout').innerHTML =
+    `viewport <b>${window.innerWidth}</b>px &nbsp;·&nbsp; ` +
+    `bar gap <b>${gap}</b>px (${Math.round(gap / bar.clientWidth * 100)}% of bar) &nbsp;·&nbsp; ` +
+    `content <b>${content}</b>/${region}px &nbsp;·&nbsp; dead <b>${dead}</b>px`;
+}
+
+document.querySelectorAll('#controls button').forEach((b) => {
+  b.addEventListener('click', () => {
+    if (b.dataset.opt) {
+      opt = b.dataset.opt;
+      document.querySelectorAll('[data-opt]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      render();
+    } else if (b.dataset.measure) {
+      document.body.dataset.measure = b.dataset.measure;
+      document.querySelectorAll('[data-measure]:not(body)').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      measure();
+    } else if (b.dataset.toggle === 'dead') {
+      const on = document.body.dataset.dead === 'on';
+      document.body.dataset.dead = on ? 'off' : 'on';
+      b.setAttribute('aria-pressed', String(!on));
+    } else if (b.dataset.toggle === 'theme') {
+      const dark = document.body.classList.toggle('dark');
+      b.textContent = dark ? 'Dark' : 'Light';
+      b.setAttribute('aria-pressed', String(dark));
+    }
+  });
+});
+addEventListener('resize', measure);
+render();
+</script>
+</body>
+</html>

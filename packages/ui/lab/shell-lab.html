@@ -19,9 +19,10 @@
   for. It costs a copied token block (below) and classic scripts instead of
   modules; both are worth it.
 
-  App profiles come from ./apps.local.js if it is present (gitignored — it
-  carries real app names, nav trees and copy). Without it you get the neutral
-  demo profile defined at the bottom, which is what a fresh clone sees.
+  App profiles come from ./apps.js if it is present. Without it you get the
+  neutral demo profile defined at the bottom — which is what the lab renders if
+  that file is ever removed, so the tool never depends on the estate's own apps
+  being there.
 -->
 <style>
 /* ── Tokens, copied from packages/design-tokens/dist/tokens.css ─────────────
@@ -502,7 +503,7 @@ td.num.neg { color: var(--ds-color-status-error); }
 </div>
 
 <!-- Private profiles, if present. Gitignored; absent in a fresh clone. -->
-<script src="./apps.local.js" onerror="void 0"></script>
+<script src="./apps.js" onerror="void 0"></script>
 <script>
 /* ── The neutral profile a fresh clone sees ──────────────────────────────── */
 const DEMO = [{
