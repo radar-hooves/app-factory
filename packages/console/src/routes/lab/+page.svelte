@@ -20,7 +20,7 @@
 	import { PROFILES, hasContext, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
 
-	type Shape = 'now' | 'a' | 'b' | 'c' | 'd';
+	type Shape = 'now' | 'a' | 'b' | 'c' | 'd' | 'e';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
 	type Zone = 'block' | 'inline';
 	type Identity = 'full' | 'avatar' | 'none';
@@ -103,10 +103,11 @@
 		persistRail();
 	}
 
+	// An accordion, not independent disclosures. You are only ever IN one module,
+	// so a second open section shows context for somewhere you are not — which is
+	// the sidebar doing too much, and it grows without limit as modules are added.
 	function toggleSection(i: number) {
-		const next = new Set(openSections);
-		next.has(i) ? next.delete(i) : next.add(i);
-		openSections = next;
+		openSections = openSections.has(i) ? new Set() : new Set([i]);
 	}
 	let showUnused = $state(false);
 	let textured = $state(true);
@@ -130,6 +131,7 @@
 		a: 'A · one row. Location left, search right. Peer views and scope sit in the page body under the title, so they scroll away.',
 		b: 'B · two rows. A 44px context row beneath the bar carries peer views and scope, aligned to the measure and sticky. Costs a permanent second band of chrome.',
 		c: 'C · shipped toolbar. A’s chrome, but the tab-and-scope row ships as one boxed component under the title. Still scrolls away.',
+		e: 'E · peer views in the top rail. Tabs beside the breadcrumb — the one arrangement no reference uses. GitHub puts them on a SECOND row and has no sidebar; Vercel, Attio and Linear put them in the content column beside a full-height rail. Narrow the viewport to 1280 and watch: the breadcrumb and the tabs are both variable-width and both want the same run.',
 		d: 'D · rail zone. No page title and no page actions — the breadcrumb and the lit rail say where you are, and the rail carries the section’s peer views, actions and scope. Walk the rail: most sections have nothing contextual, and the zone must vanish cleanly for those.'
 	};
 
@@ -143,7 +145,7 @@
 	function pickSection(i: number) {
 		secIx = i;
 		contentOverride = null;
-		if (!openSections.has(i)) openSections = new Set(openSections).add(i);
+		openSections = new Set([i]);
 	}
 
 	function pickPeer(i: number) {
@@ -221,7 +223,7 @@
 
 			{@render lbl('Shape')}
 			<div class="flex gap-1">
-				{#each [['now', 'Current'], ['a', 'A one-row'], ['b', 'B two-row'], ['c', 'C toolbar'], ['d', 'D rail zone']] as [v, t] (v)}
+				{#each [['now', 'Current'], ['a', 'A one-row'], ['b', 'B two-row'], ['c', 'C toolbar'], ['d', 'D rail zone'], ['e', 'E tabs in rail']] as [v, t] (v)}
 					<button
 						onclick={() => (shape = v as Shape)}
 						aria-pressed={shape === v}
@@ -451,6 +453,10 @@
 								{:else}<span class="font-semibold">{c}</span>{/if}
 							{/each}
 						</div>
+						{#if shape === 'e' && ctx}
+							<div class="border-border/60 mx-1 h-5 w-px flex-none"></div>
+							<div class="flex min-w-0 items-center overflow-x-auto">{@render peerTabs()}</div>
+						{/if}
 					{/if}
 
 					<div bind:this={rightEl} class="ml-auto flex flex-none items-center gap-2.5">
