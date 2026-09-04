@@ -111,7 +111,7 @@
     "frontend/src/lib/utils.ts": "ac702cbdf6203b19",
     "frontend/src/lib/workspaces/workspace-chooser.svelte": "ccb92d5fe833d1fa",
     "frontend/src/lib/workspaces/workspace-members.svelte": "237d968d20abed06",
-    "frontend/src/lib/workspaces/workspace-menu.svelte": "97132a7bff5af845",
+    "frontend/src/lib/workspaces/workspace-menu.svelte": "79a17ba4e315df43",
     "frontend/src/test/mocks/app-environment.ts": "3b3403da6c53835c",
     "frontend/src/test/mocks/app-forms.test.ts": "40ec451091623315",
     "frontend/src/test/mocks/app-forms.ts": "49089f0b5a997646",

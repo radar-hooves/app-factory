@@ -2,9 +2,14 @@
 	The workspace menu: where the caller is acting, and the ways out of it.
 
 	One control in the shell's `context` slot, whatever the caller holds. With
-	one membership it is that workspace's name over Members / New workspace /
-	Sign out; with several it also carries the switch, as a radio group of the
-	caller's memberships. It never disappears for an org-of-one, because the
+	one membership it is that workspace's name over Members / New workspace;
+	with several it also carries the switch, as a radio group of the caller's
+	memberships.
+
+	Sign out is deliberately NOT here. It moved to AppIdentity in the top bar's
+	`identity` slot when the package started shipping one — ending a session is
+	an act on your IDENTITY, not on the workspace you happen to be acting in,
+	and carrying it in both places gave a stamped app two of them. It never disappears for an org-of-one, because the
 	org-of-one is exactly who has to reach Members to make the FIRST grant — a
 	switcher rendered only once a second membership existed would have no route
 	to the act that creates one (master-project#291).
@@ -22,7 +27,6 @@
 -->
 <script lang="ts">
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-	import LogOut from '@lucide/svelte/icons/log-out';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Users from '@lucide/svelte/icons/users';
 	import { goto } from '$app/navigation';
@@ -111,10 +115,6 @@
 		</DropdownMenu.Item>
 		<DropdownMenu.Item onSelect={openCreate} data-testid="workspace-menu-create">
 			<Plus /> New {noun}…
-		</DropdownMenu.Item>
-		<DropdownMenu.Separator />
-		<DropdownMenu.Item onSelect={() => void auth.logout()} data-testid="workspace-menu-logout">
-			<LogOut /> Sign out
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
