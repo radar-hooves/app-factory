@@ -19,8 +19,7 @@
 	 */
 	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
-	import * as DropdownMenu from '@poodle64/ui/dropdown-menu';
-	import * as Avatar from '@poodle64/ui/avatar';
+	import { AppIdentity } from '@poodle64/ui/app-identity';
 
 	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
@@ -160,7 +159,6 @@
 	const peers = $derived(section.peers ?? []);
 	const controls = $derived(section.controls ?? []);
 	const who = $derived(app.identity);
-	const shown = $derived(who.display_name ?? who.username);
 	const actions = $derived(section.actions ?? []);
 	// Anything contextual at all — used only by the `today` baseline now.
 	const ctx = $derived(peers.length + controls.length + actions.length > 0);
@@ -508,76 +506,19 @@
 							aria-label="Toggle theme"
 							class="border-border text-muted-foreground hover:text-foreground grid size-[34px] flex-none place-items-center rounded-md border"
 						>◐</button>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger>
-									{#snippet child({ props })}
-										<button
-											{...props}
-											aria-label="Account"
-											class="hover:bg-surface-2 grid size-[34px] cursor-pointer place-items-center rounded-md"
-										>
-											<Avatar.Root class="size-6.5 flex-none">
-												<Avatar.Fallback
-													class="bg-primary text-primary-foreground text-[11px] font-bold"
-												>
-													{app.initials}
-												</Avatar.Fallback>
-											</Avatar.Root>
-										</button>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end" class="w-72">
-									<!-- Identity first, because the question the menu answers is
-									     "who am I signed in as" — a menu that opens on a list of
-									     actions makes you infer that from the avatar you just
-									     clicked. -->
-									<div class="flex items-start gap-3 px-2 py-1.5">
-										<Avatar.Root class="size-9 flex-none">
-											<Avatar.Fallback class="bg-primary text-primary-foreground text-[13px] font-bold">
-												{app.initials}
-											</Avatar.Fallback>
-										</Avatar.Root>
-										<div class="min-w-0">
-											<div class="truncate text-[13.5px] font-semibold">{shown}</div>
-											<!-- Username shown separately whenever it is not already the
-											     displayed name: it is what an audit log and a support
-											     question use, and it is not always the display name. -->
-											{#if who.display_name}
-												<div class="text-muted-foreground truncate font-mono text-[11px]">
-													{who.username}
-												</div>
-											{/if}
-											{#if who.email}
-												<div class="text-muted-foreground truncate text-[12px]">{who.email}</div>
-											{/if}
-										</div>
-									</div>
-									<DropdownMenu.Separator />
-									<DropdownMenu.Label class="text-muted-foreground text-[10px] tracking-[0.1em] uppercase">
-										Workspace
-									</DropdownMenu.Label>
-									<div class="flex items-center justify-between gap-2 px-2 pb-1.5">
-										<span class="truncate text-[13px]">{who.workspace}</span>
-										<span class="border-border text-muted-foreground rounded-full border px-1.5 py-px text-[10px] capitalize">
-											{who.role}
-										</span>
-									</div>
-									{#if who.entitlements.length}
-										<div class="flex flex-wrap gap-1 px-2 pb-2">
-											{#each who.entitlements as e (e)}
-												<span class="bg-surface-2 text-muted-foreground font-mono rounded px-1.5 py-px text-[10px]">
-													{e}
-												</span>
-											{/each}
-										</div>
-									{/if}
-									<DropdownMenu.Separator />
-									<DropdownMenu.Item onclick={toggleMode}>Switch theme</DropdownMenu.Item>
-									<DropdownMenu.Item>Account settings</DropdownMenu.Item>
-									<DropdownMenu.Separator />
-									<DropdownMenu.Item class="text-status-error">Sign out</DropdownMenu.Item>
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
+						<!-- The graduated shape, not a lab mock: @poodle64/ui's real
+						     AppIdentity, the component every stamped app's identity slot
+						     now composes. Wired to no-ops here — the lab has no session to
+						     sign out of — a real app passes auth.logout() and its own
+						     settings route. -->
+						<AppIdentity
+							user={{ username: who.username, display_name: who.display_name, email: who.email }}
+							workspace={who.workspace}
+							role={who.role}
+							entitlements={who.entitlements}
+							onSwitchTheme={toggleMode}
+							onSignOut={() => {}}
+						/>
 					</div>
 				</header>
 

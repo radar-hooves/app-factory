@@ -73,7 +73,6 @@ export interface AppProfile {
 	name: string;
 	mark: string;
 	hue: number;
-	initials: string;
 	who: string;
 	searchLabel: string;
 	identity: Identity;
@@ -91,7 +90,6 @@ export const PROFILES: AppProfile[] = [
 		name: 'Godswood',
 		mark: '◈',
 		hue: 150,
-		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search Godswood…',
 		// Extracted from the live app 04/09/2026 with scripts/extract-nav.js, not
@@ -229,7 +227,6 @@ export const PROFILES: AppProfile[] = [
 		name: 'Portcullis',
 		mark: '▢',
 		hue: 75,
-		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search credentials, identities, vendors…',
 		sections: [
@@ -286,7 +283,6 @@ export const PROFILES: AppProfile[] = [
 		name: 'the library',
 		mark: '▤',
 		hue: 250,
-		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search…',
 		sections: [
@@ -329,7 +325,6 @@ export const PROFILES: AppProfile[] = [
 		name: 'Cadmus',
 		mark: '✦',
 		hue: 250,
-		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search Cadmus',
 		sections: [
@@ -355,7 +350,6 @@ export const PROFILES: AppProfile[] = [
 		name: 'Earworm',
 		mark: '♫',
 		hue: 300,
-		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Jump to a page…',
 		sections: [

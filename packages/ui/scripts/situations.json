@@ -234,6 +234,11 @@
           "name": "ContextColumn",
           "props": "stats, statsTitle?, statsInfo?, detail?, ariaLabel?",
           "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane"
+        },
+        {
+          "name": "AppIdentity",
+          "props": "user, workspace?, role?, entitlements?, onSignOut, onAccountSettings?, onSwitchTheme?",
+          "insteadOf": "a hand-rolled account/avatar dropdown wired to raw DropdownMenu.* + Avatar.*"
         }
       ]
     },
