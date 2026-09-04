@@ -75,52 +75,59 @@ export const PROFILES: AppProfile[] = [
 		initials: 'PG',
 		who: 'Operator',
 		searchLabel: 'Search Godswood…',
+		// Extracted from the live app 04/09/2026 with scripts/extract-nav.js, not
+		// invented. Every module below was wrong when written by hand: Property had
+		// five imagined sub-routes instead of three real ones, Net Worth had none
+		// instead of three, and Securities' P&L points at /securities/tax.
 		sections: [
 			{ label: 'Home', icon: '⌂', crumb: ['Home'], content: 'tiles' },
-
+			{
+				label: 'Essentialism',
+				icon: '▤',
+				crumb: ['Essentialism'],
+				content: 'dashboard',
+				peers: [
+					{ label: 'Accounts' },
+					{ label: 'Categories' },
+					{ label: 'Payee Rules' },
+					{ label: 'Clearing' },
+					{ label: 'Hearth' },
+					{ label: 'Dirty Words' }
+				]
+			},
+			{
+				label: 'Groceries',
+				icon: '▦',
+				crumb: ['Groceries'],
+				content: 'table',
+				peers: [{ label: 'Categories' }, { label: 'Shops' }, { label: 'Review' }]
+			},
 			{
 				label: 'Budget',
 				icon: '◎',
 				crumb: ['Budget'],
 				content: 'dashboard',
-				peers: [
-					{ label: 'Categories' },
-					{ label: 'Recurring' },
-					{ label: 'Forecast' }
-				],
-				controls: [
-					{ k: 'Entity', v: 'Household' },
-					{ k: 'Period', v: 'Sep 2026' }
-				],
-				actions: [{ label: 'Add transaction', primary: true }, { label: 'Import' }]
+				peers: [{ label: 'Review' }, { label: 'Residual' }, { label: 'History' }],
+				controls: [{ k: 'Period', v: 'Sep 2026' }],
+				actions: [{ label: 'Add transaction', primary: true }]
 			},
-
 			{
 				label: 'Property',
 				icon: '⌂',
 				crumb: ['Property'],
 				content: 'tiles',
-				peers: [
-					{ label: 'Valuations' },
-					{ label: 'Loans' },
-					{ label: 'Expenses' },
-					{ label: 'Documents', count: '412' }
-				],
-				controls: [
-					{ k: 'Entity', v: 'All entities' },
-					{ k: 'Status', v: 'Held' }
-				],
+				peers: [{ label: 'P&L' }, { label: 'Property Managers' }, { label: 'Tools' }],
+				controls: [{ k: 'Entity', v: 'All entities' }],
 				actions: [{ label: 'Add property', primary: true }]
 			},
-
 			{
 				label: 'Net Worth',
 				icon: '◐',
 				crumb: ['Net Worth'],
 				content: 'dashboard',
-				controls: [{ k: 'Period', v: 'FY26' }]
+				peers: [{ label: 'Ledger' }, { label: 'Entities' }, { label: 'Ownership' }],
+				controls: [{ k: 'FY', v: 'FY26', options: ['FY24', 'FY25', 'FY26'] }]
 			},
-
 			{
 				label: 'Securities',
 				icon: '▥',
@@ -132,7 +139,7 @@ export const PROFILES: AppProfile[] = [
 					{ label: 'Live' },
 					{ label: 'P&L' },
 					{ label: 'Coverage' },
-					{ label: 'Ledger', count: '4,318' }
+					{ label: 'Ledger' }
 				],
 				controls: [
 					{ k: 'Entity', v: 'All entities' },
@@ -140,20 +147,61 @@ export const PROFILES: AppProfile[] = [
 				],
 				actions: [{ label: 'Add account', primary: true }, { label: 'Export' }]
 			},
-
 			{ label: 'Superannuation', icon: '▣', crumb: ['Superannuation'], content: 'dashboard' },
-			{ label: 'Travel', icon: '✈', crumb: ['Travel'], content: 'tiles' },
+			{
+				label: 'Travel',
+				icon: '✈',
+				crumb: ['Travel'],
+				content: 'tiles',
+				peers: [
+					{ label: 'Trips' },
+					{ label: 'Fares' },
+					{ label: 'Ledger' },
+					{ label: 'Statistics' },
+					{ label: 'Status credits' }
+				]
+			},
+			{ label: 'Fixxxer', icon: '⚒', crumb: ['Fixxxer'], content: 'table' },
+			{
+				label: 'Tapestry',
+				icon: '⌘',
+				crumb: ['Tapestry'],
+				content: 'tiles',
+				peers: [
+					{ label: 'People' },
+					{ label: 'Family tree' },
+					{ label: 'Search' },
+					{ label: 'Sittings' }
+				]
+			},
+			{
+				label: 'Fat Controller',
+				icon: '▩',
+				crumb: ['Fat Controller'],
+				content: 'dashboard',
+				peers: [
+					{ label: 'Document Inbox' },
+					{ label: 'Settings' },
+					{ label: 'Document Types' },
+					{ label: 'Executions' }
+				]
+			},
+			{ label: 'Zipper', icon: '◈', crumb: ['Zipper'], content: 'table' },
 			{
 				label: 'Admin',
 				icon: '⛨',
 				crumb: ['Admin'],
 				content: 'form',
-				peers: [{ label: 'Users' }, { label: 'Audit' }],
-				actions: [{ label: 'Save changes', primary: true }, { label: 'Cancel' }]
+				peers: [
+					{ label: 'Users' },
+					{ label: 'Configuration' },
+					{ label: 'Logs' },
+					{ label: 'About' }
+				],
+				actions: [{ label: 'Save changes', primary: true }]
 			}
 		]
 	},
-
 	{
 		// Scope control, no peer views — the case that proves a rail zone must take
 		// either axis on its own.
