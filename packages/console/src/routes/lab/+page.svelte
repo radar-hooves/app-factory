@@ -17,20 +17,18 @@
 	 * Graduation path: a shape that wins here gets built into AppShell for real,
 	 * and packages/ui/harness/ then verifies the shipped component in CI.
 	 */
-	import { PROFILES, hasContext, type Section } from '$lib/profiles';
+	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
 
-	type Shape = 'now' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g';
+	type Shape = 'today' | 'tabs' | 'tabs-scope';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
-	type Zone = 'block' | 'inline';
 	type Identity = 'full' | 'avatar' | 'none';
 	type Content = Section['content'];
 
 	let appIx = $state(0);
 	let secIx = $state(0);
-	let shape = $state<Shape>('d');
+	let shape = $state<Shape>('tabs');
 	let measure = $state<Measure>('wide');
-	let zone = $state<Zone>('block');
 	let identity = $state<Identity>('full');
 	let contentOverride = $state<Content | null>(null);
 	let frameWidth = $state<number | null>(null);
@@ -115,32 +113,29 @@
 	// beside its search; ours carries none, which is a large part of why the bar
 	// reads empty. Off by default so the comparison is one click.
 	let globals = $state(false);
-	// Drill-down: one record beneath the active peer view. The dossier's line is
-	// that a drill-down is NOT a peer — it extends the breadcrumb rather than
-	// joining the tabs — so this is the case that decides whether a breadcrumb
-	// earns its place.
-	let drilled = $state(false);
 
 	const app = $derived(PROFILES[appIx]);
 	const section = $derived(app.sections[Math.min(secIx, app.sections.length - 1)]);
 	const peers = $derived(section.peers ?? []);
-	const crumb = $derived(drilled ? [...section.crumb, 'Broker A 1000001'] : section.crumb);
 	const scope = $derived(section.scope ?? []);
 	const actions = $derived(section.actions ?? []);
-	const ctx = $derived(hasContext(section));
+	// Anything contextual at all — used only by the `today` baseline now.
+	const ctx = $derived(peers.length + scope.length + actions.length > 0);
 	const content = $derived(contentOverride ?? section.content);
-	const inZone = $derived(shape === 'd' && ctx);
-	const inlineZone = $derived(inZone && zone === 'inline');
+	// The roll-out carries the section's PEER VIEWS and nothing else. Actions
+	// left the sidebar for the page (operator ruling, 04/09/2026): a sidebar
+	// carrying navigation, actions and scope at once is the sidebar doing too
+	// much, and an action belongs beside the thing it acts on.
+	const inZone = $derived(shape !== 'today' && peers.length > 0);
+	const scopeInBar = $derived(shape === 'tabs-scope');
 
 	const NOTES: Record<Shape, string> = {
-		now: 'Current. Search pinned left, identity right, nothing between. No breadcrumb, so the chrome never says where you are.',
-		a: 'A · one row. Location left, search right. Peer views and scope sit in the page body under the title, so they scroll away.',
-		b: 'B · two rows. A 44px context row beneath the bar carries peer views and scope, aligned to the measure and sticky. Costs a permanent second band of chrome.',
-		c: 'C · shipped toolbar. A’s chrome, but the tab-and-scope row ships as one boxed component under the title. Still scrolls away.',
-		g: 'G · no breadcrumb. The top rail carries the peer views alone, on the argument that at section depth the breadcrumb only repeats what the lit sidebar item and the active tab already say. Turn on "drill in" to see what it costs: a record is not a peer view, so nothing on screen names the record you are in or gets you back up.',
-		f: 'F · breadcrumb, then the app’s slot. The shell already ships two top-bar slots — `context` (leading, a context switcher) and `actions` (trailing, app-level buttons); Portcullis is the only app using either. This adds the breadcrumb in front and a rule between, so the boundary reads. The slot takes SCOPE, which is bounded at a control or two; peer views stay in the content column, because seven of them is what breaks E.',
-		e: 'E · peer views in the top rail. Tabs beside the breadcrumb — the one arrangement no reference uses. GitHub puts them on a SECOND row and has no sidebar; Vercel, Attio and Linear put them in the content column beside a full-height rail. Narrow the viewport to 1280 and watch: the breadcrumb and the tabs are both variable-width and both want the same run.',
-		d: 'D · rail zone. No page title and no page actions — the breadcrumb and the lit rail say where you are, and the rail carries the section’s peer views, actions and scope. Walk the rail: most sections have nothing contextual, and the zone must vanish cleanly for those.'
+		today:
+			'What the apps ship now. Search pinned left, identity right, nothing between, no location anywhere in the chrome — several apps render no page title either. The baseline the other two have to beat.',
+		tabs:
+			'Tabs in the top rail, scope in the sidebar. One row of chrome: no breadcrumb, no second row, no page title. The top rail answers WHICH VIEW; the sidebar carries the section’s scope and actions. The strip needs 531px on Securities and gets all of it at 1512 — it clips only at 1280.',
+		'tabs-scope':
+			'The same, with scope raised out of the sidebar into the top rail beside the tabs. The open fork: it puts every contextual control on one line and empties the sidebar zone, at the cost of the one row having to carry both an unbounded set (tabs) and a bounded one (scope).'
 	};
 
 	const MEASURE_CLASS: Record<Measure, string> = {
@@ -176,7 +171,7 @@
 
 	$effect(() => {
 		// Re-read after any state that moves the layout, and on resize.
-		void [shape, measure, zone, appIx, secIx, railCollapsed, frameWidth, identity, content];
+		void [shape, measure, appIx, secIx, railCollapsed, frameWidth, identity, content];
 		const bump = () => tick++;
 		requestAnimationFrame(bump);
 		addEventListener('resize', bump);
@@ -231,7 +226,7 @@
 
 			{@render lbl('Shape')}
 			<div class="flex gap-1">
-				{#each [['now', 'Current'], ['a', 'A one-row'], ['b', 'B two-row'], ['c', 'C toolbar'], ['d', 'D rail zone'], ['e', 'E tabs in rail'], ['f', 'F crumb + slot'], ['g', 'G no breadcrumb']] as [v, t] (v)}
+				{#each [['today', 'Today'], ['tabs', 'Tabs in rail'], ['tabs-scope', 'Tabs + scope in rail']] as [v, t] (v)}
 					<button
 						onclick={() => (shape = v as Shape)}
 						aria-pressed={shape === v}
@@ -239,19 +234,6 @@
 					>{t}</button>
 				{/each}
 			</div>
-
-			{#if shape === 'd'}
-				{@render lbl('Zone')}
-				<div class="flex gap-1">
-					{#each [['block', 'below nav'], ['inline', 'under item']] as [v, t] (v)}
-						<button
-							onclick={() => (zone = v as Zone)}
-							aria-pressed={zone === v}
-							class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
-						>{t}</button>
-					{/each}
-				</div>
-			{/if}
 
 			{@render lbl('Measure')}
 			<div class="flex gap-1">
@@ -325,11 +307,6 @@
 					>{t}</button>
 				{/each}
 				<button
-					onclick={() => (drilled = !drilled)}
-					aria-pressed={drilled}
-					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
-				>drill in</button>
-				<button
 					onclick={() => (globals = !globals)}
 					aria-pressed={globals}
 					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
@@ -381,7 +358,7 @@
 
 				<nav bind:this={navEl} class="overflow-x-hidden overflow-y-auto px-2.5 py-1.5">
 					{#each app.sections as s, i (s.label)}
-						{@const rolls = inZone && zone === 'inline' && hasContext(s)}
+						{@const rolls = inZone !== undefined && shape !== 'today' && (s.peers?.length ?? 0) > 0}
 						{@const open = openSections.has(i)}
 						<div class="flex items-center">
 							<button
@@ -410,19 +387,10 @@
 							{/if}
 						</div>
 						{#if rolls && open && !railCollapsed}
-							{@render zoneBody(true)}
+							{@render rollout(s)}
 						{/if}
 					{/each}
 				</nav>
-
-				{#if inZone && zone === 'block' && !railCollapsed}
-					<div bind:this={zoneEl} class="border-border mt-2.5 border-t px-2.5 pt-1.5 pb-3.5">
-						<div class="text-muted-foreground px-2 pt-1.5 pb-1.5 text-[9.5px] tracking-[0.11em] uppercase">
-							{section.label}
-						</div>
-						{@render zoneBody(false)}
-					</div>
-				{/if}
 
 				<!-- Drag to resize; drag past the snap point and it collapses, so
 				     collapse is the far end of one gesture rather than a second
@@ -452,40 +420,34 @@
 					bind:this={barEl}
 					class="bg-surface-1 border-border sticky top-0 z-20 flex h-14 flex-none items-center gap-3 border-b px-5"
 				>
-					{#if shape === 'now'}
+					{#if shape === 'today'}
 						<div bind:this={leftEl} class="border-border bg-background text-muted-foreground flex h-[34px] w-[clamp(200px,32vw,560px)] items-center gap-2.5 rounded-md border px-2.5 text-[13px]">
 							<span>⌕</span><span class="truncate">{app.searchLabel}</span>
 							<span class="border-border font-mono ml-auto rounded-sm border px-1.5 py-0.5 text-[10px]">⌘K</span>
 						</div>
-					{:else if shape === 'g'}
+					{:else}
+						<!-- No breadcrumb. At section depth it only repeated the lit
+						     sidebar item and the active tab, and the ~157px it cost is what
+						     lets the strip fit at 1512.
+						     OPEN: the one thing it did earn was naming a record you have
+						     drilled into, and nothing here replaces that yet — on a record
+						     page this bar still lights the list's tab. Measured 04/09/2026;
+						     the answer belongs to the page, not the chrome. -->
 						<div bind:this={leftEl} class="flex min-w-0 items-center overflow-x-auto">
-							{#if ctx}{@render peerTabs()}{:else}
+							{#if ctx}
+								{@render peerTabs()}
+							{:else}
 								<span class="text-muted-foreground text-sm">{section.label}</span>
 							{/if}
 						</div>
-					{:else}
-						<div bind:this={leftEl} class="flex min-w-0 items-center gap-2 text-sm">
-							{#each crumb as c, i (c)}
-								{#if i < crumb.length - 1}
-									<span class="text-muted-foreground hover:text-foreground cursor-pointer hover:underline">{c}</span>
-									<span class="text-muted-foreground/60">›</span>
-								{:else}<span class="font-semibold">{c}</span>{/if}
-							{/each}
-						</div>
-						{#if shape === 'e' && ctx}
-							<div class="border-border/60 mx-1 h-5 w-px flex-none"></div>
-							<div class="flex min-w-0 items-center overflow-x-auto">{@render peerTabs()}</div>
-						{/if}
-						{#if shape === 'f' && scope.length}
-							<!-- The rule is what makes this legible: without it the slot's
-							     content reads as another breadcrumb segment. -->
+						{#if scopeInBar && scope.length}
 							<div class="bg-border mx-2 h-5 w-px flex-none"></div>
 							<div class="flex flex-none items-center gap-2">{@render scopeChips()}</div>
 						{/if}
 					{/if}
 
 					<div bind:this={rightEl} class="ml-auto flex flex-none items-center gap-2.5">
-						{#if shape !== 'now'}
+						{#if shape !== 'today'}
 							<div class="border-border bg-background text-muted-foreground flex h-[34px] w-[clamp(180px,22vw,380px)] items-center gap-2.5 rounded-md border px-2.5 text-[13px]">
 								<span>⌕</span><span class="truncate">{app.searchLabel}</span>
 								<span class="border-border font-mono ml-auto rounded-sm border px-1.5 py-0.5 text-[10px]">⌘K</span>
@@ -520,17 +482,6 @@
 					</div>
 				</header>
 
-				{#if (shape === 'b' || shape === 'f' || shape === 'g') && ctx}
-					<div class="bg-background border-border flex h-11 flex-none border-b">
-						<div class="mx-auto flex w-full min-w-0 items-center gap-0.5 px-8 {MEASURE_CLASS[measure]}">
-							{@render peerTabs()}
-							{#if shape !== 'f'}
-								<div class="ml-auto flex flex-none items-center gap-2">{@render scopeChips()}</div>
-							{/if}
-						</div>
-					</div>
-				{/if}
-
 				<main
 					bind:this={scrollEl}
 					class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto {textured ? 'ds-shell-texture' : ''}"
@@ -548,7 +499,7 @@
 							<div class="font-mono pointer-events-none absolute inset-y-0 left-full w-[50vw] [writing-mode:vertical-rl] grid place-items-center text-[10px] tracking-[0.3em] text-[oklch(0.62_0.18_27/0.9)] uppercase [background:repeating-linear-gradient(135deg,oklch(0.62_0.18_27/0.1)_0_6px,transparent_6px_12px)]">unused</div>
 						{/if}
 
-						{#if shape !== 'd'}
+						{#if shape === 'today'}
 							<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
 								<div class="min-w-0">
 									<h1 class="font-display text-[28px] leading-tight font-semibold tracking-[-0.02em]">
@@ -563,16 +514,26 @@
 							</div>
 						{/if}
 
-						{#if shape === 'a' && ctx}
+						{#if shape !== 'today' && actions.length}
+							<!-- Actions live on the page, beside what they act on. -->
+							<div class="mb-5 flex flex-wrap items-center gap-2">
+								{#each actions as a (a.label)}{@render btn(a.label, a.primary)}{/each}
+							</div>
+						{/if}
+
+						{#if shape === 'today' && ctx}
+							<!-- The baseline's ad-hoc row: this is where the real apps put
+							     peer views and scope today, each in its own way. -->
 							<div class="mb-5">
 								<div class="border-border flex gap-0.5 border-b">{@render peerTabs()}</div>
-								<div class="mt-3.5 flex gap-2">{@render scopeChips()}</div>
+								{#if scope.length}
+									<div class="mt-3.5 flex gap-2">{@render scopeChips()}</div>
+								{/if}
 							</div>
-						{:else if shape === 'c' && ctx}
-							<div class="border-border bg-surface-1 mb-5 flex items-center gap-0.5 rounded-lg border px-3 py-0.5">
-								{@render peerTabs()}
-								<div class="ml-auto flex items-center gap-2">{@render scopeChips()}</div>
-							</div>
+						{/if}
+
+						{#if shape === 'tabs' && scope.length}
+							<div class="mb-5 flex flex-wrap gap-2">{@render scopeChips()}</div>
 						{/if}
 
 						{@render body()}
@@ -622,44 +583,20 @@
 	>{label}</button>
 {/snippet}
 
-{#snippet zoneBody(inline: boolean)}
-	<div class={inline ? 'px-0 pb-2' : ''}>
-		{#each peers as p, i (p.label)}
-			<button
-				onclick={() => pickPeer(i)}
-				class="text-muted-foreground hover:bg-surface-2 hover:text-foreground flex h-8 w-full items-center rounded-md px-2 text-[13px] whitespace-nowrap {p.active
-					? 'bg-surface-2 text-foreground font-semibold'
-					: ''} {inline ? 'pl-[30px]' : ''}"
-			>
-				{p.label}
-				{#if p.count}<span class="text-muted-foreground font-mono ml-auto text-[10px]">{p.count}</span>{/if}
-			</button>
-		{/each}
-		{#if peers.length && (actions.length || scope.length)}
-			<div class="bg-border mx-2 mt-3 h-px"></div>
-		{/if}
-		{#if actions.length}
-			<div class="flex flex-col gap-1.5 px-2 pt-3 pb-1">
-				{#each actions as a (a.label)}
-					<button
-						class="border-border h-[34px] w-full rounded-md border text-[13px] {a.primary
-							? 'bg-primary border-primary text-primary-foreground font-semibold'
-							: 'bg-surface-1 hover:border-border-strong'}"
-					>{a.label}</button>
-				{/each}
-			</div>
-		{/if}
-		{#if scope.length}
-			<div class="flex flex-col gap-1.5 px-2 pt-3">
-				{#each scope as c (c.k)}
-					<button class="border-border bg-surface-1 hover:border-border-strong flex h-[30px] w-full items-center gap-1.5 rounded-md border px-2.5 text-[12.5px]">
-						<span class="text-muted-foreground">{c.k}</span><span>{c.v}</span>
-						<span class="text-muted-foreground ml-auto text-[9px]">▾</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-	</div>
+{#snippet rollout(s: Section)}
+	<!-- Peer views only. The section's own row above IS its dashboard, so the
+	     default view is never listed here as a child of itself. -->
+	{#each s.peers ?? [] as p, i (p.label)}
+		<button
+			onclick={() => pickPeer(i)}
+			class="text-muted-foreground hover:bg-surface-2 hover:text-foreground flex h-8 w-full items-center rounded-md pr-2 pl-[30px] text-[13px] whitespace-nowrap {p.active
+				? 'bg-surface-2 text-foreground font-semibold'
+				: ''}"
+		>
+			{p.label}
+			{#if p.count}<span class="text-muted-foreground font-mono ml-auto text-[10px]">{p.count}</span>{/if}
+		</button>
+	{/each}
 {/snippet}
 
 {#snippet body()}

@@ -16,10 +16,14 @@
  * by hand when testing the chip against a long one.
  *
  * Section fields: label, icon, crumb[], content, and optionally peers[],
- * scope[], actions[]. A section with none of those last three is the bare case,
- * and the bare case is the one worth looking at — most sections of most apps
- * have nothing contextual, and a rail zone that collapses to nothing must not
- * leave a hole where it was.
+ * scope[], actions[].
+ *
+ * `peers` are the section's OTHER views, never its default one. A module's own
+ * root is its dashboard — clicking Securities lands on the Securities dashboard
+ * — so an "Overview" peer would be the section listed as a child of itself
+ * (operator ruling, 04/09/2026). A section with no peers is the common case and
+ * the one worth checking: the rail's roll-out has to collapse to nothing
+ * without leaving a hole where it was.
  */
 
 export interface Peer { label: string; count?: string; active?: boolean }
@@ -64,10 +68,9 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Budget',
 				icon: '◎',
-				crumb: ['Budget', 'This month'],
+				crumb: ['Budget'],
 				content: 'dashboard',
 				peers: [
-					{ label: 'This month', active: true },
 					{ label: 'Categories' },
 					{ label: 'Recurring' },
 					{ label: 'Forecast' }
@@ -82,10 +85,9 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Property',
 				icon: '⌂',
-				crumb: ['Property', 'Portfolio'],
+				crumb: ['Property'],
 				content: 'tiles',
 				peers: [
-					{ label: 'Portfolio', active: true },
 					{ label: 'Valuations' },
 					{ label: 'Loans' },
 					{ label: 'Expenses' },
@@ -109,11 +111,10 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Securities',
 				icon: '▥',
-				crumb: ['Securities', 'Investing'],
+				crumb: ['Securities'],
 				content: 'dashboard',
 				peers: [
-					{ label: 'Overview' },
-					{ label: 'Investing', active: true },
+					{ label: 'Investing' },
 					{ label: 'Trading' },
 					{ label: 'Live' },
 					{ label: 'P&L' },
@@ -132,9 +133,9 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Admin',
 				icon: '⛨',
-				crumb: ['Admin', 'Settings'],
+				crumb: ['Admin'],
 				content: 'form',
-				peers: [{ label: 'Settings', active: true }, { label: 'Users' }, { label: 'Audit' }],
+				peers: [{ label: 'Users' }, { label: 'Audit' }],
 				actions: [{ label: 'Save changes', primary: true }, { label: 'Cancel' }]
 			}
 		]
@@ -154,7 +155,7 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Overview',
 				icon: '▦',
-				crumb: ['Portcullis', 'Overview'],
+				crumb: ['Portcullis'],
 				content: 'dashboard',
 				scope: [{ k: 'Store', v: 'Bitwarden' }],
 				actions: [{ label: 'Enrol identity', primary: true }, { label: 'Connect store' }]
@@ -182,13 +183,13 @@ export const PROFILES: AppProfile[] = [
 				icon: '▥',
 				crumb: ['Audit'],
 				content: 'table',
-				peers: [{ label: 'Reads', active: true }, { label: 'Refusals' }, { label: 'Admin' }],
+				peers: [{ label: 'Refusals' }, { label: 'Admin' }],
 				scope: [{ k: 'Window', v: 'Last 24h' }]
 			},
 			{
 				label: 'Authentication',
 				icon: '⛨',
-				crumb: ['Settings', 'Authentication'],
+				crumb: ['Settings'],
 				content: 'form',
 				actions: [{ label: 'Save', primary: true }]
 			},
@@ -211,9 +212,9 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Library',
 				icon: '▥',
-				crumb: ['Library', 'Documents'],
+				crumb: ['Library'],
 				content: 'table',
-				peers: [{ label: 'Documents', active: true }, { label: 'Saved' }, { label: 'Recent' }],
+				peers: [{ label: 'Saved' }, { label: 'Recent' }],
 				scope: [
 					{ k: 'Collection', v: 'All' },
 					{ k: 'Status', v: 'Indexed' }
@@ -254,9 +255,9 @@ export const PROFILES: AppProfile[] = [
 			{
 				label: 'Education',
 				icon: '▤',
-				crumb: ['Education', 'Modules'],
+				crumb: ['Education'],
 				content: 'tiles',
-				peers: [{ label: 'Modules', active: true }, { label: 'Research' }]
+				peers: [{ label: 'Research' }]
 			},
 			{ label: 'Leave', icon: '▩', crumb: ['Leave'], content: 'dashboard' },
 			{ label: 'Intelligence', icon: '◈', crumb: ['Intelligence'], content: 'prose' },
@@ -279,7 +280,7 @@ export const PROFILES: AppProfile[] = [
 				icon: '▦',
 				crumb: ['Dashboard'],
 				content: 'dashboard',
-				peers: [{ label: 'Top Music', active: true }, { label: 'Skipped Music' }],
+				peers: [{ label: 'Skipped Music' }],
 				scope: [
 					{ k: 'Range', v: 'All' },
 					{ k: 'View', v: 'Chart' }
