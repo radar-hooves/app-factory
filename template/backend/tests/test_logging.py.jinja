@@ -1,0 +1,166 @@
+"""The telemetry contract, proved at this app's own seam.
+
+`logging.py` is one call into `api_common.telemetry.configure()`, so what is
+worth asserting here is not the formatter — api-common's own suite owns the
+line shape and the redaction floor — but that THIS app's call reaches it with
+the right arguments, and that the request path binds the id the shared
+formatter reads. These are the things a stamped app can get wrong on its own
+(`rules-library/platform/telemetry.md`).
+
+`configure()` writes to `sys.stdout`, which under pytest is the capture pytest
+swaps in for the duration of each phase — so every test here calls
+`configure_logging()` in its own body, and reads the lines back through
+`capsys`. Calling it from a fixture would configure the SETUP phase's stream
+and capture nothing.
+"""
+
+import json
+import logging
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+from api_common.correlation import clear_correlation_id, set_correlation_id
+from api_common.telemetry import NOISY_LOGGERS
+from httpx import AsyncClient
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+
+from {{ package_name }}.logging import app_version, configure_logging
+
+_PROBE_LOGGER = "{{ package_name }}.probe"
+
+# The contract's reserved fields: six on every line, `correlation_id` inside a
+# request and `trace_id`/`span_id` inside a recording span.
+RESERVED_FIELDS = frozenset(
+    {
+        "timestamp",
+        "level",
+        "service_name",
+        "service_version",
+        "message",
+        "logger",
+        "correlation_id",
+        "trace_id",
+        "span_id",
+    }
+)
+
+
+@pytest.fixture(autouse=True)
+def restore_root_logging() -> Iterator[None]:
+    """Put the root logger back after a test reconfigures it.
+
+    Each test here calls the app's own `configure_logging()`, which replaces the
+    root handler and points it at the stream pytest is capturing for that phase.
+    Left in place, that handler writes to a stream nothing is reading for the
+    rest of the suite.
+    """
+    root = logging.getLogger()
+    saved_handlers, saved_level = root.handlers[:], root.level
+    yield
+    root.handlers[:] = saved_handlers
+    root.setLevel(saved_level)
+
+
+def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, Any]]:
+    """The JSON objects written to stdout since the last read.
+
+    Non-JSON lines are skipped rather than failed on: SQLAlchemy's `echo` writes
+    its own plain-text statement log to the same stream, and it is not what the
+    contract is about.
+    """
+    out = capsys.readouterr().out
+    return [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+
+
+def _recording_tracer() -> trace.Tracer:
+    """A tracer whose spans actually record, so their ids reach the log line.
+
+    The suite sets no `OTEL_EXPORTER_OTLP_ENDPOINT`, so `configure()` installs
+    no provider and the API's default hands out non-recording spans carrying no
+    ids. A provider with no exporter records and exports nowhere, which is what
+    is wanted here. Set once per process; the SDK refuses to replace it.
+    """
+    if not isinstance(trace.get_tracer_provider(), TracerProvider):
+        trace.set_tracer_provider(TracerProvider())
+    return trace.get_tracer("{{ package_name }}.tests")
+
+
+@pytest.mark.unit
+class TestTheLogLine:
+    """One JSON object per line, carrying the contract's fields."""
+
+    def test_a_log_line_is_one_json_object_with_the_reserved_fields(self, capsys: pytest.CaptureFixture[str]) -> None:
+        configure_logging()
+        set_correlation_id("probe-id")
+        try:
+            with _recording_tracer().start_as_current_span("probe"):
+                logging.getLogger(_PROBE_LOGGER).info("Probe emitted", extra={"widget_id": 7})
+        finally:
+            clear_correlation_id()
+
+        (line,) = _lines(capsys)
+        assert line.keys() >= RESERVED_FIELDS
+        assert line["service_name"] == "{{ project_name }}"
+        assert line["service_version"] == app_version()
+        assert line["level"] == "INFO"
+        assert line["logger"] == _PROBE_LOGGER
+        assert line["correlation_id"] == "probe-id"
+        assert len(line["trace_id"]) == 32
+        assert len(line["span_id"]) == 16
+        # Detail is a field beside the message, never interpolated into it.
+        assert line["message"] == "Probe emitted"
+        assert line["widget_id"] == 7
+
+
+@pytest.mark.integration
+class TestCorrelation:
+    """The id the caller sent is the id every line of that request carries."""
+
+    async def test_correlation_id_is_the_x_request_id_the_client_sent(
+        self, client: AsyncClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        configure_logging()
+        response = await client.get("/openapi.json", headers={"x-request-id": "probe-id"})
+
+        assert response.headers["x-request-id"] == "probe-id"
+        request_lines = [line for line in _lines(capsys) if line["message"] == "Request completed"]
+        assert request_lines, "RequestLoggingMiddleware logged nothing"
+        assert all(line["correlation_id"] == "probe-id" for line in request_lines)
+
+    async def test_the_id_does_not_outlive_the_request(
+        self, client: AsyncClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        configure_logging()
+        await client.get("/openapi.json", headers={"x-request-id": "probe-id"})
+        logging.getLogger(_PROBE_LOGGER).info("After the request")
+
+        after = [line for line in _lines(capsys) if line["message"] == "After the request"]
+        assert after, "the probe line was not emitted"
+        # Absent, not stale and not minted: an id on a line outside a request is
+        # indistinguishable from a real one at query time.
+        assert all("correlation_id" not in line for line in after)
+
+
+@pytest.mark.unit
+class TestConfigureIsTheOnlyCall:
+    """What the one call does to the process, and what a second one does not."""
+
+    def test_the_noisy_loggers_sit_at_warning(self, capsys: pytest.CaptureFixture[str]) -> None:
+        configure_logging()
+        assert NOISY_LOGGERS, "api-common declares no noisy loggers"
+        for name in NOISY_LOGGERS:
+            assert logging.getLogger(name).level == logging.WARNING
+
+    def test_a_second_configure_logging_is_a_no_op(self, capsys: pytest.CaptureFixture[str]) -> None:
+        configure_logging()
+        handlers = logging.getLogger().handlers[:]
+
+        configure_logging()
+
+        # Idempotent, so an entry point imported twice does not stack handlers
+        # and double every line.
+        assert logging.getLogger().handlers == handlers
+        logging.getLogger(_PROBE_LOGGER).info("Emitted once")
+        assert len(_lines(capsys)) == 1
