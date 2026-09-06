@@ -31,12 +31,14 @@
 	// Page title: "Page Name — {% endraw %}{{ project_title }}{% raw %}" or bare app name. This is the
 	// title a reader actually sees; app.html's is only the pre-hydration fallback,
 	// so both take the same derived display name.
-	// Wrapped the way prettier wants it once the name is long: a hyphenated app's
-	// project_title pushes the single-line form past the 100-column print width,
-	// so a fresh stamp of one failed `pnpm lint` on its first commit.
-	let pageTitle = $derived(
-		page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}'
-	);
+	// prettier-ignore, because this line's WIDTH is an answer, not a style: the
+	// name is interpolated twice, so a long one pushes the single line past the
+	// 100-column print width and a short one collapses the wrapped form back.
+	// Pre-wrapping does not survive both — it was tuned for a long name and then
+	// failed `pnpm lint` on a fresh stamp of a short one. Ignoring the line is
+	// the only form stable at every length.
+	// prettier-ignore
+	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
 
 	// The global search affordance canonical-app-shape.md requires in the top bar,
 	// and the palette it opens. @poodle64/ui ships both halves; composing them is
