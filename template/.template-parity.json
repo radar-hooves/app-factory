@@ -107,7 +107,7 @@
     "frontend/src/lib/api/client.ts": "06012c2cedaa454b",
     "frontend/src/lib/api/error.test.ts": "6b330ade0b71f6ec",
     "frontend/src/lib/api/error.ts": "c15da9af7a146501",
-    "frontend/src/lib/api/index.ts": "3ad637d543c82e31",
+    "frontend/src/lib/api/index.ts": "0fa0a75ad820232b",
     "frontend/src/lib/auth.svelte.test.ts": "267c406c694fe622",
     "frontend/src/lib/auth.svelte.ts": "59fd3052c9eb4598",
     "frontend/src/lib/utils.ts": "ac702cbdf6203b19",

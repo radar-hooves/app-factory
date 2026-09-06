@@ -17,6 +17,10 @@ _skip_if_exists:
   # empty, grown by the app as it banks pre-existing mypy findings, and an
   # update must never wipe it. Missed when the others were added.
   - backend/mypy-baseline.txt
+  # THE extension point for frontend/src/lib/api/index.ts, which the factory owns
+  # and re-exports this file from. App-owned by definition: what it exports IS
+  # this app's domain surface, so an update must never overwrite it.
+  - frontend/src/lib/api/app.ts
 
 project_name:
   type: str
