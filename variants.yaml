@@ -1,0 +1,28 @@
+# Ratified permanent differences from the factory: one entry per app and key,
+# added only by the operator's own act. <app> is the copier project_name; <key> a
+# parity path (with {package}) or a shape key. The value says what fails if the app
+# takes the factory's copy, and when the entry retires. Both gates read this file;
+# converge-to-template.py copies an app's entries into its own parity manifest.
+
+portcullis:
+  backend/src/{package}/mcp/http_auth.py: "the broker mints and verifies its own hardware-attested bearers; an Authentik userinfo gate would put an external IdP in front of the estate's machine-auth authority; retires if the factory grows an attested-identity path"
+  backend/src/{package}/mcp/auth.py: "the actor is the attested identity, not an x-client-id header an Authentik gate wrote; retires with http_auth.py"
+  backend/src/{package}/mcp/actors.py: "identities are enrolled and revoked in the broker's store, not a static actors.yaml; retires with http_auth.py"
+  backend/src/{package}/config/sections/mcp.py: "configures the Authentik gate this app does not install; retires with http_auth.py"
+  root-inventory:config: "no config/actors.yaml, because there are no Authentik actors to register; retires with http_auth.py"
+  deps:pyyaml: "declared only for actors.yaml, which this app has no use for; retires with http_auth.py"
+  deps:types-pyyaml: "stubs for the above; retires with it"
+  backend/src/{package}/config/sections/identity.py: "one broker holds one household's one vault: no users or workspaces to resolve a per-account grade for, and the operator's header names live on its console-editable auth config; retires if the broker ever holds a second tenant"
+  backend/src/{package}/entitlements.py: "module entitlement is licensing for a multi-module tenant app; the broker has one module and gates on attested identity or the one operator session; retires with identity.py"
+  frontend/src/lib/auth.svelte.ts: "the factory store resolves /users/me and /workspaces/me, neither of which the broker has; retires with identity.py"
+pebblestone:
+  mcp-mount: "four MCP servers run as their own processes by the app's ADR-001, for isolation; retires if that decision is reversed"
+eight:
+  root-inventory:agents: "the trading agent roster the app dispatches from"
+  root-inventory:ops: "the app's n8n workflow exports, versioned with it"
+  root-inventory:tools: "whitepaper generation, the app's own deliverable"
+  root-inventory:.ruff.toml: "lints the root Python in tools/; retires with it"
+earworm:
+  root-inventory:plugins: "a C# Jellyfin server plugin, a language the factory does not model"
+cadmus:
+  root-inventory:scripts: "Python domain tooling the app's pre-commit tail runs"
