@@ -24,15 +24,26 @@ worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 
 # Which peers may assert a client address via X-Forwarded-For, rewriting
-# request.client before any app code runs. Defaults to uvicorn's loopback-only
-# value; a deployment behind a reverse proxy sets FORWARDED_ALLOW_IPS to that
-# proxy's OWN address. Do NOT widen it to an RFC1918 range: every container on a
-# Docker bridge network sits inside 172.16.0.0/12, so such a value trusts every
-# neighbour to assert its own address, and an app that reads request.client for
-# auth or a trusted-proxy check is then spoofable by anything on that network.
-# Leave unset where the app resolves X-Forwarded-For itself behind its own
-# trusted-proxy gate — the rewrite would destroy the peer address it checks.
-forwarded_allow_ips = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
+# request.client before any app code runs. DISABLED, and FORWARDED_ALLOW_IPS is
+# not consulted: the app resolves the forwarded chain itself in proxy_trust.py,
+# behind its own trusted-proxy list, and that check reads the real TCP peer —
+# the rewrite destroys exactly the value it reads, as that module's docstring
+# already states. An empty allowlist trusts NOTHING, so uvicorn's
+# ProxyHeadersMiddleware never rewrites at all.
+#
+# Naming the reverse proxy's own address is NOT the safe middle ground. uvicorn
+# returns the rightmost forwarded entry that is not itself in this list, so with
+# the proxy named, a caller sending "X-Forwarded-For: 127.0.0.1" through that
+# proxy arrives as a loopback client — the same defeat as the wildcard, reached
+# by the value a deployer would be told to use. An RFC1918 range is worse again:
+# every container on a Docker bridge sits inside 172.16.0.0/12, so that value
+# trusts every neighbour to assert its own address. And a same-host proxy
+# reaching a published loopback port genuinely IS 127.0.0.1, so even uvicorn's
+# own default rewrites the one peer that matters.
+#
+# Gunicorn's validator rejects a list here, so the empty STRING is the spelling;
+# it validates to [].
+forwarded_allow_ips = ""  # DISABLED — see above; FORWARDED_ALLOW_IPS is ignored
 # Recycling a worker is a hygiene default, not a universal one. A service whose
 # worker holds process-local state a restart cannot rebuild — an unlocked vault
 # session, a supervised child process — comes back from a recycle unable to serve,
@@ -85,8 +96,28 @@ def worker_int(worker) -> None:
 
 
 def on_exit(server) -> None:
-    """Log final shutdown."""
+    """Log final shutdown, and run this app's own arbiter-side shutdown hook.
+
+    The arbiter is the only process in a gunicorn deployment that knows the
+    APPLICATION has ended: gunicorn calls this after it has killed every worker
+    and before it exits, so nothing can respawn and re-attach to what is stopped
+    here. A worker cannot answer the same question — a `max_requests` recycle and
+    a genuine shutdown both arrive as SIGTERM — so an app supervising a child
+    process or holding a process-local session ends it from `app_hooks.on_exit`.
+
+    Imported lazily and guarded, because this runs on the way out and a broken
+    shutdown hook must never turn a clean stop into a traceback. An app that
+    defines no `on_exit` leaves this a log line.
+    """
     server.log.info("{{ project_name }} shutdown complete")
+    try:
+        from {{ package_name }} import app_hooks
+
+        hook = getattr(app_hooks, "on_exit", None)
+        if hook is not None:
+            hook(server)
+    except Exception as exc:  # a shutdown hook must never raise
+        server.log.warning("app_hooks.on_exit failed during shutdown: %r", exc)
 
 
 def post_fork(server, worker) -> None:

@@ -8,9 +8,11 @@ once so those surfaces cannot drift apart.
 Why the app and not the server: uvicorn's ProxyHeadersMiddleware can do this,
 but it runs outside and before every Starlette middleware and route dependency,
 and it OVERWRITES ``scope["client"]`` — destroying the very input this check
-needs. Widening its ``forwarded_allow_ips`` past loopback therefore does not
-add a trust boundary, it removes one. Keep ``gunicorn.conf.py`` at the loopback
-default and resolve the chain here, where the peer is still visible.
+needs. Any non-empty ``forwarded_allow_ips`` therefore does not add a trust
+boundary, it removes one — loopback included, because a same-host proxy reaching
+a published loopback port genuinely is 127.0.0.1. ``gunicorn.conf.py`` sets the
+empty allowlist so nothing is ever rewritten, and the chain is resolved here,
+where the peer is still visible.
 """
 
 from __future__ import annotations

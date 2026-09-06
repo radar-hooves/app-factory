@@ -10,6 +10,15 @@ read green.
 
 Every hook here is a no-op by default. Add only what this app needs; do not
 delete a hook you are not using, because `main.py` imports all four by name.
+
+There is a second kind of hook: OPTIONAL ones, absent from this file until an
+app writes them, looked up by name and skipped when they are not there. Each is
+a seam a factory file already had to reach for, so a stamped app that defines
+none of them behaves exactly as it does today.
+
+  - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
+    after every worker is dead, for an app supervising a child process or a
+    process-local session a worker must not end.
 """
 
 from collections.abc import AsyncGenerator
