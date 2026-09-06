@@ -104,7 +104,7 @@
     "frontend/src/hooks.client.test.ts": "95273bf47e3f7c8a",
     "frontend/src/hooks.client.ts": "47c2a7e9e4423e6c",
     "frontend/src/lib/api/client.test.ts": "776330bbfe18f974",
-    "frontend/src/lib/api/client.ts": "06012c2cedaa454b",
+    "frontend/src/lib/api/client.ts": "f2915efefb68e90e",
     "frontend/src/lib/api/error.test.ts": "6b330ade0b71f6ec",
     "frontend/src/lib/api/error.ts": "c15da9af7a146501",
     "frontend/src/lib/api/index.ts": "0fa0a75ad820232b",
