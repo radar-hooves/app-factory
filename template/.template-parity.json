@@ -29,7 +29,6 @@
     ".gitattributes": "e753774a5c6c845d",
     ".github/workflows/auto-label-issues.yaml": "5c7fac564fe0c97d",
     ".github/workflows/canonical-shape.yaml": "ccad0f9b473a3cff",
-    ".github/workflows/cleanup-container-images.yaml": "0c870349b3a2ad63",
     ".github/workflows/docker-image.yaml": "3bc5460339b15b3e",
     ".github/workflows/frontend-ci.yaml": "13c05f0c5452ee77",
     ".github/workflows/python-ci.yaml": "dd63d7d1b59c028e",
