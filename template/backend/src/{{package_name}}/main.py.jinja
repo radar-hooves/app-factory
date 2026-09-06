@@ -16,6 +16,8 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
     app-side and resolves it against an actors.yaml allow-list. It does NOT
     trust a forwarded identity header: a machine caller does not traverse the
     human proxy, so header trust there would be a bypass. See mcp/http_auth.py.
+    An app that is itself an authority for machine identity gates it through
+    `app_hooks.mcp_auth` instead; everything else here is unchanged.
 """
 
 import logging
@@ -32,9 +34,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
+from {{ package_name }} import app_hooks
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
-from {{ package_name }}.config import get_settings
+from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.paths import frontend_build_dir
 from {{ package_name }}.db.session import get_engine
 from {{ package_name }}.exceptions import register_exception_handlers
@@ -64,10 +67,17 @@ _FRONTEND_BUILD: Path = frontend_build_dir()
 # genuine missing asset, never a route.
 _IMMUTABLE_ASSET_PREFIX = "_app/"
 
+# The prefix every vertical slice mounts under. "/api" unless this app names
+# another in app_hooks: an app whose consumer contract predates the factory
+# cannot relocate its routes without breaking every caller it has, and moving
+# the prefix is a smaller change than excepting this whole file.
+_API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
+
 # Nor is a miss under an API namespace a client-side route. A machine caller
 # hitting a path that does not exist must get a 404 it can act on, not HTTP 200
-# and a page of HTML. Extend this when the app mounts a further API namespace.
-_API_PREFIXES = ("api/", "mcp/")
+# and a page of HTML. Derived from what is actually mounted, so an app that
+# moves its API prefix moves this with it and never has to remember to.
+_API_PREFIXES = tuple(f"{prefix.strip('/')}/" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
 
 
 class _SPAStaticFiles(StaticFiles):
@@ -99,9 +109,17 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     engine.dispose()
 
 
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
-    settings = get_settings()
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create and configure the FastAPI application.
+
+    `settings` is a test seam and nothing else: production calls this with no
+    argument and resolves the same cached instance it always did. A suite that
+    must drive the whole app under a different configuration — a temporary data
+    directory, one flag flipped — builds its own Settings and passes it here,
+    rather than reaching into the lru_cache every other caller shares.
+    """
+    if settings is None:
+        settings = get_settings()
     configure_logging(debug=settings.debug)
 
     # raw_mcp_app carries the FastMCP lifespan (the streamable-HTTP session
@@ -128,17 +146,27 @@ def create_app() -> FastAPI:
     # request/response tool surface: no cross-request session state, no
     # server-initiated streaming. (In-request progress still works.)
     raw_mcp_app = mcp.http_app(path="/", stateless_http=True)
-    gated_mcp_app: Any = require_bearer_auth(
-        raw_mcp_app,
-        userinfo_url=settings.mcp.oidc_userinfo_url,
-        identity_claim=settings.mcp.oidc_identity_claim,
-        resource_metadata_url=settings.mcp.oidc_resource_metadata_url,
-    )
-    if not settings.mcp.oidc_userinfo_url:
-        _log.warning(
-            "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset: the /mcp surface is closed "
-            "(every HTTP request 401s). Set it to your Authentik userinfo endpoint to open it."
+    # The gate. An app that is itself an authority for machine identity supplies
+    # its own through app_hooks.mcp_auth, which takes the raw ASGI app and
+    # returns the gated one; stacking the factory's Authentik check in front of
+    # such an app closes the surface it exists to serve. Every other app leaves
+    # the hook undefined and gets the canonical bearer gate below.
+    app_mcp_auth = getattr(app_hooks, "mcp_auth", None)
+    gated_mcp_app: Any
+    if app_mcp_auth is not None:
+        gated_mcp_app = app_mcp_auth(raw_mcp_app)
+    else:
+        gated_mcp_app = require_bearer_auth(
+            raw_mcp_app,
+            userinfo_url=settings.mcp.oidc_userinfo_url,
+            identity_claim=settings.mcp.oidc_identity_claim,
+            resource_metadata_url=settings.mcp.oidc_resource_metadata_url,
         )
+        if not settings.mcp.oidc_userinfo_url:
+            _log.warning(
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset: the /mcp surface is closed "
+                "(every HTTP request 401s). Set it to your Authentik userinfo endpoint to open it."
+            )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -157,20 +185,36 @@ def create_app() -> FastAPI:
             # not leak across app-factory lifecycles (tests, hot reload). Logged
             # rather than raised: an exception from a finally block REPLACES the
             # one propagating out of the try, so a failure here would hide the
-            # startup error that actually matters.
-            try:
-                await gated_mcp_app.aclose()
-            except Exception:
-                _log.exception("Failed to close the MCP bearer gate's userinfo client")
+            # startup error that actually matters. `aclose` is looked up rather
+            # than called, because an app-supplied gate holds no such client.
+            aclose = getattr(gated_mcp_app, "aclose", None)
+            if aclose is not None:
+                try:
+                    await aclose()
+                except Exception:
+                    _log.exception("Failed to close the MCP bearer gate's userinfo client")
 
     app = FastAPI(
-        title="{{ project_name }}",
+        # The product's proper name, not the copier slug: this string is the
+        # title of a committed, gated OpenAPI document and of the published
+        # client's docs, where a kebab-case slug reads as a regression.
+        title="{{ project_title }}",
         # app_hooks supplies the long form once this app has enough surface to
         # want one; the one-line copier description is the default.
         description=API_DESCRIPTION or _COPIER_DESCRIPTION,
         openapi_tags=OPENAPI_TAGS or None,
         version=app_version(),
         lifespan=lifespan,
+        # Serving the schema and its two UIs is a POSTURE, not a preference. An
+        # app behind the shared ingress shell has all three 404-guarded at the
+        # edge; an app whose port is reachable without traversing that proxy
+        # sets OPENAPI_ENABLED=false and closes them here instead, where nothing
+        # can bypass it. Turning it off also closes /openapi.json, which the
+        # container healthcheck and the CI smoke probe both poll — such an app
+        # points both at a route it does still serve.
+        docs_url="/docs" if settings.openapi_enabled else None,
+        redoc_url="/redoc" if settings.openapi_enabled else None,
+        openapi_url="/openapi.json" if settings.openapi_enabled else None,
         # Hardcoded, not settings.debug: the flag installs Starlette's
         # interactive error page, which ServerErrorMiddleware checks BEFORE the
         # Exception handler registered below, so a DEBUG=true process renders a
@@ -199,13 +243,19 @@ def create_app() -> FastAPI:
     # Middleware order: added last wraps outermost (runs first). Execution
     # order is RequestID -> RequestLogging -> SecurityHeaders -> CORS -> handler,
     # so the correlation id is bound before anything downstream logs.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    #
+    # CORS is installed only where an origin is actually configured. The console
+    # is same-origin — this app serves it from its own mount — so the common case
+    # has no cross-origin consumer at all, and a policy that lists nothing can
+    # only ever widen access later by accident.
+    if settings.cors_origins_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins_list,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     app.add_middleware(SecurityHeadersMiddleware, is_production=not settings.debug)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
@@ -215,12 +265,13 @@ def create_app() -> FastAPI:
     # The agent endpoint is POST /mcp/ (trailing slash required).
     app.mount("/mcp", gated_mcp_app)
 
-    # API routes at /api. The default rate limit binds here, once, for every
-    # vertical slice the router aggregates — no per-route opt-in. Routes that
-    # need a different limit carry their own @limiter.limit(); the dependency
-    # defers to them. The /mcp and SPA surfaces below are mounted sub-apps, not
-    # router routes, and are gated on their own terms rather than by this limit.
-    app.include_router(api_router, prefix="/api", dependencies=[Depends(enforce_default_rate_limit)])
+    # API routes at _API_PREFIX. The default rate limit binds here, once, for
+    # every vertical slice the router aggregates — no per-route opt-in. Routes
+    # that need a different limit carry their own @limiter.limit(); the
+    # dependency defers to them. The /mcp and SPA surfaces below are mounted
+    # sub-apps, not router routes, and are gated on their own terms rather than
+    # by this limit.
+    app.include_router(api_router, prefix=_API_PREFIX, dependencies=[Depends(enforce_default_rate_limit)])
 
     # This app's own middleware and exception handlers. Last, so anything added
     # wraps outermost and runs first — a Host-header or body-size guard has to
