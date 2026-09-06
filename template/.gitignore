@@ -50,6 +50,9 @@ desktop.ini
 .env.*
 !.env.example
 .direnv/
+# This checkout's own direnv additions, sourced by .envrc. Machine-local by
+# definition, so it is never committed.
+.envrc.local
 
 # ============================================================================
 # Python
