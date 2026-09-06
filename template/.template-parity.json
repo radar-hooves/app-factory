@@ -109,7 +109,7 @@
     "frontend/src/lib/api/error.ts": "c15da9af7a146501",
     "frontend/src/lib/api/index.ts": "0fa0a75ad820232b",
     "frontend/src/lib/auth.svelte.test.ts": "267c406c694fe622",
-    "frontend/src/lib/auth.svelte.ts": "59fd3052c9eb4598",
+    "frontend/src/lib/auth.svelte.ts": "3ce24e53e343e16d",
     "frontend/src/lib/utils.ts": "ac702cbdf6203b19",
     "frontend/src/lib/workspaces/workspace-chooser.svelte": "ccb92d5fe833d1fa",
     "frontend/src/lib/workspaces/workspace-members.svelte": "237d968d20abed06",
