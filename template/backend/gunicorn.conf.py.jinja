@@ -46,7 +46,12 @@ graceful_timeout = 30
 keepalive = 2
 
 preload_app = True
-reuse_port = True
+# reuse_port stays off. On, every worker gets its own SO_REUSEPORT listener and
+# the kernel resets whatever is queued on it when that worker exits, so each
+# max_requests recycle 502s the connections a cold SPA load has just opened,
+# which SvelteKit renders as its 500 page. Measured 06/09/2026: two route chunks
+# reset within 3 ms of a worker closing its socket. Off, the master's one shared
+# socket is drained by the surviving workers.
 
 loglevel = "debug" if os.getenv("DEBUG", "false").lower() == "true" else "warning"
 accesslog = None  # disabled; access logs flow through uvicorn.access -> the app's own root handler
