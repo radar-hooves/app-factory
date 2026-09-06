@@ -33,7 +33,7 @@
     ".github/workflows/docker-image.yaml": "3bc5460339b15b3e",
     ".github/workflows/frontend-ci.yaml": "13c05f0c5452ee77",
     ".github/workflows/python-ci.yaml": "dd63d7d1b59c028e",
-    ".github/workflows/security.yaml": "d76b76f82914dd70",
+    ".github/workflows/security.yaml": "d364837e27559021",
     ".gitignore": "c1b630eceb2bef58",
     ".gitleaks.toml": "22a71a03bc928434",
     ".pre-commit-config.yaml": "35cf0eeb6d6c685e",
