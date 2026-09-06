@@ -131,6 +131,6 @@
     "frontend/tsconfig.json": "5ba6072319c60e79",
     "frontend/vite.config.ts": "4670f04d9717a36c",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
-    "renovate.json": "de881ee5d6d42db9"
+    "renovate.json": "02d5d44806065e8b"
   }
 }
