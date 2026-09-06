@@ -18,6 +18,17 @@
  * `timeout` REPLACE. Returning `{}` (the default) leaves the factory's stanza
  * exactly as stamped.
  *
+ * ── run shape (playwright.config.ts) ───────────────────────────────────────
+ *
+ * Two more seams, both on the run rather than the server, and both from apps
+ * that excepted the whole config to reach them. `workers` REPLACES the factory's
+ * serial default — an app whose specs are genuinely independent may raise it,
+ * and an app that is serial for a reason of its own (a dev backend that is one
+ * `--reload` process, a broker whose lock state is shared) says so here rather
+ * than re-arguing it in a forked config. `globalTeardown` is a path the factory
+ * has no default for: set it when something the suite started must be stopped
+ * afterwards, and an orphan would leave real exposure behind.
+ *
  * ── preconditions (global-setup.ts) ────────────────────────────────────────
  *
  * global-setup's own header invited app-specific preconditions for weeks without
@@ -31,6 +42,10 @@ export type AppWebServer = {
 	command?: string;
 	env?: Record<string, string>;
 	timeout?: number;
+	/** Playwright worker count; the factory runs serial (1) when this is unset. */
+	workers?: number;
+	/** Module path Playwright runs after the last spec; unset means no teardown. */
+	globalTeardown?: string;
 };
 
 export function appWebServer(_port: number): AppWebServer {
@@ -50,3 +65,17 @@ export function appWebServer(_port: number): AppWebServer {
  * reach a route has cost nothing, so catch inside this function and return.
  */
 export async function appPreconditions(_baseURL: string): Promise<void> {}
+
+/**
+ * Where this app mounts its HTTP API, as the path prefix the SPA's own calls
+ * carry ('/api/users/me' → '/api').
+ *
+ * The factory's `global-setup.ts` builds its database-environment probe from
+ * this, so an app whose backend mounts its router elsewhere gets the guard
+ * rather than excepting the file. One app mounts at the root — its machine
+ * consumers name unprefixed URLs and moving them is a contract break — and had
+ * to drop the guard entirely to say so, which left the only thing standing
+ * between a destructive suite and a real database with nowhere to stand.
+ * Answer '' for a root-mounted API.
+ */
+export const apiPrefix = '/api';
