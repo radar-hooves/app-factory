@@ -53,7 +53,7 @@
     "backend/src/{package}/config/sections/identity.py": "a030a6a23a2e50ec",
     "backend/src/{package}/config/sections/mcp.py": "e5c0a23b962187f5",
     "backend/src/{package}/config/sections/security.py": "a1fe131bbbcf2dd7",
-    "backend/src/{package}/config/vend.py": "19ad9c4fc28a97c6",
+    "backend/src/{package}/config/vend.py": "09e07db2083ef693",
     "backend/src/{package}/db/base.py": "19747c8e29638eca",
     "backend/src/{package}/db/environment.py": "10ff3ec24835a11d",
     "backend/src/{package}/db/scoping.py": "bde35c441ffcd99a",
