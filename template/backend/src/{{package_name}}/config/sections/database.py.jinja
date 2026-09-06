@@ -1,5 +1,7 @@
 """Database connection settings."""
 
+import logging
+from pathlib import Path
 from typing import Self
 from urllib.parse import quote_plus
 
@@ -7,6 +9,8 @@ from pydantic import computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.vend import vend
+
+logger = logging.getLogger(__name__)
 
 # The ONE place the SQLAlchemy dialect is named. `database_url` below builds the
 # app's URL from it, and `tests/support/explicit_server_guard.py` builds the
@@ -37,8 +41,9 @@ class DatabaseSettings(BaseSettings):
     # superuser default cannot connect. An app whose role differs changes THIS
     # default — never an env file, which the debugger does not read.
     postgres_user: str = "{{ postgres_user }}"
-    # Empty means "vend it" (see _vend_password), not "no password". Only a
-    # deployment that supplies POSTGRES_PASSWORD itself leaves this set.
+    # Empty means "read the boot-lane file, else vend it" (see
+    # _resolve_password), not "no password". Only a deployment that supplies
+    # POSTGRES_PASSWORD itself leaves this set.
     postgres_password: str = ""
     # The answered fleet-host address, NOT localhost: there is no development
     # database, so every consumer of this default — the dev server, the debugger,
@@ -55,15 +60,39 @@ class DatabaseSettings(BaseSettings):
     # file, so a number here reads as drift on an otherwise identical copy.
     postgres_port: int = {{ postgres_port }}
     postgres_db: str = "{{ project_name | replace('-', '_') }}"
+    # The boot-lane credential file: a host-minted, mode-0400, service-owned file
+    # (`rules-library/fleet/secrets.md` §Store Scope), for a deployment whose
+    # store password must never ride an environment variable or a compose file,
+    # or whose app cannot vend it without already having the store running. Unset
+    # everywhere else, including development, which vends.
+    postgres_password_file: str | None = None
 
     @model_validator(mode="after")
-    def _vend_password(self) -> Self:
-        """Fetch the password from the broker when the environment did not supply one.
+    def _resolve_password(self) -> Self:
+        """Resolve the password: the environment, then the boot-lane file, then the broker.
 
-        This is what lets development hold no env file at all. A deployment that
-        sets POSTGRES_PASSWORD (compose does) never reaches the broker; the test
-        suite assigns its own against a throwaway container, so it does not either.
+        Three sources in the order that keeps each context honest:
+
+        1. ``POSTGRES_PASSWORD`` — a deployment supplying its own; compose does,
+           and the test suite assigns one against its throwaway container.
+        2. ``POSTGRES_PASSWORD_FILE`` — the boot lane, read here so the value
+           never becomes an environment variable at all.
+        3. The broker. This is what lets development hold no env file.
+
+        An unreadable file is logged and falls through rather than raising: the
+        broker's own diagnostic is the better one where it can be reached, and
+        this message names the path where it cannot. The reason comes BEFORE the
+        path and the path goes last, because the household's log redactor
+        replaces a high-entropy token wholesale — with the path in the middle it
+        takes the diagnosis with it. The value itself is never logged, here or
+        anywhere else in this module.
         """
+        if not self.postgres_password and self.postgres_password_file:
+            path = Path(self.postgres_password_file)
+            try:
+                self.postgres_password = path.read_text().strip()
+            except OSError as exc:
+                logger.warning("Could not read the boot-lane credential file (%s): %s", exc.strerror, path)
         if not self.postgres_password:
             self.postgres_password = vend("{{ project_name }}-db", "password")
         return self
