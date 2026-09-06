@@ -6,6 +6,50 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.6] - 2026-09-06
+
+The telemetry contract, closing poodle64/master-project#325 on the factory's
+side. Every stamped app was carrying its own formatter, its own redaction
+regexes and its own request-id contextvar — a private copy of a contract that
+lives in `api-common` and moves without them, which is exactly how an app
+silently falls behind it. `logging.py` is now one call into
+`api_common.telemetry.configure()` and nothing else, and what an app emits is
+the household line: one JSON object per record, `correlation_id` from the id
+the caller sent, `trace_id`/`span_id` inside a span, to stdout. Verified by
+rendering an app, resolving it against the household index and running its
+suite: 92 tests, ruff, format and mypy green.
+
+### Added
+
+- **`api-common[telemetry]` and `redactyl-core` as backend dependencies**, pinned
+  to the `godswood` private index as an explicit named index
+  (`core/supply-chain.md`). `redactyl-core` is api-common's redaction floor and
+  transitive-only, but under an explicit index a `[tool.uv.sources]` pin reaches
+  only a DECLARED dependency, so undeclared it resolved against PyPI and the
+  whole lock failed. The Dockerfile's existing `netrc` BuildKit secret already
+  covers the index; nothing new is passed to a build.
+- **`instrument_app(app)` in `create_app()`**, so FastAPI server spans exist
+  wherever `OTEL_EXPORTER_OTLP_ENDPOINT` is set and are a no-op where it is not.
+- **`backend/tests/test_logging.py`**, covering the four things a stamped app can
+  get wrong on its own: the line is one JSON object carrying the contract's
+  reserved fields, `correlation_id` equals the `x-request-id` the client sent and
+  does not outlive the request, the noisy loggers sit at WARNING, and a second
+  `configure_logging()` stacks no handler. The line shape and the redaction floor
+  are api-common's own suite's, not copied here.
+
+### Changed
+
+- **`logging.py` is one call.** The text formatter, the `_RequestIdFilter`, the
+  four redaction regexes, the `redact()` helper and `request_id_var` are gone;
+  what remains is `configure_logging()` and the version lookup it passes as
+  `service_version`. The file is now `.jinja`, because the call names the app.
+- **`RequestIDMiddleware` binds `api_common.correlation`'s contextvar** and clears
+  it in `finally`. That is the one the shared formatter reads, so the app holds
+  no second home for the id; the `x-request-id` echo is unchanged.
+- **`_version()` moved from `main.py` to `logging.py` as `app_version()`**, since
+  the log line needs the same lookup the OpenAPI document and the health surface
+  already use — one source, three readers.
+
 ## [2026.9.5] - 2026-09-03
 
 The tenancy surface, closing poodle64/master-project#291 on the factory's side: a
