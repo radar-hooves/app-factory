@@ -43,7 +43,7 @@
     ".vscode/tasks.json": "f26e0acdfda08ca3",
     "Dockerfile": "7be4851f35b94836",
     "backend/.python-version": "a876e0b10411037a",
-    "backend/alembic.ini": "164440a905b14f2e",
+    "backend/alembic.ini": "fc9b4a245e2122fc",
     "backend/alembic/env.py": "0a58667e166cc1ab",
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
     "backend/entrypoint.sh": "6bbe92d24a02f57c",
