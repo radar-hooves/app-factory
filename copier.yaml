@@ -46,6 +46,23 @@ project_title:
   when: false
   default: "{{ project_name | replace('-', ' ') | title }}"
 
+dark_first:
+  type: bool
+  default: false
+  when: true
+  help: >-
+    Does this app rest DARK? Palette-class, like frontend/src/app.css — the one axis apps are allowed to differ on. `true` stamps a pre-hydration seed in app.html that sets mode-watcher's own storage key and class before first paint, and only when the visitor has stored no preference of their own. mode-watcher's `defaultMode` cannot express it: its setInitialMode script is injected at render time, which is late enough to flash light on a cold SPA shell, so an app that answered it by hand ended up excepting the whole file.
+
+density:
+  type: str
+  default: comfortable
+  choices:
+    - comfortable
+    - compact
+  when: true
+  help: >-
+    Row and control density for the shared design system, as `data-ds-density` on <html>. Palette-class, and the same one axis: `compact` is for an app whose primary surface is a dense table someone reads all day (portal-tables.md), `comfortable` for everything else. One app hand-edited app.html for this; every other app answers the default and its app.html does not change.
+
 description:
   type: str
   help: 'One-sentence description of the project'

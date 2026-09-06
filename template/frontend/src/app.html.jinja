@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en"{% if density == 'compact' %} data-ds-density="compact"{% endif %}>
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
@@ -8,6 +8,31 @@
          before any page component hydrates, so without this the tab is untitled
          on first paint. A page's own <svelte:head><title> overrides it. -->
 		<title>{{ project_title }}</title>
+{%- if dark_first %}
+		<!-- Dark-first: this app's resting state is dark (the `dark_first` copier
+		     answer). A fresh browser must never paint light, and mode-watcher's
+		     `defaultMode` cannot carry this — its setInitialMode script is injected
+		     at render time, late enough to flash on a cold SPA shell. This runs
+		     first, before the head placeholder below emits mode-watcher's own
+		     script, so it wins first paint. (Naming that placeholder in prose here
+		     is what broke it once: SvelteKit substitutes the FIRST occurrence in
+		     the file, comment included, so the real one below survived as literal
+		     text and every page rendered the placeholder above the app shell.)
+		     It seeds the same key mode-watcher reads ('mode-watcher-mode') and the
+		     same class it toggles ('dark'), only when no preference is stored — a
+		     user who has toggled to light keeps their choice across reloads. From
+		     hydration on, mode-watcher owns the class; this only closes the
+		     pre-hydration gap. -->
+		<script>
+			(function () {
+				try {
+					var key = 'mode-watcher-mode';
+					if (!localStorage.getItem(key)) localStorage.setItem(key, 'dark');
+					if (localStorage.getItem(key) === 'dark') document.documentElement.classList.add('dark');
+				} catch (e) {}
+			})();
+		</script>
+{%- endif %}
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
