@@ -25,18 +25,34 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 from slowapi import Limiter
 
+import {{ package_name }}.app_hooks as app_hooks
 import {{ package_name }}.rate_limit as rate_limit
-from {{ package_name }}.proxy_trust import client_ip, peer_is_trusted
+from {{ package_name }}.proxy_trust import client_ip, client_ip_from_scope, peer_is_trusted
 from {{ package_name }}.rate_limit import RateLimitExceeded, build_limiter, rate_limit_handler, rate_limit_key
 
 
 def _request(peer: str | None, headers: dict[str, str] | None = None) -> Request:
-    """Build a minimal stand-in carrying only what the trust helpers read."""
-    return SimpleNamespace(  # type: ignore[return-value]
-        client=SimpleNamespace(host=peer) if peer else None,
-        headers=headers or {},
-        url=SimpleNamespace(path="/api/example"),
-        method="GET",
+    """Build a real Request over a minimal ASGI scope.
+
+    A real one, not a stand-in: the trust helpers resolve the peer and the
+    forwarded header from ``request.scope`` so a pure-ASGI middleware can share
+    the one boundary, and a hand-rolled object with `.client` and `.headers`
+    would pass while the thing production runs did not.
+    """
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "scheme": "http",
+            "method": "GET",
+            "root_path": "",
+            "path": "/api/example",
+            "raw_path": b"/api/example",
+            "query_string": b"",
+            "server": ("testserver", 80),
+            "client": (peer, 51234) if peer else None,
+            "headers": [(k.lower().encode("latin-1"), v.encode("latin-1")) for k, v in (headers or {}).items()],
+        }
     )
 
 
@@ -98,6 +114,40 @@ class TestTrustBoundary:
 
     def test_missing_client_never_raises(self) -> None:
         assert client_ip(_request(None), _settings()) == "unknown"
+
+    def test_the_scope_typed_core_answers_the_same_question(self) -> None:
+        """A pure-ASGI middleware has no Request, and must not re-derive the boundary.
+
+        The Request-typed pair are thin wrappers over the scope-typed core, so
+        the two can never disagree — which is the only reason a middleware may
+        use the core directly.
+        """
+        req = _request("172.22.0.100", {"x-forwarded-for": "203.0.113.9"})
+        settings = _settings(networks="172.22.0.100/32")
+        assert client_ip_from_scope(req.scope, settings) == client_ip(req, settings) == "203.0.113.9"
+
+
+class TestKeyFunction:
+    """Which field the limiter counts on — the address, or this app's own key."""
+
+    def test_the_default_key_is_the_resolved_caller_address(self) -> None:
+        req = _request("203.0.113.9")
+        assert rate_limit._key_func(req) == rate_limit_key(req) == "203.0.113.9"
+
+    def test_an_app_hook_replaces_the_key_for_the_limiter_and_the_log(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An app that authenticates its callers buckets per account, not per address.
+
+        Both surfaces move together: a 429 logged with an address for a request
+        counted against an account id names the wrong caller.
+        """
+        monkeypatch.setattr(app_hooks, "rate_limit_key", lambda request: "account:7", raising=False)
+        req = _request("203.0.113.9")
+        assert rate_limit._key_func(req) == "account:7"
+        with caplog.at_level("WARNING"):
+            rate_limit_handler(req, SimpleNamespace(retry_after=5))  # type: ignore[arg-type]
+        assert any(r.__dict__.get("client_key") == "account:7" for r in caplog.records)
 
 
 class TestStorageFallback:
