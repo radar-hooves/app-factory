@@ -1,6 +1,11 @@
 [alembic]
 script_location = alembic
-prepend_sys_path = .
+# ".": the app package (backend/), so env.py's `from {{ package_name }}... import` resolves.
+# "alembic": this directory itself, so a version script can `import tenancy` for
+# alembic/tenancy.py's scope_table()/unscope_table() — the migrations directory is
+# named "alembic", which shadows the installed alembic package for `alembic.<x>`
+# submodule lookups, so a bare sibling import is the only path that resolves.
+prepend_sys_path = .:alembic
 file_template = %%(year)d%%(month).2d%%(day).2d_%%(hour).2d%%(minute).2d_%%(rev)s_%%(slug)s
 timezone = UTC
 truncate_slug_length = 40
