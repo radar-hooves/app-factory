@@ -129,7 +129,7 @@
     "frontend/tests/e2e/shell.spec.ts": "639ee47d08300089",
     "frontend/tests/e2e/workspaces.spec.ts": "14db70f489028919",
     "frontend/tsconfig.json": "5ba6072319c60e79",
-    "frontend/vite.config.ts": "adb6882d6f53419a",
+    "frontend/vite.config.ts": "4670f04d9717a36c",
     "frontend/vitest.config.ts": "ea2d4abd95f0fc3a",
     "renovate.json": "de881ee5d6d42db9"
   }

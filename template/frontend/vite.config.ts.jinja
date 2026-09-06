@@ -1,9 +1,31 @@
+import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 import { appProxy } from './app-proxy';
 import { resolveDevIdentity, vendDevUid } from './dev-identity';
+
+// The REAL path of node_modules, for Vite's serve allow-list.
+//
+// pnpm links every dependency out of a content-addressed store, and a git
+// worktree's node_modules is routinely a symlink into another checkout's store.
+// Vite resolves an import through the symlink to its real location, then checks
+// that location against `server.fs.allow` — which holds the worktree root, a
+// path the real one is not under — so `vite dev` answers 403 for the module it
+// just resolved, while build, check and Vitest (none of which serve over HTTP)
+// stay green. Adding the resolved path removes the class; falling back to the
+// unresolved one keeps the ordinary non-symlinked checkout exactly as it was.
+const configDir = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
+const realNodeModules = (() => {
+	const nodeModules = join(configDir, 'node_modules');
+	try {
+		return realpathSync(nodeModules);
+	} catch {
+		return nodeModules;
+	}
+})();
 
 export default defineConfig(({ command, isPreview }) => {
 	const plugins = [tailwindcss(), sveltekit()];
@@ -68,6 +90,9 @@ export default defineConfig(({ command, isPreview }) => {
 		server: {
 			port: {{ frontend_port }},
 			...identity.serverOptions,
+			// Vite's default allow-list is the workspace root; this adds the store
+			// node_modules actually resolves to (see realNodeModules above).
+			fs: { allow: [realNodeModules] },
 			// This is the frontend port, allocated in the household registry; failing
 			// beats silently moving off it onto one another app owns.
 			strictPort: true,
