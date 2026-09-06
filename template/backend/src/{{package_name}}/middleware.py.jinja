@@ -11,13 +11,12 @@ import time
 from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
+from api_common.correlation import clear_correlation_id, set_correlation_id
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-
-from {{ package_name }}.logging import request_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +24,12 @@ logger = logging.getLogger(__name__)
 class RequestIDMiddleware:
     """Stamp every request with a correlation id, generating one if absent.
 
-    Pure ASGI (not BaseHTTPMiddleware) so the id is bound to the logging
-    ContextVar before any middleware beneath this one runs, and every log
-    line emitted for the request — including by those middlewares — carries
-    it. Exposed back to the caller via the `x-request-id` response header.
+    Pure ASGI (not BaseHTTPMiddleware) so the id is bound before any middleware
+    beneath this one runs, and every log line emitted for the request —
+    including by those middlewares — carries it as `correlation_id`. The
+    binding is api_common's contextvar, which is where the shared formatter
+    reads it from; the app holds no second one. Exposed back to the caller via
+    the `x-request-id` response header.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -51,11 +52,11 @@ class RequestIDMiddleware:
                 message["headers"] = headers.raw
             await send(message)
 
-        token = request_id_var.set(request_id)
+        set_correlation_id(request_id)
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
-            request_id_var.reset(token)
+            clear_correlation_id()
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

@@ -22,6 +22,8 @@ dependencies = [
     "slowapi>=0.1.10",
     # gunicorn: production process manager (entrypoint.sh, gunicorn.conf.py).
     "gunicorn>=26.0.0",
+    # api-common: logging.py's one telemetry call; the extra adds the OTLP exporter and instrumentation.
+    "api-common[telemetry]>=2026.9.0",
 ]
 
 [dependency-groups]
@@ -49,6 +51,25 @@ packages = ["src/{{ package_name }}"]
 [tool.uv]
 default-groups = ["dev"]
 environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+
+# Household private package index (devpi). explicit = true → ONLY the packages
+# pinned to it below resolve here; everything else stays on PyPI, so a private
+# name can never be satisfied by a same-named public package
+# (core/supply-chain.md). Auth is ambient: the atlas CI runner authenticates via
+# the runner's netrc, the Docker build mounts one as a BuildKit secret and points
+# NETRC at it, and a dev machine uses ~/.netrc — no per-repo GitHub secret.
+[[tool.uv.index]]
+name = "godswood"
+url = "https://pypi.example.com/poodle64/prod/+simple/"
+explicit = true
+
+# Every private package is pinned to that index here: under an explicit index an
+# unpinned private name resolves nowhere, and a pin reaches only a DECLARED
+# dependency — a transitive-only private name still resolves against PyPI and is
+# not found, so it must also be declared above. Do NOT add a path override; it
+# would be written into the committed uv.lock and break every other checkout.
+[tool.uv.sources]
+api-common = { index = "godswood" }
 
 [tool.ruff]
 line-length = 120

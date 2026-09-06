@@ -1,0 +1,52 @@
+"""Telemetry configuration: one call into the shared library, and nothing else.
+
+The household telemetry contract — the JSON line and its reserved fields, the
+redaction floor, the noisy-logger suppression, the correlation/trace id pickup
+and the OTLP bootstrap — is owned by ``api_common.telemetry.configure()`` and
+moves with that library. An app that wrote its own formatter, filter, handler
+or redaction pass would be carrying a private copy of a contract it does not
+version, and would silently fall behind it; so this module is the one call,
+plus the version lookup that call needs, and never grows a second thing
+(rules-library/platform/telemetry.md).
+
+Call configure_logging() once at application startup (in the app factory).
+Use named loggers (logging.getLogger(__name__)) everywhere; never the root
+logger.
+"""
+
+from importlib.metadata import PackageNotFoundError, version
+
+from api_common.telemetry import configure
+
+
+def app_version() -> str:
+    """Resolve this app's version from its installed package metadata.
+
+    The ONE source is `backend/pyproject.toml`, read back through the metadata
+    the install writes — the same lookup GET /api/system/health already does, so
+    the OpenAPI document, the health surface and every log line's
+    `service_version` can never disagree. Without it FastAPI defaults
+    `info.version` to "0.1.0", which is not an absent value but a wrong one: the
+    spec is a committed, gated artefact that generates a published client's
+    types, and a reader of either would believe the API sits at 0.1.0 while the
+    app is CalVer. The fallback covers an uninstalled source tree only
+    (PYTHONPATH, no `uv sync`); a deployed app always has metadata.
+    """
+    try:
+        return version("{{ project_name }}")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
+def configure_logging(*, debug: bool = False) -> None:
+    """Configure this process's telemetry, once, at application startup.
+
+    Args:
+        debug: Log at DEBUG when True; otherwise the level is LOG_LEVEL's, else
+            INFO — the library's own default, not a second one declared here.
+    """
+    configure(
+        service_name="{{ project_name }}",
+        service_version=app_version(),
+        level="DEBUG" if debug else None,
+    )

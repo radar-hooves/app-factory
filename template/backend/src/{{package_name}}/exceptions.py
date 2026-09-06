@@ -186,8 +186,9 @@ def _log_exception(request: Request, exc: BackendBaseException) -> None:
       one app that could never take the file.
 
     Passed only when there IS a cause, so a self-contained 404 still logs as one
-    line. ``logging.py``'s formatters run ``redact()`` over the fully rendered
-    line — the traceback included — and Python renders no frame locals, so no
+    line. The shared formatter
+    ``api_common.telemetry.configure()`` installs runs the redaction floor over
+    the fully rendered line — the traceback included — and Python renders no frame locals, so no
     value can ride out on this path.
     """
     log_context = safe_log_context({"path": request.url.path, "method": request.method, **exc.context})
