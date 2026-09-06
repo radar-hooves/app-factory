@@ -89,7 +89,7 @@
     "backend/tests/test_workspace_scoping.py": "ebfaa0eabecafa6e",
     "compose.yaml": "1c3ea401b4732d7e",
     "frontend/.npmrc": "93d7b61d9d1758fd",
-    "frontend/.prettierignore": "9bc58f14bf2d6e80",
+    "frontend/.prettierignore": "61fa8862dbd5518c",
     "frontend/.prettierrc": "daec45a55e1f3ad7",
     "frontend/components.json": "3192c135e1a87e3e",
     "frontend/dev-identity.ts": "fb7dd048c1a8cf71",
