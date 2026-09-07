@@ -2,6 +2,28 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.2] - 2026-09-07
+
+### Added
+
+- **`AppIdentity`, the identity menu `AppShell`'s `identity` snippet has needed
+  since the shell shipped it (`@poodle64/ui/app-identity`).** Six apps had each
+  built their own — UserMenu, OperatorMenu, IdentityMenu, IdentityChip and two
+  inline versions — and three rendered no identity at all, the drift a slot
+  without a component always produces. The component landed in `a07a7bc` on
+  04/09/2026; this is its first published version.
+
+  Avatar only at rest: no name, no chevron, and no prop reintroduces the
+  variant. Open, it leads with who — display name, username only where it
+  genuinely differs from it, email — then workspace with its role and
+  entitlements, then theme, settings and sign out.
+
+  Props match the stamped template's own auth store field for field
+  (`user.{username,display_name,email}`, `workspace`, `role`,
+  `entitlements`); `display_name` and `email` are nullable there and their
+  rows collapse rather than render empty. `onSignOut` is a required callback —
+  the package has no business knowing how an app ends a session.
+
 ## [2026.9.1] - 2026-09-02
 
 ### Added
