@@ -1,9 +1,9 @@
 # telemetry-rs
 
-The household's one Rust telemetry call. It writes no file, exports no metrics, reads no settings, and knows no broker, identity or token: the endpoint and the credential reach it only as standard environment variables the fleet sets.
+The household's one Rust telemetry call. It writes no file, exports no metrics, reads no settings file of its own, and knows no broker, identity or token: the endpoint and the credential reach it as standard environment variables the fleet sets, or as a value the application hands it from its own Settings pane.
 
 ```toml
-telemetry = { git = "https://github.com/poodle64/telemetry-rs", tag = "v0.1.2" }
+telemetry = { git = "https://github.com/poodle64/telemetry-rs", tag = "v0.2.0" }
 ```
 
 ## The one call
@@ -46,11 +46,34 @@ Call `init` from the setup hook or `main`, never inside a Tokio task: it builds 
 
 `telemetry::http_client()` returns an async `reqwest` client that carries W3C `traceparent` on every request and opens a client span recording the method, the host and the status — never a path, a query or an error string, any of which can carry a search term or a query-string credential. It sets a ten-second connect timeout, which a caller cannot add per request: only the total timeout has a `RequestBuilder` form, so without it a black-holed LAN address hangs for the whole total timeout instead of failing at connect. Add a per-request `timeout` where a call has its own deadline.
 
+## The Settings pane
+
+A Tauri app launched from the Dock inherits no fleet environment, so a desktop app takes the endpoint from its own Settings. The crate never reads that file; the app does, and hands the value over.
+
+```rust
+let exporter = telemetry::Exporter {
+    endpoint: "https://otlp.example".to_owned(),
+    headers_helper: Some("signet headers otlp".to_owned()),
+};
+
+// Off any Tokio worker: this builds the exporters' blocking client.
+match telemetry::probe(&exporter) {
+    Ok(()) => guard.set_exporter(Some(exporter)),   // saves and repoints, live
+    Err(why) => eprintln!("{why}"),                 // a class or a status, never a URL
+}
+```
+
+`Guard::set_exporter` swaps the live OTLP log and span layers and flushes the previous ones on a plain thread; the stderr layer is untouched. It never fails and never panics — a helper that fails or an endpoint that will not build degrades to local only, exactly as `init` does.
+
+**The environment wins.** Where the fleet set `OTEL_EXPORTER_OTLP_ENDPOINT`, `set_exporter` is a no-op that logs one line. `Guard::exporter()` gives the pane the value to show and `Guard::exporter_is_from_env()` tells it to show that value read-only. `Exporter::from_env()` is the crate's one reader of those variables, so `init` and the pane cannot disagree.
+
+`probe` sends a single INFO record to `<endpoint>/v1/logs` through the same header client the exporters use, bounded by the OTLP timeout. `ProbeError` is `Helper`, `Connect`, `Tls`, `Timeout`, `Transport` or `Status(u16)` — a class or an HTTP status, and never a URL, a header value or a response body.
+
 ## The variables
 
 | Variable | What it does |
 | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | The bearer-gated front door. Unset means local only. Signal-specific `_LOGS_`/`_TRACES_` endpoints and `_TIMEOUT` are read by the SDK as usual. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | The bearer-gated front door, and the only thing that makes the exporter read-only to a pane. Unset means local only until `set_exporter` says otherwise. Signal-specific `_LOGS_`/`_TRACES_` endpoints and `_TIMEOUT` are read by the SDK as usual. |
 | `OTEL_EXPORTER_OTLP_HEADERS_HELPER` | A command printing a JSON object of header name to header value — `signet headers …` prints exactly this. Run once at init under `sh -c`, bounded to 10 s. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Static headers, in the standard `k=v,k=v` form. The helper's headers win where both set the same name. |
 | `RUST_LOG` | The stderr layer only, defaulting to `info`. The developer's view is never allow-listed, though the exporter's own reporting is floored at INFO and capped at one line a minute. |
@@ -59,7 +82,7 @@ Batch sizing (`OTEL_BLRP_*`, `OTEL_BSP_*`) and protocol selection are left entir
 
 ## Local only
 
-Endpoint unset, or a helper that is missing, fails, times out or prints something that is not a JSON object: the crate installs the stderr layer alone, says which condition in one line, and returns a `Guard` anyway. It never errors and never panics, so a stranger's machine running the app behaves exactly this way. A second `init` builds nothing and returns an empty `Guard`.
+Endpoint unset and no pane has set one, or a helper that is missing, fails, times out or prints something that is not a JSON object: the crate installs the stderr layer alone, says which condition in one line, and returns a `Guard` anyway. It never errors and never panics, so a stranger's machine running the app behaves exactly this way. A second `init` builds nothing and returns an empty `Guard`.
 
 ## The allow-list
 
