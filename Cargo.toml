@@ -1,0 +1,45 @@
+[package]
+name = "telemetry"
+version = "0.1.0"
+description = "The household's one Rust telemetry call: stderr for the developer, allow-listed OTLP/HTTP for the corpus"
+authors = ["poodle64"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["logs", "trace"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
+  "http-proto",
+  "logs",
+  "trace",
+  "reqwest-blocking-client",
+] }
+opentelemetry-appender-tracing = "0.32"
+opentelemetry-http = { version = "0.32", features = ["reqwest-blocking"] }
+opentelemetry-semantic-conventions = "0.32"
+tracing-opentelemetry = "0.33"
+
+async-trait = "0.1"
+http = "1"
+serde_json = "1"
+
+# rustls only — native-tls/openssl must not arrive through this crate. Not the
+# `rustls` feature: that is `__rustls-aws-lc-rs`, and aws-lc-sys fails to build
+# under thoth's `-march=armv8-a` CI flags, so a shared crate must not force it
+# into a consumer's graph. `rustls-no-provider` brings rustls plus the platform
+# certificate verifier; `init` installs ring as the process provider if the app
+# has not already installed one.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }
+reqwest-middleware = "0.5"
+reqwest-tracing = { version = "0.7", features = ["opentelemetry_0_32"] }
+
+[dev-dependencies]
+opentelemetry_sdk = { version = "0.32", features = ["logs", "trace", "testing"] }
+serial_test = "4"
