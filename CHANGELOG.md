@@ -6,6 +6,34 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.7] - 2026-09-07
+
+The seams the fleet's exception registers proved the factory lacked (master-project#328), so a stamped app holds every factory file byte-identically and differs by its answers and its app-owned extension points.
+
+### Added
+
+- `app_hooks` seams: `API_PREFIX`, `mcp_auth`, `on_exit`, `rate_limit_key`.
+- `create_app(settings=None)`; `openapi_enabled`; CORS only when an origin is configured; the OpenAPI title from `project_title`.
+- `postgres_password_file`; `<APP>_GUI_DIR`; prefixed-first `<APP>_PORTCULLIS_URL`; scope-typed `proxy_trust` helpers.
+- `compose.app.yaml` (compose `include`), `.github/image-smoke.sh` (the image gate's probe), `frontend/src/lib/api/app.ts` (the barrel's app half), a tail marker in `.prettierignore`.
+- `app-web-server.ts` exports `workers`, `globalTeardown`, `apiPrefix`; `SLOW_PATHS` per-path timeouts; `realpathSync` on `fs.allow`; `User` typed from the schema.
+- Copier answers `dark_first` and `density`.
+- `variants.yaml`: the ratified permanent differences, read by both gates.
+- `.envrc` sources `.envrc.local` and unsets the Anthropic keys.
+
+### Changed
+
+- `forwarded_allow_ips = ""`: `proxy_trust.py` owns the forwarded chain.
+- The app service runs read-only with no capabilities; gunicorn's control socket moves to the tmpfs.
+- The image build gates on the app's python-ci and security workflows and takes a `push-latest` input.
+- ruff and ruff-format scoped to `^(backend|scripts)/`.
+- `@sveltejs/vite-plugin-svelte` held below 7 until Vite 8.
+- `api-common[telemetry]` floor 2026.9.1.
+
+### Removed
+
+- `template/.template-parity.json` and the hook that regenerated it: the parity manifest is now stamped per app from the app's own render.
+
 ## [2026.9.6] - 2026-09-06
 
 The telemetry contract, closing poodle64/master-project#325 on the factory's
