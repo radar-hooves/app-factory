@@ -32,7 +32,7 @@ jobs:
     # minutes are unbilled, and atlas's runner carries no ambient Rust — the
     # household's Rust-on-atlas pattern needs a flake devShell this crate does
     # not have. Move to `[self-hosted, atlas]` once the runner is registered.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # by-exception (2026-09-08): a public crate with no flake, and the household runner carries no ambient Rust toolchain
     timeout-minutes: 30
 
     steps:
