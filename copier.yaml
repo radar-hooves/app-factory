@@ -21,6 +21,10 @@ _skip_if_exists:
   # Stamped as an empty but valid fragment so the include resolves in a fresh
   # stamp, then grown by the app — an update must never overwrite its services.
   - compose.app.yaml
+  # App-owned image smoke probe, run by the factory's docker-image workflow.
+  # Stamped with the factory's own probe so a fresh app has a working gate, then
+  # owned by the app — an update must never overwrite a probe it has tailored.
+  - .github/image-smoke.sh
 
 project_name:
   type: str
