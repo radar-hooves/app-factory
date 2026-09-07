@@ -66,6 +66,7 @@ venv/
 dist/
 build/
 .pytest_cache/
+.hypothesis/
 .mypy_cache/
 .ruff_cache/
 .coverage
