@@ -316,7 +316,7 @@ pub fn init(
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
     let from_env = Exporter::from_env();
-    let plan = plan();
+    let plan = plan(from_env.as_ref());
     let providers = match &plan {
         Plan::LocalOnly { .. } => None,
         Plan::Otlp(headers) => build_providers(service_name, service_version, headers, None),
@@ -385,13 +385,13 @@ enum Plan {
     Otlp(HashMap<String, String>),
 }
 
-fn plan() -> Plan {
-    let Some(exporter) = Exporter::from_env() else {
+fn plan(exporter: Option<&Exporter>) -> Plan {
+    let Some(exporter) = exporter else {
         return Plan::LocalOnly {
             why: "OTEL_EXPORTER_OTLP_ENDPOINT is unset",
         };
     };
-    match headers_for(&exporter) {
+    match headers_for(exporter) {
         Ok(headers) => Plan::Otlp(headers),
         Err(why) => Plan::LocalOnly { why },
     }
@@ -453,6 +453,11 @@ fn build_providers(
 ) -> Option<Providers> {
     use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 
+    // An empty endpoint parses as a relative URI, so it would build an exporter
+    // that can never send. Local only is the honest answer.
+    if endpoint.is_some_and(|base| base.trim().is_empty()) {
+        return None;
+    }
     ensure_crypto_provider();
     let resource = Resource::builder_empty()
         .with_service_name(service_name)
@@ -611,7 +616,10 @@ mod tests {
     #[serial]
     fn no_endpoint_means_stderr_only() {
         clear_env();
-        assert!(matches!(plan(), Plan::LocalOnly { .. }));
+        assert!(matches!(
+            plan(Exporter::from_env().as_ref()),
+            Plan::LocalOnly { .. }
+        ));
         assert_eq!(Exporter::from_env(), None);
     }
 
@@ -623,7 +631,10 @@ mod tests {
             ("OTEL_EXPORTER_OTLP_ENDPOINT", Some("http://127.0.0.1:9/")),
             ("OTEL_EXPORTER_OTLP_HEADERS_HELPER", Some("exit 3")),
         ]);
-        assert!(matches!(plan(), Plan::LocalOnly { .. }));
+        assert!(matches!(
+            plan(Exporter::from_env().as_ref()),
+            Plan::LocalOnly { .. }
+        ));
         clear_env();
     }
 
@@ -733,8 +744,8 @@ mod tests {
     fn a_swap_sends_the_next_record_only_to_the_new_destination() {
         let (subscriber, reload) = subscriber(ALLOW, OtlpLayers::new());
         let guard = guard_over(reload, None);
-        let (first, first_logs, _) = in_memory();
-        let (second, second_logs, _) = in_memory();
+        let (first, first_logs, first_spans) = in_memory();
+        let (second, second_logs, second_spans) = in_memory();
 
         tracing::subscriber::with_default(subscriber, || {
             guard.install(Some(first), None);
@@ -749,6 +760,7 @@ mod tests {
                 }),
             );
             tracing::info!(target: "allowed_target", "after the swap");
+            tracing::info_span!(target: "allowed_target", "after the swap span").in_scope(|| {});
         });
 
         let after = format!("{:?}", second_logs.get_emitted_logs().expect("logs"));
@@ -756,6 +768,14 @@ mod tests {
         assert!(!after.contains("before the swap"), "{after}");
         let before = format!("{:?}", first_logs.get_emitted_logs().expect("logs"));
         assert!(!before.contains("after the swap"), "{before}");
+
+        let names: Vec<_> = second_spans.get_finished_spans().expect("spans");
+        let names: Vec<_> = names.iter().map(|s| s.name.as_ref()).collect();
+        assert_eq!(names, ["after the swap span"], "{names:?}");
+        assert!(
+            first_spans.get_finished_spans().expect("spans").is_empty(),
+            "the retired tracer took nothing after the swap"
+        );
         assert_eq!(
             guard.exporter().map(|e| e.endpoint),
             Some("http://127.0.0.1:9".to_owned())

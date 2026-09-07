@@ -91,7 +91,7 @@ impl HeaderClient {
     }
 
     /// One blocking POST of an OTLP protobuf body, stamped with the same headers
-    /// an export carries. This is [`crate::probe`]'s whole transport: a probe that
+    /// an export carries. This is [`crate::probe()`]'s whole transport: a probe that
     /// passes is evidence about the client the exporters actually use, not about
     /// a second HTTP path built beside it.
     pub(crate) fn post(&self, url: &str, body: Vec<u8>) -> reqwest::Result<reqwest::StatusCode> {
