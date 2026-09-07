@@ -58,7 +58,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, atlas]
     permissions:
       contents: read
       # Mints the OIDC token npm exchanges for publish rights. Without it the

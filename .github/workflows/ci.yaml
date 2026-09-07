@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, atlas]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -132,7 +132,7 @@ jobs:
   # had no height to act on — was invisible to `build` and to jsdom alike, and
   # each was found by a person looking rather than by CI.
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # by-exception (2026-09-07): Playwright --with-deps needs apt and sudo, which the NixOS runner has neither of
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
