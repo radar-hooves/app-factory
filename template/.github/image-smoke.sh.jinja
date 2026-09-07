@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# THE extension point for docker-image.yaml's smoke gate: the command that
+# proves THIS app's image boots and serves. The workflow is the factory's and is
+# owed byte-identical, so an app whose image needs a different probe — a
+# migration to run first, a second port, a dependency to stand up beside it —
+# edits this file rather than the workflow (canonical-app-shape.md §Extension
+# points). On copier's `_skip_if_exists`, so an update never overwrites it.
+#
+# `$IMAGE` is the local tag of the image just built, set by the reusable.
+# A non-zero exit fails the build, so an image that cannot do its job never
+# reaches the registry for Watchtower to deploy.
+#
+# The probe below is DB-free by construction: create_app() defers all database
+# access to a lazy lifespan (get_engine only calls create_engine, which never
+# connects), so booting the server directly — bypassing entrypoint.sh's
+# DB-dependent migrate/stamp — serves /openapi.json with 200 on an image with no
+# database in reach. That is the same route compose.yaml's healthcheck takes, and
+# one probe catches a missing runtime file, an import error and a worker-boot
+# failure alike.
+set -eu
+
+name="smoke-{{ project_name }}-$$"
+# POSTGRES_PASSWORD: the probe reaches no database and never uses this value, but
+# an app whose settings validate eagerly cannot be CONSTRUCTED without one — it
+# fails as a boot failure and proves nothing. One token here costs nothing and
+# covers every app that tightens that validation.
+docker run -d --name "$name" -e POSTGRES_PASSWORD=smoke "$IMAGE" \
+  gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py
+trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+
+for _ in $(seq 1 30); do
+  if [ -z "$(docker ps -q -f name="^${name}$" -f status=running)" ]; then
+    echo "smoke: container exited before serving — the server failed to boot"
+    exit 1
+  fi
+  # stderr silenced: an early poll before the workers bind raises a benign
+  # ConnectionRefused; the real diagnosis on failure is the container's own log,
+  # dumped by the trap above.
+  if docker exec "$name" python3 -c 'import urllib.request, sys; sys.exit(0 if urllib.request.urlopen("http://localhost:{{ backend_port }}/openapi.json", timeout=5).getcode() == 200 else 1)' 2>/dev/null; then
+    echo "smoke: {{ project_name }} booted and served /openapi.json 200"
+    exit 0
+  fi
+  sleep 2
+done
+echo "smoke: {{ project_name }} never served /openapi.json 200 within the timeout — image will NOT be published"
+exit 1

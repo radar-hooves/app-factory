@@ -8,9 +8,16 @@ once so those surfaces cannot drift apart.
 Why the app and not the server: uvicorn's ProxyHeadersMiddleware can do this,
 but it runs outside and before every Starlette middleware and route dependency,
 and it OVERWRITES ``scope["client"]`` — destroying the very input this check
-needs. Widening its ``forwarded_allow_ips`` past loopback therefore does not
-add a trust boundary, it removes one. Keep ``gunicorn.conf.py`` at the loopback
-default and resolve the chain here, where the peer is still visible.
+needs. Any non-empty ``forwarded_allow_ips`` therefore does not add a trust
+boundary, it removes one — loopback included, because a same-host proxy reaching
+a published loopback port genuinely is 127.0.0.1. ``gunicorn.conf.py`` sets the
+empty allowlist so nothing is ever rewritten, and the chain is resolved here,
+where the peer is still visible.
+
+Two layers, one boundary. The core takes a raw ASGI ``scope``, so a pure-ASGI
+middleware — which runs before any ``Request`` exists — asks the same question
+as a route dependency instead of re-deriving it; the ``Request``-typed pair
+below are thin wrappers over it, and are what ordinary app code calls.
 """
 
 from __future__ import annotations
@@ -20,11 +27,32 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from starlette.requests import Request
+    from starlette.types import Scope
 
     from {{ package_name }}.config import Settings
 
 
-def peer_is_trusted(request: Request, settings: Settings) -> bool:
+def _peer(scope: Scope) -> str | None:
+    """The immediate TCP peer's address, or None when the scope carries none."""
+    client = scope.get("client")
+    return client[0] if client else None
+
+
+def _header(scope: Scope, name: str) -> str | None:
+    """Read one header from a raw ASGI scope by lowercased-name match.
+
+    ASGI header pairs are ``(name, value)`` byte tuples; the loosely-typed scope
+    yields them as ``Any``, so the byte value is decoded into an explicit ``str``.
+    """
+    target = name.encode("latin-1")
+    headers: list[tuple[bytes, bytes]] = scope.get("headers", [])
+    for key, value in headers:
+        if key.lower() == target:
+            return value.decode("latin-1")
+    return None
+
+
+def peer_is_trusted_scope(scope: Scope, settings: Settings) -> bool:
     """True when the immediate TCP peer is inside a configured trusted-proxy network.
 
     With no networks configured, no peer is trusted — so a fabricated
@@ -33,7 +61,7 @@ def peer_is_trusted(request: Request, settings: Settings) -> bool:
     trusted = settings.security.trusted_proxy_network_list
     if not trusted:
         return False
-    peer = request.client.host if request.client else None
+    peer = _peer(scope)
     if not peer:
         return False
     try:
@@ -43,7 +71,7 @@ def peer_is_trusted(request: Request, settings: Settings) -> bool:
     return any(addr in net for net in trusted)
 
 
-def client_ip(request: Request, settings: Settings) -> str:
+def client_ip_from_scope(scope: Scope, settings: Settings) -> str:
     """Resolve the caller's address, honouring X-Forwarded-For only from a trusted peer.
 
     Walks the forwarded chain RIGHT TO LEFT and returns the first address that
@@ -55,11 +83,11 @@ def client_ip(request: Request, settings: Settings) -> str:
     Falls back to the TCP peer when the peer is untrusted or the chain yields
     nothing usable, so an unproxied caller is always keyed by its real address.
     """
-    peer = request.client.host if request.client else "unknown"
-    if not peer_is_trusted(request, settings):
+    peer = _peer(scope) or "unknown"
+    if not peer_is_trusted_scope(scope, settings):
         return peer
 
-    forwarded = request.headers.get("x-forwarded-for")
+    forwarded = _header(scope, "x-forwarded-for")
     if not forwarded:
         return peer
 
@@ -74,3 +102,13 @@ def client_ip(request: Request, settings: Settings) -> str:
         if not any(addr in net for net in trusted):
             return str(addr)
     return peer
+
+
+def peer_is_trusted(request: Request, settings: Settings) -> bool:
+    """:func:`peer_is_trusted_scope` for a route dependency or a Starlette middleware."""
+    return peer_is_trusted_scope(request.scope, settings)
+
+
+def client_ip(request: Request, settings: Settings) -> str:
+    """:func:`client_ip_from_scope` for a route dependency or a Starlette middleware."""
+    return client_ip_from_scope(request.scope, settings)

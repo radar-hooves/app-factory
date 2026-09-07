@@ -21,13 +21,34 @@ from typing import Any
 
 import httpx
 
+#: This app's environment prefix (`platform/canonical-app-shape.md` §Named
+#: canonical values), so a broker variable can be named for THIS app alone.
+_PREFIX = "{{ package_name | upper }}"
+
+
+def _broker_env(name: str, default: str) -> str:
+    """Read this app's own ``<APP>_<name>`` first, then the bare ``<name>``, then ``default``.
+
+    Prefixed FIRST because the bare names are the household's, not this app's: a
+    workstation belonging to a different household exports ``PORTCULLIS_URL``
+    for its own broker, and an app that read it would attest to the wrong one
+    and be refused — or, worse, vend from it. The bare name still answers where
+    it is the only one set, which is every host in this household's fleet.
+    """
+    for candidate in (f"{_PREFIX}_{name}", name):
+        value = os.environ.get(candidate, "").strip()
+        if value:
+            return value
+    return default
+
+
 #: The one machine-local fact that cannot itself be vended — where the broker is.
 #: Overridable per host; the default is the household's own broker.
-BROKER_URL = os.environ.get("PORTCULLIS_URL", "{{ portcullis_url }}")
+BROKER_URL = _broker_env("PORTCULLIS_URL", "{{ portcullis_url }}")
 
 #: This app's enrolled consumer identity. One per app per machine, enrolled once
 #: (`signet enrol --identity <app>`), granted only the credentials it needs.
-SIGNET_IDENTITY = os.environ.get("PORTCULLIS_SIGNET_IDENTITY", "{{ project_name }}")
+SIGNET_IDENTITY = _broker_env("PORTCULLIS_SIGNET_IDENTITY", "{{ project_name }}")
 
 #: The signet-agent socket to sign through, when this process cannot reach the
 #: hardware itself. A container has no path to the host's YubiKey, so the host

@@ -25,3 +25,15 @@ uv sync --project backend --quiet
 
 export VIRTUAL_ENV="$PWD/backend/.venv"
 PATH_add "$PWD/backend/.venv/bin"
+
+# This checkout's own machine-local additions, if it has any. Untracked and
+# gitignored, and NOT a way back to an env file: a credential still belongs in
+# the broker, and everything a checkout can know is stamped into config already.
+source_env_if_exists .envrc.local
+
+# Last, so nothing above can put one back. An Anthropic API credential in the
+# environment sends an agent session to the metered API instead of the Max
+# login it is entitled to, and foreman refuses to dispatch at all while either
+# is set — so a checkout that inherits one from a shell profile silently either
+# bills or blocks.
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN

@@ -68,14 +68,22 @@ repos:
       - id: detect-private-key
         name: 'security - Detect private keys'
 
+  # Bounded to the two trees an app keeps Python in. With no `files` pattern
+  # these run on every staged .py anywhere in the repo, including one sitting
+  # outside any tree with a [tool.ruff] above it — which ruff then lints and
+  # REWRITES under its own defaults rather than under the app's config, at a
+  # different line length. Inert in a template app, whose Python is all under
+  # backend/; `scripts/` is here for an app that keeps root Python tooling.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.17
     hooks:
       - id: ruff
         name: 'python - Lint with ruff'
         args: [--fix]
+        files: '^(backend|scripts)/'
       - id: ruff-format
         name: 'python - Format with ruff'
+        files: '^(backend|scripts)/'
 
   # Keeps backend/uv.lock in sync with backend/pyproject.toml
   - repo: local

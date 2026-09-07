@@ -1,0 +1,47 @@
+"""Where the store password comes from, and in which order.
+
+Three sources answer one field, and the order is the whole of the contract: an
+environment that supplies its own, then the boot-lane file, then the broker.
+Reordering them is a silent change — every branch still returns a string — so
+this pins it. No test here ever asserts on a password VALUE reaching a log.
+"""
+
+import logging
+
+import pytest
+
+from {{ package_name }}.config.sections import database
+from {{ package_name }}.config.sections.database import DatabaseSettings
+
+
+def test_an_explicit_password_beats_the_boot_lane_file(tmp_path) -> None:
+    """A deployment supplying POSTGRES_PASSWORD never opens the file."""
+    credential = tmp_path / "postgres-password"
+    credential.write_text("from-the-file\n")
+    settings = DatabaseSettings(postgres_password="from-the-environment", postgres_password_file=str(credential))
+    assert settings.postgres_password == "from-the-environment"
+
+
+def test_the_boot_lane_file_is_read_when_no_password_was_supplied(tmp_path) -> None:
+    """Stripped, so the trailing newline a host-minted file carries is not part of it."""
+    credential = tmp_path / "postgres-password"
+    credential.write_text("from-the-file\n")
+    settings = DatabaseSettings(postgres_password="", postgres_password_file=str(credential))
+    assert settings.postgres_password == "from-the-file"
+
+
+def test_an_unreadable_file_warns_and_falls_through_to_the_broker(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The broker's diagnostic is the better one where it can be reached.
+
+    So a missing file does not raise here; it warns with the reason and lets the
+    broker answer, which is what a development checkout does anyway. The
+    assertion is on the REASON rather than the path: the log redactor replaces a
+    high-entropy token wholesale, and a pytest tmp_path is one.
+    """
+    monkeypatch.setattr(database, "vend", lambda credential, field: "from-the-broker")
+    with caplog.at_level(logging.WARNING):
+        settings = DatabaseSettings(postgres_password="", postgres_password_file=str(tmp_path / "not-there"))
+    assert settings.postgres_password == "from-the-broker"
+    assert any("No such file or directory" in record.getMessage() for record in caplog.records)

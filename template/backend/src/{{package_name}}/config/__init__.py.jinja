@@ -67,8 +67,17 @@ class Settings(BaseSettings):
 
     # Comma-separated: CORS needs exact origin strings, not a parsed URL —
     # kept as the raw string field pydantic-settings maps CORS_ORIGINS onto,
-    # with cors_origins_list below doing the split.
+    # with cors_origins_list below doing the split. Empty installs no CORS
+    # middleware at all (main.py): the console is same-origin.
     cors_origins: str = ""
+
+    # Whether /docs, /redoc and /openapi.json are served (main.py). True,
+    # because the shared ingress shell 404-guards all three for an app behind
+    # it. An app whose port is reachable WITHOUT traversing that proxy sets
+    # OPENAPI_ENABLED=false and closes them in the app, where nothing can go
+    # round the edge — at the cost of /openapi.json, which the container
+    # healthcheck and the CI smoke probe both poll.
+    openapi_enabled: bool = True
 
     # Domain sections. get_settings() constructs each one and passes it as an
     # init argument, which is why these carry only a factory: a section left to

@@ -38,10 +38,21 @@ def frontend_build_dir() -> Path:
     installed package in site-packages, so the mount is skipped and every request
     for the app itself answers 404 while the container reports healthy.
 
-    Resolution order is deployment first, then source tree. The final fallback is
-    only reached when neither exists, so the caller's "not built yet" branch still
-    fires for a dev checkout that has not run `pnpm build`.
+    Resolution order is the explicit override, then deployment, then source tree.
+    The final fallback is only reached when none of them exists, so the caller's
+    "not built yet" branch still fires for a dev checkout that has not run
+    `pnpm build`.
+
+    `{{ package_name | upper }}_GUI_DIR` is that override, and it is what an image
+    that does NOT ship the console at `<cwd>/frontend/build` sets — one installing
+    it under the package prefix, say. Both candidates below are relative to
+    something the process happens to be standing in, so an app whose layout
+    differs cannot express it at all without this, and the failure is silent: the
+    mount is skipped, every request for the app itself answers 404, and the
+    container reports healthy throughout.
     """
+    if override := os.environ.get("{{ package_name | upper }}_GUI_DIR", "").strip():
+        return Path(override).expanduser()
     for candidate in (Path.cwd() / "frontend" / "build", project_root() / "frontend" / "build"):
         if candidate.is_dir():
             return candidate

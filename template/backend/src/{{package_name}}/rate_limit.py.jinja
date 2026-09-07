@@ -7,9 +7,9 @@ they are in-memory. That is `security-standards.md`'s "Redis-backed counters
 with in-memory fallback" satisfied by the library, which is why an app without
 Redis does not need one and an app with Redis needs no extra code.
 
-Do NOT hand-roll a second limiter beside this one. Per-route limits and a
-per-app `key_func` are the supported ways to differ; a parallel implementation
-is not.
+Do NOT hand-roll a second limiter beside this one. Per-route limits and an
+`app_hooks.rate_limit_key` are the supported ways to differ; a parallel
+implementation is not.
 
 Usage:
 
@@ -47,6 +47,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from {{ package_name }} import app_hooks
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.proxy_trust import client_ip
 
@@ -65,11 +66,25 @@ def rate_limit_key(request: Request) -> str:
     denial of service. ``client_ip`` resolves the forwarded chain, but only when
     the peer is a configured trusted proxy.
 
-    An app that authenticates its callers should override this with something
-    stronger (an API-key id, an account id) so one noisy consumer cannot
-    throttle another; pass it as ``key_func`` when building the limiter.
+    An app that authenticates its callers keys on something stronger (an
+    API-key id, an account id) so one noisy consumer cannot throttle another:
+    it defines ``rate_limit_key(request)`` in ``app_hooks`` and the limiter
+    below takes that instead of this.
     """
     return client_ip(request, get_settings())
+
+
+def _key_func(request: Request) -> str:
+    """THE key function: this app's own where `app_hooks` defines one, else the address.
+
+    Both the limiter and the 429 log below go through here, so the key that is
+    reported is always the key that was counted — logging an address for a
+    request bucketed by account id names the wrong caller. Looked up per call
+    rather than pinned at import for the same reason: one place decides, and a
+    suite can drive the hook.
+    """
+    hook = getattr(app_hooks, "rate_limit_key", None)
+    return rate_limit_key(request) if hook is None else str(hook(request))
 
 
 def build_limiter() -> Limiter:
@@ -77,7 +92,7 @@ def build_limiter() -> Limiter:
     settings = get_settings()
     storage_uri = settings.security.rate_limit_storage_uri
     return Limiter(
-        key_func=rate_limit_key,
+        key_func=_key_func,
         default_limits=[settings.security.rate_limit_default],
         enabled=settings.security.rate_limit_enabled,
         # slowapi falls back to in-memory when this is None; an unreachable
@@ -136,7 +151,7 @@ def rate_limit_handler(request: Request, exc: Exception) -> Response:
     never a credential, and never the request body.
     """
     retry_after = getattr(exc, "retry_after", None) or 60
-    key = rate_limit_key(request)
+    key = _key_func(request)
     logger.warning(
         "Rate limit exceeded",
         extra={

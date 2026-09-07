@@ -1,0 +1,62 @@
+"""The application factory's posture: what the app serves, and to whom.
+
+Four settings-driven decisions main.py makes at construction time. Each is a
+posture rather than a preference, and each was previously true only because
+nobody had changed the line — so this file pins them, and pins the
+`create_app(settings=...)` seam that lets a test drive them at all.
+"""
+
+from fastapi.middleware.cors import CORSMiddleware
+from httpx import ASGITransport, AsyncClient
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.main import create_app
+
+DOCUMENT_ROUTES = ("/openapi.json", "/docs", "/redoc")
+
+
+def _app_with(**overrides):
+    """Build the app under a copy of the real settings, one field changed.
+
+    `model_copy` rather than a fresh Settings(): the sections resolve from the
+    process environment through get_settings()'s own path, so a test changes the
+    one field it is about and inherits every other value the app really runs on.
+    """
+    return create_app(settings=get_settings().model_copy(update=overrides))
+
+
+def _has_cors(app) -> bool:
+    return any(middleware.cls is CORSMiddleware for middleware in app.user_middleware)
+
+
+async def _get(app, path: str) -> int:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(path)
+    return response.status_code
+
+
+async def test_the_api_document_and_its_two_uis_are_served_by_default(app):
+    """The default posture is open: the shared ingress shell guards them at the edge."""
+    for path in DOCUMENT_ROUTES:
+        assert await _get(app, path) == 200, path
+
+
+async def test_openapi_enabled_false_closes_the_document_and_both_uis():
+    """An app reachable without traversing the edge closes them in the app instead.
+
+    All three, not only /docs: the schema is what enumerates the route surface,
+    so leaving it served while hiding its UI publishes exactly what matters.
+    """
+    closed = _app_with(openapi_enabled=False)
+    for path in DOCUMENT_ROUTES:
+        assert await _get(closed, path) == 404, path
+
+
+async def test_no_cors_middleware_without_a_configured_origin(app):
+    """The console is same-origin, so the common case installs no policy at all."""
+    assert not _has_cors(app)
+
+
+async def test_cors_middleware_is_installed_once_an_origin_is_configured():
+    assert _has_cors(_app_with(cors_origins="https://example.test"))

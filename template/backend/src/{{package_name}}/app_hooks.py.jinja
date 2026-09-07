@@ -10,6 +10,24 @@ read green.
 
 Every hook here is a no-op by default. Add only what this app needs; do not
 delete a hook you are not using, because `main.py` imports all four by name.
+
+There is a second kind of hook: OPTIONAL ones, absent from this file until an
+app writes them, looked up by name and skipped when they are not there. Each is
+a seam a factory file already had to reach for, so a stamped app that defines
+none of them behaves exactly as it does today.
+
+  - `API_PREFIX: str` — where `main.py` mounts every vertical slice, "/api"
+    otherwise. For an app whose consumer contract predates the factory and
+    cannot be relocated.
+  - `mcp_auth(app)` — `main.py` gates /mcp with this instead of the factory's
+    Authentik bearer check. For an app that is itself an authority for machine
+    identity, in front of which a second gate closes the surface.
+  - `rate_limit_key(request)` — the limiter's `key_func` (`rate_limit.py`), for
+    an app that can key on something stronger than an address, so one noisy
+    consumer cannot throttle another.
+  - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
+    after every worker is dead, for an app supervising a child process or a
+    process-local session a worker must not end.
 """
 
 from collections.abc import AsyncGenerator
