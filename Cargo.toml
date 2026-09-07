@@ -1,6 +1,6 @@
 [package]
 name = "telemetry"
-version = "0.1.2"
+version = "0.2.0"
 description = "The household's one Rust telemetry call: stderr for the developer, allow-listed OTLP/HTTP for the corpus"
 authors = ["poodle64"]
 license = "MIT"
@@ -23,10 +23,16 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = [
 opentelemetry-appender-tracing = "0.32"
 opentelemetry-http = { version = "0.32", features = ["reqwest-blocking"] }
 opentelemetry-semantic-conventions = "0.32"
+opentelemetry-proto = { version = "0.32", default-features = false, features = [
+  "gen-tonic-messages",
+  "logs",
+] }
+prost = "0.14"
 tracing-opentelemetry = "0.33"
 
 async-trait = "0.1"
 http = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # rustls only — native-tls/openssl must not arrive through this crate. Not the

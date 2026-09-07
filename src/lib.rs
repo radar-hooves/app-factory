@@ -1,11 +1,17 @@
 //! The household's one Rust telemetry call.
 //!
-//! [`init`] installs a stderr layer for the developer and, when the fleet has set
-//! `OTEL_EXPORTER_OTLP_ENDPOINT`, an allow-listed OTLP/HTTP protobuf log and span
-//! exporter for the corpus; [`http_client`] carries W3C trace context outbound.
-//! The crate writes no file, exports no metrics, reads no settings, and knows no
-//! broker, identity or token — endpoint and credential arrive only as standard
-//! `OTEL_EXPORTER_OTLP_*` variables.
+//! [`init`] installs a stderr layer for the developer and, when an exporter is
+//! configured, an allow-listed OTLP/HTTP protobuf log and span exporter for the
+//! corpus; [`http_client`] carries W3C trace context outbound.
+//!
+//! The exporter may arrive from the environment, as `OTEL_EXPORTER_OTLP_*`, or
+//! from the application's own settings through [`Guard::set_exporter`] — an app
+//! launched from a Dock inherits no fleet environment. The environment comes
+//! first: where it set one, a pane cannot change it. [`probe`] proves an endpoint
+//! answers before an application saves it.
+//!
+//! The crate writes no file, exports no metrics, reads no settings file of its
+//! own, and knows no broker, identity or token.
 //!
 //! Contract: `rules-library/platform/telemetry.md`; wiring:
 //! `docs/master/reference/guide-telemetry.md` §Rust.
@@ -13,9 +19,13 @@
 mod allow;
 mod bearer;
 mod client;
+mod probe;
+
+pub use probe::{ProbeError, probe};
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
@@ -24,14 +34,16 @@ use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator};
 use opentelemetry_semantic_conventions::resource::SERVICE_VERSION;
+use serde::{Deserialize, Serialize};
 use tracing::Metadata;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::filter::{EnvFilter, FilterExt, dynamic_filter_fn};
 use tracing_subscriber::layer::{Context, Filter, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{Layer, fmt};
+use tracing_subscriber::{Layer, Registry, fmt, reload};
 
-/// The total a drop may spend flushing, so exit is never delayed.
+/// The total a shutdown may spend flushing, so neither exit nor a settings change
+/// is delayed.
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(2);
 
 /// A household outbound call that cannot connect in this long is dead. It has to
@@ -39,13 +51,59 @@ const SHUTDOWN_BUDGET: Duration = Duration::from_secs(2);
 /// (`RequestBuilder::timeout`), so a caller cannot supply this one itself.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How long the header helper may take, wherever it is run.
+const HELPER_BUDGET: Duration = Duration::from_secs(10);
+
 /// Claimed by the first [`init`]; a later call builds nothing.
 static INITIALISED: AtomicBool = AtomicBool::new(false);
+
+/// The two OTLP layers, swapped as a unit by [`Guard::set_exporter`]; empty is
+/// local only. The allow-list filter sits *outside* this slot, because it never
+/// changes and `reload::Handle::reload` cannot carry a `Filtered` layer — the
+/// swapped-in layer would never be handed a filter id.
+type OtlpLayers = Vec<Box<dyn Layer<Registry> + Send + Sync>>;
+
+/// The end of the reload slot [`Guard`] keeps, so a later exporter can replace
+/// the live layers without touching the stderr layer beside them.
+type OtlpHandle = reload::Handle<OtlpLayers, Registry>;
 
 /// The two providers, kept together because they are built and shut down together.
 struct Providers {
     logs: SdkLoggerProvider,
     traces: SdkTracerProvider,
+}
+
+/// Where telemetry goes and how it authenticates: the same two facts
+/// `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS_HELPER` carry.
+/// It is serde-shaped so an application can keep it in its own settings — this
+/// crate still reads and writes no settings file of its own.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Exporter {
+    /// The collector's base address, as `OTEL_EXPORTER_OTLP_ENDPOINT` means it:
+    /// the signal path (`/v1/logs`) is appended to it, not replaced.
+    pub endpoint: String,
+    /// A command printing a JSON object of header name to header value, run once
+    /// under `sh -c` whenever this exporter is installed or probed.
+    pub headers_helper: Option<String>,
+}
+
+impl Exporter {
+    /// The fleet's answer, read from the standard variables — the crate's one
+    /// reader of them, so [`init`] and a Settings pane cannot disagree about what
+    /// the environment says. `None` when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset.
+    pub fn from_env() -> Option<Self> {
+        Some(Self {
+            endpoint: std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok()?,
+            headers_helper: std::env::var("OTEL_EXPORTER_OTLP_HEADERS_HELPER").ok(),
+        })
+    }
+}
+
+/// What [`init`] installed, and everything a later swap needs to rebuild.
+struct Installed {
+    reload: OtlpHandle,
+    service_name: &'static str,
+    service_version: &'static str,
 }
 
 /// Keeps the export pipeline alive. Hold it for the process lifetime, and drop it
@@ -63,21 +121,131 @@ struct Providers {
 /// It returns as soon as the channel closes, but it is a blocking join, so a
 /// Tokio worker would be parked for its duration. Tauri's `Exit` arm runs on the
 /// main thread, which satisfies that.
+///
+/// [`Guard::set_exporter`] repoints the live pipeline at runtime, so the same
+/// `Guard` is also what a Settings pane holds.
 #[derive(Default)]
 pub struct Guard {
-    providers: Option<Providers>,
+    providers: Mutex<Option<Providers>>,
+    installed: Option<Installed>,
+    exporter: Mutex<Option<Exporter>>,
+    from_env: bool,
+}
+
+impl Guard {
+    /// Point the live log and span export at `exporter`, or at nothing. The stderr
+    /// layer is untouched, and events already in flight are not lost: the layers
+    /// are swapped first, then the previous providers are flushed and shut down on
+    /// a plain thread within [`SHUTDOWN_BUDGET`], off the caller's.
+    ///
+    /// A no-op when the environment set the exporter — the fleet's variables win
+    /// over a pane — and a no-op on a [`Guard`] that installed nothing. Never
+    /// fails and never panics: a helper that fails or an endpoint that will not
+    /// build degrades to local only with one `debug!` line, exactly as [`init`]
+    /// does.
+    ///
+    /// Call it from a plain thread, never inside a Tokio task: it builds the
+    /// exporters' blocking `reqwest` client.
+    pub fn set_exporter(&self, exporter: Option<Exporter>) {
+        if self.from_env {
+            tracing::debug!(
+                "telemetry: the environment set the exporter and wins; set_exporter installed nothing"
+            );
+            return;
+        }
+        let Some(installed) = &self.installed else {
+            tracing::debug!(
+                "telemetry: this Guard installed no layers; set_exporter changed nothing"
+            );
+            return;
+        };
+        let built = match &exporter {
+            None => None,
+            Some(wanted) => match headers_for(wanted) {
+                Ok(headers) => build_providers(
+                    installed.service_name,
+                    installed.service_version,
+                    &headers,
+                    Some(&wanted.endpoint),
+                ),
+                Err(why) => {
+                    tracing::debug!("telemetry is local only: {why}");
+                    None
+                }
+            },
+        };
+        if exporter.is_some() && built.is_none() {
+            tracing::debug!("telemetry is local only: no exporter could be built");
+        }
+        self.install(built, exporter);
+    }
+
+    /// The exporter this process is configured for, for a pane to show. A
+    /// configured exporter whose helper failed or whose endpoint would not build
+    /// still reads back here; the pipeline degraded to local only and said so.
+    pub fn exporter(&self) -> Option<Exporter> {
+        lock(&self.exporter).clone()
+    }
+
+    /// True when the environment set the exporter, which makes it read-only:
+    /// [`Guard::set_exporter`] will not change it, so a pane should say so.
+    pub fn exporter_is_from_env(&self) -> bool {
+        self.from_env
+    }
+
+    /// Swap the live layers, then retire what they replaced. Reload first, so
+    /// nothing emitted after this call reaches the old destination.
+    fn install(&self, providers: Option<Providers>, exporter: Option<Exporter>) {
+        let Some(installed) = &self.installed else {
+            return;
+        };
+        let layers = providers
+            .as_ref()
+            .map(|p| otlp_layers(installed.service_name, p))
+            .unwrap_or_default();
+        if installed.reload.reload(layers).is_err() {
+            tracing::debug!("telemetry: the layer stack is gone; the exporter is unchanged");
+            retire(providers);
+            return;
+        }
+        let previous = std::mem::replace(&mut *lock(&self.providers), providers);
+        *lock(&self.exporter) = exporter;
+        retire(previous);
+    }
 }
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        let Some(providers) = self.providers.take() else {
+        let Some(providers) = lock(&self.providers).take() else {
             return;
         };
-        let deadline = Instant::now() + SHUTDOWN_BUDGET;
-        let left = || deadline.saturating_duration_since(Instant::now());
-        let _ = providers.logs.shutdown_with_timeout(left());
-        let _ = providers.traces.shutdown_with_timeout(left());
+        shutdown(providers);
     }
+}
+
+/// A poisoned lock is no reason to skip a flush or a swap: the data behind it is
+/// an `Option` either way.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Flush and shut down both providers, bounded by [`SHUTDOWN_BUDGET`].
+fn shutdown(providers: Providers) {
+    let deadline = Instant::now() + SHUTDOWN_BUDGET;
+    let left = || deadline.saturating_duration_since(Instant::now());
+    let _ = providers.logs.shutdown_with_timeout(left());
+    let _ = providers.traces.shutdown_with_timeout(left());
+}
+
+/// Shut down providers nothing is wired to any more, off the caller's thread: the
+/// flush may take the whole budget and a swap can come from a Tauri command.
+fn retire(providers: Option<Providers>) {
+    let Some(providers) = providers else {
+        return;
+    };
+    std::thread::spawn(move || shutdown(providers));
 }
 
 /// Install the process's telemetry. Call once, at the entry point, before
@@ -88,6 +256,11 @@ impl Drop for Guard {
 /// (`bragi` allows `bragi::library`). Everything else stays on stderr. That list
 /// is the application's own decision and belongs in its code, not in a file a
 /// user can widen by accident.
+///
+/// The exporter comes from the environment, through [`Exporter::from_env`]. An
+/// app launched from a Dock has none, so [`Guard::set_exporter`] can supply one
+/// at runtime from the application's own settings — but only where the
+/// environment set nothing.
 ///
 /// Never fails: an unset endpoint, or a missing or failing header helper, degrades
 /// to stderr only with one line saying which. The only blocking work is the header
@@ -142,20 +315,26 @@ pub fn init(
     }
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
+    let from_env = Exporter::from_env();
     let plan = plan();
     let providers = match &plan {
         Plan::LocalOnly { .. } => None,
-        Plan::Otlp(headers) => providers(service_name, service_version, headers),
+        Plan::Otlp(headers) => build_providers(service_name, service_version, headers, None),
     };
-    let installed = subscriber(service_name, allow, providers.as_ref())
-        .try_init()
-        .is_ok();
+    let layers = providers
+        .as_ref()
+        .map(|p| otlp_layers(service_name, p))
+        .unwrap_or_default();
+    let (subscriber, reload) = subscriber(allow, layers);
+    let installed = subscriber.try_init().is_ok();
 
     if !installed {
         // Something else owns the global subscriber, so our layers reach nothing.
         // Shut the providers down rather than hand back a live-looking Guard over
         // orphaned exporter threads.
-        drop(Guard { providers });
+        if let Some(providers) = providers {
+            shutdown(providers);
+        }
         tracing::debug!("telemetry: another subscriber is installed; this call installed nothing");
         return Guard::default();
     }
@@ -164,7 +343,16 @@ pub fn init(
         Plan::Otlp(_) if providers.is_none() => tracing::debug!("telemetry: no exporter built"),
         Plan::Otlp(_) => {}
     }
-    Guard { providers }
+    Guard {
+        providers: Mutex::new(providers),
+        from_env: from_env.is_some(),
+        exporter: Mutex::new(from_env),
+        installed: Some(Installed {
+            reload,
+            service_name,
+            service_version,
+        }),
+    }
 }
 
 /// An async `reqwest` client whose every request opens a client span and carries
@@ -198,53 +386,72 @@ enum Plan {
 }
 
 fn plan() -> Plan {
-    if std::env::var_os("OTEL_EXPORTER_OTLP_ENDPOINT").is_none() {
+    let Some(exporter) = Exporter::from_env() else {
         return Plan::LocalOnly {
             why: "OTEL_EXPORTER_OTLP_ENDPOINT is unset",
         };
+    };
+    match headers_for(&exporter) {
+        Ok(headers) => Plan::Otlp(headers),
+        Err(why) => Plan::LocalOnly { why },
     }
-    match std::env::var("OTEL_EXPORTER_OTLP_HEADERS_HELPER") {
-        Err(_) => Plan::Otlp(HashMap::new()),
-        Ok(command) => match bearer::run_helper(&command, Duration::from_secs(10)) {
-            Ok(headers) => Plan::Otlp(headers),
-            Err(why) => Plan::LocalOnly { why },
-        },
+}
+
+/// The headers an exporter authenticates with: the helper's output, or none where
+/// it names no helper. Shared by [`init`], [`Guard::set_exporter`] and [`probe`],
+/// so a pane's endpoint is credentialed exactly as the fleet's is.
+fn headers_for(exporter: &Exporter) -> Result<HashMap<String, String>, &'static str> {
+    match &exporter.headers_helper {
+        None => Ok(HashMap::new()),
+        Some(command) => bearer::run_helper(command, HELPER_BUDGET),
     }
+}
+
+/// The join the SDK makes from `OTEL_EXPORTER_OTLP_ENDPOINT`, made here too, so a
+/// pane's endpoint means exactly what the variable means.
+fn signal_url(base: &str, path: &str) -> String {
+    format!("{}{path}", base.trim_end_matches('/'))
 }
 
 /// The layer stack, built once and installed either globally by [`init`] or
-/// locally by a test through `tracing::subscriber::with_default`.
+/// locally by a test through `tracing::subscriber::with_default`. Only the OTLP
+/// half reloads; the developer's stderr view is fixed for the process.
 fn subscriber(
-    service_name: &'static str,
     allow: &'static [&'static str],
-    providers: Option<&Providers>,
-) -> impl tracing::Subscriber + Send + Sync + 'static {
+    layers: OtlpLayers,
+) -> (impl tracing::Subscriber + Send + Sync + 'static, OtlpHandle) {
+    let (otlp, reload) = reload::Layer::new(layers);
     let stderr = fmt::layer()
         .with_writer(std::io::stderr)
         .with_filter(env_filter().and(exporter_noise_filter()));
-    let logs = providers
-        .map(|p| OpenTelemetryTracingBridge::new(&p.logs).with_filter(allow::otlp_filter(allow)));
-    let traces = providers.map(|p| {
-        tracing_opentelemetry::layer()
-            .with_tracer(p.traces.tracer(service_name))
-            .with_filter(allow::otlp_filter(allow))
-    });
-    tracing_subscriber::registry()
-        .with(stderr)
-        .with(logs)
-        .with(traces)
+    let subscriber = tracing_subscriber::registry()
+        .with(otlp.with_filter(allow::otlp_filter(allow)))
+        .with(stderr);
+    (subscriber, reload)
 }
 
-/// Both providers, or neither. Endpoint, signal endpoints, timeouts, batch sizing
+/// The pair of layers that carry allowed events and spans to `providers`. Neither
+/// carries a filter of its own: the allow-list lives outside the reload slot.
+fn otlp_layers(service_name: &'static str, providers: &Providers) -> OtlpLayers {
+    vec![
+        Box::new(OpenTelemetryTracingBridge::new(&providers.logs)),
+        Box::new(tracing_opentelemetry::layer().with_tracer(providers.traces.tracer(service_name))),
+    ]
+}
+
+/// Both providers, or neither. Signal endpoints, timeouts, batch sizing
 /// (`OTEL_BLRP_*`/`OTEL_BSP_*`) and any static `OTEL_EXPORTER_OTLP_HEADERS` all
 /// come from the SDK's own env handling; the helper's headers are stamped on last
-/// by the client, so they win.
-fn providers(
+/// by the client, so they win. `endpoint` is `None` for the environment's own
+/// exporter, leaving the address to the SDK as well, and `Some` only for one a
+/// Settings pane supplied, which no variable names.
+fn build_providers(
     service_name: &'static str,
     service_version: &'static str,
     headers: &HashMap<String, String>,
+    endpoint: Option<&str>,
 ) -> Option<Providers> {
-    use opentelemetry_otlp::WithHttpConfig;
+    use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 
     ensure_crypto_provider();
     let resource = Resource::builder_empty()
@@ -253,16 +460,18 @@ fn providers(
         .build();
     let client = |timeout_var| bearer::HeaderClient::new(bearer::timeout(timeout_var), headers);
 
-    let log_exporter = opentelemetry_otlp::LogExporter::builder()
+    let mut log_builder = opentelemetry_otlp::LogExporter::builder()
         .with_http()
-        .with_http_client(client("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT")?)
-        .build()
-        .ok()?;
-    let span_exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http_client(client("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT")?);
+    let mut span_builder = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
-        .with_http_client(client("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT")?)
-        .build()
-        .ok()?;
+        .with_http_client(client("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT")?);
+    if let Some(base) = endpoint {
+        log_builder = log_builder.with_endpoint(signal_url(base, "/v1/logs"));
+        span_builder = span_builder.with_endpoint(signal_url(base, "/v1/traces"));
+    }
+    let log_exporter = log_builder.build().ok()?;
+    let span_exporter = span_builder.build().ok()?;
 
     Some(Providers {
         logs: SdkLoggerProvider::builder()
@@ -382,11 +591,28 @@ mod tests {
         (providers, logs, spans)
     }
 
+    /// A `Guard` over a locally installed stack, so a swap can be driven without
+    /// claiming the process's one global subscriber. `from_env` is the exporter
+    /// the environment supplied, if any.
+    fn guard_over(reload: OtlpHandle, from_env: Option<Exporter>) -> Guard {
+        Guard {
+            providers: Mutex::new(None),
+            installed: Some(Installed {
+                reload,
+                service_name: "test-service",
+                service_version: "0.0.0",
+            }),
+            from_env: from_env.is_some(),
+            exporter: Mutex::new(from_env),
+        }
+    }
+
     #[test]
     #[serial]
     fn no_endpoint_means_stderr_only() {
         clear_env();
         assert!(matches!(plan(), Plan::LocalOnly { .. }));
+        assert_eq!(Exporter::from_env(), None);
     }
 
     #[test]
@@ -416,12 +642,23 @@ mod tests {
         ]);
         let started = Instant::now();
         let guard = init("test-service", "0.0.0", ALLOW);
-        assert!(guard.providers.is_some(), "the OTLP providers were built");
+        assert!(
+            lock(&guard.providers).is_some(),
+            "the OTLP providers were built"
+        );
+        assert!(guard.exporter_is_from_env(), "the environment set it");
+        assert_eq!(
+            guard.exporter().map(|e| e.endpoint),
+            Some("http://127.0.0.1:9/".to_owned())
+        );
         tracing::info!(target: "allowed_target", "allowed");
         tracing::info!(target: "some_other_target", "denied");
 
         let second = init("test-service", "0.0.0", ALLOW);
-        assert!(second.providers.is_none(), "a second init builds nothing");
+        assert!(
+            lock(&second.providers).is_none(),
+            "a second init builds nothing"
+        );
 
         drop(guard);
         assert!(
@@ -439,7 +676,8 @@ mod tests {
     #[serial]
     fn the_stderr_filter_keeps_its_level_hint() {
         set_env(&[("RUST_LOG", None)]);
-        let hint = tracing::Subscriber::max_level_hint(&subscriber("test", &[], None));
+        let (subscriber, _reload) = subscriber(&[], OtlpLayers::new());
+        let hint = tracing::Subscriber::max_level_hint(&subscriber);
         assert_eq!(hint, Some(LevelFilter::INFO));
     }
 
@@ -466,9 +704,11 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn the_allow_list_holds_for_both_events_and_spans() {
         let (providers, logs, spans) = in_memory();
-        tracing::subscriber::with_default(subscriber("test", ALLOW, Some(&providers)), || {
+        let (subscriber, _reload) = subscriber(ALLOW, otlp_layers("test-service", &providers));
+        tracing::subscriber::with_default(subscriber, || {
             tracing::info!(target: "allowed_target", "kept");
             tracing::info!(target: "allowed_target::inner", "kept too");
             tracing::info!(target: "another_target", "dropped");
@@ -486,16 +726,78 @@ mod tests {
         assert_eq!(names, ["kept span"], "{names:?}");
     }
 
+    /// The swap is what lets a Settings pane repoint a running app, so the record
+    /// after it must reach the new destination and only the new destination.
+    #[test]
+    #[serial]
+    fn a_swap_sends_the_next_record_only_to_the_new_destination() {
+        let (subscriber, reload) = subscriber(ALLOW, OtlpLayers::new());
+        let guard = guard_over(reload, None);
+        let (first, first_logs, _) = in_memory();
+        let (second, second_logs, _) = in_memory();
+
+        tracing::subscriber::with_default(subscriber, || {
+            guard.install(Some(first), None);
+            tracing::info!(target: "allowed_target", "before the swap");
+            let reached = format!("{:?}", first_logs.get_emitted_logs().expect("logs"));
+            assert!(reached.contains("before the swap"), "{reached}");
+            guard.install(
+                Some(second),
+                Some(Exporter {
+                    endpoint: "http://127.0.0.1:9".to_owned(),
+                    headers_helper: None,
+                }),
+            );
+            tracing::info!(target: "allowed_target", "after the swap");
+        });
+
+        let after = format!("{:?}", second_logs.get_emitted_logs().expect("logs"));
+        assert!(after.contains("after the swap"), "{after}");
+        assert!(!after.contains("before the swap"), "{after}");
+        let before = format!("{:?}", first_logs.get_emitted_logs().expect("logs"));
+        assert!(!before.contains("after the swap"), "{before}");
+        assert_eq!(
+            guard.exporter().map(|e| e.endpoint),
+            Some("http://127.0.0.1:9".to_owned())
+        );
+    }
+
+    /// The fleet's variables win over a pane: on a machine that sets them, a
+    /// Settings pane is a read-only display.
+    #[test]
+    #[serial]
+    fn an_exporter_from_the_environment_cannot_be_replaced_by_a_pane() {
+        clear_env();
+        set_env(&[("OTEL_EXPORTER_OTLP_ENDPOINT", Some("http://127.0.0.1:9/"))]);
+        let from_env = Exporter::from_env().expect("the environment set one");
+        let (subscriber, reload) = subscriber(ALLOW, OtlpLayers::new());
+        let guard = guard_over(reload, Some(from_env.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            guard.set_exporter(Some(Exporter {
+                endpoint: "http://127.0.0.1:10/".to_owned(),
+                headers_helper: None,
+            }));
+        });
+
+        assert!(guard.exporter_is_from_env());
+        assert_eq!(guard.exporter(), Some(from_env));
+        assert!(lock(&guard.providers).is_none(), "nothing was built");
+        clear_env();
+    }
+
     /// The client span must carry no path, no query and no error string, because
     /// its target is force-allowed past the caller's allow-list.
     #[test]
+    #[serial]
     fn a_failed_request_records_no_url_and_no_error_fields() {
         let (providers, _, spans) = in_memory();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("a runtime");
-        tracing::subscriber::with_default(subscriber("test", &[], Some(&providers)), || {
+        let (subscriber, _reload) = subscriber(&[], otlp_layers("test-service", &providers));
+        tracing::subscriber::with_default(subscriber, || {
             runtime.block_on(async {
                 // Port 1 on loopback refuses immediately; nothing leaves the host.
                 let result = http_client()
@@ -514,5 +816,17 @@ mod tests {
             assert!(!rendered.contains(forbidden), "{forbidden} in {rendered}");
         }
         assert!(rendered.contains("server.address"), "{rendered}");
+    }
+
+    #[test]
+    fn a_signal_path_is_appended_to_the_endpoint_however_it_ends() {
+        assert_eq!(
+            signal_url("https://otlp.example/", "/v1/logs"),
+            "https://otlp.example/v1/logs"
+        );
+        assert_eq!(
+            signal_url("https://otlp.example", "/v1/logs"),
+            "https://otlp.example/v1/logs"
+        );
     }
 }

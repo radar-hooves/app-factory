@@ -2,10 +2,11 @@
 //!
 //! `OTEL_EXPORTER_OTLP_HEADERS_HELPER` names a command printing a JSON object of
 //! header name to header value — Claude Code's `headersHelper` contract, which
-//! `signet headers` already satisfies. It runs once, at init: the credential is a
-//! static bearer with no expiry, so a rotated one is picked up at the next launch
-//! and there is no refresh loop. Nothing here ever logs a header value, the
-//! helper's stdout, or anything derived from either — `Debug` included.
+//! `signet headers` already satisfies. It runs once per exporter — at init, at a
+//! swap, at a probe: the credential is a static bearer with no expiry, so a
+//! rotated one is picked up at the next launch and there is no refresh loop.
+//! Nothing here ever logs a header value, the helper's stdout, or anything
+//! derived from either — `Debug` included.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -87,6 +88,21 @@ impl HeaderClient {
             .build()
             .ok()?;
         Some(Self { inner, headers })
+    }
+
+    /// One blocking POST of an OTLP protobuf body, stamped with the same headers
+    /// an export carries. This is [`crate::probe`]'s whole transport: a probe that
+    /// passes is evidence about the client the exporters actually use, not about
+    /// a second HTTP path built beside it.
+    pub(crate) fn post(&self, url: &str, body: Vec<u8>) -> reqwest::Result<reqwest::StatusCode> {
+        let mut request = self
+            .inner
+            .post(url)
+            .header(http::header::CONTENT_TYPE, "application/x-protobuf");
+        for (name, value) in &self.headers {
+            request = request.header(name.clone(), value.clone());
+        }
+        Ok(request.body(body).send()?.status())
     }
 }
 
