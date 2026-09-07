@@ -56,14 +56,13 @@ let exporter = telemetry::Exporter {
     headers_helper: Some("signet headers otlp".to_owned()),
 };
 
-// Off any Tokio worker: this builds the exporters' blocking client.
 match telemetry::probe(&exporter) {
     Ok(()) => guard.set_exporter(Some(exporter)),   // saves and repoints, live
     Err(why) => eprintln!("{why}"),                 // a class or a status, never a URL
 }
 ```
 
-`Guard::set_exporter` swaps the live OTLP log and span layers and flushes the previous ones on a plain thread; the stderr layer is untouched. It never fails and never panics — a helper that fails or an endpoint that will not build degrades to local only, exactly as `init` does.
+`Guard::set_exporter` swaps the live OTLP log and span layers and flushes the previous ones on a plain thread; the stderr layer is untouched. It never fails and never panics — a helper that fails or an endpoint that will not build degrades to local only, exactly as `init` does. Both it and `probe` build the blocking client on a plain thread of their own, so an async Tauri command cannot make them panic; both still block the caller, so reach them through `spawn_blocking`.
 
 **The environment wins.** Where the fleet set `OTEL_EXPORTER_OTLP_ENDPOINT`, `set_exporter` is a no-op that logs one line. `Guard::exporter()` gives the pane the value to show and `Guard::exporter_is_from_env()` tells it to show that value read-only. `Exporter::from_env()` is the crate's one reader of those variables, so `init` and the pane cannot disagree.
 

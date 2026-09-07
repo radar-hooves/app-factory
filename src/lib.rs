@@ -127,6 +127,7 @@ struct Installed {
 #[derive(Default)]
 pub struct Guard {
     providers: Mutex<Option<Providers>>,
+    retiring: Mutex<Option<std::thread::JoinHandle<()>>>,
     installed: Option<Installed>,
     exporter: Mutex<Option<Exporter>>,
     from_env: bool,
@@ -144,8 +145,10 @@ impl Guard {
     /// build degrades to local only with one `debug!` line, exactly as [`init`]
     /// does.
     ///
-    /// Call it from a plain thread, never inside a Tokio task: it builds the
-    /// exporters' blocking `reqwest` client.
+    /// Safe to call from anywhere: the exporters' blocking `reqwest` client is
+    /// built on a plain thread of its own, so the caller's context cannot make it
+    /// panic. It still blocks the caller while the header helper runs, so from an
+    /// async command reach it through `spawn_blocking`.
     pub fn set_exporter(&self, exporter: Option<Exporter>) {
         if self.from_env {
             tracing::debug!(
@@ -162,12 +165,7 @@ impl Guard {
         let built = match &exporter {
             None => None,
             Some(wanted) => match headers_for(wanted) {
-                Ok(headers) => build_providers(
-                    installed.service_name,
-                    installed.service_version,
-                    &headers,
-                    Some(&wanted.endpoint),
-                ),
+                Ok(headers) => build_off_thread(installed, &headers, &wanted.endpoint),
                 Err(why) => {
                     tracing::debug!("telemetry is local only: {why}");
                     None
@@ -195,6 +193,11 @@ impl Guard {
 
     /// Swap the live layers, then retire what they replaced. Reload first, so
     /// nothing emitted after this call reaches the old destination.
+    ///
+    /// The reload and the record of what is live are one critical section. Two
+    /// callers that interleave them — two saves from a pane, a retry racing the
+    /// first — would otherwise leave the subscriber pointed at providers the
+    /// other caller has just shut down, silently and with nothing to see it.
     fn install(&self, providers: Option<Providers>, exporter: Option<Exporter>) {
         let Some(installed) = &self.installed else {
             return;
@@ -203,23 +206,41 @@ impl Guard {
             .as_ref()
             .map(|p| otlp_layers(installed.service_name, p))
             .unwrap_or_default();
+        let mut live = lock(&self.providers);
         if installed.reload.reload(layers).is_err() {
             tracing::debug!("telemetry: the layer stack is gone; the exporter is unchanged");
-            retire(providers);
+            drop(live);
+            self.retire(providers);
             return;
         }
-        let previous = std::mem::replace(&mut *lock(&self.providers), providers);
+        let previous = std::mem::replace(&mut *live, providers);
         *lock(&self.exporter) = exporter;
-        retire(previous);
+        drop(live);
+        self.retire(previous);
+    }
+
+    /// Shut down providers nothing is wired to any more, off the caller's thread:
+    /// the flush may take the whole budget and a swap can come from a Tauri
+    /// command. The handle is kept so a quit moments after a swap still waits for
+    /// that flush; replacing it detaches a flush whose own budget has passed.
+    fn retire(&self, providers: Option<Providers>) {
+        let Some(providers) = providers else {
+            return;
+        };
+        *lock(&self.retiring) = Some(std::thread::spawn(move || shutdown(providers)));
     }
 }
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        let Some(providers) = lock(&self.providers).take() else {
-            return;
-        };
-        shutdown(providers);
+        if let Some(providers) = lock(&self.providers).take() {
+            shutdown(providers);
+        }
+        // A swap moments before the quit left a flush in flight. It carries its
+        // own budget, so waiting for it costs at most one more.
+        if let Some(retiring) = lock(&self.retiring).take() {
+            let _ = retiring.join();
+        }
     }
 }
 
@@ -237,15 +258,6 @@ fn shutdown(providers: Providers) {
     let left = || deadline.saturating_duration_since(Instant::now());
     let _ = providers.logs.shutdown_with_timeout(left());
     let _ = providers.traces.shutdown_with_timeout(left());
-}
-
-/// Shut down providers nothing is wired to any more, off the caller's thread: the
-/// flush may take the whole budget and a swap can come from a Tauri command.
-fn retire(providers: Option<Providers>) {
-    let Some(providers) = providers else {
-        return;
-    };
-    std::thread::spawn(move || shutdown(providers));
 }
 
 /// Install the process's telemetry. Call once, at the entry point, before
@@ -345,6 +357,7 @@ pub fn init(
     }
     Guard {
         providers: Mutex::new(providers),
+        retiring: Mutex::new(None),
         from_env: from_env.is_some(),
         exporter: Mutex::new(from_env),
         installed: Some(Installed {
@@ -408,9 +421,11 @@ fn headers_for(exporter: &Exporter) -> Result<HashMap<String, String>, &'static 
 }
 
 /// The join the SDK makes from `OTEL_EXPORTER_OTLP_ENDPOINT`, made here too, so a
-/// pane's endpoint means exactly what the variable means.
+/// pane's endpoint means exactly what the variable means. One trailing slash, as
+/// upstream's `build_endpoint_uri` does it — never every trailing slash, which
+/// would rewrite an endpoint the variable would have kept.
 fn signal_url(base: &str, path: &str) -> String {
-    format!("{}{path}", base.trim_end_matches('/'))
+    format!("{}{path}", base.strip_suffix('/').unwrap_or(base))
 }
 
 /// The layer stack, built once and installed either globally by [`init`] or
@@ -437,6 +452,30 @@ fn otlp_layers(service_name: &'static str, providers: &Providers) -> OtlpLayers 
         Box::new(OpenTelemetryTracingBridge::new(&providers.logs)),
         Box::new(tracing_opentelemetry::layer().with_tracer(providers.traces.tracer(service_name))),
     ]
+}
+
+/// Build the providers on a plain thread. `reqwest`'s blocking client panics when
+/// it is built inside a Tokio runtime, and a Settings pane's save is an async
+/// command; a thread of its own makes the caller's context irrelevant. A panic in
+/// there is local only, never the caller's.
+fn build_off_thread(
+    installed: &Installed,
+    headers: &HashMap<String, String>,
+    endpoint: &str,
+) -> Option<Providers> {
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                build_providers(
+                    installed.service_name,
+                    installed.service_version,
+                    headers,
+                    Some(endpoint),
+                )
+            })
+            .join()
+            .unwrap_or_default()
+    })
 }
 
 /// Both providers, or neither. Signal endpoints, timeouts, batch sizing
@@ -602,6 +641,7 @@ mod tests {
     fn guard_over(reload: OtlpHandle, from_env: Option<Exporter>) -> Guard {
         Guard {
             providers: Mutex::new(None),
+            retiring: Mutex::new(None),
             installed: Some(Installed {
                 reload,
                 service_name: "test-service",
@@ -782,6 +822,33 @@ mod tests {
         );
     }
 
+    /// `reqwest::blocking::ClientBuilder::build` panics inside a Tokio runtime, and
+    /// a Settings pane's save is an async command.
+    #[test]
+    #[serial]
+    fn a_swap_from_inside_a_tokio_runtime_does_not_panic() {
+        clear_env();
+        let (subscriber, reload) = subscriber(ALLOW, OtlpLayers::new());
+        let guard = guard_over(reload, None);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        tracing::subscriber::with_default(subscriber, || {
+            runtime.block_on(async {
+                // Port 9 discards; nothing leaves the host and no flush waits on it.
+                guard.set_exporter(Some(Exporter {
+                    endpoint: "http://127.0.0.1:9".to_owned(),
+                    headers_helper: None,
+                }));
+            });
+        });
+        assert!(
+            lock(&guard.providers).is_some(),
+            "the swap installed an exporter"
+        );
+    }
+
     /// The fleet's variables win over a pane: on a machine that sets them, a
     /// Settings pane is a read-only display.
     #[test]
@@ -847,6 +914,11 @@ mod tests {
         assert_eq!(
             signal_url("https://otlp.example", "/v1/logs"),
             "https://otlp.example/v1/logs"
+        );
+        assert_eq!(
+            signal_url("https://otlp.example//", "/v1/logs"),
+            "https://otlp.example//v1/logs",
+            "only the one slash the SDK strips"
         );
     }
 }

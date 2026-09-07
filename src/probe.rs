@@ -6,6 +6,7 @@
 //! outcome is a class, never a message: `reqwest`'s error `Display` appends the
 //! full URL, so nothing from it reaches [`ProbeError`].
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -64,16 +65,31 @@ impl Error for ProbeError {}
 /// It reads no settings and stores nothing: the caller owns the value being
 /// tested, whether or not it is the one currently installed.
 ///
-/// Call it from a plain thread, never inside a Tokio task: it builds the same
-/// blocking `reqwest` client the exporters use, which panics in an async context.
+/// Safe to call from anywhere: the blocking client runs on a plain thread of its
+/// own, so the caller's context cannot make it panic. It still blocks until the
+/// collector answers or the OTLP timeout expires, so from an async command reach
+/// it through `spawn_blocking`.
 pub fn probe(exporter: &Exporter) -> Result<(), ProbeError> {
-    ensure_crypto_provider();
     let headers = headers_for(exporter).map_err(|_| ProbeError::Helper)?;
-    let timeout = bearer::timeout("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT");
-    let client = bearer::HeaderClient::new(timeout, &headers).ok_or(ProbeError::Transport)?;
     let url = signal_url(&exporter.endpoint, "/v1/logs");
+    // `reqwest`'s blocking client panics when it is used inside a Tokio runtime,
+    // and a Settings pane's test button is an async command. A panic in there is
+    // still an error, never the caller's.
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| send(&url, &headers))
+            .join()
+            .unwrap_or(Err(ProbeError::Transport))
+    })
+}
+
+/// The request itself, on whatever thread the caller gave it.
+fn send(url: &str, headers: &HashMap<String, String>) -> Result<(), ProbeError> {
+    ensure_crypto_provider();
+    let timeout = bearer::timeout("OTEL_EXPORTER_OTLP_LOGS_TIMEOUT");
+    let client = bearer::HeaderClient::new(timeout, headers).ok_or(ProbeError::Transport)?;
     let status = client
-        .post(&url, request().encode_to_vec())
+        .post(url, request().encode_to_vec())
         .map_err(classify)?;
     if status.is_success() {
         Ok(())
@@ -222,10 +238,26 @@ mod tests {
         served.join().expect("the listener thread");
     }
 
+    /// `reqwest`'s blocking client panics inside a Tokio runtime under debug
+    /// assertions, and a Settings pane's test button is an async command.
+    #[test]
+    #[serial]
+    fn a_probe_from_inside_a_tokio_runtime_does_not_panic() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let (port, served) = accepts_one();
+        let outcome = runtime.block_on(async { probe(&to(format!("http://127.0.0.1:{port}"))) });
+        assert_eq!(outcome, Ok(()));
+        served.join().expect("the listener thread");
+    }
+
     #[test]
     fn the_record_carries_a_service_name_and_nothing_of_the_callers() {
         let rendered = format!("{:?}", request());
         assert!(rendered.contains("telemetry probe"), "{rendered}");
         assert!(rendered.contains(SERVICE_NAME), "{rendered}");
+        assert!(rendered.contains(env!("CARGO_PKG_NAME")), "{rendered}");
     }
 }
