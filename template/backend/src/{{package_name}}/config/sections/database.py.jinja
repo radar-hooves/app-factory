@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Self
 from urllib.parse import quote_plus
 
-from pydantic import computed_field, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.vend import vend
@@ -97,10 +97,10 @@ class DatabaseSettings(BaseSettings):
             self.postgres_password = vend("{{ project_name }}-db", "password")
         return self
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Sync SQLAlchemy connection URL.
+        """Sync SQLAlchemy connection URL. A property, never a computed field: a
+        computed field rides every `model_dump()`, and this one carries the password.
 
         User and password are percent-encoded: a generated password containing
         `@`, `:`, `/`, `?` or `#` otherwise splits the URL at the wrong place and
