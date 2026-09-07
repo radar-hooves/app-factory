@@ -20,4 +20,4 @@ The household's one Rust telemetry call. Every Rust process — Tauri app, daemo
 - Batch sizing, protocol selection and export timeouts are the SDK's own env handling. The crate overrides none of them: hardcoding a value here takes the standard variable away from the fleet. `http_client`'s connect timeout is the exception, and only because reqwest has no per-request form of it.
 - Tauri drops no managed state at exit, so the wiring is always both halves: manage a `Mutex<Option<Guard>>` and take it in the `RunEvent::Exit` arm. Documenting only the `manage` half ships a crate whose flush never runs.
 
-Contract: `rules-library/platform/telemetry.md`. Wiring: `docs/master/reference/guide-telemetry.md` §Rust. Design: `poodle64/master-project#314` (07/09/2026), ledger `#330`.
+Contract: `rules-library/platform/telemetry.md`. Wiring: `docs/master/reference/guide-telemetry.md` §Rust. Design: `radar-hooves/master-project#314` (07/09/2026), ledger `#330`.

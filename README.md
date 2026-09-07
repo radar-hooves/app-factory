@@ -3,7 +3,7 @@
 The household's one Rust telemetry call. It writes no file, exports no metrics, reads no settings file of its own, and knows no broker, identity or token: the endpoint and the credential reach it as standard environment variables the fleet sets, or as a value the application hands it from its own Settings pane.
 
 ```toml
-telemetry = { git = "https://github.com/poodle64/telemetry-rs", tag = "v0.2.0" }
+telemetry = { git = "https://github.com/radar-hooves/telemetry-rs", tag = "v0.2.0" }
 ```
 
 ## The one call

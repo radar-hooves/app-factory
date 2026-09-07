@@ -63,7 +63,7 @@ jobs:
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # This repo is PUBLIC and poodle64/master-project is private, so the
+          # This repo is PUBLIC and radar-hooves/master-project is private, so the
           # ntfy-failure composite action cannot be resolved at job-setup time;
           # the household CI standard has a public repo inline the curl.
           if [ -z "$NTFY_TOKEN" ]; then
