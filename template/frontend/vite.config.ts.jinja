@@ -79,11 +79,11 @@ export default defineConfig(({ command, isPreview }) => {
 	// This is a construction argument, not a benchmark: `127.0.0.1` cannot be
 	// worse than `localhost` against a socket bound to `0.0.0.0`, on any machine.
 	//
-	// Not overridable: no app has needed a second target, and an override nobody
-	// reaches for is untested machinery (issue #13 item 4) — an app that
-	// genuinely needs one adds it back with a use to prove it against, rather
-	// than carrying it speculatively.
-	const backendTarget = `http://127.0.0.1:{{ backend_port }}`;
+	// The override exists for one measured use (godswood#772): an E2E suite whose
+	// backend runs on its own port so it can never adopt the interactive one.
+	const backendTarget =
+		process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ??
+		`http://127.0.0.1:{{ backend_port }}`;
 
 	return {
 		plugins: [...plugins, requireDevIdentity],
