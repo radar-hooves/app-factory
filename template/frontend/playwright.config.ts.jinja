@@ -22,6 +22,11 @@ export default defineConfig({
 	// which global-setup calls once its guard passes; that file is the seam for
 	// BOTH this stanza and that one, and neither of them is edited per app.
 	globalSetup: './tests/e2e/global-setup.ts',
+	// No factory default: nothing the factory's own setup starts outlives the
+	// run. An app that starts something that does — a broker holding an unlocked
+	// vault, a container, a temp data root — names its teardown module in
+	// tests/e2e/app-web-server.ts, and `undefined` here is Playwright's "none".
+	globalTeardown: APP_WEB_SERVER.globalTeardown,
 	timeout: CI ? 90_000 : 30_000,
 	expect: { timeout: CI ? 20_000 : 5_000 },
 	// Deliberately no CI retry: a retry turns a real intermittent failure into a green build.
@@ -30,8 +35,10 @@ export default defineConfig({
 	// and the tenancy specs change what that identity belongs to — a grant made
 	// in one file is a second membership seen by another running beside it,
 	// which turns "the menu offers no switch" into a coin toss. Serial is the
-	// only honest answer while the identity is singular.
-	workers: 1,
+	// only honest answer while the identity is singular. An app that has made its
+	// suite genuinely independent — or that is serial for a reason of its own —
+	// says so in tests/e2e/app-web-server.ts rather than forking this file.
+	workers: APP_WEB_SERVER.workers ?? 1,
 	reporter: CI
 		? [
 				['list'],

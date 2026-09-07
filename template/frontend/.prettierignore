@@ -18,3 +18,13 @@ src/lib/api/schema.d.ts
 # Reformatting them turns every banked finding into a two-tool diff.
 .design-craft-baseline.json
 .ui-drift-baseline.json
+
+# ============================================================================
+# App-owned
+# ============================================================================
+# Prettier has no include directive, so this is the extension point: everything
+# above is the factory's and is compared byte-for-byte, everything below is this
+# app's. What belongs here is a path only this app has — a second build output,
+# a generated source tree, hand-aligned fixture JSON a reformat would destroy.
+# One reason per line, so a stale rule can be retired by someone who did not add it.
+# App-owned below this line; the factory owns everything above it.

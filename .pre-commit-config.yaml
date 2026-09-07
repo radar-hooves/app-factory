@@ -76,22 +76,3 @@ repos:
         entry: household-precommit-history
         language: system
         types: [text]
-
-  # ---------------------------------------------------------------------------- #
-  #                             Template parity manifest                         #
-  # ---------------------------------------------------------------------------- #
-
-  # template/.template-parity.json is DERIVED from the template's own files, so
-  # it regenerates here rather than by a documented step someone has to remember
-  # — a stale manifest silently passes every app that matches the OLD template.
-  # Writes via a temp file so a generator failure cannot truncate the manifest.
-  - repo: local
-    hooks:
-      - id: template-parity-manifest
-        name: 'template · Regenerate the parity manifest'
-        entry: >-
-          bash -c 'out=$(mktemp) && python3 .claude/skills/canonical-app-migration/check-template-parity.py --generate . > "$out" && mv "$out" template/.template-parity.json'
-
-        language: system
-        pass_filenames: false
-        files: '^template/'

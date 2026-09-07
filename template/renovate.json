@@ -6,6 +6,11 @@
       "description": "The copier template source in .copier-answers.yml has no Renovate datasource — a bare `gh:` path resolves as git-tags and always reports 'no-result', which every stamped app then carries as a permanent repository problem on its Dependency Dashboard. The value is correct and is bumped by `copier update`, never by Renovate.",
       "matchPackageNames": ["gh:poodle64/full-stack-app-template"],
       "enabled": false
+    },
+    {
+      "description": "vite-plugin-svelte v7 declares `vite: ^8` as a peer and registers its Svelte prebundle loader ONLY under optimizeDeps.rolldownOptions — v6 branches on vite.rolldownVersion and falls back to optimizeDeps.esbuildOptions, v7 deleted that branch. Vite 7's esbuild dep-optimiser never reads rolldownOptions, so every prebundled .svelte file goes through uncompiled and `vite dev` dies, while build, check, lint and Vitest all stay green — a bump nothing in CI catches. Verified 07/09/2026 against the published 6.2.4 and 7.0.0 sources. Retires when this app takes Vite 8.",
+      "matchPackageNames": ["@sveltejs/vite-plugin-svelte"],
+      "allowedVersions": "<7"
     }
   ]
 }

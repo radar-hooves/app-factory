@@ -1,6 +1,6 @@
 import type { FullConfig } from '@playwright/test';
 
-import { appPreconditions } from './app-web-server';
+import { apiPrefix, appPreconditions } from './app-web-server';
 
 /**
  * Refuses to run the E2E suite against a database that is not a throwaway.
@@ -31,6 +31,17 @@ import { appPreconditions } from './app-web-server';
 const ALLOWED_ENVIRONMENT = 'local';
 
 /**
+ * The route the guard asks, built from the app's own API mount point
+ * (`apiPrefix` in tests/e2e/app-web-server.ts, '/api' unless an app says
+ * otherwise). Written as a seam rather than a literal because an app that
+ * mounts its router at the root cannot reach this route at all, and its only
+ * way to say so was to drop the guard.
+ */
+function probePath(): string {
+	return `${apiPrefix}/system/database-environment`;
+}
+
+/**
  * Fetch the database-environment probe from the dev server, tolerating the
  * IPv4/IPv6 split that breaks a naive `fetch('http://localhost:…')` in CI.
  *
@@ -49,7 +60,7 @@ const ALLOWED_ENVIRONMENT = 'local';
  * as "could not ask", which reads as production.
  */
 async function probeDatabaseEnvironment(baseURL: string): Promise<Response> {
-	const target = new URL('/api/system/database-environment', baseURL);
+	const target = new URL(probePath(), baseURL);
 	const port = target.port || (target.protocol === 'https:' ? '443' : '80');
 	// Build the candidate host forms in reachability order: the configured host
 	// (what the operator's machine resolves, and what a browser would use), then
@@ -77,7 +88,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 	if (!baseURL) {
 		throw new Error('No baseURL configured; playwright.config.ts sets one from E2E_PORT.');
 	}
-	const endpoint = new URL('/api/system/database-environment', baseURL).toString();
+	const endpoint = new URL(probePath(), baseURL).toString();
 
 	let environment: string;
 	try {

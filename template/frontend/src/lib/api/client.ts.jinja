@@ -47,11 +47,31 @@ const workspaceMiddleware: Middleware = {
 // Track timeout IDs by request identity (survives request.clone()).
 const timeoutIds = new WeakMap<Request, ReturnType<typeof setTimeout>>();
 
-// Abort requests exceeding 30 seconds.
+// The budget every call gets unless SLOW_PATHS says otherwise.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * The calls that are legitimately slower than the default, by SCHEMA path (the
+ * templated path openapi-fetch hands the middleware, e.g. '/api/items/{id}').
+ *
+ * Empty in the factory and expected to stay near-empty: an entry is an argued
+ * exception, not a tuning knob, and it names the one call that fans out or waits
+ * on something outside this app. Raising DEFAULT_TIMEOUT_MS instead would hide
+ * every stuck call behind the slowest one's budget, which is the opposite of
+ * what a timeout is for. One app arrived here the hard way — a retrieval query
+ * fanning out across collections was abandoned at 30s while the API went on to
+ * answer it fine.
+ */
+const SLOW_PATHS: Record<string, number> = {};
+
+// Abort a request that outlives its budget.
 const timeoutMiddleware: Middleware = {
-	async onRequest({ request }) {
+	async onRequest({ request, schemaPath }) {
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), 30_000);
+		const timeoutId = setTimeout(
+			() => controller.abort(),
+			SLOW_PATHS[schemaPath] ?? DEFAULT_TIMEOUT_MS
+		);
 		const newRequest = new Request(request, { signal: controller.signal });
 		timeoutIds.set(newRequest, timeoutId);
 		return newRequest;

@@ -15,16 +15,21 @@
  * silent default is how one workspace's data lands in another.
  */
 import { api, setActiveWorkspaceId } from './api/client';
+import type { components } from './api/schema';
 
 export const ACTIVE_WORKSPACE_STORAGE_KEY = '{{ project_name }}.activeWorkspaceId';
 
-export interface User {
-	id: string;
-	username: string;
-	display_name: string | null;
-	email: string | null;
-	last_seen_at: string | null;
-}
+/**
+ * Whoever `/api/users/me` says you are — the backend's own schema, not a second
+ * hand-written copy of it.
+ *
+ * Derived from the generated schema so a field added, renamed or made nullable
+ * on the backend is a type error here at the next `pnpm generate:api`, rather
+ * than a hand-maintained interface that silently drifts. Workspace and
+ * membership shapes below stay declared: they are the tenancy contract the
+ * household fixes (`platform/tenancy.md`), not this app's API surface.
+ */
+export type User = components['schemas']['CurrentUserRead'];
 
 export interface Workspace {
 	id: number;
@@ -153,7 +158,7 @@ export const auth = {
 				user = null;
 				return;
 			}
-			user = me.data as User;
+			user = me.data;
 			entitlements = (me.data as { entitlements?: string[] }).entitlements ?? [];
 			memberships = (mine.data as Membership[]) ?? [];
 
