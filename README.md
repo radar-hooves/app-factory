@@ -15,7 +15,7 @@ One factory, and a gate that fails a repo which edits what the factory owns. `ru
 Prefer `/scaffold-project`, which also sets up the governance symlinks and `.claude/CLAUDE.md`. To stamp directly:
 
 ```bash
-copier copy gh:poodle64/full-stack-app-template <path>
+copier copy gh:radar-hooves/full-stack-app-template <path>
 ```
 
 Answers are prompted from `copier.yaml`; ports come from the operator's port registry, never invented.
@@ -38,4 +38,4 @@ Deliberately not documented here: the file tree, the copier questions and the de
 
 ## Contributing
 
-Authored here, consumed as `gh:poodle64/full-stack-app-template`. Extracted from `poodle64/master-project` with history preserved so copier has a tagged VCS source (master-project#161). Changes follow `core/rules-approach.md` §"Changing a rule or strategy", the same as the rule they implement.
+Authored here, consumed as `gh:radar-hooves/full-stack-app-template`. Extracted from `radar-hooves/master-project` with history preserved so copier has a tagged VCS source (master-project#161). Changes follow `core/rules-approach.md` §"Changing a rule or strategy", the same as the rule they implement.

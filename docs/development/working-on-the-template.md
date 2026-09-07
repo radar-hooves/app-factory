@@ -42,7 +42,7 @@ An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for 
 
 **Alembic's URL must not go through `ConfigParser`.** `Config.set_main_option()` raises on any value containing a literal `%`, and the password is percent-encoded into that URL — so the `openssl rand -base64 32` the compose header documents produces a trailing `=` → `%3D` and kills boot before a single migration runs. The URL is a module-level string used directly by both the offline and online paths.
 
-**Do not re-declare shadcn token names.** An app picks its palette by overriding `--ds-color-primary` and its pair; the whole surface follows, because `@poodle64/ui/styles.css` maps every shadcn name onto a `--ds-*` token. Declaring `--card`/`--muted`/`--accent`/`--input` yourself makes the variable exist but never registers it as a Tailwind v4 theme colour, so `bg-card` and friends compile to *no rule at all* — no build error, no lint hit, no failing test (`poodle64/design-system#3`). Sidebar and chart colours are the one part still owned per app, because the package ships neither component.
+**Do not re-declare shadcn token names.** An app picks its palette by overriding `--ds-color-primary` and its pair; the whole surface follows, because `@poodle64/ui/styles.css` maps every shadcn name onto a `--ds-*` token. Declaring `--card`/`--muted`/`--accent`/`--input` yourself makes the variable exist but never registers it as a Tailwind v4 theme colour, so `bg-card` and friends compile to *no rule at all* — no build error, no lint hit, no failing test (`radar-hooves/design-system#3`). Sidebar and chart colours are the one part still owned per app, because the package ships neither component.
 
 ## Two surfaces, two gates, never interchangeable
 

@@ -17,4 +17,4 @@ permissions:
 
 jobs:
   canonical-shape:
-    uses: poodle64/master-project/.github/workflows/canonical-shape.yaml@main
+    uses: radar-hooves/master-project/.github/workflows/canonical-shape.yaml@main

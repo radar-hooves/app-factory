@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   frontend-ci:
-    uses: poodle64/master-project/.github/workflows/frontend-ci.yaml@main
+    uses: radar-hooves/master-project/.github/workflows/frontend-ci.yaml@main
     with:
       working-directory: frontend
       run-tests: true

@@ -49,7 +49,7 @@ jobs:
 
   docker:
     needs: [python-ci, security]
-    uses: poodle64/master-project/.github/workflows/docker-image-simple.yaml@main
+    uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     with:
       image-name: {{ project_name }}
       # Publish to the household registry, not the reusable's ghcr.io default; every

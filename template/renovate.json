@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>poodle64/master-project"],
+  "extends": ["local>radar-hooves/master-project"],
   "packageRules": [
     {
       "description": "The copier template source in .copier-answers.yml has no Renovate datasource — a bare `gh:` path resolves as git-tags and always reports 'no-result', which every stamped app then carries as a permanent repository problem on its Dependency Dashboard. The value is correct and is bumped by `copier update`, never by Renovate.",
-      "matchPackageNames": ["gh:poodle64/full-stack-app-template"],
+      "matchPackageNames": ["gh:radar-hooves/full-stack-app-template"],
       "enabled": false
     },
     {
