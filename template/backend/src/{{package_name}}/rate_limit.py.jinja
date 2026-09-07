@@ -47,7 +47,6 @@ from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from {{ package_name }} import app_hooks
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.proxy_trust import client_ip
 
@@ -83,6 +82,11 @@ def _key_func(request: Request) -> str:
     rather than pinned at import for the same reason: one place decides, and a
     suite can drive the hook.
     """
+    # Local, not module-level: app_hooks imports the middleware, which imports
+    # `limiter` back out of this module, and an entry point that imports the
+    # API before main (a backfill script) hit that cycle as an ImportError.
+    from {{ package_name }} import app_hooks
+
     hook = getattr(app_hooks, "rate_limit_key", None)
     return rate_limit_key(request) if hook is None else str(hook(request))
 
