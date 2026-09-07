@@ -17,6 +17,10 @@ _skip_if_exists:
   # empty, grown by the app as it banks pre-existing mypy findings, and an
   # update must never wipe it. Missed when the others were added.
   - backend/mypy-baseline.txt
+  # App-owned compose fragment, `include`d by the factory's compose.yaml.
+  # Stamped as an empty but valid fragment so the include resolves in a fresh
+  # stamp, then grown by the app — an update must never overwrite its services.
+  - compose.app.yaml
 
 project_name:
   type: str

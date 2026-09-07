@@ -1,0 +1,11 @@
+# THIS app's own compose services — a worker, a queue, a sidecar, a second
+# store. `compose.yaml` is the factory's and is owed byte-identical, so it
+# `include:`s this file rather than growing an app's services inside itself
+# (canonical-app-shape.md §Extension points). On copier's `_skip_if_exists`, so
+# a template update never overwrites what an app has put here.
+#
+# Empty by default, and an app with nothing of its own leaves it that way. Add a
+# service the way the factory declares its own: an explicit `container_name`
+# matching the service name, a pinned image or a build context, a healthcheck,
+# and the same json-file logging caps.
+services: {}

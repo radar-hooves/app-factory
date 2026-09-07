@@ -89,7 +89,7 @@
     "backend/tests/test_system_health.py": "6eb595dd7d60e1b4",
     "backend/tests/test_version.py": "28ed1c4d6a005119",
     "backend/tests/test_workspace_scoping.py": "ebfaa0eabecafa6e",
-    "compose.yaml": "1c3ea401b4732d7e",
+    "compose.yaml": "1bcf82da611e3f7f",
     "frontend/.npmrc": "93d7b61d9d1758fd",
     "frontend/.prettierignore": "9bc58f14bf2d6e80",
     "frontend/.prettierrc": "daec45a55e1f3ad7",
