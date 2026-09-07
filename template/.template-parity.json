@@ -46,7 +46,7 @@
     "backend/alembic/env.py": "0a58667e166cc1ab",
     "backend/alembic/script.py.mako": "10a62fa32d96d6ae",
     "backend/entrypoint.sh": "6bbe92d24a02f57c",
-    "backend/gunicorn.conf.py": "46d911a57711be6d",
+    "backend/gunicorn.conf.py": "b9c5bab617467bae",
     "backend/src/{package}/__init__.py": "01ba4719c80b6fe9",
     "backend/src/{package}/config/paths.py": "3d7afbde87df157d",
     "backend/src/{package}/config/sections/database.py": "0e4845fb7d2dc506",

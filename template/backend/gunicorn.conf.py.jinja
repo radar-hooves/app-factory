@@ -79,6 +79,13 @@ logconfig_dict = {
 
 proc_name = "{{ package_name }}"
 
+# The arbiter's control socket. Gunicorn defaults it under $HOME, which a
+# read-only root filesystem cannot create: the arbiter logs an ERROR on every
+# boot and then carries on without a control interface. This is not application
+# state, so it belongs on the container's tmpfs — in a directory gunicorn
+# creates under the process umask, rather than loose in world-writable /tmp.
+control_socket = "/tmp/gunicorn/gunicorn.ctl"
+
 # Security limits
 limit_request_line = 4094
 limit_request_fields = 100
