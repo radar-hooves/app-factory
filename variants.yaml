@@ -9,12 +9,15 @@ portcullis:
   backend/src/{package}/mcp/auth.py: "the actor is the attested identity, not an x-client-id header an Authentik gate wrote; retires with http_auth.py"
   backend/src/{package}/mcp/actors.py: "identities are enrolled and revoked in the broker's store, not a static actors.yaml; retires with http_auth.py"
   backend/src/{package}/config/sections/mcp.py: "configures the Authentik gate this app does not install; retires with http_auth.py"
-  root-inventory:config: "no config/actors.yaml, because there are no Authentik actors to register; retires with http_auth.py"
   deps:pyyaml: "declared only for actors.yaml, which this app has no use for; retires with http_auth.py"
   deps:types-pyyaml: "stubs for the above; retires with it"
   backend/src/{package}/config/sections/identity.py: "one broker holds one household's one vault: no users or workspaces to resolve a per-account grade for, and the operator's header names live on its console-editable auth config; retires if the broker ever holds a second tenant"
   backend/src/{package}/entitlements.py: "module entitlement is licensing for a multi-module tenant app; the broker has one module and gates on attested identity or the one operator session; retires with identity.py"
   frontend/src/lib/auth.svelte.ts: "the factory store resolves /users/me and /workspaces/me, neither of which the broker has; retires with identity.py"
+  frontend/src/lib/workspaces/workspace-chooser.svelte: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
+  frontend/src/lib/workspaces/workspace-members.svelte: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
+  frontend/src/lib/workspaces/workspace-menu.svelte: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
+  frontend/tests/e2e/workspaces.spec.ts: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
 pebblestone:
   mcp-mount: "four MCP servers run as their own processes by the app's ADR-001, for isolation; retires if that decision is reversed"
 eight:
