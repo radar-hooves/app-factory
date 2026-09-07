@@ -75,6 +75,12 @@ _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
 # and a page of HTML. Derived from what is mounted.
 _API_PREFIXES = tuple(f"{prefix.strip('/')}/" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
 
+# Nor is a miss on one of these a client-side route. FastAPI serves all three
+# itself when openapi_enabled is True, so this branch only ever fires when it
+# is False — and OPENAPI_ENABLED's whole point is that they answer 404, not the
+# SPA shell with a 200 a scanner reads as "reachable, docs hidden".
+_DOCUMENT_ROUTES = ("openapi.json", "docs", "redoc")
+
 
 class _SPAStaticFiles(StaticFiles):
     """Serve the built SPA, falling back to index.html for client-side routes.
@@ -91,7 +97,11 @@ class _SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if exc.status_code == 404 and not path.startswith((_IMMUTABLE_ASSET_PREFIX, *_API_PREFIXES)):
+            if (
+                exc.status_code == 404
+                and path not in _DOCUMENT_ROUTES
+                and not path.startswith((_IMMUTABLE_ASSET_PREFIX, *_API_PREFIXES))
+            ):
                 return await super().get_response("index.html", scope)
             raise
 
