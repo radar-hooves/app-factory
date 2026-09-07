@@ -18,10 +18,8 @@ portcullis:
 pebblestone:
   mcp-mount: "four MCP servers run as their own processes by the app's ADR-001, for isolation; retires if that decision is reversed"
 eight:
-  root-inventory:agents: "the trading agent roster the app dispatches from"
+  root-inventory:desks: "the identity folder per strategy desk — persona, playbook, seed manifest — that the roster dispatches from"
   root-inventory:ops: "the app's n8n workflow exports, versioned with it"
-  root-inventory:tools: "whitepaper generation, the app's own deliverable"
-  root-inventory:.ruff.toml: "lints the root Python in tools/; retires with it"
   root-inventory:GOAL.md: "the trading programme's charter, the app's own deliverable"
 earworm:
   root-inventory:plugins: "a C# Jellyfin server plugin, a language the factory does not model"
