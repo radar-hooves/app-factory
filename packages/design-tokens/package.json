@@ -4,7 +4,7 @@
   "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
   "type": "module",
   "license": "MIT",
-  "repository": "github:poodle64/design-system",
+  "repository": "github:radar-hooves/design-system",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

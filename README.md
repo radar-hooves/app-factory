@@ -25,7 +25,7 @@ config and no auth token needed to install either one. See each package's own
 README for its contents, consumption snippet, and release process.
 
 WP-51 background: `docs/master/templates/golden-patterns/app-shape-and-frontend.md`
-in `poodle64/master-project` (`master-project#174`). The companion
+in `radar-hooves/master-project` (`master-project#174`). The companion
 `docs/development/wp51-canonical-shape.md` this used to cite does not exist in
 either repo and the reference is dropped rather than left dangling.
 

@@ -12,7 +12,7 @@
  * `lint:css` and `check` all succeed, and the app ships with `bg-card`,
  * `bg-muted`, `bg-accent`, `bg-popover` and `border-input` compiling to no rule
  * at all — no build error, no lint hit, no failing test, just classes in the DOM
- * with nothing behind them. That is poodle64/design-system#3, which reached every
+ * with nothing behind them. That is radar-hooves/design-system#3, which reached every
  * app in the estate before anyone saw it: dropdowns with no hover, inputs with no
  * border, cards and popovers with no surface.
  *
