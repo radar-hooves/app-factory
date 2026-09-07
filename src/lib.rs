@@ -34,6 +34,11 @@ use tracing_subscriber::{Layer, fmt};
 /// The total a drop may spend flushing, so exit is never delayed.
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(2);
 
+/// A household outbound call that cannot connect in this long is dead. It has to
+/// be set on the client: only the total timeout has a per-request form
+/// (`RequestBuilder::timeout`), so a caller cannot supply this one itself.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Claimed by the first [`init`]; a later call builds nothing.
 static INITIALISED: AtomicBool = AtomicBool::new(false);
 
@@ -43,15 +48,21 @@ struct Providers {
     traces: SdkTracerProvider,
 }
 
-/// Keeps the export pipeline alive. Hold it for the process lifetime — a Tauri
-/// app puts it in managed state — and dropping it flushes and shuts the providers
-/// down within [`SHUTDOWN_BUDGET`].
+/// Keeps the export pipeline alive. Hold it for the process lifetime, and drop it
+/// at exit: dropping is what flushes the batch processors and shuts the providers
+/// down, within [`SHUTDOWN_BUDGET`].
+///
+/// **Tauri does not drop managed state at exit.** `app.manage(init(..))` on its
+/// own means this `Drop` never runs and whatever the batch processors hold at
+/// quit is lost. Manage a `Mutex<Option<Guard>>` and take it in the
+/// `RunEvent::Exit` arm — see [`init`] for the snippet.
 ///
 /// Drop it from a plain thread, never from a Tokio worker: after that bounded
 /// flush the exporters' blocking `reqwest` client is dropped, and its own `Drop`
 /// joins the `reqwest-internal-sync-runtime` thread with no timeout of its own.
 /// It returns as soon as the channel closes, but it is a blocking join, so a
-/// Tokio worker would be parked for its duration.
+/// Tokio worker would be parked for its duration. Tauri's `Exit` arm runs on the
+/// main thread, which satisfies that.
 #[derive(Default)]
 pub struct Guard {
     providers: Option<Providers>,
@@ -85,15 +96,40 @@ impl Drop for Guard {
 ///
 /// Call it from a plain thread — a Tauri app's `setup` hook on the main thread,
 /// or `main` — and never from inside a Tokio task: it constructs the exporters'
-/// blocking `reqwest` client, which panics if built in an async context. The same
-/// applies to dropping the [`Guard`].
+/// blocking `reqwest` client, which panics if built in an async context.
 ///
-/// ```no_run
-/// # struct App;
-/// # impl App { fn manage<T>(&self, _: T) {} }
-/// # fn setup(app: &App) {
-/// app.manage(telemetry::init("bragi", env!("CARGO_PKG_VERSION"), &["bragi"]));
-/// # }
+/// Tauri does not drop managed state at exit, so the [`Guard`] must be taken back
+/// out and dropped in the `RunEvent::Exit` arm or nothing flushes. `Manager::
+/// unmanage` is deprecated and documented as unsafe, so the state is a
+/// `Mutex<Option<Guard>>` and the exit arm takes it — upstream's own advice:
+///
+/// ```ignore
+/// use std::sync::Mutex;
+/// use tauri::{Manager, RunEvent};
+///
+/// tauri::Builder::default()
+///     .setup(|app| {
+///         app.manage(Mutex::new(Some(telemetry::init(
+///             "bragi",
+///             env!("CARGO_PKG_VERSION"),
+///             &["bragi"],
+///         ))));
+///         Ok(())
+///     })
+///     .build(tauri::generate_context!())
+///     .expect("build")
+///     .run(|app, event| {
+///         if let RunEvent::Exit = event {
+///             // Tauri drops no managed state at exit; this is what flushes.
+///             // The Exit arm is on the main thread, off any async runtime.
+///             let guard = app
+///                 .state::<Mutex<Option<telemetry::Guard>>>()
+///                 .lock()
+///                 .expect("the telemetry guard")
+///                 .take();
+///             drop(guard);
+///         }
+///     });
 /// ```
 pub fn init(
     service_name: &'static str,
@@ -136,9 +172,19 @@ pub fn init(
 ///
 /// The span records the method, the host and the status only — never a path, a
 /// query or an error string, all of which can carry private material.
+///
+/// The client carries a ten-second connect timeout, because a caller cannot add
+/// one per request: only the total timeout has a `RequestBuilder` form, so a
+/// black-holed address would otherwise hang for the whole total timeout instead
+/// of failing at connect. Set a per-request `timeout` on top where the call has
+/// its own deadline.
 pub fn http_client() -> reqwest_middleware::ClientWithMiddleware {
     ensure_crypto_provider();
-    reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+    let inner = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .expect("a reqwest client with no TLS or resolver configuration of its own");
+    reqwest_middleware::ClientBuilder::new(inner)
         .with(reqwest_tracing::TracingMiddleware::<
             client::HouseholdSpanBackend,
         >::new())

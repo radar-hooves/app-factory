@@ -3,27 +3,48 @@
 The household's one Rust telemetry call. It writes no file, exports no metrics, reads no settings, and knows no broker, identity or token: the endpoint and the credential reach it only as standard environment variables the fleet sets.
 
 ```toml
-telemetry = { git = "https://github.com/poodle64/telemetry-rs", tag = "v0.1.1" }
+telemetry = { git = "https://github.com/poodle64/telemetry-rs", tag = "v0.1.2" }
 ```
 
 ## The one call
 
 ```rust
+use std::sync::Mutex;
+use tauri::{Manager, RunEvent};
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            // Hold the Guard for the process lifetime; dropping it flushes.
-            app.manage(telemetry::init("bragi", env!("CARGO_PKG_VERSION"), &["bragi"]));
+            app.manage(Mutex::new(Some(telemetry::init(
+                "bragi",
+                env!("CARGO_PKG_VERSION"),
+                &["bragi"],
+            ))));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("run");
+        .build(tauri::generate_context!())
+        .expect("build")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                // Tauri drops NO managed state at exit, so this is the only thing
+                // that flushes the batch processors. The Exit arm is on the main
+                // thread, which is also where the Guard must be dropped.
+                let guard = app
+                    .state::<Mutex<Option<telemetry::Guard>>>()
+                    .lock()
+                    .expect("the telemetry guard")
+                    .take();
+                drop(guard);
+            }
+        });
 }
 ```
 
-Call it from the setup hook or `main`, never inside a Tokio task: it builds the exporters' blocking HTTP client. Drop the `Guard` off a Tokio worker too — after its bounded flush it joins that client's own runtime thread.
+Both halves are required. `app.manage(init(..))` on its own never drops the `Guard`, so whatever the batch processors hold at quit is lost. The state is a `Mutex<Option<Guard>>` because `Manager::unmanage` is deprecated and documented as unsafe — this is upstream's own advice.
 
-`telemetry::http_client()` returns an async `reqwest` client that carries W3C `traceparent` on every request and opens a client span recording the method, the host and the status — never a path, a query or an error string, any of which can carry a search term or a query-string credential.
+Call `init` from the setup hook or `main`, never inside a Tokio task: it builds the exporters' blocking HTTP client. The same goes for the drop — after its bounded flush it joins that client's own runtime thread.
+
+`telemetry::http_client()` returns an async `reqwest` client that carries W3C `traceparent` on every request and opens a client span recording the method, the host and the status — never a path, a query or an error string, any of which can carry a search term or a query-string credential. It sets a ten-second connect timeout, which a caller cannot add per request: only the total timeout has a `RequestBuilder` form, so without it a black-holed LAN address hangs for the whole total timeout instead of failing at connect. Add a per-request `timeout` where a call has its own deadline.
 
 ## The variables
 
