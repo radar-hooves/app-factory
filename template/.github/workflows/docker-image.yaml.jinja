@@ -35,11 +35,8 @@ permissions:
   packages: write
 
 jobs:
-  # The app's own gates, called rather than merely hoped for. A tag build used to
-  # publish and stage a Watchtower deploy on the strength of the image building,
-  # scanning and booting, none of which runs a test or a type-check — so a red
-  # main could ship. Called as jobs here because `needs:` reaches only jobs in
-  # this workflow; both carry `workflow_call:` for exactly this.
+  # The image builds only from a tree the app's own gates passed; `needs:` reaches
+  # only jobs in this workflow, so both are called here and carry `workflow_call:`.
   python-ci:
     uses: ./.github/workflows/python-ci.yaml
     permissions:
@@ -62,11 +59,8 @@ jobs:
       # On a v* tag the version is the tag; a manual run falls back to this file
       # (the app's pyproject lives under backend/, not the repo root default).
       version-file: backend/pyproject.toml
-      # A tag build always moves :latest; a manual run decides. Watchtower
-      # auto-deploys :latest, so a verification build that only wants to prove
-      # the image still builds passes false and stages no deploy. Written as an
-      # `or` rather than a ternary because GitHub's `&&`/`||` treats a false
-      # input as unset and would hand back the default.
+      # A tag build moves :latest (Watchtower deploys it); a manual run decides. An
+      # `or`, because GitHub's `&&`/`||` treats a false input as unset.
       push-latest: {% raw %}${{ github.event_name != 'workflow_dispatch' || inputs.push-latest }}{% endraw %}
       # The household private-index read credential, mounted into the build as a
       # BuildKit secret (never a build arg) so it stays out of image history. The

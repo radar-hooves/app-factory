@@ -8,12 +8,8 @@
 # {{ backend_port }} before bringing this up; both bind the same host port.
 
 include:
-  # THE extension point for this file. compose.yaml is the factory's and is owed
-  # byte-identical in every app, so an app's own services — a worker, a queue, a
-  # sidecar — arrive through a fragment it owns rather than by editing this file
-  # (canonical-app-shape.md §Extension points). Stamped empty and on copier's
-  # `_skip_if_exists`, so it exists for `include` to find and an update never
-  # overwrites it.
+  # THE extension point for this file: the app's own services live in the fragment
+  # (canonical-app-shape.md §Extension points), stamped empty and app-owned.
   - compose.app.yaml
 
 services:
@@ -36,14 +32,8 @@ services:
         - netrc
     container_name: {{ project_name }}
     restart: always
-    # Container hardening. The app writes nothing to its own filesystem: its
-    # state is the database and `data/`, which is mounted below and stays
-    # writable. A read-only root therefore costs nothing and makes "the image is
-    # what it says it is" something the runtime enforces rather than something
-    # the Dockerfile asserts. /tmp is the one exception the app genuinely needs
-    # — Python's tempfile is on the vend path — and it is a tmpfs, so nothing
-    # written there outlives the container. cap_drop ALL because the process
-    # binds a port above 1024 as uid 1000 and needs no capability whatsoever.
+    # The app writes only to the database and `data/`, so the root is read-only,
+    # /tmp is a tmpfs, and no capability is kept.
     read_only: true
     cap_drop:
       - ALL

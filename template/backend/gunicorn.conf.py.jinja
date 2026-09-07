@@ -23,27 +23,12 @@ workers = 1 if os.getenv("DEBUG", "false").lower() == "true" else int(os.getenv(
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 
-# Which peers may assert a client address via X-Forwarded-For, rewriting
-# request.client before any app code runs. DISABLED, and FORWARDED_ALLOW_IPS is
-# not consulted: the app resolves the forwarded chain itself in proxy_trust.py,
-# behind its own trusted-proxy list, and that check reads the real TCP peer —
-# the rewrite destroys exactly the value it reads, as that module's docstring
-# already states. An empty allowlist trusts NOTHING, so uvicorn's
-# ProxyHeadersMiddleware never rewrites at all.
-#
-# Naming the reverse proxy's own address is NOT the safe middle ground. uvicorn
-# returns the rightmost forwarded entry that is not itself in this list, so with
-# the proxy named, a caller sending "X-Forwarded-For: 127.0.0.1" through that
-# proxy arrives as a loopback client — the same defeat as the wildcard, reached
-# by the value a deployer would be told to use. An RFC1918 range is worse again:
-# every container on a Docker bridge sits inside 172.16.0.0/12, so that value
-# trusts every neighbour to assert its own address. And a same-host proxy
-# reaching a published loopback port genuinely IS 127.0.0.1, so even uvicorn's
-# own default rewrites the one peer that matters.
-#
-# Gunicorn's validator rejects a list here, so the empty STRING is the spelling;
-# it validates to [].
-forwarded_allow_ips = ""  # DISABLED — see above; FORWARDED_ALLOW_IPS is ignored
+# Uvicorn rewrites request.client from X-Forwarded-For for peers in this list.
+# proxy_trust.py resolves the chain itself against the trusted-proxy list and
+# needs the real TCP peer, which the rewrite destroys, so nothing is trusted here
+# and FORWARDED_ALLOW_IPS is not consulted. Naming the proxy or an RFC1918 range
+# hands a caller any address it asserts. Gunicorn takes the empty string for [].
+forwarded_allow_ips = ""
 # Recycling a worker is a hygiene default, not a universal one. A service whose
 # worker holds process-local state a restart cannot rebuild — an unlocked vault
 # session, a supervised child process — comes back from a recycle unable to serve,
@@ -79,11 +64,8 @@ logconfig_dict = {
 
 proc_name = "{{ package_name }}"
 
-# The arbiter's control socket. Gunicorn defaults it under $HOME, which a
-# read-only root filesystem cannot create: the arbiter logs an ERROR on every
-# boot and then carries on without a control interface. This is not application
-# state, so it belongs on the container's tmpfs — in a directory gunicorn
-# creates under the process umask, rather than loose in world-writable /tmp.
+# Gunicorn defaults its control socket under $HOME, which a read-only root cannot
+# create; the tmpfs holds it.
 control_socket = "/tmp/gunicorn/gunicorn.ctl"
 
 # Security limits
@@ -103,18 +85,11 @@ def worker_int(worker) -> None:
 
 
 def on_exit(server) -> None:
-    """Log final shutdown, and run this app's own arbiter-side shutdown hook.
+    """Log final shutdown, then run app_hooks.on_exit if the app defines one.
 
-    The arbiter is the only process in a gunicorn deployment that knows the
-    APPLICATION has ended: gunicorn calls this after it has killed every worker
-    and before it exits, so nothing can respawn and re-attach to what is stopped
-    here. A worker cannot answer the same question — a `max_requests` recycle and
-    a genuine shutdown both arrive as SIGTERM — so an app supervising a child
-    process or holding a process-local session ends it from `app_hooks.on_exit`.
-
-    Imported lazily and guarded, because this runs on the way out and a broken
-    shutdown hook must never turn a clean stop into a traceback. An app that
-    defines no `on_exit` leaves this a log line.
+    Only the arbiter knows the application has ended (a worker cannot tell a
+    recycle from a shutdown), so an app supervising a child process ends it here.
+    Guarded: a shutdown hook must never raise.
     """
     server.log.info("{{ project_name }} shutdown complete")
     try:

@@ -67,16 +67,12 @@ _FRONTEND_BUILD: Path = frontend_build_dir()
 # genuine missing asset, never a route.
 _IMMUTABLE_ASSET_PREFIX = "_app/"
 
-# The prefix every vertical slice mounts under. "/api" unless this app names
-# another in app_hooks: an app whose consumer contract predates the factory
-# cannot relocate its routes without breaking every caller it has, and moving
-# the prefix is a smaller change than excepting this whole file.
+# Every vertical slice mounts under this; an app with an older consumer contract names its own in app_hooks.
 _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
 
 # Nor is a miss under an API namespace a client-side route. A machine caller
 # hitting a path that does not exist must get a 404 it can act on, not HTTP 200
-# and a page of HTML. Derived from what is actually mounted, so an app that
-# moves its API prefix moves this with it and never has to remember to.
+# and a page of HTML. Derived from what is mounted.
 _API_PREFIXES = tuple(f"{prefix.strip('/')}/" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
 
 
@@ -112,11 +108,7 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application.
 
-    `settings` is a test seam and nothing else: production calls this with no
-    argument and resolves the same cached instance it always did. A suite that
-    must drive the whole app under a different configuration — a temporary data
-    directory, one flag flipped — builds its own Settings and passes it here,
-    rather than reaching into the lru_cache every other caller shares.
+    `settings` is a test seam; production passes nothing and gets the cached instance.
     """
     if settings is None:
         settings = get_settings()
@@ -146,11 +138,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # request/response tool surface: no cross-request session state, no
     # server-initiated streaming. (In-request progress still works.)
     raw_mcp_app = mcp.http_app(path="/", stateless_http=True)
-    # The gate. An app that is itself an authority for machine identity supplies
-    # its own through app_hooks.mcp_auth, which takes the raw ASGI app and
-    # returns the gated one; stacking the factory's Authentik check in front of
-    # such an app closes the surface it exists to serve. Every other app leaves
-    # the hook undefined and gets the canonical bearer gate below.
+    # app_hooks.mcp_auth gates /mcp for an app that is its own machine-identity
+    # authority; every other app gets the Authentik bearer gate.
     app_mcp_auth = getattr(app_hooks, "mcp_auth", None)
     gated_mcp_app: Any
     if app_mcp_auth is not None:
@@ -185,8 +174,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # not leak across app-factory lifecycles (tests, hot reload). Logged
             # rather than raised: an exception from a finally block REPLACES the
             # one propagating out of the try, so a failure here would hide the
-            # startup error that actually matters. `aclose` is looked up rather
-            # than called, because an app-supplied gate holds no such client.
+            # startup error that actually matters; an app-supplied gate may hold no client.
             aclose = getattr(gated_mcp_app, "aclose", None)
             if aclose is not None:
                 try:
@@ -195,9 +183,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     _log.exception("Failed to close the MCP bearer gate's userinfo client")
 
     app = FastAPI(
-        # The product's proper name, not the copier slug: this string is the
-        # title of a committed, gated OpenAPI document and of the published
-        # client's docs, where a kebab-case slug reads as a regression.
         title="{{ project_title }}",
         # app_hooks supplies the long form once this app has enough surface to
         # want one; the one-line copier description is the default.
@@ -205,13 +190,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_tags=OPENAPI_TAGS or None,
         version=app_version(),
         lifespan=lifespan,
-        # Serving the schema and its two UIs is a POSTURE, not a preference. An
-        # app behind the shared ingress shell has all three 404-guarded at the
-        # edge; an app whose port is reachable without traversing that proxy
-        # sets OPENAPI_ENABLED=false and closes them here instead, where nothing
-        # can bypass it. Turning it off also closes /openapi.json, which the
-        # container healthcheck and the CI smoke probe both poll — such an app
-        # points both at a route it does still serve.
+        # OPENAPI_ENABLED=false closes the schema and both UIs for an app reachable
+        # without the ingress proxy; its healthcheck and smoke probe then poll a route it still serves.
         docs_url="/docs" if settings.openapi_enabled else None,
         redoc_url="/redoc" if settings.openapi_enabled else None,
         openapi_url="/openapi.json" if settings.openapi_enabled else None,
@@ -243,11 +223,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Middleware order: added last wraps outermost (runs first). Execution
     # order is RequestID -> RequestLogging -> SecurityHeaders -> CORS -> handler,
     # so the correlation id is bound before anything downstream logs.
-    #
-    # CORS is installed only where an origin is actually configured. The console
-    # is same-origin — this app serves it from its own mount — so the common case
-    # has no cross-origin consumer at all, and a policy that lists nothing can
-    # only ever widen access later by accident.
+    # CORS only where an origin is configured; the console is same-origin.
     if settings.cors_origins_list:
         app.add_middleware(
             CORSMiddleware,
