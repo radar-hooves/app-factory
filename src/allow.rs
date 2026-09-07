@@ -72,6 +72,7 @@ mod tests {
     #[test]
     fn the_client_target_constant_matches_reqwest_tracing() {
         use reqwest_tracing::{DefaultSpanBackend, ReqwestOtelSpanBackend};
+        crate::ensure_crypto_provider();
         let request = reqwest::Client::new()
             .get("http://127.0.0.1:1/")
             .build()

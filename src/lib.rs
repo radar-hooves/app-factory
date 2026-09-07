@@ -237,7 +237,9 @@ fn exporter_noise_filter<S: 'static>() -> impl Filter<S> + 'static {
 
 /// rustls needs a process-wide provider; ring keeps aws-lc-sys out of a
 /// consumer's build, and installing it here is a no-op if the app already did.
-fn ensure_crypto_provider() {
+/// Every path that builds a `reqwest` client must call this first — `reqwest`
+/// panics without a provider under `rustls-no-provider`.
+pub(crate) fn ensure_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 

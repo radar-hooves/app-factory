@@ -180,6 +180,7 @@ mod tests {
 
     #[test]
     fn debug_never_prints_a_header_value() {
+        crate::ensure_crypto_provider();
         let client = HeaderClient::new(
             Duration::from_secs(1),
             &HashMap::from([("Authorization".to_owned(), "Bearer hunter2".to_owned())]),
