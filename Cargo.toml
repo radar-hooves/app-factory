@@ -1,6 +1,6 @@
 [package]
 name = "telemetry"
-version = "0.1.0"
+version = "0.1.1"
 description = "The household's one Rust telemetry call: stderr for the developer, allow-listed OTLP/HTTP for the corpus"
 authors = ["poodle64"]
 license = "MIT"
@@ -35,7 +35,7 @@ serde_json = "1"
 # into a consumer's graph. `rustls-no-provider` brings rustls plus the platform
 # certificate verifier; `init` installs ring as the process provider if the app
 # has not already installed one.
-reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "blocking"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }
 reqwest-middleware = "0.5"
 reqwest-tracing = { version = "0.7", features = ["opentelemetry_0_32"] }
@@ -43,3 +43,4 @@ reqwest-tracing = { version = "0.7", features = ["opentelemetry_0_32"] }
 [dev-dependencies]
 opentelemetry_sdk = { version = "0.32", features = ["logs", "trace", "testing"] }
 serial_test = "4"
+tokio = { version = "1", features = ["rt", "net", "time"] }

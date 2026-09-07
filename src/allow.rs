@@ -8,21 +8,19 @@ use tracing::Metadata;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::filter::{FilterFn, filter_fn};
 
-/// Spans this crate's own outbound HTTP client opens carry no application data —
-/// they are the client half of a trace the household wants end to end — so they
-/// are always allowed. `reqwest-tracing` expands `reqwest_otel_span!` inside its
-/// own crate, so the target is `reqwest_tracing::…`.
-const CLIENT_TARGET_PREFIX: &str = "reqwest_tracing";
+/// True when `target` is exactly `entry`, or a module beneath it.
+fn matches(target: &str, entry: &str) -> bool {
+    target == entry
+        || target
+            .strip_prefix(entry)
+            .is_some_and(|rest| rest.starts_with("::"))
+}
 
-/// True when `target` is exactly an allow-list entry, or a module beneath one.
+/// True when `target` is on the allow-list. This crate's own client spans carry
+/// only a method, a host and a status (`client.rs`), so they are always allowed —
+/// under the same equality-or-`::` rule as a caller's entry, never a bare prefix.
 pub(crate) fn allowed(target: &str, allow: &[&str]) -> bool {
-    target.starts_with(CLIENT_TARGET_PREFIX)
-        || allow.iter().any(|entry| {
-            target == *entry
-                || target
-                    .strip_prefix(*entry)
-                    .is_some_and(|rest| rest.starts_with("::"))
-        })
+    matches(target, crate::client::TARGET) || allow.iter().any(|entry| matches(target, entry))
 }
 
 /// The filter both OTLP layers share: the allow-list, with a level floor of INFO.
@@ -64,29 +62,11 @@ mod tests {
 
     #[test]
     fn the_crates_own_client_spans_are_always_allowed() {
-        assert!(allowed("reqwest_tracing::reqwest_otel_span_builder", &[]));
-    }
-
-    /// The constant above is a claim about another crate; this checks it against
-    /// the span `reqwest-tracing` actually builds, with no network involved.
-    #[test]
-    fn the_client_target_constant_matches_reqwest_tracing() {
-        use reqwest_tracing::{DefaultSpanBackend, ReqwestOtelSpanBackend};
-        crate::ensure_crypto_provider();
-        let request = reqwest::Client::new()
-            .get("http://127.0.0.1:1/")
-            .build()
-            .expect("a request that is never sent");
-        // A span only carries metadata while a subscriber is active.
-        let target = tracing::subscriber::with_default(tracing_subscriber::registry(), || {
-            DefaultSpanBackend::on_request_start(&request, &mut Default::default())
-                .metadata()
-                .map(|m| m.target().to_owned())
-                .unwrap_or_default()
-        });
+        assert!(allowed(crate::client::TARGET, &[]));
+        assert!(allowed("telemetry::client::retry", &[]));
         assert!(
-            allowed(&target, &[]),
-            "reqwest-tracing now uses target {target:?}"
+            !allowed("telemetry::client_of_someone_else", &[]),
+            "the force-allow is not a bare prefix either"
         );
     }
 }
