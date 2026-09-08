@@ -39,6 +39,17 @@ pnpm add @poodle64/librarian @poodle64/ui @lucide/svelte
 and `shiki` are peer dependencies: declare them yourself so Renovate tracks
 their versions and `pnpm ls` shows them.
 
+The components style themselves with Tailwind utility classes, same as
+`@poodle64/ui`, so the same line is needed in the app's `app.css`:
+
+```css
+@source '../node_modules/@poodle64/librarian/dist'; /* Tailwind content scan */
+```
+
+Without it the classes ship in `dist` but Tailwind's default content scan
+never sees `node_modules`, so nothing compiles for them — no build error, no
+lint hit, just an unstyled transcript.
+
 ## Consuming the package
 
 Every export is its own subpath, matching `@poodle64/ui`'s convention:
@@ -53,6 +64,7 @@ Every export is its own subpath, matching `@poodle64/ui`'s convention:
 	let question = $state('');
 	let running = $state(false);
 	const transcript = new Transcript();
+	let controller: AbortController | null = null;
 
 	async function submit() {
 		const asked = question.trim();
@@ -61,15 +73,26 @@ Every export is its own subpath, matching `@poodle64/ui`'s convention:
 		question = '';
 		running = true;
 		transcript.reset();
+		controller = new AbortController();
 
 		try {
-			for await (const event of ask({ question: asked, endpoint: '/api/caller/ask' })) {
+			for await (const event of ask({
+				question: asked,
+				endpoint: '/api/caller/ask',
+				signal: controller.signal
+			})) {
 				transcript.apply(event);
 				if (event.type === 'result' || event.type === 'library_error') running = false;
 			}
 		} finally {
 			running = false;
+			controller = null;
 		}
+	}
+
+	function stop() {
+		controller?.abort();
+		running = false;
 	}
 </script>
 
@@ -81,7 +104,7 @@ Every export is its own subpath, matching `@poodle64/ui`'s convention:
 	scope="library"
 	onscope={() => {}}
 	onsubmit={submit}
-	onstop={() => {}}
+	onstop={stop}
 />
 ```
 
