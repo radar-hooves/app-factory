@@ -2,9 +2,10 @@ name: Publish Package
 
 # Publishes one workspace package to public npm (registry.npmjs.org, the
 # @poodle64 scope) on a package-scoped tag push: design-tokens-v<version> for
-# @poodle64/design-tokens, ui-v<version> for @poodle64/ui. Scoped tags let
-# each package release on its own cadence without forcing a version bump on
-# the other (WP-51 Lane WP, 2026-07-22).
+# @poodle64/design-tokens, ui-v<version> for @poodle64/ui, librarian-v<version>
+# for @poodle64/librarian. Scoped tags let each package release on its own
+# cadence without forcing a version bump on the others (WP-51 Lane WP,
+# 2026-07-22; librarian added for cadmus#109).
 #
 # Moved off GitHub Packages 2026-08-04: GitHub Packages' npm registry
 # requires an authenticated request for every install, public packages
@@ -45,7 +46,7 @@ name: Publish Package
 
 on:
   push:
-    tags: ['design-tokens-v*', 'ui-v*']
+    tags: ['design-tokens-v*', 'ui-v*', 'librarian-v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -84,6 +85,10 @@ jobs:
             ui-v*)
               echo "dir=packages/ui" >> "$GITHUB_OUTPUT"
               echo "version=${RELEASE_TAG#ui-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            librarian-v*)
+              echo "dir=packages/librarian" >> "$GITHUB_OUTPUT"
+              echo "version=${RELEASE_TAG#librarian-v}" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "unrecognised tag: $RELEASE_TAG" >&2

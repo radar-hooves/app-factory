@@ -45,6 +45,9 @@ jobs:
       - name: Type-check @poodle64/ui
         run: pnpm --filter @poodle64/ui run check
 
+      - name: Type-check @poodle64/librarian
+        run: pnpm --filter @poodle64/librarian run check
+
       - name: Assert @poodle64/design-tokens emitted contract
         run: |
           set -e

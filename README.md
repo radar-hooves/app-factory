@@ -18,11 +18,18 @@ packages/
                      table), extracted from the household's most conformant
                      consuming app and restyled by whichever app's token alias
                      layer is active. See packages/ui/README.md.
+  librarian/         @poodle64/librarian, Milton's conversation surface: the
+                     stream client, transcript state and chat components
+                     (transcript, composer, markdown, tool/thinking rows,
+                     working indicator), owned by the library and pressed
+                     here so any household app renders the librarian instead
+                     of rebuilding it. See packages/librarian/README.md.
 ```
 
-Both packages publish to public npm under the `@poodle64` scope — no registry
-config and no auth token needed to install either one. See each package's own
-README for its contents, consumption snippet, and release process.
+All three packages publish to public npm under the `@poodle64` scope: no
+registry config and no auth token needed to install any of them. See each
+package's own README for its contents, consumption snippet, and release
+process.
 
 WP-51 background: `docs/master/templates/golden-patterns/app-shape-and-frontend.md`
 in `radar-hooves/master-project` (`master-project#174`). The companion

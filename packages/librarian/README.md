@@ -1,0 +1,115 @@
+# @poodle64/librarian
+
+Milton's conversation surface, as a Svelte 5 package: the stream client, the
+transcript state, and the chat components (transcript, composer, markdown,
+tool/thinking rows, the working indicator). An app renders the librarian
+instead of rebuilding it.
+
+Owned by the library — this is Milton's surface; design-system is its press.
+Change it here, consume it there.
+
+## What is here
+
+```text
+src/lib/
+  client.ts               ask(): streams Claude Code's OWN events, unaltered
+  transcript.svelte.ts     Transcript state, the fold/segment/describe helpers
+  history.svelte.ts        the browser-held conversation list, namespaced per caller
+  components/
+    agent-transcript/       one question and everything the agent did answering it
+    composer/                the input box: value, scope chips, send/stop
+    markdown/                sanitised, streaming-safe markdown + syntax highlighting
+    activity-group/          a run of tool calls, collapsed to one line
+    tool-row/                one tool call
+    thinking-row/            one thinking block
+    working/                 the pre-first-token "something is happening" indicator
+```
+
+Deliberately excluded: the library console's own `CorpusTree`, `DocumentPane`
+and collection picker. Those are furniture for browsing a corpus, not part of
+talking to Milton, and stay in the library's own frontend.
+
+## Installation
+
+```bash
+pnpm add @poodle64/librarian @poodle64/ui @lucide/svelte
+```
+
+`svelte`, `@poodle64/ui`, `@lucide/svelte`, `marked`, `isomorphic-dompurify`
+and `shiki` are peer dependencies: declare them yourself so Renovate tracks
+their versions and `pnpm ls` shows them.
+
+## Consuming the package
+
+Every export is its own subpath, matching `@poodle64/ui`'s convention:
+
+```svelte
+<script lang="ts">
+	import { ask } from '@poodle64/librarian/client';
+	import { Transcript } from '@poodle64/librarian/transcript';
+	import AgentTranscript from '@poodle64/librarian/agent-transcript';
+	import Composer from '@poodle64/librarian/composer';
+
+	let question = $state('');
+	let running = $state(false);
+	const transcript = new Transcript();
+
+	async function submit() {
+		const asked = question.trim();
+		if (!asked || running) return;
+
+		question = '';
+		running = true;
+		transcript.reset();
+
+		try {
+			for await (const event of ask({ question: asked, endpoint: '/api/caller/ask' })) {
+				transcript.apply(event);
+				if (event.type === 'result' || event.type === 'library_error') running = false;
+			}
+		} finally {
+			running = false;
+		}
+	}
+</script>
+
+<AgentTranscript {question} blocks={transcript.blocks} outcome={transcript.outcome} {running} />
+
+<Composer
+	bind:value={question}
+	{running}
+	scope="library"
+	onscope={() => {}}
+	onsubmit={submit}
+	onstop={() => {}}
+/>
+```
+
+`ask()`'s `endpoint` defaults to `/api/agent/ask`; pass whatever route the
+consuming app mounts (a room's `/api/rooms/{id}/ask`, a caller's
+`/api/caller/ask`) and an optional `fetch` for a caller-authenticated wrapper.
+
+`createHistory(namespace)` from `@poodle64/librarian/history` gives each app,
+or each room inside an app, its own `localStorage` key, so two consumers
+never collide on one conversation list:
+
+```ts
+import { createHistory, titleFrom } from '@poodle64/librarian/history';
+
+const history = createHistory('cadmus.rooms.defence-personnel');
+history.load();
+```
+
+## Verifying a change
+
+```bash
+pnpm run build   # svelte-package + publint
+pnpm run check   # svelte-check
+pnpm run test    # build + vitest
+```
+
+## Releasing
+
+1. Change a component; bump `version` in `package.json` (CalVer).
+2. `pnpm build`, which runs `svelte-package` then `publint`.
+3. Commit, tag `librarian-v<version>`, push the tag; CI publishes to public npm.
