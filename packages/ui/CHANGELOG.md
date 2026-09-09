@@ -2,6 +2,33 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.4] - 2026-09-09
+
+### Fixed
+
+- **`AppIdentity` read a bare handle's initials as if it were a name.**
+  Reported live on cadmus: a colleague with no display name, no email and
+  one personal workspace saw the avatar's fallback letters come out wrong —
+  `initialsOf` slices the first two characters of any single unbroken token,
+  which reads as real initials for a handle that has none. A handle-specific
+  rule now runs whenever there is no display name: one letter from a bare
+  handle (`jdoe` → `J`), one from each side of a `firstname.lastname` or
+  `firstname-lastname` handle (`mary-jane` → `MJ`) — operator ruling,
+  07/09/2026. The bar itself was already avatar-only at rest (04/09/2026);
+  this closes the one case that gave a false read. Proved at
+  `?surface=mobile-audit&identity=bare` (`harness/drive.md`).
+
+### Added
+
+- **`AppIdentity` takes `onManageMembers`.** The factory template's
+  `WorkspaceMenu` now renders nothing for a single-member workspace (there
+  is nothing to switch to), which took Members with it — the org-of-one's
+  one route to their first grant (master-project#291). `onManageMembers`
+  puts a "Members" item in the identity dropdown for exactly that caller;
+  wired in `full-stack-app-template`, not exercised by this package's own
+  fixtures beyond the render/callback pair covered by
+  `src/test/app-identity.test.ts`.
+
 ## [2026.9.3] - 2026-09-09
 
 ### Fixed

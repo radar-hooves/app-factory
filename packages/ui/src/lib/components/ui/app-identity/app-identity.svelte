@@ -23,6 +23,13 @@
 	 * baked in here: `onSignOut` and `onAccountSettings` are callbacks. Theme
 	 * follows AppShell's own `onToggleTheme` pattern — override it, or accept
 	 * mode-watcher's `toggleMode` by default.
+	 *
+	 * `onManageMembers` exists for the caller a workspace switcher has nothing
+	 * to show: `WorkspaceMenu` (the factory template) renders nothing in the
+	 * bar for a single-member workspace, and this is where Members lands
+	 * instead (operator ruling, 07/09/2026, master-project#291's org-of-one
+	 * case). Wire it whenever the app has a members route, whether or not it
+	 * also renders a switcher.
 	 */
 	import { toggleMode } from 'mode-watcher';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -35,6 +42,7 @@
 		entitlements = [],
 		onSignOut,
 		onAccountSettings,
+		onManageMembers,
 		onSwitchTheme
 	}: {
 		user: { username: string; display_name: string | null; email: string | null };
@@ -47,6 +55,19 @@
 		onSignOut: () => void;
 		/** Optional until the app has an account-settings destination to send it to. */
 		onAccountSettings?: () => void;
+		/**
+		 * Reach the workspace's members surface from here. Ignored while
+		 * `workspace` is unset.
+		 *
+		 * A workspace holding exactly one member has nothing to switch, so the
+		 * app's own workspace switcher renders nothing for it (operator ruling,
+		 * 07/09/2026) — and Members was that switcher's one non-switching act,
+		 * the route an org-of-one needs to make its first grant. This is where
+		 * that act lives once the switcher is gone; a switcher still showing for
+		 * several workspaces keeps its own Members entry too, so the two never
+		 * disagree about where it is.
+		 */
+		onManageMembers?: () => void;
 		/** Override the theme action. Defaults to mode-watcher's toggleMode, matching AppShell. */
 		onSwitchTheme?: () => void;
 	} = $props();
@@ -63,7 +84,31 @@
 		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}
-	const initials = $derived(initialsOf(shown));
+
+	/**
+	 * Initials for a bare HANDLE — no display name to fall back on.
+	 *
+	 * A handle has no word boundaries a name has: `initialsOf` slicing the
+	 * first two characters of one unbroken token produces a pair that reads
+	 * as real initials while meaning nothing (operator ruling, 07/09/2026).
+	 * Where the handle itself encodes two parts — `firstname.lastname`,
+	 * `firstname-lastname` — one letter from each reads the same as a real
+	 * name's initials; where it does not, only the first letter is honest.
+	 */
+	function handleInitials(handle: string): string {
+		const parts = handle.trim().split(/[.-]+/).filter(Boolean);
+		if (parts.length === 0) return '';
+		if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+	}
+
+	// Never text in the bar (operator ruling, 07/09/2026): with no display
+	// name, the trigger below still renders only this avatar, initialled off
+	// the handle rather than off `shown`, which for this branch just IS the
+	// handle.
+	const initials = $derived(
+		user.display_name ? initialsOf(user.display_name) : handleInitials(user.username)
+	);
 
 	function switchTheme() {
 		if (onSwitchTheme) onSwitchTheme();
@@ -127,6 +172,9 @@
 						</span>
 					{/each}
 				</div>
+			{/if}
+			{#if onManageMembers}
+				<DropdownMenu.Item onSelect={onManageMembers}>Members</DropdownMenu.Item>
 			{/if}
 		{/if}
 		<DropdownMenu.Separator />

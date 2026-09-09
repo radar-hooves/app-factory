@@ -677,6 +677,18 @@ crowding, not one component in isolation:
   gesture bar: `env(safe-area-inset-*)` reached none of the sticky bar, the
   full-height drawer or the scrolling content's own bottom padding.
 
+`?surface=mobile-audit&identity=bare` swaps the `AppIdentity` fixture for a
+caller with no display name and no email — a bare handle, `r-hendriks` —
+the shape reported live on cadmus (a colleague with a bare handle and one
+personal workspace). Look for the same thing the plain fixture proves: the
+top bar carries only the avatar, no text of any kind, at 390×844, 768×1024
+and 1440×900 alike. It caught one further defect: `AppIdentity`'s initials
+fell back to `initialsOf`'s word-splitting rule, which takes the first two
+characters of any single unbroken token — reading as real initials for a
+handle with none. Fixed by a handle-specific rule: one letter from a bare
+handle, one from each side of a `firstname.lastname` or `firstname-lastname`
+handle (operator ruling, 07/09/2026).
+
 ## The loud-unknown rule, painted (`?surface=schema-form`)
 
 `<SchemaForm>` over a pair of documents that is part-broken on purpose: a

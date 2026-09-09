@@ -176,6 +176,8 @@
 	// reports scrollHeight and clientHeight as 0 either way.
 	const surface = params.get('surface') ?? 'shell';
 	const wrapper = params.get('wrapper') ?? 'plain';
+	// `?identity=bare` — see the mobile-audit fixture below.
+	const identityParam = params.get('identity');
 	// `table` is the reported case: a wide child that carries its own scroller.
 	// `word` is the harsher one — an unbreakable string with no scroller of its
 	// own, which nothing can make fit; it is here to pin what the shell DOES
@@ -502,6 +504,14 @@
 	let collapsed = $state(false);
 	const currentPath = '#/credentials';
 
+	// `?surface=mobile-audit&identity=bare` swaps the fixture below for a
+	// caller with no display name, no email and a bare handle — the shape
+	// reported live on cadmus (design-system, the phone-shell defect
+	// programme, follow-up): AppIdentity's initials must come off the handle
+	// rather than off empty text, and never fall back to rendering the handle
+	// AS TEXT in the bar. `identity=bare` alone (surface unset) is meaningless
+	// and ignored; only `mobile-audit` reads it.
+	//
 	// `?surface=mobile-audit` — a realistic composed surface for the
 	// phone/tablet/desktop sweep (design-system, the phone-shell defect
 	// programme): a long rail (nine sections, two carrying children), the
@@ -1239,11 +1249,13 @@
 		{/snippet}
 		{#snippet identity()}
 			<AppIdentity
-				user={{
-					username: 'operator',
-					display_name: 'Operator',
-					email: 'operator@example.invalid'
-				}}
+				user={identityParam === 'bare'
+					? { username: 'r-hendriks', display_name: null, email: null }
+					: {
+							username: 'operator',
+							display_name: 'Operator',
+							email: 'operator@example.invalid'
+						}}
 				workspace="Household"
 				role="owner"
 				entitlements={['admin']}
