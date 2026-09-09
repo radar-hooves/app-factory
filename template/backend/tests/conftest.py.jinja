@@ -16,8 +16,6 @@ from pathlib import Path
 
 import pytest
 
-# Settings tests never read may be absent from the environment.
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEBUG", "true")
 
 # The rate limiter keys on the caller's address, and the whole suite presents as
