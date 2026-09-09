@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import Composer from './composer.svelte';
+import Composer from '$lib/components/composer/composer.svelte';
 
 describe('Composer scope chip', () => {
 	it('renders nothing when the caller has fixed the scope', () => {

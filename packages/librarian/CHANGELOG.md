@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.5] - 2026-09-09
+
+### Fixed
+
+- **2026.9.4 shipped its own test file inside the published package.**
+  `composer.test.ts` was co-located beside `composer.svelte` inside
+  `src/lib`, which `svelte-package` packages wholesale — `dist/` (and the
+  npm tarball) carried `composer.test.js` alongside the component. Moved to
+  `src/test/composer.test.ts`, matching `@poodle64/ui`'s convention of
+  keeping every test outside `src/lib` for exactly this reason. No
+  behaviour change; 2026.9.4 is otherwise identical and was not deprecated
+  on npm, but a consumer should take 2026.9.5.
+
 ## [2026.9.4] - 2026-09-09
 
 ### Fixed
@@ -12,9 +25,9 @@ All notable changes to this package are documented here. Format follows [Keep a 
   as the sole entry in the chip row — console furniture with nothing to
   switch to. The chip row now renders only once there are two or more
   scopes to pick between; a fixed-scope consumer gets no chip and no space
-  where it was. Covered by `src/lib/components/composer/composer.test.ts`,
-  the package's first component test (also adds `src/test/setup.ts` and
-  wires `vitest.config.ts`'s `setupFiles`, per `sveltekit-testing.md`).
+  where it was. Covered by `src/test/composer.test.ts`, the package's first
+  component test (also adds `src/test/setup.ts` and wires
+  `vitest.config.ts`'s `setupFiles`, per `sveltekit-testing.md`).
 
 ## [2026.9.3] - 2026-09-09
 
