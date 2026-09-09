@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.8] - 2026-09-09
+
 ### Fixed
 
 - `workspaces.spec.ts` and `example.spec.ts`'s direct-backend `BACKEND` const now reads `<APP>_DEV_BACKEND_TARGET` first, the same env var `vite.config.ts`'s dev proxy already reads to redirect its own `/api` target — falling back to the copier-stamped `backend_port` unchanged. An app whose E2E backend cannot bind the interactive port (godswood#780) no longer gets `ECONNREFUSED` from a spec hardcoded to a port nothing there listens on.
