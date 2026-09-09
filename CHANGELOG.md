@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.9] - 2026-09-09
+
+### Fixed
+
+- `workspaces.spec.ts`'s sole-membership assertions still expected `WorkspaceMenu` to render a chip naming the caller's own workspace and offer Members from it — the exact behaviour 2026.9.8 removed. It now asserts the menu renders nothing and reaches Members through the identity avatar's `onManageMembers` instead, matching the component it is testing. Caught stamping a downstream app against this tree (cadmus#109): the template's own spec would have failed against its own component.
+
 ## [2026.9.8] - 2026-09-09
 
 ### Fixed

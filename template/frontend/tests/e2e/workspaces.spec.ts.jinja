@@ -66,12 +66,15 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 	expect(mine).toHaveLength(1);
 	const own = mine[0]!.workspace;
 
-	// One membership: the menu names it and offers no switch.
-	await expect(page.getByTestId('workspace-menu-name')).toHaveText(own.name);
-	await page.getByTestId('workspace-menu').click();
-	await expect(page.getByTestId('workspace-menu-members')).toBeVisible();
-	await expect(page.getByTestId('workspace-menu-option')).toHaveCount(0);
-	await page.keyboard.press('Escape');
+	// One membership: nothing to switch between, so the menu renders nothing —
+	// Members is reached through the identity avatar's onManageMembers instead
+	// (master-project#291, workspace-menu.svelte: a control with one possible
+	// state is not a control).
+	await expect(page.getByTestId('workspace-menu')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Account' }).click();
+	await page.getByRole('menuitem', { name: 'Members' }).click();
+	await expect(page).toHaveURL(/\/workspace$/);
+	await page.goto('/');
 
 	// The partner makes a workspace and grants this person a seat in it.
 	const shared = `Shared ${Date.now()}`;
