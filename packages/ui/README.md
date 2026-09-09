@@ -83,10 +83,10 @@ rather than rebuilding it:
 
 | Import                                          | What it is                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                        |
+| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                       |
 | `panel`                                         | The generic titled card: optional icon, subtitle and trailing actions over a body that can opt out of padding.                                                                                                                                                                                                                                              |
 | `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                          |
-| `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select.                                                                                                                                                                                                                                                    |
+| `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select. Below `xl` (1280px), where the column has nowhere to sit, the same content opens from a floating trigger instead of disappearing.                                                                                                                  |
 | `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                           |
 | `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                |
 | `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                    |
@@ -380,10 +380,10 @@ top-right — painted once, by the shell, on the region that scrolls:
 </AppShell>
 ```
 
-| Value  | What it paints                                          | Reach for it when                                                        |
-| ------ | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `grid` | a dot-grid floor plus one accent vignette in the corner | the default — the house "instrument-grade" surface                       |
-| `none` | nothing at all                                          | an app arguing a deliberate exception                                    |
+| Value  | What it paints                                          | Reach for it when                                  |
+| ------ | ------------------------------------------------------- | -------------------------------------------------- |
+| `grid` | a dot-grid floor plus one accent vignette in the corner | the default — the house "instrument-grade" surface |
+| `none` | nothing at all                                          | an app arguing a deliberate exception              |
 
 `grid` is the default since `2026.8.8`, so a shell that does not mention
 `texture` wears the house atmosphere. It shipped `none`-by-default in `2026.8.4`
@@ -1038,20 +1038,20 @@ Money, dates and times, percentages and plain numbers, in `en-AU` / AUD /
 `Australia/Brisbane`. No dependencies and no DOM — it is `Intl` and arithmetic,
 so it runs in a load function as happily as in a component.
 
-| Function                                                      | What it does                                                                                                                                |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `formatCurrency(dollars, opts)`                                | `$1,234.56`. `decimals` (default 2), `currency` (default AUD), `fallback`.                                                                   |
-| `formatCurrencyFromCents(cents, opts)`                         | The same, for money stored as integer cents.                                                                                                 |
-| `formatCurrencyString(str, opts)`                              | Groups a money STRING without ever parsing it to a float — for a figure that reaches a tax return.                                            |
-| `compactCurrency(value, opts)`                                 | `$1.1m` / `$12k`, for a chart axis or a dense tile.                                                                                          |
-| `isNegativeMoney(value)`                                       | The sign, without a parse, for choosing a tone class.                                                                                        |
-| `dollarsToCents(dollars)`                                      | Whole cents.                                                                                                                                 |
-| `formatNumber(value, opts)`                                    | `1,234,567`.                                                                                                                                 |
-| `formatPercentage(value, opts)`                                | Value is already in percentage POINTS: `4.5` → `4.5%`.                                                                                       |
-| `formatRatioAsPercentage(value, opts)`                         | Value is a 0–1 RATIO: `0.045` → `4.5%`.                                                                                                      |
-| `formatDate(value, opts)`                                      | `19 Dec 2024`, `19 December 2024` (`format: 'long'`) or `19/12/2024` (`format: 'numeric'`).                                                   |
-| `formatDateTime(value, opts)`                                  | The same plus a 24-hour time: `19 Dec 2024, 14:05`.                                                                                          |
-| `parseApiDate(iso)`                                            | Reads an offset-less timestamp as UTC — the naive-UTC backend trap below.                                                                     |
+| Function                               | What it does                                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `formatCurrency(dollars, opts)`        | `$1,234.56`. `decimals` (default 2), `currency` (default AUD), `fallback`.                         |
+| `formatCurrencyFromCents(cents, opts)` | The same, for money stored as integer cents.                                                       |
+| `formatCurrencyString(str, opts)`      | Groups a money STRING without ever parsing it to a float — for a figure that reaches a tax return. |
+| `compactCurrency(value, opts)`         | `$1.1m` / `$12k`, for a chart axis or a dense tile.                                                |
+| `isNegativeMoney(value)`               | The sign, without a parse, for choosing a tone class.                                              |
+| `dollarsToCents(dollars)`              | Whole cents.                                                                                       |
+| `formatNumber(value, opts)`            | `1,234,567`.                                                                                       |
+| `formatPercentage(value, opts)`        | Value is already in percentage POINTS: `4.5` → `4.5%`.                                             |
+| `formatRatioAsPercentage(value, opts)` | Value is a 0–1 RATIO: `0.045` → `4.5%`.                                                            |
+| `formatDate(value, opts)`              | `19 Dec 2024`, `19 December 2024` (`format: 'long'`) or `19/12/2024` (`format: 'numeric'`).        |
+| `formatDateTime(value, opts)`          | The same plus a 24-hour time: `19 Dec 2024, 14:05`.                                                |
+| `parseApiDate(iso)`                    | Reads an offset-less timestamp as UTC — the naive-UTC backend trap below.                          |
 
 Four decisions worth knowing before a migration, because each was settled
 against an app that had decided it the other way:
@@ -1109,8 +1109,8 @@ still pass while `bg-card`, `bg-muted`, `bg-accent`, `bg-popover` and
 `border-input` compile to no rule at all:
 
 ```css
-@import '@poodle64/ui/styles.css';            /* registers the surface */
-@source '../node_modules/@poodle64/ui/dist';  /* puts it in the scan   */
+@import '@poodle64/ui/styles.css'; /* registers the surface */
+@source '../node_modules/@poodle64/ui/dist'; /* puts it in the scan   */
 ```
 
 They fail differently, so the gate asserts them differently: it compiles the

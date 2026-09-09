@@ -1,11 +1,12 @@
 # Real-browser verification
 
-Eleven surfaces, selected by `?surface=`: the default `shell` (AppShell,
+Twelve surfaces, selected by `?surface=`: the default `shell` (AppShell,
 below), plus `states` (the async-outcome surfaces), `card` (CardTitle's
 heading mode), `overlays`, `overflow`, `avatar`, `palette` (the palette
-catalogue), `theming`, `detail-panel`, `nested` (nested navigation) and
-`console` (the console-dashboard primitives) — each in its own section at the
-end.
+catalogue), `theming`, `detail-panel`, `nested` (nested navigation),
+`console` (the console-dashboard primitives) and `mobile-audit` (a realistic
+composed page, driven by eye at phone/tablet/desktop) — each in its own
+section at the end.
 
 ## Two ways to drive it
 
@@ -647,6 +648,35 @@ completeness but carry no scripted check of their own.
 | StatusBadge's new `primary` chip/dot resolve to a real colour, distinct from every shared five-state chip's                           | same — and `primary` is not in the shared `Status` type, so nothing else proves it paints at all | `--ds-color-primary`'s resolved colour, different from success/warning/error/info/neutral |
 | BarRow's fill genuinely covers the percentage of its track `pct` asked for                                                            | jsdom has no layout, so "42% wide" and "0% wide with a `width: 42%` string" measure identically  | fill/track `getBoundingClientRect()` ratio within 2% of 42%                               |
 
+## Phone/tablet chrome, driven by eye (`?surface=mobile-audit`)
+
+A realistic composed page — a nine-section rail with two branches, the
+`actions` slot carrying two StatusBadges, the real `AppIdentity` in the
+`identity` slot, an eight-column `DataTableTanstack`, a six-card `TileGrid`
+and a `ContextColumn` — the shapes an app actually ships together, rather
+than one primitive at a time. No claim here is scripted: "does this read as
+broken at 390×844" is a judgement, not a comparison a script can make (`core
+/verification.md` "Scripts Drive, Models Judge"), so this exists to be looked
+at — at 390×844, 768×1024 and 1440×900, in both themes — the way `console`
+above exists for the five dashboard primitives it renders with no check of
+its own.
+
+Driving it caught three defects no scripted surface here was shaped to find,
+because each needs several real components composed together under real
+crowding, not one component in isolation:
+
+- The leading/trailing search affordance kept its full label and shrank to
+  whatever a `context` switcher or the `actions` badges left it — as little
+  as one glyph, beside two StatusBadges at 390px, painting a button that
+  read "S". It is icon-only below `sm`, matching the menu and theme-toggle
+  buttons either side of it.
+- `ContextColumn` hid outright below `xl` (1280px) — tablet included — with
+  no way to reach the stats or the selected-row detail inside it. It now
+  opens the same content in an `AppDialog` from a floating trigger.
+- Nothing in the shell accounted for a device notch or a home-indicator
+  gesture bar: `env(safe-area-inset-*)` reached none of the sticky bar, the
+  full-height drawer or the scrolling content's own bottom padding.
+
 ## The loud-unknown rule, painted (`?surface=schema-form`)
 
 `<SchemaForm>` over a pair of documents that is part-broken on purpose: a
@@ -967,16 +997,16 @@ that. Five of the six (`dialog`, `alert-dialog`, `command`, `input-group`,
 The ramp is `--ds-control-*` tokens now, moved as a set by one attribute:
 
 ```html
-<html data-ds-density="compact">
+<html data-ds-density="compact"></html>
 ```
 
 Two claims are driven, and the second protects every existing consumer:
 
-| Rung      | comfortable        | compact           |
-| --------- | ------------------ | ----------------- |
-| `xs`      | 28px / 10px / 6px  | 24px / 8px / 4px  |
-| `sm`      | 36px / 14px / 8px  | 28px / 10px / 6px |
-| `default` | 40px / 16px / 12px | 32px / 12px / 8px |
+| Rung      | comfortable        | compact            |
+| --------- | ------------------ | ------------------ |
+| `xs`      | 28px / 10px / 6px  | 24px / 8px / 4px   |
+| `sm`      | 36px / 14px / 8px  | 28px / 10px / 6px  |
+| `default` | 40px / 16px / 12px | 32px / 12px / 8px  |
 | `lg`      | 44px / 20px / 12px | 36px / 16px / 10px |
 
 (height / inline padding / the trim beside an icon; the `icon-*` sizes are

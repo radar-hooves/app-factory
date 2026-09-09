@@ -59,6 +59,14 @@
 	import CollectionDetail from '../dist/components/ui/collection-detail/collection-detail.svelte';
 	import DocumentDetail from '../dist/components/ui/document-detail/document-detail.svelte';
 	import SearchResults from '../dist/components/ui/search-results/search-results.svelte';
+	import ContextColumn from '../dist/components/ui/context-column/context-column.svelte';
+	import TileGrid from '../dist/components/ui/tile-grid/tile-grid.svelte';
+	import { AppIdentity } from '../dist/components/ui/app-identity/index.js';
+	import { DataTableTanstack } from '../dist/components/ui/data-table-tanstack/index.js';
+	import type { ColumnDef } from '../dist/components/ui/data-table-tanstack/index.js';
+	import { createSvelteTable } from '../dist/components/ui/data-table/index.js';
+	import { getCoreRowModel } from '@tanstack/table-core';
+	import type { StatItem } from '../dist/components/ui/stat-list/stat-list.svelte';
 	import type {
 		LibraryCollection,
 		LibraryDocument,
@@ -73,6 +81,7 @@
 	import Package from '@lucide/svelte/icons/package';
 	import KeySquare from '@lucide/svelte/icons/key-square';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
+	import BookOpen from '@lucide/svelte/icons/book-open';
 
 	// `?surface=nested` drives nested navigation. Three of its four claims are
 	// beyond jsdom entirely: the indent geometry is a layout fact, the chevron's
@@ -492,6 +501,99 @@
 	let paletteOpen = $state(false);
 	let collapsed = $state(false);
 	const currentPath = '#/credentials';
+
+	// `?surface=mobile-audit` — a realistic composed surface for the
+	// phone/tablet/desktop sweep (design-system, the phone-shell defect
+	// programme): a long rail (nine sections, two carrying children), the
+	// `actions` slot holding two StatusBadges, the real AppIdentity in the
+	// `identity` slot (not the harness's own hand-rolled stand-in below, which
+	// predates AppIdentity's extraction), a ContextColumn, an eight-column
+	// DataTableTanstack and a six-card TileGrid. Nothing here is scripted in
+	// drive.mjs — it exists to be looked at, per
+	// rules-library/core/verification.md "Scripts Drive, Models Judge".
+	const auditNav: NavSource = [
+		{ label: 'Overview', href: '#/overview', icon: LayoutDashboard },
+		{ label: 'Reports', href: '#/reports', icon: ScrollText },
+		{
+			label: 'Credentials',
+			href: '#/credentials',
+			icon: Package,
+			badge: 3,
+			children: [
+				{ label: 'Rotations', href: '#/credentials/rotations' },
+				{ label: 'Expiring soon', href: '#/credentials/expiring' }
+			]
+		},
+		{ label: 'Identities', href: '#/identities', icon: KeySquare },
+		{
+			label: 'Education',
+			href: '#/education',
+			icon: ScrollText,
+			children: [
+				{ label: 'Open architecture', href: '#/education/open-architecture' },
+				{ label: 'Autonomy', href: '#/education/autonomy' }
+			]
+		},
+		{ label: 'Audit', href: '#/audit', icon: ScrollText },
+		{ label: 'Marketplace', href: '#/marketplace', icon: Package },
+		{ label: 'Library', href: '#/library', icon: BookOpen },
+		{ label: 'Intelligence', href: '#/intelligence', icon: LayoutDashboard },
+		{ label: 'Records', href: '#/records', icon: ScrollText }
+	];
+
+	interface AuditRow {
+		id: string;
+		account: string;
+		platform: string;
+		owner: string;
+		status: string;
+		opened: string;
+		realised: number;
+		unrealised: number;
+		events: number;
+	}
+	const AUDIT_ROWS: AuditRow[] = Array.from({ length: 14 }, (_, i) => ({
+		id: `row-${i}`,
+		account: `Broker ${String.fromCharCode(65 + (i % 4))} ${1000001 + i}`,
+		platform: ['cTrader', 'IRESS', 'MT5', 'TWS'][i % 4],
+		owner: ['Trust', 'Individual', 'Joint', 'SMSF'][i % 4],
+		status: i % 5 === 0 ? 'Dormant' : 'Active',
+		opened: `${(i % 28) + 1}/0${(i % 9) + 1}/2026`,
+		realised: 321857.83 - i * 25412.6,
+		unrealised: i % 3 === 0 ? -4159.25 * i : 1875.4 * i,
+		events: 2014 - i * 130
+	}));
+	const auditColumns: ColumnDef<AuditRow>[] = [
+		{ accessorKey: 'account', header: 'Account' },
+		{ accessorKey: 'platform', header: 'Platform' },
+		{ accessorKey: 'owner', header: 'Owner' },
+		{ accessorKey: 'status', header: 'Status' },
+		{ accessorKey: 'opened', header: 'Opened' },
+		{ accessorKey: 'realised', header: 'Realised' },
+		{ accessorKey: 'unrealised', header: 'Unrealised' },
+		{ accessorKey: 'events', header: 'Events' }
+	];
+	const auditTable = createSvelteTable<AuditRow>({
+		data: AUDIT_ROWS,
+		columns: auditColumns,
+		getCoreRowModel: getCoreRowModel()
+	});
+
+	const AUDIT_CARDS = [
+		{ title: 'Marketplace', body: 'The strategy paper and the working papers underneath.' },
+		{ title: 'Library', body: 'The primary-source evidence base behind the strategy.' },
+		{ title: 'Education', body: 'Autonomy and open-architecture education library.' },
+		{ title: 'Leave', body: 'Chapter 5 leave planning — service history and balances.' },
+		{ title: 'Intelligence', body: 'The entity/assertion knowledge graph, cut temporally.' },
+		{ title: 'Records', body: 'Preserved activity, kept as a record.' }
+	];
+
+	const AUDIT_STATS: StatItem[] = [
+		{ label: 'Accounts', value: 14 },
+		{ label: 'Active', value: 11, status: 'success' },
+		{ label: 'Dormant', value: 3, status: 'warning' },
+		{ label: 'Net gain', value: '$41,275.60', status: 'success' }
+	];
 
 	// The theme follows the OS preference, and a driver picks it by emulating
 	// `prefers-color-scheme` rather than by passing a mode here.
@@ -1121,6 +1223,64 @@
 		     The first run of the driver caught exactly that. -->
 		<div data-probe="texture-spacer" style="height: 3200px; flex: none"></div>
 	</AppShell>
+{:else if surface === 'mobile-audit'}
+	<AppShell
+		nav={auditNav}
+		{collapsible}
+		bind:collapsed
+		currentPath="#/reports"
+		brandTitle="Cadmus"
+		measure="wide"
+		onSearch={() => (paletteOpen = true)}
+	>
+		{#snippet actions()}
+			<StatusBadge status="success" label="Synced" />
+			<StatusBadge status="warning" label="3 pending" />
+		{/snippet}
+		{#snippet identity()}
+			<AppIdentity
+				user={{
+					username: 'operator',
+					display_name: 'Operator',
+					email: 'operator@example.invalid'
+				}}
+				workspace="Household"
+				role="owner"
+				entitlements={['admin']}
+				onSignOut={() => {}}
+			/>
+		{/snippet}
+		<div class="flex min-h-0 flex-1 gap-6">
+			<div class="min-w-0 flex-1">
+				<h1 class="font-display text-display font-semibold">Reports</h1>
+				<p class="text-muted-foreground mt-1 mb-6 text-sm" data-probe="audit-table-caption">
+					Eight columns, fourteen rows.
+				</p>
+				<div class="h-[420px]" data-probe="audit-table">
+					<DataTableTanstack table={auditTable} getRowId={(r) => r.id} />
+				</div>
+
+				<h2 class="font-display mt-10 text-xl font-semibold">Portfolios</h2>
+				<TileGrid min="16rem" gap="1rem" class="mt-4" data-probe="audit-tile-grid">
+					{#each AUDIT_CARDS as c (c.title)}
+						<Card>
+							<CardHeader>
+								<CardTitle level={3}>{c.title}</CardTitle>
+								<CardDescription>{c.body}</CardDescription>
+							</CardHeader>
+						</Card>
+					{/each}
+				</TileGrid>
+			</div>
+			<ContextColumn stats={AUDIT_STATS} ariaLabel="Report context" />
+		</div>
+	</AppShell>
+
+	<CommandPalette
+		bind:open={paletteOpen}
+		nav={auditNav}
+		onNavigate={(href) => (location.hash = href.slice(1))}
+	/>
 {:else}
 	<AppShell
 		{nav}

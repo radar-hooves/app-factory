@@ -867,6 +867,11 @@
 		transition: width 200ms ease;
 	}
 
+	/* Full viewport height (`inset-block: 0`), so the brand row at its top and
+	   the last nav row at its bottom sit exactly where a notch or a home
+	   indicator gesture bar would cover them. The rail's own sticky state
+	   never needs this — it starts below the page's own top edge in normal
+	   flow, not against the physical screen edge. */
 	.ds-shell-rail[data-drawer='true'] {
 		display: flex;
 		position: fixed;
@@ -874,6 +879,8 @@
 		left: 0;
 		z-index: 50;
 		max-width: 82vw;
+		padding-top: env(safe-area-inset-top);
+		padding-bottom: env(safe-area-inset-bottom);
 		box-shadow:
 			0 10px 15px -3px oklch(0 0 0 / 0.1),
 			0 4px 6px -4px oklch(0 0 0 / 0.1);
@@ -890,6 +897,8 @@
 			position: sticky;
 			z-index: auto;
 			max-width: none;
+			padding-top: 0;
+			padding-bottom: 0;
 			box-shadow: none;
 			animation: none;
 		}

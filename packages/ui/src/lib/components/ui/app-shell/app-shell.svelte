@@ -420,16 +420,26 @@
 	trailing sizes to its clamp without stretching the right-hand group.
 -->
 {#snippet searchButton(sizing: string)}
+	<!--
+		Below `sm` this is an icon-only square, matching the menu/theme-toggle
+		buttons either side of it: a fixed-width pill sharing the row with a
+		`context` switcher or a couple of trailing `actions` badges has as little
+		as the width of one glyph to shrink into, and a button painting a single
+		truncated letter reads as broken rather than as a control. `sizing`
+		supplies the width/flex/padding pair at each tier (base then `sm:`), so
+		this snippet's own classes carry shape only and never fight it over the
+		same property.
+	-->
 	<button
 		onclick={onSearch}
 		class={cn(
-			'border-border text-shell-muted-foreground hover:text-shell-foreground flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
+			'border-border text-shell-muted-foreground hover:text-shell-foreground flex items-center rounded-md border transition-colors sm:text-sm',
 			sizing
 		)}
 		data-testid="ds-shell-search"
 	>
 		<Search class="size-4 flex-none" />
-		<span class="truncate">{searchLabel}</span>
+		<span class="hidden truncate sm:inline">{searchLabel}</span>
 		{#if searchShortcut}
 			<kbd
 				class="border-border bg-background text-shell-muted-foreground text-2xs ml-auto hidden rounded border px-1.5 py-0.5 font-mono sm:block"
@@ -481,7 +491,7 @@
 				<button
 					bind:this={overlayFirstFocus}
 					onclick={closeMobileNav}
-					class="border-border text-shell-muted-foreground hover:text-shell-foreground absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-md border md:hidden"
+					class="border-border text-shell-muted-foreground hover:text-shell-foreground absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 grid size-8 place-items-center rounded-md border md:hidden"
 					aria-label="Close menu"
 				>
 					<X class="size-4" />
@@ -535,7 +545,7 @@
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 		<header
-			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex h-14 flex-none items-center gap-2 border-b px-3 backdrop-blur sm:gap-3 sm:px-5"
+			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none items-center gap-2 border-b px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:gap-3 sm:px-5"
 		>
 			{#if hasNav}
 				<!-- `aria-controls` names the region this toggle opens. It is present
@@ -568,12 +578,16 @@
 			{#if context}{@render context()}{/if}
 
 			{#if onSearch && searchPlacement === 'leading'}
-				{@render searchButton('min-w-0 flex-1 sm:w-[clamp(200px,32vw,560px)] sm:flex-none')}
+				{@render searchButton(
+					'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,32vw,560px)] sm:flex-1 sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
+				)}
 			{/if}
 
 			<div class="ml-auto flex flex-none items-center gap-2 sm:gap-3">
 				{#if onSearch && searchPlacement === 'trailing'}
-					{@render searchButton('min-w-0 flex-none sm:w-[clamp(200px,32vw,560px)]')}
+					{@render searchButton(
+						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,32vw,560px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
+					)}
 				{/if}
 
 				{#if actions}{@render actions()}{/if}
@@ -694,7 +708,8 @@
 						'flex min-h-0 min-w-0 flex-1 flex-col',
 						'w-full',
 						capped && 'ds-shell-measure',
-						padded && 'px-4 py-5 sm:px-6 md:px-8 md:py-7 2xl:px-12'
+						padded &&
+							'px-4 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pt-7 md:pb-[calc(1.75rem+env(safe-area-inset-bottom))] 2xl:px-12'
 					)}
 					data-measure={capped ?? undefined}
 				>

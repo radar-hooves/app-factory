@@ -2,6 +2,40 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.3] - 2026-09-09
+
+### Fixed
+
+- **The shell was not showable on a phone.** Driving `AppShell` composed the
+  way a real app composes it (a nine-section rail, two StatusBadges in
+  `actions`, `AppIdentity` in `identity`, an eight-column `DataTableTanstack`,
+  a six-card `TileGrid`, a `ContextColumn`) at 390×844 turned up three
+  defects no single-primitive surface was shaped to catch:
+  - The search affordance kept its full label and shrank to whatever a
+    `context` switcher or the `actions` badges left it: as little as one
+    glyph wide beside two badges, painting a button that read "S". Below
+    `sm` it is now icon-only, matching the menu and theme-toggle buttons
+    either side of it; nothing changes at `sm` and up.
+  - `ContextColumn` hid outright below `xl` (1280px), tablet included, with
+    no way to reach the stats or the selected-row detail inside it. It now
+    opens the identical content from a 44px floating trigger in an
+    `AppDialog`, dismissible the same way every other dialogue is.
+  - Nothing in the shell accounted for a device notch or a home-indicator
+    gesture bar. `env(safe-area-inset-*)` now reaches the sticky top bar,
+    the full-height mobile drawer (including its close button) and the
+    scrolling content region's own bottom padding; it resolves to `0` on
+    everything else, so nothing here moves a pixel on a display without one.
+
+  The DataTable and card-grid claims in the same sweep — a painted surface
+  on both themes, a horizontal scroller contained to the table rather than
+  the page, cards collapsing to one column with no overlap — were already
+  true and are now pinned by a new harness surface,
+  `?surface=mobile-audit` (`harness/drive.md`), rather than newly fixed.
+
+  Desktop and tablet render pixel-identically: every change above is scoped
+  below the `sm` or `xl` breakpoint, or resolves to a `0` custom property on
+  hardware with no safe area.
+
 ## [2026.9.2] - 2026-09-07
 
 ### Added
@@ -134,12 +168,12 @@ of them are the same shape: a class in the DOM with nothing behind it.
   <html data-ds-density="compact"></html>
   ```
 
-  | Size | comfortable | compact |
-  | --- | --- | --- |
-  | `xs` | 28px | 24px |
-  | `sm` | 36px | 28px |
-  | `default` | 40px | 32px |
-  | `lg` | 44px | 36px |
+  | Size      | comfortable | compact |
+  | --------- | ----------- | ------- |
+  | `xs`      | 28px        | 24px    |
+  | `sm`      | 36px        | 28px    |
+  | `default` | 40px        | 32px    |
+  | `lg`      | 44px        | 36px    |
 
   Inline padding and the trim beside an icon move with the height; `icon-*`
   stays a square of the same height. The attribute is honoured wherever it
@@ -176,7 +210,7 @@ of them are the same shape: a class in the DOM with nothing behind it.
   the three reported as fictions. The `--bits-floating-*` set is written on the
   floating wrapper, and `getFloatingContentCSSVars(name)` aliases it per
   component onto the content inside — so `--bits-popover-content-available-
-  height` and its siblings do exist and do resolve. Driven in a browser:
+height` and its siblings do exist and do resolve. Driven in a browser:
   `max-height: 848px`, `transform-origin: 144px 0px`.
 
   The report was made against 2.17.3, which is below this package's declared
@@ -213,7 +247,7 @@ of them are the same shape: a class in the DOM with nothing behind it.
 
   It carries **no measure**: a reading width and a reading face are two
   decisions, and an app composes `class="ds-prose ds-measure"
-  data-measure="prose"`.
+data-measure="prose"`.
 
   The package styles the content and does not render it — sanitising untrusted
   HTML is a security boundary a package cannot see the inputs to, so the app
@@ -262,7 +296,6 @@ of them are the same shape: a class in the DOM with nothing behind it.
   the type from the button failed three of the six. A test on class strings
   would have passed against all three vendored copies while any one of them
   silently stopped pointing at its own error node.
-
 
 - **`PageHeader` gains `icon` and `meta` snippets (design-system#21).**
   Promoted on duplication rather than on request, which is the household test:
@@ -315,7 +348,6 @@ of them are the same shape: a class in the DOM with nothing behind it.
   title reading "Workbench". So the README now says what it is for and lists
   `subtitle`, `info`, `meta` and `breadcrumbs` as the places the fact usually
   belongs instead. No code change, and no consumer has to move.
-
 
 - **`.ds-measure`, the content measure without the centring
   (design-system#22).** The scale solved "six different max-widths across nine
@@ -379,7 +411,7 @@ of them are the same shape: a class in the DOM with nothing behind it.
 
   The report it came from — "the box-shadow never renders, regardless of ring
   colour" — is not reproducible; the ring paints at `oklab(0.5 … / 0.5) 0 0 0
-  3px` with the border taking the ring colour, and a focused button photographs
+3px` with the border taking the ring colour, and a focused button photographs
   differently from a blurred one. It was a measurement artefact worth recording:
   `Button`'s base carries `transition-all` at 150ms, so a `getComputedStyle`
   read taken in the same turn as the focus returns the transition's START value
@@ -419,20 +451,20 @@ of them are the same shape: a class in the DOM with nothing behind it.
 
 - **The household's Australian value formatters, once: `@poodle64/ui/format`.**
   Two apps had hand-rolled the same job — `godswood/frontend/src/lib/utils/
-  formatters.ts` (with its own tests) and `pebblestone/frontend/src/lib/utils/
-  format.ts` (still app-owned after its design-system adoption pass, precisely
+formatters.ts` (with its own tests) and `pebblestone/frontend/src/lib/utils/
+format.ts` (still app-owned after its design-system adoption pass, precisely
   because this package shipped nothing) — and had already drifted on every
   decision that matters. All four disagreements are user-visible, and the fleet
   is entirely Australian, so the divergence bought nothing:
 
-  | Decision | godswood | pebblestone | Shipped |
-  | --- | --- | --- | --- |
-  | Percentage input | `4.5` → `4.5%` | `0.045` → `4.5%` | Both, named apart: `formatPercentage` (points) and `formatRatioAsPercentage` (ratio) |
-  | Money input | dollars, `number \| string` | integer cents | Both: `formatCurrency` and `formatCurrencyFromCents` |
-  | Money decimals | 0 by default | 2 by default | 2 — dropping cents is a loss of fidelity the caller asks for, not the default that rounds $1,234.56 up to $1,235 |
-  | Date shape | `19 Dec 2024` | `19/12/2024` | Both, on one function: `formatDate(v, { format })`, default `short` |
-  | Missing value | `N/A` | `-` | `N/A`, with `fallback` on every formatter — beside a money column, `-` reads as a minus sign |
-  | Negative money | Intl's own | sign outside the symbol | Sign outside the symbol, everywhere, including `compactCurrency` (which rendered `A$-1.5m`) |
+  | Decision         | godswood                    | pebblestone             | Shipped                                                                                                          |
+  | ---------------- | --------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+  | Percentage input | `4.5` → `4.5%`              | `0.045` → `4.5%`        | Both, named apart: `formatPercentage` (points) and `formatRatioAsPercentage` (ratio)                             |
+  | Money input      | dollars, `number \| string` | integer cents           | Both: `formatCurrency` and `formatCurrencyFromCents`                                                             |
+  | Money decimals   | 0 by default                | 2 by default            | 2 — dropping cents is a loss of fidelity the caller asks for, not the default that rounds $1,234.56 up to $1,235 |
+  | Date shape       | `19 Dec 2024`               | `19/12/2024`            | Both, on one function: `formatDate(v, { format })`, default `short`                                              |
+  | Missing value    | `N/A`                       | `-`                     | `N/A`, with `fallback` on every formatter — beside a money column, `-` reads as a minus sign                     |
+  | Negative money   | Intl's own                  | sign outside the symbol | Sign outside the symbol, everywhere, including `compactCurrency` (which rendered `A$-1.5m`)                      |
 
   Also settled: a **negative-currency** and a **non-AUD** rendering. AUD stays a
   bare `$`; a foreign currency renders disambiguated (`USD 1,234.56`) rather
@@ -536,7 +568,6 @@ of them are the same shape: a class in the DOM with nothing behind it.
   `DocumentDetail` were laid out for a desktop only, which the first consumer
   found the moment it drove them at phone width. Three separate faults, one
   class:
-
   - `LibraryBrowse`'s facet rail was `hidden md:block` with nothing to reveal
     it, so below `md` the whole of filtering was simply absent — no drawer, no
     disclosure, no way to reach a facet at all. A `Filters` button now
