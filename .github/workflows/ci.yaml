@@ -25,13 +25,15 @@ concurrency:
 jobs:
   rust:
     name: Rust
-    # by-exception (2026-09-07): no self-hosted runner is registered for this
-    # repo (`gh api repos/poodle64/telemetry-rs/actions/runners` → 0), so a
-    # `self-hosted` job would queue forever; registering one is a yggdrasil
-    # change plus a rebuild on atlas. The repo is PUBLIC, so vendor-hosted
-    # minutes are unbilled, and atlas's runner carries no ambient Rust — the
-    # household's Rust-on-atlas pattern needs a flake devShell this crate does
-    # not have. Move to `[self-hosted, atlas]` once the runner is registered.
+    # by-exception (2026-09-07, updated 09/09/2026): the radar-hooves org now
+    # runs 9 online self-hosted runners registered at the ORG level
+    # (atlas-1..8, huginn — `gh api orgs/radar-hooves/actions/runners`), so a
+    # `self-hosted` job here would no longer queue forever for want of a
+    # runner. This repo stays on ubuntu-latest anyway: it is PUBLIC, so
+    # vendor-hosted minutes are unbilled, and atlas's runners carry no
+    # ambient Rust toolchain — the household's Rust-on-atlas pattern needs a
+    # flake devShell this crate does not have. Move to `[self-hosted, atlas]`
+    # once this crate gets one.
     runs-on: ubuntu-latest # by-exception (2026-09-08): a public crate with no flake, and the household runner carries no ambient Rust toolchain
     timeout-minutes: 30
 
