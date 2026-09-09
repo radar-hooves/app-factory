@@ -135,4 +135,18 @@ pnpm run test    # build + vitest
 
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint`.
-3. Commit, tag `librarian-v<version>`, push the tag; CI publishes to public npm.
+3. Commit, tag `librarian-v<version>`, push the tag.
+4. `.github/workflows/publish.yaml` runs on that push and should publish via
+   npm OIDC trusted publishing: check it with
+   `gh run list --workflow=publish.yaml`. As of 2026.9.5 every run since
+   `ui-v2026.9.2` fails at the `npm publish` step with
+   `E404 Not Found - PUT .../@poodle64%2flibrarian` (an OIDC/trusted-publisher
+   binding issue, since `Build and test package` passes first). Until that
+   is diagnosed and fixed, publish manually from `packages/librarian/`:
+   ```bash
+   printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' > .npmrc
+   signet exec --identity huginn-claude --broker https://portcullis.example.com \
+     --credential npm-publish-token --env-var NODE_AUTH_TOKEN -- npm publish
+   rm -f .npmrc
+   ```
+   Confirm with `npm view @poodle64/librarian version`.
