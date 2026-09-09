@@ -575,7 +575,19 @@
 				{@render brandLockup(true)}
 			</span>
 
-			{#if context}{@render context()}{/if}
+			<!-- `min-w-0` is what lets a leading `context` snippet (a workspace
+			     switcher, a breadcrumb) actually shrink under crowding — a flex
+			     item's automatic `min-width: auto` otherwise floors it at its own
+			     min-content size, so with search, actions and identity all also
+			     competing for the bar the FIRST thing to run out of room was
+			     whichever trailing control happened to sit last in source order
+			     (theme, identity) — pushed edge-to-edge past the header's own
+			     right edge and, with no horizontal scroll on the bar, permanently
+			     unreachable rather than merely cramped (design-system#111). The
+			     wordmark and the search button already carry their own shrink
+			     behaviour (hiding text, going icon-only); `context` is the one
+			     leading slot that never had to. -->
+			{#if context}<div class="min-w-0">{@render context()}</div>{/if}
 
 			{#if onSearch && searchPlacement === 'leading'}
 				{@render searchButton(

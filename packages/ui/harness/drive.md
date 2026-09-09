@@ -651,17 +651,19 @@ completeness but carry no scripted check of their own.
 ## Phone/tablet chrome, driven by eye (`?surface=mobile-audit`)
 
 A realistic composed page — a nine-section rail with two branches, the
-`actions` slot carrying two StatusBadges, the real `AppIdentity` in the
+`actions` slot carrying two StatusBadges, the real `AppIdentity` (its
+dropdown carrying both an identity row and a `workspace` row) in the
 `identity` slot, an eight-column `DataTableTanstack`, a six-card `TileGrid`
 and a `ContextColumn` — the shapes an app actually ships together, rather
 than one primitive at a time. No claim here is scripted: "does this read as
 broken at 390×844" is a judgement, not a comparison a script can make (`core
 /verification.md` "Scripts Drive, Models Judge"), so this exists to be looked
-at — at 390×844, 768×1024 and 1440×900, in both themes — the way `console`
-above exists for the five dashboard primitives it renders with no check of
-its own.
+at — at 360×780, 390×844, 768×1024 and 1440×900, in both themes, both
+branches expanded at the two phone widths (a full-entitlement caller
+discloses everything the tree has) — the way `console` above exists for the
+five dashboard primitives it renders with no check of its own.
 
-Driving it caught three defects no scripted surface here was shaped to find,
+Driving it caught five defects no scripted surface here was shaped to find,
 because each needs several real components composed together under real
 crowding, not one component in isolation:
 
@@ -676,13 +678,35 @@ crowding, not one component in isolation:
 - Nothing in the shell accounted for a device notch or a home-indicator
   gesture bar: `env(safe-area-inset-*)` reached none of the sticky bar, the
   full-height drawer or the scrolling content's own bottom padding.
+- The drawer's own width was `min(--ds-shell-rail-width, 82vw)` — `vw`, the
+  layout viewport, plus a fixed rem value, neither term tied to the actual
+  screen. Cadmus's own E2E fixture (a caller with the full admin entitlement
+  set, expanding every branch the tree has) caught the shell 4px past 360px
+  wide (design-system#111): nothing on this surface reproduced the exact
+  pixel, so the fix is a construction guarantee rather than a number chased
+  to zero. The drawer's width is now
+  `min(--ds-shell-rail-width, 82dvw, 100dvw - env(safe-area-inset-left))`,
+  `.ds-nav` carries an explicit `overflow-x: hidden` so the drawer scrolls
+  vertically only, and `.ds-shell` itself now carries `max-width: 100dvw` as
+  a backstop against a `position: fixed` descendant (the open drawer)
+  escaping its `overflow-hidden` the way a fixed element escapes any
+  ancestor that is not itself a containing block for fixed elements. 360×780
+  (a small Android, narrower than 390×844) joined the matrix for exactly
+  this: it is the width the bug actually shipped at.
+- The leading `context` snippet had no `min-w-0`, so under the SAME 360px
+  crowding it refused to shrink at all — a flex item's automatic
+  `min-width: auto` floors it at its own min-content size — and pushed the
+  theme toggle and identity control edge-to-edge past the bar's own right
+  side, with no horizontal scroll to reach them: reachable in the DOM,
+  invisible and unclickable on screen. It now sits in a `min-w-0` wrapper,
+  the same shrink discipline the wordmark and search button already had.
 
 `?surface=mobile-audit&identity=bare` swaps the `AppIdentity` fixture for a
 caller with no display name and no email — a bare handle, `r-hendriks` —
 the shape reported live on cadmus (a colleague with a bare handle and one
 personal workspace). Look for the same thing the plain fixture proves: the
-top bar carries only the avatar, no text of any kind, at 390×844, 768×1024
-and 1440×900 alike. It caught one further defect: `AppIdentity`'s initials
+top bar carries only the avatar, no text of any kind, at 360×780, 390×844,
+768×1024 and 1440×900 alike. It caught one further defect: `AppIdentity`'s initials
 fell back to `initialsOf`'s word-splitting rule, which takes the first two
 characters of any single unbroken token — reading as real initials for a
 handle with none. Fixed by a handle-specific rule: one letter from a bare

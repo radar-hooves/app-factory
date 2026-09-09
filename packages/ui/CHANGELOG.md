@@ -2,6 +2,37 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.5] - 2026-09-09
+
+### Fixed
+
+- **The mobile drawer's own width tracked the wrong viewport.** Cadmus's E2E
+  fixture (`navigation.spec.ts:144`) started asserting the full admin
+  entitlement set once its own fixture gap closed (cadmus#109), and with
+  every branch now genuinely disclosed at 360px it caught the shell 4px past
+  the viewport (design-system#111). The drawer's width was
+  `min(--ds-shell-rail-width, 82vw)` — `vw`, the layout viewport, plus a
+  fixed rem value, neither term tied to the screen it is actually drawn on.
+  It is now `min(--ds-shell-rail-width, 82dvw, 100dvw - env(safe-area-inset-left))`,
+  so it cannot be asked to draw wider than the real viewport at any width,
+  on any device, by construction rather than by chasing a number. `.ds-nav`
+  also carries an explicit `overflow-x: hidden` (a row that doesn't fit now
+  truncates, via the label's existing `.truncate`, instead of growing the
+  drawer a second, sideways scrollbar), and `.ds-shell` itself gained a
+  `max-width: 100dvw` backstop against a `position: fixed` descendant — the
+  open drawer — escaping its `overflow-hidden` the way a fixed element
+  escapes any ancestor that is not itself a containing block for fixed
+  elements. The mobile-audit lab (`harness/drive.md`) added 360×780 (a small
+  Android, narrower than 390×844) to its matrix — the width the bug actually
+  shipped at — and now drives both disclosed branches open at both phone
+  widths, matching a full-entitlement caller. Driving that fixture also
+  turned up a header-side sibling of the same bug: a leading `context`
+  snippet had no `min-w-0`, so under real crowding at 360px it refused to
+  shrink and pushed the theme toggle and identity control edge-to-edge past
+  the bar's own right side — reachable in principle, invisible and
+  unclickable in practice. It now sits in a `min-w-0` wrapper, matching the
+  shrink behaviour the wordmark and search button already had.
+
 ## [2026.9.4] - 2026-09-09
 
 ### Fixed
