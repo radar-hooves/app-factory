@@ -9,6 +9,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 ### Fixed
 
 - `workspaces.spec.ts` and `example.spec.ts`'s direct-backend `BACKEND` const now reads `<APP>_DEV_BACKEND_TARGET` first, the same env var `vite.config.ts`'s dev proxy already reads to redirect its own `/api` target — falling back to the copier-stamped `backend_port` unchanged. An app whose E2E backend cannot bind the interactive port (godswood#780) no longer gets `ECONNREFUSED` from a spec hardcoded to a port nothing there listens on.
+- `WorkspaceMenu` occupied top-bar space at phone width even for an org-of-one holding exactly one personal workspace, showing that workspace's own name back at it — the same class of defect as an unnamed `AppIdentity` handle. It now renders nothing for a single membership; Members stays reachable through `AppIdentity`'s new `onManageMembers` (`@poodle64/ui` 2026.9.4), wired in `+layout.svelte` for exactly that caller. For several memberships the trigger is icon-only below `sm` instead of a full-width name chip. `@poodle64/ui` floor raised to 2026.9.4 (design-system, the phone-shell defect programme, org-of-one follow-up).
 
 ## [2026.9.7] - 2026-09-07
 

@@ -1,18 +1,28 @@
 <!--
-	The workspace menu: where the caller is acting, and the ways out of it.
+	The workspace menu: the switch between workspaces, for whoever has more
+	than one to switch between.
 
-	One control in the shell's `context` slot, whatever the caller holds. With
-	one membership it is that workspace's name over Members / New workspace;
-	with several it also carries the switch, as a radio group of the caller's
-	memberships.
+	One control in the shell's `context` slot. With several memberships it is
+	the active one's name over a radio group of the rest, then Members / New
+	workspace; with exactly one it renders NOTHING (operator ruling,
+	07/09/2026) — a caller with nothing to switch to was shown a chip carrying
+	their own workspace's name back at them, which at phone width is the same
+	dead-weight-in-the-bar defect as an unnamed AppIdentity handle, and for the
+	same reason: a control with one possible state is not a control.
+
+	Members does not disappear with it. The org-of-one is exactly who has to
+	reach Members to make the FIRST grant (master-project#291), so the
+	layout's own `identity` slot wires `AppIdentity`'s `onManageMembers` for
+	exactly the callers this component renders nothing for — see
+	`+layout.svelte`. New-workspace creation has no such second door: an
+	org-of-one who wants a second workspace reaches it once a second
+	membership makes this menu render again, or from a route the app adds if
+	that act turns out to matter sooner.
 
 	Sign out is deliberately NOT here. It moved to AppIdentity in the top bar's
 	`identity` slot when the package started shipping one — ending a session is
 	an act on your IDENTITY, not on the workspace you happen to be acting in,
-	and carrying it in both places gave a stamped app two of them. It never disappears for an org-of-one, because the
-	org-of-one is exactly who has to reach Members to make the FIRST grant — a
-	switcher rendered only once a second membership existed would have no route
-	to the act that creates one (master-project#291).
+	and carrying it in both places gave a stamped app two of them.
 
 	Modelled on the workspace menu comparable products put top-left (Linear,
 	Slack): the name is the trigger, the other workspaces are radio items, the
@@ -27,6 +37,7 @@
 -->
 <script lang="ts">
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+	import Layers from '@lucide/svelte/icons/layers';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Users from '@lucide/svelte/icons/users';
 	import { goto } from '$app/navigation';
@@ -38,6 +49,7 @@
 	import { Label } from '@poodle64/ui/label';
 	import { api, extractApiError } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
+	import { cn } from '$lib/utils';
 
 	let {
 		label = 'Workspace',
@@ -45,6 +57,8 @@
 	}: { label?: string; membersHref?: string } = $props();
 
 	const noun = $derived(label.toLowerCase());
+	// The only reason this ever renders: something to switch between.
+	const hasChoice = $derived(auth.canSwitchWorkspace);
 	// bits-ui radio groups carry string values; workspace ids are numbers.
 	const activeValue = $derived(auth.activeWorkspace ? String(auth.activeWorkspace.id) : '');
 
@@ -80,20 +94,24 @@
 	}
 </script>
 
-<DropdownMenu.Root>
-	<!-- No aria-label: the visible text IS the accessible name, so a voice-control
-	     user can say the workspace's name to open it (WCAG 2.5.3). -->
-	<DropdownMenu.Trigger
-		class={buttonVariants({ variant: 'outline', size: 'sm' })}
-		data-testid="workspace-menu"
-	>
-		<span class="max-w-48 truncate" data-testid="workspace-menu-name">
-			{auth.activeWorkspace?.name ?? `Choose a ${noun}`}
-		</span>
-		<ChevronsUpDown class="text-muted-foreground" />
-	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="start">
-		{#if auth.canSwitchWorkspace}
+{#if hasChoice}
+	<DropdownMenu.Root>
+		<!-- `aria-label` carries the accessible name below `sm`, where the name
+		     span is visually hidden to keep this chip from crowding search, the
+		     theme toggle and identity into a phone-width bar — the visible text
+		     still IS the accessible name at `sm` and up (WCAG 2.5.3). -->
+		<DropdownMenu.Trigger
+			class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5 px-2 sm:px-3')}
+			aria-label={auth.activeWorkspace?.name ?? `Choose a ${noun}`}
+			data-testid="workspace-menu"
+		>
+			<Layers class="sm:hidden" />
+			<span class="hidden max-w-48 truncate sm:inline" data-testid="workspace-menu-name">
+				{auth.activeWorkspace?.name ?? `Choose a ${noun}`}
+			</span>
+			<ChevronsUpDown class="text-muted-foreground" />
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content align="start">
 			<DropdownMenu.Label>Switch {noun}</DropdownMenu.Label>
 			<DropdownMenu.RadioGroup
 				value={activeValue}
@@ -109,15 +127,15 @@
 				{/each}
 			</DropdownMenu.RadioGroup>
 			<DropdownMenu.Separator />
-		{/if}
-		<DropdownMenu.Item onSelect={() => goto(membersHref)} data-testid="workspace-menu-members">
-			<Users /> Members
-		</DropdownMenu.Item>
-		<DropdownMenu.Item onSelect={openCreate} data-testid="workspace-menu-create">
-			<Plus /> New {noun}…
-		</DropdownMenu.Item>
-	</DropdownMenu.Content>
-</DropdownMenu.Root>
+			<DropdownMenu.Item onSelect={() => goto(membersHref)} data-testid="workspace-menu-members">
+				<Users /> Members
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={openCreate} data-testid="workspace-menu-create">
+				<Plus /> New {noun}…
+			</DropdownMenu.Item>
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+{/if}
 
 <AppDialog
 	bind:open={createOpen}

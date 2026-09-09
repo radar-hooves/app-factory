@@ -47,6 +47,12 @@
 	// (full-stack-app-template#23). ⌘K is bound by CommandPalette itself — do not
 	// add a keydown handler here.
 	let paletteOpen = $state(false);
+
+	// One route, read by both WorkspaceMenu (its own "Members" item, for
+	// several memberships) and AppIdentity below (onManageMembers, for
+	// exactly one) — so renaming the members route stays a one-line change
+	// rather than two call sites drifting apart.
+	const membersHref = '/workspace';
 </script>
 
 <svelte:head>
@@ -71,13 +77,14 @@
 	currentPath={page.url.pathname}
 	onSearch={() => (paletteOpen = true)}
 >
-	<!-- The workspace menu: which body of data every request acts in, the
-	     switch between them, the members surface and sign-out. The factory owns
-	     the component; this is where the app mounts it, and the one place to say
-	     what THIS app calls a workspace — pass label="Household" here and on the
-	     members route (rules-library/platform/tenancy.md). -->
+	<!-- The workspace switch, for whoever has more than one to switch between —
+	     renders nothing for an org-of-one (see workspace-menu.svelte). The
+	     factory owns the component; this is where the app mounts it, and the
+	     one place to say what THIS app calls a workspace — pass
+	     label="Household" here and on the members route
+	     (rules-library/platform/tenancy.md). -->
 	{#snippet context()}
-		<WorkspaceMenu />
+		<WorkspaceMenu {membersHref} />
 	{/snippet}
 
 	<!-- Who is signed in, and the way out — rendered once, at the end of the
@@ -85,7 +92,13 @@
 	     Contract). Waits for auth.user rather than passing it a null one; the
 	     loading and workspace-choice states below still get full shell chrome,
 	     just not yet an avatar. onAccountSettings is left unset until this app
-	     has a settings route to send it to — the item still renders, inert. -->
+	     has a settings route to send it to — the item still renders, inert.
+
+	     onManageMembers is wired ONLY while WorkspaceMenu renders nothing for
+	     this caller (one membership, `!auth.canSwitchWorkspace`): that menu
+	     carries its own Members entry once there is a switch to go with it,
+	     and giving both surfaces the same item at once is the same act listed
+	     twice, not a second door (see workspace-menu.svelte). -->
 	{#snippet identity()}
 		{#if auth.user}
 			<AppIdentity
@@ -93,6 +106,7 @@
 				workspace={auth.activeWorkspace?.name}
 				role={auth.activeRole}
 				entitlements={auth.entitlements}
+				onManageMembers={auth.canSwitchWorkspace ? undefined : () => goto(membersHref)}
 				onSignOut={() => void auth.logout()}
 			/>
 		{/if}
