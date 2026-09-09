@@ -4,7 +4,10 @@
 	"description": "Household shared component layer: shadcn-svelte primitives (bits-ui) plus the composed page chrome every app builds its routes from, restyled by each app's @poodle64/design-tokens alias layer. One fix reaches every app.",
 	"type": "module",
 	"license": "MIT",
-	"repository": "github:radar-hooves/design-system",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/radar-hooves/design-system.git"
+	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org",
 		"access": "public",
@@ -32,7 +35,7 @@
 		}
 	},
 	"bin": {
-		"ds-check-colour-surface": "./bin/check-colour-surface.mjs"
+		"ds-check-colour-surface": "bin/check-colour-surface.mjs"
 	},
 	"peerDependencies": {
 		"bits-ui": "^2.18.1",
