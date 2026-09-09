@@ -146,6 +146,12 @@
 	   requirement numbers — so it is the main way a reader picks a reference
 	   out of a paragraph. Bordered rather than merely tinted, because a tint
 	   alone is invisible against this palette's flat surfaces. */
+	/* Inline, in running text: wraps at word boundaries like the prose around it
+	   rather than scrolling in its own box — that pattern is reserved for wide
+	   BLOCK content (a table, a fenced code block) that a reader scrolls past;
+	   an inline identifier a reader is reading stays in flow. A long citation
+	   title is exactly the case: nowrap clipped it at the container edge on a
+	   phone with no way to read the rest. */
 	.agent-prose :global(code) {
 		font-family: var(--ds-font-mono, monospace);
 		font-size: 0.8125em;
@@ -153,7 +159,8 @@
 		border: 1px solid var(--border);
 		border-radius: 0.35em;
 		padding: 0.1em 0.35em;
-		white-space: nowrap;
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 
 	.agent-prose :global(pre) {
