@@ -62,7 +62,7 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	});
 
 	if (!response.ok || !response.body) {
-		yield { type: 'library_error', error: `The agent answered ${response.status}.` };
+		yield { type: 'library_error', error: "Milton can't be reached right now." };
 		return;
 	}
 

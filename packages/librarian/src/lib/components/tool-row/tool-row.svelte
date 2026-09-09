@@ -5,14 +5,13 @@
   dimmed sub-line. Borders and badge pills make a run of five calls read as
   five separate events rather than one train of thought.
 
-  The row says what the agent is DOING, not what it typed. A reader here is
-  asking about documents, not reading a terminal, and `Bash ls -1 .` looks
-  like a leak from the machine room. The raw command is one click away, so
-  nothing is hidden from anyone who wants it.
+  The row says what Milton DID, in a reader's own words — never the tool's
+  name or the raw command it ran. Expanding a settled row shows what came
+  back, never what was typed.
 -->
 <script lang="ts">
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import { describe, summarise, type ToolBlock } from '../../transcript.svelte';
+	import { describe, type ToolBlock } from '../../transcript.svelte';
 
 	interface Props {
 		block: ToolBlock;
@@ -53,17 +52,12 @@
 		<span class="text-muted-foreground truncate">
 			<span class="text-foreground font-medium">{said.verb}</span>
 			{#if said.object}<span class="text-foreground/80">{said.object}</span>{/if}
-			{#if repeats > 1}<span class="text-muted-foreground">· {repeats} sections</span>{/if}
+			{#if repeats > 1}<span class="text-muted-foreground">· {repeats} pages</span>{/if}
 		</span>
 	</button>
 
 	{#if open}
 		<div class="border-border mt-1 ml-5.5 border-l pl-3">
-			<!-- The real command, for anyone who wants it. -->
-			<p class="text-muted-foreground font-mono text-xs break-all">
-				{block.name}
-				{summarise(block)}
-			</p>
 			{#if block.result}
 				<pre
 					class="text-muted-foreground mt-1 max-h-72 overflow-auto font-mono text-xs whitespace-pre-wrap">{block.result}</pre>

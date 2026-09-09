@@ -39,16 +39,16 @@
 		onstop
 	}: Props = $props();
 
-	// What the agent is being asked about — chat with this document, this
-	// collection, or the whole library. Callers that have no narrower scope
-	// pass neither name, leaving "All collections" the sole entry — and a
-	// sole entry is not a choice, so `hasChoice` below hides it rather than
-	// rendering a chip with nothing to switch to.
+	// What Milton is being asked about — this document, this collection, or
+	// the whole library. Callers that have no narrower scope pass neither
+	// name, leaving "The whole library" the sole entry — and a sole entry is
+	// not a choice, so `hasChoice` below hides it rather than rendering a
+	// chip with nothing to switch to.
 	const choices = $derived(
 		[
 			documentName ? { id: 'document' as const, label: documentName } : null,
 			collectionName ? { id: 'collection' as const, label: collectionName } : null,
-			{ id: 'library' as const, label: 'All collections' }
+			{ id: 'library' as const, label: 'The whole library' }
 		].filter((c) => c !== null)
 	);
 
@@ -79,7 +79,7 @@
 		bind:value
 		onkeydown={keydown}
 		rows="2"
-		placeholder={running ? 'Queue another message…' : 'Ask anything'}
+		placeholder={running ? 'Queue another message…' : 'Ask Milton…'}
 		class="text-foreground placeholder:text-muted-foreground max-h-52 w-full resize-none bg-transparent px-4 pt-3 pb-2 text-base outline-none"
 	></textarea>
 

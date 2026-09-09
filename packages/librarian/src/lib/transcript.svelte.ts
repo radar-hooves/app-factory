@@ -41,12 +41,13 @@ export interface Outcome {
 	error?: string;
 }
 
-/** What the agent is DOING, in words a reader who has never seen a shell knows.
+/** What Milton DID, in a reader's own words — never the tool's name or the
+ * raw command it ran.
  *
  * The collapsed row is read by someone asking a question about documents, not
  * by an engineer: `Bash ls -1 .` tells them nothing and looks like a leak from
- * the machine room. The raw command is still one click away on expand, so this
- * hides nothing — it just stops the transcript opening with jargon.
+ * the machine room. Milton never narrates how he searched, so a tool this
+ * does not recognise falls back to something that names no mechanism at all.
  */
 export function describe(block: ToolBlock): { verb: string; object: string } {
 	const input = parseInput(block);
@@ -54,28 +55,28 @@ export function describe(block: ToolBlock): { verb: string; object: string } {
 
 	if (block.name === 'Read') {
 		const path = str(input.file_path ?? input.path);
-		return { verb: 'Reading', object: documentName(path) };
+		return { verb: 'Read', object: documentName(path) };
 	}
 	if (block.name === 'Grep') {
-		return { verb: 'Searching for', object: str(input.pattern) };
+		return { verb: 'Looked for', object: str(input.pattern) };
 	}
 	if (block.name === 'Glob') {
-		return { verb: 'Looking for files', object: str(input.pattern) };
+		return { verb: 'Looked for documents', object: '' };
 	}
 	if (block.name === 'Bash') {
 		if (/\bgrep\b|\brg\b/.test(command)) {
 			const quoted = command.match(/["']([^"']{2,60})["']/);
-			return { verb: 'Searching for', object: quoted?.[1] ?? 'a phrase' };
+			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase' };
 		}
-		if (/\bls\b/.test(command)) return { verb: 'Listing', object: listTarget(command) };
-		if (/\bfind\b/.test(command)) return { verb: 'Looking for files', object: '' };
+		if (/\bls\b/.test(command)) return { verb: 'Looked through the library', object: '' };
+		if (/\bfind\b/.test(command)) return { verb: 'Looked for documents', object: '' };
 		if (/\bcat\b|\bhead\b|\bsed\b/.test(command)) {
-			return { verb: 'Reading', object: documentName(lastPath(command)) };
+			return { verb: 'Read', object: documentName(lastPath(command)) };
 		}
-		if (/\bwc\b/.test(command)) return { verb: 'Counting', object: '' };
-		return { verb: 'Running a command', object: '' };
+		if (/\bwc\b/.test(command)) return { verb: 'Checked', object: '' };
+		return { verb: 'Looked into it', object: '' };
 	}
-	return { verb: block.name, object: summarise(block) };
+	return { verb: 'Looked into it', object: '' };
 }
 
 function parseInput(block: ToolBlock): Record<string, unknown> {
@@ -96,12 +97,6 @@ function documentName(path: string): string {
 	// `.../<title-slug>/page-004.md` — the page number is noise, the slug is not.
 	if (/^page-\d+\.md$/.test(page)) return prettify(segments.at(-2) ?? '');
 	return prettify(page.replace(/\.md$/, ''));
-}
-
-function listTarget(command: string): string {
-	const target = command.trim().split(/\s+/).at(-1) ?? '';
-	if (!target || target === '.' || target.startsWith('-')) return 'the collections';
-	return prettify(target.replace(/\/$/, ''));
 }
 
 function lastPath(command: string): string {
@@ -197,7 +192,7 @@ export class Transcript {
 		}
 
 		if (event.type === 'library_error') {
-			this.outcome = { isError: true, error: event.error ?? 'the agent failed' };
+			this.outcome = { isError: true, error: event.error ?? "Milton can't be reached right now." };
 			return;
 		}
 
@@ -349,8 +344,8 @@ function sameStep(a: ToolBlock | ThinkingBlock, b: ToolBlock | ThinkingBlock): b
 
 function tally(group: ActivityGroup, block: ToolBlock): void {
 	const { verb } = describe(block);
-	if (verb === 'Searching for') group.searches += 1;
-	if (verb === 'Reading') group.documents += 1;
+	if (verb === 'Looked for') group.searches += 1;
+	if (verb === 'Read') group.documents += 1;
 	const collection = collectionOf(block);
 	if (collection && !group.collections.includes(collection)) group.collections.push(collection);
 }
@@ -362,15 +357,15 @@ function collectionOf(block: ToolBlock): string {
 	return match?.[1] ?? '';
 }
 
-/** One line describing a whole investigation, for the collapsed state. */
+/** One line describing a whole investigation, for the collapsed state.
+ *
+ * Counts of what Milton did are fine ("1 search · 2 documents read"); how he
+ * organises what he knows is not — no collection count, no shelf, no corpus.
+ */
 export function summariseActivity(group: ActivityGroup): string {
 	const parts: string[] = [];
 	if (group.searches) parts.push(`${group.searches} search${group.searches === 1 ? '' : 'es'}`);
 	if (group.documents)
 		parts.push(`${group.documents} document${group.documents === 1 ? '' : 's'} read`);
-	if (group.collections.length)
-		parts.push(
-			`${group.collections.length} collection${group.collections.length === 1 ? '' : 's'}`
-		);
-	return parts.length ? parts.join(' · ') : 'Worked on it';
+	return parts.length ? parts.join(' · ') : 'Looked into it';
 }

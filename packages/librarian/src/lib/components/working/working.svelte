@@ -18,15 +18,7 @@
 
 	let { label }: Props = $props();
 
-	const WORDS = [
-		'Starting',
-		'Reading the shelves',
-		'Rummaging',
-		'Cross-checking',
-		'Thumbing pages',
-		'Following a reference',
-		'Chasing it down'
-	];
+	const WORDS = ['Milton is looking', 'Milton is reading'];
 
 	let tick = $state(0);
 	let elapsed = $state(0);

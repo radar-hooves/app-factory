@@ -2,6 +2,38 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.6] - 2026-09-09
+
+### Changed
+
+- **Every user-visible string now presents Milton as a person, not the
+  library's architecture** (`rules-library/platform/canonical-app-shape.md`
+  §Milton is a person, not a place). On cadmus production the activity
+  summary read "1 search · 2 documents read · 1 collection" and the working
+  indicator and tool rows described the mechanics — both violations.
+  - `summariseActivity()` drops the collection count; counts of searches and
+    documents read stay ("1 search · 2 documents read").
+  - `describe()` (the tool-row label) never returns a tool's name or a raw
+    path/pattern for an unrecognised call; every branch returns a reader
+    verb instead ("Read", "Looked for", "Looked for documents", "Looked
+    through the library", "Checked", "Looked into it").
+  - `ToolRow`'s expanded state no longer prints the tool name and raw
+    command/path line; it still shows the tool's real result.
+  - `Working`'s cycling placeholder is now exactly "Milton is looking…" /
+    "Milton is reading…", dropping "Reading the shelves" (a forbidden
+    architecture noun) and the rest of the whimsical word list.
+  - `Composer`'s placeholder defaults to "Ask Milton…" (was "Ask anything")
+    and its unscoped chip reads "The whole library" (was "All
+    collections").
+  - The stream-failure error frame reads "Milton can't be reached right
+    now." in both `client.ts` (was "The agent answered `<status>`.") and
+    `transcript.svelte.ts`'s `library_error` fallback (was "the agent
+    failed").
+    Event handling and component structure are unchanged — copy only. Pinned
+    by `src/test/transcript.test.ts`, `src/test/tool-row.test.ts`,
+    `src/test/working.test.ts`, `src/test/activity-group.test.ts`, and the
+    extended `src/test/composer.test.ts`.
+
 ## [2026.9.5] - 2026-09-09
 
 ### Fixed
