@@ -59,7 +59,10 @@ permissions:
 
 jobs:
   publish:
-    runs-on: [self-hosted, atlas]
+    # by-exception (2026-09-04): npm trusted publishing does not support
+    # self-hosted runners at all (see the deviation note above); OIDC
+    # publishing needs a GitHub-hosted runner or npm rejects it.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       # Mints the OIDC token npm exchanges for publish rights. Without it the
