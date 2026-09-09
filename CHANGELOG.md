@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- `workspaces.spec.ts` and `example.spec.ts`'s direct-backend `BACKEND` const now reads `<APP>_DEV_BACKEND_TARGET` first, the same env var `vite.config.ts`'s dev proxy already reads to redirect its own `/api` target — falling back to the copier-stamped `backend_port` unchanged. An app whose E2E backend cannot bind the interactive port (godswood#780) no longer gets `ECONNREFUSED` from a spec hardcoded to a port nothing there listens on.
+
 ## [2026.9.7] - 2026-09-07
 
 The seams the fleet's exception registers proved the factory lacked (master-project#328), so a stamped app holds every factory file byte-identically and differs by its answers and its app-owned extension points.
