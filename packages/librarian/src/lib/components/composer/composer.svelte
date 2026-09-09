@@ -41,7 +41,9 @@
 
 	// What the agent is being asked about — chat with this document, this
 	// collection, or the whole library. Callers that have no narrower scope
-	// pass neither name and only "All collections" ever renders.
+	// pass neither name, leaving "All collections" the sole entry — and a
+	// sole entry is not a choice, so `hasChoice` below hides it rather than
+	// rendering a chip with nothing to switch to.
 	const choices = $derived(
 		[
 			documentName ? { id: 'document' as const, label: documentName } : null,
@@ -49,6 +51,12 @@
 			{ id: 'library' as const, label: 'All collections' }
 		].filter((c) => c !== null)
 	);
+
+	// A room with one shelf set has one scope, fixed by the caller never
+	// passing a name — no pick to make, so the row renders nothing rather
+	// than a chip that only ever reselects itself (design-system, the
+	// fixed-scope Composer defect).
+	const hasChoice = $derived(choices.length > 1);
 
 	// Three chips in a narrow column clipped all three to fragments
 	// ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
@@ -76,20 +84,22 @@
 	></textarea>
 
 	<div class="flex items-center gap-2 px-3 pb-2.5">
-		<div class="flex min-w-0 flex-wrap items-center gap-1">
-			{#each choices as choice (choice.id)}
-				<button
-					type="button"
-					onclick={() => onscope(choice.id)}
-					class="max-w-full truncate rounded-full px-2 py-0.5 text-xs transition-colors {scope ===
-					choice.id
-						? 'bg-primary/15 text-foreground border-primary/40 border'
-						: 'text-muted-foreground hover:text-foreground border border-transparent'}"
-				>
-					{choice.label}
-				</button>
-			{/each}
-		</div>
+		{#if hasChoice}
+			<div class="flex min-w-0 flex-wrap items-center gap-1">
+				{#each choices as choice (choice.id)}
+					<button
+						type="button"
+						onclick={() => onscope(choice.id)}
+						class="max-w-full truncate rounded-full px-2 py-0.5 text-xs transition-colors {scope ===
+						choice.id
+							? 'bg-primary/15 text-foreground border-primary/40 border'
+							: 'text-muted-foreground hover:text-foreground border border-transparent'}"
+					>
+						{choice.label}
+					</button>
+				{/each}
+			</div>
+		{/if}
 		<span class="flex-1"></span>
 		{#if running}
 			<button

@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.4] - 2026-09-09
+
+### Fixed
+
+- **`Composer` rendered its "All collections" scope chip even for a
+  fixed-scope consumer.** A room with one shelf set never passes
+  `documentName` or `collectionName`, which used to leave "All collections"
+  as the sole entry in the chip row — console furniture with nothing to
+  switch to. The chip row now renders only once there are two or more
+  scopes to pick between; a fixed-scope consumer gets no chip and no space
+  where it was. Covered by `src/lib/components/composer/composer.test.ts`,
+  the package's first component test (also adds `src/test/setup.ts` and
+  wires `vitest.config.ts`'s `setupFiles`, per `sveltekit-testing.md`).
+
 ## [2026.9.3] - 2026-09-09
 
 ### Fixed

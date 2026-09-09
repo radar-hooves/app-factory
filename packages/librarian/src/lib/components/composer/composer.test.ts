@@ -1,0 +1,44 @@
+/**
+ * The scope chip renders only when there is a genuine pick between two or
+ * more scopes (design-system, the fixed-scope Composer defect). A room with
+ * one shelf set passes neither `documentName` nor `collectionName`, leaving
+ * "All collections" as the sole entry — and a sole entry is console
+ * furniture, not a control.
+ */
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
+import Composer from './composer.svelte';
+
+describe('Composer scope chip', () => {
+	it('renders nothing when the caller has fixed the scope', () => {
+		render(Composer, {
+			props: {
+				value: '',
+				running: false,
+				scope: 'library',
+				onscope: () => {},
+				onsubmit: () => {},
+				onstop: () => {}
+			}
+		});
+
+		expect(screen.queryByText('All collections')).not.toBeInTheDocument();
+	});
+
+	it('renders chips once a narrower scope is offered', () => {
+		render(Composer, {
+			props: {
+				value: '',
+				running: false,
+				scope: 'library',
+				collectionName: 'household-legal',
+				onscope: () => {},
+				onsubmit: () => {},
+				onstop: () => {}
+			}
+		});
+
+		expect(screen.getByText('All collections')).toBeInTheDocument();
+		expect(screen.getByText('household-legal')).toBeInTheDocument();
+	});
+});

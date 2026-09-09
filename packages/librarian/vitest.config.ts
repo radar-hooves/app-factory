@@ -7,8 +7,10 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'jsdom',
-		// No test files ship with the initial move (none existed on the source
-		// components); a consumer's own suite is where behaviour gets pinned.
+		setupFiles: ['src/test/setup.ts'],
+		// A component whose OWN behaviour needs no consuming app to exercise
+		// (a conditional render, a derived value) is pinned here; a claim about
+		// real layout, CSS or the network stays a consumer's harness.
 		passWithNoTests: true,
 		include: ['src/**/*.{test,spec}.{js,ts}']
 	},
