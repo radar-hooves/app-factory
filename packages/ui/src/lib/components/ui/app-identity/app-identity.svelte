@@ -30,7 +30,14 @@
 	 * instead (operator ruling, 07/09/2026, master-project#291's org-of-one
 	 * case). Wire it whenever the app has a members route, whether or not it
 	 * also renders a switcher.
+	 *
+	 * `links` is the escape valve for everything the fixed entries have no room
+	 * for — an Admin route, a support link — as a LIST, so every app's extra
+	 * destinations render as the same row. Without it an app puts its own
+	 * destination in AppShell's `actions` slot as an icon button (cadmus did,
+	 * twice), and two apps do it two ways in the same bar.
 	 */
+	import type { Component } from 'svelte';
 	import { toggleMode } from 'mode-watcher';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
@@ -43,7 +50,8 @@
 		onSignOut,
 		onAccountSettings,
 		onManageMembers,
-		onSwitchTheme
+		onSwitchTheme,
+		links = []
 	}: {
 		user: { username: string; display_name: string | null; email: string | null };
 		/** The active workspace's name. Omit while none is chosen yet — the block hides rather than rendering empty. */
@@ -70,6 +78,22 @@
 		onManageMembers?: () => void;
 		/** Override the theme action. Defaults to mode-watcher's toggleMode, matching AppShell. */
 		onSwitchTheme?: () => void;
+		/**
+		 * App destinations the fixed entries have no room for, rendered in their
+		 * own group.
+		 *
+		 * A list of items, never a snippet: a snippet lets each app invent its own
+		 * row shape, and two apps inventing two shapes in the same top bar is the
+		 * drift this package exists to end. Cadmus is the measured case — its
+		 * Admin entry had nowhere to go and became an icon button in AppShell's
+		 * `actions` slot, and a second one (a quiet support link) was about to
+		 * follow it there.
+		 *
+		 * No `href`: the callback shape matches every other action on this
+		 * component, and a consumer routes with its own `goto`. The icon is
+		 * optional — a label-only row stays aligned with any iconed row beside it.
+		 */
+		links?: { label: string; icon?: Component<{ class?: string }>; onSelect: () => void }[];
 	} = $props();
 
 	const shown = $derived(user.display_name ?? user.username);
@@ -109,6 +133,11 @@
 	const initials = $derived(
 		user.display_name ? initialsOf(user.display_name) : handleInitials(user.username)
 	);
+
+	// Spacers only where the group actually has an icon to align to: a group of
+	// label-only rows sits flush with the fixed entries below it, exactly as it
+	// would if this prop had never existed.
+	const linksHaveIcons = $derived(links.some((l) => l.icon));
 
 	function switchTheme() {
 		if (onSwitchTheme) onSwitchTheme();
@@ -176,6 +205,26 @@
 			{#if onManageMembers}
 				<DropdownMenu.Item onSelect={onManageMembers}>Members</DropdownMenu.Item>
 			{/if}
+		{/if}
+		{#if links.length}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Group>
+				<!-- Keyed by position, not by label: nothing in the type makes a label
+				     unique, and two apps' configs colliding on one would be a
+				     duplicate-key crash rather than a duplicated row. This list is
+				     app configuration, not data that reorders. -->
+				{#each links as link, i (i)}
+					{@const Icon = link.icon}
+					<DropdownMenu.Item onSelect={link.onSelect}>
+						{#if Icon}
+							<Icon class="size-4" />
+						{:else if linksHaveIcons}
+							<span class="size-4 flex-none" aria-hidden="true"></span>
+						{/if}
+						{link.label}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Group>
 		{/if}
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item onSelect={switchTheme}>Switch theme</DropdownMenu.Item>

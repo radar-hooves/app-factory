@@ -20,6 +20,7 @@
 	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
+	import ShieldIcon from '@lucide/svelte/icons/shield';
 
 	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';
@@ -116,6 +117,17 @@
 	// CSS custom properties and the gradient reads them, so the browser does the
 	// painting and JS only ever sets two numbers.
 	let glow = $state(false);
+	// AppIdentity's `links` — the app's OWN destinations, the ones the fixed
+	// entries have no room for. Off by default because that is the shape every
+	// app renders today; on, the menu grows one group between Members and the
+	// theme toggle. Two rows on purpose: one iconed, one label-only, which is
+	// exactly cadmus's pair (an Admin route and a quiet support link) and the
+	// only way to see that a label-only row still lines up with an iconed one.
+	let identityLinks = $state(false);
+	const IDENTITY_LINKS = [
+		{ label: 'Admin', icon: ShieldIcon, onSelect: () => {} },
+		{ label: 'Support Milton', onSelect: () => {} }
+	];
 	let glowX = $state(50);
 	let glowY = $state(50);
 	let glowRaf = 0;
@@ -351,6 +363,11 @@
 					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
 				>cursor glow</button>
 				<button
+					onclick={() => (identityLinks = !identityLinks)}
+					aria-pressed={identityLinks}
+					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
+				>identity links</button>
+				<button
 					onclick={() => (globals = !globals)}
 					aria-pressed={globals}
 					class="rounded border border-[#363b47] bg-[#22262f] px-2 py-1 hover:text-white aria-pressed:border-transparent aria-pressed:bg-[var(--ds-color-primary)] aria-pressed:font-semibold aria-pressed:text-white"
@@ -517,6 +534,7 @@
 							role={who.role}
 							entitlements={who.entitlements}
 							onSwitchTheme={toggleMode}
+							links={identityLinks ? IDENTITY_LINKS : []}
 							onSignOut={() => {}}
 						/>
 					</div>

@@ -2,6 +2,33 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.6] - 2026-09-10
+
+### Added
+
+- **`AppIdentity` takes `links` — the app's own destinations.** The component
+  carried a fixed set of callbacks and no way for an app to add an entry of
+  its own, so cadmus put its Admin route in AppShell's top-bar `actions` slot
+  as an icon button (its `(protected)/+layout.svelte` names the limitation in
+  the `actions` snippet's own comment) and was about to put a second one — a
+  quiet support link — there beside it. Two apps solving that two ways in the
+  same bar is the drift this package exists to end, so it is solved once,
+  here: `links?: { label: string; icon?: Component<{ class?: string }>;
+  onSelect: () => void }[]` renders as its own `DropdownMenu.Group` behind a
+  separator, after the identity block and Members and before the theme toggle
+  — Sign out stays last whatever is added above it. A LIST, not a snippet: a
+  snippet would let each app invent its own row shape, which is the thing
+  being prevented. No `href` either — the callback matches every other action
+  on this component and a consumer routes with its own `goto`. The icon is
+  optional; a label-only row beside an iconed one draws an `aria-hidden`
+  spacer so both labels start at the same offset, and a group with no icons at
+  all draws none, so it sits flush with the fixed entries below it. Absent or
+  empty, the menu renders exactly as before — no separator, no empty group,
+  asserted on both the item list and the rendered separator count
+  (`src/test/app-identity.test.ts`). The lab's `identity links` toggle
+  (`packages/console`, `/lab`) shows the group with one iconed and one
+  label-only row.
+
 ## [2026.9.5] - 2026-09-09
 
 ### Fixed
