@@ -23,10 +23,16 @@ export interface Citation {
 /** Inline `[n]` markers, in order of first appearance.
  *
  * Deliberately not a global "[digits]" match: `[1](…)` is a markdown link and
- * `[1]: …` a link definition, and both appear in real answers. */
+ * `[1]: …` a link definition, and both appear in real answers.
+ *
+ * A following `[` is NOT excluded, and that is the point: `[1][2]` is how an
+ * answer cites two sources for one claim, and a lookahead that rejected it
+ * dropped the FIRST of the pair — `matchAll` resumes after the failed attempt
+ * rather than backtracking, so `[1]` was never seen at all and rendered as
+ * dead text beside a live `[2]`. */
 export function citationMarkers(markdown: string): number[] {
 	const seen: number[] = [];
-	for (const match of markdown.matchAll(/\[(\d{1,3})\](?![(:[])/g)) {
+	for (const match of markdown.matchAll(/\[(\d{1,3})\](?![(:])/g)) {
 		const n = Number(match[1]);
 		if (!seen.includes(n)) seen.push(n);
 	}
@@ -53,10 +59,19 @@ export function splitSources(markdown: string): SplitAnswer {
 	const heading = markdown.match(SOURCES_HEADING);
 	if (!heading || heading.index === undefined) return { body: markdown, citations: [] };
 
-	const block = markdown.slice(heading.index + heading[0].length);
+	// The block runs to the NEXT heading, not to the end of the answer. Cutting
+	// to the end loses anything Milton wrote after his sources — a closing note,
+	// a caveat — and loses it silently, which is the worst way to lose it.
+	const after = markdown.slice(heading.index + heading[0].length);
+	const next = after.search(/^[ \t]{0,3}#{1,6}[ \t]/m);
+	const block = next === -1 ? after : after.slice(0, next);
+	const tail = next === -1 ? '' : after.slice(next).trim();
+
 	const citations = parseSourceLines(block);
 	if (citations.length === 0) return { body: markdown, citations: [] };
-	return { body: markdown.slice(0, heading.index).trimEnd(), citations };
+
+	const before = markdown.slice(0, heading.index).trimEnd();
+	return { body: tail ? `${before}\n\n${tail}` : before, citations };
 }
 
 /** One list item per source; anything else in the block is ignored. */

@@ -21,6 +21,10 @@ describe('citationMarkers()', () => {
 		expect(citationMarkers('See [1](https://example.com) and [2]: https://example.com')).toEqual([]);
 	});
 
+	it('finds BOTH of two adjacent markers, which is how one claim cites two sources', () => {
+		expect(citationMarkers('The rate has not changed [1][2].')).toEqual([1, 2]);
+	});
+
 	it('finds nothing in prose that cites nothing', () => {
 		expect(citationMarkers('Recreation leave is 20 days a year.')).toEqual([]);
 	});
@@ -69,10 +73,13 @@ describe('splitSources()', () => {
 	});
 
 	it('stops at the next heading rather than eating the rest of the answer', () => {
-		const { citations } = splitSources(
+		const { body, citations } = splitSources(
 			'Answer.\n\n## Sources\n\n- One document\n\n## Notes\n\n- Not a source'
 		);
 		expect(citations.map((c) => c.title)).toEqual(['One document']);
+		// Anything Milton wrote AFTER his sources is his answer, not his sources,
+		// and dropping it is the worst kind of loss: silent.
+		expect(body).toBe('Answer.\n\n## Notes\n\n- Not a source');
 	});
 });
 

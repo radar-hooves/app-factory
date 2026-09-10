@@ -163,6 +163,11 @@ export async function loadDocument(documentId: string): Promise<LoadedDocument> 
 
 const question = (asked: string) => `${PREAMBLE}\n\n${asked}`;
 
+function splitAt(markdown: string, heading: string): [string, string] {
+	const at = markdown.indexOf(heading);
+	return [markdown.slice(0, at).trimEnd(), markdown.slice(at)];
+}
+
 const ACTIVITY: Block[] = [
 	tool(0, 'Grep', { pattern: 'recreation leave' }),
 	tool(1, 'Read', { file_path: '/data/staged/pacman-division-2/page-014.md' }),
@@ -280,13 +285,24 @@ export function scene(state: LabState): LabScene {
 
 	// `answer` and `citations` render the same turn; the difference is whether
 	// the source pane has been opened, which is a click the driver makes.
+	//
+	// Deliberately TWO text blocks with a tool call between them, which is the
+	// real shape of an answer Milton goes back to the shelf part-way through —
+	// and the shape that catches a Sources block being lifted off the joined
+	// answer rather than off the block that carries it.
+	const [opening, rest] = splitAt(LONG, '## Carrying leave over');
 	return {
 		...base,
 		turns: [
 			{
 				id: 'turn-1',
 				question: question('How much recreation leave do I get each year?'),
-				blocks: [...ACTIVITY, text(3, LONG)],
+				blocks: [
+					...ACTIVITY,
+					text(3, opening),
+					tool(4, 'Read', { file_path: '/data/staged/pacman-division-1/page-002.md' }),
+					text(5, rest)
+				],
 				outcome: { turns: 4, durationMs: 12_600 },
 				citations: CITATIONS
 			}

@@ -15,7 +15,8 @@
 		readerQuestion,
 		segment,
 		type Block,
-		type Outcome
+		type Outcome,
+		type TextBlock
 	} from '../../transcript.svelte';
 	import {
 		citationMarkers,
@@ -62,31 +63,34 @@
 	const segments = $derived(segment(blocks));
 	const lastIndex = $derived(segments.at(-1)?.index ?? -1);
 
-	// The prose block a Sources list may be hiding at the end of is the last
-	// one; splitting every text segment would eat a "## Sources" heading a
-	// reader legitimately asked about mid-answer.
+	// An answer can arrive as SEVERAL text blocks with tool calls between them,
+	// so the Sources block is at the end of the LAST one. It is split off that
+	// block alone: splitting the joined answer and substituting the result back
+	// into one segment would print every earlier block twice.
+	//
+	// And only once the answer has settled — mid-stream the "## Sources" heading
+	// may be all that has arrived, with the list still to come.
+	const texts = $derived(segments.filter((s): s is TextBlock => s.kind === 'text'));
+	const lastTextIndex = $derived(texts.at(-1)?.index ?? -1);
+	const split = $derived(
+		running ? { body: '', citations: [] } : splitSources(texts.at(-1)?.text ?? '')
+	);
+	const sources = $derived(resolveCitations(citations, split.citations));
+
+	/** The answer as a reader would paste it: every block, Sources stripped. */
 	const answer = $derived(
-		segments
-			.filter((s) => s.kind === 'text')
-			.map((s) => s.text)
+		texts
+			.map((s) => (s.index === lastTextIndex && split.citations.length > 0 ? split.body : s.text))
 			.join('\n\n')
 	);
-	const split = $derived(running ? { body: '', citations: [] } : splitSources(answer));
-	const sources = $derived(resolveCitations(citations, split.citations));
+
 	// Only a number the prose actually marks becomes a chip; a source list may
 	// legitimately carry an entry the answer never points at inline.
 	const numbers = $derived(
 		new Set(citationMarkers(answer).filter((n) => sources.some((c) => c.n === n)))
 	);
 
-	function prose(text: string, isLast: boolean): string {
-		// Only the last text segment can carry the trailing Sources block, and
-		// only once the answer has settled — mid-stream the heading may be all
-		// that has arrived.
-		return isLast && split.citations.length > 0 ? split.body : text;
-	}
-
-	const hasAnswer = $derived(segments.some((s) => s.kind === 'text'));
+	const hasAnswer = $derived(texts.length > 0);
 	// A failed turn settles too, and "Ask again" is the one thing a reader wants
 	// from it — there is just nothing to copy.
 	const settled = $derived(!running && (hasAnswer || Boolean(outcome?.error)));
@@ -124,7 +128,9 @@
 		{:else}
 			<div class="max-w-[72ch] min-w-0">
 				<Markdown
-					content={prose(seg.text, seg.index === lastIndex)}
+					content={seg.index === lastTextIndex && split.citations.length > 0
+						? split.body
+						: seg.text}
 					streaming={running && seg.index === lastIndex}
 					{collectionNames}
 					citationNumbers={numbers}
