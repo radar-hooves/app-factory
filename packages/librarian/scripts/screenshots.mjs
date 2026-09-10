@@ -2,8 +2,8 @@
  * The screenshot grid: every state, three widths, both themes.
  *
  * Scripted rather than driven by hand because it is pre-known choreography —
- * seven states x three widths x two themes is 42 shots, and a person taking
- * them by hand takes 42 slightly different ones
+ * eleven states x three widths x two themes is 66 shots, and a person taking
+ * them by hand takes 66 slightly different ones
  * (`rules-library/core/verification.md` §"Scripts Drive, Models Judge"). The
  * model's time goes on looking at the batch afterwards.
  *
@@ -44,6 +44,7 @@ const STATES = [
 	'citations',
 	'sources',
 	'attachments',
+	'narration',
 	'not-held',
 	'error',
 	'stopped'
@@ -112,6 +113,22 @@ for (const theme of THEMES) {
 			if (state === 'citations') {
 				await page.click('sup[data-cite="1"]');
 				await page.waitForSelector('aside[aria-label="Source document"] h3');
+			}
+
+			// A fold photographs as an absence, so this shot is taken open: the
+			// activity line, then the "Thought" row inside it, which is where
+			// Milton's between-tool sentence now lives. The claim the shot cannot
+			// make — that it is not ALSO sitting in the answer — is asserted first,
+			// on the closed state, at every width and both themes.
+			if (state === 'narration') {
+				const said = "Let me also check if there's any provision for cashing out";
+				const closed = await page.locator('[role="log"]').innerText();
+				if (closed.includes(said)) {
+					failures.push(`${state}-${width}-${theme}: narration rendered as answer prose`);
+				}
+				await page.getByRole('button', { name: /documents read/ }).click();
+				await page.getByRole('button', { name: 'Thought' }).click();
+				await page.getByText(said, { exact: false }).waitFor();
 			}
 
 			// One frame of settle: the pane scrolls its cited section into view and

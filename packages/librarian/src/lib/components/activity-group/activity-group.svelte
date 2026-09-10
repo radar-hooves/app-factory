@@ -7,6 +7,11 @@
   to mention. So there is exactly one row in every state — "Working…" while it
   runs, a count of what was done once it settles — and the steps are behind a
   disclosure for the reader who wants them.
+
+  That commentary is a step in here too. It reaches the caller as an ordinary
+  `text` block, not a `thinking` one, so `segment()` re-homes any text with a
+  tool call still to come into this group; it renders as a ThinkingRow beside
+  the tools, folded like the rest.
 -->
 <script lang="ts">
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';

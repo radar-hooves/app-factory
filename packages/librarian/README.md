@@ -28,7 +28,7 @@ src/lib/
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        a whole investigation, as one quiet line
     tool-row/              one tool call
-    thinking-row/          one thinking block
+    thinking-row/          one thought, or one line of between-tool narration
     working/               the pre-first-token "something is happening" indicator
 ```
 
@@ -231,6 +231,23 @@ one asks it through `onsuggest` and takes the whole row with it — the moment
 between the click and the new turn arriving is otherwise long enough to ask a
 second question by mistake.
 
+### Where the answer starts
+
+Milton narrates between tool calls — "Let me also check whether…" — and the
+caller stream gives that nowhere to arrive: it carries no `thinking` blocks
+at all, so narration is an ordinary `text` block, identical to the answer
+except in POSITION. `segment()` reads that position: a text block with any
+tool call still to come in the turn is narration and folds into the activity
+group as a thinking-shaped row; the run of text after the LAST tool call is
+the answer. While a turn streams the judgement is provisional — a block that
+is currently last renders as prose, and a tool call arriving after it
+re-homes it — which is why `segment()` is pure and re-derived per event
+rather than deciding once.
+
+The cost is an answer Milton interrupts to go back to the shelf: its first
+half folds away. Position is the only signal the stream gives, and a rule
+read off the prose itself would be unexplainable the first time it misfired.
+
 ### Changing the words
 
 Every user-visible string this package renders lives in
@@ -271,15 +288,16 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is ten states x three widths x both themes, taken by
+`docs/screenshots/` is eleven states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
 opens and closes from the keyboard with focus returning to the chip and is
 really draggable, that the scope statement folds once there is a
-conversation over it and reopens from that line, and that a follow-up chip
-asks its question and takes the rest of the row with it. It exits non-zero
-on any of them.
+conversation over it and reopens from that line, that a follow-up chip asks
+its question and takes the rest of the row with it, and that Milton's
+between-tool narration is nowhere in the answer prose before the activity
+line is opened. It exits non-zero on any of them.
 
 ```bash
 pnpm --filter @poodle64/console run build

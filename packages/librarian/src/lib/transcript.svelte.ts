@@ -318,8 +318,11 @@ function renderResult(content: unknown): string {
 // ── Grouping: what the reader sees instead of every step ─────────────────────
 
 export interface ActivityStep {
-	/** The block this step stands for; a repeated step keeps the FIRST. */
-	block: ToolBlock | ThinkingBlock;
+	/** The block this step stands for; a repeated step keeps the FIRST.
+	 *
+	 * A `text` block here is interstitial narration, not the answer — see
+	 * `segment()`. */
+	block: Block;
 	/** How many identical consecutive steps collapsed into this one. */
 	repeats: number;
 }
@@ -355,7 +358,7 @@ export interface Turn {
 /**
  * Fold a turn's flat block list into what a reader should actually see.
  *
- * Two problems this solves, both reported off a real transcript:
+ * Three problems this solves, all reported off a real transcript:
  *
  * 1. Fifteen tool rows stood between the question and the first word of the
  *    answer, so the answer had to be scrolled to. Contiguous activity becomes
@@ -363,21 +366,44 @@ export interface Turn {
  * 2. "Reading pspf guidelines 2026" appeared five times in a row — five pages
  *    of one document, which is one act of reading to a human. Consecutive
  *    steps with the same label collapse to one row carrying a count.
+ * 3. Milton's between-tool narration was rendering unfolded, as answer prose.
+ *    The caller stream carries no `thinking` blocks at all — measured on
+ *    production 11/09/2026 — so "Let me also check whether…" arrives as an
+ *    ordinary `text` block, indistinguishable from the answer except by
+ *    POSITION. A text block with any tool call still to come in this turn is
+ *    narration; only the run of text after the LAST tool call is the answer.
+ *    Narration folds into the activity group as a thinking-shaped step.
+ *
+ * That third rule is provisional while a turn streams, and deliberately so: a
+ * text block that is currently last IS the answer as far as anything can know,
+ * and renders as prose. The tool call that arrives after it re-homes it into
+ * the group. Nothing here holds state to make that work — `segment` is pure
+ * and re-derived on every event, so re-homing is just the next call returning
+ * a different shape.
+ *
+ * The cost of the rule is a real answer that Milton interrupts to go back to
+ * the shelf: its first half folds away. That is the trade taken knowingly —
+ * the position of a block is the only signal the stream gives, and a rule read
+ * off the prose itself would be unexplainable the first time it misfired.
  */
 export function segment(blocks: Block[]): Segment[] {
 	const out: Segment[] = [];
 	let current: ActivityGroup | null = null;
 
-	for (const block of blocks) {
-		if (block.kind === 'text') {
+	let lastTool = -1;
+	for (let i = 0; i < blocks.length; i += 1) if (blocks[i].kind === 'tool') lastTool = i;
+
+	for (const [i, block] of blocks.entries()) {
+		if (block.kind === 'text' && i > lastTool) {
 			current = null;
 			out.push(block);
 			continue;
 		}
 		// A thinking block with no text is a row whose chevron opens on nothing.
 		// Claude Code's thinking display defaults to "omitted", so most arrive
-		// empty — rendering them is worse than dropping them.
-		if (block.kind === 'thinking' && !block.text.trim()) continue;
+		// empty — rendering them is worse than dropping them. An empty narration
+		// block is the same row, for the same reason.
+		if (block.kind !== 'tool' && !block.text.trim()) continue;
 		if (!current) {
 			current = {
 				kind: 'activity',
@@ -400,9 +426,12 @@ export function segment(blocks: Block[]): Segment[] {
 	return out;
 }
 
-function sameStep(a: ToolBlock | ThinkingBlock, b: ToolBlock | ThinkingBlock): boolean {
+function sameStep(a: Block, b: Block): boolean {
 	if (a.kind !== b.kind) return false;
 	if (a.kind === 'thinking') return true;
+	// Two narration sentences are two things Milton said; collapsing them to
+	// one row with a count would lose the second one entirely.
+	if (a.kind === 'text') return false;
 	const left = describe(a as ToolBlock);
 	const right = describe(b as ToolBlock);
 	return left.verb === right.verb && left.object === right.object;

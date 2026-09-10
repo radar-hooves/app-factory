@@ -201,6 +201,13 @@ const ACTIVITY: Block[] = [
 	tool(2, 'Read', { file_path: '/data/staged/pacman-division-2/page-015.md' })
 ];
 
+/** What Milton says BETWEEN two tool calls, verbatim off production
+ *  (11/09/2026). It reaches the caller as a plain `text` block — the stream
+ *  carries no `thinking` blocks at all — so until `segment()` learned to read
+ *  its POSITION this rendered unfolded, as the first line of the answer. */
+const NARRATION =
+	"Let me also check if there's any provision for cashing out while still serving, to be thorough.";
+
 export type LabState =
 	| 'empty'
 	| 'working'
@@ -209,6 +216,7 @@ export type LabState =
 	| 'citations'
 	| 'sources'
 	| 'attachments'
+	| 'narration'
 	| 'error'
 	| 'stopped'
 	| 'not-held';
@@ -323,6 +331,29 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
+	// Milton goes back to the shelf part-way through, saying so as he goes. The
+	// sentence is Milton's working-out, not his answer, and the shot is of it
+	// folded into the activity line with the answer whole underneath.
+	if (state === 'narration') {
+		return {
+			...base,
+			turns: [
+				{
+					id: 'turn-1',
+					question: question('How much recreation leave do I get each year?'),
+					blocks: [
+						...ACTIVITY,
+						text(3, NARRATION),
+						tool(4, 'Read', { file_path: '/data/staged/pacman-division-2/page-031.md' }),
+						text(5, SHORT)
+					],
+					outcome: { turns: 4, durationMs: 9700 },
+					citations: CITATIONS.slice(0, 2)
+				}
+			]
+		};
+	}
+
 	if (state === 'error') {
 		return {
 			...base,
@@ -354,10 +385,11 @@ export function scene(state: LabState): LabScene {
 	// `answer` and `citations` render the same turn; the difference is whether
 	// the source pane has been opened, which is a click the driver makes.
 	//
-	// Deliberately TWO text blocks with a tool call between them, which is the
-	// real shape of an answer Milton goes back to the shelf part-way through —
-	// and the shape that catches a Sources block being lifted off the joined
-	// answer rather than off the block that carries it.
+	// Deliberately TWO text blocks, which catches a Sources block being lifted
+	// off the joined answer rather than off the block that carries it. Both sit
+	// AFTER the last tool call: a text block with a tool call still to come is
+	// narration now, and an answer written around one would fold its own first
+	// half away. The `narration` scene is that shape, on purpose.
 	const [opening, rest] = splitAt(LONG, '## Carrying leave over');
 	return {
 		...base,
@@ -367,8 +399,8 @@ export function scene(state: LabState): LabScene {
 				question: question('How much recreation leave do I get each year?'),
 				blocks: [
 					...ACTIVITY,
-					text(3, opening),
-					tool(4, 'Read', { file_path: '/data/staged/pacman-division-1/page-002.md' }),
+					tool(3, 'Read', { file_path: '/data/staged/pacman-division-1/page-002.md' }),
+					text(4, opening),
 					text(5, rest)
 				],
 				outcome: { turns: 4, durationMs: 12_600 },

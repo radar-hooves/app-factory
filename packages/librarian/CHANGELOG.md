@@ -2,6 +2,51 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.11] - 2026-09-11
+
+Milton's between-tool narration was rendering as the answer
+(`radar-hooves/cadmus#114`). Measured on production 11/09/2026, cadmus
+2026.9.13 on @poodle64/librarian 2026.9.10.
+
+### Fixed
+
+- **Narration read as answer prose, unfolded, at the top of every answer.**
+  The caller stream carries no `thinking` content blocks at all, so "Let me
+  also check if there's any provision for cashing out while still serving, to
+  be thorough" arrives as an ordinary `text` block — identical to the answer
+  in every way except POSITION. `segment()` pushed every text block as prose
+  and closed the activity group under it, so a reader got Milton's working-out
+  as his first paragraph and a second activity line beneath it. It now reads
+  the position: a text block with any tool call still to come in the turn is
+  narration and folds into the activity group as a thinking-shaped row, folded
+  by default exactly as a real `thinking` block is; the run of text after the
+  LAST tool call is the answer. `hasAnswer`, the copied answer, the citation
+  markers and the "he answered without a source" line all follow it, because
+  all four read the segmented text and narration is no longer among it.
+
+  While a turn streams the judgement is provisional and deliberately so: a
+  text block that is currently last IS the answer as far as anything can know
+  and renders as prose, and the tool call that arrives after it re-homes it
+  into the group — which keeps the key it already had, so a disclosure the
+  reader opened does not re-mount. Nothing holds state to do that; `segment()`
+  is pure and re-derived on every event.
+
+  The cost is an answer Milton interrupts to go back to the shelf: its first
+  half folds away. That trade is taken knowingly — position is the only signal
+  the stream gives, and a rule read off the prose itself would be
+  unexplainable the first time it misfired.
+
+### Changed
+
+- `ActivityStep.block` widens from `ToolBlock | ThinkingBlock` to `Block`, and
+  `ThinkingRow` takes a `TextBlock` as well as a `ThinkingBlock`. Both render
+  the same row and say the same word: to a reader they are the same thing —
+  what Milton was working through, not what he concluded.
+- The `narration` state joins the screenshot grid (eleven states now), shot
+  with the activity line and the narration row open, because a fold
+  photographs as an absence. The driver asserts at every width and both themes
+  that the sentence is nowhere in the transcript before that click.
+
 ## [2026.9.10] - 2026-09-11
 
 Two defects a fresh-context review found in 2026.9.9; use this one.

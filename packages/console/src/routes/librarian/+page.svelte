@@ -27,6 +27,7 @@
 		'citations',
 		'sources',
 		'attachments',
+		'narration',
 		'not-held',
 		'error',
 		'stopped'
