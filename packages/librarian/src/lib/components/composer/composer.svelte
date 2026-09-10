@@ -101,8 +101,11 @@
 	});
 
 	// Focus comes back once Milton is done, so a reader can keep going without
-	// reaching for the mouse. Focusing at send is pointless — the box is
-	// disabled a frame later — so the transition out of `running` is the hook.
+	// reaching for the mouse. It has to be the transition OUT of `running`: a
+	// disabled element cannot hold focus, so the focus call in `submit()` below
+	// survives only for a host that never sets `running` — measured, focus lands
+	// on `body` the frame the box disables and comes back here.
+	//
 	// Plain, not `$state`: read and written in the same effect, which would
 	// otherwise re-trigger itself forever.
 	let wasRunning = false;

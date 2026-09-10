@@ -157,6 +157,24 @@ for (const theme of THEMES) {
 	await page.waitForSelector('aside[aria-label="Source document"]', { state: 'detached' });
 	const refocused = await page.evaluate(() => document.activeElement?.getAttribute('data-cite'));
 	if (refocused !== '1') failures.push(`focus did not return to the chip on close (got ${refocused})`);
+
+	// And the pane is actually resizable. The handle is absolutely positioned
+	// inside it, so a pane that is `static` at `lg` silently hands the handle to
+	// some other ancestor and the drag moves nothing at all.
+	await page.click('sup[data-cite="1"]');
+	const pane = page.locator('aside[aria-label="Source document"]');
+	await pane.waitFor();
+	const before = await pane.boundingBox();
+	await page.mouse.move(before.x + 3, 400);
+	await page.mouse.down();
+	await page.mouse.move(before.x - 160, 400, { steps: 8 });
+	await page.mouse.up();
+	const after = await pane.boundingBox();
+	if (Math.round(after.width) - Math.round(before.width) < 150) {
+		failures.push(
+			`the source pane did not resize (${Math.round(before.width)}px -> ${Math.round(after.width)}px)`
+		);
+	}
 	await context.close();
 }
 
@@ -167,4 +185,4 @@ if (failures.length) {
 	for (const line of failures) console.error(`FAIL ${line}`);
 	process.exit(1);
 }
-console.log('no clipping at any width; the source pane opens and closes from the keyboard');
+console.log('no clipping at any width; the source pane opens from the keyboard, resizes, and returns focus on close');

@@ -112,8 +112,12 @@
 <aside
 	style="--pane-width: {width}px"
 	aria-label="Source document"
-	class="bg-surface-1 border-border fixed inset-x-0 bottom-0 z-40 flex h-[80svh] flex-col rounded-t-2xl border-t shadow-2xl lg:static lg:h-auto lg:w-[var(--pane-width)] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none"
+	class="bg-surface-1 border-border fixed inset-x-0 bottom-0 z-40 flex h-[80svh] flex-col rounded-t-2xl border-t shadow-2xl lg:relative lg:h-auto lg:w-[var(--pane-width)] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none"
 >
+	<!-- The drag handle. `lg:relative` on the pane above, not `lg:static`, is
+	     what this depends on: an absolutely-positioned child needs a positioned
+	     ancestor, and without one the handle lands somewhere else entirely and
+	     the pane is silently not resizable. Measured — the drag moved nothing. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -- a pointer-only
 	     affordance for a width that has a keyboard-independent default; the
 	     pane is fully usable without ever touching it. -->
