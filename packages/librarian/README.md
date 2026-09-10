@@ -14,12 +14,14 @@ Change it here, consume it there.
 src/lib/
   client.ts                ask(): streams Claude Code's OWN events, unaltered
   transcript.svelte.ts     Transcript state, the fold/segment/describe helpers
-  citations.ts             the Citation shape, `[n]` markers, "## Sources"
+  citations.ts             the Citation shape, `[n]` markers, the trust mark
+  copy.ts                  every word this package says, and the host's overrides
   attachments.ts           what a reader may attach, and the limits
   follow-scroll.svelte.ts  follow the stream until the reader disagrees
   history.svelte.ts        the browser-held conversation list, per caller
   components/
     conversation/          the whole reading surface: scroll, pill, pane, composer slot
+    scope-statement/       what this room answers from, and what it does not hold
     agent-transcript/      one question and everything Milton did answering it
     document-pane/         the cited document, open at the cited passage
     composer/              the input box: attachments, scope chips, send/stop
@@ -99,6 +101,7 @@ gives it a height and a composer and nothing else:
 					live.blocks = transcript.blocks;
 					live.outcome = transcript.outcome;
 					live.citations = transcript.citations;
+					live.suggestions = transcript.suggestions;
 				}
 			}
 		} finally {
@@ -123,6 +126,8 @@ gives it a height and a composer and nothing else:
 		examples={['How much recreation leave do I get?']}
 		onexample={(q) => (question = q)}
 		onregenerate={() => run(asked, [])}
+		onsuggest={(q) => run(q, [])}
+		scope="Milton answers from the ADF Pay and Conditions Manual (PACMAN). He does not hold your own pay records or anything about your individual case."
 		{loadDocument}
 	>
 		{#snippet composer()}
@@ -152,7 +157,10 @@ on it fires once and never again.
 | Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collections[]`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
 | Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (cadmus: `GET /api/sources/documents/{id}/content`) |
 | Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                        |
+| Asking a follow-up       | `onsuggest(question)`: ask it as a NEW turn. Without the handler the chips do not render at all — a chip that does nothing is worse than no chip                                            |
 | The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
+| What this surface covers | `scope`: one statement per room, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
+| The words themselves     | `copy`: a partial of `LibrarianCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                            |
 
 Nothing here fetches on its own behalf. The library's document read is
 authenticated, and a package that called it directly would be reaching past
@@ -166,7 +174,15 @@ The library emits one SSE frame after the final assistant text:
 {
 	"type": "citations",
 	"items": [
-		{ "n": 1, "document_id": "…", "title": "…", "section": "…", "anchor": "…", "snippet": "…" }
+		{
+			"n": 1,
+			"document_id": "…",
+			"title": "…",
+			"section": "…",
+			"anchor": "…",
+			"snippet": "…",
+			"verified_at": "2026-06-23"
+		}
 	]
 }
 ```
@@ -176,6 +192,57 @@ in the prose become chips, and the chip opens `DocumentPane` at the cited
 section. Until that frame ships everywhere, the same chips are DERIVED from
 a trailing "## Sources" block in the answer: those render and read, and are
 inert, because a title and a section are not an id.
+
+### The trust mark
+
+`verified_at` is the date the last recheck found the document unchanged at
+its publisher, `YYYY-MM-DD`, resolved by the library from its own catalogue —
+never from what the model wrote, because a trust mark a model can author is
+not a trust mark. Null means nothing has ever confirmed it.
+
+Both the source list and the pane render it in words: **verified 23 Jun 2026**
+or **not verified**, in the same muted register as the section beside it. An
+unverified source is not an error and is not dressed as one — the words carry
+the difference, and a red one would have a colleague discount a document that
+is simply new.
+
+A DERIVED citation carries no mark at all. It has no catalogued document
+behind it, so "not verified" would be a claim about a record nothing here
+ever read.
+
+An answer that settles having cited nothing says so, once, under the prose:
+"Milton answered this one without a source. He may not hold a document that
+covers it." Only on a turn whose stream this surface actually watched finish
+— a turn read back out of `createHistory()` has no citations because history
+stores none, and labelling it as holding nothing would be a lie about an
+answer that may have cited three documents.
+
+### Follow-ups
+
+One more frame follows the citations, and only when the librarian named any:
+
+```json
+{ "type": "suggestions", "items": ["Can I carry leave over when I post?"] }
+```
+
+At most three, each short enough to fit a chip. `Transcript.suggestions`
+carries them; `Conversation` offers them under the LAST answer, and clicking
+one asks it through `onsuggest` and takes the whole row with it — the moment
+between the click and the new turn arriving is otherwise long enough to ask a
+second question by mistake.
+
+### Changing the words
+
+Every user-visible string this package renders lives in
+`@poodle64/librarian/copy`, and every component takes a partial of it:
+
+```svelte
+<Conversation {turns} {running} copy={{ notVerified: 'not checked yet' }} />
+```
+
+Overriding one line leaves the rest as the package wrote them, and a key
+passed as `undefined` — the shape a host produces from state that has not
+loaded — is ignored rather than rendering nothing where a word belongs.
 
 ### The system preamble
 
@@ -204,12 +271,15 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is eight states x three widths x both themes, taken by
+`docs/screenshots/` is ten states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
-cannot: that nothing scrolls sideways at any width, and that the source pane
-opens and closes from the keyboard with focus returning to the chip. It
-exits non-zero on either.
+cannot: that nothing scrolls sideways at any width, that the source pane
+opens and closes from the keyboard with focus returning to the chip and is
+really draggable, that the scope statement folds once there is a
+conversation over it and reopens from that line, and that a follow-up chip
+asks its question and takes the rest of the row with it. It exits non-zero
+on any of them.
 
 ```bash
 pnpm --filter @poodle64/console run build
@@ -221,17 +291,6 @@ pnpm --filter @poodle64/librarian run screenshots
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint`.
 3. Commit, tag `librarian-v<version>`, push the tag.
-4. `.github/workflows/publish.yaml` runs on that push and should publish via
-   npm OIDC trusted publishing: check it with
-   `gh run list --workflow=publish.yaml`. As of 2026.9.5 every run since
-   `ui-v2026.9.2` fails at the `npm publish` step with
-   `E404 Not Found - PUT .../@poodle64%2flibrarian` (an OIDC/trusted-publisher
-   binding issue, since `Build and test package` passes first). Until that
-   is diagnosed and fixed, publish manually from `packages/librarian/`:
-   ```bash
-   printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' > .npmrc
-   signet exec --identity huginn-claude --broker https://portcullis.example.com \
-     --credential npm-publish-token --env-var NODE_AUTH_TOKEN -- npm publish
-   rm -f .npmrc
-   ```
-   Confirm with `npm view @poodle64/librarian version`.
+4. `.github/workflows/publish.yaml` runs on that push and publishes through
+   npm's trusted publisher. Watch it: `gh run list --workflow=publish.yaml`,
+   then `npm view @poodle64/librarian version`.

@@ -31,8 +31,13 @@ export interface AgentEvent {
 	detail?: string;
 	tools?: string[];
 	model?: string;
-	/** `citations` frames only: the library's sources for the answer just sent. */
-	items?: Citation[];
+	/**
+	 * The payload of the library's own two trailing frames, which share a key
+	 * and not a shape: `citations` carries sources, `suggestions` carries
+	 * follow-up questions as plain strings. Narrowed on `type` by whoever
+	 * reads it (`Transcript.apply`).
+	 */
+	items?: Citation[] | string[];
 	[key: string]: unknown;
 }
 

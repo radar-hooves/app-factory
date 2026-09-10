@@ -56,7 +56,10 @@ export interface Outcome {
 export function readerQuestion(question: string): string {
 	const parts = question.split(/\n{2,}/);
 	let start = 0;
-	while (start < parts.length - 1 && /^(you are|you're|your role|act as|system:)\b/i.test(parts[start].trim()))
+	while (
+		start < parts.length - 1 &&
+		/^(you are|you're|your role|act as|system:)\b/i.test(parts[start].trim())
+	)
 		start += 1;
 	return parts.slice(start).join('\n\n').trim();
 }
@@ -177,6 +180,8 @@ export class Transcript {
 	outcome = $state<Outcome | null>(null);
 	/** Sources for the answer, from the library's own `citations` frame. */
 	citations = $state<Citation[]>([]);
+	/** Follow-ups the librarian named, from the `suggestions` frame after it. */
+	suggestions = $state<string[]>([]);
 	other = $state<AgentEvent[]>([]);
 
 	/** Content-block index is per MESSAGE, so it repeats across turns; this
@@ -192,6 +197,7 @@ export class Transcript {
 		this.blocks = [];
 		this.outcome = null;
 		this.citations = [];
+		this.suggestions = [];
 		this.other = [];
 		this.#open.clear();
 	}
@@ -215,9 +221,23 @@ export class Transcript {
 		}
 
 		// Emitted after the final assistant text, so it lands on a turn that is
-		// otherwise complete.
+		// otherwise complete. Both frames put their payload on `items`, so each
+		// keeps only what its own shape admits: a `citations` frame carrying
+		// strings, or a `suggestions` frame carrying objects, is the library
+		// having changed under us, and rendering it would be worse than
+		// rendering nothing.
 		if (event.type === 'citations') {
-			this.citations = event.items ?? [];
+			this.citations = (event.items ?? []).filter(
+				(item): item is Citation => typeof item === 'object' && item !== null
+			);
+			return;
+		}
+
+		// Last of the two, and only when the librarian named any.
+		if (event.type === 'suggestions') {
+			this.suggestions = (event.items ?? []).filter(
+				(item): item is string => typeof item === 'string' && item.trim().length > 0
+			);
 			return;
 		}
 
@@ -327,6 +347,9 @@ export interface Turn {
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];
+	/** Follow-ups offered after this answer. Absent on a turn read back from
+	 *  history: they belonged to the moment it was asked. */
+	suggestions?: string[];
 }
 
 /**

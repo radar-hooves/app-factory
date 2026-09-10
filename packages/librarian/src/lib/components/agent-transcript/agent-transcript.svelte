@@ -22,8 +22,10 @@
 		citationMarkers,
 		resolveCitations,
 		splitSources,
+		trustMark,
 		type Citation
 	} from '../../citations';
+	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import Markdown from '../markdown/markdown.svelte';
@@ -38,10 +40,17 @@
 		citations?: Citation[];
 		/** Forwarded to Markdown; omit if the caller has no collections to chip. */
 		collectionNames?: Set<string>;
+		/** Follow-ups from the library's `suggestions` frame. */
+		suggestions?: string[];
 		/** Opens the document pane. Omit and chips render but do not open. */
 		oncite?: (citation: Citation) => void;
 		/** Offered on the LAST answer only — re-asks the same question. */
 		onregenerate?: () => void;
+		/** Asks a follow-up. Offered on the LAST answer only; omit and the
+		 *  chips do not render, because a chip that does nothing is worse than
+		 *  no chip. */
+		onsuggest?: (question: string) => void;
+		copy?: Partial<LibrarianCopy>;
 	}
 
 	let {
@@ -51,9 +60,14 @@
 		running,
 		citations = [],
 		collectionNames = new Set(),
+		suggestions = [],
 		oncite,
-		onregenerate
+		onregenerate,
+		onsuggest,
+		copy
 	}: Props = $props();
+
+	const words = $derived(resolveCopy(copy));
 
 	const asked = $derived(readerQuestion(question));
 
@@ -95,8 +109,31 @@
 	// from it — there is just nothing to copy.
 	const settled = $derived(!running && (hasAnswer || Boolean(outcome?.error)));
 
+	/**
+	 * Milton answered and cited nothing, and we WATCHED him do it.
+	 *
+	 * `outcome` is the gate, not merely an empty source list: a turn read back
+	 * out of the conversation history is prose with no citations and no
+	 * outcome, because history stores neither — and a stored answer that cited
+	 * three documents would be labelled as holding nothing. Same for an answer
+	 * a reader stopped: the frame naming its sources never arrived, so nothing
+	 * here knows whether there were any.
+	 */
+	const notHeld = $derived(
+		settled && hasAnswer && sources.length === 0 && Boolean(outcome) && !outcome?.error
+	);
+
+	// A follow-up is offered once. Clicking it asks the question, which puts a
+	// new turn below this one — and leaving the row up for the moment before
+	// that arrives invites a second click on a third suggestion, asking two
+	// questions the reader only meant to ask one of.
+	let used = $state(false);
+	const followUps = $derived(!used && onsuggest ? suggestions : []);
+
 	let copied = $state(false);
-	async function copy() {
+	// Not `copy`: the prop of that name is the package's own words, and a
+	// function shadowing it here would be a redeclaration, not a shadow.
+	async function copyToClipboard() {
 		try {
 			await navigator.clipboard.writeText(answer);
 			copied = true;
@@ -146,10 +183,11 @@
 	{#if sources.length > 0}
 		<section class="max-w-[72ch]">
 			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-				Sources
+				{words.sources}
 			</h2>
 			<ol class="flex flex-col gap-1">
 				{#each sources as source (source.n)}
+					{@const mark = trustMark(source, words)}
 					<li>
 						<button
 							type="button"
@@ -166,11 +204,47 @@
 								{#if source.section}<span class="text-muted-foreground">
 										· {source.section}</span
 									>{/if}
+								<!-- Same muted register as the section, deliberately. An
+								     unverified source is not an error and must not be
+								     dressed as one; the words carry the difference, and a
+								     red one would have a colleague discount a document
+								     that is simply new. -->
+								{#if mark}<span class="text-muted-foreground/80"> · {mark}</span>{/if}
 							</span>
 						</button>
 					</li>
 				{/each}
 			</ol>
+		</section>
+	{/if}
+
+	{#if notHeld}
+		<p class="text-muted-foreground max-w-[72ch] text-sm">{words.notHeld}</p>
+	{/if}
+
+	{#if followUps.length > 0}
+		<section class="max-w-[72ch]">
+			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+				{words.suggestions}
+			</h2>
+			<!-- Wrapping, not scrolling: at 390 a question is most of a line, so a
+			     row of three would clip two of them to fragments. -->
+			<ul class="flex flex-wrap gap-2">
+				{#each followUps as followUp (followUp)}
+					<li class="max-w-full">
+						<button
+							type="button"
+							onclick={() => {
+								used = true;
+								onsuggest?.(followUp);
+							}}
+							class="border-border hover:border-border-strong hover:bg-surface-2 focus-visible:ring-ring text-foreground max-w-full rounded-full border px-3.5 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+						>
+							{followUp}
+						</button>
+					</li>
+				{/each}
+			</ul>
 		</section>
 	{/if}
 
@@ -188,23 +262,23 @@
 			{#if hasAnswer}
 				<button
 					type="button"
-					onclick={copy}
-					aria-label={copied ? 'Copied' : 'Copy answer'}
+					onclick={copyToClipboard}
+					aria-label={copied ? words.copiedAnswer : words.copyAnswer}
 					class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
 				>
 					{#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if}
-					<span>{copied ? 'Copied' : 'Copy'}</span>
+					<span>{copied ? words.copiedAnswer : words.copyAnswer}</span>
 				</button>
 			{/if}
 			{#if onregenerate}
 				<button
 					type="button"
 					onclick={onregenerate}
-					aria-label="Ask again"
+					aria-label={words.askAgain}
 					class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
 				>
 					<RefreshCwIcon class="size-3.5" />
-					<span>Ask again</span>
+					<span>{words.askAgain}</span>
 				</button>
 			{/if}
 			{#if outcome && !outcome.error}

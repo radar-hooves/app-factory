@@ -2,6 +2,58 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.9] - 2026-09-10
+
+What a colleague needs to judge an answer, rather than take it on trust
+(`radar-hooves/cadmus#114`, the "trust marks and scope statements" and
+"follow-up suggestions" lanes). The library released 2026.9.32 carrying the two
+frames this reads.
+
+### Added
+
+- **The trust mark.** `Citation.verified_at` — the date the last recheck found
+  the document unchanged at its publisher, resolved by the library from its own
+  catalogue and never from what the model wrote. The source list and
+  `DocumentPane` both render it in words: **verified 23 Jun 2026** or **not
+  verified**, in the same muted register as the section beside it. Not red: an
+  unverified source is not an error, and dressing it as one would have a
+  colleague discount a document that is simply new. A citation DERIVED from a
+  "## Sources" block carries no mark at all, because there is no catalogued
+  document behind it and "not verified" would be a claim about a record nothing
+  here ever read. The date is read off the string rather than through `Date`,
+  which would show every reader west of Greenwich the day before.
+- **A "not held" line** under an answer that settled having cited nothing:
+  "Milton answered this one without a source. He may not hold a document that
+  covers it." Gated on the turn's own `outcome`, not merely an empty citation
+  list — a turn read back out of `createHistory()` has no citations because
+  history stores none, and an answer that cited three documents would otherwise
+  come back labelled as holding nothing.
+- **`ScopeStatement`** (`@poodle64/librarian/scope-statement`), reached through
+  `Conversation`'s `scope` prop: what this room answers from and what it does
+  not hold, in the host's own words. It leads while the surface is empty and
+  folds to one line as soon as there is a conversation over it — a boundary a
+  reader has already read is a banner in the way — and that line reopens it.
+- **Follow-up chips** from the library's `suggestions` frame
+  (`Transcript.suggestions`, `Turn.suggestions`), offered under the last answer
+  and asked through `onsuggest`. Clicking one takes the whole row with it: the
+  moment between the click and the new turn arriving is long enough to ask a
+  second question by mistake. Without an `onsuggest` handler they do not render
+  at all.
+- **`@poodle64/librarian/copy`**: every user-visible string this package
+  renders, in one module, with `resolveCopy()` merging a host's partial over
+  it. A key passed as `undefined` is dropped rather than spread, which is the
+  shape a host produces from state that has not loaded yet.
+- Two more lab states (`sources`, `not-held`) and two more assertions in
+  `scripts/screenshots.mjs`: that the scope statement folds and reopens from
+  the keyboard at 390, and that a used follow-up row stops offering its other
+  questions.
+
+### Changed
+
+- `AgentEvent.items` is `Citation[] | string[]` — the library's two trailing
+  frames share the key and not the shape, so `Transcript.apply` keeps only what
+  each frame's own shape admits.
+
 ## [2026.9.8] - 2026-09-10
 
 The colleague-facing bar for Ask Milton (`radar-hooves/cadmus#113`): nothing

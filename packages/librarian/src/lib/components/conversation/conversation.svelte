@@ -13,9 +13,11 @@
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
 	import type { Turn } from '../../transcript.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
+	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
 	import AgentTranscript from '../agent-transcript/agent-transcript.svelte';
 	import DocumentPane from '../document-pane/document-pane.svelte';
+	import ScopeStatement from '../scope-statement/scope-statement.svelte';
 
 	interface Props {
 		turns: Turn[];
@@ -27,8 +29,17 @@
 		/** Up to three, shown in the empty state as tappable pills. */
 		examples?: string[];
 		onexample?: (question: string) => void;
+		/** What this surface answers from and what it does not hold, in the
+		 *  host's own words. One statement per room, above the first turn,
+		 *  folded once the conversation starts. */
+		scope?: string;
 		/** Re-asks the last question. Offered on the last answer only. */
 		onregenerate?: () => void;
+		/** Asks a follow-up the librarian suggested. Offered on the last answer
+		 *  only; without it the suggestion chips do not render. */
+		onsuggest?: (question: string) => void;
+		/** Overrides for the package's own words. */
+		copy?: Partial<LibrarianCopy>;
 		/** Enables the source pane. Without it, chips render but do not open. */
 		loadDocument?: LoadDocument;
 		collectionNames?: Set<string>;
@@ -45,11 +56,16 @@
 		welcome = 'Ask Milton a question about the library.',
 		examples = [],
 		onexample,
+		scope,
 		onregenerate,
+		onsuggest,
+		copy,
 		loadDocument,
 		collectionNames = new Set(),
 		composer
 	}: Props = $props();
+
+	const words = $derived(resolveCopy(copy));
 
 	let viewport = $state<HTMLElement | null>(null);
 	let open = $state<Citation | null>(null);
@@ -139,6 +155,14 @@
 					</div>
 				{/if}
 
+				<!-- Above the first turn, and in ONE place in the markup: the empty
+				     state carries the welcome, this carries the boundary, and both
+				     sit at the top of the same column so a reader meets them in
+				     the same order whether or not they have asked anything yet. -->
+				{#if scope}
+					<ScopeStatement statement={scope} expanded={turns.length === 0} {copy} />
+				{/if}
+
 				{#each turns as turn, index (turn.id)}
 					<AgentTranscript
 						question={turn.question}
@@ -146,9 +170,12 @@
 						outcome={turn.outcome}
 						running={running && index === turns.length - 1}
 						citations={turn.citations ?? []}
+						suggestions={turn.suggestions ?? []}
 						{collectionNames}
+						{copy}
 						oncite={cite}
 						onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
+						onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
 					/>
 				{/each}
 			</div>
@@ -161,7 +188,7 @@
 				class="border-border bg-surface-1 text-foreground hover:bg-surface-2 focus-visible:ring-ring absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs shadow-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
 			>
 				<ArrowDownIcon class="size-3.5" />
-				Jump to latest
+				{words.jumpToLatest}
 			</button>
 		{/if}
 		</div>
@@ -175,6 +202,6 @@
 	</div>
 
 	{#if open && loadDocument}
-		<DocumentPane citation={open} {loadDocument} onclose={() => (open = null)} />
+		<DocumentPane citation={open} {loadDocument} {copy} onclose={() => (open = null)} />
 	{/if}
 </div>

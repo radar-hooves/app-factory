@@ -85,6 +85,9 @@ what was credited and the self-service view is a projection.
 2. **PACMAN Division 2** — Part 5.2, accrual and crediting
 3. **PACMAN Division 1** — Part 1, delegate approvals`;
 
+/** Both trust marks in one answer, deliberately: a source last confirmed on a
+ *  date, and one nothing has ever confirmed. A grid where every source is
+ *  verified proves only half the rendering. */
 export const CITATIONS: Citation[] = [
 	{
 		n: 1,
@@ -92,7 +95,8 @@ export const CITATIONS: Citation[] = [
 		title: 'PACMAN Division 2',
 		section: 'Part 5 — Recreation leave',
 		anchor: 'part-5',
-		snippet: 'A permanent member accrues 20 days of recreation leave a year.'
+		snippet: 'A permanent member accrues 20 days of recreation leave a year.',
+		verified_at: '2026-06-23'
 	},
 	{
 		n: 2,
@@ -100,7 +104,8 @@ export const CITATIONS: Citation[] = [
 		title: 'PACMAN Division 2',
 		section: 'Part 5.2 — Accrual and crediting',
 		anchor: 'part-5-2',
-		snippet: 'Leave is credited monthly in arrears.'
+		snippet: 'Leave is credited monthly in arrears.',
+		verified_at: '2026-06-23'
 	},
 	{
 		n: 3,
@@ -108,9 +113,26 @@ export const CITATIONS: Citation[] = [
 		title: 'PACMAN Division 1',
 		section: 'Part 1 — Delegate approvals',
 		anchor: 'part-1',
-		snippet: 'The delegate may approve carriage of a balance above the cap.'
+		snippet: 'The delegate may approve carriage of a balance above the cap.',
+		verified_at: null
 	}
 ];
+
+/** What the librarian offers to be asked next, at the length it really sends
+ *  them — long enough to wrap a chip at 390. */
+export const SUGGESTIONS = [
+	'Can I carry leave over when I post?',
+	'What happens to my balance on leave without pay?',
+	'How is long service leave different?'
+];
+
+/** The room's own boundary, as a host writes it: what he answers from, then
+ *  what he does not hold. */
+export const SCOPE =
+	'Milton answers from the ADF Pay and Conditions Manual (PACMAN) — pay, leave, allowances ' +
+	'and conditions of service, as the instruments themselves set them out.\n\n' +
+	'He does not hold your own pay records, your posting order, your unit’s orders, or anything ' +
+	'about your individual case. For those, your orderly room is the place to go.';
 
 const DOCUMENTS: Record<string, LoadedDocument> = {
 	'pacman-division-2': {
@@ -168,6 +190,11 @@ function splitAt(markdown: string, heading: string): [string, string] {
 	return [markdown.slice(0, at).trimEnd(), markdown.slice(at)];
 }
 
+const UNCITED = `Leave is administered under the one manual across the ADF, and a unit does not
+set its own accrual or its own carry-over cap. How a particular unit *schedules* leave — a
+stand-down period, a roster, who to ask first — is a local matter, decided at the unit rather
+than in an instrument.`;
+
 const ACTIVITY: Block[] = [
 	tool(0, 'Grep', { pattern: 'recreation leave' }),
 	tool(1, 'Read', { file_path: '/data/staged/pacman-division-2/page-014.md' }),
@@ -180,9 +207,11 @@ export type LabState =
 	| 'streaming'
 	| 'answer'
 	| 'citations'
+	| 'sources'
 	| 'attachments'
 	| 'error'
-	| 'stopped';
+	| 'stopped'
+	| 'not-held';
 
 export interface LabScene {
 	turns: Turn[];
@@ -234,6 +263,26 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
+	// The TAIL of a settled answer: the source list with its trust marks, and
+	// the follow-ups under it. The long answer's tail is 900px below the fold,
+	// so the shot that proves those two is its own short scene rather than a
+	// scroll position the driver has to hold.
+	if (state === 'sources') {
+		return {
+			...base,
+			turns: [
+				{
+					id: 'turn-1',
+					question: question('How much recreation leave do I get each year?'),
+					blocks: [...ACTIVITY, text(3, SHORT)],
+					outcome: { turns: 3, durationMs: 8400 },
+					citations: CITATIONS,
+					suggestions: SUGGESTIONS
+				}
+			]
+		};
+	}
+
 	if (state === 'attachments') {
 		return {
 			...base,
@@ -250,6 +299,25 @@ export function scene(state: LabState): LabScene {
 					blocks: [...ACTIVITY, text(3, SHORT)],
 					outcome: { turns: 3, durationMs: 8400 },
 					citations: CITATIONS.slice(0, 2)
+				}
+			]
+		};
+	}
+
+	// An answer Milton gave without citing anything. The one state where the
+	// "he may not hold a document that covers it" line is the point of the shot.
+	if (state === 'not-held') {
+		return {
+			...base,
+			turns: [
+				{
+					id: 'turn-1',
+					question: question('Does my unit run its own leave calendar?'),
+					blocks: [
+						tool(0, 'Grep', { pattern: 'unit leave calendar' }),
+						text(1, UNCITED)
+					],
+					outcome: { turns: 2, durationMs: 5200 }
 				}
 			]
 		};
@@ -304,7 +372,8 @@ export function scene(state: LabState): LabScene {
 					text(5, rest)
 				],
 				outcome: { turns: 4, durationMs: 12_600 },
-				citations: CITATIONS
+				citations: CITATIONS,
+				suggestions: SUGGESTIONS
 			}
 		]
 	};

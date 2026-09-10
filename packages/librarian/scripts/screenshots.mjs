@@ -42,7 +42,9 @@ const STATES = [
 	'streaming',
 	'answer',
 	'citations',
+	'sources',
 	'attachments',
+	'not-held',
 	'error',
 	'stopped'
 ];
@@ -174,6 +176,51 @@ for (const theme of THEMES) {
 		failures.push(
 			`the source pane did not resize (${Math.round(before.width)}px -> ${Math.round(after.width)}px)`
 		);
+	}
+	await context.close();
+}
+
+// The scope statement folds once there is a conversation over it, and the line
+// it folds to is still the way back in. A screenshot shows the folded line; only
+// this shows that it reopens — and it is checked at 390, where a statement that
+// would not fold costs a reader most of the first screen.
+{
+	const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	const page = await context.newPage();
+	await page.goto(`http://localhost:${PORT}/librarian?state=answer`, {
+		waitUntil: 'domcontentloaded'
+	});
+	const toggle = page.getByRole('button', { name: /what milton answers from/i });
+	await toggle.waitFor();
+	if ((await toggle.getAttribute('aria-expanded')) !== 'false') {
+		failures.push('the scope statement did not fold once the conversation had a turn');
+	}
+	await toggle.focus();
+	await page.keyboard.press('Enter');
+	if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+		failures.push('the folded scope statement did not reopen from the keyboard');
+	}
+	await context.close();
+}
+
+// A follow-up chip asks its question and takes the row with it. Two claims in
+// one gesture, and neither survives a screenshot.
+{
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	await page.goto(`http://localhost:${PORT}/librarian?state=answer`, {
+		waitUntil: 'domcontentloaded'
+	});
+	const chip = page.getByRole('button', { name: 'Can I carry leave over when I post?' });
+	await chip.waitFor();
+	const before = await page.locator('article').count();
+	await chip.click();
+	await page.waitForFunction(
+		(had) => document.querySelectorAll('article').length > had,
+		before
+	);
+	if (await page.getByRole('button', { name: 'How is long service leave different?' }).count()) {
+		failures.push('a used follow-up row was still offering its other questions');
 	}
 	await context.close();
 }

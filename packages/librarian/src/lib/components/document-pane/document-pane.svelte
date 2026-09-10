@@ -9,16 +9,25 @@
 -->
 <script lang="ts">
 	import XIcon from '@lucide/svelte/icons/x';
-	import type { Citation, LoadDocument, LoadedDocument } from '../../citations';
+	import { trustMark, type Citation, type LoadDocument, type LoadedDocument } from '../../citations';
+	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import Markdown from '../markdown/markdown.svelte';
 
 	interface Props {
 		citation: Citation;
 		loadDocument: LoadDocument;
 		onclose: () => void;
+		copy?: Partial<LibrarianCopy>;
 	}
 
-	let { citation, loadDocument, onclose }: Props = $props();
+	let { citation, loadDocument, onclose, copy }: Props = $props();
+
+	const words = $derived(resolveCopy(copy));
+	// The same mark the chip carried, repeated where the reader has the
+	// document open in front of them: this is the moment they decide whether
+	// to act on it, and a currency they had to remember from a chip two
+	// scrolls up is one they will not have.
+	const mark = $derived(trustMark(citation, words));
 
 	const MIN_WIDTH = 320;
 	/** ~40% of a 1440 desktop, which is the width the pane is designed at. */
@@ -143,12 +152,15 @@
 			{#if citation.section}
 				<p class="text-muted-foreground truncate text-xs">{citation.section}</p>
 			{/if}
+			{#if mark}
+				<p class="text-muted-foreground/80 text-xs">{mark}</p>
+			{/if}
 		</div>
 		<button
 			bind:this={closeButton}
 			type="button"
 			onclick={onclose}
-			aria-label="Close source"
+			aria-label={words.closeSource}
 			class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring -mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
 		>
 			<XIcon class="size-4" />
@@ -157,7 +169,7 @@
 
 	<div bind:this={scroller} class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
 		{#if failed}
-			<p class="text-muted-foreground text-sm">That document can't be opened right now.</p>
+			<p class="text-muted-foreground text-sm">{words.documentUnavailable}</p>
 		{:else if !document_}
 			<div class="flex flex-col gap-2" aria-hidden="true">
 				{#each [0, 1, 2, 3] as row (row)}

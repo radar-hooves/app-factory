@@ -9,6 +9,8 @@
  * open a pane. A derived citation is marked `derived` so the UI can tell.
  */
 
+import type { LibrarianCopy } from './copy';
+
 export interface Citation {
 	n: number;
 	document_id: string;
@@ -16,6 +18,16 @@ export interface Citation {
 	section?: string;
 	anchor?: string;
 	snippet?: string;
+	/**
+	 * The date the last recheck found this document unchanged at its
+	 * publisher, `YYYY-MM-DD`. Null when nothing has ever confirmed it.
+	 *
+	 * The library resolves this from its own catalogue, never from what the
+	 * model wrote — a trust mark a model can author is not a trust mark — so
+	 * a DERIVED citation carries none at all, and absent is not the same fact
+	 * as null.
+	 */
+	verified_at?: string | null;
 	/** True when this came from the prose block rather than the wire event. */
 	derived?: boolean;
 }
@@ -118,6 +130,46 @@ function parseSource(text: string): { title: string; section?: string } {
  */
 export function resolveCitations(fromEvent: Citation[], fromProse: Citation[]): Citation[] {
 	return fromEvent.length > 0 ? fromEvent : fromProse;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * `2026-06-23` as `23 Jun 2026`, or null if it is not a date.
+ *
+ * Read off the string rather than through `new Date()`: a date-only string is
+ * parsed as UTC midnight and then RENDERED in the reader's own zone, so every
+ * reader west of Greenwich would be shown the day before the one the library
+ * recorded. There is no time here to convert — a date is what was stored.
+ *
+ * `Intl` is not used either: `en-AU` abbreviates June as "June", so the mark
+ * would change length month to month for no reason a reader benefits from.
+ */
+export function formatVerified(iso: string): string | null {
+	const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+	if (!match) return null;
+	const [, year, month, day] = match;
+	const index = Number(month) - 1;
+	const date = Number(day);
+	if (index < 0 || index > 11 || date < 1 || date > 31) return null;
+	return `${date} ${MONTHS[index]} ${year}`;
+}
+
+/**
+ * How current this source is, in words a reader already has.
+ *
+ * Three outcomes, and the third is the one worth stating: a citation the
+ * package DERIVED from a "## Sources" block gets no mark at all. It has no
+ * catalogued document behind it, so "not verified" would be a claim about a
+ * record we never read — and a wrong trust mark is worse than none.
+ *
+ * A `verified_at` that is present but not a date is treated as no date, for
+ * the same reason: what is shown must be what is known.
+ */
+export function trustMark(citation: Citation, copy: LibrarianCopy): string | null {
+	if (citation.derived) return null;
+	const when = citation.verified_at ? formatVerified(citation.verified_at) : null;
+	return when ? `${copy.verified} ${when}` : copy.notVerified;
 }
 
 /** One addressable slice of a document — the granularity a citation names. */

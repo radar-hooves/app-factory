@@ -17,12 +17,7 @@
 	import Conversation from '@poodle64/librarian/conversation';
 	import Composer, { type Scope } from '@poodle64/librarian/composer';
 	import type { Turn } from '@poodle64/librarian/transcript';
-	import {
-		EXAMPLES,
-		loadDocument,
-		scene,
-		type LabState
-	} from '$lib/librarian-fixtures';
+	import { EXAMPLES, loadDocument, scene, SCOPE, type LabState } from '$lib/librarian-fixtures';
 
 	const STATES: LabState[] = [
 		'empty',
@@ -30,7 +25,9 @@
 		'streaming',
 		'answer',
 		'citations',
+		'sources',
 		'attachments',
+		'not-held',
 		'error',
 		'stopped'
 	];
@@ -102,9 +99,14 @@
 		{running}
 		{version}
 		examples={EXAMPLES}
+		scope={SCOPE}
 		welcome="Ask Milton about ADF pay, allowances, leave and conditions of service."
 		onexample={(question) => {
 			value = question;
+		}}
+		onsuggest={(followUp) => {
+			value = followUp;
+			send();
 		}}
 		onregenerate={() => {
 			running = true;
