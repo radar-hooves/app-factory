@@ -46,7 +46,7 @@ export function render(markdown: string, { streaming = false } = {}): string {
 	const source = streaming ? balance(markdown) : markdown;
 	const html = marked.parse(source, { async: false });
 	return DOMPurify.sanitize(html, {
-		ADD_ATTR: ['target', 'rel'],
+		ADD_ATTR: ['target', 'rel', 'data-cite', 'tabindex', 'role'],
 		FORBID_TAGS: ['style', 'form', 'input', 'button'],
 		FORBID_ATTR: ['style', 'onerror', 'onload']
 	});
@@ -96,6 +96,51 @@ export function markCollections(root: HTMLElement, collections: Set<string>): vo
 		if (code.parentElement?.tagName === 'PRE') continue;
 		const name = (code.textContent ?? '').trim();
 		if (collections.has(name)) code.dataset.collection = 'true';
+	}
+}
+
+/**
+ * Turn every inline `[n]` marker into a citation chip.
+ *
+ * Done against the rendered DOM rather than the markdown string, for the same
+ * reason `markCollections` is: a `[3]` inside a fenced code block or a link
+ * label is not a citation, and `closest()` settles that in one call where a
+ * string-level regex would need to re-implement the parser to know.
+ *
+ * `sup` rather than `button`: the sanitiser strips `button` (it is in
+ * `FORBID_TAGS`, and rightly — this is model output), so the chip carries the
+ * button ROLE and a tab stop, and the component delegates the events.
+ */
+export function markCitations(root: HTMLElement, valid: Set<number>): void {
+	if (valid.size === 0) return;
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const targets: Text[] = [];
+	for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+		const text = node as Text;
+		if (text.parentElement?.closest('pre, code, a, sup')) continue;
+		if (/\[\d{1,3}\]/.test(text.data)) targets.push(text);
+	}
+
+	for (const text of targets) {
+		const fragment = document.createDocumentFragment();
+		let cursor = 0;
+		for (const match of text.data.matchAll(/\[(\d{1,3})\]/g)) {
+			const n = Number(match[1]);
+			if (!valid.has(n) || match.index === undefined) continue;
+			fragment.append(text.data.slice(cursor, match.index));
+			const chip = document.createElement('sup');
+			chip.className = 'ds-cite';
+			chip.dataset.cite = String(n);
+			chip.setAttribute('role', 'button');
+			chip.setAttribute('tabindex', '0');
+			chip.setAttribute('aria-label', `Source ${n}`);
+			chip.textContent = String(n);
+			fragment.append(chip);
+			cursor = match.index + match[0].length;
+		}
+		if (cursor === 0) continue;
+		fragment.append(text.data.slice(cursor));
+		text.replaceWith(fragment);
 	}
 }
 

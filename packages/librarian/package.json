@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/librarian",
-	"version": "2026.9.6",
+	"version": "2026.9.7",
 	"description": "Milton's conversation surface as a consumable Svelte 5 package: the stream client, transcript state and chat components (transcript, composer, markdown) every household app renders instead of rebuilding.",
 	"type": "module",
 	"license": "MIT",
@@ -29,6 +29,18 @@
 		"./history": {
 			"types": "./dist/history.svelte.d.ts",
 			"svelte": "./dist/history.svelte.js"
+		},
+		"./citations": {
+			"types": "./dist/citations.d.ts",
+			"svelte": "./dist/citations.js"
+		},
+		"./attachments": {
+			"types": "./dist/attachments.d.ts",
+			"svelte": "./dist/attachments.js"
+		},
+		"./follow-scroll": {
+			"types": "./dist/follow-scroll.svelte.d.ts",
+			"svelte": "./dist/follow-scroll.svelte.js"
 		},
 		"./*": {
 			"types": "./dist/components/*/index.d.ts",

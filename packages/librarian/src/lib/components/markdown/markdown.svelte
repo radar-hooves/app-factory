@@ -7,16 +7,25 @@
   consuming app.
 -->
 <script lang="ts">
-	import { highlight, markCollections, render } from './markdown';
+	import { highlight, markCitations, markCollections, render } from './markdown';
 
 	interface Props {
 		content: string;
 		streaming?: boolean;
 		/** Collection names to chip in backticks; omit if the caller has none. */
 		collectionNames?: Set<string>;
+		/** `[n]` markers to turn into chips; omit and the markers stay as text. */
+		citationNumbers?: Set<number>;
+		oncite?: (n: number) => void;
 	}
 
-	let { content, streaming = false, collectionNames = new Set() }: Props = $props();
+	let {
+		content,
+		streaming = false,
+		collectionNames = new Set(),
+		citationNumbers = new Set(),
+		oncite
+	}: Props = $props();
 	let host = $state<HTMLElement | null>(null);
 
 	const html = $derived(render(content, { streaming }));
@@ -27,12 +36,42 @@
 		if (!host || !html) return;
 		// Chips are cheap and wanted DURING streaming; highlighting is not.
 		markCollections(host, collectionNames);
+		markCitations(host, citationNumbers);
 		if (streaming) return;
 		void highlight(host);
 	});
+
+	// Delegated, because the chips are created by the sanitiser's output rather
+	// than by this template — there is no element here to put a handler on.
+	function citeFrom(target: EventTarget | null): number | null {
+		const chip = (target as HTMLElement | null)?.closest?.('[data-cite]');
+		const n = Number((chip as HTMLElement | undefined)?.dataset.cite);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	}
+
+	function click(event: MouseEvent) {
+		const n = citeFrom(event.target);
+		if (n !== null) oncite?.(n);
+	}
+
+	function keydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		const n = citeFrom(event.target);
+		if (n === null) return;
+		event.preventDefault();
+		oncite?.(n);
+	}
 </script>
 
-<div bind:this={host} class="agent-prose text-foreground text-base leading-7">
+<!-- svelte-ignore a11y_no_static_element_interactions -- the interactive
+     elements are the sanitiser-created chips, which carry role and tabindex;
+     this element only delegates their events. -->
+<div
+	bind:this={host}
+	onclick={click}
+	onkeydown={keydown}
+	class="agent-prose text-foreground text-base leading-7"
+>
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
 	{@html html}
 </div>
@@ -169,6 +208,10 @@
 		border-radius: var(--radius);
 		padding: 0.85em 1em;
 		overflow-x: auto;
+		/* A fenced block is the one thing here allowed to be wider than the
+		   measure, so it must scroll INSIDE itself: without this a 90-column
+		   line makes the whole transcript scroll sideways at 390px. */
+		max-width: 100%;
 	}
 
 	.agent-prose :global(pre code) {
@@ -190,8 +233,11 @@
 		color: var(--shiki-dark);
 	}
 
+	/* `display: block` is what makes the overflow scroll: a real `table` box
+	   ignores overflow-x and widens its container instead. */
 	.agent-prose :global(table) {
 		width: 100%;
+		max-width: 100%;
 		border-collapse: collapse;
 		font-size: 0.9em;
 		display: block;
@@ -203,6 +249,9 @@
 		border: 1px solid var(--border);
 		padding: 0.4em 0.6em;
 		text-align: start;
+		/* A cell must not be squeezed to one character per line by a narrow
+		   viewport; the table scrolls instead. */
+		white-space: nowrap;
 	}
 
 	.agent-prose :global(th) {
@@ -218,6 +267,35 @@
 		border-color: color-mix(in oklab, var(--primary) 45%, transparent);
 		color: var(--foreground);
 		font-weight: 500;
+	}
+
+	/* The citation chip. A superscript number a reader can press: small enough
+	   to sit inside a sentence without breaking its rhythm, big enough that a
+	   thumb finds it — the padding, not the glyph, carries the target size. */
+	.agent-prose :global(sup.ds-cite) {
+		display: inline-block;
+		min-width: 1.35em;
+		margin-inline: 0.15em;
+		padding: 0.1em 0.3em;
+		border-radius: 0.4em;
+		background: color-mix(in oklab, var(--primary) 16%, transparent);
+		color: var(--foreground);
+		font-family: var(--ds-font-mono, monospace);
+		font-size: 0.7em;
+		font-weight: 600;
+		line-height: 1.4;
+		text-align: center;
+		vertical-align: 0.35em;
+		cursor: pointer;
+	}
+
+	.agent-prose :global(sup.ds-cite:hover) {
+		background: color-mix(in oklab, var(--primary) 30%, transparent);
+	}
+
+	.agent-prose :global(sup.ds-cite:focus-visible) {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
 	}
 
 	.agent-prose :global(hr) {

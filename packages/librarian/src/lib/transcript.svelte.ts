@@ -8,6 +8,7 @@
  */
 
 import type { AgentEvent } from './client';
+import type { Citation } from './citations';
 
 export interface TextBlock {
 	kind: 'text';
@@ -39,6 +40,25 @@ export interface Outcome {
 	durationMs?: number;
 	isError?: boolean;
 	error?: string;
+}
+
+/**
+ * The question as the READER asked it.
+ *
+ * A host prepends a system preamble to every question before it goes to the
+ * library — cadmus sends `{room.preamble}\n\n{question}` — and echoing that
+ * back into the transcript shows a colleague the machine room. Leading
+ * blank-line-separated paragraphs addressed to the model are dropped.
+ *
+ * The LAST paragraph is never dropped, whatever it starts with: someone whose
+ * entire question is "You are wrong about the leave rule" must still see it.
+ */
+export function readerQuestion(question: string): string {
+	const parts = question.split(/\n{2,}/);
+	let start = 0;
+	while (start < parts.length - 1 && /^(you are|you're|your role|act as|system:)\b/i.test(parts[start].trim()))
+		start += 1;
+	return parts.slice(start).join('\n\n').trim();
 }
 
 /** What Milton DID, in a reader's own words — never the tool's name or the
@@ -155,6 +175,8 @@ export class Transcript {
 	sessionId = $state<string | null>(null);
 	model = $state<string | null>(null);
 	outcome = $state<Outcome | null>(null);
+	/** Sources for the answer, from the library's own `citations` frame. */
+	citations = $state<Citation[]>([]);
 	other = $state<AgentEvent[]>([]);
 
 	/** Content-block index is per MESSAGE, so it repeats across turns; this
@@ -169,6 +191,7 @@ export class Transcript {
 	reset() {
 		this.blocks = [];
 		this.outcome = null;
+		this.citations = [];
 		this.other = [];
 		this.#open.clear();
 	}
@@ -188,6 +211,13 @@ export class Transcript {
 				durationMs: event.duration_ms,
 				isError: event.is_error
 			};
+			return;
+		}
+
+		// Emitted after the final assistant text, so it lands on a turn that is
+		// otherwise complete.
+		if (event.type === 'citations') {
+			this.citations = event.items ?? [];
 			return;
 		}
 
@@ -285,6 +315,19 @@ export interface ActivityGroup {
 }
 
 export type Segment = ActivityGroup | TextBlock;
+
+/** One question and the answer to it, as the transcript renders it.
+ *
+ * A finished turn is a plain object the host keeps in a list; the LIVE turn is
+ * a `Transcript` spread into the same shape. Both render identically, which is
+ * what stops a conversation flickering as the last turn settles. */
+export interface Turn {
+	id: string;
+	question: string;
+	blocks: Block[];
+	outcome: Outcome | null;
+	citations?: Citation[];
+}
 
 /**
  * Fold a turn's flat block list into what a reader should actually see.
