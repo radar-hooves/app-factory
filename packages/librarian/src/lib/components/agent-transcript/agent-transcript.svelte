@@ -105,9 +105,28 @@
 	);
 
 	const hasAnswer = $derived(texts.length > 0);
+
+	/**
+	 * What went wrong, if anything did — in words, whether or not the run gave
+	 * any.
+	 *
+	 * Two different failures reach a turn and only one of them carries a
+	 * message. `library_error` (the stream never opened) sets `error`; a run
+	 * that opened and then failed sets `is_error` on its terminal frame and
+	 * says nothing at all — Claude Code's own `error_max_turns` and
+	 * `error_during_execution` are exactly that shape. Reading only `error`
+	 * left the second kind rendering as a clean, complete answer: no banner,
+	 * a duration badge, and — worse — the "he holds nothing on this" line,
+	 * which is a claim about the shelf made off a run that never finished
+	 * looking.
+	 */
+	const failure = $derived(
+		outcome?.error ?? (outcome?.isError ? words.answerFailed : null)
+	);
+
 	// A failed turn settles too, and "Ask again" is the one thing a reader wants
 	// from it — there is just nothing to copy.
-	const settled = $derived(!running && (hasAnswer || Boolean(outcome?.error)));
+	const settled = $derived(!running && (hasAnswer || Boolean(failure)));
 
 	/**
 	 * Milton answered and cited nothing, and we WATCHED him do it.
@@ -120,7 +139,7 @@
 	 * here knows whether there were any.
 	 */
 	const notHeld = $derived(
-		settled && hasAnswer && sources.length === 0 && Boolean(outcome) && !outcome?.error
+		settled && hasAnswer && sources.length === 0 && Boolean(outcome) && !failure
 	);
 
 	// A follow-up is offered once. Clicking it asks the question, which puts a
@@ -248,12 +267,12 @@
 		</section>
 	{/if}
 
-	{#if outcome?.error}
+	{#if failure}
 		<p
 			class="border-status-error/40 bg-status-error/10 text-foreground max-w-[72ch] rounded-lg border px-3 py-2 text-sm"
 			role="alert"
 		>
-			{outcome.error}
+			{failure}
 		</p>
 	{/if}
 
@@ -281,7 +300,7 @@
 					<span>{words.askAgain}</span>
 				</button>
 			{/if}
-			{#if outcome && !outcome.error}
+			{#if outcome && !failure}
 				<span class="pl-1 font-mono text-xs tabular-nums opacity-70">
 					{((outcome.durationMs ?? 0) / 1000).toFixed(1)}s
 				</span>

@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.10] - 2026-09-11
+
+Two defects a fresh-context review found in 2026.9.9; use this one.
+
+### Fixed
+
+- **A run that ended in error was rendering as a clean, complete answer.** Two
+  different failures reach a turn and only one of them carries a message: a
+  stream that never opened sets `error`, while a run that opened and then
+  failed sets `is_error` on its terminal frame and says nothing at all (Claude
+  Code's own `error_max_turns` and `error_during_execution` are exactly that
+  shape). Reading only `error` gave that second kind no banner, a duration
+  badge as though it had finished, and — worst — the new "he answered without a
+  source" line, which is a claim about the shelf made off a run that never
+  finished looking. All three now read the failure, and a run that failed
+  silently says so in the package's own words (`answerFailed`).
+- **`formatVerified` accepted a day its month never had**, so a `2026-04-31`
+  would have printed "31 Apr 2026". Round-tripped through `Date.UTC` rather
+  than bounds-checked against 31.
+
 ## [2026.9.9] - 2026-09-10
 
 What a colleague needs to judge an answer, rather than take it on trust

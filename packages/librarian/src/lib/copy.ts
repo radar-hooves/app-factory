@@ -20,6 +20,8 @@ export interface LibrarianCopy {
 	notVerified: string;
 	/** Shown under an answer that finished without citing anything. */
 	notHeld: string;
+	/** Shown when the run itself ended in error and said nothing about why. */
+	answerFailed: string;
 	/** Heading over the list of what an answer cited. */
 	sources: string;
 	/** Heading over the follow-up questions the librarian offered. */
@@ -42,6 +44,9 @@ export const DEFAULT_COPY: LibrarianCopy = {
 	// reading it has no model of any of those, and the room's own instruction
 	// to Milton forbids him naming them either.
 	notHeld: 'Milton answered this one without a source. He may not hold a document that covers it.',
+	// A run can end `is_error` carrying no message at all, and a turn that
+	// simply stops is the one thing a reader must not have to guess about.
+	answerFailed: 'Milton stopped before he finished this one.',
 	sources: 'Sources',
 	suggestions: 'Ask next',
 	scope: 'What Milton answers from',

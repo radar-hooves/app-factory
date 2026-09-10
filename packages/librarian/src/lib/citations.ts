@@ -151,7 +151,10 @@ export function formatVerified(iso: string): string | null {
 	const [, year, month, day] = match;
 	const index = Number(month) - 1;
 	const date = Number(day);
-	if (index < 0 || index > 11 || date < 1 || date > 31) return null;
+	// Round-tripped rather than bounds-checked: 1-31 admits "31 Apr 2026",
+	// and a mark that shows a day that never happened is worse than no mark.
+	const made = new Date(Date.UTC(Number(year), index, date));
+	if (made.getUTCMonth() !== index || made.getUTCDate() !== date) return null;
 	return `${date} ${MONTHS[index]} ${year}`;
 }
 

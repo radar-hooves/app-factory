@@ -87,6 +87,32 @@ describe('an answer with nothing behind it', () => {
 		});
 		expect(screen.queryByText(/without a source/)).not.toBeInTheDocument();
 	});
+
+	it('says nothing of the kind on a run that failed WITHOUT saying why', () => {
+		// The shape Claude Code's own error_max_turns / error_during_execution
+		// terminal frame has: `is_error` set and no message at all. Read as a
+		// clean finish, it produced a claim about the shelf off a run that
+		// never finished looking.
+		answer({ citations: [], outcome: { turns: 8, durationMs: 60_000, isError: true } });
+		expect(screen.queryByText(/without a source/)).not.toBeInTheDocument();
+	});
+});
+
+describe('a run that ended in error', () => {
+	it('says so even when the run itself said nothing', () => {
+		answer({ citations: [], outcome: { turns: 8, durationMs: 60_000, isError: true } });
+		expect(screen.getByRole('alert')).toHaveTextContent('Milton stopped before he finished this one.');
+	});
+
+	it('does not wear a duration as though it had finished', () => {
+		answer({ citations: [], outcome: { turns: 8, durationMs: 60_000, isError: true } });
+		expect(screen.queryByText('60.0s')).not.toBeInTheDocument();
+	});
+
+	it("keeps whatever the failure did say, in preference to the package's words", () => {
+		answer({ citations: [], outcome: { isError: true, error: "Milton can't be reached right now." } });
+		expect(screen.getByRole('alert')).toHaveTextContent("Milton can't be reached right now.");
+	});
 });
 
 describe('the follow-ups an answer offers', () => {

@@ -36,6 +36,14 @@ describe('formatVerified()', () => {
 		expect(formatVerified('')).toBeNull();
 		expect(formatVerified('2026-13-01')).toBeNull();
 	});
+
+	it('refuses a day that month never had', () => {
+		expect(formatVerified('2026-04-31')).toBeNull();
+		expect(formatVerified('2026-02-30')).toBeNull();
+		// 2026 is not a leap year, and 2028 is.
+		expect(formatVerified('2026-02-29')).toBeNull();
+		expect(formatVerified('2028-02-29')).toBe('29 Feb 2028');
+	});
 });
 
 describe('trustMark()', () => {
