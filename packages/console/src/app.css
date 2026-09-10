@@ -17,6 +17,10 @@
    lint hit, just missing classes in the compiled CSS. */
 @source '../../ui/dist';
 
+/* Same reasoning for the librarian's components, which the /librarian lab
+   renders — its classes ship in dist and Tailwind scans no node_modules. */
+@source '../../librarian/dist';
+
 /*
   The enter/exit animation keyframes and the `dark`, `data-open` and
   `data-closed` variants all arrive with @poodle64/ui/styles.css above, so

@@ -29,10 +29,14 @@
   },
   "dependencies": {
     "@poodle64/design-tokens": "workspace:*",
+    "@poodle64/librarian": "workspace:*",
     "@poodle64/ui": "workspace:*",
     "bits-ui": "^2.18.1",
     "clsx": "^2.1.1",
+    "isomorphic-dompurify": "^3.23.0",
+    "marked": "^18.0.11",
     "mode-watcher": "^1.1.0",
+    "shiki": "^4.4.3",
     "tailwind-merge": "^3.4.0"
   }
 }

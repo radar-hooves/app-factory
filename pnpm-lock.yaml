@@ -13,6 +13,9 @@ importers:
       '@poodle64/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
+      '@poodle64/librarian':
+        specifier: workspace:*
+        version: link:../librarian
       '@poodle64/ui':
         specifier: workspace:*
         version: link:../ui
@@ -22,9 +25,18 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      isomorphic-dompurify:
+        specifier: ^3.23.0
+        version: 3.23.0
+      marked:
+        specifier: ^18.0.11
+        version: 18.0.12
       mode-watcher:
         specifier: ^1.1.0
         version: 1.1.0(svelte@5.56.7)
+      shiki:
+        specifier: ^4.4.3
+        version: 4.4.3
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.6.0
@@ -119,6 +131,9 @@ importers:
       marked:
         specifier: ^18.0.11
         version: 18.0.12
+      playwright:
+        specifier: ^1.62.0
+        version: 1.62.0
       publint:
         specifier: ^0.3.15
         version: 0.3.21

@@ -17,6 +17,9 @@
 		/** `[n]` markers to turn into chips; omit and the markers stay as text. */
 		citationNumbers?: Set<number>;
 		oncite?: (n: number) => void;
+		/** A step down, for prose that is reference material beside an answer
+		 *  rather than the answer itself — the source pane's sections. */
+		dense?: boolean;
 	}
 
 	let {
@@ -24,7 +27,8 @@
 		streaming = false,
 		collectionNames = new Set(),
 		citationNumbers = new Set(),
-		oncite
+		oncite,
+		dense = false
 	}: Props = $props();
 	let host = $state<HTMLElement | null>(null);
 
@@ -70,7 +74,7 @@
 	bind:this={host}
 	onclick={click}
 	onkeydown={keydown}
-	class="agent-prose text-foreground text-base leading-7"
+	class="agent-prose text-foreground {dense ? 'text-sm leading-6' : 'text-base leading-7'}"
 >
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
 	{@html html}

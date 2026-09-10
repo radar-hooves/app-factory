@@ -9,6 +9,7 @@
   hosts answering it separately is three chances to answer it differently.
 -->
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
 	import type { Turn } from '../../transcript.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
@@ -31,6 +32,10 @@
 		/** Enables the source pane. Without it, chips render but do not open. */
 		loadDocument?: LoadDocument;
 		collectionNames?: Set<string>;
+		/** The composer, rendered INSIDE the transcript column so the source
+		 *  pane narrows it too — a composer the host places outside slides
+		 *  under the pane the moment one opens. */
+		composer?: Snippet;
 	}
 
 	let {
@@ -42,7 +47,8 @@
 		onexample,
 		onregenerate,
 		loadDocument,
-		collectionNames = new Set()
+		collectionNames = new Set(),
+		composer
 	}: Props = $props();
 
 	let viewport = $state<HTMLElement | null>(null);
@@ -59,7 +65,12 @@
 
 	// A new question re-pins: the reader asked for the thing about to arrive,
 	// even if they were reading something further up when they asked.
-	let seen = $state(0);
+	//
+	// Deliberately NOT `$state`: an effect that both reads and writes one piece
+	// of reactive state re-triggers itself, which Svelte stops with
+	// `effect_update_depth_exceeded` — measured, on this component. Nothing
+	// renders this, so a plain variable is both correct and enough.
+	let seen = 0;
 	$effect(() => {
 		if (turns.length > seen) follow.pin();
 		seen = turns.length;
@@ -92,7 +103,11 @@
 </script>
 
 <div class="flex min-h-0 flex-1">
-	<div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+		<!-- The pill is positioned against the SCROLL region, not the column: the
+		     composer is in the column too, and a pill over the input is a pill in
+		     the way. -->
+		<div class="relative flex min-h-0 flex-1 flex-col">
 		<div
 			bind:this={viewport}
 			onscroll={scrolled}
@@ -148,6 +163,14 @@
 				Jump to latest
 			</button>
 		{/if}
+		</div>
+
+		{#if composer}
+			<div class="shrink-0 px-4 pb-3">
+				<div class="mx-auto w-full max-w-[46rem]">{@render composer()}</div>
+			</div>
+		{/if}
+
 	</div>
 
 	{#if open && loadDocument}

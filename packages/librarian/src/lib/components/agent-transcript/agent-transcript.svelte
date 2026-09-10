@@ -86,7 +86,10 @@
 		return isLast && split.citations.length > 0 ? split.body : text;
 	}
 
-	const settled = $derived(!running && segments.some((s) => s.kind === 'text'));
+	const hasAnswer = $derived(segments.some((s) => s.kind === 'text'));
+	// A failed turn settles too, and "Ask again" is the one thing a reader wants
+	// from it — there is just nothing to copy.
+	const settled = $derived(!running && (hasAnswer || Boolean(outcome?.error)));
 
 	let copied = $state(false);
 	async function copy() {
@@ -176,15 +179,17 @@
 
 	{#if settled}
 		<div class="text-muted-foreground -ml-1.5 flex items-center gap-1">
-			<button
-				type="button"
-				onclick={copy}
-				aria-label={copied ? 'Copied' : 'Copy answer'}
-				class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-			>
-				{#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if}
-				<span>{copied ? 'Copied' : 'Copy'}</span>
-			</button>
+			{#if hasAnswer}
+				<button
+					type="button"
+					onclick={copy}
+					aria-label={copied ? 'Copied' : 'Copy answer'}
+					class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+				>
+					{#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if}
+					<span>{copied ? 'Copied' : 'Copy'}</span>
+				</button>
+			{/if}
 			{#if onregenerate}
 				<button
 					type="button"

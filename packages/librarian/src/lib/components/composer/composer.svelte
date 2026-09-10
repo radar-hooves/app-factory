@@ -103,7 +103,9 @@
 	// Focus comes back once Milton is done, so a reader can keep going without
 	// reaching for the mouse. Focusing at send is pointless — the box is
 	// disabled a frame later — so the transition out of `running` is the hook.
-	let wasRunning = $state(false);
+	// Plain, not `$state`: read and written in the same effect, which would
+	// otherwise re-trigger itself forever.
+	let wasRunning = false;
 	$effect(() => {
 		if (wasRunning && !running) textarea?.focus();
 		wasRunning = running;
@@ -201,7 +203,7 @@
 			bind:value
 			oninput={grow}
 			onkeydown={keydown}
-			rows="2"
+			rows="1"
 			disabled={running}
 			placeholder={running ? 'Milton is answering…' : 'Ask Milton…'}
 			class="text-foreground placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3 pb-2 text-base outline-none disabled:opacity-60"

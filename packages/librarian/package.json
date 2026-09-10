@@ -67,6 +67,7 @@
 		"isomorphic-dompurify": "^3.23.0",
 		"jsdom": "^29.1.1",
 		"marked": "^18.0.11",
+		"playwright": "^1.62.0",
 		"publint": "^0.3.15",
 		"shiki": "^4.4.3",
 		"svelte": "^5.56.2",
@@ -79,7 +80,8 @@
 		"build": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "pnpm run build && vitest run",
-		"prepublishOnly": "pnpm run build"
+		"prepublishOnly": "pnpm run build",
+		"screenshots": "node scripts/screenshots.mjs"
 	},
 	"packageManager": "pnpm@10.28.0"
 }

@@ -33,7 +33,9 @@
 	// Keyed on the id, so re-citing the same document while the pane is open
 	// moves to the new section without a second fetch and without a flash of
 	// the loading state.
-	let loadedId = $state<string | null>(null);
+	// Plain, not `$state`: the effect below both reads and writes it, and
+	// nothing renders it.
+	let loadedId: string | null = null;
 
 	$effect(() => {
 		const id = citation.document_id;
@@ -122,7 +124,14 @@
 		class="hover:bg-primary/40 absolute inset-y-0 left-0 hidden w-1.5 cursor-col-resize lg:block"
 	></div>
 
-	<header class="border-border flex items-start gap-2 border-b px-4 py-3">
+	<!-- The sheet's grabber. Below `lg` this is an overlay a reader has to be
+	     able to see the top edge of; on a desktop it is a column, and a column
+	     with a handle on it reads as draggable in the wrong axis. -->
+	<div class="flex justify-center pt-2 pb-1 lg:hidden" aria-hidden="true">
+		<span class="bg-border h-1 w-9 rounded-full"></span>
+	</div>
+
+	<header class="border-border flex items-start gap-2 border-b px-4 py-3 lg:pt-3">
 		<div class="min-w-0 flex-1">
 			<h2 class="text-foreground truncate text-sm font-semibold">
 				{document_?.title ?? citation.title}
@@ -160,9 +169,7 @@
 						: ''}"
 				>
 					<h3 class="text-foreground mb-1 text-sm font-semibold">{section.heading}</h3>
-					<div class="text-sm">
-						<Markdown content={section.text} />
-					</div>
+					<Markdown content={section.text} dense />
 				</section>
 			{/each}
 		{/if}
