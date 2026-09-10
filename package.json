@@ -1,14 +1,21 @@
 {
-  "name": "design-system",
-  "private": true,
-  "type": "module",
-  "description": "Household web design-language factory \u2014 pnpm workspace: @poodle64/design-tokens + @poodle64/ui.",
-  "license": "MIT",
-  "scripts": {
-    "build": "pnpm -r run build",
-    "check": "pnpm -r --if-present run check",
-    "dev": "pnpm --filter @poodle64/console run dev",
-    "test": "pnpm -r run test"
-  },
-  "packageManager": "pnpm@10.28.0"
+	"name": "design-system",
+	"private": true,
+	"type": "module",
+	"description": "Household web design-language factory — pnpm workspace: @poodle64/design-tokens + @poodle64/ui.",
+	"license": "MIT",
+	"scripts": {
+		"build": "pnpm -r run build",
+		"check": "pnpm -r --if-present run check",
+		"dev": "pnpm --filter @poodle64/console run dev",
+		"test": "pnpm -r run test"
+	},
+	"packageManager": "pnpm@10.28.0",
+	"pnpm": {
+		"overrides": {
+			"fast-uri": "3.1.6",
+			"nanoid": "3.3.18"
+		},
+		"//overrides": "fast-uri (transitive via ajv): CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172. nanoid (transitive via postcss): CVE-2026-67213."
+	}
 }
