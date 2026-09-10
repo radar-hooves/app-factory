@@ -10,6 +10,10 @@ The consequence is that identity is read from ``request.headers`` rather than
 through FastAPI's ``Header()`` parameter, which needs its alias at function
 definition time and so cannot take a configured name. See ``deps.py``.
 
+An app that must hold no PII does not edit this: its vhost withholds the name
+and email headers and this stock code simply never receives them — the
+handle-only option in the `authentik-onboard` skill carries the two lines.
+
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_UID_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_USERNAME_HEADER
