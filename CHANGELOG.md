@@ -6,6 +6,16 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.10] - 2026-09-11
+
+### Fixed
+
+- `backend/tests/conftest.py` resolves the test server at module import, and every pytest process imports it — so under pytest-xdist a run stood up a Postgres container and a reaper per worker, plus one for the controller. A `-n auto` suite on the fleet's 28-core runner asked the daemon for 29 of each; after a morning of them the runner held 155 test containers, 309 dead reapers and a load average of 56, and no container would start at all (pebblestone#762). One container per RUN now, by pytest-xdist's own documented recipe: a `filelock` and a settings file keyed on the controller's pid, the first process in starts the container and the rest read its settings. Isolation is unchanged in kind — each worker takes its own DATABASE on that one server (`<app>_test_gw0`), and the `session` fixture's transaction rollback still separates tests within a worker. Only the process that STARTED the container stops it, and that is the controller, which outlives every worker. Without xdist the behaviour is exactly as before. `filelock` joins the dev group.
+
+### Changed
+
+- `.github/workflows/python-ci.yaml` names the cap an app owes if it parallelises its suite: `-n auto` reads the runner's core count, the household runner is shared and 28-core, and `PYTEST_XDIST_AUTO_NUM_WORKERS` is the knob — the caller stanza itself gains nothing, because the reusable exposes no workers input and a caller's `env:` does not cross into a called workflow.
+
 ## [2026.9.9] - 2026-09-09
 
 ### Fixed
