@@ -76,6 +76,7 @@ _SHARED_SERVER_FILE = Path(tempfile.gettempdir()) / f"{{ package_name }}-test-po
 TEST_DATABASE_NAME = "{{ package_name }}_test" if _WORKER_ID == "master" else f"{{ package_name }}_test_{_WORKER_ID}"
 
 _EPHEMERAL_POSTGRES = None
+_PUBLISHED_SHARED_SERVER = False
 
 
 def _shared_ephemeral_postgres() -> dict[str, str]:
@@ -84,21 +85,40 @@ def _shared_ephemeral_postgres() -> dict[str, str]:
     The lock is held ACROSS the start, so a worker arriving mid-start waits for
     the container rather than starting a second one.
 
-    Who starts it is not a race worth winning: the controller imports this
-    module before it spawns a single worker, so it is the process that starts
-    the container and the workers only ever read the file. That is also what
-    makes teardown safe — the controller outlives every worker, so the stop
-    below can never pull the database out from under a worker still using it.
+    Only a process that is NOT an xdist worker ever publishes a container for
+    others to use, and that is what makes the teardown safe by construction
+    rather than by luck: a publisher outlives every worker, so its stop cannot
+    pull the database out from under a worker still running. A worker finishes
+    its own share of the files and exits while its siblings are still going —
+    were it the publisher, that exit would stop their database mid-suite.
+
+    In practice the controller imports this module before it spawns a single
+    worker, so it publishes and the workers only ever read. A worker that finds
+    no file is in a run whose controller never imported this module: it keeps a
+    container to itself, which is what every process did before sharing, and
+    says so rather than sharing something nothing can own safely.
     """
+    global _PUBLISHED_SHARED_SERVER
+
     with FileLock(f"{_SHARED_SERVER_FILE}.lock"):
-        if _WORKER_ID != "master" and _SHARED_SERVER_FILE.is_file():
-            return dict(json.loads(_SHARED_SERVER_FILE.read_text()))
+        if _WORKER_ID != "master":
+            if _SHARED_SERVER_FILE.is_file():
+                return dict(json.loads(_SHARED_SERVER_FILE.read_text()))
+            logging.warning(
+                "%s: the pytest controller did not import conftest.py, so there is no process that "
+                "outlives this run to hold a shared Postgres — starting one for this worker alone, "
+                "as every worker now will. Check that testpaths (or the path argument) reaches the "
+                "tests directory.",
+                _WORKER_ID,
+            )
+            return _start_ephemeral_postgres()
         settings = _start_ephemeral_postgres()
         # 0600 and opened that way rather than chmod'ed after: the file carries
         # the container's password, and /tmp is world-readable on Linux.
         descriptor = os.open(_SHARED_SERVER_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as handle:
             json.dump(settings, handle)
+        _PUBLISHED_SHARED_SERVER = True
         return settings
 
 
@@ -172,7 +192,8 @@ def _stop_ephemeral_postgres() -> None:
     successful stop is silent rather than a NotFound traceback on the way out.
 
     Only the process that STARTED the container holds one to stop, so a worker
-    that merely read the settings file never reaches past the guard below.
+    that merely read the settings file never reaches past the guard below, and
+    only the process that PUBLISHED one clears the file.
 
     Best-effort: a failure to tear down must not change the exit status of a run
     whose tests have already passed.
@@ -181,10 +202,12 @@ def _stop_ephemeral_postgres() -> None:
     container, _EPHEMERAL_POSTGRES = _EPHEMERAL_POSTGRES, None
     if container is None:
         return
-    # Before the stop, so nothing can read settings for a container being torn
-    # down. The run is over by the time either caller gets here.
-    _SHARED_SERVER_FILE.unlink(missing_ok=True)
-    Path(f"{_SHARED_SERVER_FILE}.lock").unlink(missing_ok=True)
+    if _PUBLISHED_SHARED_SERVER:
+        # Under the lock and before the stop, so no process can read settings
+        # for a container that is being torn down.
+        with FileLock(f"{_SHARED_SERVER_FILE}.lock"):
+            _SHARED_SERVER_FILE.unlink(missing_ok=True)
+        Path(f"{_SHARED_SERVER_FILE}.lock").unlink(missing_ok=True)
     try:
         container.stop()
     except Exception as exc:  # teardown must never fail a passing run
