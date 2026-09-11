@@ -17,14 +17,14 @@ Tagging by hand is discipline, not a ratchet. If template changes ever start mis
 
 ## Silent failure 2: a stale parity manifest measures against an old factory
 
-`template/.template-parity.json` hashes every template-owned file with app-specific tokens (name, package, ports, palette) normalised out, so an app that quietly edits its `Dockerfile` fails CI instead of drifting unnoticed.
+Every stamped app carries its own `.template-parity.json`: the sha256 of each factory-owned file as the template renders it for that app's own copier answers, plus the template commit that render came from, so an app that quietly edits its `Dockerfile` fails CI instead of drifting unnoticed. Nothing is normalised; the app's name, ports and palette come back through the render and are identical on both sides.
 
 **Each stamped app carries its own copy of that manifest and measures itself against that copy.** An app whose copy is old therefore measures itself against an *old factory* and reports green while running old code. Every app in the fleet was doing exactly this until 2026-08-19; the tell was that their totals disagreed — 64/64, 41/44, 68/70, three counts for one manifest. What it hid: two apps that had never taken a released SPA fix, an undeclared runtime dependency, and three unmet dependency floors.
 
 Two consequences:
 
 - Changing a gated file in `template/` breaks parity in every app until each takes the new copy **and** a re-stamped manifest. Both halves, or the gate lies.
-- You do not maintain the manifest by hand. The `template-parity-manifest` pre-commit hook regenerates it whenever anything under `template/` changes; if it rewrites the file, re-stage and commit again. A manifest kept current by a documented step would go stale exactly the way an untagged change does, and a stale manifest is worse than none — it passes every app matching the *old* template.
+- You do not maintain the manifest by hand. `check-template-parity.py --generate` (in master's `canonical-app-migration` skill) writes it into the app from a fresh render of the tagged template; an app takes a new factory file and regenerates its manifest in the same commit. A stale manifest is worse than none — it passes every app matching the *old* template.
 
 An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for a dependency floor, in its `.canonical-exceptions`, dated, with a reason. The bar is `canonical-app-shape.md` §Sameness: a difference that is right is right for every app, so it belongs here, not there.
 
