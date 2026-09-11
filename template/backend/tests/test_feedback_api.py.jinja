@@ -1,0 +1,215 @@
+"""The feedback slice, driven through HTTP.
+
+Filing runs as a FastAPI background task on its OWN database session
+(`api/feedback/service.py`'s `file_issue`), deliberately decoupled from the
+request's — which may already be committed and closed by the time a
+background task executes. This suite's `session` fixture is one
+SAVEPOINT-scoped transaction shared by the whole test
+(`rules-library/stacks/python-testing.md` §Transaction Rollback Fixture), so a
+genuinely separate connection would never see a row this test just created but
+never truly committed. `_reuse_test_session` below makes `file_issue` reuse
+that one session instead, so these tests exercise the real HTTP + background
+task path without a second, invisible connection.
+"""
+
+import base64
+from collections.abc import Iterator
+
+import httpx
+import pytest
+from fastapi import FastAPI
+from httpx import AsyncClient
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.feedback import service
+from {{ package_name }}.api.feedback.models import FeedbackStatus
+from {{ package_name }}.config import Settings, get_settings
+from {{ package_name }}.config.sections.feedback import FeedbackSettings
+
+# A minimal 1x1 transparent PNG, for the screenshot round trip.
+_PNG_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _admin_headers() -> dict[str, str]:
+    return {"x-authentik-uid": "the-admin", "x-authentik-username": "the-admin", "x-authentik-entitlements": "admin"}
+
+
+def _report_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "message": "It crashed after I typed password=hunter2 into the form",
+        "route": "/workspace/settings",
+        "user_agent": "test-agent/1.0",
+        "viewport": {"width": 1280, "height": 800},
+        "session_id": "session-abc123",
+        "screenshot": None,
+    }
+    payload.update(overrides)
+    return payload
+
+
+class _ReuseSession:
+    """`with factory() as s: ...` that hands back an already-open session unclosed."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __enter__(self) -> Session:
+        return self._session
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _reuse_test_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> None:
+    """Make `file_issue`'s own session factory hand back this test's session.
+
+    See the module docstring: without this, `file_issue` opens a real second
+    connection that can never see this test's uncommitted work.
+    """
+    monkeypatch.setattr(service, "get_session_factory", lambda: (lambda: _ReuseSession(session)))
+
+
+@pytest.fixture
+def filing_enabled(app: FastAPI) -> Iterator[None]:
+    """Override `get_settings` so filing is configured, cleaned up afterwards."""
+    configured: Settings = get_settings().model_copy(
+        update={"feedback": FeedbackSettings(github_repo="acme/reports", github_token_credential="github-feedback-test")}
+    )
+    app.dependency_overrides[get_settings] = lambda: configured
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+def _github_response(status_code: int, **json_body: object) -> httpx.Response:
+    request = httpx.Request("POST", "https://api.github.com/repos/acme/reports/issues")
+    return httpx.Response(status_code, json=json_body, request=request)
+
+
+# ── Filing disabled (the default) ───────────────────────────────────────────
+
+
+async def test_a_report_stays_received_when_no_repo_is_configured(client: AsyncClient) -> None:
+    """The default: no repo configured, so filing never runs and nothing 5xxs."""
+    created = await client.post("/api/feedback/", json=_report_payload())
+    assert created.status_code == 201
+    report_id = created.json()["id"]
+
+    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    assert read.status_code == 200
+    body = read.json()
+    assert body["status"] == FeedbackStatus.RECEIVED.value
+    assert body["issue_url"] is None
+    assert body["error"] is None
+    # The stored message is the raw text — redaction only ever touches what
+    # would leave the app in a filed issue, and nothing was filed here.
+    assert body["message"] == _report_payload()["message"]
+
+
+# ── Filing succeeds ──────────────────────────────────────────────────────────
+
+
+async def test_a_report_files_as_a_redacted_github_issue(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, filing_enabled: None
+) -> None:
+    """A configured repo gets one POST, titled and bodied as the brief specifies."""
+    posted: list[dict[str, object]] = []
+
+    def _fake_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> httpx.Response:
+        posted.append({"url": url, "json": json, "headers": headers})
+        return _github_response(201, html_url="https://github.com/acme/reports/issues/42")
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    monkeypatch.setattr(service, "vend", lambda credential, field: "gh-token-123")
+
+    payload = _report_payload()
+    created = await client.post("/api/feedback/", json=payload)
+    report_id = created.json()["id"]
+
+    assert len(posted) == 1
+    call = posted[0]
+    assert call["url"] == "https://api.github.com/repos/acme/reports/issues"
+    assert call["headers"]["Authorization"] == "Bearer gh-token-123"
+    assert call["json"]["labels"] == ["feedback"]
+    # The title is the first 80 characters of the ORIGINAL message.
+    assert call["json"]["title"] == str(payload["message"])[:80]
+    # The body is REDACTED: the credential-shaped value never reaches GitHub...
+    assert "hunter2" not in call["json"]["body"]
+    assert "password" in call["json"]["body"]
+    # ...and carries enough to act on the report without opening the app.
+    assert f"Admin: /api/feedback/{report_id}" in call["json"]["body"]
+    assert 'Loki: {service_name="' in call["json"]["body"]
+    assert payload["session_id"] in call["json"]["body"]
+
+    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    body = read.json()
+    assert body["status"] == FeedbackStatus.FILED.value
+    assert body["issue_url"] == "https://github.com/acme/reports/issues/42"
+    assert body["error"] is None
+    # The STORED message is untouched — only the outgoing issue body redacts.
+    assert body["message"] == payload["message"]
+
+
+# ── Filing fails ─────────────────────────────────────────────────────────────
+
+
+async def test_a_failed_github_call_leaves_the_report_received_with_the_error(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, filing_enabled: None
+) -> None:
+    """A GitHub-side failure never reaches the caller as a 5xx — it lands on the row."""
+
+    def _failing_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> httpx.Response:
+        return _github_response(500)
+
+    monkeypatch.setattr(httpx, "post", _failing_post)
+    monkeypatch.setattr(service, "vend", lambda credential, field: "gh-token-123")
+
+    created = await client.post("/api/feedback/", json=_report_payload())
+    assert created.status_code == 201
+    report_id = created.json()["id"]
+
+    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    body = read.json()
+    assert body["status"] == FeedbackStatus.RECEIVED.value
+    assert body["issue_url"] is None
+    assert body["error"]
+
+
+# ── The admin gate ───────────────────────────────────────────────────────────
+
+
+async def test_a_caller_without_the_admin_entitlement_cannot_read_a_report(client: AsyncClient) -> None:
+    created = await client.post("/api/feedback/", json=_report_payload())
+    report_id = created.json()["id"]
+
+    refused = await client.get(f"/api/feedback/{report_id}")
+    assert refused.status_code == 403
+
+
+# ── The screenshot ───────────────────────────────────────────────────────────
+
+
+async def test_the_screenshot_endpoint_serves_the_stored_png_bytes(client: AsyncClient) -> None:
+    created = await client.post("/api/feedback/", json=_report_payload(screenshot=_PNG_DATA_URL))
+    report_id = created.json()["id"]
+
+    screenshot = await client.get(f"/api/feedback/{report_id}/screenshot", headers=_admin_headers())
+    assert screenshot.status_code == 200
+    assert screenshot.headers["content-type"] == "image/png"
+    assert screenshot.content == base64.b64decode(_PNG_DATA_URL.split(",", 1)[1])
+
+
+async def test_a_report_with_no_screenshot_answers_404_for_one(client: AsyncClient) -> None:
+    created = await client.post("/api/feedback/", json=_report_payload())
+    report_id = created.json()["id"]
+
+    screenshot = await client.get(f"/api/feedback/{report_id}/screenshot", headers=_admin_headers())
+    assert screenshot.status_code == 404
+
+
+async def test_an_invalid_screenshot_value_is_refused(client: AsyncClient) -> None:
+    refused = await client.post("/api/feedback/", json=_report_payload(screenshot="not-a-data-url"))
+    assert refused.status_code == 400

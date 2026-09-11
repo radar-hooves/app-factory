@@ -1,0 +1,75 @@
+"""HTTP routes for reported feedback.
+
+Filing is deliberately dumb (v1): every report becomes a GitHub issue, no LLM
+triage, and noise is a GitHub label problem until a real app proves that
+wrong. Posting is open to any authenticated user — reporting a problem is not
+an admin act — while reading a report back is, because a report may carry a
+screenshot of somebody else's screen.
+"""
+
+from fastapi import APIRouter, BackgroundTasks, status
+from starlette.responses import Response
+
+from {{ package_name }}.api.feedback import service
+from {{ package_name }}.api.feedback.schemas import FeedbackCreate, FeedbackCreateResponse, FeedbackRead
+from {{ package_name }}.deps import CurrentUser, SessionDep, SettingsDep
+from {{ package_name }}.entitlements import module_dependency
+from {{ package_name }}.exceptions import NotFoundError
+
+router = APIRouter()
+
+
+@router.post(
+    "/",
+    response_model=FeedbackCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createFeedback",
+)
+def create_feedback(
+    data: FeedbackCreate,
+    background_tasks: BackgroundTasks,
+    session: SessionDep,
+    user: CurrentUser,
+    settings: SettingsDep,
+) -> FeedbackCreateResponse:
+    """Record a report and file it as a GitHub issue in the background.
+
+    The row is created and committed before filing starts, so a slow or failed
+    GitHub call never turns into a 5xx for the person who just reported a
+    problem — `service.file_issue` records the outcome on the row instead.
+    """
+    report = service.create_report(session, user_id=user.id, data=data)
+    background_tasks.add_task(service.file_issue, report_id=report.id, settings=settings)
+    return FeedbackCreateResponse(id=report.id)
+
+
+@router.get(
+    "/{report_id}",
+    response_model=FeedbackRead,
+    dependencies=[module_dependency("admin")],
+    operation_id="getFeedback",
+)
+def get_feedback(report_id: int, session: SessionDep) -> FeedbackRead:
+    """Return one feedback report. Admin only.
+
+    Raises:
+        NotFoundError: no such report exists.
+    """
+    return FeedbackRead.model_validate(service.get_report(session, report_id))
+
+
+@router.get(
+    "/{report_id}/screenshot",
+    dependencies=[module_dependency("admin")],
+    operation_id="getFeedbackScreenshot",
+)
+def get_feedback_screenshot(report_id: int, session: SessionDep) -> Response:
+    """Return the screenshot PNG bytes captured with this report.
+
+    Raises:
+        NotFoundError: no such report exists, or it carries no screenshot.
+    """
+    report = service.get_report(session, report_id)
+    if report.screenshot is None:
+        raise NotFoundError(f"Feedback {report_id} has no screenshot")
+    return Response(content=report.screenshot, media_type="image/png")

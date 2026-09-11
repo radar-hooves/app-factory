@@ -1,0 +1,63 @@
+"""Pydantic schemas for reported feedback."""
+
+import datetime
+import uuid
+
+from pydantic import BaseModel, ConfigDict
+
+from {{ package_name }}.api.feedback.models import FeedbackStatus
+
+
+class Viewport(BaseModel):
+    """The reporting browser's window size, for reproducing what the user saw."""
+
+    width: int
+    height: int
+
+
+class FeedbackCreate(BaseModel):
+    """A report as `@poodle64/ui`'s `ReportWidget` POSTs it.
+
+    Shape and field names are the package's contract, not this app's choice —
+    changing one here without changing the widget silently breaks every app
+    that has taken it.
+    """
+
+    message: str
+    route: str
+    user_agent: str
+    viewport: Viewport
+    session_id: str
+    # A `data:image/png;base64,...` URL, or None when the widget captured no
+    # screenshot. Decoded to bytes in `service.create_report`.
+    screenshot: str | None = None
+
+
+class FeedbackCreateResponse(BaseModel):
+    """The one thing `ReportWidget`'s `onSubmitted(id)` needs."""
+
+    id: int
+
+
+class FeedbackRead(BaseModel):
+    """A feedback report as the admin surface reads it back.
+
+    No screenshot field: the bytes are served separately
+    (`GET /api/feedback/{id}/screenshot`), so a caller reading the list never
+    pays for an image it may not want.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime.datetime
+    user_id: uuid.UUID
+    route: str
+    user_agent: str
+    viewport_width: int
+    viewport_height: int
+    session_id: str
+    message: str
+    status: FeedbackStatus
+    issue_url: str | None
+    error: str | None

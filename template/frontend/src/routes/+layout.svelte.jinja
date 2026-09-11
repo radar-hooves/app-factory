@@ -7,6 +7,7 @@
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
+	import { ReportWidget } from '@poodle64/ui/feedback';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
@@ -131,4 +132,10 @@
      app with palette ACTIONS as well as pages adds them as a child command group
      right here — one app does, which is not enough consumers to earn a seam. -->
 <CommandPalette bind:open={paletteOpen} onNavigate={goto} />
+
+<!-- The feedback widget, for whoever is actually signed in — there is nobody
+     to attribute a report to before then. -->
+{#if auth.user}
+	<ReportWidget />
+{/if}
 {% endraw -%}

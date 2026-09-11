@@ -18,6 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
+from {{ package_name }}.config.sections.feedback import FeedbackSettings
 from {{ package_name }}.config.sections.identity import IdentitySettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
 from {{ package_name }}.config.sections.security import SecuritySettings
@@ -88,6 +89,8 @@ class Settings(BaseSettings):
     # section's own resolution (env, then .env, then default) is what stands.
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     example: ExampleSettings = Field(default_factory=ExampleSettings)
+    # Where a reported feedback issue is filed. Empty repo disables filing.
+    feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
     # Names of the forward-auth identity headers. Defaults are Authentik's
     # own spellings, so an app behind the household outpost sets none of them.
     identity: IdentitySettings = Field(default_factory=IdentitySettings)
@@ -112,6 +115,7 @@ def get_settings() -> Settings:
         return Settings(
             database=DatabaseSettings(),
             example=ExampleSettings(),
+            feedback=FeedbackSettings(),
             identity=IdentitySettings(),
             mcp=MCPSettings(),
             security=SecuritySettings(),

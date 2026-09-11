@@ -1,0 +1,63 @@
+"""MCP tools over the feedback slice — read-only.
+
+Gated exactly like every other `/mcp` tool: `ActorGateMiddleware`
+(`mcp/auth.py`) is wired onto the FastMCP instance before any dispatcher
+registers, so a call reaching either tool below has already proved a
+registered actor. There is no separate "admin" concept on this surface — that
+is a Tier 1a entitlement grade the human proxy asserts, and a machine caller
+never carries one (`rules-library/platform/tenancy.md` §There Is No Machine
+Caller).
+"""
+
+from fastmcp import FastMCP
+
+from {{ package_name }}.api.feedback import service
+from {{ package_name }}.api.feedback.models import FeedbackReport
+from {{ package_name }}.db.session import get_session_factory
+
+_MAX_LIMIT = 100
+
+
+def _report_dict(report: FeedbackReport) -> dict[str, object]:
+    """The row minus its screenshot bytes, plus where to fetch them."""
+    return {
+        "id": report.id,
+        "created_at": report.created_at.isoformat(),
+        "user_id": str(report.user_id),
+        "route": report.route,
+        "user_agent": report.user_agent,
+        "viewport": {"width": report.viewport_width, "height": report.viewport_height},
+        "session_id": report.session_id,
+        "message": report.message,
+        "status": report.status.value,
+        "issue_url": report.issue_url,
+        "error": report.error,
+        "screenshot_url": f"/api/feedback/{report.id}/screenshot" if report.screenshot is not None else None,
+    }
+
+
+def register_feedback_tools(mcp: FastMCP) -> None:
+    """Register `feedback_get` and `feedback_list` on `mcp`."""
+
+    @mcp.tool()
+    def feedback_get(id: int) -> dict[str, object]:
+        """Return one feedback report by id, without its screenshot bytes.
+
+        Raises:
+            NotFoundError: no report with this id exists.
+        """
+        with get_session_factory()() as session:
+            return _report_dict(service.get_report(session, id))
+
+    @mcp.tool()
+    def feedback_list(status: str | None = None, limit: int = 20) -> list[dict[str, object]]:
+        """List feedback reports, newest first, optionally filtered by status.
+
+        Args:
+            status: "received" or "filed"; omit for every status.
+            limit: maximum reports to return (default 20, capped at 100).
+        """
+        bounded_limit = max(1, min(limit, _MAX_LIMIT))
+        with get_session_factory()() as session:
+            reports = service.list_reports(session, status=status, limit=bounded_limit)
+            return [_report_dict(report) for report in reports]

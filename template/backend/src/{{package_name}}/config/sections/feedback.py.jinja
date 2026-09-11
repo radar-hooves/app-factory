@@ -1,0 +1,34 @@
+"""GitHub issue-filing settings for reported feedback.
+
+Filing is opt-in: an app with no repo configured leaves every report at
+`status="received"` and never calls out (`api/feedback/service.py`). The
+bearer is a broker credential, vended the same way the database password is
+(`config/vend.py`) — never an environment variable.
+
+Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
+    {{ project_name | upper | replace('-', '_') }}_GITHUB_REPO
+    {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN_CREDENTIAL
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class FeedbackSettings(BaseSettings):
+    """Where a reported feedback issue is filed, and under which broker credential."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="{{ project_name | upper | replace('-', '_') }}_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # "owner/name". Empty disables filing — the safe default for a fresh stamp
+    # with no feedback repo set up yet.
+    # Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_REPO
+    github_repo: str = ""
+
+    # The broker catalogue name for the GitHub token filing an issue needs.
+    # Vended per use (`config/vend.py`'s `vend()`), never held on Settings: a
+    # broker outage then fails one report's filing rather than the app's boot.
+    # Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN_CREDENTIAL
+    github_token_credential: str = "github-feedback"

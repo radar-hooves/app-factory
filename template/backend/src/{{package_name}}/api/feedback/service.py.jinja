@@ -1,0 +1,184 @@
+"""Business logic for reported feedback: persistence, redaction, and filing.
+
+v1 does no triage: every report files, labelled ``feedback``, and noise is a
+GitHub label problem until a real app proves that wrong.
+"""
+
+import base64
+import binascii
+import logging
+import uuid
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.feedback.models import FeedbackReport, FeedbackStatus
+from {{ package_name }}.api.feedback.schemas import FeedbackCreate
+from {{ package_name }}.config import Settings
+from {{ package_name }}.config.vend import VendError, vend
+from {{ package_name }}.db.session import get_session_factory
+from {{ package_name }}.exceptions import BadRequestError, NotFoundError
+
+logger = logging.getLogger(__name__)
+
+_SCREENSHOT_DATA_URL_PREFIX = "data:image/png;base64,"
+_TITLE_MAX_CHARS = 80
+_GITHUB_API_VERSION = "2022-11-28"
+_GITHUB_TIMEOUT_SECONDS = 10.0
+
+# This app's own Loki service_name label (`platform/telemetry.md`), for the
+# issue-body hint below. A plain literal, like `version("{{ project_name }}")`
+# in api/system/router.py.
+_SERVICE_NAME = "{{ project_name }}"
+
+
+def _decode_screenshot(data_url: str | None) -> bytes | None:
+    """Decode a `data:image/png;base64,...` screenshot, or return None.
+
+    Raises:
+        BadRequestError: a value was submitted that is not a PNG data URL.
+    """
+    if data_url is None:
+        return None
+    if not data_url.startswith(_SCREENSHOT_DATA_URL_PREFIX):
+        raise BadRequestError("screenshot must be a data:image/png;base64,... URL")
+    try:
+        return base64.b64decode(data_url.removeprefix(_SCREENSHOT_DATA_URL_PREFIX), validate=True)
+    except binascii.Error as exc:
+        raise BadRequestError("screenshot is not valid base64") from exc
+
+
+def create_report(session: Session, *, user_id: uuid.UUID, data: FeedbackCreate) -> FeedbackReport:
+    """Persist a feedback report. Filing happens separately, as a background task.
+
+    Raises:
+        BadRequestError: `data.screenshot` is present but not a PNG data URL.
+    """
+    report = FeedbackReport(
+        user_id=user_id,
+        route=data.route,
+        user_agent=data.user_agent,
+        viewport_width=data.viewport.width,
+        viewport_height=data.viewport.height,
+        session_id=data.session_id,
+        message=data.message,
+        screenshot=_decode_screenshot(data.screenshot),
+        status=FeedbackStatus.RECEIVED,
+    )
+    session.add(report)
+    session.flush()
+    session.refresh(report)
+    return report
+
+
+def get_report(session: Session, report_id: int) -> FeedbackReport:
+    """Return a feedback report by id.
+
+    Raises:
+        NotFoundError: no such report exists.
+    """
+    report = session.get(FeedbackReport, report_id)
+    if report is None:
+        raise NotFoundError(f"Feedback {report_id} not found")
+    return report
+
+
+def list_reports(session: Session, *, status: str | None = None, limit: int = 20) -> list[FeedbackReport]:
+    """Return feedback reports, newest first, optionally filtered by status."""
+    query = select(FeedbackReport).order_by(FeedbackReport.created_at.desc()).limit(limit)
+    if status is not None:
+        query = query.where(FeedbackReport.status == status)
+    return list(session.execute(query).scalars().all())
+
+
+def _redacted_message(message: str) -> str:
+    """Run `message` through the household's redaction floor before it leaves the app.
+
+    `api-common` builds its own `Redactor` internally (`api_common.logging`) but
+    exposes no public function to reuse — its redaction is wired into the log
+    path only. So this calls `redactyl-core` directly, with its default policy:
+    the same engine api-common's own floor is built on, just without the
+    log-specific `LEGACY_SENSITIVE_KEY_EXTRAS` seeding that path adds.
+    """
+    from redactyl_core import make_redactor
+
+    return make_redactor().redact_text(message) or ""
+
+
+def _loki_hint(session_id: str) -> str:
+    """A LogQL selector for this report's session, to paste straight into Grafana.
+
+    Built by concatenation rather than an f-string: an f-string needs its
+    literal curly braces doubled, and this file's own Jinja templating would
+    try to parse a doubled pair as a template block of its own.
+    """
+    return '{service_name="' + _SERVICE_NAME + '"} |= "' + session_id + '"'
+
+
+def _issue_body(report: FeedbackReport, redacted_message: str) -> str:
+    """The GitHub issue body: the redacted report plus enough to act on it."""
+    return (
+        f"{redacted_message}\n\n"
+        "---\n"
+        f"Route: {report.route}\n"
+        f"Viewport: {report.viewport_width}x{report.viewport_height}\n"
+        f"User agent: {report.user_agent}\n"
+        f"Session: {report.session_id}\n"
+        f"Admin: /api/feedback/{report.id}\n"
+        f"Loki: {_loki_hint(report.session_id)}\n"
+    )
+
+
+def _file_github_issue(*, repo: str, token: str, title: str, body: str) -> str:
+    """POST one GitHub issue labelled `feedback`; return its `html_url`."""
+    response = httpx.post(
+        f"https://api.github.com/repos/{repo}/issues",
+        json={"title": title, "body": body, "labels": ["feedback"]},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        },
+        timeout=_GITHUB_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return str(response.json()["html_url"])
+
+
+def file_issue(*, report_id: int, settings: Settings) -> None:
+    """Redact the message and file it as a GitHub issue; runs as a background task.
+
+    Opens its OWN session rather than the request's — a background task can run
+    after the request's session has already committed and closed, and this way
+    the two never race over the same connection. A failure here is caught and
+    recorded on the row; it never becomes a 5xx for the person who just filed
+    the report, because the response has already been sent by the time this runs.
+    """
+    factory = get_session_factory()
+    with factory() as session:
+        report = session.get(FeedbackReport, report_id)
+        if report is None:  # pragma: no cover - the id was just created by this same request
+            return
+
+        if not settings.feedback.github_repo:
+            # No repo configured: filing is disabled, and the row simply stays
+            # RECEIVED. Not an error — a fresh stamp has nowhere to file yet.
+            return
+
+        title = report.message[:_TITLE_MAX_CHARS]
+        body = _issue_body(report, _redacted_message(report.message))
+
+        try:
+            token = vend(settings.feedback.github_token_credential, "token")
+            issue_url = _file_github_issue(
+                repo=settings.feedback.github_repo, token=token, title=title, body=body
+            )
+        except (VendError, httpx.HTTPError) as exc:
+            logger.warning("Could not file feedback %d as a GitHub issue: %s", report_id, exc)
+            report.error = str(exc)
+        else:
+            report.status = FeedbackStatus.FILED
+            report.issue_url = issue_url
+            report.error = None
+        session.commit()

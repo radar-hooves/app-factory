@@ -27,6 +27,7 @@ import logging
 from fastmcp import FastMCP
 
 from {{ package_name }}.mcp.auth import ActorGateMiddleware, resolve_actor
+from {{ package_name }}.mcp.dispatchers.feedback import register_feedback_tools
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,10 @@ def create_mcp_server() -> FastMCP:
     # a tool registered without it is reachable by any valid Authentik bearer.
     mcp.add_middleware(ActorGateMiddleware())
 
-    # Register domain dispatchers here as the app grows.
-    # Example:
-    #   from {{ package_name }}.mcp.dispatchers.example import register_example_tools
-    #   register_example_tools(mcp)
+    # The feedback slice's tools come from the factory, same as its HTTP router
+    # (api/main.py). Register this app's own domain dispatchers beside it as it
+    # grows.
+    register_feedback_tools(mcp)
 
     @mcp.tool()
     def health_check() -> dict[str, str]:

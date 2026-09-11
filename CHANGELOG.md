@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.11] - 2026-09-11
+
+### Added
+
+- The feedback slice every stamped app now carries: `api/feedback/` (`POST /api/feedback` for any authenticated user; `GET /api/feedback/{id}` and `.../screenshot` admin-gated) and `feedback_reports` (personal-subject, not workspace-scoped — a report is about the reporter, never a shared body of data, and its screenshot may be of their own screen). v1 does no triage: a FastAPI background task redacts the message through `redactyl-core`'s default policy and files one GitHub issue labelled `feedback`, titled from the first 80 characters of the raw message and bodied with the redacted one, the route, viewport, user agent, session id, an admin link and a Loki hint — noise is a GitHub label problem until a real app proves otherwise. A failure, or no repo configured, leaves the row `received` with the error on it rather than a 5xx. `config/sections/feedback.py`: `github_repo` (owner/name; empty disables filing) and `github_token_credential` (broker catalogue name, default `github-feedback`), vended the same way the database password is — never an environment variable. MCP: `feedback_get(id)` and `feedback_list(status=None, limit=20)`, gated like every other tool.
+- `hooks.client.ts` starts `@poodle64/ui`'s browser telemetry (`initBrowserTelemetry`) once per app load, and the authenticated layout mounts its `ReportWidget`. `@poodle64/ui` floor raised to 2026.9.7 for both.
+
 ## [2026.9.10.1] - 2026-09-11
 
 ### Fixed

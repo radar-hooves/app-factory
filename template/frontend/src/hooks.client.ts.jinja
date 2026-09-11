@@ -1,4 +1,12 @@
+import { initBrowserTelemetry } from '@poodle64/ui/telemetry';
 import type { HandleClientError } from '@sveltejs/kit';
+
+import { version } from '$app/environment';
+
+// Browser-side telemetry (`rules-library/platform/telemetry.md`), started once
+// per app load. Dev has no collector to send to, hence the empty URL;
+// production sends through the proxy at /faro/collect.
+initBrowserTelemetry({ app: '{{ project_name }}', version, url: import.meta.env.DEV ? '' : '/faro/collect' });
 
 /**
  * Recovery from a stale build reference after a deploy.

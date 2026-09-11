@@ -15,6 +15,7 @@ what stops a new table quietly shipping with no access predicate
 """
 
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
 from {{ package_name }}.db.base import Base
@@ -57,6 +58,7 @@ WORKSPACE_EXEMPT: dict[type, str] = {
     Workspace: "the workspace itself — rows are scoped TO it",
     WorkspaceMembership: "the grant that resolution reads; scoping it by workspace would be circular",
     DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
+    FeedbackReport: "personal-subject: the person who filed it — a report may carry a screenshot of their own screen",
 }
 
 __all__ = ["WORKSPACE_EXEMPT", "Base"]

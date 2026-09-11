@@ -1,6 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// vi.mock() is hoisted above every import in this file, including a plain
+// `const` — only a value from vi.hoisted() is safe for its factory to close over.
+const { mockInitBrowserTelemetry } = vi.hoisted(() => ({ mockInitBrowserTelemetry: vi.fn() }));
+vi.mock('@poodle64/ui/telemetry', () => ({ initBrowserTelemetry: mockInitBrowserTelemetry }));
+
+// Importing the module is what fires the top-level initBrowserTelemetry()
+// call under test below — hooks.client runs it once, at module evaluation,
+// not inside a function this file could call directly.
 import { handleError, isStaleChunkError, mayAttemptReload } from './hooks.client';
+
+describe('browser telemetry', () => {
+	it('starts once per app load, with the build version and no collector URL in dev', () => {
+		expect(mockInitBrowserTelemetry).toHaveBeenCalledTimes(1);
+		const [config] = mockInitBrowserTelemetry.mock.calls[0] as [{ app: string; version: string; url: string }];
+		expect(config.app.length).toBeGreaterThan(0);
+		expect(config.version).toBe('test'); // $app/environment's mocked build version
+		expect(config.url).toBe(''); // no collector to send to in dev
+	});
+});
 
 describe('isStaleChunkError', () => {
 	// Real messages emitted when a deploy has replaced the chunk a still-open tab

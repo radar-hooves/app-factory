@@ -4,10 +4,11 @@ Include one sub-router per vertical domain slice. Each slice lives in
 api/<domain>/ with its own router.py, schemas.py, models.py, service.py,
 and dependencies.py.
 
-``users``, ``workspaces`` and ``admin`` come from the factory and are not this
-app's domain (`rules-library/platform/canonical-app-shape.md` §Shared Domains
-Belong to the Factory): identity, the access boundary and administration are
-cross-cutting, and an app that builds its own is diverging on a solved problem.
+``users``, ``workspaces``, ``admin`` and ``feedback`` come from the factory and
+are not this app's domain (`rules-library/platform/canonical-app-shape.md`
+§Shared Domains Belong to the Factory): identity, the access boundary,
+administration and how a user reports a problem are cross-cutting, and an app
+that builds its own is diverging on a solved problem.
 
 There is deliberately NO ``api/auth`` slice, and an app must not add one.
 Authentication is the identity provider's (Tier 1a, proxy-delegated), so the
@@ -22,6 +23,7 @@ from fastapi import APIRouter
 
 from {{ package_name }}.api.admin.router import router as admin_router
 from {{ package_name }}.api.example.router import router as example_router
+from {{ package_name }}.api.feedback.router import router as feedback_router
 from {{ package_name }}.api.system.router import router as system_router
 from {{ package_name }}.api.users.router import router as users_router
 from {{ package_name }}.api.workspaces.router import router as workspaces_router
@@ -30,5 +32,6 @@ api_router = APIRouter()
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
+api_router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
 api_router.include_router(example_router, prefix="/example", tags=["example"])
 api_router.include_router(system_router, prefix="/system", tags=["system"])

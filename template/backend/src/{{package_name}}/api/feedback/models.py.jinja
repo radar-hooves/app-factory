@@ -1,0 +1,75 @@
+"""ORM model for reported feedback.
+
+One models.py per domain slice. Import this in db/registry.py so Alembic
+includes the table in autogenerate.
+"""
+
+import enum
+import uuid
+
+from sqlalchemy import Enum, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from {{ package_name }}.db.base import Base, TimestampMixin
+
+
+class FeedbackStatus(enum.StrEnum):
+    """Where a report stands with the GitHub issue tracker.
+
+    Two values only, deliberately: v1 does no triage, so there is nothing
+    between "not filed yet" and "filed". A row that fails to file stays
+    RECEIVED with `error` set, rather than gaining a third state — the retry
+    is a human re-reading `error`, not a state machine.
+    """
+
+    RECEIVED = "received"
+    FILED = "filed"
+
+
+class FeedbackReport(Base, TimestampMixin):
+    """A report a user filed from the browser widget, with its filing outcome.
+
+    PERSONAL-SUBJECT, not WorkspaceScoped (`rules-library/platform/tenancy.md`
+    §Classification): a report is about one person's browser session, its
+    screenshot is of THEIR screen, and reading it is an admin act, not a
+    workspace one — so `user_id` is the enforced predicate rather than
+    `workspace_id`, and the exemption is recorded in `db/registry.py`.
+    """
+
+    __tablename__ = "feedback_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # NOT NULL: this is the personal-subject predicate `db/registry.py` claims.
+    # CASCADE, unlike WorkspaceScoped's attribution columns — a report is
+    # personal data about the reporter, with no other row referencing it, so a
+    # deleted user's reports go with them rather than surviving ownerless.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    route: Mapped[str] = mapped_column(String(2048), nullable=False)
+    user_agent: Mapped[str] = mapped_column(String(512), nullable=False)
+    viewport_width: Mapped[int] = mapped_column(Integer, nullable=False)
+    viewport_height: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # The browser telemetry session id (`initBrowserTelemetry`/`getSessionId()`),
+    # carried so the Loki hint in a filed issue can pull the matching logs.
+    session_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Nullable: the widget may submit no screenshot, and a data-URL decode
+    # failure is refused at the API rather than stored as a null (schemas.py).
+    screenshot: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
+    # VARCHAR + CHECK, not a native Postgres enum, matching WorkspaceRole
+    # (`api/workspaces/models.py`): adding a value is then an ordinary column
+    # change, never an `ALTER TYPE` that cannot run inside a transaction.
+    status: Mapped[FeedbackStatus] = mapped_column(
+        Enum(FeedbackStatus, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=FeedbackStatus.RECEIVED,
+    )
+    issue_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
