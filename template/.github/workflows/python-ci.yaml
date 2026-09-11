@@ -35,6 +35,20 @@ permissions:
 
 jobs:
   python-ci:
+    # No worker count is set here, deliberately. The reusable runs `pytest -q`
+    # in ONE process and exposes no workers input, and a caller's `env:` does
+    # not cross into a called workflow, so there is nothing here to set.
+    #
+    # An app that parallelises its suite — pytest-xdist, `-n auto` in addopts —
+    # must cap it. `-n auto` reads the RUNNER's core count, and the household
+    # runner is shared and 28-core, so one run asks for 28 pytest processes and
+    # 28 of everything each one starts. `PYTEST_XDIST_AUTO_NUM_WORKERS` is the
+    # cap, wherever the environment genuinely reaches the suite: the runner
+    # itself, a developer's shell, a local workflow's `env:`. From THIS file the
+    # only channel into the job is the reusable's own `pytest-args` input
+    # (`-q -n 4`). The suite's Postgres is shared across workers
+    # (backend/tests/conftest.py), so what a worker costs is CPU and memory —
+    # not a database container each.
     uses: radar-hooves/master-project/.github/workflows/python-ci.yaml@main
     with:
       working-directory: backend
