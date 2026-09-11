@@ -6,15 +6,18 @@ per-session Postgres testcontainer — the household hermetic-test pattern
 """
 
 import atexit
+import json
 import logging
 import os
 import secrets
 import subprocess
 import sys
+import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
 import pytest
+from filelock import FileLock
 
 os.environ.setdefault("DEBUG", "true")
 
@@ -36,20 +39,73 @@ os.environ.setdefault("{{ project_name | upper | replace('-', '_') }}_RATE_LIMIT
 #
 #   1. {{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_* when set — an explicit,
 #      purpose-provisioned test server (a CI service container).
-#   2. Otherwise an ephemeral Docker container this module starts and
-#      `pytest_sessionfinish` removes. Nothing ambient can reach it and it
-#      dies with the run.
+#   2. Otherwise an ephemeral Docker container — ONE per run, shared by every
+#      xdist worker (see below) — that `pytest_sessionfinish` removes. Nothing
+#      ambient can reach it and it dies with the run.
 #
 # POSTGRES_DB stays forced as defence in depth: belt and braces now that the
 # server is guaranteed not to be anything but a throwaway.
-TEST_DATABASE_NAME = "{{ package_name }}_test"
 _TEST_ENV_PREFIX = "{{ project_name | upper | replace('-', '_') }}_TEST_POSTGRES_"
+
+# ── ONE Postgres per run, not per process ───────────────────────────────────
+# Every pytest process imports this module, so a container started here is a
+# container per PROCESS — and under pytest-xdist that is the controller plus one
+# per worker. On a 28-core runner a `-n auto` suite therefore asked the daemon
+# for 29 Postgres containers and 29 reapers per run; after a morning of them the
+# runner held 155 test containers, 309 dead reapers and a load average of 56,
+# and no suite could start a container at all (pebblestone#762).
+#
+# So the container is shared, by pytest-xdist's own documented recipe: a lock
+# file and a settings file somewhere every process of the run agrees on, the
+# first process in starts the container and writes the settings, the rest read
+# them. The recipe's directory — `tmp_path_factory.getbasetemp().parent` —
+# belongs to a fixture, and this runs at IMPORT, which the POSTGRES_* assignment
+# below has to (it must precede the first app import). So the run is keyed by
+# the controller's pid instead: an xdist worker is a direct child of the
+# controller, and a live pid is unique, so two runs on one machine never collide
+# and a settings file left behind by a killed run is never mistaken for this
+# one's (the controller always starts fresh and overwrites).
+_WORKER_ID = os.environ.get("PYTEST_XDIST_WORKER", "master")  # the value xdist's `worker_id` fixture reports
+_RUN_ID = os.getpid() if _WORKER_ID == "master" else os.getppid()
+_SHARED_SERVER_FILE = Path(tempfile.gettempdir()) / f"{{ package_name }}-test-postgres-{_RUN_ID}.json"
+
+# One database per worker ON that shared server, which is exactly the isolation
+# a container per worker used to buy: no worker can see another's schema or
+# rows, and within a worker the `session` fixture's transaction rollback still
+# owns isolation between tests. Only the server is shared.
+TEST_DATABASE_NAME = "{{ package_name }}_test" if _WORKER_ID == "master" else f"{{ package_name }}_test_{_WORKER_ID}"
 
 _EPHEMERAL_POSTGRES = None
 
 
+def _shared_ephemeral_postgres() -> dict[str, str]:
+    """Return the run's one ephemeral Postgres, starting it if nobody has yet.
+
+    The lock is held ACROSS the start, so a worker arriving mid-start waits for
+    the container rather than starting a second one.
+
+    Who starts it is not a race worth winning: the controller imports this
+    module before it spawns a single worker, so it is the process that starts
+    the container and the workers only ever read the file. That is also what
+    makes teardown safe — the controller outlives every worker, so the stop
+    below can never pull the database out from under a worker still using it.
+    """
+    with FileLock(f"{_SHARED_SERVER_FILE}.lock"):
+        if _WORKER_ID != "master" and _SHARED_SERVER_FILE.is_file():
+            return dict(json.loads(_SHARED_SERVER_FILE.read_text()))
+        settings = _start_ephemeral_postgres()
+        # 0600 and opened that way rather than chmod'ed after: the file carries
+        # the container's password, and /tmp is world-readable on Linux.
+        descriptor = os.open(_SHARED_SERVER_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(settings, handle)
+        return settings
+
+
 def _start_ephemeral_postgres() -> dict[str, str]:
     """Start a throwaway Postgres via testcontainers and return its settings.
+
+    Called once per run, under the lock `_shared_ephemeral_postgres` holds.
 
     testcontainers owns the parts that are easy to get subtly wrong: the
     readiness protocol, a random free host port, socket differences across
@@ -115,6 +171,9 @@ def _stop_ephemeral_postgres() -> None:
     ``atexit`` registration cannot both act on it and so a second call after a
     successful stop is silent rather than a NotFound traceback on the way out.
 
+    Only the process that STARTED the container holds one to stop, so a worker
+    that merely read the settings file never reaches past the guard below.
+
     Best-effort: a failure to tear down must not change the exit status of a run
     whose tests have already passed.
     """
@@ -122,6 +181,10 @@ def _stop_ephemeral_postgres() -> None:
     container, _EPHEMERAL_POSTGRES = _EPHEMERAL_POSTGRES, None
     if container is None:
         return
+    # Before the stop, so nothing can read settings for a container being torn
+    # down. The run is over by the time either caller gets here.
+    _SHARED_SERVER_FILE.unlink(missing_ok=True)
+    Path(f"{_SHARED_SERVER_FILE}.lock").unlink(missing_ok=True)
     try:
         container.stop()
     except Exception as exc:  # teardown must never fail a passing run
@@ -151,7 +214,7 @@ def _resolve_test_server() -> dict[str, str]:
         refuse_if_explicit_server_is_production(resolved)
         return resolved
 
-    return _start_ephemeral_postgres()
+    return _shared_ephemeral_postgres()
 
 
 _TEST_SERVER = _resolve_test_server()
@@ -286,7 +349,13 @@ def pytest_sessionstart(session) -> None:
     connectivity check when the app is first created, and fixture ordering
     does not guarantee a schema-building fixture wins that race. A
     session-start hook precedes every fixture, so there is no race to lose.
+
+    Under xdist the controller runs no tests and needs no database: each worker
+    builds its own on the shared server. It still resolved that server at
+    import, because it is the process that started the container.
     """
+    if session.config.pluginmanager.hasplugin("dsession"):  # xdist registers it in the controller only
+        return
     _ensure_test_database_ready()
     # Whatever this app needs doing once, after the schema exists and before any
     # test runs (tests/app_fixtures.py). No-op unless the app defines one.

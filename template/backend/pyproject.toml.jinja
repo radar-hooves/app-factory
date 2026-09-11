@@ -39,6 +39,9 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "httpx>=0.28.1",
+    # filelock: conftest.py's cross-process lock, so one pytest run starts ONE
+    # Postgres container and every xdist worker shares it.
+    "filelock>=3.20.3",
     # 4.15.0 is the first release carrying testcontainers.community.postgres,
     # which conftest.py imports; 4.13/4.14 ship only the deprecated alias.
     "testcontainers[postgres]>=4.15.0",
