@@ -353,6 +353,12 @@ export interface Turn {
 	/** Follow-ups offered after this answer. Absent on a turn read back from
 	 *  history: they belonged to the moment it was asked. */
 	suggestions?: string[];
+	/** A study artefact rather than an ordinary answer: renders as a card once
+	 *  settled, never as prose, and opens the reading column instead of a
+	 *  citation. Absent (or `'answer'`) is every ordinary turn. */
+	kind?: 'answer' | 'artefact';
+	/** The artefact's own name. Only meaningful when `kind` is `'artefact'`. */
+	title?: string;
 }
 
 /**

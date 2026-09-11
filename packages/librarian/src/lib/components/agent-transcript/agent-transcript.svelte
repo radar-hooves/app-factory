@@ -28,6 +28,7 @@
 	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
+	import ArtefactCard from '../artefact-card/artefact-card.svelte';
 	import Markdown from '../markdown/markdown.svelte';
 
 	interface Props {
@@ -51,6 +52,14 @@
 		 *  no chip. */
 		onsuggest?: (question: string) => void;
 		copy?: Partial<LibrarianCopy>;
+		/** A study artefact rather than an ordinary answer: once settled, this
+		 *  renders as a card instead of prose. */
+		kind?: 'answer' | 'artefact';
+		/** The artefact's own name, for the card. */
+		title?: string;
+		/** Opens the artefact in the reading column. Required wherever `kind`
+		 *  is `'artefact'`. */
+		onopenartefact?: () => void;
 	}
 
 	let {
@@ -64,8 +73,13 @@
 		oncite,
 		onregenerate,
 		onsuggest,
-		copy
+		copy,
+		kind = 'answer',
+		title,
+		onopenartefact
 	}: Props = $props();
+
+	const isArtefact = $derived(kind === 'artefact');
 
 	const words = $derived(resolveCopy(copy));
 
@@ -181,7 +195,7 @@
 	{#each segments as seg (seg.index)}
 		{#if seg.kind === 'activity'}
 			<ActivityGroup group={seg} live={running && seg.index === lastIndex} />
-		{:else}
+		{:else if !isArtefact}
 			<div class="max-w-[72ch] min-w-0">
 				<Markdown
 					content={seg.index === lastTextIndex && split.citations.length > 0
@@ -199,7 +213,11 @@
 		{/if}
 	{/each}
 
-	{#if sources.length > 0}
+	{#if isArtefact && settled}
+		<ArtefactCard title={title ?? 'Briefing'} citationCount={sources.length} onopen={() => onopenartefact?.()} />
+	{/if}
+
+	{#if !isArtefact && sources.length > 0}
 		<section class="max-w-[72ch]">
 			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
 				{words.sources}
@@ -237,11 +255,11 @@
 		</section>
 	{/if}
 
-	{#if notHeld}
+	{#if !isArtefact && notHeld}
 		<p class="text-muted-foreground max-w-[72ch] text-sm">{words.notHeld}</p>
 	{/if}
 
-	{#if followUps.length > 0}
+	{#if !isArtefact && followUps.length > 0}
 		<section class="max-w-[72ch]">
 			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
 				{words.suggestions}
@@ -276,7 +294,7 @@
 		</p>
 	{/if}
 
-	{#if settled}
+	{#if !isArtefact && settled}
 		<div class="text-muted-foreground -ml-1.5 flex items-center gap-1">
 			{#if hasAnswer}
 				<button

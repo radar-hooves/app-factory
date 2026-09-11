@@ -16,8 +16,14 @@
 	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
 	import AgentTranscript from '../agent-transcript/agent-transcript.svelte';
+	import ArtefactPane from '../artefact-pane/artefact-pane.svelte';
 	import DocumentPane from '../document-pane/document-pane.svelte';
 	import ScopeStatement from '../scope-statement/scope-statement.svelte';
+
+	/** What the reading column holds — a cited document or a study artefact,
+	 *  never both and never two panes: whichever the reader last opened
+	 *  replaces whatever was there. */
+	type Column = { kind: 'document'; citation: Citation } | { kind: 'artefact'; turn: Turn } | null;
 
 	interface Props {
 		turns: Turn[];
@@ -68,7 +74,7 @@
 	const words = $derived(resolveCopy(copy));
 
 	let viewport = $state<HTMLElement | null>(null);
-	let open = $state<Citation | null>(null);
+	let column = $state<Column>(null);
 	const follow = new FollowScroll();
 
 	function metrics(el: HTMLElement) {
@@ -113,8 +119,13 @@
 
 	function cite(citation: Citation) {
 		// A citation derived from the prose has no id to read, so its chip is
-		// legible but inert rather than opening an empty pane.
-		if (loadDocument && citation.document_id) open = citation;
+		// legible but inert rather than opening an empty pane. Replaces
+		// whatever the column held, artefact included — never a second pane.
+		if (loadDocument && citation.document_id) column = { kind: 'document', citation };
+	}
+
+	function openArtefact(turn: Turn) {
+		column = { kind: 'artefact', turn };
 	}
 </script>
 
@@ -173,6 +184,9 @@
 						suggestions={turn.suggestions ?? []}
 						{collectionNames}
 						{copy}
+						kind={turn.kind}
+						title={turn.title}
+						onopenartefact={() => openArtefact(turn)}
 						oncite={cite}
 						onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
 						onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
@@ -201,7 +215,14 @@
 
 	</div>
 
-	{#if open && loadDocument}
-		<DocumentPane citation={open} {loadDocument} {copy} onclose={() => (open = null)} />
+	{#if column?.kind === 'document' && loadDocument}
+		<DocumentPane citation={column.citation} {loadDocument} {copy} onclose={() => (column = null)} />
+	{:else if column?.kind === 'artefact'}
+		<ArtefactPane
+			turn={column.turn}
+			{copy}
+			onclose={() => (column = null)}
+			oncite={(citation) => cite(citation)}
+		/>
 	{/if}
 </div>

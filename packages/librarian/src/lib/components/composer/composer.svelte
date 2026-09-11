@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
 	import SquareIcon from '@lucide/svelte/icons/square';
 	import XIcon from '@lucide/svelte/icons/x';
@@ -39,6 +40,10 @@
 		onscope: (scope: Scope) => void;
 		onsubmit: () => void;
 		onstop: () => void;
+		/** Asks for a study artefact instead of an ordinary answer. Omit and no
+		 *  control renders — studying is a mode of asking, never a tab, so a
+		 *  host with nothing to build offers none rather than a disabled one. */
+		onbriefing?: () => void;
 	}
 
 	let {
@@ -51,7 +56,8 @@
 		attachments = true,
 		onscope,
 		onsubmit,
-		onstop
+		onstop,
+		onbriefing
 	}: Props = $props();
 
 	// What Milton is being asked about — this document, this collection, or
@@ -232,6 +238,19 @@
 					class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
 				>
 					<PaperclipIcon class="size-4" />
+				</button>
+			{/if}
+
+			{#if onbriefing}
+				<button
+					type="button"
+					onclick={onbriefing}
+					disabled={running}
+					aria-label="Ask for a briefing"
+					title="Ask for a briefing"
+					class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+				>
+					<FileTextIcon class="size-4" />
 				</button>
 			{/if}
 

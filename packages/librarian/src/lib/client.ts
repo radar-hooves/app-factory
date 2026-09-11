@@ -49,6 +49,11 @@ export interface AskOptions {
 	collections?: string[];
 	/** Files Milton reads for this question. Switches the request to multipart. */
 	files?: File[];
+	/** What kind of turn this ask should become. Absent means an ordinary
+	 *  question; a host that offers a study artefact sends its own kind
+	 *  (`'briefing'`) and interprets what comes back accordingly — the wire
+	 *  vocabulary is the host's own, never a fixed set here. */
+	kind?: string;
 	signal?: AbortSignal;
 	/** Where the ask lands. Each app mounts its own ask route. */
 	endpoint?: string;
@@ -78,7 +83,8 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 				question: options.question,
 				resume: options.resume ?? null,
 				subtree: options.subtree ?? '',
-				collections: options.collections ?? []
+				collections: options.collections ?? [],
+				kind: options.kind
 			}),
 			signal
 		};
@@ -89,6 +95,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	if (options.resume) form.append('resume', options.resume);
 	for (const collection of options.collections ?? []) form.append('collections[]', collection);
 	for (const file of options.files) form.append('files[]', file, file.name);
+	if (options.kind) form.append('kind', options.kind);
 	return { method: 'POST', credentials: 'include', body: form, signal };
 }
 

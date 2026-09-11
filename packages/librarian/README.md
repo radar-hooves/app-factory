@@ -24,6 +24,8 @@ src/lib/
     scope-statement/       what this room answers from, and what it does not hold
     agent-transcript/      one question and everything Milton did answering it
     document-pane/         the cited document, open at the cited passage
+    artefact-card/         a study artefact's card in the transcript
+    artefact-pane/         a study artefact, open in the reading column
     composer/              the input box: attachments, scope chips, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        a whole investigation, as one quiet line
@@ -153,14 +155,14 @@ on it fires once and never again.
 
 | Concern                  | How                                                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The ask route            | `ask({ endpoint })`: a room's `/api/rooms/{id}/ask`, a caller's `/api/caller/ask`                                                                                                          |
+| The ask route            | `ask({ endpoint })`: a room's `/api/rooms/{id}/ask`, a caller's `/api/caller/ask`                                                                                                           |
 | Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collections[]`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
 | Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (cadmus: `GET /api/sources/documents/{id}/content`) |
-| Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                        |
+| Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                         |
 | Asking a follow-up       | `onsuggest(question)`: ask it as a NEW turn. Without the handler the chips do not render at all — a chip that does nothing is worse than no chip                                            |
 | The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
 | What this surface covers | `scope`: one statement per room, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
-| The words themselves     | `copy`: a partial of `LibrarianCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                            |
+| The words themselves     | `copy`: a partial of `LibrarianCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                           |
 
 Nothing here fetches on its own behalf. The library's document read is
 authenticated, and a package that called it directly would be reaching past
