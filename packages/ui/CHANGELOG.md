@@ -2,6 +2,47 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.7] - 2026-09-11
+
+### Added
+
+- **Browser telemetry and the feedback widget — the pair every household app
+  mounts** (master-project#335 Lane 2). Two new exports: `@poodle64/ui/telemetry`
+  (`initBrowserTelemetry`, `getSessionId`) and `@poodle64/ui/feedback`
+  (`ReportWidget`). Until now each app wired its own telemetry — or none — and
+  the estate's feedback story was a `mailto:` link at best; the pair makes both
+  one import, mounted once in the client entry and root layout. The telemetry
+  module is Faro with the house configuration fixed rather than chosen per app:
+  session tracking on (the feedback payload carries the session id), the
+  console captured nowhere (the console stays local by rule), and
+  `TracingInstrumentation` on so same-origin fetch and XHR carry `traceparent`
+  — the feedback POST and the server-side trace of the page it was sent from
+  share one trace id. `initBrowserTelemetry({ app, version, url })` is inert
+  when `url` is empty — a private or unconfigured deployment ships no beacons
+  and `getSessionId()` reads null with no branch at the call site — and
+  idempotent: a second call returns the first instance, so an HMR leg or a
+  remounted layout cannot register a second Faro global (faro-core refuses one
+  outright). Both faro packages are `dependencies`, not peers, for the same
+  reason `bits-ui` is a peer elsewhere: a duplicated Faro instance would strand
+  the session id the widget reports against. `ReportWidget` is the user-facing
+  half: a fixed bottom-right trigger opening the one report dialogue — a
+  labelled "What happened?" textarea, and a screenshot checkbox (on by default)
+  capturing `document.body` with `html-to-image`, where a capture the page
+  cannot produce is tolerated silently (the report sends with a null image).
+  Submit POSTs one JSON body — `{ message, route, user_agent, viewport:
+  { width, height }, session_id, screenshot }` — to the `endpoint` prop
+  (default `/api/feedback`); the endpoint answers `{ id }`, the dialogue shows
+  the id with a thank-you and fires `onSubmitted(id)`, and a failure keeps the
+  draft and offers Retry, because the message the user typed is the hard half
+  to reproduce. The widget sits under `components/feedback/`, not
+  `components/ui/`: it is app machinery the layout mounts once, not page chrome
+  composed per situation, so it stands outside the situation→component registry
+  too. `src/test/telemetry.test.ts` pins the no-URL no-op, the idempotency and
+  the configuration (session tracking on, console capture off, tracing present)
+  with the faro modules mocked; `src/test/report-widget.test.ts` pins the
+  exact payload shape field for field, the state machine, and both legs where
+  a collaborator fails (screenshot, endpoint).
+
 ## [2026.9.6] - 2026-09-10
 
 ### Added

@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/ui",
-	"version": "2026.9.6",
+	"version": "2026.9.7",
 	"description": "Household shared component layer: shadcn-svelte primitives (bits-ui) plus the composed page chrome every app builds its routes from, restyled by each app's @poodle64/design-tokens alias layer. One fix reaches every app.",
 	"type": "module",
 	"license": "MIT",
@@ -28,6 +28,14 @@
 		"./format": {
 			"types": "./dist/format.d.ts",
 			"svelte": "./dist/format.js"
+		},
+		"./telemetry": {
+			"types": "./dist/telemetry.d.ts",
+			"svelte": "./dist/telemetry.js"
+		},
+		"./feedback": {
+			"types": "./dist/components/feedback/index.d.ts",
+			"svelte": "./dist/components/feedback/index.js"
 		},
 		"./*": {
 			"types": "./dist/components/ui/*/index.d.ts",
@@ -60,10 +68,13 @@
 		}
 	},
 	"dependencies": {
+		"@grafana/faro-web-sdk": "^2.11.0",
+		"@grafana/faro-web-tracing": "^2.11.0",
 		"@jsonforms/core": "^3.8.0",
 		"@lucide/svelte": "^1.25.0",
 		"@tanstack/table-core": "^8.21.3",
 		"clsx": "^2.1.1",
+		"html-to-image": "^1.11.13",
 		"tailwind-merge": "^3.6.0",
 		"tailwind-variants": "^3.2.2",
 		"tw-animate-css": "^1.4.0"
