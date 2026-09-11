@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.10.1] - 2026-09-11
+
+### Fixed
+
+- The run's shared Postgres was safe on an emergent property rather than a guarantee: the controller imports `conftest.py` before it spawns a worker, so the controller published the container and the controller stopped it. Were a worker ever the publisher — a run whose controller never imports the file — it would stop that database the moment it finished its own files, with its siblings still connected. A worker now never publishes: it reads the settings file if one is there, and otherwise keeps a container to itself, which is what every process did before sharing, and warns why. Only the publisher clears the settings file, and under the lock.
+
 ## [2026.9.10] - 2026-09-11
 
 ### Fixed
