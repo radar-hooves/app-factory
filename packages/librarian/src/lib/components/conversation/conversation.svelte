@@ -107,6 +107,25 @@
 		viewport.scrollTop = viewport.scrollHeight;
 	});
 
+	// Asking for a briefing puts its card in the transcript AND opens the
+	// artefact in the column, closing whatever document was there — a
+	// colleague who just asked for one is asking to read it, not merely to
+	// see that it exists. Fires on the RUNNING → settled transition only, so
+	// reopening a past conversation whose last turn happens to be an
+	// artefact does not reopen a pane the reader may have since closed.
+	//
+	// Plain, not `$state`: read and written in the same effect, which would
+	// otherwise re-trigger itself forever (the pattern this file's `seen`
+	// already uses for the same reason).
+	let wasRunning = false;
+	$effect(() => {
+		const last = turns.at(-1);
+		if (wasRunning && !running && last?.kind === 'artefact' && !last.outcome?.isError) {
+			column = { kind: 'artefact', turn: last };
+		}
+		wasRunning = running;
+	});
+
 	function scrolled() {
 		if (viewport) follow.measure(metrics(viewport));
 	}
