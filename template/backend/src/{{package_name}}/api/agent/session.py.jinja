@@ -106,7 +106,12 @@ def build_argv(settings: AgentSettings, persona: PersonaConfig, question: str, *
         "bypassPermissions",
     ]
     if persona.mcp_config is not None:
-        argv += ["--mcp-config", str(persona.mcp_config)]
+        # --strict-mcp-config stops the CLI walking cwd's ancestors for a
+        # second .mcp.json: without it, a persona's own file merges with
+        # whatever the household fleet happens to declare above the persona's
+        # home. Measured: a developer's system/init listed ninety fleet
+        # servers beside the persona's own two.
+        argv += ["--mcp-config", str(persona.mcp_config), "--strict-mcp-config"]
     if resume:
         argv += ["--resume", resume]
     return argv
@@ -135,6 +140,12 @@ async def ask(
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        # asyncio's own default (64 KiB) is a StreamReader buffer limit, not a
+        # CLI or protocol one: `readline()` raises `ValueError` the moment one
+        # stream-json line exceeds it, killing the turn mid-stream. Measured:
+        # a `user`/`tool_result` frame carrying 100 rows. 16 MiB because a
+        # tool result can carry a whole document.
+        limit=16 * 1024 * 1024,
     )
     assert process.stdout is not None
 

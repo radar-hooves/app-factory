@@ -32,6 +32,7 @@ from {{ package_name }}.api.agent.ownership import AgentSession
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
+from tests.support import fake_agent_cli
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
 
@@ -146,10 +147,24 @@ async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_mo
     assert "allowed=Read,Grep" in text
     assert "disallowed=Bash" in text
     assert "mcp_config=" in text and ".mcp.json" in text
+    assert "strict_mcp_config=True" in text
     assert "permission_mode=bypassPermissions" in text
     assert "thinking_off=0" in text
 
     assert any(e.get("type") == "result" for e in events)
+
+
+async def test_a_frame_over_asyncios_default_stream_limit_still_arrives_intact(client: AsyncClient) -> None:
+    """Without `ask()`'s own `limit=`, this line raises `ValueError` mid-stream and the turn just stops."""
+    response = await client.post(
+        "/api/agent/milton/ask", json={"question": fake_agent_cli.GIANT_TRIGGER}, headers=ASKER
+    )
+    events = _events(response.text)
+
+    echoed = next(e for e in events if e.get("type") == "assistant")
+    assert len(echoed["message"]["content"][0]["text"]) == fake_agent_cli.GIANT_TEXT_SIZE
+    assert any(e.get("type") == "result" for e in events)
+    assert not any(e.get("type") == "library_error" for e in events)
 
 
 async def test_the_apps_own_environment_does_not_reach_the_childs(

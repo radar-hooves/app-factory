@@ -6,6 +6,11 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- `api/agent/session.py`'s `ask()` spawned the CLI with asyncio's default 64 KiB `StreamReader` limit, so a stream-json line over it (a `tool_result` frame carrying many rows, measured) raised `ValueError: Separator is found, but chunk is longer than limit` and killed the turn mid-stream. `create_subprocess_exec` now takes `limit=16 MiB`; proven by `fake_agent_cli.py`'s new `__giant__` trigger, a 200,000-byte `assistant` frame that must now arrive as one intact SSE frame.
+- `build_argv()` passed `--mcp-config <persona .mcp.json>` with no `--strict-mcp-config`, so the CLI also merged any `.mcp.json` it found walking up from `cwd` above the persona's home — measured on a developer's machine, the persona's `system/init` listed the whole household fleet, ninety servers, beside its own two. `--strict-mcp-config` now rides beside `--mcp-config`; asserted in `test_agent_api.py`'s argv test via the fake CLI's echoed `strict_mcp_config`.
+
 ## [2026.9.12.4] - 2026-09-13
 
 ### Fixed
