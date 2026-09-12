@@ -23,7 +23,19 @@ from {{ package_name }}.config.paths import project_root
 
 
 def _default_personas_dir() -> Path:
-    """Return the default persona directory (``config/personas`` at the repo root)."""
+    """Return the default persona directory: `/app/config/personas` in the
+    container, `config/personas` at the repo root in a source checkout.
+
+    `project_root()` alone lands nowhere in a container — the package installs
+    into site-packages, several directories above where the image actually
+    unpacks `config/` — so the shipped persona directory would never be found.
+    `Path.cwd()` is the container's WORKDIR (`/app`) and a source checkout's
+    invocation directory alike, the same two-step resolution `paths.py`'s
+    `frontend_build_dir()`/`data_dir()` already use for the identical reason.
+    """
+    for candidate in (Path.cwd() / "config" / "personas", project_root() / "config" / "personas"):
+        if candidate.is_dir():
+            return candidate
     return project_root() / "config" / "personas"
 
 
