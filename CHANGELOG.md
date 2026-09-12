@@ -6,9 +6,11 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.12] - 2026-09-12
+
 ### Added
 
-- Chunk 1 of the agent console (`docs/design/agent-console.md`): the factory gains an `agent` slice. `api/agent/` — `persona.py` (loads `config/personas/<name>/`'s `CLAUDE.md`/`settings.json`/`.mcp.json`, seeds a writable home per persona under `data/agent-homes/`, derives `--allowedTools`/`--disallowedTools` from `settings.json`'s own `permissions`), `session.py` (spawns `claude -p` with `--output-format stream-json`, pointed at the seeded home via `CLAUDE_CONFIG_DIR`), `ownership.py` (an issued session id is claimed for the asker who issued it; `--resume` from anyone else is refused, the fix `library#125` measured), `ask.py` (the SSE stream, verbatim, plus the optional `app_hooks.agent_turn(persona, user, text)` redactor seam) and `router.py` (`GET /personas`, narrowed to the caller's own `agent-<name>` entitlements; `POST /{persona}/ask`). `agent_sessions` (personal-subject, not workspace-scoped). The Dockerfile's pinned Claude Code install moves into the factory's own byte-identical body. `routes/agent/[persona]` on the frontend, built from `@poodle64/librarian`'s `Conversation`/`Composer`/`Transcript`. An app with no persona directory lists no personas and renders no console. Proven by `backend/tests/test_agent_api.py` driving a real subprocess (`tests/support/fake_agent_cli.py`) through argv, env, ownership and SSE framing.
+- The `agent` slice (`docs/design/agent-console.md`, chunk 1): a stamped app offers a chat with a named persona, a `claude -p` session streamed verbatim to `routes/agent/[persona]`. A persona is `config/personas/<name>/` (`CLAUDE.md`, `settings.json`, `.mcp.json`; `<APP>_AGENT_PERSONAS_DIR` overrides, read at every spawn); tool allow and deny lists come from its `settings.json`; the door is `require_module("agent-<name>")`; a session is claimed by its asker and a foreign resume refused; the child process gets a minimal environment; `app_hooks.agent_turn` is the optional redactor seam. An app with no persona directory renders no console.
 
 ## [2026.9.11] - 2026-09-11
 
