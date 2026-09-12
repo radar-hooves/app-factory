@@ -5,7 +5,33 @@
 redacted placeholder, never the value itself.
 """
 
-from {{ package_name }}.config.sections.agent import AgentSettings
+from pathlib import Path
+
+import pytest
+
+from {{ package_name }}.config.paths import project_root
+from {{ package_name }}.config.sections.agent import AgentSettings, _default_personas_dir
+
+
+def test_the_default_personas_dir_prefers_the_cwd_over_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`project_root()` lands nowhere in a container; `Path.cwd()` is its WORKDIR.
+
+    A container ships `config/personas` at `/app/config/personas` and never at
+    wherever the installed package's `project_root()` walk lands, so the
+    default must find it via the process's cwd, exactly as
+    `frontend_build_dir()`/`data_dir()` already do.
+    """
+    (tmp_path / "config" / "personas").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert _default_personas_dir() == tmp_path / "config" / "personas"
+
+
+def test_the_default_personas_dir_falls_back_to_project_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No `config/personas` under the cwd — the source-tree layout — falls back."""
+    monkeypatch.chdir(tmp_path)
+    assert _default_personas_dir() == project_root() / "config" / "personas"
 
 
 def test_the_gateway_key_never_appears_in_a_repr_or_a_dump() -> None:
