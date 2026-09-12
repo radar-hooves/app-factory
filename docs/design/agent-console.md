@@ -4,7 +4,7 @@ Status: **design, 12/09/2026.** A stamped app offers its users a chat with a nam
 
 ## Decision
 
-**The factory gains an `agent` slice: the session spawn, the verbatim stream, session ownership, the persona contract, the door, and one console route on `@poodle64/librarian`. Everything that knows what a corpus is stays the library's.** Cost: about 1,050 lines in the factory, 540 of them the library's own files taken as they stand. Pebblestone drops about 5,700 lines by stamping it; the library keeps its 2,225.
+**The factory gains an `agent` slice: the session spawn, the verbatim stream, session ownership, the persona contract, the door, and one console route of its own built from `@poodle64/librarian`'s components. Everything that knows what a corpus is stays the library's.** Cost: about 1,050 lines in the factory: 540 lifted from the library's slice, 510 new. Pebblestone drops about 5,700 lines by stamping it; the library keeps its 2,225.
 
 Three clauses of the request are reshaped and one is refused:
 
