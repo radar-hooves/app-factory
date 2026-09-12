@@ -68,9 +68,7 @@ class AgentSession(Base, TimestampMixin):
     #: CASCADE, like `feedback_reports`: a conversation is personal-subject to
     #: whoever asked, with nothing else referencing it, so a deleted account
     #: takes its sessions with it.
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
 def claim(session: Session, session_id: str, user_id: uuid.UUID) -> None:

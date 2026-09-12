@@ -60,9 +60,7 @@ def list_personas(settings: AgentSettings) -> list[str]:
     if not settings.personas_dir.is_dir():
         return []
     return sorted(
-        child.name
-        for child in settings.personas_dir.iterdir()
-        if child.is_dir() and (child / "CLAUDE.md").is_file()
+        child.name for child in settings.personas_dir.iterdir() if child.is_dir() and (child / "CLAUDE.md").is_file()
     )
 
 
