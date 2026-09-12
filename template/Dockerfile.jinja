@@ -83,7 +83,11 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # The file is REQUIRED: delete it in an app and the COPY fails the build.
 # Debian's own security patches first: the base image rebuilds days after an
 # advisory, and the image scan gates on a HIGH the moment it is published.
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# curl and the CA bundle are the factory's own need: the Claude Code install
+# stanza below fetches over HTTPS, and the slim base ships neither.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/system-packages.txt ./backend/system-packages.txt
 RUN packages="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' ./backend/system-packages.txt | tr '\n' ' ')" \
     && if [ -n "$packages" ]; then \

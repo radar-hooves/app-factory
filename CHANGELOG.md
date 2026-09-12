@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- The factory's runtime image installs `curl` and the CA bundle itself: the Claude Code stanza fetches over HTTPS and the slim base ships neither, so a fresh stamp with an empty package list failed to build.
+
 ## [2026.9.12.3] - 2026-09-12
 
 ### Fixed
