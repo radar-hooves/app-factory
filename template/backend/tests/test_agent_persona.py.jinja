@@ -1,0 +1,79 @@
+"""Two workers seeding one persona's home at once must never race.
+
+`shutil.copy2` truncates its destination the instant it opens it, before a
+single byte of content is written, so `target.exists()` turns true well
+before the file is complete. The old `_seed()` read that as "already
+copied" and moved straight to `json.loads` on it. Reproduced deterministically
+by pausing the first thread's copy right at that instant, rather than hoping
+real OS scheduling happens to land there.
+"""
+
+import json
+import shutil
+import threading
+from pathlib import Path
+
+import pytest
+
+from {{ package_name }}.api.agent.persona import PersonaConfig, load
+from {{ package_name }}.config.sections.agent import AgentSettings
+
+
+def _write_persona(root: Path, name: str) -> None:
+    directory = root / name
+    directory.mkdir(parents=True)
+    (directory / "CLAUDE.md").write_text(f"You are {name}.")
+    (directory / "settings.json").write_text(json.dumps({"model": "goku/sonnet", "permissions": {}}))
+    (directory / ".mcp.json").write_text(json.dumps({"mcpServers": {}}))
+
+
+def test_a_concurrent_seed_of_one_persona_from_two_threads_leaves_one_intact_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    personas_dir = tmp_path / "personas"
+    _write_persona(personas_dir, "milton")
+    settings = AgentSettings(personas_dir=personas_dir)
+
+    truncated = threading.Event()
+    second_call_done = threading.Event()
+    original_copy2 = shutil.copy2
+
+    def _copy2_paused_after_truncating_settings_json(src: Path, dst: Path, *args: object, **kwargs: object) -> object:
+        if Path(dst).name == "settings.json" and not truncated.is_set():
+            Path(dst).write_bytes(b"")
+            truncated.set()
+            second_call_done.wait(timeout=5)
+        return original_copy2(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "copy2", _copy2_paused_after_truncating_settings_json)
+
+    results: list[PersonaConfig | Exception] = []
+
+    def _seed_first() -> None:
+        try:
+            results.append(load(settings, "milton"))
+        except Exception as exc:
+            results.append(exc)
+
+    def _load_second() -> None:
+        truncated.wait(timeout=5)
+        try:
+            results.append(load(settings, "milton"))
+        except Exception as exc:
+            results.append(exc)
+        finally:
+            second_call_done.set()
+
+    first = threading.Thread(target=_seed_first)
+    second = threading.Thread(target=_load_second)
+    first.start()
+    second.start()
+    first.join()
+    second.join()
+
+    assert all(isinstance(result, PersonaConfig) for result in results), results
+
+    home = tmp_path / "data" / "agent-homes" / "milton"
+    assert json.loads((home / "settings.json").read_text())["model"] == "goku/sonnet"
+    assert (home / "CLAUDE.md").read_text() == "You are milton."

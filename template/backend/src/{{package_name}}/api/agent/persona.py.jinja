@@ -13,7 +13,9 @@ become this one.
 """
 
 import json
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,6 +66,15 @@ def list_personas(settings: AgentSettings) -> list[str]:
     )
 
 
+def _copy_shipped_files(source: Path, target: Path) -> None:
+    """Copy each shipped file into `target` that is not already there."""
+    for filename in SOURCE_FILES:
+        candidate = source / filename
+        destination = target / filename
+        if candidate.is_file() and not destination.exists():
+            shutil.copy2(candidate, destination)
+
+
 def _seed(source: Path, home: Path) -> None:
     """Copy a persona's shipped files into its writable home. Only ever ADDS.
 
@@ -72,13 +83,29 @@ def _seed(source: Path, home: Path) -> None:
     discard that state on every restart — the same rule the library's
     `prepare_home` enforces on its one shared home, generalised here to each
     persona's own.
+
+    A fresh home is built in a private staging directory and renamed into
+    place, so two workers seeding the same persona at once never expose a
+    half-written `settings.json` to `load()`'s `json.loads` below: `home`
+    either does not exist yet or is already complete. Once `home` exists,
+    this falls back to add-only copying, so a persona gaining a new shipped
+    file after its home was first seeded still picks it up.
     """
-    home.mkdir(parents=True, exist_ok=True)
-    for filename in SOURCE_FILES:
-        candidate = source / filename
-        target = home / filename
-        if candidate.is_file() and not target.exists():
-            shutil.copy2(candidate, target)
+    if home.is_dir():
+        _copy_shipped_files(source, home)
+        return
+
+    home.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{home.name}.", dir=home.parent))
+    _copy_shipped_files(source, staging)
+    try:
+        os.rename(staging, home)
+    except OSError:
+        # Lost the race: another worker's `home` already exists, complete.
+        # Treat that as done rather than retrying the copy into it.
+        if not home.is_dir():
+            raise
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _tool_list(settings_json: dict[str, object], key: str) -> str:
