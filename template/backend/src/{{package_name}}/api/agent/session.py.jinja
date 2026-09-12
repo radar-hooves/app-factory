@@ -1,0 +1,171 @@
+"""Run one Claude Code session as a persona and yield its events verbatim.
+
+The whole point of this module is that it does NOT interpret the stream. A
+translation layer between Claude Code's events and some house vocabulary is
+the middleware this slice exists to delete: it rots the moment Claude Code
+adds an event type, and it makes the Console show something other than what
+the agent actually did. So every line the CLI emits on stdout is forwarded
+unchanged, and the frontend renders the real thing.
+
+`--output-format stream-json` IS the wire format, which is why this drives the
+CLI rather than the Agent SDK: the SDK hands back typed Python objects that
+would have to be re-serialised, and re-serialising is translating.
+
+Lifted from `library.api.agent.session` (radar-hooves/library) and generalised
+from one shipped home to N persona homes (`persona.py`). Two things the
+library's version needed that this one does not, both because a persona's
+`settings.json` decides them instead of a per-question prompt: there is no
+`--model` flag (Claude Code reads it from the seeded settings.json) and no
+`--append-system-prompt` (CLAUDE.md in the persona's home IS the system
+prompt — Claude Code loads it from CLAUDE_CONFIG_DIR the same way it loads a
+user's own `~/.claude/CLAUDE.md`). `--mcp-config` is new: pointed explicitly
+at the persona's own `.mcp.json` rather than left to cwd auto-discovery, so
+the servers a persona reaches do not depend on where the subprocess happens
+to run.
+"""
+
+import asyncio
+import json
+import os
+from collections.abc import AsyncIterator
+
+from {{ package_name }}.api.agent.persona import PersonaConfig
+from {{ package_name }}.config.sections.agent import AgentSettings
+
+#: The error frame's `type`. Not this app's own vocabulary — it is
+#: `@poodle64/librarian`'s wire contract: `Transcript.apply()` in the shared
+#: frontend package special-cases the literal string `library_error` to set
+#: `outcome.isError`, and nothing else recognises a failed turn. Renaming it
+#: here would compile, look correct app-side, and render nothing at all.
+ERROR_EVENT = "library_error"
+
+
+#: Named, not inherited wholesale: the app process's own environment carries
+#: this app's own secrets (the database password, the OIDC client secret,
+#: broker-vended values), and a persona whose settings.json does not deny a
+#: shell or network tool could otherwise read one out of its environment and
+#: echo it into the SSE stream. PATH so the CLI (and any shebang line it or a
+#: hook execs) resolves an interpreter the ordinary way; LANG/LC_ALL/TERM for
+#: encoding and terminal detection; CLAUDE_CODE_OAUTH_TOKEN because it is the
+#: credential this slice authenticates the CLI with (`config/sections/agent.py`
+#: — vended onto the app process, never minted here).
+_INHERITED_IF_SET = ("PATH", "LANG", "LC_ALL", "TERM", "CLAUDE_CODE_OAUTH_TOKEN")
+
+
+def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, str]:
+    """The subprocess environment, built from scratch rather than inherited.
+
+    Unlike the library's version, `CLAUDE_CONFIG_DIR` is never absent — a
+    persona's whole point is its own isolated home, so it is always pointed
+    at that home rather than left to inherit an ambient login. `HOME` is
+    pointed there too, rather than at this process's own, for the same
+    reason.
+    """
+    env: dict[str, str] = {"HOME": str(persona.home), "CLAUDE_CONFIG_DIR": str(persona.home)}
+    for name in _INHERITED_IF_SET:
+        if name in os.environ:
+            env[name] = os.environ[name]
+
+    if not settings.thinking:
+        env["MAX_THINKING_TOKENS"] = "0"
+
+    if settings.gateway_key:
+        env["ANTHROPIC_BASE_URL"] = settings.gateway_url
+        env["ANTHROPIC_AUTH_TOKEN"] = settings.gateway_key
+        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = settings.haiku_model
+        # No auto-update, telemetry, or availability checks: a container that
+        # reaches past its gateway on start is one more thing to diagnose.
+        env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+
+    return env
+
+
+def build_argv(settings: AgentSettings, persona: PersonaConfig, question: str, *, resume: str | None) -> list[str]:
+    """The exact command line. Split out so a test can assert it without a subprocess."""
+    argv = [
+        settings.executable,
+        "-p",
+        question,
+        "--output-format",
+        "stream-json",
+        # --verbose is REQUIRED for stream-json to emit anything but the final
+        # result; without it the endpoint streams one frame at the very end and
+        # looks like a hang.
+        "--verbose",
+        # Token-level deltas. Without this, `assistant` events arrive as whole
+        # blocks and the Console renders in paragraph-sized jumps rather than
+        # streaming the way the editor does.
+        "--include-partial-messages",
+        "--allowedTools",
+        persona.allowed_tools,
+        "--disallowedTools",
+        persona.disallowed_tools,
+        "--effort",
+        settings.effort,
+        "--permission-mode",
+        "bypassPermissions",
+    ]
+    if persona.mcp_config is not None:
+        argv += ["--mcp-config", str(persona.mcp_config)]
+    if resume:
+        argv += ["--resume", resume]
+    return argv
+
+
+async def ask(
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    question: str,
+    *,
+    resume: str | None = None,
+) -> AsyncIterator[dict[str, object]]:
+    """Yield each event the session emits, in order, unaltered.
+
+    One synthetic event is added, and it is clearly the transport's own: an
+    `ERROR_EVENT` frame if the process cannot start or dies badly. Claude
+    Code's own `result` event terminates a healthy stream.
+    """
+    process = await asyncio.create_subprocess_exec(
+        *build_argv(settings, persona, question, resume=resume),
+        cwd=str(persona.home),
+        # DEVNULL, not inherited. `claude -p` READS stdin and folds it into the
+        # prompt, so an inherited descriptor makes the agent answer about
+        # whatever the parent had on it rather than the question.
+        env=_environment(settings, persona),
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout is not None
+
+    try:
+        while True:
+            try:
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=settings.timeout_seconds)
+            except TimeoutError:
+                process.kill()
+                yield {"type": ERROR_EVENT, "error": "agent exceeded its wall clock"}
+                return
+            if not line:
+                break
+            text = line.decode(errors="replace").strip()
+            if not text.startswith("{"):
+                # The CLI writes non-JSON diagnostics to stdout on some paths.
+                # Dropping them keeps the contract "every frame is an event".
+                continue
+            try:
+                yield json.loads(text)
+            except json.JSONDecodeError:
+                continue
+    finally:
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+
+    if process.returncode not in (0, None):
+        stderr = (await process.stderr.read()).decode(errors="replace") if process.stderr else ""
+        yield {
+            "type": ERROR_EVENT,
+            "error": f"agent exited {process.returncode}",
+            "detail": stderr[-2000:],
+        }

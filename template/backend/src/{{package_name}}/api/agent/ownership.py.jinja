@@ -1,0 +1,99 @@
+"""Who may resume an agent session — measured, not assumed.
+
+Lifted from `library.api.agent.ownership` (radar-hooves/library), which
+carries the measurement this control is built on: `--resume <session_id>`
+passed straight through with no check that the session belonged to the
+identity presenting it (library#125). Driven against the deployed library
+(2026.9.6) rather than assumed from Claude Code's source:
+
+| arm                                                    | result |
+| ------------------------------------------------------- | ------ |
+| asker A states a question in a session                  | answers, `session_id` issued |
+| asker B (a different identity) resumes it                | **returns A's answer verbatim** |
+
+So `--resume` resolves a session id with no ownership check of its own — the
+CONVERSATION crosses whoever presents the id. This module is the fix: an
+ownership record for issued session ids, checked BEFORE the subprocess is
+built.
+
+`user_id` is the local `users.id` FK directly, not the string-prefixed
+`person:<uid>`/`caller:<id>` key the library's version carries — this slice
+has no machine caller yet (that is the library's own `/api/caller/ask`, out
+of scope here), so there is exactly one identity space, and
+`db/registry.py`'s personal-subject exemption for this table needs a real
+NOT NULL `user_id` column to enforce, not an opaque string it cannot check.
+
+## Fails closed, including on what already exists
+
+A session id with no row is refused exactly as another owner's is: one answer
+covers "not yours" and "never issued", because telling them apart is itself a
+disclosure.
+
+## What this does NOT claim
+
+- **Revocation stays non-retroactive.** A resumed transcript carries what that
+  session was already told; narrowing an asker's access afterwards does not
+  retract it. What it now cannot do is carry it to somebody else.
+- **A resume re-emitting the ORIGINAL id is a live property of Claude Code**,
+  not something this module enforces — `claim`'s never-overwrite rule is what
+  makes either direction safe: were a future CLI to mint a fresh id on resume,
+  the effect is a second row per conversation; were it to reuse one across
+  conversations, the later owner is refused.
+"""
+
+import uuid
+
+from sqlalchemy import ForeignKey, String, select
+from sqlalchemy.orm import Mapped, Session, mapped_column
+
+from {{ package_name }}.db.base import Base, TimestampMixin
+
+#: What the ask endpoint says when a resume is refused. Deliberately the same
+#: words whether the session belongs to someone else or has never existed —
+#: and they name the next step, because the reader who meets this most often
+#: holds a session id from before this control existed.
+DENIAL = "that session is not one you can continue; ask again without it to start a new conversation"
+
+
+class AgentSession(Base, TimestampMixin):
+    """One issued agent session and the user it was issued to."""
+
+    __tablename__ = "agent_sessions"
+
+    #: Claude Code's own id, taken verbatim from the `system`/`init` event. A
+    #: string rather than a UUID column: the format is the CLI's to change, and
+    #: a type that rejects a future one would refuse the session rather than
+    #: record it.
+    session_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    #: CASCADE, like `feedback_reports`: a conversation is personal-subject to
+    #: whoever asked, with nothing else referencing it, so a deleted account
+    #: takes its sessions with it.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+
+def claim(session: Session, session_id: str, user_id: uuid.UUID) -> None:
+    """Record who a newly issued session belongs to, if it is not already claimed.
+
+    Never overwrites. A resume re-emits the ORIGINAL session id in its own
+    `init` event, which is not an upsert: an owner who passed the check below
+    would otherwise re-stamp the row on every turn, and a bug that let anyone
+    else through would silently transfer ownership to them.
+
+    Commits its own write. The ask endpoint hands the id to the client in the
+    same stream, so a row that waited for the request's own commit would be
+    claimable in the window between the frame and the end of the response.
+    """
+    if session.get(AgentSession, session_id) is not None:
+        return
+    session.add(AgentSession(session_id=session_id, user_id=user_id))
+    session.commit()
+
+
+def may_resume(session: Session, session_id: str, user_id: uuid.UUID) -> bool:
+    """Whether `user_id` issued `session_id`. Unknown ids are refused, not trusted."""
+    found = session.execute(
+        select(AgentSession.user_id).where(AgentSession.session_id == session_id)
+    ).scalar_one_or_none()
+    return found is not None and found == user_id

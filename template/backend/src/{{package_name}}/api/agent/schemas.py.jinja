@@ -1,0 +1,19 @@
+"""Request shape for asking a persona.
+
+There is deliberately no response model for the stream. An SSE frame here
+carries a Claude Code event, whose schema is Claude Code's own and changes
+when it changes. Declaring a Pydantic model for it would be this slice
+re-asserting ownership of a vocabulary it has none over, and would make every
+new event type a validation error rather than something the Console renders.
+"""
+
+from pydantic import BaseModel, Field
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=8000)
+    #: A prior session's id, from the `system`/`init` event. Continues that
+    #: conversation with its context intact rather than starting fresh. Must be
+    #: a session THIS asker was issued — `api/agent/ownership.py` carries the
+    #: measurement of what an unbound one returned.
+    resume: str | None = None

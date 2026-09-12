@@ -1,0 +1,249 @@
+"""The agent slice, driven end to end through a REAL subprocess.
+
+Every other slice test in this suite monkeypatches past the boundary it is
+proving; this one deliberately does not. `AgentSettings.executable` is
+pointed at `tests/support/fake_agent_cli.py`, a standalone script with its
+own shebang, so `session.py` spawns a genuine child process exactly as it
+would spawn `claude` — which is what lets this suite assert on the actual
+argv and environment session.py builds (persona.py's derived
+`--allowedTools`/`--disallowedTools`, `--mcp-config`, `MAX_THINKING_TOKENS`,
+the model read off the seeded `CLAUDE_CONFIG_DIR/settings.json`) rather than
+on a mock standing in for the claim that those are what get passed.
+
+`docs/design/agent-console.md` names this the chunk-1 proof: "one test
+driving a fake CLI through argv, env, ownership and SSE framing."
+"""
+
+import json
+import os
+import stat
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from {{ package_name }} import app_hooks
+from {{ package_name }}.api.agent import ownership
+from {{ package_name }}.api.agent.ownership import AgentSession
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.config import Settings, get_settings
+from {{ package_name }}.config.sections.agent import AgentSettings
+
+FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
+
+ASKER = {"x-authentik-uid": "asker-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-milton"}
+OTHER = {"x-authentik-uid": "asker-2", "x-authentik-username": "other", "x-authentik-entitlements": "agent-milton"}
+UNENTITLED = {"x-authentik-uid": "asker-3", "x-authentik-username": "bystander"}
+
+
+def _write_persona(root: Path, name: str, *, model: str = "goku/sonnet") -> Path:
+    """A minimal persona directory: CLAUDE.md, settings.json, .mcp.json."""
+    directory = root / name
+    directory.mkdir(parents=True)
+    (directory / "CLAUDE.md").write_text(f"You are {name}.")
+    (directory / "settings.json").write_text(
+        json.dumps({"model": model, "permissions": {"allow": ["Read", "Grep"], "deny": ["Bash"]}})
+    )
+    (directory / ".mcp.json").write_text(json.dumps({"mcpServers": {}}))
+    return directory
+
+
+@pytest.fixture
+def personas_dir(tmp_path: Path) -> Path:
+    root = tmp_path / "personas"
+    _write_persona(root, "milton")
+    return root
+
+
+@pytest.fixture(autouse=True)
+def _agent_settings(app: FastAPI, personas_dir: Path) -> Iterator[None]:
+    """Point the agent slice at a throwaway persona directory and the fake CLI.
+
+    `os.chmod` runs even though the file is already committed executable:
+    a checkout step (copier, a zip export) is not guaranteed to carry the bit,
+    and a subprocess spawned from a non-executable path fails with `PermissionError`
+    rather than anything this suite could mistake for a real assertion failure.
+    """
+    os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    configured: Settings = get_settings().model_copy(
+        update={"agent": AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)}
+    )
+    app.dependency_overrides[get_settings] = lambda: configured
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+def _events(body: str) -> list[dict[str, object]]:
+    """Parse an SSE response body back into its JSON frames."""
+    frames = []
+    for block in body.split("\n\n"):
+        for line in block.splitlines():
+            if line.startswith("data: "):
+                frames.append(json.loads(line.removeprefix("data: ")))
+    return frames
+
+
+def _row(session: Session, session_id: str) -> AgentSession | None:
+    return session.execute(select(AgentSession).where(AgentSession.session_id == session_id)).scalar_one_or_none()
+
+
+# ── The door ──────────────────────────────────────────────────────────────
+
+
+async def test_an_unentitled_caller_cannot_ask(client: AsyncClient) -> None:
+    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=UNENTITLED)
+    assert response.status_code == 403
+
+
+async def test_a_persona_with_no_directory_answers_not_found(client: AsyncClient) -> None:
+    headers = {**ASKER, "x-authentik-entitlements": "agent-nobody"}
+    response = await client.post("/api/agent/nobody/ask", json={"question": "hi"}, headers=headers)
+    assert response.status_code == 404
+
+
+async def test_the_persona_list_is_narrowed_to_the_callers_own_entitlements(client: AsyncClient) -> None:
+    entitled = await client.get("/api/agent/personas", headers=ASKER)
+    assert entitled.json() == ["milton"]
+
+    bystander = await client.get("/api/agent/personas", headers=UNENTITLED)
+    assert bystander.json() == []
+
+
+async def test_an_app_with_no_persona_directory_lists_none(
+    client: AsyncClient, app: FastAPI, tmp_path: Path
+) -> None:
+    # Overrides the autouse fixture's own override for this one request; its
+    # teardown pops whichever override is current, so nothing needs undoing here.
+    empty: Settings = get_settings().model_copy(
+        update={"agent": AgentSettings(personas_dir=tmp_path / "no-such-dir", executable=str(FAKE_CLI))}
+    )
+    app.dependency_overrides[get_settings] = lambda: empty
+
+    response = await client.get("/api/agent/personas", headers=ASKER)
+    assert response.json() == []
+
+
+# ── argv, env, and the SSE frames ────────────────────────────────────────
+
+
+async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_model(
+    client: AsyncClient,
+) -> None:
+    response = await client.post("/api/agent/milton/ask", json={"question": "what is recreation leave?"}, headers=ASKER)
+    assert response.status_code == 200
+
+    events = _events(response.text)
+    init = next(e for e in events if e.get("subtype") == "init")
+    assert isinstance(init["session_id"], str) and init["session_id"]
+
+    echoed = next(e for e in events if e.get("type") == "assistant")
+    text = echoed["message"]["content"][0]["text"]
+    assert "question=what is recreation leave?" in text
+    assert "model=goku/sonnet" in text
+    assert "allowed=Read,Grep" in text
+    assert "disallowed=Bash" in text
+    assert "mcp_config=" in text and ".mcp.json" in text
+    assert "permission_mode=bypassPermissions" in text
+    assert "thinking_off=0" in text
+
+    assert any(e.get("type") == "result" for e in events)
+
+
+async def test_the_apps_own_environment_does_not_reach_the_childs(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A persona with no shell/network denial must not read this app's own secrets off its environment."""
+    monkeypatch.setenv("AGENT_TEST_MARKER", "a-value-that-must-not-reach-the-child")
+    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
+    assert "marker=absent" in echoed["message"]["content"][0]["text"]
+
+
+async def test_a_crashing_cli_becomes_one_library_error_frame(client: AsyncClient) -> None:
+    """session.py's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
+    response = await client.post("/api/agent/milton/ask", json={"question": "__crash__"}, headers=ASKER)
+    events = _events(response.text)
+    assert len(events) == 1
+    assert events[0]["type"] == "library_error"
+    assert events[0]["error"] == "agent exited 3"
+
+
+async def test_the_issued_session_is_claimed_for_the_asker(client: AsyncClient, session: Session) -> None:
+    response = await client.post("/api/agent/milton/ask", json={"question": "hello"}, headers=ASKER)
+    session_id = next(e for e in _events(response.text) if e.get("subtype") == "init")["session_id"]
+
+    # user_id is the local user's UUID primary key `get_identity` upserted for
+    # `asker-1`, not the raw Authentik uid — so it is read back off the same
+    # table rather than assumed.
+    asker = session.execute(select(User).where(User.authentik_uid == "asker-1")).scalar_one()
+    row = _row(session, str(session_id))
+    assert row is not None
+    assert row.user_id == asker.id
+
+
+async def test_the_owner_may_resume_their_own_session(client: AsyncClient) -> None:
+    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
+    session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
+
+    resumed = await client.post(
+        "/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=ASKER
+    )
+    events = _events(resumed.text)
+    init = next(e for e in events if e.get("subtype") == "init")
+    # The real CLI re-emits the ORIGINAL id on resume (`ownership.py`'s own
+    # measurement); the fake CLI mirrors that so this assertion is genuine.
+    assert init["session_id"] == session_id
+    assert not any(e.get("type") == "library_error" for e in events)
+
+
+async def test_a_different_caller_cannot_resume_someone_elses_session(client: AsyncClient) -> None:
+    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
+    session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
+
+    refused = await client.post(
+        "/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=OTHER
+    )
+    events = _events(refused.text)
+    assert events == [{"type": "library_error", "error": ownership.DENIAL}]
+
+
+async def test_an_unknown_session_id_is_refused_the_same_way_as_a_foreign_one(client: AsyncClient) -> None:
+    refused = await client.post(
+        "/api/agent/milton/ask", json={"question": "hi", "resume": "never-issued"}, headers=ASKER
+    )
+    events = _events(refused.text)
+    assert events == [{"type": "library_error", "error": ownership.DENIAL}]
+
+
+# ── The optional redactor hook ───────────────────────────────────────────
+
+
+async def test_the_question_is_unredacted_when_the_app_defines_no_hook(client: AsyncClient) -> None:
+    assert not hasattr(app_hooks, "agent_turn")
+    response = await client.post("/api/agent/milton/ask", json={"question": "raw text"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
+    assert "question=raw text" in echoed["message"]["content"][0]["text"]
+
+
+async def test_a_defined_hook_runs_on_the_question_before_the_cli_sees_it(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, session: Session
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def _fake_hook(persona: str, user: str, text: str) -> str:
+        calls.append((persona, user, text))
+        return text.replace("secret", "[redacted]")
+
+    monkeypatch.setattr(app_hooks, "agent_turn", _fake_hook, raising=False)
+
+    response = await client.post("/api/agent/milton/ask", json={"question": "my secret plan"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
+
+    asker = session.execute(select(User).where(User.authentik_uid == "asker-1")).scalar_one()
+    assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
+    assert calls == [("milton", str(asker.id), "my secret plan")]
