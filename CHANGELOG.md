@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.12.3] - 2026-09-12
+
+### Fixed
+
+- `config/sections/agent.py`'s `gateway_key` was a plain `str`, so a `repr()` or a `model_dump()` of `AgentSettings` echoed the gateway credential in full — a consumer's review caught it. Now a `SecretStr`; `session.py`'s `_environment()` reads it with `.get_secret_value()` at its one crossing into the child process.
+- `api/agent/persona.py`'s `_seed()` `mkdir`'d a persona's home before copying its files into it, so two workers seeding the same fresh persona at once could both see that home and one could read a `settings.json` the other had not finished writing — `shutil.copy2` truncates its destination the instant it opens it, so `json.loads` in `load()` could hit an empty file and raise an unhandled `JSONDecodeError`. A fresh home is now built in a private staging directory and renamed into place, so it is either absent or complete; an already-seeded home keeps the old add-only behaviour, so a persona gaining a newly-shipped file still picks it up.
+
 ## [2026.9.12.2] - 2026-09-12
 
 ### Fixed
