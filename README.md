@@ -32,6 +32,7 @@ Written for the next agent working here, not for onboarding.
 | --- | --- |
 | [Working on this template](docs/development/working-on-the-template.md) | **Read before editing `template/`.** The two disciplines that fail silently — untagged changes reach nothing, stale parity manifests measure against an old factory — plus the traps in the shape itself. |
 | [Adopting an existing app](docs/development/adopting-an-existing-app.md) | Stamping over a repo that already has an app: the reconcile after the stamp is the job, not the stamp. |
+| [Agent console](docs/design/agent-console.md) | Design: the persona chat slice the factory carries, what stays the library's, the persona contract, and the sequence by which the library and Pebblestone take it. |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
 
 Deliberately not documented here: the file tree, the copier questions and the dependency list. All three are readable from the repo, and a transcription of them is wrong from the first commit that touches anything.
