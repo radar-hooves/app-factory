@@ -64,6 +64,9 @@ def main() -> None:
             f"effort={_flag(argv, '--effort')}",
             f"permission_mode={_flag(argv, '--permission-mode')}",
             f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
+            # Present only if session.py leaked the parent's own environment
+            # through rather than building the child's from scratch.
+            f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
         ]
     )
 

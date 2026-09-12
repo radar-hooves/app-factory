@@ -154,6 +154,16 @@ async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_mo
     assert any(e.get("type") == "result" for e in events)
 
 
+async def test_the_apps_own_environment_does_not_reach_the_childs(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A persona with no shell/network denial must not read this app's own secrets off its environment."""
+    monkeypatch.setenv("AGENT_TEST_MARKER", "a-value-that-must-not-reach-the-child")
+    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
+    assert "marker=absent" in echoed["message"]["content"][0]["text"]
+
+
 async def test_a_crashing_cli_becomes_one_library_error_frame(client: AsyncClient) -> None:
     """session.py's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
     response = await client.post("/api/agent/milton/ask", json={"question": "__crash__"}, headers=ASKER)
