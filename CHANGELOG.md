@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.12.4] - 2026-09-13
+
 ### Fixed
 
 - `config/sections/agent.py`'s `_default_personas_dir()` resolved from `project_root()` alone, which lands nowhere in a container — the package installs into site-packages, well above where the image unpacks `config/` — so a deployment that leaves `<APP>_AGENT_PERSONAS_DIR` unset finds no persona directory at all, however many the image ships. Same class as `mcp.py`'s actor-registry default (pebblestone 499dd462), masked there only because the Dockerfile sets `<APP>_ACTORS_CONFIG_PATH` explicitly; nothing sets the agent equivalent. Now checks `Path.cwd()` first, the container's WORKDIR, matching `paths.py`'s own `frontend_build_dir()`/`data_dir()`.
