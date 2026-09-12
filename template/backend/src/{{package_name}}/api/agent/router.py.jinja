@@ -1,0 +1,45 @@
+"""The agent slice: list personas, and ask one.
+
+`POST /{persona}/ask` is gated on a per-persona module entitlement
+(`agent-<persona>`) rather than a router-level dependency, because the module
+name is not known until the path parameter is: `require_module` is called
+directly as the plain function it already is, inside the route, instead of
+through `Depends()` (`entitlements.py`'s own factory shape covers both).
+"""
+
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
+from {{ package_name }}.api.agent import ask as ask_module
+from {{ package_name }}.api.agent import persona as persona_module
+from {{ package_name }}.api.agent.schemas import AskRequest
+from {{ package_name }}.deps import CurrentIdentity, SessionDep, SettingsDep
+from {{ package_name }}.entitlements import has_module, require_module
+
+router = APIRouter()
+
+
+@router.get("/personas", operation_id="listAgentPersonas")
+async def personas(identity: CurrentIdentity, settings: SettingsDep) -> list[str]:
+    """Personas this deployment carries AND this caller is entitled to ask.
+
+    An app with no persona directory returns an empty list here, which is
+    what tells the Console to render nothing rather than a chat that fails on
+    the first question.
+    """
+    names = persona_module.list_personas(settings.agent)
+    return [name for name in names if has_module(identity.entitlements, f"agent-{name}")]
+
+
+@router.post("/{persona}/ask", operation_id="askAgent")
+async def ask(
+    persona: str, db: SessionDep, identity: CurrentIdentity, settings: SettingsDep, request: AskRequest
+) -> StreamingResponse:
+    """Ask `persona`, bounded by the caller's own entitlement for it.
+
+    Raises:
+        NotFoundError: `persona` names no directory under `config/personas/`.
+    """
+    require_module(f"agent-{persona}")(identity)
+    config = persona_module.load(settings.agent, persona)
+    return ask_module.stream(db, settings.agent, config, request, user_id=identity.user.id)

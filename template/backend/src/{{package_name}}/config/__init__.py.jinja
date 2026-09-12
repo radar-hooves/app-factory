@@ -16,6 +16,7 @@ from pathlib import Path
 from pydantic import Field, ValidationError, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.feedback import FeedbackSettings
@@ -87,6 +88,10 @@ class Settings(BaseSettings):
     # defaults or to .env, and a container configured entirely by environment
     # silently runs on localhost. Init arguments outrank every source, so the
     # section's own resolution (env, then .env, then default) is what stands.
+    # Where this deployment's personas live and what their sessions inherit
+    # (api/agent/). Every field has a safe default, so a fresh stamp with no
+    # persona directory boots and its console renders empty.
+    agent: AgentSettings = Field(default_factory=AgentSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     example: ExampleSettings = Field(default_factory=ExampleSettings)
     # Where a reported feedback issue is filed. Empty repo disables filing.

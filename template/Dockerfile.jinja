@@ -149,6 +149,25 @@ EXPOSE {{ backend_port }}
 
 CMD ["./backend/entrypoint.sh"]
 
+# Claude Code, the engine the agent slice drives (api/agent/session.py spawns
+# `claude -p` per persona per question). Installed with the vendor's native
+# installer under the runtime user's own home, because this runs after USER
+# and uid 1000 owns ~/.local. The signed apt repo would be better supply
+# chain, but adding an apt source is a change ABOVE the marker below and so a
+# parity exception; a pinned installer here keeps the factory's copy
+# byte-identical, which is the trade taken.
+#
+# The version is PINNED and the autoupdater disabled, together: an image whose
+# binary rewrites itself at runtime is not the image that was tested, and a
+# container that reaches the network on start is one more thing to diagnose.
+# Bump this line deliberately, the same as any other dependency.
+ENV DISABLE_AUTOUPDATER=1
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+RUN curl -fsSL -o /tmp/install-claude.sh https://claude.ai/install.sh \
+    && bash /tmp/install-claude.sh 2.1.257 \
+    && rm -f /tmp/install-claude.sh \
+    && claude --version
+
 # A Dockerfile has no include directive, so app image content takes the same
 # terminal extension point `.gitignore` does: everything above this marker is
 # owed byte-identical, and an app appends its own COPY/ENV below it with a

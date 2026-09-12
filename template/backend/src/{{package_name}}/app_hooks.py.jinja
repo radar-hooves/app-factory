@@ -28,6 +28,10 @@ none of them behaves exactly as it does today.
   - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
     after every worker is dead, for an app supervising a child process or a
     process-local session a worker must not end.
+  - `agent_turn(persona: str, user: str, text: str) -> str` — `api/agent/ask.py`
+    runs a persona's incoming question through this before spawning the CLI,
+    for an app that must redact what reaches the model and the logs beneath
+    it. Absent by default: the factory's own agent slice redacts nothing.
 """
 
 from collections.abc import AsyncGenerator
