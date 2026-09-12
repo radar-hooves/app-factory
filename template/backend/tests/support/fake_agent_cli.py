@@ -17,12 +17,18 @@ argv and env by reading the stream rather than a side channel, and one
 `--resume <id>` re-emits that SAME id — the real CLI's own behaviour
 `ownership.py`'s docstring measures and is built on — so a resumed turn
 claims no new row.
+
+A question of exactly `__crash__` exits 3 having printed nothing, so the
+suite can also drive session.py's OWN synthetic error frame (a CLI that dies
+badly) rather than only the happy path.
 """
 
 import json
 import os
 import sys
 import uuid
+
+CRASH_TRIGGER = "__crash__"
 
 
 def _emit(event: dict[str, object]) -> None:
@@ -36,6 +42,8 @@ def _flag(argv: list[str], name: str) -> str | None:
 def main() -> None:
     argv = sys.argv[1:]
     question = _flag(argv, "-p") or ""
+    if question == CRASH_TRIGGER:
+        sys.exit(3)
     resume = _flag(argv, "--resume")
     session_id = resume or f"fake-{uuid.uuid4().hex[:12]}"
 
