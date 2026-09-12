@@ -44,9 +44,7 @@ class FeedbackReport(Base, TimestampMixin):
     # CASCADE, unlike WorkspaceScoped's attribution columns — a report is
     # personal data about the reporter, with no other row referencing it, so a
     # deleted user's reports go with them rather than surviving ownerless.
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     route: Mapped[str] = mapped_column(String(2048), nullable=False)
     user_agent: Mapped[str] = mapped_column(String(512), nullable=False)

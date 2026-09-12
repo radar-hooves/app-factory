@@ -28,8 +28,7 @@ from {{ package_name }}.config.sections.feedback import FeedbackSettings
 
 # A minimal 1x1 transparent PNG, for the screenshot round trip.
 _PNG_DATA_URL = (
-    "data:image/png;base64,"
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
 
@@ -70,14 +69,16 @@ def _reuse_test_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> No
     See the module docstring: without this, `file_issue` opens a real second
     connection that can never see this test's uncommitted work.
     """
-    monkeypatch.setattr(service, "get_session_factory", lambda: (lambda: _ReuseSession(session)))
+    monkeypatch.setattr(service, "get_session_factory", lambda: lambda: _ReuseSession(session))
 
 
 @pytest.fixture
 def filing_enabled(app: FastAPI) -> Iterator[None]:
     """Override `get_settings` so filing is configured, cleaned up afterwards."""
     configured: Settings = get_settings().model_copy(
-        update={"feedback": FeedbackSettings(github_repo="acme/reports", github_token_credential="github-feedback-test")}
+        update={
+            "feedback": FeedbackSettings(github_repo="acme/reports", github_token_credential="github-feedback-test")
+        }
     )
     app.dependency_overrides[get_settings] = lambda: configured
     yield

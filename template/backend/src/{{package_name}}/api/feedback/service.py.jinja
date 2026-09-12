@@ -171,9 +171,7 @@ def file_issue(*, report_id: int, settings: Settings) -> None:
 
         try:
             token = vend(settings.feedback.github_token_credential, "token")
-            issue_url = _file_github_issue(
-                repo=settings.feedback.github_repo, token=token, title=title, body=body
-            )
+            issue_url = _file_github_issue(repo=settings.feedback.github_repo, token=token, title=title, body=body)
         except (VendError, httpx.HTTPError) as exc:
             logger.warning("Could not file feedback %d as a GitHub issue: %s", report_id, exc)
             report.error = str(exc)

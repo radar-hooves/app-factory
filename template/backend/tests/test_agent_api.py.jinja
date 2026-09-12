@@ -114,9 +114,7 @@ async def test_the_persona_list_is_narrowed_to_the_callers_own_entitlements(clie
     assert bystander.json() == []
 
 
-async def test_an_app_with_no_persona_directory_lists_none(
-    client: AsyncClient, app: FastAPI, tmp_path: Path
-) -> None:
+async def test_an_app_with_no_persona_directory_lists_none(client: AsyncClient, app: FastAPI, tmp_path: Path) -> None:
     # Overrides the autouse fixture's own override for this one request; its
     # teardown pops whichever override is current, so nothing needs undoing here.
     empty: Settings = get_settings().model_copy(
@@ -190,9 +188,7 @@ async def test_the_owner_may_resume_their_own_session(client: AsyncClient) -> No
     first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
     session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
 
-    resumed = await client.post(
-        "/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=ASKER
-    )
+    resumed = await client.post("/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=ASKER)
     events = _events(resumed.text)
     init = next(e for e in events if e.get("subtype") == "init")
     # The real CLI re-emits the ORIGINAL id on resume (`ownership.py`'s own
@@ -205,9 +201,7 @@ async def test_a_different_caller_cannot_resume_someone_elses_session(client: As
     first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
     session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
 
-    refused = await client.post(
-        "/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=OTHER
-    )
+    refused = await client.post("/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=OTHER)
     events = _events(refused.text)
     assert events == [{"type": "library_error", "error": ownership.DENIAL}]
 
