@@ -16,6 +16,7 @@ not this one's.
 
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.paths import project_root
@@ -49,7 +50,7 @@ class AgentSettings(BaseSettings):
     # this factory names no household gateway, because a stamped app has no
     # standing opinion on one.
     gateway_url: str = ""
-    gateway_key: str = ""
+    gateway_key: SecretStr = SecretStr("")
 
     # Claude Code runs a small model for background work as well as the one
     # answering. Through a gateway it can only be a model the gateway serves,

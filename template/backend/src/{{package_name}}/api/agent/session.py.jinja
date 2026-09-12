@@ -69,9 +69,9 @@ def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, s
     if not settings.thinking:
         env["MAX_THINKING_TOKENS"] = "0"
 
-    if settings.gateway_key:
+    if settings.gateway_key.get_secret_value():
         env["ANTHROPIC_BASE_URL"] = settings.gateway_url
-        env["ANTHROPIC_AUTH_TOKEN"] = settings.gateway_key
+        env["ANTHROPIC_AUTH_TOKEN"] = settings.gateway_key.get_secret_value()
         env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = settings.haiku_model
         # No auto-update, telemetry, or availability checks: a container that
         # reaches past its gateway on start is one more thing to diagnose.

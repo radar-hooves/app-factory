@@ -1,0 +1,20 @@
+"""The gateway credential never leaks through a repr or a dump.
+
+`gateway_key` crosses into the child process at exactly one call site
+(`session.py`'s `_environment()`); everywhere else it must read back as a
+redacted placeholder, never the value itself.
+"""
+
+from {{ package_name }}.config.sections.agent import AgentSettings
+
+
+def test_the_gateway_key_never_appears_in_a_repr_or_a_dump() -> None:
+    settings = AgentSettings(gateway_key="not-a-real-token")
+    assert "not-a-real-token" not in repr(settings)
+    assert "not-a-real-token" not in str(settings.model_dump())
+    assert "not-a-real-token" not in str(settings.model_dump(mode="json"))
+
+
+def test_the_real_value_is_still_reachable_for_the_child_process() -> None:
+    settings = AgentSettings(gateway_key="not-a-real-token")
+    assert settings.gateway_key.get_secret_value() == "not-a-real-token"
