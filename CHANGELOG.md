@@ -10,6 +10,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ### Fixed
 
+- The runtime image applies Debian's security patches before installing packages, so a fresh HIGH in the base no longer fails every app's image scan until the base rebuilds.
+
 - The same ruff-format instability as 2026.9.12.1, in the three files a whole-tree render + `ruff format --check` sweep found afterwards: `api/feedback/models.py`, `api/feedback/service.py`, `tests/test_feedback_api.py`. `tests/test_agent_api.py` had the same class in three more places the first pass missed.
 
 ## [2026.9.12.1] - 2026-09-12
