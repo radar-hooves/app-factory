@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.12.1] - 2026-09-12
+
+### Fixed
+
+- `api/agent/ownership.py` and `persona.py` (the `agent` slice, 2026.9.12) each wrapped a call across three lines with no magic trailing comma and well inside the 120-column floor, so a consuming app's own `ruff format` collapsed each to one line the moment the file landed, permanently failing that app's own template-parity check on two files it never touched. Joined here so a fresh render is already what the pinned ruff floor (>=0.15.16) produces.
+
 ## [2026.9.12] - 2026-09-12
 
 ### Added
