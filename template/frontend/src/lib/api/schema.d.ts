@@ -216,6 +216,123 @@ export interface paths {
         patch: operations["adminUpdateUser"];
         trace?: never;
     };
+    "/api/feedback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Feedback
+         * @description Record a report and file it as a GitHub issue in the background.
+         *
+         *     The row is created and committed before filing starts, so a slow or failed
+         *     GitHub call never turns into a 5xx for the person who just reported a
+         *     problem — `service.file_issue` records the outcome on the row instead.
+         */
+        post: operations["createFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feedback/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Feedback
+         * @description Return one feedback report. Admin only.
+         *
+         *     Raises:
+         *         NotFoundError: no such report exists.
+         */
+        get: operations["getFeedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feedback/{report_id}/screenshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Feedback Screenshot
+         * @description Return the screenshot PNG bytes captured with this report.
+         *
+         *     Raises:
+         *         NotFoundError: no such report exists, or it carries no screenshot.
+         */
+        get: operations["getFeedbackScreenshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Personas
+         * @description Personas this deployment carries AND this caller is entitled to ask.
+         *
+         *     An app with no persona directory returns an empty list here, which is
+         *     what tells the Console to render nothing rather than a chat that fails on
+         *     the first question.
+         */
+        get: operations["listAgentPersonas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Ask `persona`, bounded by the caller's own entitlement for it.
+         *
+         *     Raises:
+         *         NotFoundError: `persona` names no directory under `config/personas/`.
+         */
+        post: operations["askAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/example/": {
         parameters: {
             query?: never;
@@ -379,6 +496,13 @@ export interface components {
             /** Is Active */
             is_active: boolean;
         };
+        /** AskRequest */
+        AskRequest: {
+            /** Question */
+            question: string;
+            /** Resume */
+            resume?: string | null;
+        };
         /**
          * CurrentUserRead
          * @description The caller's own record, plus the entitlements this request carried.
@@ -435,6 +559,85 @@ export interface components {
             /** Body */
             body: string | null;
         };
+        /**
+         * FeedbackCreate
+         * @description A report as `@poodle64/ui`'s `ReportWidget` POSTs it.
+         *
+         *     Shape and field names are the package's contract, not this app's choice —
+         *     changing one here without changing the widget silently breaks every app
+         *     that has taken it.
+         */
+        FeedbackCreate: {
+            /** Message */
+            message: string;
+            /** Route */
+            route: string;
+            /** User Agent */
+            user_agent: string;
+            viewport: components["schemas"]["Viewport"];
+            /** Session Id */
+            session_id: string;
+            /** Screenshot */
+            screenshot?: string | null;
+        };
+        /**
+         * FeedbackCreateResponse
+         * @description The one thing `ReportWidget`'s `onSubmitted(id)` needs.
+         */
+        FeedbackCreateResponse: {
+            /** Id */
+            id: number;
+        };
+        /**
+         * FeedbackRead
+         * @description A feedback report as the admin surface reads it back.
+         *
+         *     No screenshot field: the bytes are served separately
+         *     (`GET /api/feedback/{id}/screenshot`), so a caller reading the list never
+         *     pays for an image it may not want.
+         */
+        FeedbackRead: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Route */
+            route: string;
+            /** User Agent */
+            user_agent: string;
+            /** Viewport Width */
+            viewport_width: number;
+            /** Viewport Height */
+            viewport_height: number;
+            /** Session Id */
+            session_id: string;
+            /** Message */
+            message: string;
+            status: components["schemas"]["FeedbackStatus"];
+            /** Issue Url */
+            issue_url: string | null;
+            /** Error */
+            error: string | null;
+        };
+        /**
+         * FeedbackStatus
+         * @description Where a report stands with the GitHub issue tracker.
+         *
+         *     Two values only, deliberately: v1 does no triage, so there is nothing
+         *     between "not filed yet" and "filed". A row that fails to file stays
+         *     RECEIVED with `error` set, rather than gaining a third state — the retry
+         *     is a human re-reading `error`, not a state machine.
+         * @enum {string}
+         */
+        FeedbackStatus: "received" | "filed";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -551,6 +754,16 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * Viewport
+         * @description The reporting browser's window size, for reproducing what the user saw.
+         */
+        Viewport: {
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
         };
         /**
          * WorkspaceCreate
@@ -883,6 +1096,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFeedbackScreenshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listAgentPersonas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    askAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
