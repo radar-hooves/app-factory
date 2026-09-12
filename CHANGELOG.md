@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.12.2] - 2026-09-12
+
+### Fixed
+
+- The same ruff-format instability as 2026.9.12.1, in the three files a whole-tree render + `ruff format --check` sweep found afterwards: `api/feedback/models.py`, `api/feedback/service.py`, `tests/test_feedback_api.py`. `tests/test_agent_api.py` had the same class in three more places the first pass missed.
+
 ## [2026.9.12.1] - 2026-09-12
 
 ### Fixed
