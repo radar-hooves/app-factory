@@ -25,7 +25,7 @@
 		trustMark,
 		type Citation
 	} from '../../citations';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_COPY, resolveCopy, type LibrarianCopy } from '../../copy';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
@@ -133,9 +133,15 @@
 	 * a duration badge, and — worse — the "he holds nothing on this" line,
 	 * which is a claim about the shelf made off a run that never finished
 	 * looking.
+	 *
+	 * `error` still carries `DEFAULT_COPY.unreachable` verbatim from `client.ts`
+	 * — the stream layer has no `name` to compose with — so that exact default
+	 * is swapped for `words.unreachable`, which `Conversation`'s `name` prop
+	 * (or a host's own `copy` override) already resolved.
 	 */
 	const failure = $derived(
-		outcome?.error ?? (outcome?.isError ? words.answerFailed : null)
+		(outcome?.error === DEFAULT_COPY.unreachable ? words.unreachable : outcome?.error) ??
+			(outcome?.isError ? words.answerFailed : null)
 	);
 
 	// A failed turn settles too, and "Ask again" is the one thing a reader wants

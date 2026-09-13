@@ -22,6 +22,9 @@ export interface LibrarianCopy {
 	notHeld: string;
 	/** Shown when the run itself ended in error and said nothing about why. */
 	answerFailed: string;
+	/** Shown when the stream never opened at all. `Conversation`'s `name`
+	 *  prop composes this default; a host overriding `copy` directly wins. */
+	unreachable: string;
 	/** Heading over the list of what an answer cited. */
 	sources: string;
 	/** Heading over the follow-up questions the librarian offered. */
@@ -47,6 +50,7 @@ export const DEFAULT_COPY: LibrarianCopy = {
 	// A run can end `is_error` carrying no message at all, and a turn that
 	// simply stops is the one thing a reader must not have to guess about.
 	answerFailed: 'Milton stopped before he finished this one.',
+	unreachable: "Milton can't be reached right now.",
 	sources: 'Sources',
 	suggestions: 'Ask next',
 	scope: 'What Milton answers from',

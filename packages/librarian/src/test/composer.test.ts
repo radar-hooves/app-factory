@@ -58,4 +58,30 @@ describe('Composer placeholder', () => {
 
 		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
 	});
+
+	it("takes the host's own persona name in both states", () => {
+		const { rerender } = render(Composer, {
+			props: {
+				value: '',
+				running: false,
+				scope: 'library',
+				onscope: () => {},
+				onsubmit: () => {},
+				onstop: () => {},
+				name: 'Penny'
+			}
+		});
+		expect(screen.getByPlaceholderText('Ask Penny…')).toBeInTheDocument();
+
+		rerender({
+			value: '',
+			running: true,
+			scope: 'library',
+			onscope: () => {},
+			onsubmit: () => {},
+			onstop: () => {},
+			name: 'Penny'
+		});
+		expect(screen.getByPlaceholderText('Penny is answering…')).toBeInTheDocument();
+	});
 });

@@ -44,6 +44,8 @@
 		 *  control renders — studying is a mode of asking, never a tab, so a
 		 *  host with nothing to build offers none rather than a disabled one. */
 		onbriefing?: () => void;
+		/** The persona's display name; the placeholder in both states takes it. */
+		name?: string;
 	}
 
 	let {
@@ -57,7 +59,8 @@
 		onscope,
 		onsubmit,
 		onstop,
-		onbriefing
+		onbriefing,
+		name = 'Milton'
 	}: Props = $props();
 
 	// What Milton is being asked about — this document, this collection, or
@@ -214,7 +217,7 @@
 			onkeydown={keydown}
 			rows="1"
 			disabled={running}
-			placeholder={running ? 'Milton is answering…' : 'Ask Milton…'}
+			placeholder={running ? `${name} is answering…` : `Ask ${name}…`}
 			class="text-foreground placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3 pb-2 text-base outline-none disabled:opacity-60"
 		></textarea>
 

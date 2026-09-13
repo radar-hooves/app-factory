@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.14] - 2026-09-13
+
+A second persona needs the same surface (`radar-hooves/library#133`, dispatched
+from pebblestone's night-shift session, `pebblestone#784`):
+pebblestone's boardroom renders "Conversation with Milton" for Penny.
+
+### Added
+
+- **`name` on `Composer` and `Conversation`**, default `'Milton'`: every label
+  that names the librarian takes it — the composer placeholder in both states
+  (`Ask {name}…`, `{name} is answering…`), the conversation's aria-label
+  (`Conversation with {name}`), the `welcome` default, and the unreachable
+  alert. The library's own console passes nothing and keeps rendering Milton
+  unchanged. `LibrarianCopy.unreachable` is the new copy key behind the last
+  one — `client.ts`'s stream layer has no `name` to compose with, so
+  `Conversation` swaps its own default text in wherever the stream's own
+  default comes back verbatim, and a host's explicit `copy.unreachable` still
+  wins over the name-composed one.
+
 ## [2026.9.11] - 2026-09-11
 
 Milton's between-tool narration was rendering as the answer

@@ -31,6 +31,9 @@
 		/** `Transcript.version` — bumped per event. Text grows in place, so a
 		 *  count of turns is not enough to keep the scroll following. */
 		version?: number;
+		/** The persona's display name. The aria-label, the `welcome` default and
+		 *  the unreachable alert all take it. */
+		name?: string;
 		welcome?: string;
 		/** Up to three, shown in the empty state as tappable pills. */
 		examples?: string[];
@@ -59,7 +62,8 @@
 		turns,
 		running,
 		version = 0,
-		welcome = 'Ask Milton a question about the library.',
+		name = 'Milton',
+		welcome = `Ask ${name} a question about the library.`,
 		examples = [],
 		onexample,
 		scope,
@@ -72,6 +76,12 @@
 	}: Props = $props();
 
 	const words = $derived(resolveCopy(copy));
+
+	// A host's own `copy.unreachable` still wins: it comes last in the spread.
+	const effectiveCopy = $derived<Partial<LibrarianCopy>>({
+		unreachable: `${name} can't be reached right now.`,
+		...copy
+	});
 
 	let viewport = $state<HTMLElement | null>(null);
 	let column = $state<Column>(null);
@@ -160,7 +170,7 @@
 			role="log"
 			aria-live="polite"
 			aria-busy={running}
-			aria-label="Conversation with Milton"
+			aria-label="Conversation with {name}"
 			class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
 		>
 			<div class="mx-auto flex w-full max-w-[46rem] flex-col gap-8 px-4 py-6">
@@ -190,7 +200,7 @@
 				     sit at the top of the same column so a reader meets them in
 				     the same order whether or not they have asked anything yet. -->
 				{#if scope}
-					<ScopeStatement statement={scope} expanded={turns.length === 0} {copy} />
+					<ScopeStatement statement={scope} expanded={turns.length === 0} copy={effectiveCopy} />
 				{/if}
 
 				{#each turns as turn, index (turn.id)}
@@ -202,7 +212,7 @@
 						citations={turn.citations ?? []}
 						suggestions={turn.suggestions ?? []}
 						{collectionNames}
-						{copy}
+						copy={effectiveCopy}
 						kind={turn.kind}
 						title={turn.title}
 						onopenartefact={() => openArtefact(turn)}
@@ -235,11 +245,16 @@
 	</div>
 
 	{#if column?.kind === 'document' && loadDocument}
-		<DocumentPane citation={column.citation} {loadDocument} {copy} onclose={() => (column = null)} />
+		<DocumentPane
+			citation={column.citation}
+			{loadDocument}
+			copy={effectiveCopy}
+			onclose={() => (column = null)}
+		/>
 	{:else if column?.kind === 'artefact'}
 		<ArtefactPane
 			turn={column.turn}
-			{copy}
+			copy={effectiveCopy}
 			onclose={() => (column = null)}
 			oncite={(citation) => cite(citation)}
 		/>
