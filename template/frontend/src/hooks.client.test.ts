@@ -13,7 +13,9 @@ import { handleError, isStaleChunkError, mayAttemptReload } from './hooks.client
 describe('browser telemetry', () => {
 	it('starts once per app load, with the build version and no collector URL in dev', () => {
 		expect(mockInitBrowserTelemetry).toHaveBeenCalledTimes(1);
-		const [config] = mockInitBrowserTelemetry.mock.calls[0] as [{ app: string; version: string; url: string }];
+		const [config] = mockInitBrowserTelemetry.mock.calls[0] as [
+			{ app: string; version: string; url: string }
+		];
 		expect(config.app.length).toBeGreaterThan(0);
 		expect(config.version).toBe('test'); // $app/environment's mocked build version
 		expect(config.url).toBe(''); // no collector to send to in dev

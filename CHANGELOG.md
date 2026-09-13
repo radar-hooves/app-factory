@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.1] - 2026-09-13
+
+### Fixed
+
+- `hooks.client.ts.jinja`'s `initBrowserTelemetry()` call and `hooks.client.test.ts`'s mock-call type assertion each rendered over the template's own `printWidth: 100`, so every stamped app's first `prettier --check` edited a factory file. Both now wrap the way `prettier --write` itself breaks them, proven by rendering a throwaway stamp and running the shipped `.prettierrc` against it. Found re-stamping Pebblestone onto v2026.9.13. Closes radar-hooves/full-stack-app-template#33.
+- `pyproject.toml.jinja`'s api-common floor was `>=2026.9.1`; raised to `>=2026.9.4` for the log-filter fix for a non-string key that raised in Pebblestone's suite. Closes radar-hooves/full-stack-app-template#33.
+
 ## [2026.9.13] - 2026-09-13
 
 ### Added
