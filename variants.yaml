@@ -18,6 +18,9 @@ portcullis:
   frontend/src/lib/workspaces/workspace-members.svelte: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
   frontend/src/lib/workspaces/workspace-menu.svelte: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
   frontend/tests/e2e/workspaces.spec.ts: "tenancy surface for the workspaces the broker has none of; retires with identity.py"
+pebblestone:
+  backend/src/{package}/db/scoping.py: "one company, one tenant: the fail-closed workspace hooks over 373 files of single-tenant queries protect no second tenant and are the disclosure risk pebblestone#760 names; retires if the app ever serves a second company"
+  backend/tests/test_workspace_scoping.py: "asserts the scoping hooks above; retires with them"
 eight:
   root-inventory:desks: "the identity folder per strategy desk — persona, playbook, seed manifest — that the roster dispatches from"
   root-inventory:ops: "the app's n8n workflow exports, versioned with it"
