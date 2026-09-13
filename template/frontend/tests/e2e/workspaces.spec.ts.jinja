@@ -42,19 +42,38 @@ test.afterAll(async () => {
 	await partner.dispose();
 });
 
-test.beforeEach(async ({ page }) => {
-	// Self-healing, not merely tidy: there is no route to delete a workspace,
-	// so every run leaves the partner owning one more, and a run that aborted
-	// mid-way leaves the suite's person still holding a seat in it. Retract any
-	// such seat first, so the assertions below start from the org-of-one every
-	// fresh identity is.
-	await page.goto('/');
+/**
+ * Retract the suite identity's seat in every non-personal workspace the
+ * partner owns.
+ *
+ * Self-healing, not merely tidy: there is no route to delete a workspace, so
+ * every successful run leaves the partner owning one more, and this test's
+ * own body never retracts the seat IT grants (only the reverse direction,
+ * partner-in-e2e-uid's-own-workspace). Left uncleaned, the seat survives the
+ * test and the suite identity holds two memberships for whatever spec runs
+ * next in this worker — which, once anything renders `WorkspaceChooser` for
+ * `needsWorkspaceChoice`, blocks that spec's page behind a chooser screen it
+ * knows nothing about (radar-hooves/full-stack-app-template#39). Called from
+ * both `beforeEach` (heals a run that aborted mid-way) and `afterEach` (heals
+ * the suite for whatever runs after a clean pass), so neither a crash nor a
+ * pass leaves the identity behind.
+ */
+async function retractStraySeats(page: import('@playwright/test').Page): Promise<void> {
 	const me = (await (await page.request.get('/api/users/me')).json()) as Person;
 	for (const held of await memberships(partner)) {
 		if (held.role === 'owner' && !held.workspace.slug.startsWith('personal-')) {
 			await partner.delete(`/api/workspaces/${held.workspace.id}/members/${me.id}`);
 		}
 	}
+}
+
+test.beforeEach(async ({ page }) => {
+	await page.goto('/');
+	await retractStraySeats(page);
+});
+
+test.afterEach(async ({ page }) => {
+	await retractStraySeats(page);
 });
 
 test('a person granted a seat chooses the shared workspace, and every request carries it', async ({
