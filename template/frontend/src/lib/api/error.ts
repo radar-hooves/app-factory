@@ -1,8 +1,10 @@
 /**
  * API error extraction utility.
  *
- * Maps whatever a failed call hands back to a { title, description } shape,
- * the pair a toast, a banner or an `ErrorState` renders.
+ * Maps whatever a failed call hands back to a { title, description } shape:
+ * `toastApiError()` (sibling `error-toast.ts`) puts it straight into
+ * svelte-sonner, and `describeApiError()` below flattens it to the one string
+ * a banner, an `ErrorState` or a prefixed message takes.
  *
  * `description` is REQUIRED, not optional. A toast with no description renders
  * a bare title, so an optional field pushes a `?? 'something'` onto every call
@@ -167,4 +169,19 @@ function extractFromBody(
 	}
 
 	return { title: fallbackTitle, description: fallbackDescription };
+}
+
+/**
+ * The flattened string a banner, an `ErrorState` or a prefixed message takes:
+ * `${title}: ${description}`. The toast idiom is `toastApiError()` instead
+ * (sibling `error-toast.ts`, which needs svelte-sonner and so stays out of
+ * this file).
+ */
+export function describeApiError(
+	error: unknown,
+	fallbackTitle?: string,
+	fallbackDescription?: string
+): string {
+	const info = extractApiError(error, fallbackTitle, fallbackDescription);
+	return `${info.title}: ${info.description}`;
 }

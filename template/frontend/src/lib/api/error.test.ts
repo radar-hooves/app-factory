@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractApiError, formatErrorDetails } from './error';
+import { describeApiError, extractApiError, formatErrorDetails } from './error';
 
 // The scaffold's example unit test — extend it as this app's own error shapes
 // appear, rather than deleting it: every case below is a shape the factory's
@@ -127,6 +127,14 @@ describe('extractApiError', () => {
 	it('handles null and undefined without throwing', () => {
 		expect(extractApiError(null).description).toBe('An error occurred');
 		expect(extractApiError(undefined, 'Nope').title).toBe('Nope');
+	});
+});
+
+describe('describeApiError', () => {
+	it('flattens title and description into the one string a banner or ErrorState takes', () => {
+		expect(describeApiError({ detail: 'Row is locked' }, 'Failed to save')).toBe(
+			'Failed to save: Row is locked'
+		);
 	});
 });
 
