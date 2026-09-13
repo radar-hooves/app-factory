@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.2] - 2026-09-13
+
+### Added
+
+- `tests/support/fake_agent_cli.py`'s new `__mcp_probe__` question reads the `--mcp-config` file it was spawned with, runs the one server entry's `headersHelper` command exactly as the real CLI's own (Zod-validated) field is described, and makes one real HTTP GET at the server's `url` with the resulting headers — so a stamped app's suite can prove a persona's bearer actually reaches its MCP door, and is refused without it, without depending on the real `claude` binary's own headersHelper implementation. `test_agent_api.py.jinja`'s new test drives it against a tiny in-test HTTP server that 401s any request lacking the expected bearer: 200 with the right token, 401 with a stale one. Shape taken from Pebblestone's own `fake_agent_cli.py` (`MCP_PROBE_TRIGGER`/`_probe_mcp`) verbatim; every app on the agent-console pattern needs the same proof, and Pebblestone's own parity exception for this file retires on its next stamp. Dispatched by the Pebblestone cutover session; consumer evidence pebblestone#795. Closes radar-hooves/full-stack-app-template#34.
+
 ## [2026.9.13.1] - 2026-09-13
 
 ### Fixed

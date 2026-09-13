@@ -30,18 +30,33 @@ but chunk is longer than limit` were `create_subprocess_exec`'s `limit=` not
 raised. A real line that size is a `user`/`tool_result` frame carrying many
 rows; this fakes the size, not the frame shape, since the size is the whole
 defect.
+
+A question of exactly `__mcp_probe__` does something else again: it reads
+the `--mcp-config` file this process was handed, runs the one server
+entry's `headersHelper` command exactly as the real CLI's own
+(Zod-validated) `headersHelper` field is described -- a shell command whose
+stdout is a JSON object of header key/value strings -- and makes one real
+HTTP GET at the server's `url` with those headers. This is what proves a
+persona's `.mcp.json` actually presents the bearer its own MCP server
+demands, without depending on the real `claude` binary's own headersHelper
+implementation (verified separately, out of this fake CLI's reach, against
+the pinned Dockerfile version's own bundled schema).
 """
 
 import json
 import os
+import subprocess
 import sys
 import uuid
+
+import httpx
 
 CRASH_TRIGGER = "__crash__"
 GIANT_TRIGGER = "__giant__"
 #: Well past 65536 (asyncio's default `StreamReader` limit), so this trigger
 #: only survives the read loop when `ask()` passes its own `limit=`.
 GIANT_TEXT_SIZE = 200_000
+MCP_PROBE_TRIGGER = "__mcp_probe__"
 
 
 def _emit(event: dict[str, object]) -> None:
@@ -50,6 +65,23 @@ def _emit(event: dict[str, object]) -> None:
 
 def _flag(argv: list[str], name: str) -> str | None:
     return argv[argv.index(name) + 1] if name in argv else None
+
+
+def _probe_mcp(argv: list[str]) -> dict[str, object]:
+    """Run the configured `headersHelper` and call the one server it names."""
+    config_path = _flag(argv, "--mcp-config")
+    with open(config_path or "") as handle:
+        servers = json.load(handle)["mcpServers"]
+    name, server = next(iter(servers.items()))
+
+    headers: dict[str, str] = dict(server.get("headers") or {})
+    helper = server.get("headersHelper")
+    if helper:
+        completed = subprocess.run(helper, shell=True, capture_output=True, text=True, check=True)
+        headers.update(json.loads(completed.stdout))
+
+    response = httpx.get(server["url"], headers=headers, timeout=5.0)
+    return {"server": name, "status_code": response.status_code, "body": response.text}
 
 
 def main() -> None:
@@ -64,6 +96,14 @@ def main() -> None:
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
         _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "x" * GIANT_TEXT_SIZE}]}})
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": "", "is_error": False})
+        return
+
+    if question == MCP_PROBE_TRIGGER:
+        result = _probe_mcp(argv)
+        echo = json.dumps(result)
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
+        _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
         return
 
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")

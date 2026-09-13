@@ -17,7 +17,10 @@ driving a fake CLI through argv, env, ownership and SSE framing."
 import json
 import os
 import stat
+import threading
+import uuid
 from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -271,3 +274,73 @@ async def test_a_defined_hook_runs_on_the_question_before_the_cli_sees_it(
     asker = session.execute(select(User).where(User.authentik_uid == "asker-1")).scalar_one()
     assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
     assert calls == [("milton", str(asker.id), "my secret plan")]
+
+
+# ── The persona's headersHelper presents the bearer its .mcp.json names ────
+#
+# #34: a persona's `.mcp.json` exists to make the CLI's own `headersHelper`
+# present a bearer to its MCP server. The fake CLI's `__mcp_probe__` question
+# runs that exact shell-command shape against a real local HTTP server that
+# 401s without the bearer it names, so this proves the mechanism -- not the
+# real `claude` binary's own headersHelper support, which is out of this
+# suite's reach and verified separately against the pinned Dockerfile version.
+
+
+class _BearerRequiredHandler(BaseHTTPRequestHandler):
+    """A real HTTP server that 401s any request lacking `expected_bearer`."""
+
+    expected_bearer = ""
+
+    def do_GET(self) -> None:
+        body = b"ok" if self.headers.get("Authorization") == f"Bearer {self.expected_bearer}" else b"unauthorized"
+        self.send_response(200 if body == b"ok" else 401)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Silence: the default logs every request to stderr."""
+
+
+@pytest.fixture
+def fake_mcp_server() -> Iterator[tuple[str, str]]:
+    """A real loopback HTTP server requiring a freshly generated bearer."""
+    token = f"tok-{uuid.uuid4().hex}"
+    handler = type("_ExpectingHandler", (_BearerRequiredHandler,), {"expected_bearer": token})
+    server = HTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/mcp/", token
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def _probe_result(response_text: str) -> dict[str, object]:
+    echoed = next(e for e in _events(response_text) if e.get("type") == "assistant")
+    result: dict[str, object] = json.loads(echoed["message"]["content"][0]["text"])
+    return result
+
+
+async def test_the_headers_helper_presents_the_bearer_the_fake_mcp_server_requires(
+    client: AsyncClient, personas_dir: Path, fake_mcp_server: tuple[str, str]
+) -> None:
+    """The right token 200s, a stale one 401s -- proven against one live server, not a rubber stamp."""
+    url, token = fake_mcp_server
+    token_path = personas_dir / "agent.bearer"
+    header_shape = '{"Authorization":"Bearer %s"}'
+    helper = f"printf '{header_shape}' \"$(cat {token_path})\""
+    (personas_dir / "milton" / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"milton": {"type": "http", "url": url, "headersHelper": helper}}})
+    )
+
+    token_path.write_text(token)
+    ok = await client.post("/api/agent/milton/ask", json={"question": fake_agent_cli.MCP_PROBE_TRIGGER}, headers=ASKER)
+    assert _probe_result(ok.text)["status_code"] == 200
+
+    token_path.write_text("a-stale-or-wrong-token")
+    refused = await client.post(
+        "/api/agent/milton/ask", json={"question": fake_agent_cli.MCP_PROBE_TRIGGER}, headers=ASKER
+    )
+    assert _probe_result(refused.text)["status_code"] == 401
