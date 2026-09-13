@@ -1,9 +1,15 @@
 """Fetch a secret from the household broker at startup.
 
 Development holds no env file. Every fact a checkout can know is stamped into
-this app's own config defaults; the one it cannot — the database password — is
-vended here, keyed by this app's enrolled signet identity. A fresh clone needs
-nothing filled in, and there is no per-consumer copy of the value to drift.
+this app's own config defaults; what it cannot know — a database password, any
+other credential a section owns — is fetched here, keyed by this app's
+enrolled signet identity. A fresh clone needs nothing filled in, and there is
+no per-consumer copy of the value to drift.
+
+`Vended` and `VendedSettings` below are the declarative surface every secret
+setting uses: a field names its credential and field, `VendedSettings` fills
+it in when the environment left it empty, and no settings section hand-writes
+its own environment/file/broker resolution order.
 
 `signet` writes to a file rather than stdout, so a vended value cannot land in a
 log, a shell history, or an agent transcript. Keep it that way: nothing in this
@@ -11,15 +17,22 @@ module may return, log, or interpolate a value into a message.
 """
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
+import time
+from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import httpx
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 #: This app's environment prefix (`platform/canonical-app-shape.md` §Named
 #: canonical values), so a broker variable can be named for THIS app alone.
@@ -121,6 +134,99 @@ def vend(credential: str, field: str) -> str:
             detail = result.stderr.strip() or result.stdout.strip()
             raise VendError(f"could not vend '{credential}.{field}' from {BROKER_URL}: {detail}")
         return destination.read_text().strip()
+
+
+_VEND_ATTEMPTS = 3
+_VEND_BACKOFF_SECONDS = 2.0
+
+
+def _vend_with_retry(credential: str, field: str) -> str:
+    """`vend`, retried with backoff for a broker that is locked or has not
+    finished starting -- the shape of the broker restarting alongside this
+    container, not of a genuinely absent credential.
+
+    Bounded: the last attempt's VendError is what escapes, carrying the
+    broker's own diagnostic and nothing this app was not already told.
+    Uncaught here, it propagates out of settings construction and fails the
+    container's own boot -- which is the point: compose restarts it rather
+    than serving with a credential it never got.
+    """
+    last_error: VendError | None = None
+    for attempt in range(_VEND_ATTEMPTS):
+        try:
+            return vend(credential, field)
+        except VendError as exc:
+            last_error = exc
+            if attempt < _VEND_ATTEMPTS - 1:
+                time.sleep(_VEND_BACKOFF_SECONDS * (2**attempt))
+    assert last_error is not None  # the loop above always sets it before falling through
+    raise last_error
+
+
+@dataclass(frozen=True)
+class Vended:
+    """Marks a settings field as vended: which broker credential answers it,
+    and which field of that credential, when the environment leaves it empty.
+
+    ``file_field`` names a sibling field carrying a boot-lane credential file
+    path (`platform/canonical-app-shape.md` §Development launch), consulted
+    BEFORE the broker. It is the one escape hatch: a third-party container in
+    the stack that cannot vend for itself (postgres), or this app's own
+    identity when it IS the broker (portcullis, which cannot vend from
+    itself). Every other field leaves it unset and just vends when empty.
+    """
+
+    credential: str
+    field: str
+    file_field: str | None = None
+
+
+def resolve_vended_fields(settings: BaseSettings) -> None:
+    """Fill every ``Vended``-annotated field ``settings`` left empty.
+
+    The whole reason a field declares this instead of a hand-written
+    validator: the resolution order -- the environment, then an optional
+    boot-lane file, then the broker -- lives here exactly once, for every
+    secret setting the app carries. ``VendedSettings`` below is the one line
+    each section adds to use it. Nothing here ever logs, returns, or raises a
+    resolved value itself.
+    """
+    for name, info in type(settings).model_fields.items():
+        spec = next((meta for meta in info.metadata if isinstance(meta, Vended)), None)
+        if spec is None:
+            continue
+        current = getattr(settings, name)
+        is_secret = isinstance(current, SecretStr)
+        value = current.get_secret_value() if is_secret else current
+        if not value and spec.file_field:
+            file_path = getattr(settings, spec.file_field, None)
+            if file_path:
+                try:
+                    value = Path(file_path).read_text().strip()
+                except OSError as exc:
+                    logger.warning(
+                        "Could not read the boot-lane credential file (%s): %s",
+                        exc.strerror,
+                        Path(file_path),
+                    )
+        if not value:
+            value = _vend_with_retry(spec.credential, spec.field)
+        setattr(settings, name, SecretStr(value) if is_secret else value)
+
+
+class VendedSettings(BaseSettings):
+    """Base for a settings section carrying one or more ``Vended`` fields.
+
+    A section declares each field's credential with ``Annotated[str,
+    Vended(...)]`` (or ``Annotated[SecretStr, Vended(...)]``) and gets this
+    resolution for free -- no per-section ``model_validator`` to hand-write
+    or let drift from the next one.
+    """
+
+    @model_validator(mode="after")
+    def _resolve_vended_fields(self) -> Self:
+        resolve_vended_fields(self)
+        return self
 
 
 def _broker_auth_header() -> dict[str, str]:

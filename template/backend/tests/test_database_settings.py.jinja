@@ -1,16 +1,17 @@
 """Where the store password comes from, and in which order.
 
-Three sources answer one field, and the order is the whole of the contract: an
-environment that supplies its own, then the boot-lane file, then the broker.
-Reordering them is a silent change — every branch still returns a string — so
-this pins it. No test here ever asserts on a password VALUE reaching a log.
+The order is `Vended`'s own contract (`config/vend.py`): the environment,
+then the boot-lane file, then the broker. `test_vend.py` proves that
+mechanism in general; this file proves `DatabaseSettings` wires it to the
+right credential. No test here ever asserts on a password VALUE reaching a
+log.
 """
 
 import logging
 
 import pytest
 
-from {{ package_name }}.config.sections import database
+from {{ package_name }}.config import vend as vend_module
 from {{ package_name }}.config.sections.database import DatabaseSettings
 
 
@@ -40,8 +41,22 @@ def test_an_unreadable_file_warns_and_falls_through_to_the_broker(
     assertion is on the REASON rather than the path: the log redactor replaces a
     high-entropy token wholesale, and a pytest tmp_path is one.
     """
-    monkeypatch.setattr(database, "vend", lambda credential, field: "from-the-broker")
+    monkeypatch.setattr(vend_module, "vend", lambda credential, field: "from-the-broker")
     with caplog.at_level(logging.WARNING):
         settings = DatabaseSettings(postgres_password="", postgres_password_file=str(tmp_path / "not-there"))
     assert settings.postgres_password == "from-the-broker"
     assert any("No such file or directory" in record.getMessage() for record in caplog.records)
+
+
+def test_the_password_vends_under_this_app_s_own_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`postgres_password` names `{{ project_name }}-db`/`password` — this app's own row in the catalogue, never a shared or guessed one."""
+    calls: list[tuple[str, str]] = []
+
+    def fake_vend(credential: str, field: str) -> str:
+        calls.append((credential, field))
+        return "from-the-broker"
+
+    monkeypatch.setattr(vend_module, "vend", fake_vend)
+    settings = DatabaseSettings(postgres_password="")
+    assert settings.postgres_password == "from-the-broker"
+    assert calls == [("{{ project_name }}-db", "password")]

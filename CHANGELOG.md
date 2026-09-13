@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13] - 2026-09-13
+
+### Added
+
+- One shape for every secret setting, in development and production alike (operator decision 13/09/2026): `config/vend.py`'s new `Vended` field spec and `VendedSettings` base replace a hand-written validator per section. A field declares `Annotated[str, Vended(credential, field, file_field=...)]` (or `SecretStr`), and `VendedSettings` resolves it — the environment, then an optional boot-lane file, then the broker — in one place, once, for every secret the app carries, rather than one hand-rolled resolution per settings section. `config/sections/database.py`'s `postgres_password` is the first consumer; its old `_resolve_password` validator is retired in favour of the declaration. A broker that is locked or has not finished starting gets three bounded attempts with exponential backoff before the container fails and compose restarts it — no hang, and no credential value ever reaches a log line, an exception, or a retry. `test_vend.py` proves the mechanism itself (the environment wins, an empty field vends by its declared credential/field, a vend failure retries then raises the broker's own diagnostic and nothing more, the boot-lane file answers before the broker is ever asked); `test_database_settings.py` proves the database section's own wiring. `agent.py`'s `gateway_key` stays outside this mechanism deliberately: it is optional pass-through config for a genuinely Anthropic-compatible gateway, and auto-vending it would silently route every stamped app onto a gateway it never asked for. `docs/development/working-on-the-template.md` and the stamped `.env.example` now name this as the one shape a secret setting takes, and `.env.example` no longer asks a developer to paste `POSTGRES_PASSWORD` in. Closes radar-hooves/full-stack-app-template#32.
+
 ## [2026.9.12.5] - 2026-09-13
 
 ### Fixed

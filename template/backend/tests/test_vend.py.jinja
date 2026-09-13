@@ -1,0 +1,100 @@
+"""The declarative vend-on-empty mechanism: `Vended` field specs and `VendedSettings`.
+
+`test_database_settings.py` proves the database section wires this to the
+right credential; this file proves the mechanism itself, independent of any
+one field's business meaning — the environment wins, an empty field vends by
+its declared (credential, field), a vend failure retries with backoff then
+raises the broker's own diagnostic and nothing more, and the boot-lane file
+escape hatch answers before the broker is ever asked.
+"""
+
+from typing import Annotated
+
+import pytest
+from pydantic import SecretStr
+from pydantic_settings import SettingsConfigDict
+
+from {{ package_name }}.config import vend as vend_module
+from {{ package_name }}.config.vend import Vended, VendedSettings, VendError
+
+
+class _ExampleSettings(VendedSettings):
+    """A synthetic settings model exercising a plain and a secret vended field."""
+
+    model_config = SettingsConfigDict(env_prefix="EXAMPLE_VENDED_TEST_")
+
+    plain_field: Annotated[str, Vended("example-credential", "plain-field")] = ""
+    secret_field: Annotated[SecretStr, Vended("example-credential", "secret-field")] = SecretStr("")
+
+
+class _FiledSettings(VendedSettings):
+    """A synthetic settings model exercising the boot-lane file escape hatch."""
+
+    model_config = SettingsConfigDict(env_prefix="EXAMPLE_VENDED_TEST_")
+
+    value: Annotated[str, Vended("example-credential", "value-field", file_field="value_file")] = ""
+    value_file: str | None = None
+
+
+def _forbidden_vend(credential: str, field: str) -> str:
+    raise AssertionError(f"must not vend '{credential}.{field}' when a value was already available")
+
+
+def test_env_wins_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A value the environment supplied is never overwritten by a vend."""
+    monkeypatch.setattr(vend_module, "vend", _forbidden_vend)
+    settings = _ExampleSettings(plain_field="from-the-environment", secret_field="also-from-the-environment")
+    assert settings.plain_field == "from-the-environment"
+    assert settings.secret_field.get_secret_value() == "also-from-the-environment"
+
+
+def test_empty_vends_by_credential_and_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty field is filled by `vend(credential, field)`, keyed exactly as declared."""
+    calls: list[tuple[str, str]] = []
+
+    def fake_vend(credential: str, field: str) -> str:
+        calls.append((credential, field))
+        return f"vended-{field}"
+
+    monkeypatch.setattr(vend_module, "vend", fake_vend)
+    settings = _ExampleSettings()
+    assert settings.plain_field == "vended-plain-field"
+    assert settings.secret_field.get_secret_value() == "vended-secret-field"
+    assert set(calls) == {("example-credential", "plain-field"), ("example-credential", "secret-field")}
+
+
+def test_a_vend_failure_retries_then_raises_without_the_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bounded retries with backoff — for a broker locked or not yet answering
+    after a restart — then the broker's own diagnostic, and nothing this app
+    was not already told.
+    """
+    monkeypatch.setattr(vend_module, "_VEND_ATTEMPTS", 3)
+    monkeypatch.setattr(vend_module, "_VEND_BACKOFF_SECONDS", 0)
+    attempts: list[tuple[str, str]] = []
+
+    def failing_vend(credential: str, field: str) -> str:
+        attempts.append((credential, field))
+        raise VendError(f"could not vend '{credential}.{field}' from https://broker.example: broker locked")
+
+    monkeypatch.setattr(vend_module, "vend", failing_vend)
+    with pytest.raises(VendError) as excinfo:
+        _ExampleSettings()
+    assert attempts == [("example-credential", "plain-field")] * 3
+    assert "broker locked" in str(excinfo.value)
+
+
+def test_the_boot_lane_file_answers_before_the_broker_is_ever_asked(tmp_path) -> None:
+    """The one escape hatch: a value already on disk means `vend` is never called."""
+    credential_file = tmp_path / "boot-lane-secret"
+    credential_file.write_text("from-the-file\n")
+    settings = _FiledSettings(value="", value_file=str(credential_file))
+    assert settings.value == "from-the-file"
+
+
+def test_the_boot_lane_file_still_falls_through_to_vend_when_unreadable(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file path that names nothing readable is not a value: the broker still answers."""
+    monkeypatch.setattr(vend_module, "vend", lambda credential, field: "from-the-broker")
+    settings = _FiledSettings(value="", value_file=str(tmp_path / "not-there"))
+    assert settings.value == "from-the-broker"
