@@ -8,7 +8,7 @@ import { extractApiError, formatErrorDetails } from './error';
 describe('extractApiError', () => {
 	it('maps the backend error envelope to a toast-ready shape', () => {
 		const info = extractApiError({ error: 'not_found', message: 'No such item' });
-		expect(info).toEqual({ title: 'Not Found', description: 'No such item', status: undefined });
+		expect(info).toEqual({ title: 'Not Found', description: 'No such item' });
 	});
 
 	it("gives the client's normalised network code a human title", () => {
@@ -19,23 +19,19 @@ describe('extractApiError', () => {
 	it("maps FastAPI's bare detail payload", () => {
 		expect(extractApiError({ detail: 'Unprocessable' })).toEqual({
 			title: 'Error',
-			description: 'Unprocessable',
-			status: undefined
-		});
-	});
-
-	// A raw TypeError is an object with a string `message`, so it reaches this
-	// helper looking exactly like a backend envelope. The ordering inside
-	// extractApiError is what keeps them apart.
-	it('reports a raw fetch rejection as a network error, not a generic one', () => {
-		expect(extractApiError(new TypeError('Failed to fetch'))).toEqual({
-			title: 'Network error',
-			description: 'Failed to fetch'
+			description: 'Unprocessable'
 		});
 	});
 
 	it('falls back to a string rendering of anything else', () => {
 		expect(extractApiError('boom')).toEqual({ title: 'Error', description: 'boom' });
+	});
+
+	it("treats a message-shaped `error` as the description, not a code to humanise", () => {
+		// pebblestone's Origin guard answers a rejected cross-origin request with
+		// exactly this shape: a sentence in `error`, no `message` beside it.
+		const info = extractApiError({ error: 'Cross-origin request rejected' });
+		expect(info).toEqual({ title: 'Error', description: 'Cross-origin request rejected' });
 	});
 
 	describe('the caller-supplied fallbacks', () => {
@@ -44,17 +40,7 @@ describe('extractApiError', () => {
 				extractApiError({}, 'Failed to load invoices', 'The invoice list is unavailable')
 			).toEqual({
 				title: 'Failed to load invoices',
-				description: 'The invoice list is unavailable',
-				status: undefined
-			});
-		});
-
-		it('appends the status to a fallback description, so a bare failure is still diagnosable', () => {
-			const info = extractApiError({ status: 502, body: {} }, 'Failed to save', 'Could not save');
-			expect(info).toEqual({
-				title: 'Failed to save',
-				description: 'Could not save (HTTP 502)',
-				status: 502
+				description: 'The invoice list is unavailable'
 			});
 		});
 
@@ -73,8 +59,7 @@ describe('extractApiError', () => {
 			});
 			expect(info).toEqual({
 				title: 'That name is already taken',
-				description: '42, Acme Pty Ltd',
-				status: undefined
+				description: '42, Acme Pty Ltd'
 			});
 		});
 
@@ -93,42 +78,50 @@ describe('extractApiError', () => {
 				message: 'Bad request',
 				details: { nested: { too: 'deep' } }
 			});
-			expect(info).toEqual({ title: 'Bad Request', description: 'Bad request', status: undefined });
+			expect(info).toEqual({ title: 'Bad Request', description: 'Bad request' });
 		});
 	});
 
-	describe('the { status, body } wrapper some call sites construct', () => {
-		it('reads the body through the wrapper and keeps the status', () => {
-			const info = extractApiError({ status: 404, body: { error: 'not_found', message: 'Gone' } });
-			expect(info).toEqual({ title: 'Not Found', description: 'Gone', status: 404 });
+	describe("FastAPI's 422 ValidationError[]", () => {
+		it('renders a single field error as a readable summary', () => {
+			const info = extractApiError({
+				detail: [{ loc: ['body', 'name'], msg: 'field required', type: 'missing' }]
+			});
+			expect(info).toEqual({ title: 'Error', description: 'name: field required' });
 		});
 
-		it('reads a bare body with no wrapper the same way', () => {
-			const info = extractApiError({ error: 'not_found', message: 'Gone' });
-			expect(info.description).toBe('Gone');
+		it('joins several field errors, never as [object Object]', () => {
+			const info = extractApiError({
+				detail: [
+					{ loc: ['body', 'name'], msg: 'field required', type: 'missing' },
+					{ loc: ['body', 'email'], msg: 'invalid format', type: 'value_error' }
+				]
+			});
+			expect(info.description).toBe('name: field required; email: invalid format');
+			expect(info.description).not.toContain('[object Object]');
+		});
+
+		it('falls back to the fallback description when the array carries nothing renderable', () => {
+			const info = extractApiError({ detail: [{}] }, 'Failed to save', 'Could not save');
+			expect(info).toEqual({ title: 'Failed to save', description: 'Could not save' });
 		});
 	});
 
-	it("reports a proxy's HTML error page as a service failure, never as markup", () => {
-		const page = '<!DOCTYPE html>\n<html><head><title>502 Bad Gateway</title></head></html>';
-		const info = extractApiError({ status: 502, body: page });
-		expect(info.title).toBe('Service unavailable');
-		expect(info.description).not.toContain('<');
-	});
-
-	it('renders a plain string body as the description', () => {
-		expect(extractApiError({ status: 500, body: 'upstream exploded' }).description).toBe(
-			'upstream exploded'
-		);
-	});
-
-	it('never stringifies a 422 ValidationError array into a toast', () => {
-		const info = extractApiError({
-			status: 422,
-			body: { detail: [{ loc: ['body', 'name'], msg: 'field required' }] }
+	describe("a proxy's HTML error page", () => {
+		it('reports nginx\'s built-in 502 page as a service failure, never as markup', () => {
+			// nginx's own error pages open with `<html`, not `<!doctype html>`.
+			const page = '<html><head><title>502 Bad Gateway</title></head></html>';
+			const info = extractApiError(page);
+			expect(info.title).toBe('Service unavailable');
+			expect(info.description).not.toContain('<');
 		});
-		expect(info.description).toBe('An error occurred (HTTP 422)');
-		expect(info.description).not.toContain('[object Object]');
+
+		it('reports a `<!doctype html>` page the same way', () => {
+			const page = '<!DOCTYPE html>\n<html><head><title>502 Bad Gateway</title></head></html>';
+			const info = extractApiError(page);
+			expect(info.title).toBe('Service unavailable');
+			expect(info.description).not.toContain('<');
+		});
 	});
 
 	it('handles null and undefined without throwing', () => {

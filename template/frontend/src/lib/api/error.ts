@@ -1,8 +1,8 @@
 /**
  * API error extraction utility.
  *
- * Maps whatever a failed call hands back to a { title, description, status? }
- * shape usable with svelte-sonner: toast.error(info.title, { description: info.description }).
+ * Maps whatever a failed call hands back to a { title, description } shape,
+ * the pair a toast, a banner or an `ErrorState` renders.
  *
  * `description` is REQUIRED, not optional. A toast with no description renders
  * a bare title, so an optional field pushes a `?? 'something'` onto every call
@@ -19,19 +19,22 @@
  *     for a network failure or a timeout, which is why it is the SAME shape:
  *     a call site cannot tell a real 503 from an unreachable API, and should
  *     not have to;
- *   - FastAPI's bare `{ detail }` from a raw HTTPException;
+ *   - FastAPI's bare `{ detail }` from a raw HTTPException, string or (a 422)
+ *     a ValidationError[];
+ *   - a sentence in `error` with no `message` beside it (a guard that answers
+ *     in prose, not a code);
  *   - a proxy's HTML error page (nginx, Cloudflare), which must never render
  *     raw into a toast;
- *   - a plain string body;
- *   - a raw fetch rejection (TypeError / AbortError) reaching here directly;
- *   - the bare parsed body openapi-fetch hands most call sites AND the
- *     { status, body } wrapper some construct by hand.
+ *   - a plain string body.
+ *
+ * A raw fetch rejection (TypeError, AbortError) never reaches here: client.ts's
+ * `errorNormaliserMiddleware` turns every one into the backend-envelope shape
+ * first, so this file carries no branch for the throw itself.
  */
 
 export interface ApiErrorInfo {
 	title: string;
 	description: string;
-	status?: number;
 }
 
 // Codes the client's onError normaliser emits for a throwing request, mapped to
@@ -61,9 +64,40 @@ export function formatErrorDetails(details: unknown): string | undefined {
 	return values.length > 0 ? values.join(', ') : undefined;
 }
 
+/**
+ * Render FastAPI's 422 `ValidationError[]` as a readable field summary. A
+ * field-level entry still maps onto a form field via superforms' setError()
+ * (sveltekit-api-client.md §Error Handling); this is what a caller with no
+ * such mapping — or a field the form does not cover — falls back to.
+ */
+function formatValidationErrors(detail: unknown): string | undefined {
+	if (!Array.isArray(detail) || detail.length === 0) return undefined;
+	const parts = detail
+		.map((item) => {
+			if (!item || typeof item !== 'object') return undefined;
+			const entry = item as Record<string, unknown>;
+			if (typeof entry.msg !== 'string') return undefined;
+			const loc = Array.isArray(entry.loc) ? entry.loc : [];
+			const field = loc.length > 1 ? loc[loc.length - 1] : undefined;
+			return typeof field === 'string' || typeof field === 'number'
+				? `${field}: ${entry.msg}`
+				: entry.msg;
+		})
+		.filter((part): part is string => Boolean(part));
+	return parts.length > 0 ? parts.join('; ') : undefined;
+}
+
+// A proxy (nginx, Cloudflare) answers a failure with its own HTML page, not
+// JSON. nginx's built-in error pages open with `<html`, not `<!doctype html>`,
+// so both are checked; rendering either raw would put markup in a toast.
+function isHtmlPage(body: string): boolean {
+	const start = body.trimStart().toLowerCase();
+	return start.startsWith('<!doctype html') || start.startsWith('<html');
+}
+
 // `not_found` -> `Not Found`. Only reached for a code with no entry in
 // NORMALISED_TITLES; the raw snake_case code is a developer's string, not a
-// user's, and rendering it into a toast was the previous behaviour.
+// user's.
 function humanise(code: string): string {
 	return code.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -73,69 +107,31 @@ export function extractApiError(
 	fallbackTitle = 'Error',
 	fallbackDescription = 'An error occurred'
 ): ApiErrorInfo {
-	// A raw throw is checked FIRST: an Error is an object carrying a string
-	// `message`, so the envelope branch below would swallow it and report a
-	// network failure as a generic "Error".
-	if (error instanceof DOMException && error.name === 'AbortError') {
-		return {
-			title: NORMALISED_TITLES.timeout,
-			description: 'The request took too long and was cancelled.'
-		};
-	}
-	if (error instanceof TypeError) {
-		return { title: NORMALISED_TITLES.network_error, description: error.message };
-	}
-
 	if (error === null || error === undefined || typeof error !== 'object') {
-		return typeof error === 'string' && error.length > 0
-			? { title: fallbackTitle, description: error }
-			: { title: fallbackTitle, description: fallbackDescription };
+		if (typeof error !== 'string' || error.length === 0) {
+			return { title: fallbackTitle, description: fallbackDescription };
+		}
+		return isHtmlPage(error)
+			? {
+					title: 'Service unavailable',
+					description: 'The service is temporarily unavailable. Please try again shortly.'
+				}
+			: { title: fallbackTitle, description: error };
 	}
 
-	// openapi-fetch hands most call sites the bare parsed error body (e.g.
-	// `{ detail: 'Not found' }`) with no `status` on it at all — the status lives
-	// on the sibling Response, which this helper never receives. A minority of
-	// call sites wrap it as `{ status, body }` instead. Normalise both into a
-	// body to inspect and an optional status to enrich the result with. `status`
-	// must never gate whether the body is read: it only ever adds.
-	const wrapper = error as Record<string, unknown>;
-	const status = typeof wrapper.status === 'number' ? wrapper.status : undefined;
-	const body = 'body' in wrapper ? wrapper.body : error;
-
-	return { ...extractFromBody(body, fallbackTitle, fallbackDescription, status), status };
+	return extractFromBody(error as Record<string, unknown>, fallbackTitle, fallbackDescription);
 }
 
 function extractFromBody(
-	body: unknown,
+	d: Record<string, unknown>,
 	fallbackTitle: string,
-	fallbackDescription: string,
-	status: number | undefined
-): { title: string; description: string } {
-	const withStatus = (description: string) =>
-		status ? `${description} (HTTP ${status})` : description;
-
-	if (body === null || body === undefined) {
-		return { title: fallbackTitle, description: withStatus(fallbackDescription) };
-	}
-
-	if (typeof body === 'string') {
-		// A proxy (nginx, Cloudflare) answers with a page, not JSON. Rendering it
-		// raw puts markup in a toast, so it is reported as what it is.
-		if (body.trimStart().toLowerCase().startsWith('<!doctype html')) {
-			return {
-				title: 'Service unavailable',
-				description: 'The service is temporarily unavailable. Please try again shortly.'
-			};
-		}
-		return { title: fallbackTitle, description: body };
-	}
-
-	if (typeof body !== 'object') {
-		return { title: fallbackTitle, description: String(body) };
-	}
-
-	const d = body as Record<string, unknown>;
-	const code = typeof d.error === 'string' ? d.error : undefined;
+	fallbackDescription: string
+): ApiErrorInfo {
+	// `error` is a code ("not_found") to humanise only when it looks like one; a
+	// sentence there (a guard answering in prose, e.g. "Cross-origin request
+	// rejected") is the message, not a code, and must not be mangled by
+	// humanise() or hidden behind a generic description.
+	const code = typeof d.error === 'string' && !d.error.includes(' ') ? d.error : undefined;
 	const codeTitle = code
 		? (NORMALISED_TITLES[code as keyof typeof NORMALISED_TITLES] ?? humanise(code))
 		: undefined;
@@ -155,14 +151,20 @@ function extractFromBody(
 		// FastAPI's bare HTTPException shape.
 		return { title: fallbackTitle, description: d.detail };
 	}
-	// A non-string `detail` is FastAPI's 422 ValidationError[], deliberately not
-	// stringified: an array must never render raw into a toast. Field-level 422s
-	// map to form errors at the call site via superforms' setError()
-	// (rules-library/stacks/sveltekit-api-client.md §Error Handling).
 
-	if (codeTitle) {
-		return { title: codeTitle, description: withStatus(fallbackDescription) };
+	const validation = formatValidationErrors(d.detail);
+	if (validation) {
+		// FastAPI's 422 ValidationError[].
+		return { title: fallbackTitle, description: validation };
 	}
 
-	return { title: fallbackTitle, description: withStatus(fallbackDescription) };
+	if (typeof d.error === 'string' && d.error.includes(' ')) {
+		return { title: fallbackTitle, description: d.error };
+	}
+
+	if (codeTitle) {
+		return { title: codeTitle, description: fallbackDescription };
+	}
+
+	return { title: fallbackTitle, description: fallbackDescription };
 }
