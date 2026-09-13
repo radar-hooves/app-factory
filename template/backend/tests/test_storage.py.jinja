@@ -40,7 +40,9 @@ async def test_put_and_delete_root_every_path_under_nextcloud_root() -> None:
         return httpx.Response(204 if request.method == "DELETE" else 201)
 
     storage = Storage(_settings())
-    storage.webdav._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    storage.webdav._http = httpx.AsyncClient(
+        base_url=storage.webdav.base_url, transport=httpx.MockTransport(handler)
+    )
 
     await storage.put("notes/plan.txt", b"content")
     await storage.delete("notes/plan.txt")
