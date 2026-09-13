@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.10] - 2026-09-14
+
+### Added
+
+- `api/agent/session.py.jinja`'s `_environment()` now passes Claude Code's own OpenTelemetry configuration through to a persona's child process when the deployment sets it on the app process itself: `CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`, `OTEL_RESOURCE_ATTRIBUTES`. `OTEL_SERVICE_NAME` is always computed instead of inherited — `<project_name>-agent-<persona>` — so a persona's spans and logs are never folded into the app's own. Before this, a deployment that set these on the app service (mimir did tonight: `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318`, `OTEL_LOGS_EXPORTER=otlp`) got the app's own telemetry but nothing from the persona sessions actually doing the work, since `_environment()` builds the child's environment from an allow-list and none of these names were on it. `tests/support/fake_agent_cli.py` now echoes every telemetry variable it was spawned with, so `test_agent_api.py.jinja` can assert on both the pass-through case and the absent case. Dispatched from pebblestone's night-shift session (pebblestone#784). Proven by rendering a throwaway stamp from this commit: `uv sync && pytest` passes, including the two new telemetry tests. Closes radar-hooves/full-stack-app-template#40.
+
 ## [2026.9.13.9] - 2026-09-14
 
 ### Fixed

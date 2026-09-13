@@ -52,6 +52,24 @@ ERROR_EVENT = "library_error"
 _INHERITED_IF_SET = ("PATH", "LANG", "LC_ALL", "TERM", "CLAUDE_CODE_OAUTH_TOKEN")
 
 
+#: Claude Code's own OpenTelemetry configuration, passed through only when the
+#: deployment set it on the app process, so a persona's session reports to the
+#: same OTLP collector the app itself does (#40: mimir set these on the app
+#: service and got the app's spans but nothing from the persona sessions doing
+#: the actual work). `OTEL_SERVICE_NAME` is deliberately not here — the child
+#: gets its own, computed in `_environment()`, so its telemetry is never
+#: folded into the app's.
+_TELEMETRY_INHERITED_IF_SET = (
+    "CLAUDE_CODE_ENABLE_TELEMETRY",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_HEADERS",
+    "OTEL_EXPORTER_OTLP_PROTOCOL",
+    "OTEL_METRICS_EXPORTER",
+    "OTEL_LOGS_EXPORTER",
+    "OTEL_RESOURCE_ATTRIBUTES",
+)
+
+
 def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, str]:
     """The subprocess environment, built from scratch rather than inherited.
 
@@ -60,9 +78,17 @@ def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, s
     at that home rather than left to inherit an ambient login. `HOME` is
     pointed there too, rather than at this process's own, for the same
     reason.
+
+    Telemetry: CLAUDE_CODE_ENABLE_TELEMETRY, OTEL_EXPORTER_OTLP_ENDPOINT/_HEADERS/_PROTOCOL,
+    OTEL_METRICS_EXPORTER, OTEL_LOGS_EXPORTER and OTEL_RESOURCE_ATTRIBUTES pass through when the
+    app process carries them; OTEL_SERVICE_NAME is always the persona's own instead, computed here.
     """
-    env: dict[str, str] = {"HOME": str(persona.home), "CLAUDE_CONFIG_DIR": str(persona.home)}
-    for name in _INHERITED_IF_SET:
+    env: dict[str, str] = {
+        "HOME": str(persona.home),
+        "CLAUDE_CONFIG_DIR": str(persona.home),
+        "OTEL_SERVICE_NAME": f"{{ project_name }}-agent-{persona.name}",
+    }
+    for name in _INHERITED_IF_SET + _TELEMETRY_INHERITED_IF_SET:
         if name in os.environ:
             env[name] = os.environ[name]
 

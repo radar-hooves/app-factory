@@ -11,7 +11,8 @@ Speaks just enough of the wire format: one `system`/`init` event carrying a
 session id, one `assistant` event whose text ECHOES what this process was
 actually invoked with (the question, the tool flags, the MCP config path and
 whether `--strict-mcp-config` rode beside it, the model read off
-`CLAUDE_CONFIG_DIR/settings.json`) so the test can assert on argv and env by
+`CLAUDE_CONFIG_DIR/settings.json`, and every telemetry variable `session.py`'s
+`_environment()` may have set) so the test can assert on argv and env by
 reading the stream rather than a side channel, and one `result` event.
 
 `--resume <id>` re-emits that SAME id — the real CLI's own behaviour
@@ -57,6 +58,19 @@ GIANT_TRIGGER = "__giant__"
 #: only survives the read loop when `ask()` passes its own `limit=`.
 GIANT_TEXT_SIZE = 200_000
 MCP_PROBE_TRIGGER = "__mcp_probe__"
+
+#: The telemetry variables `session.py`'s `_environment()` may pass through
+#: or compute, in the order the echo line reports them.
+TELEMETRY_VARS = (
+    "CLAUDE_CODE_ENABLE_TELEMETRY",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_HEADERS",
+    "OTEL_EXPORTER_OTLP_PROTOCOL",
+    "OTEL_METRICS_EXPORTER",
+    "OTEL_LOGS_EXPORTER",
+    "OTEL_RESOURCE_ATTRIBUTES",
+    "OTEL_SERVICE_NAME",
+)
 
 
 def _emit(event: dict[str, object]) -> None:
@@ -127,6 +141,7 @@ def main() -> None:
             # Present only if session.py leaked the parent's own environment
             # through rather than building the child's from scratch.
             f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
+            "telemetry=" + ",".join(f"{name}={os.environ.get(name, 'absent')}" for name in TELEMETRY_VARS),
         ]
     )
 

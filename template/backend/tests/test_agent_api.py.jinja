@@ -195,6 +195,52 @@ async def test_the_apps_own_environment_does_not_reach_the_childs(
     assert "marker=absent" in echoed["message"]["content"][0]["text"]
 
 
+async def test_the_apps_otel_settings_reach_the_child_under_its_own_service_name(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#40: set on the app process, telemetry rides through -- except OTEL_SERVICE_NAME, which the child computes."""
+    monkeypatch.setenv("CLAUDE_CODE_ENABLE_TELEMETRY", "1")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-otlp-header-value")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+    monkeypatch.setenv("OTEL_METRICS_EXPORTER", "otlp")
+    monkeypatch.setenv("OTEL_LOGS_EXPORTER", "otlp")
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=test")
+    # The app's own service name -- must NOT reach the child unchanged.
+    monkeypatch.setenv("OTEL_SERVICE_NAME", "{{ project_name }}")
+
+    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")["message"]["content"][0]["text"]
+
+    assert "CLAUDE_CODE_ENABLE_TELEMETRY=1" in echoed
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318" in echoed
+    assert "OTEL_EXPORTER_OTLP_HEADERS=x-otlp-header-value" in echoed
+    assert "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf" in echoed
+    assert "OTEL_METRICS_EXPORTER=otlp" in echoed
+    assert "OTEL_LOGS_EXPORTER=otlp" in echoed
+    assert "OTEL_RESOURCE_ATTRIBUTES=deployment.environment=test" in echoed
+    assert "OTEL_SERVICE_NAME={{ project_name }}-agent-milton" in echoed
+
+
+async def test_the_apps_otel_settings_are_absent_from_the_child_when_unset(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No telemetry set on the app process -- the child carries none, only its own computed service name.
+
+    Deletes rather than merely not setting: the developer or CI process running THIS suite may itself carry
+    `CLAUDE_CODE_ENABLE_TELEMETRY` (Claude Code's own), which would otherwise leak in as a false pass-through.
+    """
+    for name in fake_agent_cli.TELEMETRY_VARS[:-1]:  # every pass-through name but OTEL_SERVICE_NAME
+        monkeypatch.delenv(name, raising=False)
+
+    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
+    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")["message"]["content"][0]["text"]
+
+    for name in fake_agent_cli.TELEMETRY_VARS[:-1]:
+        assert f"{name}=absent" in echoed
+    assert "OTEL_SERVICE_NAME={{ project_name }}-agent-milton" in echoed
+
+
 async def test_a_crashing_cli_becomes_one_library_error_frame(client: AsyncClient) -> None:
     """session.py's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
     response = await client.post("/api/agent/milton/ask", json={"question": "__crash__"}, headers=ASKER)
