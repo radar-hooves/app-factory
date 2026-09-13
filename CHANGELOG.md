@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.9] - 2026-09-14
+
+### Fixed
+
+- The users/workspaces migration (`a1c4f7e29b03`) wrote a `UniqueConstraint` on `users.authentik_uid` and on `workspaces.slug`, plus a separate non-unique `op.create_index` for each. Both models declare `unique=True, index=True`, which SQLAlchemy maps onto ONE unique index, so `alembic check` reported drift (drop the constraint, flip the index to unique) on every stamp. Each column now gets one unique index and no separate constraint.
+- `frontend/tests/e2e/workspaces.spec.ts`'s `beforeEach` retracted only a seat the *partner* held in a workspace the suite identity owns; it never retracted the suite identity's own seat in a workspace the partner owns, which the test body grants but never undoes. That seat survived the run, so the suite identity held two memberships for whatever spec ran next in the worker — invisible until something actually renders `WorkspaceChooser` for `needsWorkspaceChoice`, which then blocks that spec's page behind a chooser screen it knows nothing about. The retraction is now `retractStraySeats()`, called from both `beforeEach` (heals a run that aborted mid-way) and `afterEach` (heals the suite for whatever runs after a clean pass).
+
+Both found by pebblestone taking this slice as carbon copies against a shell that actually renders `WorkspaceChooser` (pebblestone#760 at eed60983). Dispatched from pebblestone's night-shift session (pebblestone#784, pebblestone#760). Proven by rendering a throwaway stamp from this commit: `alembic check` reports "No new upgrade operations detected" against a fresh throwaway Postgres, the backend's 143 tests pass, `pnpm check` reports 0 errors/warnings across 1182 files, and the full Playwright suite (`example`, `shell`, `workspaces`) passes with a real backend behind it. Closes radar-hooves/full-stack-app-template#39.
+
 ## [2026.9.13.8] - 2026-09-13
 
 ### Added
