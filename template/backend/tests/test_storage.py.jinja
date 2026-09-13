@@ -1,16 +1,20 @@
 """`Storage` binds the household api-client to this app's Nextcloud settings and
 roots every path under `nextcloud_root`.
 
-A fake transport swapped onto the api-client's own HTTP client after
-construction proves the ROOTING and the SHARE call this factory adds; the
-wrapper's own protocol correctness (PROPFIND parsing, WebDAV verbs) is
-`api-clients`'s own test suite's job, not this factory's.
+A fake transport swapped onto the WebDAV wrapper's own HTTP client after
+construction proves the ROOTING this factory adds; the wrapper's own protocol
+correctness (PROPFIND parsing, WebDAV verbs) is `api-clients`'s own test
+suite's job, not this factory's. `share` goes through the generated OCS
+client instead, whose response model demands a full, realistic Nextcloud
+share object — exactly the fidelity `api-clients` proves, not this factory —
+so its test fakes the bound method rather than the wire.
 """
 
-import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
+from nextcloud.models.shareapi_create_share_request import ShareapiCreateShareRequest
 
 from {{ package_name }}.config.sections.files import FilesSettings
 from {{ package_name }}.files.storage import Storage, get_storage
@@ -53,25 +57,21 @@ async def test_put_and_delete_root_every_path_under_nextcloud_root() -> None:
     ]
 
 
-async def test_share_creates_a_public_link_for_the_rooted_path() -> None:
-    seen_paths: list[str] = []
+async def test_share_creates_a_public_link_for_the_rooted_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen_paths.append(json.loads(request.content)["path"])
-        return httpx.Response(
-            200,
-            json={
-                "ocs": {
-                    "meta": {"status": "ok", "statuscode": 200},
-                    "data": {"url": "https://cloud.example.test/s/abc123"},
-                }
-            },
-        )
+    async def fake_create_share(
+        *, ocs_api_request: bool, shareapi_create_share_request: ShareapiCreateShareRequest
+    ) -> SimpleNamespace:
+        captured["ocs_api_request"] = ocs_api_request
+        captured["path"] = shareapi_create_share_request.path
+        captured["share_type"] = shareapi_create_share_request.share_type
+        return SimpleNamespace(ocs=SimpleNamespace(data=SimpleNamespace(url="https://cloud.example.test/s/abc123")))
 
     storage = Storage(_settings())
-    storage._shares.api_client.rest_client.pool_manager = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(storage._shares, "shareapi_create_share", fake_create_share)
 
     url = await storage.share("report.pdf")
 
     assert url == "https://cloud.example.test/s/abc123"
-    assert seen_paths == ["myapp/report.pdf"]
+    assert captured == {"ocs_api_request": True, "path": "myapp/report.pdf", "share_type": 3}
