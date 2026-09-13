@@ -67,32 +67,56 @@ def list_personas(settings: AgentSettings) -> list[str]:
 
 
 def _copy_shipped_files(source: Path, target: Path) -> None:
-    """Copy each shipped file into `target` that is not already there."""
+    """Copy each shipped file into `target`, overwriting whatever is there."""
     for filename in SOURCE_FILES:
         candidate = source / filename
-        destination = target / filename
-        if candidate.is_file() and not destination.exists():
-            shutil.copy2(candidate, destination)
+        if candidate.is_file():
+            shutil.copy2(candidate, target / filename)
+
+
+def _reseed_shipped_files(source: Path, home: Path) -> None:
+    """Re-copy each shipped file over an already-seeded `home`, file by file.
+
+    `home` is live — the CLI's own state (sessions, projects, backups, its
+    own json files) lives beside these three and must survive untouched — so
+    it cannot be rebuilt wholesale the way a fresh home is. Each file is
+    staged as a sibling temp file and renamed over the old one, so a
+    concurrent `load()`'s `json.loads` below only ever sees the whole old
+    file or the whole new one, the same rename-into-place atomicity the
+    fresh-home path gets from staging the entire directory.
+    """
+    for filename in SOURCE_FILES:
+        candidate = source / filename
+        if not candidate.is_file():
+            continue
+        fd, staged_name = tempfile.mkstemp(prefix=f".{filename}.", dir=home)
+        os.close(fd)
+        staged = Path(staged_name)
+        shutil.copy2(candidate, staged)
+        os.replace(staged, home / filename)
 
 
 def _seed(source: Path, home: Path) -> None:
-    """Copy a persona's shipped files into its writable home. Only ever ADDS.
+    """Copy a persona's shipped files into its writable home, every spawn.
 
-    A file already in the home was put there by Claude Code itself (it WRITES
-    to its own config directory) or by an operator, and overwriting it would
-    discard that state on every restart — the same rule the library's
-    `prepare_home` enforces on its one shared home, generalised here to each
-    persona's own.
+    `SOURCE_FILES` reach every spawn fresh: an edit to
+    `config/personas/<name>/CLAUDE.md`, `settings.json` or `.mcp.json`
+    overwrites the copy in `home` on the very next ask, matching
+    `docs/design/agent-console.md`'s persona contract ("read at every spawn,
+    so an edit reaches the next turn without a restart") — until this fix,
+    that was true of the source read but not of the seeded home, so an edit
+    already seeded once (Milton's `settings.json` on atlas, kept `goku/sonnet`
+    through a release that changed it to `sonnet`) never reached the home
+    Claude Code actually reads. Everything else in `home` — the CLI's own
+    state — is never in `SOURCE_FILES` and is left alone.
 
     A fresh home is built in a private staging directory and renamed into
     place, so two workers seeding the same persona at once never expose a
     half-written `settings.json` to `load()`'s `json.loads` below: `home`
-    either does not exist yet or is already complete. Once `home` exists,
-    this falls back to add-only copying, so a persona gaining a new shipped
-    file after its home was first seeded still picks it up.
+    either does not exist yet or is already complete.
     """
     if home.is_dir():
-        _copy_shipped_files(source, home)
+        _reseed_shipped_files(source, home)
         return
 
     home.parent.mkdir(parents=True, exist_ok=True)

@@ -154,6 +154,21 @@ async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_mo
     assert any(e.get("type") == "result" for e in events)
 
 
+async def test_an_edit_to_settings_json_reaches_the_very_next_ask(client: AsyncClient, personas_dir: Path) -> None:
+    """`docs/design/agent-console.md`: read at every spawn, no restart needed."""
+    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
+    echoed = next(e for e in _events(first.text) if e.get("type") == "assistant")
+    assert "model=goku/sonnet" in echoed["message"]["content"][0]["text"]
+
+    (personas_dir / "milton" / "settings.json").write_text(
+        json.dumps({"model": "sonnet", "permissions": {"allow": ["Read", "Grep"], "deny": ["Bash"]}})
+    )
+
+    second = await client.post("/api/agent/milton/ask", json={"question": "two"}, headers=ASKER)
+    echoed = next(e for e in _events(second.text) if e.get("type") == "assistant")
+    assert "model=sonnet" in echoed["message"]["content"][0]["text"]
+
+
 async def test_a_frame_over_asyncios_default_stream_limit_still_arrives_intact(client: AsyncClient) -> None:
     """Without `ask()`'s own `limit=`, this line raises `ValueError` mid-stream and the turn just stops."""
     response = await client.post(
