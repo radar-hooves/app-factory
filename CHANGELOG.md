@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.8] - 2026-09-13
+
+### Added
+
+- A `files` slice, off by default: `config/sections/files.py`'s `FilesSettings` (`NEXTCLOUD_URL`, `NEXTCLOUD_USERNAME`, a `Vended` `NEXTCLOUD_APP_PASSWORD` under this app's own `{{ project_name }}-nextcloud`/`app_password` broker credential, `NEXTCLOUD_ROOT`) and `files/storage.py`'s `Storage`/`get_storage()`, a WebDAV handle bound to it — put, get, list, move, delete, and (via the generated OCS Share API, which the WebDAV protocol has no operation for) share. Depends on the household `nextcloud` api-client (`nextcloud.wrappers.NextcloudClient`, `>=2026.6.0`, pinned to the private index alongside api-common and redactyl-core) rather than vendoring WebDAV code, the way Godswood's own 356-line copy and Pebblestone's planned SharePoint replacement both would have. An empty `NEXTCLOUD_URL` — the default on every existing app's next re-stamp — skips both the client construction and the vend entirely, so nothing changes for an app that has not opted in; `get_storage()` refuses loudly rather than open a connection to nothing. Turning it on for a deployment needs `NEXTCLOUD_URL` set and `{{ project_name }}-nextcloud` enrolled at the broker as an app-password credential before the container's next boot. Dispatched from Pebblestone's night-shift session (pebblestone#784, `docs/development/night-shift-2026-09-13.md` §1); consumer evidence Godswood's `backend/src/godswood/core/nextcloud/service.py` and Pebblestone's phase 8 (`docs/development/microsoft-365-exit-map.md`). Closes radar-hooves/full-stack-app-template#37.
+
 ## [2026.9.13.6] - 2026-09-13
 
 ### Added
