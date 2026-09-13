@@ -59,7 +59,7 @@ class Storage:
             ocs_api_request=True,
             shareapi_create_share_request=ShareapiCreateShareRequest(
                 path=self._rooted(path),
-                share_type=_SHARE_TYPE_PUBLIC_LINK,
+                shareType=_SHARE_TYPE_PUBLIC_LINK,
             ),
         )
         return response.ocs.data.url or ""
