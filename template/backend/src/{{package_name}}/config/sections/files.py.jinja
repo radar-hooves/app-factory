@@ -44,9 +44,7 @@ class FilesSettings(BaseSettings):
     # while the slice is off. An app-password, not the account's login
     # password: Nextcloud issues one per consumer, and it alone is revocable
     # without disturbing the human login it was minted from.
-    nextcloud_app_password: Annotated[
-        SecretStr, Vended("{{ project_name }}-nextcloud", "app_password")
-    ] = SecretStr("")
+    nextcloud_app_password: Annotated[SecretStr, Vended("{{ project_name }}-nextcloud", "app_password")] = SecretStr("")
     # This app's own subtree of the Nextcloud instance; every path `files/storage.py`
     # takes is resolved under it, never above it.
     nextcloud_root: str = "{{ project_name }}"
