@@ -97,6 +97,7 @@
 			{turns}
 			{running}
 			version={transcript.version}
+			name={persona}
 			welcome="Ask {persona} a question."
 			onregenerate={() => run(asked)}
 		>
@@ -104,6 +105,7 @@
 				<Composer
 					bind:value={question}
 					{running}
+					name={persona}
 					scope="library"
 					onscope={() => {}}
 					attachments={false}
