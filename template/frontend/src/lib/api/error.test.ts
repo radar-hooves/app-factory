@@ -27,7 +27,7 @@ describe('extractApiError', () => {
 		expect(extractApiError('boom')).toEqual({ title: 'Error', description: 'boom' });
 	});
 
-	it("treats a message-shaped `error` as the description, not a code to humanise", () => {
+	it('treats a message-shaped `error` as the description, not a code to humanise', () => {
 		// pebblestone's Origin guard answers a rejected cross-origin request with
 		// exactly this shape: a sentence in `error`, no `message` beside it.
 		const info = extractApiError({ error: 'Cross-origin request rejected' });
@@ -108,7 +108,7 @@ describe('extractApiError', () => {
 	});
 
 	describe("a proxy's HTML error page", () => {
-		it('reports nginx\'s built-in 502 page as a service failure, never as markup', () => {
+		it("reports nginx's built-in 502 page as a service failure, never as markup", () => {
 			// nginx's own error pages open with `<html`, not `<!doctype html>`.
 			const page = '<html><head><title>502 Bad Gateway</title></head></html>';
 			const info = extractApiError(page);
