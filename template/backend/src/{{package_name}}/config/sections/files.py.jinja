@@ -1,0 +1,62 @@
+"""File storage settings: this app's own Nextcloud service identity.
+
+A fresh stamp answers no `NEXTCLOUD_URL`, which turns the whole slice off:
+`files/storage.py`'s `get_storage()` refuses, and no vend is attempted, so
+every existing app re-stamps unchanged. An app that wants Nextcloud sets the
+URL and enrols `{{ project_name }}-nextcloud` at the broker (an app-password
+credential, `app_password` field) before its next boot; `config/vend.py`
+then vends it exactly as `database.py` vends the database password.
+
+Does not inherit `VendedSettings`: that class resolves every `Vended` field
+unconditionally at construction, which would vend `nextcloud_app_password`
+even with the slice off. The validator below runs the same mechanism gated
+on `enabled` instead.
+
+Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
+    {{ project_name | upper | replace('-', '_') }}_NEXTCLOUD_URL
+    {{ project_name | upper | replace('-', '_') }}_NEXTCLOUD_USERNAME
+    {{ project_name | upper | replace('-', '_') }}_NEXTCLOUD_APP_PASSWORD
+    {{ project_name | upper | replace('-', '_') }}_NEXTCLOUD_ROOT
+"""
+
+from typing import Annotated, Self
+
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from {{ package_name }}.config.vend import Vended, resolve_vended_fields
+
+
+class FilesSettings(BaseSettings):
+    """WebDAV file storage, off by default."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="{{ project_name | upper | replace('-', '_') }}_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Empty disables the slice — the safe default for a fresh stamp with no
+    # Nextcloud service account enrolled yet.
+    nextcloud_url: str = ""
+    nextcloud_username: str = "{{ project_name }}"
+    # Empty means vend it (see `Vended` in config/vend.py), skipped entirely
+    # while the slice is off. An app-password, not the account's login
+    # password: Nextcloud issues one per consumer, and it alone is revocable
+    # without disturbing the human login it was minted from.
+    nextcloud_app_password: Annotated[
+        SecretStr, Vended("{{ project_name }}-nextcloud", "app_password")
+    ] = SecretStr("")
+    # This app's own subtree of the Nextcloud instance; every path `files/storage.py`
+    # takes is resolved under it, never above it.
+    nextcloud_root: str = "{{ project_name }}"
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.nextcloud_url)
+
+    @model_validator(mode="after")
+    def _resolve_vended_fields_when_enabled(self) -> Self:
+        if self.enabled:
+            resolve_vended_fields(self)
+        return self

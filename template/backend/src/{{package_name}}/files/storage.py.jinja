@@ -1,0 +1,80 @@
+"""This app's Nextcloud-backed file store.
+
+One WebDAV handle bound to the app's own vended Nextcloud service identity
+(`config/sections/files.py`), so no domain slice writes WebDAV code of its
+own. `put`/`get`/`list`/`move`/`delete` ride `NextcloudClient.webdav`, the
+household api-client's own facade (auth, OCS headers and all six protocol
+clients bound once); `share` is not on that facade, so it goes straight
+through the client's generated OCS Share API operation instead, over the
+same `api_client` the facade already built and headered.
+"""
+
+from functools import lru_cache
+
+from nextcloud.api.files_sharing_shareapi_api import FilesSharingShareapiApi
+from nextcloud.models.shareapi_create_share_request import ShareapiCreateShareRequest
+from nextcloud.wrappers import FileEntry, NextcloudClient
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.config.sections.files import FilesSettings
+
+# Nextcloud's public-link share type (OCS Share API §Constants). The only
+# kind this slice needs; sharing with a person or group is the household
+# `nextcloud` MCP server's job, not this factory's.
+_SHARE_TYPE_PUBLIC_LINK = 3
+
+
+class Storage:
+    """This app's root-scoped WebDAV handle, plus link sharing."""
+
+    def __init__(self, settings: FilesSettings) -> None:
+        self._root = settings.nextcloud_root.strip("/")
+        client = NextcloudClient(
+            settings.nextcloud_url, settings.nextcloud_username, settings.nextcloud_app_password.get_secret_value()
+        )
+        self.webdav = client.webdav
+        self._shares = FilesSharingShareapiApi(client.api_client)
+
+    def _rooted(self, path: str) -> str:
+        return f"{self._root}/{path.lstrip('/')}" if self._root else path
+
+    async def put(self, path: str, content: bytes, *, overwrite: bool = True) -> None:
+        await self.webdav.upload(self._rooted(path), content, overwrite=overwrite)
+
+    async def get(self, path: str) -> bytes:
+        return await self.webdav.download(self._rooted(path))
+
+    async def list(self, path: str = "", *, depth: int = 1) -> list[FileEntry]:
+        return await self.webdav.list_dir(self._rooted(path), depth=depth)
+
+    async def move(self, src: str, dst: str, *, overwrite: bool = True) -> None:
+        await self.webdav.move(self._rooted(src), self._rooted(dst), overwrite=overwrite)
+
+    async def delete(self, path: str) -> None:
+        await self.webdav.delete(self._rooted(path))
+
+    async def share(self, path: str) -> str:
+        """Create a public link share for `path`; returns the share URL."""
+        response = await self._shares.shareapi_create_share(
+            ocs_api_request=True,
+            shareapi_create_share_request=ShareapiCreateShareRequest(
+                path=self._rooted(path),
+                share_type=_SHARE_TYPE_PUBLIC_LINK,
+            ),
+        )
+        return response.ocs.data.url or ""
+
+
+@lru_cache(maxsize=1)
+def get_storage() -> Storage:
+    """Return the process-wide `Storage`, bound to this app's Nextcloud settings.
+
+    Raises RuntimeError while the slice is off (`FilesSettings.enabled` is
+    false): a caller that reaches here is a route or a hook this app chose to
+    wire, and an unconfigured slice should fail loudly rather than construct
+    a client against an empty URL.
+    """
+    settings = get_settings().files
+    if not settings.enabled:
+        raise RuntimeError("the files slice is off: set NEXTCLOUD_URL to enable it")
+    return Storage(settings)

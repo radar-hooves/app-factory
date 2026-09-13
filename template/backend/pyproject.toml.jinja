@@ -28,6 +28,10 @@ dependencies = [
     # under an explicit index a [tool.uv.sources] pin reaches only a DECLARED
     # dependency — undeclared it resolves against PyPI and is not found.
     "redactyl-core>=2026.7.0",
+    # nextcloud: the household api-client's WebDAV wrapper and generated OCS Share
+    # API, bound in files/storage.py — the files slice's whole WebDAV layer, so no
+    # app carries its own put/get/list/move/delete/share code.
+    "nextcloud>=2026.6.0",
 ]
 
 [dependency-groups]
@@ -78,6 +82,7 @@ explicit = true
 [tool.uv.sources]
 api-common = { index = "godswood" }
 redactyl-core = { index = "godswood" }
+nextcloud = { index = "godswood" }
 
 [tool.ruff]
 line-length = 120
