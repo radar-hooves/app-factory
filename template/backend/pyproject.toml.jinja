@@ -23,7 +23,7 @@ dependencies = [
     # gunicorn: production process manager (entrypoint.sh, gunicorn.conf.py).
     "gunicorn>=26.0.0",
     # api-common: logging.py's one telemetry call; the extra adds the OTLP exporter and instrumentation.
-    "api-common[telemetry]>=2026.9.1",
+    "api-common[telemetry]>=2026.9.4",
     # redactyl-core is api-common's redaction floor and transitive-only here, but
     # under an explicit index a [tool.uv.sources] pin reaches only a DECLARED
     # dependency — undeclared it resolves against PyPI and is not found.
