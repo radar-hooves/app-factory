@@ -32,7 +32,7 @@
 	import { Panel } from '@poodle64/ui/panel';
 	import * as Select from '@poodle64/ui/select';
 	import * as Table from '@poodle64/ui/table';
-	import { api, extractApiError } from '$lib/api';
+	import { api, describeApiError, toastApiError } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 
 	let { label = 'Workspace' }: { label?: string } = $props();
@@ -65,7 +65,7 @@
 		]);
 		loading = false;
 		if (listed.error) {
-			failure = extractApiError(listed.error, 'Could not load members').description;
+			failure = describeApiError(listed.error, 'Could not load members');
 			return;
 		}
 		members = listed.data;
@@ -100,8 +100,7 @@
 		});
 		adding = false;
 		if (error) {
-			const info = extractApiError(error, 'Could not add the member');
-			toast.error(info.title, { description: info.description });
+			toastApiError(error, 'Could not add the member');
 			return;
 		}
 		toast.success('Member added', {
@@ -122,8 +121,7 @@
 			params: { path: { workspace_id: workspace.id, user_id: target.user.id } }
 		});
 		if (error) {
-			const info = extractApiError(error, 'Could not remove the member');
-			toast.error(info.title, { description: info.description });
+			toastApiError(error, 'Could not remove the member');
 			return;
 		}
 		toast.success('Member removed', {
@@ -153,8 +151,7 @@
 		});
 		renaming = false;
 		if (error) {
-			const info = extractApiError(error, `Could not rename the ${noun}`);
-			toast.error(info.title, { description: info.description });
+			toastApiError(error, `Could not rename the ${noun}`);
 			return;
 		}
 		renameOpen = false;

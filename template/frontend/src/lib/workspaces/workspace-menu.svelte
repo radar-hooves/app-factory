@@ -47,7 +47,7 @@
 	import * as DropdownMenu from '@poodle64/ui/dropdown-menu';
 	import { Input } from '@poodle64/ui/input';
 	import { Label } from '@poodle64/ui/label';
-	import { api, extractApiError } from '$lib/api';
+	import { api, toastApiError } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { cn } from '$lib/utils';
 
@@ -80,8 +80,7 @@
 		const { data, error } = await api.POST('/api/workspaces/', { body: { name } });
 		creating = false;
 		if (error) {
-			const info = extractApiError(error, `Could not create the ${noun}`);
-			toast.error(info.title, { description: info.description });
+			toastApiError(error, `Could not create the ${noun}`);
 			return;
 		}
 		createOpen = false;

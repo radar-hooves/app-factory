@@ -1,7 +1,7 @@
 {% raw %}<script lang="ts">
 	import { onMount } from 'svelte';
 	import PageHeader from '@poodle64/ui/page-header';
-	import { api, extractApiError } from '$lib/api';
+	import { api, describeApiError } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 
 	let status = $state<string | null>(null);
@@ -13,7 +13,7 @@
 	onMount(async () => {
 		const { data, error } = await api.GET('/api/example/');
 		status = error
-			? `Could not reach the API: ${extractApiError(error).description}`
+			? describeApiError(error, 'Could not reach the API')
 			: `Connected — ${data.length} example items in ${auth.activeWorkspace?.name ?? 'this workspace'}.`;
 	});
 </script>
