@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.5] - 2026-09-13
+
+### Fixed
+
+- `@poodle64/librarian`'s `Composer` and `Conversation` render the agent console's whole surface for any persona, but neither took a `name` prop before `2026.9.14` — the placeholder, the aria-label, the `welcome` default and the unreachable alert all read "Milton" regardless of which persona was actually running. Pinned `@poodle64/librarian` at `2026.9.14` exactly (not a caret range, matching the `impeccable` precedent, since this call site now depends on the prop the version adds) and pass `name={persona}` to both components on `routes/agent/[persona]/+page.svelte`; the template carries no lockfile to pin further. Proven by rendering a throwaway stamp from this commit: `pnpm install` resolves `@poodle64/librarian@2026.9.14` exactly, `pnpm check` reports 0 errors and 0 warnings across 1182 files, and the frontend's 76 unit tests still pass. Dispatched by the Pebblestone cutover session; consumer evidence pebblestone#784.
+
 ## [2026.9.13.3] - 2026-09-13
 
 ### Fixed
