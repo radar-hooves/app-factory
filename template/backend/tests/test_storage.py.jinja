@@ -1,0 +1,75 @@
+"""`Storage` binds the household api-client to this app's Nextcloud settings and
+roots every path under `nextcloud_root`.
+
+A fake transport swapped onto the api-client's own HTTP client after
+construction proves the ROOTING and the SHARE call this factory adds; the
+wrapper's own protocol correctness (PROPFIND parsing, WebDAV verbs) is
+`api-clients`'s own test suite's job, not this factory's.
+"""
+
+import json
+
+import httpx
+import pytest
+
+from {{ package_name }}.config.sections.files import FilesSettings
+from {{ package_name }}.files.storage import Storage, get_storage
+
+
+def _settings() -> FilesSettings:
+    return FilesSettings(
+        nextcloud_url="https://cloud.example.test",
+        nextcloud_username="app-user",
+        nextcloud_app_password="app-password",
+        nextcloud_root="myapp",
+    )
+
+
+def test_get_storage_refuses_while_the_slice_is_off() -> None:
+    """The suite's own env carries no NEXTCLOUD_URL — the fresh-stamp default."""
+    get_storage.cache_clear()
+    with pytest.raises(RuntimeError, match="files slice is off"):
+        get_storage()
+
+
+async def test_put_and_delete_root_every_path_under_nextcloud_root() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        return httpx.Response(204 if request.method == "DELETE" else 201)
+
+    storage = Storage(_settings())
+    storage.webdav._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    await storage.put("notes/plan.txt", b"content")
+    await storage.delete("notes/plan.txt")
+
+    assert seen == [
+        ("PUT", "/remote.php/dav/files/app-user/myapp/notes/plan.txt"),
+        ("DELETE", "/remote.php/dav/files/app-user/myapp/notes/plan.txt"),
+    ]
+
+
+async def test_share_creates_a_public_link_for_the_rooted_path() -> None:
+    seen_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_paths.append(json.loads(request.content)["path"])
+        return httpx.Response(
+            200,
+            json={
+                "ocs": {
+                    "meta": {"status": "ok", "statuscode": 200},
+                    "data": {"url": "https://cloud.example.test/s/abc123"},
+                }
+            },
+        )
+
+    storage = Storage(_settings())
+    storage._shares.api_client.rest_client.pool_manager = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    url = await storage.share("report.pdf")
+
+    assert url == "https://cloud.example.test/s/abc123"
+    assert seen_paths == ["myapp/report.pdf"]
