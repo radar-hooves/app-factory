@@ -11,6 +11,7 @@ async def test_health_check_reports_healthy(client):
     body = response.json()
     assert body["status"] == "healthy"
     assert "version" in body
+    assert body["revision"] == ""
     assert "environment" in body
     assert "timestamp" in body
 

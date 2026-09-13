@@ -41,6 +41,7 @@ def health_check(session: SessionDep) -> HealthResponse:
     return HealthResponse(
         status="healthy",
         version=version("{{ project_name }}"),
+        revision=settings.revision,
         environment="development" if settings.debug else "production",
         timestamp=datetime.now(UTC),
     )

@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.6] - 2026-09-13
+
+### Added
+
+- `revision: str` on `HealthResponse` (`api/system/schemas.py.jinja`, `router.py.jinja`): `GET /api/system/health` now carries the build's commit SHA, so a deploy proof can read which build is actually answering — `version` is the package version and does not move between builds of the same version. Sourced from one root `Settings.revision` field (`config/__init__.py.jinja`), read once at startup from the `REVISION` environment variable, never a subprocess call to git; empty in a source checkout. `Dockerfile.jinja`'s runtime stage bakes it in: the `GIT_COMMIT` arg/env pair nothing ever read is retired in favour of `ARG GIT_SHA=""` -> `ENV REVISION=${GIT_SHA}`, keeping the arg name pebblestone's own Dockerfile already bakes so no app's build workflow needs to change. `test_system_health.py.jinja` asserts the field reads empty against the un-baked test environment; `frontend/src/lib/api/schema.d.ts` regenerated for the new field. Proven by rendering a throwaway stamp: `uv sync && pytest` (revision empty) and `docker build --build-arg GIT_SHA=<sha>` (revision carries it through `/api/system/health`). Dispatched by the Pebblestone night-shift session; consumer evidence pebblestone#784, which re-stamps onto this tag to retire its own second `/api/health` route. Closes radar-hooves/full-stack-app-template#38.
+
 ## [2026.9.13.5] - 2026-09-13
 
 ### Fixed

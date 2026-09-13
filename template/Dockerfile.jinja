@@ -67,10 +67,14 @@ FROM python:3.14-slim-bookworm
 
 WORKDIR /app
 
-# Git commit hash baked in at build time.
-# Usage: docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) .
-ARG GIT_COMMIT=unknown
-ENV GIT_COMMIT=${GIT_COMMIT}
+# Deploy-revision stamping, so a deploy proof can read which build is
+# answering (GET /api/system/health -> Settings.revision). Empty for a local
+# `docker build` with no --build-arg. GIT_SHA is the fleet's established arg
+# name (pebblestone's own Dockerfile bakes the same); keep it in step rather
+# than mint a second name for the same value.
+# Usage: docker build --build-arg GIT_SHA=$(git rev-parse HEAD) .
+ARG GIT_SHA=""
+ENV REVISION=${GIT_SHA}
 
 ENV TZ=Australia/Brisbane
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

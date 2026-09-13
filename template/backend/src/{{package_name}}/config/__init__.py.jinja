@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # healthcheck and the CI smoke probe both poll.
     openapi_enabled: bool = True
 
+    # Build revision (commit SHA) the running image was built from, read once
+    # at startup — never a subprocess call to git. Baked in via the
+    # Dockerfile's GIT_SHA build arg -> ENV REVISION; empty in a source
+    # checkout or an unstamped local `docker build`, so a deploy proof
+    # (GET /api/system/health) can tell which build is actually answering.
+    revision: str = ""
+
     # Domain sections. get_settings() constructs each one and passes it as an
     # init argument, which is why these carry only a factory: a section left to
     # the parent's own sources is rebuilt from THEM, and the parent knows only

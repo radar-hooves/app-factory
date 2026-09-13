@@ -652,6 +652,8 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+            /** Revision */
+            revision: string;
             /** Environment */
             environment: string;
             /**
