@@ -18,6 +18,12 @@ own "column contains null values" error here: add the columns nullable in your
 own revision, backfill them to the workspace those rows belong to, then tighten.
 The template cannot guess whose data it is, and defaulting would be the wrong
 answer to that question rather than a convenient one.
+
+``users.authentik_uid`` and ``workspaces.slug`` each get ONE unique index, not
+a ``UniqueConstraint`` plus a separate non-unique index: the model declares
+both columns ``unique=True, index=True``, which SQLAlchemy maps onto a single
+unique index, and the split version left ``alembic check`` reporting drift on
+every stamp (radar-hooves/full-stack-app-template#39).
 """
 
 from collections.abc import Sequence
@@ -46,9 +52,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("authentik_uid"),
     )
-    op.create_index(op.f("ix_users_authentik_uid"), "users", ["authentik_uid"])
+    op.create_index(op.f("ix_users_authentik_uid"), "users", ["authentik_uid"], unique=True)
 
     op.create_table(
         "workspaces",
@@ -58,9 +63,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("slug"),
     )
-    op.create_index(op.f("ix_workspaces_slug"), "workspaces", ["slug"])
+    op.create_index(op.f("ix_workspaces_slug"), "workspaces", ["slug"], unique=True)
 
     op.create_table(
         "workspace_memberships",
