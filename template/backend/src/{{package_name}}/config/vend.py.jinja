@@ -14,6 +14,16 @@ its own environment/file/broker resolution order.
 `signet` writes to a file rather than stdout, so a vended value cannot land in a
 log, a shell history, or an agent transcript. Keep it that way: nothing in this
 module may return, log, or interpolate a value into a message.
+
+A context with no signet identity -- CI foremost -- has no way to answer any of
+this, and adding fields to `Vended` should never mean adding one dummy value per
+secret name per workflow. Setting `<APP>_VEND=off` (see `_VEND_SWITCH_ENV`
+below) skips the broker for whatever `Vended` field the environment and any
+boot-lane file still leave empty, logging once per process and leaving that
+field at its empty default rather than raising. Nothing sets it in production:
+compose supplies every name there, so the switch is never reached, and a
+container that somehow started without a name still fails closed exactly as
+before.
 """
 
 import json
@@ -85,6 +95,34 @@ def _identity_flags() -> list[str]:
     if SIGNET_AGENT_SOCKET:
         flags += ["--agent", SIGNET_AGENT_SOCKET]
     return flags
+
+
+#: Set to ``off`` to skip the broker entirely -- the one declared way a context
+#: with no signet identity (CI) constructs settings without vending. Read fresh
+#: on every resolution rather than cached at import, so a test can flip it with
+#: `monkeypatch.setenv` exactly as it flips any other input to this module.
+_VEND_SWITCH_ENV = f"{_PREFIX}_VEND"
+
+_logged_vend_switched_off = False
+
+
+def _vend_switched_off() -> bool:
+    return os.environ.get(_VEND_SWITCH_ENV, "").strip().lower() == "off"
+
+
+def _log_vend_switched_off_once() -> None:
+    """Log once per process, never once per field -- a section carrying a dozen
+    ``Vended`` fields must not spam a dozen identical lines.
+    """
+    global _logged_vend_switched_off
+    if _logged_vend_switched_off:
+        return
+    logger.warning(
+        "%s=off: the broker is not asked. Every Vended field the environment and any boot-lane "
+        "file still leave empty stays at its empty default. Never set this in production.",
+        _VEND_SWITCH_ENV,
+    )
+    _logged_vend_switched_off = True
 
 
 class VendError(RuntimeError):
@@ -189,7 +227,8 @@ def resolve_vended_fields(settings: BaseSettings) -> None:
     boot-lane file, then the broker -- lives here exactly once, for every
     secret setting the app carries. ``VendedSettings`` below is the one line
     each section adds to use it. Nothing here ever logs, returns, or raises a
-    resolved value itself.
+    resolved value itself, save the one line naming that the broker is being
+    skipped under `_VEND_SWITCH_ENV`.
     """
     for name, info in type(settings).model_fields.items():
         spec = next((meta for meta in info.metadata if isinstance(meta, Vended)), None)
@@ -210,7 +249,10 @@ def resolve_vended_fields(settings: BaseSettings) -> None:
                         Path(file_path),
                     )
         if not value:
-            value = _vend_with_retry(spec.credential, spec.field)
+            if _vend_switched_off():
+                _log_vend_switched_off_once()
+            else:
+                value = _vend_with_retry(spec.credential, spec.field)
         setattr(settings, name, SecretStr(value) if is_secret else value)
 
 

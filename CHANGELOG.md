@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.13.3] - 2026-09-13
+
+### Fixed
+
+- `config/vend.py`'s `resolve_vended_fields` raised `VendError` for any `Vended` field a context with no signet identity left empty — every CI job, since none enrols one. Pebblestone's re-stamp onto v2026.9.13.2 put 19 fields on `Vended`; its backend-test, frontend-e2e and docker-build-smoke jobs each construct `Settings()` with only the database password set, and all three went red on main at 9959c4fb with `VendError: signet is not on PATH`. `<APP>_VEND=off` is the one declared switch: `resolve_vended_fields` now skips the broker for a field the environment and any boot-lane file still leave empty, logging once per process and leaving it at its empty default rather than raising. Production is unaffected — nothing sets it there, so an unnamed field still fails closed. `backend/tests/conftest.py` sets it by default for every pytest run (`setdefault`, so a developer session that wants a real vend exercised overrides it), and `.github/image-smoke.sh` sets it on the container the docker-build gate boots; both construct `Settings()` with no identity behind them. There is no template-owned e2e CI workflow to carry the same line into — `frontend/tests/e2e/global-setup.ts` and `app-web-server.ts` are the template's whole e2e surface, and the job that boots a real backend for Playwright is each app's own caller of the household `playwright-container.yaml` reusable — so an app's own e2e/migration job sets the switch itself (documented in `docs/development/working-on-the-template.md`, alongside the mechanics). `test_vend.py` gains one test proving a field stays empty with the switch on and still raises with it unset; `test_vend.py` and `test_database_settings.py`'s existing vend-path tests now unset the switch explicitly, since conftest's new default would otherwise skip the very broker call they exercise. Proven by rendering a throwaway stamp and running its whole backend suite (137 passed) plus a direct check with `signet` removed from `PATH`: `Settings()` constructs with the switch on, and still raises without it. Dispatched by the Pebblestone cutover session; consumer evidence pebblestone CI runs on 9959c4fb. Closes radar-hooves/full-stack-app-template#35.
+
 ## [2026.9.13.2] - 2026-09-13
 
 ### Added

@@ -8,7 +8,11 @@ set -eu
 
 name="smoke-{{ project_name }}-$$"
 # POSTGRES_PASSWORD is never used; eager settings validation needs a value to construct.
-docker run -d --name "$name" -e POSTGRES_PASSWORD=smoke "$IMAGE" \
+# {{ package_name | upper }}_VEND=off: this container has no signet identity and
+# nothing else here names a Vended field, so the broker is never asked
+# (config/vend.py) — any Vended field an app's own domain settings later add
+# stays at its empty default instead of failing the boot this gate exists to prove.
+docker run -d --name "$name" -e POSTGRES_PASSWORD=smoke -e {{ package_name | upper }}_VEND=off "$IMAGE" \
   gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py
 trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
 

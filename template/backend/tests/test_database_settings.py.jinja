@@ -41,6 +41,7 @@ def test_an_unreadable_file_warns_and_falls_through_to_the_broker(
     assertion is on the REASON rather than the path: the log redactor replaces a
     high-entropy token wholesale, and a pytest tmp_path is one.
     """
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)  # conftest defaults it off for the suite
     monkeypatch.setattr(vend_module, "vend", lambda credential, field: "from-the-broker")
     with caplog.at_level(logging.WARNING):
         settings = DatabaseSettings(postgres_password="", postgres_password_file=str(tmp_path / "not-there"))
@@ -50,6 +51,7 @@ def test_an_unreadable_file_warns_and_falls_through_to_the_broker(
 
 def test_the_password_vends_under_this_app_s_own_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     """`postgres_password` names `{{ project_name }}-db`/`password` — this app's own row in the catalogue, never a shared or guessed one."""
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)  # conftest defaults it off for the suite
     calls: list[tuple[str, str]] = []
 
     def fake_vend(credential: str, field: str) -> str:

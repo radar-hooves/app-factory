@@ -21,6 +21,18 @@ from filelock import FileLock
 
 os.environ.setdefault("DEBUG", "true")
 
+# The suite must never depend on a live broker being reachable: the database
+# credential above is always an ephemeral testcontainer's, never vended, and any
+# OTHER `Vended` field an app's own domain settings declare has no signet
+# identity to vend under here either — this process runs as CI does, not as a
+# developer session. `config/vend.py`'s `<APP>_VEND=off` is the declared way to
+# say so; test_vend.py itself proves the mechanism by monkeypatching `vend`
+# directly, so it is unaffected by the default set here. `setdefault`, not a
+# plain assignment: a developer deliberately exercising a real vend for one
+# test session sets `{{ package_name | upper }}_VEND=on` first and this leaves
+# that alone.
+os.environ.setdefault("{{ package_name | upper }}_VEND", "off")
+
 # The rate limiter keys on the caller's address, and the whole suite presents as
 # one synthetic client — so an enabled default limit would eventually throttle
 # the suite against itself as the number of endpoint tests grows. Off by default
