@@ -162,4 +162,11 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 	await page.getByTestId('workspace-rename-name').fill(own.name);
 	await page.getByTestId('workspace-rename-submit').click();
 	await expect(page.getByTestId('workspace-menu-name')).toHaveText(own.name);
+
+	// Retract the seat the partner granted at the top of the test. Left in
+	// place, this identity carries two memberships for the rest of the run —
+	// every other spec that follows in the same worker or suite hits the
+	// chooser instead of the page it expects. beforeEach only self-heals THIS
+	// test's own next run, never a spec that runs after it in the same pass.
+	await partner.delete(`/api/workspaces/${created.workspace.id}/members/${me.id}`);
 });

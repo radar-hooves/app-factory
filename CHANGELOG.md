@@ -12,6 +12,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - `@poodle64/ui` floor raised to `2026.9.8`. The shell now names the active section in its top bar (derived from `nav` and `currentPath`), carries a route's own scope controls there through a new `ShellControls` component, ships `Segmented` for a small fixed choice, and the rail's right edge drags to resize. The stamped home route wires the new pattern — `ShellControls` with a `Segmented size="sm"` view toggle — so a fresh app shows it in place, not only in the package's own docs. No stamped route drops a `PageHeader` title for this: the scaffold ships no `nav` config of its own (an app's, wired once it has more than one page to link between), so the bar names no section yet for a title to echo. Dispatched from master-project, on the operator's word. Proven by rendering a throwaway stamp from this commit: `pnpm install` resolves `@poodle64/ui@2026.9.8`, and `pnpm check` reports 0 errors and 0 warnings.
 
+### Fixed
+
+- `tests/e2e/workspaces.spec.ts` retracts the seat it grants itself at the top of the test, not only the one it retracts mid-test. Left in place, the identity the suite runs as carries two memberships for the rest of the run — every spec that follows in the same pass hits the workspace chooser instead of the page it expects. `beforeEach`'s self-heal only cleans up before this test's own NEXT run, never a spec that runs after it in the same pass; there is exactly one test in the file, so nothing ever ran that cleanup within a single run until now. Found stamping earworm onto `2026.9.8` above and re-running its own E2E suite twice against the same throwaway database.
+
 ## [2026.9.13.10] - 2026-09-14
 
 ### Added
