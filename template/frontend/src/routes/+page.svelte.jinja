@@ -1,6 +1,8 @@
 {% raw %}<script lang="ts">
 	import { onMount } from 'svelte';
 	import PageHeader from '@poodle64/ui/page-header';
+	import { ShellControls } from '@poodle64/ui/app-shell';
+	import { Segmented, type SegmentedOption } from '@poodle64/ui/segmented';
 	import { api, describeApiError } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 
@@ -16,6 +18,18 @@
 			? describeApiError(error, 'Could not reach the API')
 			: `Connected — ${data.length} example items in ${auth.activeWorkspace?.name ?? 'this workspace'}.`;
 	});
+
+	// The pattern a real domain route follows for its own scope (an entity, a
+	// financial year, a chart/table toggle): render it inside `ShellControls`
+	// and it appears in the top bar, never a row above the body
+	// (`sveltekit-frontend.md` §Component library). This page's own choice —
+	// how much of the connection status to show — is a placeholder for that;
+	// the wiring is the point.
+	let view = $state<'summary' | 'detail'>('summary');
+	const VIEW_OPTIONS: SegmentedOption<'summary' | 'detail'>[] = [
+		{ value: 'summary', label: 'Summary' },
+		{ value: 'detail', label: 'Detail' }
+	];
 </script>
 
 <!-- Compose the shared page-title treatment rather than a hand-rolled heading —
@@ -31,9 +45,13 @@
 <!-- prettier-ignore -->
 <PageHeader title="{% endraw %}{{ project_name }}{% raw %}" subtitle="{% endraw %}{{ description }}{% raw %}" />
 
+<ShellControls>
+	<Segmented bind:value={view} options={VIEW_OPTIONS} label="View" size="sm" />
+</ShellControls>
+
 {#if status}
 	<p class="bg-card text-card-foreground mt-6 rounded-md border px-4 py-3 text-sm">
-		{status}
+		{view === 'detail' ? status : status.split(' — ')[0]}
 	</p>
 {:else}
 	<p class="text-muted-foreground mt-6 text-sm">Checking API…</p>

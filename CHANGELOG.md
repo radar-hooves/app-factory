@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.15] - 2026-09-15
+
+### Changed
+
+- `@poodle64/ui` floor raised to `2026.9.8`. The shell now names the active section in its top bar (derived from `nav` and `currentPath`), carries a route's own scope controls there through a new `ShellControls` component, ships `Segmented` for a small fixed choice, and the rail's right edge drags to resize. The stamped home route wires the new pattern — `ShellControls` with a `Segmented size="sm"` view toggle — so a fresh app shows it in place, not only in the package's own docs. No stamped route drops a `PageHeader` title for this: the scaffold ships no `nav` config of its own (an app's, wired once it has more than one page to link between), so the bar names no section yet for a title to echo. Dispatched from master-project, on the operator's word. Proven by rendering a throwaway stamp from this commit: `pnpm install` resolves `@poodle64/ui@2026.9.8`, and `pnpm check` reports 0 errors and 0 warnings.
+
 ## [2026.9.13.10] - 2026-09-14
 
 ### Added
