@@ -565,7 +565,7 @@
 		-->
 		<aside
 			id={navRegionId}
-			class="ds-shell-rail bg-shell text-shell-foreground border-border relative flex-none flex-col border-r"
+			class="ds-shell-rail bg-shell text-shell-foreground border-border flex-none flex-col border-r"
 			style={railWidth ? `--ds-shell-rail-width: ${railWidth}px` : undefined}
 			data-collapsed={railCollapsed ? 'true' : undefined}
 			data-resizing={resizing ? 'true' : undefined}

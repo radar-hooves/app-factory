@@ -1283,6 +1283,22 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			document.getAnimations().every((animation) => animation.playState !== 'running')
 		);
 
+		// The drawer overlays the page: a utility on the same element (`relative`,
+		// `sticky`) outranks the base-layer `position: fixed` and leaves it in
+		// flow, squeezing the bar beside it.
+		const drawer = await page.evaluate(() => {
+			const rail = document.querySelector('.ds-shell-rail');
+			return {
+				position: getComputedStyle(rail).position,
+				barWidth: document.querySelector('.ds-shell-bar').getBoundingClientRect().width
+			};
+		});
+		check(
+			`nested @ ${width}px: the open drawer is position:fixed and the bar keeps the full width`,
+			drawer.position === 'fixed' && Math.round(drawer.barWidth) === width,
+			`position ${drawer.position}, bar ${Math.round(drawer.barWidth)}px of ${width}px`
+		);
+
 		const measured = await page.evaluate((viewport) => {
 			// Every element in the document, not the document's own scrollWidth: a
 			// scroll container hides its contents' overflow from the naive check,

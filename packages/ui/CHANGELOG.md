@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.9] - 2026-09-15
+
+### Fixed
+
+- **The phone drawer stayed in flow.** 2026.9.8 put a `relative` utility on the
+  rail for the resize handle; a utility outranks the base-layer
+  `position: fixed`, so the open drawer sat beside the page and squeezed the
+  bar to a third of the screen. The rail is `sticky`, which positions the
+  handle already; the utility is gone. `harness/drive.mjs` now asserts the
+  open drawer is `fixed` and the bar keeps the full width at 360 and 320px.
+
 ## [2026.9.8] - 2026-09-15
 
 ### Added
