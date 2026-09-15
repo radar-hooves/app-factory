@@ -2,6 +2,35 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.8] - 2026-09-15
+
+### Added
+
+- **The shell names where you are.** The top bar carries the active nav
+  label (the active child's where one matches, else the item's), read off
+  `nav` and `currentPath`, so a collapsed rail or a closed phone drawer no
+  longer leaves a page's location unnamed. `activeNavLabel` is exported. Shown
+  from `md`; on a phone only when the page has controls to show with it.
+- **`ShellControls`** (`@poodle64/ui/app-shell`): a page renders its scope
+  controls (entity, financial year, chart/table) inside it and they appear in
+  the top bar after the location — inline from `xl`, a second row of the bar
+  below that. Registered through context, withdrawn on unmount. Sub-routes
+  stay in the rail (`NavItem.children`); the bar carries only what changes the
+  view of the page you are on.
+- **`Segmented`** (`@poodle64/ui/segmented`): one value from a small fixed
+  set, every option visible, `size="sm"` for the bar. bits-ui ToggleGroup
+  underneath.
+- **The rail resizes.** A drag handle on the rail's right edge (md+, when
+  `collapsible`): 200–420px, arrows nudge, Home or a double-click resets, a
+  drag below 170px collapses. Width persists in `localStorage`
+  (`ds-shell-rail-width`) and survives a collapse. Untouched, nothing is
+  written and the rail renders as before.
+
+### Changed
+
+- The top bar wraps below `xl` so the controls row can sit under it; at `xl`
+  and above it is the one 56px row it was.
+
 ## [2026.9.7] - 2026-09-11
 
 ### Added

@@ -89,7 +89,8 @@
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import AppNav from './app-nav.svelte';
-	import { toItems, type NavSource } from './types.js';
+	import { activeNavLabel, toItems, type NavSource } from './types.js';
+	import { provideShellControls, type ShellControlsSlot } from './controls.js';
 	import { cn } from '$lib/utils.js';
 
 	let {
@@ -213,6 +214,92 @@
 	} = $props();
 
 	const hasNav = $derived(toItems(nav).length > 0);
+
+	// Where the user is, in words: the rail is icons when collapsed and a closed
+	// drawer on a phone, so the bar names the section.
+	const location = $derived(activeNavLabel(nav, currentPath));
+
+	// The page's scope controls, registered by `<ShellControls>` from the route.
+	const controls: ShellControlsSlot = $state({ content: null });
+	provideShellControls(controls);
+
+	// Rail width is a personal preference: localStorage, one key across apps.
+	// A drag below RAIL_SNAP collapses; the width survives and returns on expand.
+	const RAIL_KEY = 'ds-shell-rail-width';
+	const RAIL_MIN = 200;
+	const RAIL_MAX = 420;
+	const RAIL_SNAP = 170;
+	const RAIL_STEP = 16;
+	let railWidth = $state<number | null>(null);
+	let resizing = $state(false);
+	$effect(() => {
+		try {
+			const stored = Number(localStorage.getItem(RAIL_KEY));
+			if (stored >= RAIL_MIN && stored <= RAIL_MAX) railWidth = stored;
+		} catch {
+			/* storage unavailable: the default width stands */
+		}
+	});
+	function clampRail(next: number) {
+		return Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(next)));
+	}
+	function setRailWidth(next: number) {
+		railWidth = clampRail(next);
+		try {
+			localStorage.setItem(RAIL_KEY, String(railWidth));
+		} catch {
+			/* storage unavailable: the width lasts the session */
+		}
+	}
+	function startResize(event: PointerEvent) {
+		const handle = event.currentTarget as HTMLElement;
+		const rail = handle.parentElement as HTMLElement;
+		const startX = event.clientX;
+		const startWidth = rail.getBoundingClientRect().width;
+		const before = railWidth;
+		resizing = true;
+		handle.setPointerCapture(event.pointerId);
+		const move = (e: PointerEvent) => {
+			const next = startWidth + (e.clientX - startX);
+			if (next < RAIL_SNAP) {
+				// A collapse keeps the width it had; only a resize stores one.
+				railWidth = before;
+				collapsed = true;
+				stop();
+			} else {
+				railWidth = clampRail(next);
+			}
+		};
+		const stop = () => {
+			resizing = false;
+			if (!collapsed && railWidth !== null) setRailWidth(railWidth);
+			handle.removeEventListener('pointermove', move);
+			handle.removeEventListener('pointerup', stop);
+			handle.removeEventListener('pointercancel', stop);
+			if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+		};
+		handle.addEventListener('pointermove', move);
+		handle.addEventListener('pointerup', stop);
+		handle.addEventListener('pointercancel', stop);
+	}
+	function resizeByKey(event: KeyboardEvent) {
+		const current = railWidth ?? RAIL_MIN + (RAIL_MAX - RAIL_MIN) / 4;
+		if (event.key === 'ArrowLeft') setRailWidth(current - RAIL_STEP);
+		else if (event.key === 'ArrowRight') setRailWidth(current + RAIL_STEP);
+		else if (event.key === 'Home') resetRailWidth();
+		else if (event.key === 'End') setRailWidth(RAIL_MAX);
+		else return;
+		event.preventDefault();
+	}
+	/** Back to the package default (Home, or a double-click on the handle). */
+	function resetRailWidth() {
+		railWidth = null;
+		try {
+			localStorage.removeItem(RAIL_KEY);
+		} catch {
+			/* storage unavailable */
+		}
+	}
 
 	// The measure is resolved ONCE, and the class and the attribute both read
 	// that one answer. Two independently-worded conditionals looked symmetric
@@ -478,8 +565,10 @@
 		-->
 		<aside
 			id={navRegionId}
-			class="ds-shell-rail bg-shell text-shell-foreground border-border flex-none flex-col border-r"
+			class="ds-shell-rail bg-shell text-shell-foreground border-border relative flex-none flex-col border-r"
+			style={railWidth ? `--ds-shell-rail-width: ${railWidth}px` : undefined}
 			data-collapsed={railCollapsed ? 'true' : undefined}
+			data-resizing={resizing ? 'true' : undefined}
 			data-drawer={mobileNavOpen ? 'true' : undefined}
 			data-testid={mobileNavOpen ? 'ds-shell-drawer' : undefined}
 			role={mobileNavOpen ? 'dialog' : undefined}
@@ -540,12 +629,33 @@
 				label={navLabel}
 				onNavigate={() => (mobileNavOpen = false)}
 			/>
+			{#if collapsible && !railCollapsed && !mobileNavOpen}
+				<!-- The rail's right edge: drag to resize, drag past the snap to
+				     collapse, arrows to nudge, Home to reset, double-click to reset.
+				     A focusable separator is the ARIA window-splitter pattern. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+				<div
+					role="separator"
+					aria-orientation="vertical"
+					aria-label="Resize sidebar"
+					aria-valuenow={railWidth ?? undefined}
+					aria-valuemin={RAIL_MIN}
+					aria-valuemax={RAIL_MAX}
+					tabindex="0"
+					class="ds-shell-rail-handle"
+					onpointerdown={startResize}
+					onkeydown={resizeByKey}
+					ondblclick={resetRailWidth}
+					data-testid="ds-rail-resize"
+				></div>
+			{/if}
 		</aside>
 	{/if}
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 		<header
-			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none items-center gap-2 border-b px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:gap-3 sm:px-5"
+			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none flex-wrap items-center gap-2 border-b px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:gap-3 sm:px-5 xl:flex-nowrap"
 		>
 			{#if hasNav}
 				<!-- `aria-controls` names the region this toggle opens. It is present
@@ -588,6 +698,28 @@
 			     behaviour (hiding text, going icon-only); `context` is the one
 			     leading slot that never had to. -->
 			{#if context}<div class="min-w-0">{@render context()}</div>{/if}
+
+			<!-- Where you are, then the page's scope controls. Inline with the
+			     rest of the bar from xl; below that, controls take a second row
+			     of the bar, and a bare label shows from md and not on a phone. -->
+			{#if location || controls.content}
+				<div
+					class={cn(
+						'flex min-w-0 items-center gap-2 sm:gap-3',
+						controls.content
+							? 'order-last basis-full pb-2 xl:order-none xl:basis-auto xl:pb-0'
+							: 'hidden md:flex'
+					)}
+					data-testid="ds-shell-location"
+				>
+					{#if location}
+						<span class="text-shell-muted-foreground max-w-48 flex-none truncate text-sm"
+							>{location}</span
+						>
+					{/if}
+					{#if controls.content}{@render controls.content()}{/if}
+				</div>
+			{/if}
 
 			{#if onSearch && searchPlacement === 'leading'}
 				{@render searchButton(

@@ -164,6 +164,28 @@ That is the whole minimum. Everything below is optional.
 | `texture`                                         | The house atmosphere on the content region. Defaults to `grid`; `none` is the opt-out.                                  |
 | `padded`, `mainClass`                             | Padding, and extra classes on the scrolling content container.                                                          |
 
+The bar also names where you are — the active nav label, read off `nav` and
+`currentPath` — and carries the page's scope controls. A page registers them
+with `ShellControls`; they render after the location, inline from `xl` and on
+a second row of the bar below that:
+
+```svelte
+<script lang="ts">
+	import { ShellControls } from '@poodle64/ui/app-shell';
+	import { Segmented } from '@poodle64/ui/segmented';
+	let year = $state('FY26');
+</script>
+
+<ShellControls>
+	<Segmented bind:value={year} options={YEARS} label="Financial year" size="sm" />
+</ShellControls>
+```
+
+A scope control changes the view of the page you are on and never
+navigates; sub-routes are `NavItem.children`. The rail's right edge is a drag
+handle (200–420px, arrows nudge, Home resets, a drag below 170px collapses);
+the width persists in `localStorage` as `ds-shell-rail-width`.
+
 ### Nested navigation
 
 A section with its own navigation puts it on the item, as `children`, and the
@@ -1230,17 +1252,6 @@ non-zero and naming the field on any difference.
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint` (package.json/exports sanity).
 3. Commit, tag `ui-v<version>`, push the tag.
-4. `.github/workflows/publish.yaml` runs on that push and should publish via
-   npm OIDC trusted publishing: check it with
-   `gh run list --workflow=publish.yaml`. As of 2026.9.4 every run since
-   `ui-v2026.9.2` fails at the `npm publish` step with
-   `E404 Not Found - PUT .../@poodle64%2fui` (an OIDC/trusted-publisher
-   binding issue, since `Build and test package` passes first). Until that
-   is diagnosed and fixed, publish manually from `packages/ui/`:
-   ```bash
-   printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' > .npmrc
-   signet exec --identity huginn-claude --broker https://portcullis.example.com \
-     --credential npm-publish-token --env-var NODE_AUTH_TOKEN -- npm publish
-   rm -f .npmrc
-   ```
+4. `.github/workflows/publish.yaml` runs on that push and publishes via npm
+   OIDC trusted publishing: `gh run list --workflow=publish.yaml`.
    Confirm with `npm view @poodle64/ui version`.

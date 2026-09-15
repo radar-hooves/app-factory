@@ -1,21 +1,9 @@
 <script lang="ts">
 	/**
-	 * The shell lab.
-	 *
-	 * Deliberately does NOT compose AppShell. Its whole job is rendering chrome
-	 * the package cannot produce yet — shape D has no page header and a rail
-	 * contextual zone, neither of which AppShell has — so importing the shipped
-	 * component would make the lab unable to do the one thing it exists for.
-	 * The console's own routes compose AppShell; this one is upstream of it.
-	 *
-	 * What it DOES share is everything below the component line: the token
-	 * layer, the ds-* layer, and now the Tailwind utility layer, because it
-	 * lives inside a real consumer build. That last one is why this moved out of
-	 * a standalone HTML file — a shape judged here is judged in the same CSS an
-	 * app will render it in.
-	 *
-	 * Graduation path: a shape that wins here gets built into AppShell for real,
-	 * and packages/ui/harness/ then verifies the shipped component in CI.
+	 * The shell lab: chrome drawn by hand, upstream of AppShell, so a shape can
+	 * be judged in a real consumer build before the package ships it. The
+	 * "Sidebar sub-routes" shape is what AppShell ships as of ui 2026.9.8; the
+	 * lab stays for the next shape.
 	 */
 	import { PROFILES, type Section } from '$lib/profiles';
 	import { toggleMode } from 'mode-watcher';

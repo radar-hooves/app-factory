@@ -215,3 +215,21 @@ export function hasActiveNavChild(item: NavItem, currentPath: string | undefined
 	if (!currentPath) return false;
 	return navChildren(item).some((child) => isNavItemActive(child, currentPath));
 }
+
+/**
+ * The label of where the user is: the active child's where one matches, else
+ * the active item's. Undefined when nothing matches, so an unlisted route
+ * renders no label rather than a wrong one.
+ */
+export function activeNavLabel(
+	nav: NavSource | undefined,
+	currentPath: string | undefined
+): string | undefined {
+	if (!currentPath) return undefined;
+	for (const item of toItems(nav)) {
+		const child = navChildren(item).find((c) => isNavItemActive(c, currentPath));
+		if (child) return child.label;
+		if (isNavItemActive(item, currentPath)) return item.label;
+	}
+	return undefined;
+}

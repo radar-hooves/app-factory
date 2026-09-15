@@ -226,6 +226,16 @@
           "insteadOf": "a bespoke nav rail + header layout per app"
         },
         {
+          "name": "ShellControls",
+          "props": "children",
+          "insteadOf": "a scope row (entity, financial year, chart/table) hand-placed above the page body; the shell's top bar carries it"
+        },
+        {
+          "name": "Segmented",
+          "props": "value, options, label, size?",
+          "insteadOf": "a hand-built row of aria-pressed buttons for a small fixed choice"
+        },
+        {
           "name": "PageHeader",
           "props": "title?, eyebrow?, breadcrumbs?, icon?, subtitle?, info?, meta?, actions?",
           "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"

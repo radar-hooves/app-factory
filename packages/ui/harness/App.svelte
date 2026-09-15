@@ -62,6 +62,9 @@
 	import ContextColumn from '../dist/components/ui/context-column/context-column.svelte';
 	import TileGrid from '../dist/components/ui/tile-grid/tile-grid.svelte';
 	import { AppIdentity } from '../dist/components/ui/app-identity/index.js';
+	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
+	import { Segmented } from '../dist/components/ui/segmented/index.js';
+	let auditYear = $state('FY26');
 	import { DataTableTanstack } from '../dist/components/ui/data-table-tanstack/index.js';
 	import type { ColumnDef } from '../dist/components/ui/data-table-tanstack/index.js';
 	import { createSvelteTable } from '../dist/components/ui/data-table/index.js';
@@ -1262,6 +1265,26 @@
 				onSignOut={() => {}}
 			/>
 		{/snippet}
+		<!-- The page's scope in the bar; with the Entity trigger beside it, the
+		     shape a finance page carries. -->
+		<ShellControls>
+			<button
+				class="border-border bg-surface-1 flex h-7 flex-none items-center gap-1.5 rounded-md border px-2.5 text-xs whitespace-nowrap"
+				data-probe="audit-entity"
+			>
+				<span class="text-muted-foreground">Entity</span><span>All entities</span>
+			</button>
+			<Segmented
+				bind:value={auditYear}
+				options={[
+					{ value: 'FY24', label: 'FY24' },
+					{ value: 'FY25', label: 'FY25' },
+					{ value: 'FY26', label: 'FY26' }
+				]}
+				label="Financial year"
+				size="sm"
+			/>
+		</ShellControls>
 		<div class="flex min-h-0 flex-1 gap-6">
 			<div class="min-w-0 flex-1">
 				<h1 class="font-display text-display font-semibold">Reports</h1>

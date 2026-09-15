@@ -68,19 +68,18 @@ Measured off the references at their native scale, rows run ~32–36px with a ~1
 
 **Current build departs:** ~44px rows with a wide gutter, which is why eight items fill only the top quarter of the rail and leave a void above the foot.
 
-## The corrected shape
+## The shape
 
-Two rows, following GitHub, with Linear and Notion's restraint in the rail.
+One 56px bar, following Linear and Notion's restraint in the rail.
 
-- **Global bar.** Left: breadcrumb, `Securities / Investing`, module muted and view bold. Right: search, then any global action. Both ends anchored.
-- **Context row**, rendered only where a module has peer views. Left: the lens tabs as underline tabs. Right: the scope controls that belong to the whole view (the owner filter, a date range) — which is also the "persistent filter bar above the report" the securities dossier called for from Tradervue and Edgewonk. **⚑ This is now the best-evidenced part of the whole shape**: Grafana puts breadcrumb left and `Last 24 hours` + refresh right on exactly this row, and Attio stacks title → scope row → filter row, each altitude thinner than the one above. It was inference before those two were opened; it is now copied from two working dense consoles.
-- **Rail head.** Brand left, collapse toggle right, icon-only.
-- **Rail body.** Grouped under quiet headers, tighter rows, neutral active wash.
-- **Rail foot.** Identity alone, with the theme toggle beside it — no second row.
+- **Bar.** Left: where you are (the active nav label), then the page's scope controls — an entity, a financial year, chart/table — then search. Right: app-level actions, theme, identity. No breadcrumb, no page title.
+- **Rail head.** Brand left, collapse toggle right, icon-only. The right edge drags to resize and collapses past the snap.
+- **Rail body.** Sections, each disclosing its own sub-routes beneath it; grouped under quiet headers, tighter rows, neutral active wash. A sub-route lives here and nowhere else.
+- **Page.** Actions sit beside what they act on, never in the chrome.
 
-### Peer versus drill-down
+### Scope versus sub-route
 
-A tab row is for **peer views** of one section. A drill-down — one property, one document, one trade — is not a peer; it extends the breadcrumb in the global bar instead. Getting this wrong is what turns a tab row into a junk drawer.
+A scope control changes the view of the page you are on and lives in the bar. A sub-route is another page of the section and lives in the rail. A drill-down — one property, one document — is the page's own heading, not chrome.
 
 ## Parity notes
 
