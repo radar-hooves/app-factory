@@ -25,11 +25,18 @@ function refusal() {
 }
 
 /** A response streaming the frames given, as the wire carries them. */
-function streaming(frames: string[], { truncate = false } = {}) {
+function streaming(
+	frames: string[],
+	{ truncate = false, unterminated = false, contentType = 'text/event-stream' } = {}
+) {
 	const body = new ReadableStream<Uint8Array>({
 		start(controller) {
 			const encoder = new TextEncoder();
-			for (const frame of frames) controller.enqueue(encoder.encode(`data: ${frame}\n\n`));
+			frames.forEach((frame, index) => {
+				const last = index === frames.length - 1;
+				const separator = unterminated && last ? '' : '\n\n';
+				controller.enqueue(encoder.encode(`data: ${frame}${separator}`));
+			});
 			if (truncate) controller.error(new TypeError('network error'));
 			else controller.close();
 		}
@@ -37,7 +44,7 @@ function streaming(frames: string[], { truncate = false } = {}) {
 	return {
 		ok: true,
 		body,
-		headers: new Headers({ 'content-type': 'text/event-stream' })
+		headers: contentType ? new Headers({ 'content-type': contentType }) : new Headers()
 	} as unknown as Response;
 }
 
@@ -171,6 +178,29 @@ describe('ask()', () => {
 			throw new DOMException('aborted', 'AbortError');
 		}) as unknown as typeof globalThis.fetch;
 		expect(await collect(ask({ question: 'q', fetch: fakeFetch, signal: controller.signal }))).toEqual([]);
+	});
+
+	it('keeps a last frame the server sent without its blank line', async () => {
+		// A stream that closes cleanly mid-separator still sent that frame, and
+		// it is usually the terminal `result` carrying the duration and the
+		// sources. Dropped, a finished answer wears an unreachable line.
+		const fakeFetch = vi.fn(async () =>
+			streaming([JSON.stringify({ type: 'result', is_error: false })], { unterminated: true })
+		) as unknown as typeof globalThis.fetch;
+		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+			{ type: 'result', is_error: false }
+		]);
+	});
+
+	it('reads a stream whose route declared no content type at all', async () => {
+		// A proxy that drops the header is still streaming; refusing it here
+		// would be this layer breaking a working consumer over a header.
+		const fakeFetch = vi.fn(async () =>
+			streaming([JSON.stringify({ type: 'result', is_error: false })], { contentType: '' })
+		) as unknown as typeof globalThis.fetch;
+		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+			{ type: 'result', is_error: false }
+		]);
 	});
 
 	it('leaves a completed run exactly as the CLI sent it', async () => {

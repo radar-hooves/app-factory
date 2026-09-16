@@ -133,8 +133,14 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	// A session that expired mid-conversation is the shape this catches: the
 	// POST is redirected to a login page, which answers 200 with HTML, and a
 	// reader whose stream "opened" then waits for frames that can never come.
-	const kind = response.headers.get('content-type') ?? '';
-	if (!response.ok || !response.body || !kind.includes('text/event-stream')) {
+	//
+	// A response that DECLARES something other than an event stream is refused;
+	// one that declares nothing is read anyway. A route behind a proxy that
+	// drops the header is still streaming, and refusing it here would be this
+	// layer breaking a working consumer over a header — the terminal-frame
+	// check at the end of this function catches it if it really says nothing.
+	const kind = (response.headers.get('content-type') ?? '').toLowerCase();
+	if (!response.ok || !response.body || (kind && !kind.includes('text/event-stream'))) {
 		yield { type: 'library_error' };
 		return;
 	}
@@ -147,6 +153,25 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	// rather than left to the renderer, which cannot tell a stream that died
 	// from one still arriving.
 	let terminal = false;
+
+	/** One frame's `data:` lines, as the event they carry. */
+	function parse(frame: string): AgentEvent | null {
+		// `data:` only — the type lives inside the payload where Claude Code
+		// puts it, so there is no second place to look.
+		const data = frame
+			.split('\n')
+			.filter((l) => l.startsWith('data:'))
+			.map((l) => l.slice(5).trim())
+			.join('');
+		if (!data) return null;
+		try {
+			return JSON.parse(data) as AgentEvent;
+		} catch {
+			// A partial frame at the end of a stream is not an error.
+			return null;
+		}
+	}
+
 	for (;;) {
 		let chunk: ReadableStreamReadResult<string>;
 		try {
@@ -163,22 +188,21 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 			const frame = buffered.slice(0, boundary);
 			buffered = buffered.slice(boundary + 2);
 			boundary = buffered.indexOf('\n\n');
-			// `data:` only — the type lives inside the payload where Claude Code
-			// puts it, so there is no second place to look.
-			const data = frame
-				.split('\n')
-				.filter((l) => l.startsWith('data:'))
-				.map((l) => l.slice(5).trim())
-				.join('');
-			if (!data) continue;
-			try {
-				const event = JSON.parse(data) as AgentEvent;
-				if (event.type === 'result' || event.type === 'library_error') terminal = true;
-				yield event;
-			} catch {
-				/* a partial frame at end of stream is not an error */
-			}
+			const event = parse(frame);
+			if (!event) continue;
+			if (event.type === 'result' || event.type === 'library_error') terminal = true;
+			yield event;
 		}
+	}
+
+	// The last frame of a stream that closed cleanly without its blank line.
+	// It is usually the terminal `result`, carrying the duration and the
+	// sources, so dropping it both loses the answer's furniture and makes a
+	// finished turn look like one that died.
+	const last = parse(buffered);
+	if (last) {
+		if (last.type === 'result' || last.type === 'library_error') terminal = true;
+		yield last;
 	}
 
 	if (!terminal && !options.signal?.aborted) yield { type: 'library_error' };

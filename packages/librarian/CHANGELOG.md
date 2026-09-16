@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.16] - 2026-09-16
+
+Two edges on `ask()`, from the fresh-context review of 2026.9.15.
+
+### Fixed
+
+- **A last frame sent without its blank line is read.** The reader parsed a
+  frame only on the `\n\n` that separates two of them, so a server that
+  closed cleanly straight after its final `data:` line lost that frame — and
+  the final frame is the terminal `result`, carrying the duration and the
+  sources. The turn then wore the unreachable line under a complete answer,
+  because nothing terminal had arrived.
+- **A route that declares no content type is read anyway.** The content-type
+  check refuses a response that DECLARES something other than an event stream
+  (the login page an expired session redirects to), and reads one that
+  declares nothing: a proxy that drops the header is still streaming, and
+  refusing it would be this layer breaking a working consumer over a header.
+  The comparison is case-folded.
+
 ## [2026.9.15] - 2026-09-16
 
 The consuming app's persona is the whole voice, the transcript reads as a
