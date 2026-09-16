@@ -356,8 +356,14 @@
 	/* The reader's own words carry the consuming app's hue, the way every chat
 	   a person already uses colours THEIR side and leaves the other party
 	   neutral. It is an identity mark, not decoration: scanning back for "what
-	   did I ask" is a colour search, not a reading task. The hue is whatever
-	   the host set --ds-color-primary to, so no consumer is named here.
+	   did I ask" is a colour search, not a reading task.
+
+	   --ds-color-primary-solid, falling back to --ds-color-primary, because a
+	   dark-mode palette lightens its primary so the SAME token can serve as
+	   coloured text on a dark page. A fill behind light text and text on a dark
+	   ground want opposite lightness, and a brand asked to be both comes out
+	   washed — a deep red reads as salmon. An app with a fill-grade brand
+	   colour declares the solid pair; one that has not is unaffected.
 	   It stays on the SHORT side of the transcript on purpose — a question is
 	   a line or two, an answer is paragraphs, so filling the question is an
 	   accent and filling the answer would be a wall. */
@@ -365,9 +371,9 @@
 		max-width: 85%;
 		border: 1px solid transparent;
 		border-radius: var(--ds-radius-xl);
-		background: var(--ds-color-primary);
+		background: var(--ds-color-primary-solid, var(--ds-color-primary));
 		padding: 0.625rem 1rem;
-		color: var(--ds-color-primary-foreground);
+		color: var(--ds-color-primary-solid-foreground, var(--ds-color-primary-foreground));
 		font-size: 1rem;
 		line-height: 1.5rem;
 		overflow-wrap: break-word;
@@ -414,8 +420,8 @@
 		   under the 3:1 floor for a non-text graphic and read as a smudge —
 		   measured 2.55:1 on a dark-mode host. A solid fill carries the hue AND
 		   the contrast. */
-		background: var(--ds-color-primary);
-		color: var(--ds-color-primary-foreground);
+		background: var(--ds-color-primary-solid, var(--ds-color-primary));
+		color: var(--ds-color-primary-solid-foreground, var(--ds-color-primary-foreground));
 		font-size: var(--ds-text-2xs);
 		font-weight: 600;
 		text-transform: uppercase;
