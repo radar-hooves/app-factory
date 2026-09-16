@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/ui",
-	"version": "2026.9.14",
+	"version": "2026.9.15",
 	"description": "Household shared component layer: shadcn-svelte primitives (bits-ui) plus the composed page chrome every app builds its routes from, restyled by each app's @poodle64/design-tokens alias layer. One fix reaches every app.",
 	"type": "module",
 	"license": "MIT",

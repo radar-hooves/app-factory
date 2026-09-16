@@ -110,8 +110,6 @@
 		identity,
 		settingsHref,
 		settingsLabel = 'Settings',
-		version,
-		versionHref,
 		onSearch,
 		searchLabel = 'Search…',
 		searchShortcut = '⌘K',
@@ -176,16 +174,14 @@
 		identity?: Snippet;
 		/** Where the Settings row at the rail's foot links. Absent renders no row.
 		 *  Settings sits at the foot because configuring the app is not navigating
-		 *  it, and the split reads without a label. */
+		 *  it, and the split reads without a label.
+		 *
+		 *  The app's version does NOT live beside it. A build string earns rail
+		 *  space only if it saves a trip, and it does not: Settings is on screen
+		 *  at every moment and its About section is one click from here, so the
+		 *  line was permanent furniture duplicating the thing directly above it. */
 		settingsHref?: string;
 		settingsLabel?: string;
-		/** The build this person is looking at, e.g. `2026.9.3 · b032a3a`. Rendered
-		 *  as one muted line under the Settings row: no icon, no hover, not a nav
-		 *  row. It earns its place by answering "what am I running" the moment
-		 *  someone reports a bug, and it links into Settings where the full
-		 *  About section lives. */
-		version?: string;
-		versionHref?: string;
 		/** Provide to render the search affordance. Usually opens a CommandPalette. */
 		onSearch?: () => void;
 		searchLabel?: string;
@@ -673,26 +669,19 @@
 				The version is not a row: no icon, no tile, no hover, one muted
 				line, so it reads as metadata and never competes for a click.
 			-->
-			{#if settingsHref || version}
-				<div class="ds-shell-rail-foot mt-auto" class:sr-only={railCollapsed && !mobileNavOpen}>
-					{#if settingsHref}
-						<a
-							href={settingsHref}
-							class="ds-nav-item"
-							aria-current={currentPath?.startsWith(settingsHref) ? 'page' : undefined}
-							onclick={() => (mobileNavOpen = false)}
-						>
-							<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
-							<span class="truncate">{settingsLabel}</span>
-						</a>
-					{/if}
-					{#if version}
-						{#if versionHref}
-							<a href={versionHref} class="ds-shell-version">{version}</a>
-						{:else}
-							<p class="ds-shell-version">{version}</p>
-						{/if}
-					{/if}
+			{#if settingsHref}
+				<div class="ds-shell-rail-foot mt-auto">
+					<a
+						href={settingsHref}
+						class="ds-nav-item"
+						aria-current={currentPath?.startsWith(settingsHref) ? 'page' : undefined}
+						onclick={() => (mobileNavOpen = false)}
+					>
+						<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+						<span class={railCollapsed && !mobileNavOpen ? 'sr-only' : 'truncate'}>
+							{settingsLabel}
+						</span>
+					</a>
 				</div>
 			{/if}
 			{#if collapsible && !railCollapsed && !mobileNavOpen}
