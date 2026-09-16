@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.18] - 2026-09-16
+
+### Changed
+
+- `@poodle64/librarian` pinned at `2026.9.16`, which reads a last SSE frame a server sent without its trailing blank line (that frame is the terminal `result`, carrying the answer's duration and sources, so losing it put an unreachable line under a complete answer) and reads a stream whose route declared no content type at all, while still refusing one that declares something else — the login page an expired session redirects to. Proven by rendering a throwaway stamp from this commit: `pnpm install` resolves `@poodle64/librarian@2026.9.16` exactly, `pnpm check` reports 0 errors and 0 warnings across 1185 files, and the frontend's 76 unit tests pass.
+
 ## [2026.9.17] - 2026-09-16
 
 ### Changed
