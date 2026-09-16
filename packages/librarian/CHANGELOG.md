@@ -2,6 +2,72 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.15] - 2026-09-16
+
+The consuming app's persona is the whole voice, the transcript reads as a
+chat, and a failed stream says so (`radar-hooves/design-system#35`, from
+Pebblestone's agent console, the director watching a portal drive 16/09/2026).
+
+### Fixed
+
+- **The package's look no longer depends on the consumer's Tailwind config.**
+  Every component now carries its own CSS, written against the `--ds-*`
+  tokens and compiled by whatever bundler the app already runs. Pebblestone's
+  `app.css` has an `@source` line for `@poodle64/ui` and never had one for
+  this package, so NONE of its utilities compiled there: no per-turn cards,
+  no role distinction, unstyled tables, and `max-w-[46rem]` resolving to
+  `max-width: none` — a transcript measured 2302px wide. There was no build
+  error, no lint hit and no failing test, and there could not be. The reading
+  column's measure is now `--ds-lib-measure` (default `46rem`) in this
+  package's own stylesheet, and the console's `app.css` has had its scan line
+  REMOVED so the screenshot grid is taken in a consumer that compiles none of
+  these classes.
+- **A failed stream leaves Send disabled no longer.** `ask()` never throws:
+  a `fetch` the browser blocks on CORS after an expired session redirects it,
+  a 200 that is a login page rather than an event stream, a connection that
+  dies mid-answer and a stream that ends with no terminal frame all yield one
+  `library_error` and finish the iteration, which is what runs the host's
+  `finally` and re-enables its composer. The turn shows the unreachable line
+  and offers "Ask again". An abort the reader asked for stays silent.
+- **No string in this package names a persona.** `working.svelte` hardcoded
+  "Milton is looking" / "Milton is reading" and rendered with no props;
+  `notHeld` and `answerFailed` named him in plain text; only `unreachable`
+  was ever composed. Penny told Pebblestone's director "Milton is looking" on
+  every question she was asked, and said Milton had answered without a source
+  on nearly every answer.
+
+### Added
+
+- **`copyFor(name)` and `personaName(name)`** in `@poodle64/librarian/copy`.
+  `LibrarianCopy` gains `welcome`, `askPlaceholder`, `answeringPlaceholder`,
+  `working` (the cycling words) and `conversationLabel`, so the persona's name
+  reaches every sentence the package renders. `resolveCopy(overrides, name)`
+  takes the name too; a host's explicit override still wins. The copy is
+  pronoun-free: the persona is whoever the app says it is, and a sentence that
+  guesses is wrong for half of them.
+- **A display name from a slug.** `name="penny"` renders "Penny",
+  `chief-engineer` renders "Chief Engineer", and a name with any capital in it
+  is left exactly as the host wrote it. The consuming app passes
+  `page.params.persona`, which is the slug.
+- **A transcript that reads as a chat.** Each turn is the reader's bubble
+  against the trailing edge and a bounded answer card under it, signed with
+  the persona's name, its avatar initial and the time; markdown tables gained
+  zebra striping; a caret blinks at the end of the streaming text; and the
+  composer sits on the app's own background behind a hairline, off the scroll
+  area.
+- **`Turn.at`** (epoch ms), rendered as a clock time distinct from the
+  duration badge. A host that persists conversations supplies it; one that
+  does not gets a stamp when the turn first appears, and a turn already on
+  screen at mount shows none rather than claiming it was asked today.
+- **`Outcome.unreachable`**, the fact behind the unreachable sentence.
+  `client.ts` has no persona to name, so it reports the failure and the
+  rendering layer says it in the right voice — replacing the sentinel that
+  compared `outcome.error` against `DEFAULT_COPY.unreachable` verbatim.
+- **`SourceList`** (`@poodle64/librarian/source-list`), the source rows the
+  transcript and the artefact pane had each been rendering for themselves.
+- Two more lab states, `chat` (three settled turns) and `persona` (the same
+  surface answering as Penny), photographed like the rest.
+
 ## [2026.9.14] - 2026-09-13
 
 A second persona needs the same surface (`radar-hooves/library#133`, dispatched

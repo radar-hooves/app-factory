@@ -30,7 +30,9 @@
 		'narration',
 		'not-held',
 		'error',
-		'stopped'
+		'stopped',
+		'chat',
+		'persona'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -40,6 +42,9 @@
 	let value = $state('');
 	let files = $state<File[]>([]);
 	let version = $state(0);
+	// Whose surface this is. Only the `persona` scene renames it, and renaming
+	// it is the whole test: every word the package says has to follow.
+	let name = $state('Milton');
 	// Bumping `version` from an effect that also READ it would re-trigger the
 	// effect; the counter it is set from is a plain variable for that reason.
 	let bump = 0;
@@ -53,6 +58,7 @@
 		running = next.running;
 		value = next.value;
 		files = next.files;
+		name = next.name;
 		version = ++bump;
 	});
 
@@ -99,9 +105,12 @@
 		{turns}
 		{running}
 		{version}
+		{name}
 		examples={EXAMPLES}
 		scope={SCOPE}
-		welcome="Ask Milton about ADF pay, allowances, leave and conditions of service."
+		welcome={name === 'Milton'
+			? 'Ask Milton about ADF pay, allowances, leave and conditions of service.'
+			: undefined}
 		onexample={(question) => {
 			value = question;
 		}}
@@ -121,6 +130,7 @@
 				bind:files
 				{running}
 				{scope}
+				{name}
 				onscope={(next) => (scope = next)}
 				onsubmit={send}
 				onstop={() => (running = false)}

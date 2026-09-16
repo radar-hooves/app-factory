@@ -83,7 +83,7 @@ describe('an answer with nothing behind it', () => {
 	it('says nothing of the kind on a turn that failed', () => {
 		answer({
 			citations: [],
-			outcome: { isError: true, error: "Milton can't be reached right now." }
+			outcome: { isError: true, unreachable: true }
 		});
 		expect(screen.queryByText(/without a source/)).not.toBeInTheDocument();
 	});
@@ -101,7 +101,7 @@ describe('an answer with nothing behind it', () => {
 describe('a run that ended in error', () => {
 	it('says so even when the run itself said nothing', () => {
 		answer({ citations: [], outcome: { turns: 8, durationMs: 60_000, isError: true } });
-		expect(screen.getByRole('alert')).toHaveTextContent('Milton stopped before he finished this one.');
+		expect(screen.getByRole('alert')).toHaveTextContent('Milton stopped before finishing this one.');
 	});
 
 	it('does not wear a duration as though it had finished', () => {
@@ -110,8 +110,13 @@ describe('a run that ended in error', () => {
 	});
 
 	it("keeps whatever the failure did say, in preference to the package's words", () => {
-		answer({ citations: [], outcome: { isError: true, error: "Milton can't be reached right now." } });
-		expect(screen.getByRole('alert')).toHaveTextContent("Milton can't be reached right now.");
+		answer({ citations: [], outcome: { isError: true, error: 'The room is closed for maintenance.' } });
+		expect(screen.getByRole('alert')).toHaveTextContent('The room is closed for maintenance.');
+	});
+
+	it('says the persona cannot be reached when the stream never opened', () => {
+		answer({ citations: [], outcome: { isError: true, unreachable: true }, name: 'penny' });
+		expect(screen.getByRole('alert')).toHaveTextContent("Penny can't be reached right now.");
 	});
 });
 

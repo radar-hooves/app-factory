@@ -1,11 +1,16 @@
 <!--
-  One question and everything Milton did answering it.
+  One question and everything the persona did answering it.
 
-  Three things carry the shape. The question is a bubble against the edge, so a
-  reader scanning back finds their own words without reading any of the answer.
-  The answer is plain prose held to a reading measure, because a full-width
-  line at 1440 is the single clearest tell that a surface was never read on.
-  Everything Milton DID is one quiet line above it, never a stack.
+  Four things carry the shape. The question is a bubble against the trailing
+  edge, so a reader scanning back finds their own words without reading any of
+  the answer. The answer is a bounded card under it, signed with the persona's
+  name and the time, because a transcript of unbounded prose reads as a log
+  and the director's first words about the live screen were "it doesn't look
+  like a ChatGPT window". Everything the persona DID is one quiet line inside
+  that card, never a stack. And the measure is the package's own CSS, never a
+  utility class a consuming app's Tailwind has to discover in `dist` — the one
+  that got away compiled to `max-width: none` in production and left a
+  2302px-wide transcript.
 -->
 <script lang="ts">
 	import CheckIcon from '@lucide/svelte/icons/check';
@@ -22,14 +27,14 @@
 		citationMarkers,
 		resolveCitations,
 		splitSources,
-		trustMark,
 		type Citation
 	} from '../../citations';
-	import { DEFAULT_COPY, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
 	import Markdown from '../markdown/markdown.svelte';
+	import SourceList from '../source-list/source-list.svelte';
 
 	interface Props {
 		question: string;
@@ -52,6 +57,13 @@
 		 *  no chip. */
 		onsuggest?: (question: string) => void;
 		copy?: Partial<LibrarianCopy>;
+		/** The persona's display name, signed on the answer card. */
+		name?: string;
+		/** When the question was asked, epoch ms. Rendered as a clock time —
+		 *  which is a different fact from the duration badge beside the actions,
+		 *  and a reader scanning back for "what did I ask after lunch" needs the
+		 *  first one. Absent renders no time rather than a guess. */
+		at?: number;
 		/** A study artefact rather than an ordinary answer: once settled, this
 		 *  renders as a card instead of prose. */
 		kind?: 'answer' | 'artefact';
@@ -74,6 +86,8 @@
 		onregenerate,
 		onsuggest,
 		copy,
+		name = DEFAULT_PERSONA,
+		at,
 		kind = 'answer',
 		title,
 		onopenartefact
@@ -81,9 +95,27 @@
 
 	const isArtefact = $derived(kind === 'artefact');
 
-	const words = $derived(resolveCopy(copy));
+	const words = $derived(resolveCopy(copy, name));
+	const who = $derived(personaName(name));
 
 	const asked = $derived(readerQuestion(question));
+
+	// The reader's own locale and their own clock. A date is added only once
+	// the turn is not from today, because "14:32" is what a reader scanning
+	// this morning's conversation is actually matching against.
+	const clock = $derived.by(() => {
+		if (at === undefined) return null;
+		const when = new Date(at);
+		const sameDay = new Date().toDateString() === when.toDateString();
+		return {
+			iso: when.toISOString(),
+			text: when.toLocaleTimeString(undefined, {
+				hour: 'numeric',
+				minute: '2-digit',
+				...(sameDay ? {} : { day: 'numeric', month: 'short' })
+			})
+		};
+	});
 
 	// An activity group stays live — and therefore labelled "Working…" — only
 	// while it is the last thing in the turn. As soon as prose arrives, it
@@ -124,24 +156,23 @@
 	 * What went wrong, if anything did — in words, whether or not the run gave
 	 * any.
 	 *
-	 * Two different failures reach a turn and only one of them carries a
-	 * message. `library_error` (the stream never opened) sets `error`; a run
-	 * that opened and then failed sets `is_error` on its terminal frame and
-	 * says nothing at all — Claude Code's own `error_max_turns` and
-	 * `error_during_execution` are exactly that shape. Reading only `error`
-	 * left the second kind rendering as a clean, complete answer: no banner,
-	 * a duration badge, and — worse — the "he holds nothing on this" line,
-	 * which is a claim about the shelf made off a run that never finished
-	 * looking.
+	 * Three shapes reach a turn and only one of them carries a message.
+	 * `unreachable` is a stream that never opened or died half-way, which
+	 * `client.ts` raises without words because that layer does not know whose
+	 * voice to say them in. A run that opened and then failed sets `is_error`
+	 * on its terminal frame and says nothing at all — Claude Code's own
+	 * `error_max_turns` and `error_during_execution` are exactly that shape.
+	 * Only a run that volunteered a message gets its own words through.
 	 *
-	 * `error` still carries `DEFAULT_COPY.unreachable` verbatim from `client.ts`
-	 * — the stream layer has no `name` to compose with — so that exact default
-	 * is swapped for `words.unreachable`, which `Conversation`'s `name` prop
-	 * (or a host's own `copy` override) already resolved.
+	 * Reading none of this left a failed turn rendering as a clean, complete
+	 * answer: no banner, a duration badge, and — worse — the "answered without
+	 * a source" line, which is a claim about the shelf made off a run that
+	 * never finished looking.
 	 */
 	const failure = $derived(
-		(outcome?.error === DEFAULT_COPY.unreachable ? words.unreachable : outcome?.error) ??
-			(outcome?.isError ? words.answerFailed : null)
+		outcome?.unreachable
+			? words.unreachable
+			: (outcome?.error ?? (outcome?.isError ? words.answerFailed : null))
 	);
 
 	// A failed turn settles too, and "Ask again" is the one thing a reader wants
@@ -149,7 +180,7 @@
 	const settled = $derived(!running && (hasAnswer || Boolean(failure)));
 
 	/**
-	 * Milton answered and cited nothing, and we WATCHED him do it.
+	 * The persona answered and cited nothing, and we WATCHED it happen.
 	 *
 	 * `outcome` is the gate, not merely an empty source list: a turn read back
 	 * out of the conversation history is prose with no citations and no
@@ -184,25 +215,34 @@
 	}
 </script>
 
-<article class="flex flex-col gap-3">
-	<!-- Right-aligned, following Claude and ChatGPT rather than a VS Code-style
-	     panel: this surface is read by people who arrive with those two as
-	     their model of what a chat looks like. -->
-	<div
-		class="bg-surface-3 text-foreground border-border max-w-[85%] self-end rounded-2xl border px-4 py-2.5 text-base break-words whitespace-pre-wrap"
-	>
-		{asked}
+<article class="ds-lib-turn">
+	<!-- Trailing-edge bubble, following Claude and ChatGPT rather than a
+	     VS Code-style panel: this surface is read by people who arrive with
+	     those two as their model of what a chat looks like. -->
+	<div class="ds-lib-ask">
+		<div class="ds-lib-bubble">{asked}</div>
+		{#if clock}
+			<time class="ds-lib-ask-time" datetime={clock.iso}>{clock.text}</time>
+		{/if}
 	</div>
 
-	{#if running && segments.length === 0}
-		<Working />
-	{/if}
+	<div class="ds-lib-answer">
+		<header class="ds-lib-answer-head">
+			<span class="ds-lib-avatar" aria-hidden="true">{who.slice(0, 1)}</span>
+			<span class="ds-lib-who">{who}</span>
+			{#if clock}
+				<time class="ds-lib-answer-time" datetime={clock.iso}>{clock.text}</time>
+			{/if}
+		</header>
 
-	{#each segments as seg (seg.index)}
-		{#if seg.kind === 'activity'}
-			<ActivityGroup group={seg} live={running && seg.index === lastIndex} />
-		{:else if !isArtefact}
-			<div class="max-w-[72ch] min-w-0">
+		{#if running && segments.length === 0}
+			<Working copy={words} />
+		{/if}
+
+		{#each segments as seg (seg.index)}
+			{#if seg.kind === 'activity'}
+				<ActivityGroup group={seg} live={running && seg.index === lastIndex} />
+			{:else if !isArtefact}
 				<Markdown
 					content={seg.index === lastTextIndex && split.citations.length > 0
 						? split.body
@@ -215,120 +255,270 @@
 						if (found) oncite?.(found);
 					}}
 				/>
+			{/if}
+		{/each}
+
+		{#if isArtefact && settled}
+			<ArtefactCard
+				title={title ?? 'Briefing'}
+				citationCount={sources.length}
+				onopen={() => onopenartefact?.()}
+			/>
+		{/if}
+
+		{#if !isArtefact && sources.length > 0}
+			<SourceList {sources} {words} {oncite} />
+		{/if}
+
+		{#if !isArtefact && notHeld}
+			<p class="ds-lib-not-held">{words.notHeld}</p>
+		{/if}
+
+		{#if !isArtefact && followUps.length > 0}
+			<section>
+				<h2 class="ds-lib-follow-heading">{words.suggestions}</h2>
+				<!-- Wrapping, not scrolling: at 390 a question is most of a line, so
+				     a row of three would clip two of them to fragments. -->
+				<ul class="ds-lib-chips">
+					{#each followUps as followUp (followUp)}
+						<li>
+							<button
+								type="button"
+								class="ds-lib-chip"
+								onclick={() => {
+									used = true;
+									onsuggest?.(followUp);
+								}}
+							>
+								{followUp}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
+		{#if failure}
+			<p class="ds-lib-failure" role="alert">{failure}</p>
+		{/if}
+
+		{#if !isArtefact && settled}
+			<div class="ds-lib-actions">
+				{#if hasAnswer}
+					<button
+						type="button"
+						class="ds-lib-action"
+						onclick={copyToClipboard}
+						aria-label={copied ? words.copiedAnswer : words.copyAnswer}
+					>
+						{#if copied}<CheckIcon size={14} />{:else}<CopyIcon size={14} />{/if}
+						<span>{copied ? words.copiedAnswer : words.copyAnswer}</span>
+					</button>
+				{/if}
+				{#if onregenerate}
+					<button
+						type="button"
+						class="ds-lib-action"
+						onclick={onregenerate}
+						aria-label={words.askAgain}
+					>
+						<RefreshCwIcon size={14} />
+						<span>{words.askAgain}</span>
+					</button>
+				{/if}
+				<!-- How long it took, which is not the same fact as when it was
+				     asked; both are on the card and neither stands in for the
+				     other. -->
+				{#if outcome && !failure}
+					<span class="ds-lib-duration">{((outcome.durationMs ?? 0) / 1000).toFixed(1)}s</span>
+				{/if}
 			</div>
 		{/if}
-	{/each}
-
-	{#if isArtefact && settled}
-		<ArtefactCard title={title ?? 'Briefing'} citationCount={sources.length} onopen={() => onopenartefact?.()} />
-	{/if}
-
-	{#if !isArtefact && sources.length > 0}
-		<section class="max-w-[72ch]">
-			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-				{words.sources}
-			</h2>
-			<ol class="flex flex-col gap-1">
-				{#each sources as source (source.n)}
-					{@const mark = trustMark(source, words)}
-					<li>
-						<button
-							type="button"
-							onclick={() => oncite?.(source)}
-							disabled={!source.document_id || !oncite}
-							class="border-border hover:border-border-strong hover:bg-surface-2 focus-visible:ring-ring flex w-full items-baseline gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:hover:bg-transparent"
-						>
-							<span
-								class="bg-primary/15 text-foreground shrink-0 rounded px-1.5 font-mono text-xs tabular-nums"
-								>{source.n}</span
-							>
-							<span class="min-w-0">
-								<span class="text-foreground">{source.title}</span>
-								{#if source.section}<span class="text-muted-foreground">
-										· {source.section}</span
-									>{/if}
-								<!-- Same muted register as the section, deliberately. An
-								     unverified source is not an error and must not be
-								     dressed as one; the words carry the difference, and a
-								     red one would have a colleague discount a document
-								     that is simply new. -->
-								{#if mark}<span class="text-muted-foreground/80"> · {mark}</span>{/if}
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ol>
-		</section>
-	{/if}
-
-	{#if !isArtefact && notHeld}
-		<p class="text-muted-foreground max-w-[72ch] text-sm">{words.notHeld}</p>
-	{/if}
-
-	{#if !isArtefact && followUps.length > 0}
-		<section class="max-w-[72ch]">
-			<h2 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-				{words.suggestions}
-			</h2>
-			<!-- Wrapping, not scrolling: at 390 a question is most of a line, so a
-			     row of three would clip two of them to fragments. -->
-			<ul class="flex flex-wrap gap-2">
-				{#each followUps as followUp (followUp)}
-					<li class="max-w-full">
-						<button
-							type="button"
-							onclick={() => {
-								used = true;
-								onsuggest?.(followUp);
-							}}
-							class="border-border hover:border-border-strong hover:bg-surface-2 focus-visible:ring-ring text-foreground max-w-full rounded-full border px-3.5 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-						>
-							{followUp}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{/if}
-
-	{#if failure}
-		<p
-			class="border-status-error/40 bg-status-error/10 text-foreground max-w-[72ch] rounded-lg border px-3 py-2 text-sm"
-			role="alert"
-		>
-			{failure}
-		</p>
-	{/if}
-
-	{#if !isArtefact && settled}
-		<div class="text-muted-foreground -ml-1.5 flex items-center gap-1">
-			{#if hasAnswer}
-				<button
-					type="button"
-					onclick={copyToClipboard}
-					aria-label={copied ? words.copiedAnswer : words.copyAnswer}
-					class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-				>
-					{#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if}
-					<span>{copied ? words.copiedAnswer : words.copyAnswer}</span>
-				</button>
-			{/if}
-			{#if onregenerate}
-				<button
-					type="button"
-					onclick={onregenerate}
-					aria-label={words.askAgain}
-					class="hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-				>
-					<RefreshCwIcon class="size-3.5" />
-					<span>{words.askAgain}</span>
-				</button>
-			{/if}
-			{#if outcome && !failure}
-				<span class="pl-1 font-mono text-xs tabular-nums opacity-70">
-					{((outcome.durationMs ?? 0) / 1000).toFixed(1)}s
-				</span>
-			{/if}
-		</div>
-	{/if}
+	</div>
 </article>
+
+<style>
+	.ds-lib-turn {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.ds-lib-ask {
+		display: flex;
+		max-width: 100%;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.25rem;
+		align-self: flex-end;
+	}
+
+	.ds-lib-bubble {
+		max-width: 85%;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-xl);
+		background: var(--ds-color-surface-3);
+		padding: 0.625rem 1rem;
+		color: var(--ds-color-foreground);
+		font-size: 1rem;
+		line-height: 1.5rem;
+		overflow-wrap: break-word;
+		white-space: pre-wrap;
+	}
+
+	.ds-lib-ask-time,
+	.ds-lib-answer-time {
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* The card. A turn a reader can see the edges of is the whole of what the
+	   director was asking for: one question and its answer, bounded, rather
+	   than prose running edge to edge under the last lot of prose. */
+	.ds-lib-answer {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-xl);
+		background: var(--ds-color-surface-2);
+		padding: 0.875rem 1rem 0.75rem;
+	}
+
+	.ds-lib-answer-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.ds-lib-avatar {
+		display: flex;
+		width: 1.375rem;
+		height: 1.375rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--ds-radius-full);
+		background: color-mix(in oklab, var(--ds-color-primary) 18%, transparent);
+		color: var(--ds-color-foreground);
+		font-size: var(--ds-text-2xs);
+		font-weight: 600;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-who {
+		flex: 1;
+		color: var(--ds-color-foreground);
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+
+	.ds-lib-not-held {
+		margin: 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: 0.875rem;
+	}
+
+	.ds-lib-follow-heading {
+		margin: 0 0 0.375rem;
+		color: var(--ds-color-muted-foreground);
+		font-family: inherit;
+		font-size: var(--ds-text-2xs);
+		font-weight: 500;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ds-lib-chips li {
+		max-width: 100%;
+	}
+
+	.ds-lib-chip {
+		max-width: 100%;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-full);
+		background: none;
+		padding: 0.5rem 0.875rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: 0.875rem;
+		text-align: start;
+		cursor: pointer;
+		transition:
+			background-color 150ms ease,
+			border-color 150ms ease;
+	}
+
+	.ds-lib-chip:hover {
+		border-color: var(--ds-color-border-strong);
+		background: var(--ds-color-surface-1);
+	}
+
+	.ds-lib-chip:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-failure {
+		margin: 0;
+		border: 1px solid color-mix(in oklab, var(--ds-color-status-error) 40%, transparent);
+		border-radius: var(--ds-radius-lg);
+		background: color-mix(in oklab, var(--ds-color-status-error) 10%, transparent);
+		padding: 0.5rem 0.75rem;
+		color: var(--ds-color-foreground);
+		font-size: 0.875rem;
+	}
+
+	.ds-lib-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-inline-start: -0.375rem;
+		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-action {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		border: 0;
+		border-radius: var(--ds-radius-md);
+		background: none;
+		padding: 0.25rem 0.375rem;
+		color: inherit;
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-action:hover {
+		background: var(--ds-color-surface-1);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-action:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-duration {
+		padding-inline-start: 0.25rem;
+		font-family: var(--ds-font-code);
+		font-size: var(--ds-text-2xs);
+		font-variant-numeric: tabular-nums;
+		opacity: 0.7;
+	}
+</style>

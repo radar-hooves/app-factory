@@ -74,13 +74,55 @@
 	bind:this={host}
 	onclick={click}
 	onkeydown={keydown}
-	class="agent-prose text-foreground {dense ? 'text-sm leading-6' : 'text-base leading-7'}"
+	class="agent-prose"
+	class:is-dense={dense}
+	class:is-streaming={streaming}
 >
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
 	{@html html}
 </div>
 
 <style>
+	.agent-prose {
+		color: var(--ds-color-foreground);
+		font-size: 1rem;
+		line-height: 1.75rem;
+	}
+
+	.agent-prose.is-dense {
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+	}
+
+	/* The streaming caret. A pseudo-element on whatever block the text has
+	   reached, rather than an element appended after the prose: injected into
+	   the sanitiser's output it would fight every re-render, and placed after
+	   the container it would sit on its own line under the paragraph being
+	   written, which reads as a bullet rather than a cursor. */
+	.agent-prose.is-streaming :global(> *:last-child::after) {
+		content: '';
+		display: inline-block;
+		width: 0.45em;
+		height: 1.05em;
+		margin-inline-start: 0.12em;
+		border-radius: 1px;
+		background: var(--ds-color-primary);
+		vertical-align: -0.15em;
+		animation: ds-lib-caret 1.1s steps(1, end) infinite;
+	}
+
+	@keyframes ds-lib-caret {
+		50% {
+			opacity: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.agent-prose.is-streaming :global(> *:last-child::after) {
+			animation: none;
+		}
+	}
+
 	.agent-prose :global(> *:first-child) {
 		margin-top: 0;
 	}
@@ -102,7 +144,7 @@
 	.agent-prose :global(h2),
 	.agent-prose :global(h3),
 	.agent-prose :global(h4) {
-		font-family: var(--ds-font-display, inherit);
+		font-family: var(--ds-font-display);
 		font-weight: 600;
 		line-height: 1.3;
 		margin-block: 1.6em 0.6em;
@@ -112,7 +154,7 @@
 	   of the page (measured, both themes), so weight and rule do the work that
 	   a background tint cannot. */
 	.agent-prose :global(h2) {
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--ds-color-border);
 		padding-top: 0.8em;
 	}
 
@@ -167,19 +209,19 @@
 
 	.agent-prose :global(strong) {
 		font-weight: 600;
-		color: var(--foreground);
+		color: var(--ds-color-foreground);
 	}
 
 	.agent-prose :global(a) {
-		color: var(--ds-color-primary, currentColor);
+		color: var(--ds-color-primary);
 		text-underline-offset: 0.2em;
 		text-decoration-line: underline;
 	}
 
 	.agent-prose :global(blockquote) {
-		border-inline-start: 2px solid var(--primary);
+		border-inline-start: 2px solid var(--ds-color-primary);
 		padding-inline: 1em 0;
-		color: var(--muted-foreground);
+		color: var(--ds-color-muted-foreground);
 		font-style: italic;
 	}
 
@@ -196,10 +238,10 @@
 	   title is exactly the case: nowrap clipped it at the container edge on a
 	   phone with no way to read the rest. */
 	.agent-prose :global(code) {
-		font-family: var(--ds-font-mono, monospace);
+		font-family: var(--ds-font-code);
 		font-size: 0.8125em;
-		background: var(--muted);
-		border: 1px solid var(--border);
+		background: var(--ds-color-surface-1);
+		border: 1px solid var(--ds-color-border);
 		border-radius: 0.35em;
 		padding: 0.1em 0.35em;
 		white-space: normal;
@@ -207,9 +249,9 @@
 	}
 
 	.agent-prose :global(pre) {
-		background: var(--muted);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--ds-color-surface-1);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-lg);
 		padding: 0.85em 1em;
 		overflow-x: auto;
 		/* A fenced block is the one thing here allowed to be wider than the
@@ -250,7 +292,7 @@
 
 	.agent-prose :global(th),
 	.agent-prose :global(td) {
-		border: 1px solid var(--border);
+		border: 1px solid var(--ds-color-border);
 		padding: 0.4em 0.6em;
 		text-align: start;
 		/* A cell must not be squeezed to one character per line by a narrow
@@ -259,17 +301,24 @@
 	}
 
 	.agent-prose :global(th) {
-		background: var(--muted);
+		background: var(--ds-color-surface-1);
 		font-weight: 600;
+	}
+
+	/* Zebra striping. A dense table of rates or dates is read across the row,
+	   and at this palette's contrast a hairline grid alone is not enough to
+	   keep an eye on one. */
+	.agent-prose :global(tbody tr:nth-child(even) td) {
+		background: color-mix(in oklab, var(--ds-color-surface-1) 45%, transparent);
 	}
 
 	/* A collection reads as an entity rather than another monospace token when
 	   the caller passes `collectionNames`. Accent-tinted rather than the flat
 	   muted surface every other identifier sits on. */
 	.agent-prose :global(code[data-collection]) {
-		background: color-mix(in oklab, var(--primary) 16%, transparent);
-		border-color: color-mix(in oklab, var(--primary) 45%, transparent);
-		color: var(--foreground);
+		background: color-mix(in oklab, var(--ds-color-primary) 16%, transparent);
+		border-color: color-mix(in oklab, var(--ds-color-primary) 45%, transparent);
+		color: var(--ds-color-foreground);
 		font-weight: 500;
 	}
 
@@ -282,9 +331,9 @@
 		margin-inline: 0.15em;
 		padding: 0.1em 0.3em;
 		border-radius: 0.4em;
-		background: color-mix(in oklab, var(--primary) 16%, transparent);
-		color: var(--foreground);
-		font-family: var(--ds-font-mono, monospace);
+		background: color-mix(in oklab, var(--ds-color-primary) 16%, transparent);
+		color: var(--ds-color-foreground);
+		font-family: var(--ds-font-code);
 		font-size: 0.7em;
 		font-weight: 600;
 		line-height: 1.4;
@@ -294,17 +343,17 @@
 	}
 
 	.agent-prose :global(sup.ds-cite:hover) {
-		background: color-mix(in oklab, var(--primary) 30%, transparent);
+		background: color-mix(in oklab, var(--ds-color-primary) 30%, transparent);
 	}
 
 	.agent-prose :global(sup.ds-cite:focus-visible) {
-		outline: 2px solid var(--ring);
+		outline: 2px solid var(--ds-color-ring);
 		outline-offset: 2px;
 	}
 
 	.agent-prose :global(hr) {
 		border: 0;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--ds-color-border);
 		margin-block: 1.5em;
 	}
 </style>

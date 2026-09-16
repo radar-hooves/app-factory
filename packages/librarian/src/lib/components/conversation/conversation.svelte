@@ -13,7 +13,7 @@
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
 	import type { Turn } from '../../transcript.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
 	import AgentTranscript from '../agent-transcript/agent-transcript.svelte';
 	import ArtefactPane from '../artefact-pane/artefact-pane.svelte';
@@ -31,9 +31,13 @@
 		/** `Transcript.version` — bumped per event. Text grows in place, so a
 		 *  count of turns is not enough to keep the scroll following. */
 		version?: number;
-		/** The persona's display name. The aria-label, the `welcome` default and
-		 *  the unreachable alert all take it. */
+		/** Who is speaking. A slug is fine — `penny` renders as "Penny" — and
+		 *  every word this package says is composed from it: the working line,
+		 *  the failure sentences, the scope label, the composer's placeholder
+		 *  and the accessible name of the scroll region. Absent is the library's
+		 *  own Milton, which is a default rather than a hardcoding. */
 		name?: string;
+		/** The empty state's opening line. Absent takes the persona's own. */
 		welcome?: string;
 		/** Up to three, shown in the empty state as tappable pills. */
 		examples?: string[];
@@ -62,8 +66,8 @@
 		turns,
 		running,
 		version = 0,
-		name = 'Milton',
-		welcome = `Ask ${name} a question about the library.`,
+		name = DEFAULT_PERSONA,
+		welcome,
 		examples = [],
 		onexample,
 		scope,
@@ -75,13 +79,24 @@
 		composer
 	}: Props = $props();
 
-	const words = $derived(resolveCopy(copy));
+	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
+	// none of them takes the name, so there is exactly one place a persona
+	// turns into sentences.
+	const words = $derived(resolveCopy(copy, name));
+	const who = $derived(personaName(name));
+	const opening = $derived(welcome ?? words.welcome);
 
-	// A host's own `copy.unreachable` still wins: it comes last in the spread.
-	const effectiveCopy = $derived<Partial<LibrarianCopy>>({
-		unreachable: `${name} can't be reached right now.`,
-		...copy
-	});
+	/**
+	 * When each turn arrived, for the turns this surface actually watched
+	 * arrive.
+	 *
+	 * A host that persists its conversations sets `turn.at` and that wins. A
+	 * host that does not gets a stamp the moment a turn appears, which is true
+	 * for a live turn and deliberately absent for one read back out of
+	 * history — stamping those with `Date.now()` would print this afternoon
+	 * against a question asked last week.
+	 */
+	let stamps = $state<Record<string, number>>({});
 
 	let viewport = $state<HTMLElement | null>(null);
 	let column = $state<Column>(null);
@@ -102,9 +117,12 @@
 	// of reactive state re-triggers itself, which Svelte stops with
 	// `effect_update_depth_exceeded` — measured, on this component. Nothing
 	// renders this, so a plain variable is both correct and enough.
-	let seen = 0;
+	let seen = -1;
 	$effect(() => {
-		if (turns.length > seen) follow.pin();
+		if (seen >= 0 && turns.length > seen) {
+			follow.pin();
+			for (const turn of turns.slice(seen)) stamps[turn.id] ??= Date.now();
+		}
 		seen = turns.length;
 	});
 
@@ -158,105 +176,245 @@
 	}
 </script>
 
-<div class="flex min-h-0 flex-1">
-	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+<div class="ds-lib-surface">
+	<div class="ds-lib-main">
 		<!-- The pill is positioned against the SCROLL region, not the column: the
 		     composer is in the column too, and a pill over the input is a pill in
 		     the way. -->
-		<div class="relative flex min-h-0 flex-1 flex-col">
-		<div
-			bind:this={viewport}
-			onscroll={scrolled}
-			role="log"
-			aria-live="polite"
-			aria-busy={running}
-			aria-label="Conversation with {name}"
-			class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-		>
-			<div class="mx-auto flex w-full max-w-[46rem] flex-col gap-8 px-4 py-6">
-				{#if turns.length === 0}
-					<div class="flex flex-col items-start gap-4 py-8">
-						<p class="text-foreground max-w-[46ch] text-lg leading-snug">{welcome}</p>
-						{#if examples.length > 0}
-							<ul class="flex flex-col items-start gap-2">
-								{#each examples.slice(0, 3) as example (example)}
-									<li class="max-w-full">
-										<button
-											type="button"
-											onclick={() => onexample?.(example)}
-											class="border-border hover:border-border-strong hover:bg-surface-2 focus-visible:ring-ring text-foreground max-w-full rounded-full border px-3.5 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-										>
-											{example}
-										</button>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</div>
-				{/if}
-
-				<!-- Above the first turn, and in ONE place in the markup: the empty
-				     state carries the welcome, this carries the boundary, and both
-				     sit at the top of the same column so a reader meets them in
-				     the same order whether or not they have asked anything yet. -->
-				{#if scope}
-					<ScopeStatement statement={scope} expanded={turns.length === 0} copy={effectiveCopy} />
-				{/if}
-
-				{#each turns as turn, index (turn.id)}
-					<AgentTranscript
-						question={turn.question}
-						blocks={turn.blocks}
-						outcome={turn.outcome}
-						running={running && index === turns.length - 1}
-						citations={turn.citations ?? []}
-						suggestions={turn.suggestions ?? []}
-						{collectionNames}
-						copy={effectiveCopy}
-						kind={turn.kind}
-						title={turn.title}
-						onopenartefact={() => openArtefact(turn)}
-						oncite={cite}
-						onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
-						onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
-					/>
-				{/each}
-			</div>
-		</div>
-
-		{#if !follow.following && turns.length > 0}
-			<button
-				type="button"
-				onclick={jump}
-				class="border-border bg-surface-1 text-foreground hover:bg-surface-2 focus-visible:ring-ring absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs shadow-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+		<div class="ds-lib-scroll-region">
+			<div
+				bind:this={viewport}
+				onscroll={scrolled}
+				role="log"
+				aria-live="polite"
+				aria-busy={running}
+				aria-label={words.conversationLabel}
+				class="ds-lib-scroll"
 			>
-				<ArrowDownIcon class="size-3.5" />
-				{words.jumpToLatest}
-			</button>
-		{/if}
+				<!-- The measure, in this package's own stylesheet.
+				     `--ds-lib-measure` is the one knob a host may turn, and it is a
+				     token rather than a class precisely because a class here is a
+				     string a consuming app's Tailwind has to find in `dist` — the
+				     arrangement that silently produced `max-width: none` and a
+				     2302px line in Pebblestone's production build. -->
+				<div class="ds-lib-column">
+					{#if turns.length === 0}
+						<div class="ds-lib-empty">
+							<p class="ds-lib-welcome">{opening}</p>
+							{#if examples.length > 0}
+								<ul class="ds-lib-chips">
+									{#each examples.slice(0, 3) as example (example)}
+										<li>
+											<button type="button" class="ds-lib-chip" onclick={() => onexample?.(example)}>
+												{example}
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</div>
+					{/if}
+
+					<!-- Above the first turn, and in ONE place in the markup: the empty
+					     state carries the welcome, this carries the boundary, and both
+					     sit at the top of the same column so a reader meets them in
+					     the same order whether or not they have asked anything yet. -->
+					{#if scope}
+						<ScopeStatement statement={scope} expanded={turns.length === 0} copy={words} />
+					{/if}
+
+					{#each turns as turn, index (turn.id)}
+						<AgentTranscript
+							question={turn.question}
+							blocks={turn.blocks}
+							outcome={turn.outcome}
+							running={running && index === turns.length - 1}
+							citations={turn.citations ?? []}
+							suggestions={turn.suggestions ?? []}
+							{collectionNames}
+							copy={words}
+							name={who}
+							at={turn.at ?? stamps[turn.id]}
+							kind={turn.kind}
+							title={turn.title}
+							onopenartefact={() => openArtefact(turn)}
+							oncite={cite}
+							onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
+							onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
+						/>
+					{/each}
+				</div>
+			</div>
+
+			{#if !follow.following && turns.length > 0}
+				<button type="button" class="ds-lib-jump" onclick={jump}>
+					<ArrowDownIcon size={14} />
+					{words.jumpToLatest}
+				</button>
+			{/if}
 		</div>
 
 		{#if composer}
-			<div class="shrink-0 px-4 pb-3">
-				<div class="mx-auto w-full max-w-[46rem]">{@render composer()}</div>
+			<!-- Lifted off the scroll area, and on the app's own background rather
+			     than the transcript's: prose scrolling up to the exact edge of the
+			     input is the one place a reader loses track of which is which. -->
+			<div class="ds-lib-composer">
+				<div class="ds-lib-column ds-lib-column-flush">{@render composer()}</div>
 			</div>
 		{/if}
-
 	</div>
 
 	{#if column?.kind === 'document' && loadDocument}
 		<DocumentPane
 			citation={column.citation}
 			{loadDocument}
-			copy={effectiveCopy}
+			copy={words}
 			onclose={() => (column = null)}
 		/>
 	{:else if column?.kind === 'artefact'}
 		<ArtefactPane
 			turn={column.turn}
-			copy={effectiveCopy}
+			copy={words}
 			onclose={() => (column = null)}
 			oncite={(citation) => cite(citation)}
 		/>
 	{/if}
 </div>
+
+<style>
+	.ds-lib-surface {
+		display: flex;
+		min-height: 0;
+		flex: 1;
+	}
+
+	.ds-lib-main {
+		display: flex;
+		min-width: 0;
+		min-height: 0;
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.ds-lib-scroll-region {
+		position: relative;
+		display: flex;
+		min-height: 0;
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.ds-lib-scroll {
+		min-height: 0;
+		flex: 1;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.ds-lib-column {
+		display: flex;
+		width: 100%;
+		max-width: var(--ds-lib-measure, 46rem);
+		flex-direction: column;
+		gap: 1.5rem;
+		margin-inline: auto;
+		padding: 1.5rem 1rem;
+	}
+
+	.ds-lib-column-flush {
+		gap: 0;
+		padding: 0;
+	}
+
+	.ds-lib-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1rem;
+		padding-block: 2rem;
+	}
+
+	.ds-lib-welcome {
+		max-width: 46ch;
+		margin: 0;
+		color: var(--ds-color-foreground);
+		font-size: 1.125rem;
+		line-height: 1.375;
+	}
+
+	.ds-lib-chips {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ds-lib-chips li {
+		max-width: 100%;
+	}
+
+	.ds-lib-chip {
+		max-width: 100%;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-full);
+		background: none;
+		padding: 0.5rem 0.875rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: 0.875rem;
+		text-align: start;
+		cursor: pointer;
+		transition:
+			background-color 150ms ease,
+			border-color 150ms ease;
+	}
+
+	.ds-lib-chip:hover {
+		border-color: var(--ds-color-border-strong);
+		background: var(--ds-color-surface-2);
+	}
+
+	.ds-lib-chip:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-jump {
+		position: absolute;
+		bottom: 0.75rem;
+		left: 50%;
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		transform: translateX(-50%);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-full);
+		background: var(--ds-color-surface-1);
+		padding: 0.375rem 0.75rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		cursor: pointer;
+		box-shadow: 0 8px 20px rgb(0 0 0 / 0.18);
+		transition: background-color 150ms ease;
+	}
+
+	.ds-lib-jump:hover {
+		background: var(--ds-color-surface-2);
+	}
+
+	.ds-lib-jump:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-composer {
+		flex: none;
+		border-top: 1px solid var(--ds-color-border);
+		background: var(--ds-color-background);
+		padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+	}
+</style>

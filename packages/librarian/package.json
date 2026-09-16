@@ -1,7 +1,7 @@
 {
 	"name": "@poodle64/librarian",
-	"version": "2026.9.14",
-	"description": "Milton's conversation surface as a consumable Svelte 5 package: the stream client, transcript state and chat components (transcript, composer, markdown) every household app renders instead of rebuilding.",
+	"version": "2026.9.15",
+	"description": "An agent's conversation surface as a consumable Svelte 5 package: the stream client, transcript state and self-styling chat components (transcript, composer, markdown) every household app renders instead of rebuilding, speaking as whichever persona the app names.",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -53,6 +53,7 @@
 	},
 	"peerDependencies": {
 		"svelte": "^5.54.0",
+		"@poodle64/design-tokens": "^2026.8.1",
 		"@poodle64/ui": "^2026.9.2",
 		"@lucide/svelte": "^1.7.0",
 		"marked": "^18.0.11",
@@ -61,6 +62,7 @@
 	},
 	"devDependencies": {
 		"@lucide/svelte": "^1.7.0",
+		"@poodle64/design-tokens": "workspace:*",
 		"@poodle64/ui": "workspace:*",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/package": "^2.5.8",

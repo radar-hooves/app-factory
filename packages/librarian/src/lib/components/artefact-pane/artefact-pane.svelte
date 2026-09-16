@@ -1,17 +1,18 @@
 <!--
   A study artefact, open in the reading column.
 
-  The same shell shape `DocumentPane` uses (a column at `lg`, a bottom sheet
-  below it) because decision 2 of the ask-milton surface is that a colleague
-  never has to learn which of the two things is in the column before they
-  open it — only ever one, in the same place, closing whichever was there.
+  The same shell shape `DocumentPane` uses (a column at 64rem, a bottom sheet
+  below it) because decision 2 of the agent surface is that a colleague never
+  has to learn which of the two things is in the column before they open it —
+  only ever one, in the same place, closing whichever was there.
 -->
 <script lang="ts">
 	import XIcon from '@lucide/svelte/icons/x';
 	import { segment, type TextBlock, type Turn } from '../../transcript.svelte';
-	import { resolveCitations, splitSources, trustMark, type Citation } from '../../citations';
+	import { resolveCitations, splitSources, type Citation } from '../../citations';
 	import { resolveCopy, type LibrarianCopy } from '../../copy';
 	import Markdown from '../markdown/markdown.svelte';
+	import SourceList from '../source-list/source-list.svelte';
 
 	interface Props {
 		turn: Turn;
@@ -52,69 +53,159 @@
 
 <svelte:window onkeydown={keydown} />
 
-<aside
-	aria-label="Study artefact"
-	class="bg-surface-1 border-border fixed inset-x-0 bottom-0 z-40 flex h-[80svh] flex-col rounded-t-2xl border-t shadow-2xl lg:relative lg:h-auto lg:w-[560px] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none"
->
-	<!-- The sheet's grabber. Below `lg` this is an overlay a reader has to be
+<aside aria-label="Study artefact" class="ds-lib-pane">
+	<!-- The sheet's grabber. On a phone this is an overlay a reader has to be
 	     able to see the top edge of; on a desktop it is a column, so there is
 	     nothing here to grab. -->
-	<div class="flex justify-center pt-2 pb-1 lg:hidden" aria-hidden="true">
-		<span class="bg-border h-1 w-9 rounded-full"></span>
-	</div>
+	<div class="ds-lib-pane-grabber" aria-hidden="true"><span></span></div>
 
-	<header class="border-border flex items-start gap-2 border-b px-4 py-3 lg:pt-3">
-		<div class="min-w-0 flex-1">
-			<h2 class="text-foreground truncate text-sm font-semibold">{turn.title ?? 'Briefing'}</h2>
-			<p class="text-muted-foreground truncate text-xs">
+	<header class="ds-lib-pane-header">
+		<div class="ds-lib-pane-heading">
+			<h2 class="ds-lib-pane-title">{turn.title ?? 'Briefing'}</h2>
+			<p class="ds-lib-pane-subtitle">
 				Briefing doc · {sources.length} source{sources.length === 1 ? '' : 's'}
 			</p>
 		</div>
 		<button
 			bind:this={closeButton}
 			type="button"
+			class="ds-lib-pane-close"
 			onclick={onclose}
 			aria-label={words.closeSource}
-			class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring -mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
 		>
-			<XIcon class="size-4" />
+			<XIcon size={16} />
 		</button>
 	</header>
 
-	<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+	<div class="ds-lib-pane-body">
 		<Markdown content={split.citations.length > 0 ? split.body : rawAnswer} />
 
 		{#if sources.length > 0}
-			<section class="mt-6">
-				<h3 class="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-					{words.sources}
-				</h3>
-				<ol class="flex flex-col gap-1">
-					{#each sources as source (source.n)}
-						{@const mark = trustMark(source, words)}
-						<li>
-							<button
-								type="button"
-								onclick={() => oncite?.(source)}
-								disabled={!source.document_id || !oncite}
-								class="border-border hover:border-border-strong hover:bg-surface-2 focus-visible:ring-ring flex w-full items-baseline gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:hover:bg-transparent"
-							>
-								<span
-									class="bg-primary/15 text-foreground shrink-0 rounded px-1.5 font-mono text-xs tabular-nums"
-									>{source.n}</span
-								>
-								<span class="min-w-0">
-									<span class="text-foreground">{source.title}</span>
-									{#if source.section}<span class="text-muted-foreground">
-											· {source.section}</span
-										>{/if}
-									{#if mark}<span class="text-muted-foreground/80"> · {mark}</span>{/if}
-								</span>
-							</button>
-						</li>
-					{/each}
-				</ol>
-			</section>
+			<div class="ds-lib-pane-sources">
+				<SourceList {sources} {words} {oncite} level={3} />
+			</div>
 		{/if}
 	</div>
 </aside>
+
+<style>
+	.ds-lib-pane {
+		position: fixed;
+		inset-inline: 0;
+		bottom: 0;
+		z-index: 40;
+		display: flex;
+		height: 80svh;
+		flex-direction: column;
+		border-top: 1px solid var(--ds-color-border);
+		border-start-start-radius: var(--ds-radius-xl);
+		border-start-end-radius: var(--ds-radius-xl);
+		background: var(--ds-color-surface-1);
+		box-shadow: 0 -12px 40px rgb(0 0 0 / 0.25);
+	}
+
+	.ds-lib-pane-grabber {
+		display: flex;
+		justify-content: center;
+		padding-top: 0.5rem;
+		padding-bottom: 0.25rem;
+	}
+
+	.ds-lib-pane-grabber span {
+		width: 2.25rem;
+		height: 0.25rem;
+		border-radius: var(--ds-radius-full);
+		background: var(--ds-color-border);
+	}
+
+	.ds-lib-pane-header {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		border-bottom: 1px solid var(--ds-color-border);
+		padding: 0.75rem 1rem;
+	}
+
+	.ds-lib-pane-heading {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.ds-lib-pane-title,
+	.ds-lib-pane-subtitle {
+		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ds-lib-pane-title {
+		color: var(--ds-color-foreground);
+		font-family: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	.ds-lib-pane-subtitle {
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-pane-close {
+		display: flex;
+		width: 2rem;
+		height: 2rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		margin-top: -0.25rem;
+		border: 0;
+		border-radius: var(--ds-radius-lg);
+		background: none;
+		color: var(--ds-color-muted-foreground);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-pane-close:hover {
+		background: var(--ds-color-surface-2);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-pane-close:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-pane-body {
+		min-height: 0;
+		flex: 1;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.75rem 1rem;
+	}
+
+	.ds-lib-pane-sources {
+		margin-top: 1.5rem;
+	}
+
+	@media (min-width: 64rem) {
+		.ds-lib-pane {
+			position: relative;
+			inset: auto;
+			height: auto;
+			width: 35rem;
+			flex: none;
+			border-top: 0;
+			border-inline-start: 1px solid var(--ds-color-border);
+			border-radius: 0;
+			box-shadow: none;
+		}
+
+		.ds-lib-pane-grabber {
+			display: none;
+		}
+	}
+</style>

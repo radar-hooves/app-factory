@@ -23,6 +23,7 @@
 		MAX_FILES,
 		rejectionMessage
 	} from '../../attachments';
+	import { DEFAULT_PERSONA, resolveCopy, type LibrarianCopy } from '../../copy';
 
 	export type Scope = 'document' | 'collection' | 'library';
 
@@ -44,8 +45,11 @@
 		 *  control renders — studying is a mode of asking, never a tab, so a
 		 *  host with nothing to build offers none rather than a disabled one. */
 		onbriefing?: () => void;
-		/** The persona's display name; the placeholder in both states takes it. */
+		/** Who is being asked. A slug is fine — `penny` renders as "Penny" — and
+		 *  both placeholders are composed from it. */
 		name?: string;
+		/** Overrides for the package's own words. */
+		copy?: Partial<LibrarianCopy>;
 	}
 
 	let {
@@ -60,8 +64,11 @@
 		onsubmit,
 		onstop,
 		onbriefing,
-		name = 'Milton'
+		name = DEFAULT_PERSONA,
+		copy
 	}: Props = $props();
+
+	const words = $derived(resolveCopy(copy, name));
 
 	// What Milton is being asked about — this document, this collection, or
 	// the whole library. Callers that have no narrower scope pass neither
@@ -180,30 +187,25 @@
 </script>
 
 <div
+	class="ds-lib-composer-lift"
 	style="transform: translateY(-{lift}px); padding-bottom: {lift
 		? '0px'
 		: 'env(safe-area-inset-bottom, 0px)'}"
-	class="transition-transform duration-150"
 >
-	<div
-		class="border-border bg-surface-1 focus-within:border-primary/60 rounded-xl border transition-colors"
-	>
+	<div class="ds-lib-box">
 		{#if files.length > 0}
-			<ul class="flex flex-wrap gap-1.5 px-3 pt-3">
+			<ul class="ds-lib-files">
 				{#each files as file, index (file.name + file.size)}
-					<li
-						class="border-border bg-surface-2 flex max-w-full items-center gap-1.5 rounded-lg border py-1 pr-1 pl-2 text-xs"
-					>
-						<span class="text-foreground truncate">{file.name}</span>
-						<span class="text-muted-foreground shrink-0 tabular-nums">{formatSize(file.size)}</span
-						>
+					<li class="ds-lib-file">
+						<span class="ds-lib-file-name">{file.name}</span>
+						<span class="ds-lib-file-size">{formatSize(file.size)}</span>
 						<button
 							type="button"
+							class="ds-lib-file-remove"
 							onclick={() => remove(index)}
 							aria-label="Remove {file.name}"
-							class="text-muted-foreground hover:text-foreground hover:bg-surface-3 focus-visible:ring-ring flex size-5 shrink-0 items-center justify-center rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
 						>
-							<XIcon class="size-3" />
+							<XIcon size={12} />
 						</button>
 					</li>
 				{/each}
@@ -217,11 +219,11 @@
 			onkeydown={keydown}
 			rows="1"
 			disabled={running}
-			placeholder={running ? `${name} is answering…` : `Ask ${name}…`}
-			class="text-foreground placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3 pb-2 text-base outline-none disabled:opacity-60"
+			placeholder={running ? words.answeringPlaceholder : words.askPlaceholder}
+			class="ds-lib-input"
 		></textarea>
 
-		<div class="flex items-center gap-2 px-3 pb-2.5">
+		<div class="ds-lib-controls">
 			{#if attachments}
 				<input
 					bind:this={picker}
@@ -229,75 +231,287 @@
 					multiple
 					accept={ACCEPT_ATTRIBUTE}
 					onchange={pick}
-					class="hidden"
+					class="ds-lib-picker"
 					tabindex="-1"
 					aria-hidden="true"
 				/>
 				<button
 					type="button"
+					class="ds-lib-icon-button"
 					onclick={() => picker?.click()}
 					disabled={running || files.length >= MAX_FILES}
 					aria-label="Attach a file"
-					class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
 				>
-					<PaperclipIcon class="size-4" />
+					<PaperclipIcon size={16} />
 				</button>
 			{/if}
 
 			{#if onbriefing}
 				<button
 					type="button"
+					class="ds-lib-icon-button"
 					onclick={onbriefing}
 					disabled={running}
 					aria-label="Ask for a briefing"
 					title="Ask for a briefing"
-					class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
 				>
-					<FileTextIcon class="size-4" />
+					<FileTextIcon size={16} />
 				</button>
 			{/if}
 
 			{#if hasChoice}
-				<div class="flex min-w-0 flex-wrap items-center gap-1">
+				<div class="ds-lib-scopes">
 					{#each choices as choice (choice.id)}
 						<button
 							type="button"
+							class="ds-lib-scope-chip"
+							class:is-chosen={scope === choice.id}
 							onclick={() => onscope(choice.id)}
-							class="max-w-full truncate rounded-full px-2 py-0.5 text-xs transition-colors {scope ===
-							choice.id
-								? 'bg-primary/15 text-foreground border-primary/40 border'
-								: 'text-muted-foreground hover:text-foreground border border-transparent'}"
 						>
 							{choice.label}
 						</button>
 					{/each}
 				</div>
 			{/if}
-			<span class="flex-1"></span>
+			<span class="ds-lib-spacer"></span>
 			{#if running}
-				<button
-					type="button"
-					onclick={onstop}
-					aria-label="Stop"
-					class="bg-foreground text-background hover:bg-foreground/90 flex size-8 items-center justify-center rounded-full transition-colors"
-				>
-					<SquareIcon class="size-3.5 fill-current" />
+				<button type="button" class="ds-lib-stop" onclick={onstop} aria-label="Stop">
+					<SquareIcon size={14} fill="currentColor" />
 				</button>
 			{:else}
 				<button
 					type="button"
+					class="ds-lib-send"
 					onclick={submit}
 					disabled={!value.trim()}
 					aria-label="Send"
-					class="bg-primary text-primary-foreground hover:bg-primary/90 disabled:hover:bg-primary flex size-8 items-center justify-center rounded-full transition-all disabled:opacity-30"
 				>
-					<ArrowUpIcon class="size-4" />
+					<ArrowUpIcon size={16} />
 				</button>
 			{/if}
 		</div>
 	</div>
 
 	{#if rejected}
-		<p class="text-status-error px-1 pt-1.5 text-xs" role="status" aria-live="polite">{rejected}</p>
+		<p class="ds-lib-rejected" role="status" aria-live="polite">{rejected}</p>
 	{/if}
 </div>
+
+<style>
+	.ds-lib-composer-lift {
+		transition: transform 150ms ease;
+	}
+
+	.ds-lib-box {
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-xl);
+		background: var(--ds-color-surface-1);
+		transition: border-color 150ms ease;
+	}
+
+	.ds-lib-box:focus-within {
+		border-color: color-mix(in oklab, var(--ds-color-primary) 60%, transparent);
+	}
+
+	.ds-lib-files {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		margin: 0;
+		padding: 0.75rem 0.75rem 0;
+		list-style: none;
+	}
+
+	.ds-lib-file {
+		display: flex;
+		max-width: 100%;
+		align-items: center;
+		gap: 0.375rem;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-lg);
+		background: var(--ds-color-surface-2);
+		padding: 0.25rem 0.25rem 0.25rem 0.5rem;
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-file-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-file-size {
+		flex: none;
+		color: var(--ds-color-muted-foreground);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.ds-lib-file-remove {
+		display: flex;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: var(--ds-radius-sm);
+		background: none;
+		color: var(--ds-color-muted-foreground);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-file-remove:hover {
+		background: var(--ds-color-surface-3);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-input {
+		display: block;
+		width: 100%;
+		resize: none;
+		border: 0;
+		background: transparent;
+		padding: 0.75rem 1rem 0.5rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: 1rem;
+		outline: none;
+	}
+
+	.ds-lib-input::placeholder {
+		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-input:disabled {
+		opacity: 0.6;
+	}
+
+	.ds-lib-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 0.75rem 0.625rem;
+	}
+
+	.ds-lib-picker {
+		display: none;
+	}
+
+	.ds-lib-icon-button,
+	.ds-lib-stop,
+	.ds-lib-send {
+		display: flex;
+		width: 2rem;
+		height: 2rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: var(--ds-radius-full);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease,
+			opacity 150ms ease;
+	}
+
+	.ds-lib-icon-button {
+		background: none;
+		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-icon-button:hover:not(:disabled) {
+		background: var(--ds-color-surface-2);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-icon-button:disabled,
+	.ds-lib-send:disabled {
+		cursor: default;
+		opacity: 0.3;
+	}
+
+	.ds-lib-icon-button:focus-visible,
+	.ds-lib-stop:focus-visible,
+	.ds-lib-send:focus-visible,
+	.ds-lib-scope-chip:focus-visible,
+	.ds-lib-file-remove:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-stop {
+		background: var(--ds-color-foreground);
+		color: var(--ds-color-background);
+	}
+
+	.ds-lib-send {
+		background: var(--ds-color-primary);
+		color: var(--ds-color-primary-foreground);
+	}
+
+	.ds-lib-send:hover:not(:disabled),
+	.ds-lib-stop:hover {
+		opacity: 0.9;
+	}
+
+	/* Three chips in a narrow column clipped all three to fragments
+	   ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
+	   cannot finish reading is not a control, it is decoration. */
+	.ds-lib-scopes {
+		display: flex;
+		min-width: 0;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.ds-lib-scope-chip {
+		max-width: 100%;
+		overflow: hidden;
+		border: 1px solid transparent;
+		border-radius: var(--ds-radius-full);
+		background: none;
+		padding: 0.125rem 0.5rem;
+		color: var(--ds-color-muted-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-scope-chip:hover {
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-scope-chip.is-chosen {
+		border-color: color-mix(in oklab, var(--ds-color-primary) 40%, transparent);
+		background: color-mix(in oklab, var(--ds-color-primary) 15%, transparent);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-spacer {
+		flex: 1;
+	}
+
+	.ds-lib-rejected {
+		margin: 0;
+		padding: 0.375rem 0.25rem 0;
+		color: var(--ds-color-status-error);
+		font-size: var(--ds-text-2xs);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ds-lib-composer-lift {
+			transition: none;
+		}
+	}
+</style>

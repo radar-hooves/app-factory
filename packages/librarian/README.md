@@ -1,12 +1,16 @@
 # @poodle64/librarian
 
-Milton's conversation surface, as a Svelte 5 package: the stream client, the
+An agent's conversation surface, as a Svelte 5 package: the stream client, the
 transcript state, and the chat components an app renders instead of
 rebuilding: the transcript with its own follow-scroll, the composer with
 attachments, citation chips and the source pane they open.
 
-Owned by the library. This is Milton's surface; design-system is its press.
-Change it here, consume it there.
+The persona is an argument. Name it once — `name="penny"` — and every word the
+package says is composed from it. Milton is the library's own persona and the
+default; no string in this package names him.
+
+Owned by the library. Design-system is its press: change it here, consume it
+there.
 
 ## What is here
 
@@ -44,16 +48,28 @@ pnpm add @poodle64/librarian @poodle64/ui @lucide/svelte
 and `shiki` are peer dependencies: declare them yourself so Renovate tracks
 their versions and `pnpm ls` shows them.
 
-The components style themselves with Tailwind utility classes, same as
-`@poodle64/ui`, so the same line is needed in the app's `app.css`:
+**No Tailwind content-scan line, and deliberately none.** These components
+carry their own CSS, written against the `--ds-*` tokens and compiled by
+whatever bundler the app already runs, so the transcript looks the same in
+every consumer whether or not that consumer scans `node_modules`. It did not
+always: the package styled itself with Tailwind utilities and asked each app
+for an `@source` line, Pebblestone's `app.css` never had one, and the console
+shipped a 2302px-wide transcript with no cards, no measure and unstyled
+tables — no build error, no lint hit, nothing failing. A package whose
+appearance depends on a line in its consumer's stylesheet does not have a
+look; it has a hope.
+
+What it does need is the token layer every app already imports:
 
 ```css
-@source '../node_modules/@poodle64/librarian/dist'; /* Tailwind content scan */
+@import '@poodle64/design-tokens/tokens.css';
 ```
 
-Without it the classes ship in `dist` but Tailwind's default content scan
-never sees `node_modules`, so nothing compiles for them — no build error, no
-lint hit, just an unstyled transcript.
+The composed page chrome this package borrows from `@poodle64/ui` (`Panel`)
+still follows that package's own `@source` line, which every app has.
+
+One knob: `--ds-lib-measure` (default `46rem`) sets the transcript's reading
+column. Set it on any ancestor.
 
 ## Consuming the package
 
@@ -213,7 +229,7 @@ behind it, so "not verified" would be a claim about a record nothing here
 ever read.
 
 An answer that settles having cited nothing says so, once, under the prose:
-"Milton answered this one without a source. He may not hold a document that
+"Milton answered this one without a source. There may be no document here that
 covers it." Only on a turn whose stream this surface actually watched finish
 — a turn read back out of `createHistory()` has no citations because history
 stores none, and labelling it as holding nothing would be a lie about an
@@ -235,7 +251,7 @@ second question by mistake.
 
 ### Where the answer starts
 
-Milton narrates between tool calls — "Let me also check whether…" — and the
+The persona narrates between tool calls — "Let me also check whether…" — and the
 caller stream gives that nowhere to arrive: it carries no `thinking` blocks
 at all, so narration is an ordinary `text` block, identical to the answer
 except in POSITION. `segment()` reads that position: a text block with any
@@ -246,22 +262,59 @@ is currently last renders as prose, and a tool call arriving after it
 re-homes it — which is why `segment()` is pure and re-derived per event
 rather than deciding once.
 
-The cost is an answer Milton interrupts to go back to the shelf: its first
+The cost is an answer the persona interrupts to go back to the shelf: its first
 half folds away. Position is the only signal the stream gives, and a rule
 read off the prose itself would be unexplainable the first time it misfired.
 
-### Changing the words
+### Who is speaking, and in what words
 
-Every user-visible string this package renders lives in
-`@poodle64/librarian/copy`, and every component takes a partial of it:
+Every user-visible string lives in `@poodle64/librarian/copy`, and every one
+of them is composed from the persona's name:
 
 ```svelte
-<Conversation {turns} {running} copy={{ notVerified: 'not checked yet' }} />
+<Conversation {turns} {running} name="penny" />
+<Composer bind:value {running} name="penny" {scope} {onscope} {onsubmit} {onstop} />
+```
+
+That one prop carries the working line ("Penny is looking…"), both composer
+placeholders, the uncited-answer note, both failure sentences, the scope
+label, the opening line, the name signed on every answer card and the
+accessible name of the scroll region. A slug is fine: `penny` renders as
+"Penny", `chief-engineer` as "Chief Engineer", and a name the host already
+capitalised is left exactly as written.
+
+A host that wants different words still overrides one at a time:
+
+```svelte
+<Conversation {turns} {running} name="penny" copy={{ notVerified: 'not checked yet' }} />
 ```
 
 Overriding one line leaves the rest as the package wrote them, and a key
 passed as `undefined` — the shape a host produces from state that has not
 loaded — is ignored rather than rendering nothing where a word belongs.
+
+### When the stream fails
+
+`ask()` never throws. A refused route, a `fetch` the browser blocks on CORS
+after an expired session redirects it, a 200 that turns out to be a login
+page, a connection that dies mid-answer and a stream that simply stops
+without a terminal frame all arrive as one `library_error` event and a
+finished iteration. That matters because the host's `for await` loop is what
+re-enables its Send button: a thrown generator left Pebblestone's console
+disabled, silent and waiting indefinitely every time a session expired.
+
+The event carries no words — this layer does not know whose voice to say them
+in — so the turn renders `copy.unreachable` in the persona's own name and
+settles, offering "Ask again".
+
+### Timestamps
+
+`Turn.at` (epoch ms) renders as a clock time on the question and the answer
+card, which is a different fact from the duration badge beside the actions. A
+host that persists conversations sets it; a host that does not gets one
+stamped when the turn first appears, and a turn already on screen at mount —
+one read back out of history — deliberately shows none rather than claiming
+it was asked this afternoon.
 
 ### The system preamble
 
@@ -290,16 +343,21 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is eleven states x three widths x both themes, taken by
+`docs/screenshots/` is thirteen states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
 opens and closes from the keyboard with focus returning to the chip and is
 really draggable, that the scope statement folds once there is a
 conversation over it and reopens from that line, that a follow-up chip asks
-its question and takes the rest of the row with it, and that Milton's
+its question and takes the rest of the row with it, that the persona's
 between-tool narration is nowhere in the answer prose before the activity
-line is opened. It exits non-zero on any of them.
+line is opened, and that the reading column holds its 46rem measure and stays
+centred at every width. It exits non-zero on any of them.
+
+The console's `app.css` deliberately does NOT scan this package's `dist`, so
+the grid is taken in a consumer that compiles none of its Tailwind classes —
+which is the only way the measure claim above means anything.
 
 ```bash
 pnpm --filter @poodle64/console run build

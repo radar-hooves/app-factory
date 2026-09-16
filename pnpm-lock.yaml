@@ -105,6 +105,9 @@ importers:
       '@lucide/svelte':
         specifier: ^1.7.0
         version: 1.25.0(svelte@5.56.7)
+      '@poodle64/design-tokens':
+        specifier: workspace:*
+        version: link:../design-tokens
       '@poodle64/ui':
         specifier: workspace:*
         version: link:../ui

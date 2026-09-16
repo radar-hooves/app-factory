@@ -219,14 +219,30 @@ export type LabState =
 	| 'narration'
 	| 'error'
 	| 'stopped'
-	| 'not-held';
+	| 'not-held'
+	| 'chat'
+	| 'persona';
 
 export interface LabScene {
 	turns: Turn[];
 	running: boolean;
 	value: string;
 	files: File[];
+	/** Who is answering. Every scene but `persona` is the library's own Milton,
+	 *  which is what keeps the default honest: one scene renames the persona
+	 *  and the whole surface follows, including the words. */
+	name: string;
 }
+
+/** A second persona's answer, in a second app's subject matter: the package
+ *  is a shape, and nothing in it is about a library. */
+const PENNY = `Four bills are waiting on you, worth **$18,420** in total. Two are inside their
+payment terms this week; the other two are the concrete supplier's, held since
+Friday pending a delivery docket.`;
+
+/** Fixed clock times, so the grid photographs the same transcript every run. */
+const CLOCK = Date.UTC(2026, 8, 16, 0, 12);
+const minutes = (n: number) => CLOCK + n * 60_000;
 
 function fakeFile(name: string, type: string, size: number): File {
 	const made = new File([''], name, { type });
@@ -235,7 +251,7 @@ function fakeFile(name: string, type: string, size: number): File {
 }
 
 export function scene(state: LabState): LabScene {
-	const base: LabScene = { turns: [], running: false, value: '', files: [] };
+	const base: LabScene = { turns: [], running: false, value: '', files: [], name: 'Milton' };
 
 	if (state === 'empty') return base;
 
@@ -354,6 +370,10 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
+	// The session expired mid-conversation: the ask was redirected and blocked,
+	// so the stream never opened. The turn says so in the persona's own voice
+	// and settles, which is what re-enables Send — the shot to check is the
+	// composer, which carries a live send button rather than a stop square.
 	if (state === 'error') {
 		return {
 			...base,
@@ -362,9 +382,73 @@ export function scene(state: LabState): LabScene {
 					id: 'turn-1',
 					question: question('How much recreation leave do I get each year?'),
 					blocks: ACTIVITY,
-					outcome: { isError: true, error: "Milton can't be reached right now." }
+					outcome: { isError: true, unreachable: true },
+					at: minutes(0)
 				}
 			]
+		};
+	}
+
+	// Three turns, which is the state the director was actually looking at and
+	// the one no single-turn shot can make a claim about: whether a
+	// conversation reads AS a conversation — bounded cards, one voice against
+	// the other, a measure a line of prose can be read across.
+	if (state === 'chat') {
+		return {
+			...base,
+			turns: [
+				{
+					id: 'turn-1',
+					question: question('How much recreation leave do I get each year?'),
+					blocks: [...ACTIVITY, text(3, SHORT)],
+					outcome: { turns: 3, durationMs: 8400 },
+					citations: CITATIONS.slice(0, 2),
+					at: minutes(0)
+				},
+				{
+					id: 'turn-2',
+					question: question('Does my unit run its own leave calendar?'),
+					blocks: [tool(0, 'Grep', { pattern: 'unit leave calendar' }), text(1, UNCITED)],
+					outcome: { turns: 2, durationMs: 5200 },
+					at: minutes(3)
+				},
+				{
+					id: 'turn-3',
+					question: question('Show me the carry-over caps by service category.'),
+					blocks: [...ACTIVITY, text(3, splitAt(LONG, '## Carrying leave over')[0])],
+					outcome: { turns: 4, durationMs: 11_200 },
+					citations: CITATIONS,
+					suggestions: SUGGESTIONS,
+					at: minutes(5)
+				}
+			]
+		};
+	}
+
+	// The same surface, answering as somebody else. Nothing in the package
+	// names a persona any more, so every word here — the working line, the
+	// uncited note, the scope label, the placeholder — follows this one prop.
+	if (state === 'persona') {
+		return {
+			...base,
+			name: 'penny',
+			turns: [
+				{
+					id: 'turn-1',
+					question: 'Which bills are waiting on my approval?',
+					blocks: [tool(0, 'Grep', { pattern: 'pending approvals' }), text(1, PENNY)],
+					outcome: { turns: 2, durationMs: 4100 },
+					at: minutes(0)
+				},
+				{
+					id: 'turn-2',
+					question: 'And the one from the concrete supplier?',
+					blocks: ACTIVITY.slice(0, 2),
+					outcome: null,
+					at: minutes(2)
+				}
+			],
+			running: true
 		};
 	}
 

@@ -17,9 +17,14 @@
    lint hit, just missing classes in the compiled CSS. */
 @source '../../ui/dist';
 
-/* Same reasoning for the librarian's components, which the /librarian lab
-   renders — its classes ship in dist and Tailwind scans no node_modules. */
-@source '../../librarian/dist';
+/* @poodle64/librarian is DELIBERATELY not scanned, and its absence is the
+   test. That package styles itself — component CSS against --ds-* tokens,
+   compiled by whatever bundler the consumer already runs — precisely because
+   a scan line is a thing an app can forget: Pebblestone did, and got a
+   2302px-wide transcript with no cards and no measure, with no build error
+   and nothing failing. If a shot from the /librarian lab ever comes back
+   unstyled, the package has grown a utility class it cannot pay for, and
+   adding a line here would hide it. */
 
 /*
   The enter/exit animation keyframes and the `dark`, `data-open` and

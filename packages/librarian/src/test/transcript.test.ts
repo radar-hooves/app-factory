@@ -80,9 +80,17 @@ vdescribe('summariseActivity()', () => {
 });
 
 vdescribe('Transcript error frame', () => {
-	it('names Milton, not the agent, when the stream fails with no message', () => {
+	it('records an unreachable stream as a fact, and puts no words in anyone\'s mouth', () => {
+		// The sentence names a persona; this layer does not know which one, so
+		// it carries the fact and the rendering layer says it in the right voice.
 		const transcript = new Transcript();
 		transcript.apply({ type: 'library_error' });
-		expect(transcript.outcome?.error).toBe("Milton can't be reached right now.");
+		expect(transcript.outcome).toEqual({ isError: true, unreachable: true, error: undefined });
+	});
+
+	it('keeps a message the failure did carry', () => {
+		const transcript = new Transcript();
+		transcript.apply({ type: 'library_error', error: 'The room is closed for maintenance.' });
+		expect(transcript.outcome?.error).toBe('The room is closed for maintenance.');
 	});
 });

@@ -3,9 +3,9 @@
 
   One element, two shapes. On a desktop it is a real column in the flow at
   about 40% of the width and draggable — the transcript narrows beside it and
-  nothing is covered. Below `lg` there is no width to give it, so the same
+  nothing is covered. Under 64rem there is no width to give it, so the same
   element becomes a bottom sheet over the conversation. Two components would
-  have meant two behaviours to keep honest; a class list is cheaper than that.
+  have meant two behaviours to keep honest; one media query is cheaper.
 -->
 <script lang="ts">
 	import XIcon from '@lucide/svelte/icons/x';
@@ -118,76 +118,259 @@
 
 <svelte:window onkeydown={keydown} />
 
-<aside
-	style="--pane-width: {width}px"
-	aria-label="Source document"
-	class="bg-surface-1 border-border fixed inset-x-0 bottom-0 z-40 flex h-[80svh] flex-col rounded-t-2xl border-t shadow-2xl lg:relative lg:h-auto lg:w-[var(--pane-width)] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none"
->
-	<!-- The drag handle. `lg:relative` on the pane above, not `lg:static`, is
-	     what this depends on: an absolutely-positioned child needs a positioned
-	     ancestor, and without one the handle lands somewhere else entirely and
-	     the pane is silently not resizable. Measured — the drag moved nothing. -->
+<aside style="--ds-lib-pane-width: {width}px" aria-label="Source document" class="ds-lib-pane">
+	<!-- The drag handle. The pane being `position: relative` at 64rem, not
+	     `static`, is what this depends on: an absolutely-positioned child needs
+	     a positioned ancestor, and without one the handle lands somewhere else
+	     entirely and the pane is silently not resizable. Measured — the drag
+	     moved nothing. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -- a pointer-only
 	     affordance for a width that has a keyboard-independent default; the
 	     pane is fully usable without ever touching it. -->
 	<div
+		class="ds-lib-pane-handle"
 		onpointerdown={startDrag}
 		onpointermove={drag}
 		onpointerup={endDrag}
-		class="hover:bg-primary/40 absolute inset-y-0 left-0 hidden w-1.5 cursor-col-resize lg:block"
 	></div>
 
-	<!-- The sheet's grabber. Below `lg` this is an overlay a reader has to be
+	<!-- The sheet's grabber. On a phone this is an overlay a reader has to be
 	     able to see the top edge of; on a desktop it is a column, and a column
 	     with a handle on it reads as draggable in the wrong axis. -->
-	<div class="flex justify-center pt-2 pb-1 lg:hidden" aria-hidden="true">
-		<span class="bg-border h-1 w-9 rounded-full"></span>
-	</div>
+	<div class="ds-lib-pane-grabber" aria-hidden="true"><span></span></div>
 
-	<header class="border-border flex items-start gap-2 border-b px-4 py-3 lg:pt-3">
-		<div class="min-w-0 flex-1">
-			<h2 class="text-foreground truncate text-sm font-semibold">
-				{document_?.title ?? citation.title}
-			</h2>
+	<header class="ds-lib-pane-header">
+		<div class="ds-lib-pane-heading">
+			<h2 class="ds-lib-pane-title">{document_?.title ?? citation.title}</h2>
 			{#if citation.section}
-				<p class="text-muted-foreground truncate text-xs">{citation.section}</p>
+				<p class="ds-lib-pane-subtitle">{citation.section}</p>
 			{/if}
 			{#if mark}
-				<p class="text-muted-foreground/80 text-xs">{mark}</p>
+				<p class="ds-lib-pane-mark">{mark}</p>
 			{/if}
 		</div>
 		<button
 			bind:this={closeButton}
 			type="button"
+			class="ds-lib-pane-close"
 			onclick={onclose}
 			aria-label={words.closeSource}
-			class="text-muted-foreground hover:text-foreground hover:bg-surface-2 focus-visible:ring-ring -mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
 		>
-			<XIcon class="size-4" />
+			<XIcon size={16} />
 		</button>
 	</header>
 
-	<div bind:this={scroller} class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+	<div bind:this={scroller} class="ds-lib-pane-body">
 		{#if failed}
-			<p class="text-muted-foreground text-sm">{words.documentUnavailable}</p>
+			<p class="ds-lib-pane-failed">{words.documentUnavailable}</p>
 		{:else if !document_}
-			<div class="flex flex-col gap-2" aria-hidden="true">
+			<div class="ds-lib-pane-skeleton" aria-hidden="true">
 				{#each [0, 1, 2, 3] as row (row)}
-					<div class="bg-muted h-4 animate-pulse rounded" style="width: {90 - row * 12}%"></div>
+					<div class="ds-lib-pane-bar" style="width: {90 - row * 12}%"></div>
 				{/each}
 			</div>
 		{:else}
 			{#each document_.sections as section (section.anchor)}
 				<section
 					data-anchor={section.anchor}
-					class="scroll-mt-4 rounded-lg px-3 py-2 {section.anchor === activeAnchor
-						? 'border-primary/50 bg-primary/8 border-l-2'
-						: ''}"
+					class="ds-lib-pane-section"
+					class:is-cited={section.anchor === activeAnchor}
 				>
-					<h3 class="text-foreground mb-1 text-sm font-semibold">{section.heading}</h3>
+					<h3 class="ds-lib-pane-section-heading">{section.heading}</h3>
 					<Markdown content={section.text} dense />
 				</section>
 			{/each}
 		{/if}
 	</div>
 </aside>
+
+<style>
+	.ds-lib-pane {
+		position: fixed;
+		inset-inline: 0;
+		bottom: 0;
+		z-index: 40;
+		display: flex;
+		height: 80svh;
+		flex-direction: column;
+		border-top: 1px solid var(--ds-color-border);
+		border-start-start-radius: var(--ds-radius-xl);
+		border-start-end-radius: var(--ds-radius-xl);
+		background: var(--ds-color-surface-1);
+		box-shadow: 0 -12px 40px rgb(0 0 0 / 0.25);
+	}
+
+	.ds-lib-pane-handle {
+		display: none;
+	}
+
+	.ds-lib-pane-grabber {
+		display: flex;
+		justify-content: center;
+		padding-top: 0.5rem;
+		padding-bottom: 0.25rem;
+	}
+
+	.ds-lib-pane-grabber span {
+		width: 2.25rem;
+		height: 0.25rem;
+		border-radius: var(--ds-radius-full);
+		background: var(--ds-color-border);
+	}
+
+	.ds-lib-pane-header {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		border-bottom: 1px solid var(--ds-color-border);
+		padding: 0.75rem 1rem;
+	}
+
+	.ds-lib-pane-heading {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.ds-lib-pane-title,
+	.ds-lib-pane-subtitle {
+		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ds-lib-pane-title {
+		color: var(--ds-color-foreground);
+		font-family: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	.ds-lib-pane-subtitle {
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-pane-mark {
+		margin: 0;
+		color: color-mix(in oklab, var(--ds-color-muted-foreground) 80%, transparent);
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-pane-close {
+		display: flex;
+		width: 2rem;
+		height: 2rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		margin-top: -0.25rem;
+		border: 0;
+		border-radius: var(--ds-radius-lg);
+		background: none;
+		color: var(--ds-color-muted-foreground);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-pane-close:hover {
+		background: var(--ds-color-surface-2);
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-pane-close:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-pane-body {
+		min-height: 0;
+		flex: 1;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.75rem 1rem;
+	}
+
+	.ds-lib-pane-failed {
+		margin: 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: 0.875rem;
+	}
+
+	.ds-lib-pane-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.ds-lib-pane-bar {
+		height: 1rem;
+		border-radius: var(--ds-radius-md);
+		background: var(--ds-color-surface-2);
+		animation: ds-lib-pane-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+	}
+
+	.ds-lib-pane-section {
+		scroll-margin-top: 1rem;
+		border-radius: var(--ds-radius-lg);
+		padding: 0.5rem 0.75rem;
+	}
+
+	.ds-lib-pane-section.is-cited {
+		border-inline-start: 2px solid color-mix(in oklab, var(--ds-color-primary) 50%, transparent);
+		background: color-mix(in oklab, var(--ds-color-primary) 8%, transparent);
+	}
+
+	.ds-lib-pane-section-heading {
+		margin: 0 0 0.25rem;
+		color: var(--ds-color-foreground);
+		font-family: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	@keyframes ds-lib-pane-pulse {
+		50% {
+			opacity: 0.4;
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.ds-lib-pane {
+			position: relative;
+			inset: auto;
+			height: auto;
+			width: var(--ds-lib-pane-width);
+			flex: none;
+			border-top: 0;
+			border-inline-start: 1px solid var(--ds-color-border);
+			border-radius: 0;
+			box-shadow: none;
+		}
+
+		.ds-lib-pane-handle {
+			position: absolute;
+			inset-block: 0;
+			inset-inline-start: 0;
+			display: block;
+			width: 0.375rem;
+			cursor: col-resize;
+		}
+
+		.ds-lib-pane-handle:hover {
+			background: color-mix(in oklab, var(--ds-color-primary) 40%, transparent);
+		}
+
+		.ds-lib-pane-grabber {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ds-lib-pane-bar {
+			animation: none;
+		}
+	}
+</style>

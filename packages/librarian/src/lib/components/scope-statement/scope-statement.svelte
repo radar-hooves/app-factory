@@ -1,5 +1,5 @@
 <!--
-  What Milton answers from, and what he does not hold.
+  What this room answers from, and what it does not hold.
 
   A colleague's first question about a room is not the one they type — it is
   whether the answer they are about to read covers their case at all. Saying it
@@ -45,27 +45,94 @@
 	});
 </script>
 
-<section
-	class="border-border bg-surface-2/60 rounded-xl border px-3 py-2"
-	aria-label={words.scope}
->
+<section class="ds-lib-scope" aria-label={words.scope}>
 	<button
 		type="button"
+		class="ds-lib-scope-toggle"
 		onclick={() => (open = !open)}
 		aria-expanded={open}
-		class="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-md text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
 	>
-		<InfoIcon class="size-3.5 shrink-0" />
-		<span class="min-w-0 flex-1 truncate font-medium tracking-wide uppercase">{words.scope}</span>
-		<ChevronDownIcon class="size-3.5 shrink-0 transition-transform {open ? 'rotate-180' : ''}" />
+		<InfoIcon size={14} />
+		<span class="ds-lib-scope-label">{words.scope}</span>
+		<span class="ds-lib-scope-chevron" class:is-open={open}>
+			<ChevronDownIcon size={14} />
+		</span>
 	</button>
 
 	{#if open}
 		<!-- No measure of its own: the card IS the measure, and a paragraph
 		     capped narrower than the border around it leaves a hand's width of
 		     empty card down the right at 1440. -->
-		<p class="text-muted-foreground mt-1.5 text-sm leading-6 whitespace-pre-line">
-			{statement}
-		</p>
+		<p class="ds-lib-scope-text">{statement}</p>
 	{/if}
 </section>
+
+<style>
+	.ds-lib-scope {
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-xl);
+		background: color-mix(in oklab, var(--ds-color-surface-2) 60%, transparent);
+		padding: 0.5rem 0.75rem;
+	}
+
+	.ds-lib-scope-toggle {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: 0.5rem;
+		border: 0;
+		border-radius: var(--ds-radius-md);
+		background: none;
+		padding: 0;
+		color: var(--ds-color-muted-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		text-align: start;
+		cursor: pointer;
+		transition: color 150ms ease;
+	}
+
+	.ds-lib-scope-toggle:hover {
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-scope-toggle:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-scope-label {
+		min-width: 0;
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 500;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-scope-chevron {
+		display: flex;
+		flex: none;
+		transition: transform 150ms ease;
+	}
+
+	.ds-lib-scope-chevron.is-open {
+		transform: rotate(180deg);
+	}
+
+	.ds-lib-scope-text {
+		margin: 0.375rem 0 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+		white-space: pre-line;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ds-lib-scope-chevron {
+			transition: none;
+		}
+	}
+</style>

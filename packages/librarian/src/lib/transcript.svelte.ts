@@ -39,7 +39,12 @@ export interface Outcome {
 	costUsd?: number;
 	durationMs?: number;
 	isError?: boolean;
+	/** A message the run itself gave. Words, never a code. */
 	error?: string;
+	/** The stream never opened, or died before the run said anything. The
+	 *  sentence a reader sees is the persona's own (`copy.unreachable`), which
+	 *  only the rendering layer knows, so this carries the FACT and no words. */
+	unreachable?: boolean;
 }
 
 /**
@@ -241,8 +246,11 @@ export class Transcript {
 			return;
 		}
 
+		// No persona and no sentence at this layer: `client.ts` raises this for a
+		// stream that would not open or died half-way, and the turn renders the
+		// unreachable line in whichever persona's voice the host named.
 		if (event.type === 'library_error') {
-			this.outcome = { isError: true, error: event.error ?? "Milton can't be reached right now." };
+			this.outcome = { isError: true, unreachable: true, error: event.error };
 			return;
 		}
 
@@ -347,6 +355,11 @@ export type Segment = ActivityGroup | TextBlock;
 export interface Turn {
 	id: string;
 	question: string;
+	/** When the question was asked, epoch ms. A host that persists its
+	 *  conversations supplies it; a host that does not gets one stamped when
+	 *  the turn first appears on screen, which is right for a live turn and
+	 *  honestly absent for one read back out of history. */
+	at?: number;
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];

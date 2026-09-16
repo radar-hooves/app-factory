@@ -47,8 +47,14 @@ const STATES = [
 	'narration',
 	'not-held',
 	'error',
-	'stopped'
+	'stopped',
+	'chat',
+	'persona'
 ];
+
+/** The measure the package guarantees in its OWN stylesheet: `--ds-lib-measure`,
+ *  46rem. Tolerance is the scrollbar the column sits inside. */
+const MEASURE_PX = 46 * 16;
 
 if (!existsSync(root)) {
 	console.error(`no console build at ${root} — run: pnpm --filter @poodle64/console run build`);
@@ -104,7 +110,10 @@ for (const theme of THEMES) {
 			// activity line, the lead paragraph and the table are the claims, and
 			// follow-scroll has parked the view 900px past all four. Scrolling up
 			// also raises the jump-to-latest pill, which is the point of it.
-			if (state === 'answer') {
+			// `chat` is photographed from the top for the same reason, and it is
+			// the shot the whole redesign answers to: three turns, each bounded,
+			// the reader's words against the persona's.
+			if (state === 'answer' || state === 'chat') {
 				await page.evaluate(() => {
 					document.querySelector('[role="log"]')?.scrollTo({ top: 0 });
 				});
@@ -129,6 +138,40 @@ for (const theme of THEMES) {
 				await page.getByRole('button', { name: /documents read/ }).click();
 				await page.getByRole('button', { name: 'Thought' }).click();
 				await page.getByText(said, { exact: false }).waitFor();
+			}
+
+			// The transcript is photographed at three widths and has to hold its
+			// measure at all of them. This is the claim the package lost in a
+			// consumer's production build — `max-w-[46rem]` compiled to nothing,
+			// the column ran to 2302px — so it is asserted here, inside a real
+			// consumer's build, rather than trusted to a class name.
+			const column = await page.evaluate(() => {
+				const log = document.querySelector('[role="log"]');
+				const inner = log?.firstElementChild;
+				if (!log || !inner) return null;
+				const outer = log.getBoundingClientRect();
+				const box = inner.getBoundingClientRect();
+				return {
+					width: box.width,
+					left: box.left - outer.left,
+					right: outer.right - box.right
+				};
+			});
+			if (!column) {
+				failures.push(`${state}-${width}-${theme}: no transcript column to measure`);
+			} else {
+				if (column.width > MEASURE_PX + 2) {
+					failures.push(
+						`${state}-${width}-${theme}: the column is ${Math.round(column.width)}px wide, past the ${MEASURE_PX}px measure`
+					);
+				}
+				// Centred, not left-hugging: at 1440 with the pane closed the
+				// column has ~350px of gutter either side and they must match.
+				if (Math.abs(column.left - column.right) > 2) {
+					failures.push(
+						`${state}-${width}-${theme}: the column is not centred (${Math.round(column.left)}px / ${Math.round(column.right)}px)`
+					);
+				}
 			}
 
 			// One frame of settle: the pane scrolls its cited section into view and
@@ -249,4 +292,6 @@ if (failures.length) {
 	for (const line of failures) console.error(`FAIL ${line}`);
 	process.exit(1);
 }
-console.log('no clipping at any width; the source pane opens from the keyboard, resizes, and returns focus on close');
+console.log(
+	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close'
+);

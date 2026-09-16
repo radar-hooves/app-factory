@@ -85,3 +85,34 @@ describe('Composer placeholder', () => {
 		expect(screen.getByPlaceholderText('Penny is answering…')).toBeInTheDocument();
 	});
 });
+
+describe('Composer placeholder', () => {
+	function composer(props: Record<string, unknown> = {}) {
+		return render(Composer, {
+			props: {
+				value: '',
+				running: false,
+				scope: 'library',
+				onscope: () => {},
+				onsubmit: () => {},
+				onstop: () => {},
+				...props
+			}
+		});
+	}
+
+	it('asks for the library persona by default', () => {
+		composer();
+		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
+	});
+
+	it('asks for the host persona, capitalised from its slug', () => {
+		composer({ name: 'penny' });
+		expect(screen.getByPlaceholderText('Ask Penny…')).toBeInTheDocument();
+	});
+
+	it('says who is answering while the box is disabled', () => {
+		composer({ name: 'penny', running: true });
+		expect(screen.getByPlaceholderText('Penny is answering…')).toBeInTheDocument();
+	});
+});

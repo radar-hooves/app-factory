@@ -99,16 +99,43 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	return { method: 'POST', credentials: 'include', body: form, signal };
 }
 
-/** Async-iterate the events of one question. */
+/**
+ * Async-iterate the events of one question.
+ *
+ * It never throws. Every way a stream can fail to open or die half-way through
+ * — the network dropping, an expired session redirecting the POST to an
+ * identity provider the browser then blocks on CORS, a server closing the
+ * connection mid-answer — comes back as one `library_error` event and a
+ * finished iteration, because a host's loop is what re-enables its Send
+ * button. A thrown generator leaves that loop unfinished: Pebblestone's
+ * console sat with Send disabled and no message on screen, indefinitely,
+ * every time a session expired mid-conversation.
+ *
+ * The event carries no words. The words name a persona and this layer has no
+ * idea which one is speaking, so `copyFor(name).unreachable` supplies them
+ * where the turn is rendered.
+ */
 export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	const doFetch = options.fetch ?? fetch;
-	const response = await doFetch(
-		options.endpoint ?? '/api/agent/ask',
-		requestInit(options, options.signal)
-	);
+	let response: Response;
+	try {
+		response = await doFetch(
+			options.endpoint ?? '/api/agent/ask',
+			requestInit(options, options.signal)
+		);
+	} catch {
+		// A reader who pressed stop asked for this one; it is not a failure.
+		if (options.signal?.aborted) return;
+		yield { type: 'library_error' };
+		return;
+	}
 
-	if (!response.ok || !response.body) {
-		yield { type: 'library_error', error: "Milton can't be reached right now." };
+	// A session that expired mid-conversation is the shape this catches: the
+	// POST is redirected to a login page, which answers 200 with HTML, and a
+	// reader whose stream "opened" then waits for frames that can never come.
+	const kind = response.headers.get('content-type') ?? '';
+	if (!response.ok || !response.body || !kind.includes('text/event-stream')) {
+		yield { type: 'library_error' };
 		return;
 	}
 
@@ -116,10 +143,21 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	// Frames are separated by a blank line and split across network reads at
 	// arbitrary points, so the tail of each read is carried rather than parsed.
 	let buffered = '';
+	// A turn that ends with no terminal frame ended by accident. Tracked here
+	// rather than left to the renderer, which cannot tell a stream that died
+	// from one still arriving.
+	let terminal = false;
 	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		buffered += value;
+		let chunk: ReadableStreamReadResult<string>;
+		try {
+			chunk = await reader.read();
+		} catch {
+			if (options.signal?.aborted) return;
+			yield { type: 'library_error' };
+			return;
+		}
+		if (chunk.done) break;
+		buffered += chunk.value;
 		let boundary = buffered.indexOf('\n\n');
 		while (boundary !== -1) {
 			const frame = buffered.slice(0, boundary);
@@ -134,10 +172,14 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 				.join('');
 			if (!data) continue;
 			try {
-				yield JSON.parse(data) as AgentEvent;
+				const event = JSON.parse(data) as AgentEvent;
+				if (event.type === 'result' || event.type === 'library_error') terminal = true;
+				yield event;
 			} catch {
 				/* a partial frame at end of stream is not an error */
 			}
 		}
 	}
+
+	if (!terminal && !options.signal?.aborted) yield { type: 'library_error' };
 }
