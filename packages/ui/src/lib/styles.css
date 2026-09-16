@@ -777,6 +777,13 @@
 	   lands its label at 2.5rem, exactly under the parent's. The border is a real
 	   affordance at fifteen rows, not decoration: it is what makes the run
 	   scannable as one section. */
+	/* The disclosed rows carry no guide rule. Indentation and the children's own
+	   icons already read as one group, and a line down the side is a second
+	   signal for a grouping that was never ambiguous. The indent is still
+	   measured against the parent's geometry rather than picked: `.ds-nav-item`
+	   pads 0.625rem and the icon is 1.125rem, so 1.1875rem plus 0.625rem here
+	   plus the child's own 0.625rem lands its label at 2.5rem, exactly under the
+	   parent's. */
 	.ds-nav-children {
 		display: flex;
 		flex-direction: column;
@@ -784,13 +791,6 @@
 		margin-top: 0.125rem;
 		margin-left: 1.1875rem;
 		padding-left: 0.625rem;
-		/* Derived from the nav's OWN ink, not `--border`. The rail is chrome the
-		   app may brand, and a page-surface border token cannot follow it there:
-		   on a branded rail the grey lands at 1.54:1 and reads as a dead scratch
-		   down the colour. At 50% of the chrome's ink the guide measures 3.10:1
-		   on that same rail — over the 3:1 floor it owes as a real affordance,
-		   and still a step quieter than the child labels it organises. */
-		border-left: 1px solid color-mix(in oklch, var(--ds-nav-ink) 50%, transparent);
 	}
 
 	/* The rail's foot: where you configure the app, and which build you are on.
