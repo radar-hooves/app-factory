@@ -473,7 +473,16 @@
 			{@render brand()}
 		{:else}
 			{#if brandMark}
-				<span class="border-border bg-background grid size-8 flex-none place-items-center rounded-md border">
+				<!--
+					The mark sits directly on the chrome, with no plate behind it. The
+					chrome is the app's to brand, so anything painted here from a page
+					token punches a page-coloured hole through the brand colour; and a
+					mark is chosen to suit the ground it sits on — every brand guideline
+					says so, usually as "the white mark on a dark ground" — so it needs
+					no separating. An app that wants a plate owns the whole lockup
+					through the `brand` snippet, which is what that is for.
+				-->
+				<span class="grid size-8 flex-none place-items-center">
 					{@render brandMark()}
 				</span>
 			{/if}

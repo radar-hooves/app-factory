@@ -353,13 +353,21 @@
 		align-self: flex-end;
 	}
 
+	/* The reader's own words carry the consuming app's hue, the way every chat
+	   a person already uses colours THEIR side and leaves the other party
+	   neutral. It is an identity mark, not decoration: scanning back for "what
+	   did I ask" is a colour search, not a reading task. The hue is whatever
+	   the host set --ds-color-primary to, so no consumer is named here.
+	   It stays on the SHORT side of the transcript on purpose — a question is
+	   a line or two, an answer is paragraphs, so filling the question is an
+	   accent and filling the answer would be a wall. */
 	.ds-lib-bubble {
 		max-width: 85%;
-		border: 1px solid var(--ds-color-border);
+		border: 1px solid transparent;
 		border-radius: var(--ds-radius-xl);
-		background: var(--ds-color-surface-3);
+		background: var(--ds-color-primary);
 		padding: 0.625rem 1rem;
-		color: var(--ds-color-foreground);
+		color: var(--ds-color-primary-foreground);
 		font-size: 1rem;
 		line-height: 1.5rem;
 		overflow-wrap: break-word;
@@ -381,6 +389,7 @@
 		flex-direction: column;
 		gap: 0.75rem;
 		border: 1px solid var(--ds-color-border);
+		border-inline-start: 3px solid var(--ds-color-primary);
 		border-radius: var(--ds-radius-xl);
 		background: var(--ds-color-surface-2);
 		padding: 0.875rem 1rem 0.75rem;
@@ -400,8 +409,13 @@
 		align-items: center;
 		justify-content: center;
 		border-radius: var(--ds-radius-full);
-		background: color-mix(in oklab, var(--ds-color-primary) 18%, transparent);
-		color: var(--ds-color-foreground);
+		/* Opaque, never a translucent tint. An 18% wash of a dark primary over a
+		   dark surface has almost no luminance separation, so the initial fell
+		   under the 3:1 floor for a non-text graphic and read as a smudge —
+		   measured 2.55:1 on a dark-mode host. A solid fill carries the hue AND
+		   the contrast. */
+		background: var(--ds-color-primary);
+		color: var(--ds-color-primary-foreground);
 		font-size: var(--ds-text-2xs);
 		font-weight: 600;
 		text-transform: uppercase;
