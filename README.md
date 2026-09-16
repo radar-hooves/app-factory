@@ -18,12 +18,14 @@ packages/
                      table), extracted from the household's most conformant
                      consuming app and restyled by whichever app's token alias
                      layer is active. See packages/ui/README.md.
-  librarian/         @poodle64/librarian, Milton's conversation surface: the
-                     stream client, transcript state and chat components
+  librarian/         @poodle64/librarian, an agent's conversation surface:
+                     the stream client, transcript state and chat components
                      (transcript, composer, markdown, tool/thinking rows,
                      working indicator), owned by the library and pressed
-                     here so any household app renders the librarian instead
-                     of rebuilding it. See packages/librarian/README.md.
+                     here so any household app renders a console instead of
+                     rebuilding one. It speaks as whichever persona the app
+                     names and carries its own CSS, so it needs no Tailwind
+                     scan line. See packages/librarian/README.md.
 ```
 
 All three packages publish to public npm under the `@poodle64` scope: no
