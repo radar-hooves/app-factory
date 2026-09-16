@@ -98,7 +98,6 @@
 			{running}
 			version={transcript.version}
 			name={persona}
-			welcome="Ask {persona} a question."
 			onregenerate={() => run(asked)}
 		>
 			{#snippet composer()}

@@ -14,11 +14,11 @@
    lint hit, just missing classes in the compiled CSS. */
 @source '../node_modules/@poodle64/ui/dist';
 
-/* @poodle64/librarian (the agent console's Conversation/Composer) ships in
-   node_modules too, for the same reason: without this its classes compile to
-   nothing and the console renders unstyled, with no build error and no lint
-   hit. */
-@source '../node_modules/@poodle64/librarian/dist';
+/* @poodle64/librarian is deliberately NOT scanned. It carries its own CSS,
+   written against the --ds-* tokens above and compiled by Vite with the
+   components, so the agent console looks the same whether or not an app
+   remembers a line here. Adding one compiles nothing and hides the day it
+   stops being true. */
 
 /*
   The enter/exit animation keyframes and the `dark`, `data-open` and
