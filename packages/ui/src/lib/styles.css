@@ -793,6 +793,33 @@
 		border-left: 1px solid color-mix(in oklch, var(--ds-nav-ink) 50%, transparent);
 	}
 
+	/* The rail's foot: where you configure the app, and which build you are on.
+	   Separated from the scrolling section list by a rule in the chrome's OWN
+	   ink rather than `--border`, for the reason the group guide takes the same
+	   treatment — a page-surface token cannot follow chrome an app has branded. */
+	.ds-shell-rail-foot {
+		display: flex;
+		flex-direction: column;
+		padding-top: 0.375rem;
+		border-top: 1px solid color-mix(in oklch, var(--ds-nav-ink) 22%, transparent);
+	}
+
+	/* Metadata, not a row. No icon, no tile, no hover: it answers "what am I
+	   running" when someone reports a bug and otherwise stays out of the way.
+	   `tabular-nums` so a version does not re-flow as the digits change. */
+	.ds-shell-version {
+		margin: 0;
+		padding: 0.25rem 0.75rem 0.375rem;
+		color: var(--ds-nav-ink-muted);
+		font-size: var(--ds-text-2xs);
+		font-variant-numeric: tabular-nums;
+		text-decoration: none;
+	}
+
+	a.ds-shell-version:hover {
+		color: var(--ds-nav-ink);
+	}
+
 	/* `hidden` is an attribute the UA stylesheet honours at the weakest possible
 	   specificity, so the `display: flex` above beats it and a closed group would
 	   render wide open. This is not belt-and-braces; without it the attribute is

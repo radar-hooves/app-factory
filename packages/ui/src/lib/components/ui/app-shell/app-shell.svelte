@@ -84,6 +84,7 @@
 	import Menu from '@lucide/svelte/icons/menu';
 	import X from '@lucide/svelte/icons/x';
 	import Search from '@lucide/svelte/icons/search';
+	import Settings from '@lucide/svelte/icons/settings';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
@@ -107,6 +108,10 @@
 		context,
 		actions,
 		identity,
+		settingsHref,
+		settingsLabel = 'Settings',
+		version,
+		versionHref,
 		onSearch,
 		searchLabel = 'Search…',
 		searchShortcut = '⌘K',
@@ -162,8 +167,25 @@
 		context?: Snippet;
 		/** Trailing top-bar slot, before the theme toggle: app-level action buttons. */
 		actions?: Snippet;
-		/** The signed-in user surface. Rendered once, at the end of the top bar. */
+		/** The signed-in user surface. Rendered once, at the end of the top bar.
+		 *  It stays there at EVERY width rather than moving into the rail foot on
+		 *  desktop: the rail is an overlay drawer below `md`, so a rail-placed
+		 *  account is two taps away and who-am-I is hidden behind the menu; and
+		 *  the alternative, rendering it in both, is the duplication this file
+		 *  exists to avoid. */
 		identity?: Snippet;
+		/** Where the Settings row at the rail's foot links. Absent renders no row.
+		 *  Settings sits at the foot because configuring the app is not navigating
+		 *  it, and the split reads without a label. */
+		settingsHref?: string;
+		settingsLabel?: string;
+		/** The build this person is looking at, e.g. `2026.9.3 · b032a3a`. Rendered
+		 *  as one muted line under the Settings row: no icon, no hover, not a nav
+		 *  row. It earns its place by answering "what am I running" the moment
+		 *  someone reports a bug, and it links into Settings where the full
+		 *  About section lives. */
+		version?: string;
+		versionHref?: string;
 		/** Provide to render the search affordance. Usually opens a CommandPalette. */
 		onSearch?: () => void;
 		searchLabel?: string;
@@ -638,6 +660,41 @@
 				label={navLabel}
 				onNavigate={() => (mobileNavOpen = false)}
 			/>
+
+			<!--
+				The rail's foot. `mt-auto` pins it under the nav however short the
+				section list is, so it sits on the rail's bottom edge rather than
+				trailing the last section. Two things live here and nothing else:
+				where you configure the app, and which build you are looking at.
+
+				Settings is a nav row like any other and takes the same active and
+				hover treatment, because it IS a destination — it is last rather
+				than separate because configuring the app is not navigating it.
+				The version is not a row: no icon, no tile, no hover, one muted
+				line, so it reads as metadata and never competes for a click.
+			-->
+			{#if settingsHref || version}
+				<div class="ds-shell-rail-foot mt-auto" class:sr-only={railCollapsed && !mobileNavOpen}>
+					{#if settingsHref}
+						<a
+							href={settingsHref}
+							class="ds-nav-item"
+							aria-current={currentPath?.startsWith(settingsHref) ? 'page' : undefined}
+							onclick={() => (mobileNavOpen = false)}
+						>
+							<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+							<span class="truncate">{settingsLabel}</span>
+						</a>
+					{/if}
+					{#if version}
+						{#if versionHref}
+							<a href={versionHref} class="ds-shell-version">{version}</a>
+						{:else}
+							<p class="ds-shell-version">{version}</p>
+						{/if}
+					{/if}
+				</div>
+			{/if}
 			{#if collapsible && !railCollapsed && !mobileNavOpen}
 				<!-- The rail's right edge: drag to resize, drag past the snap to
 				     collapse, arrows to nudge, Home to reset, double-click to reset.
