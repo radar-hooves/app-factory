@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.17] - 2026-09-16
+
+### Changed
+
+- `@poodle64/librarian` pinned at `2026.9.15` (exactly, as before: the call site depends on what the version carries). The package styles itself now — its components ship CSS written against the `--ds-*` tokens, compiled by Vite alongside them — so `frontend/src/app.css.jinja` no longer scans `node_modules/@poodle64/librarian/dist`, and a stamped app's console cannot be broken by a missing line in a stylesheet. That was not hypothetical: Pebblestone's own `app.ds.css` predates the line and never had it, so none of the package's utilities compiled there and its agent console rendered with no per-turn cards, no role distinction, unstyled tables and a transcript 2302px wide, with no build error and no failing gate (radar-hooves/design-system#35). The version also carries the persona through every string the package renders — the working line, both failure sentences, the uncited-answer note, both composer placeholders — and capitalises the route slug, so `routes/agent/[persona]/+page.svelte` drops its own `welcome` override: the package says "Ask Penny a question." where the override said "Ask penny a question." A failed stream (an expired session's redirect blocked on CORS) now settles the turn with the unreachable line and re-enables Send instead of leaving the composer disabled indefinitely. Dispatched from the Pebblestone cleanup session; consumer evidence `radar-hooves/design-system#35`. Proven by rendering a throwaway stamp from this commit: `pnpm install` resolves `@poodle64/librarian@2026.9.15` exactly, `pnpm check` reports 0 errors and 0 warnings across 1185 files, the frontend's 76 unit tests pass, `pnpm build` succeeds, and the built bundle carries the package's own `ds-lib-*` rules including `max-width: var(--ds-lib-measure, 46rem)` with nothing scanning `dist`.
+
 ## [2026.9.16] - 2026-09-15
 
 ### Fixed
