@@ -797,19 +797,29 @@
 	   Separated from the scrolling section list by a rule in the chrome's OWN
 	   ink rather than `--border`, for the reason the group guide takes the same
 	   treatment — a page-surface token cannot follow chrome an app has branded. */
+	/* `padding-inline` matches `.ds-nav`'s own `px-3`, because the foot sits
+	   OUTSIDE that wrapper: without it the Settings row's icon lands 0.75rem
+	   left of every icon above it and the rail reads as two lists. */
 	.ds-shell-rail-foot {
 		display: flex;
 		flex-direction: column;
-		padding-top: 0.375rem;
+		padding-block: 0.375rem 0.75rem;
+		padding-inline: 0.75rem;
 		border-top: 1px solid color-mix(in oklch, var(--ds-nav-ink) 22%, transparent);
 	}
 
 	/* Metadata, not a row. No icon, no tile, no hover: it answers "what am I
 	   running" when someone reports a bug and otherwise stays out of the way.
 	   `tabular-nums` so a version does not re-flow as the digits change. */
+	/* Below Settings, on the rail's bottom edge, so the rail OPENS with the app's
+	   name and CLOSES with its build — identity at both ends, the action between
+	   them. Above Settings would put metadata before the thing people click.
+	   `padding-inline` matches `.ds-nav-item`'s own, so it starts on the same
+	   vertical as the icons rather than the labels: it is a line of metadata,
+	   not a row missing its icon. */
 	.ds-shell-version {
 		margin: 0;
-		padding: 0.25rem 0.75rem 0.375rem;
+		padding: 0.25rem 0.625rem 0;
 		color: var(--ds-nav-ink-muted);
 		font-size: var(--ds-text-2xs);
 		font-variant-numeric: tabular-nums;

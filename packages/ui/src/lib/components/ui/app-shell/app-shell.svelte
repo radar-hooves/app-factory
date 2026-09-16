@@ -789,14 +789,14 @@
 
 			{#if onSearch && searchPlacement === 'leading'}
 				{@render searchButton(
-					'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,32vw,560px)] sm:flex-1 sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
+					'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,24vw,420px)] sm:flex-1 sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
 				)}
 			{/if}
 
 			<div class="ml-auto flex flex-none items-center gap-2 sm:gap-3">
 				{#if onSearch && searchPlacement === 'trailing'}
 					{@render searchButton(
-						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,32vw,560px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
+						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(180px,18vw,300px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
 					)}
 				{/if}
 
