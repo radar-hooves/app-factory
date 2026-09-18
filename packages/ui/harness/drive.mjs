@@ -1205,7 +1205,6 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			return {
 				expanded: control.getAttribute('aria-expanded'),
 				panelDisplay: panelStyle.display,
-				borderLeft: panelStyle.borderLeftWidth,
 				chevronTransform: getComputedStyle(control.querySelector('svg')).transform,
 				parentLabelLeft: parentLabel.getBoundingClientRect().left,
 				childLabelLeft: childLabel.getBoundingClientRect().left,
@@ -1253,11 +1252,6 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			'nested: a child label lines up under its parent’s',
 			Math.abs(measured.childLabelLeft - measured.parentLabelLeft) < 1,
 			`child ${measured.childLabelLeft.toFixed(1)}px vs parent ${measured.parentLabelLeft.toFixed(1)}px`
-		);
-		check(
-			'nested: the guide border is a real resolved width',
-			parseFloat(measured.borderLeft) > 0,
-			measured.borderLeft
 		);
 		check(
 			'nested: a child row stays inside the rail',

@@ -770,27 +770,24 @@
 		color: var(--ds-nav-ink);
 	}
 
-	/* The disclosed rows. The indent is measured against the parent's own
-	   geometry rather than picked: .ds-nav-item pads 0.625rem and the icon is
-	   1.125rem, so the icon's centre line sits at 1.1875rem — where the guide
-	   border goes — and 0.625rem of padding here plus the child's own 0.625rem
-	   lands its label at 2.5rem, exactly under the parent's. The border is a real
-	   affordance at fifteen rows, not decoration: it is what makes the run
-	   scannable as one section. */
 	/* The disclosed rows carry no guide rule. Indentation and the children's own
 	   icons already read as one group, and a line down the side is a second
-	   signal for a grouping that was never ambiguous. The indent is still
-	   measured against the parent's geometry rather than picked: `.ds-nav-item`
-	   pads 0.625rem and the icon is 1.125rem, so 1.1875rem plus 0.625rem here
-	   plus the child's own 0.625rem lands its label at 2.5rem, exactly under the
-	   parent's. */
+	   signal for a grouping that was never ambiguous. 8f39b02 removed the rule
+	   but not the 1px it was contributing to the indent (design-system#38): the
+	   border sat between this margin and this padding, so the child label
+	   landed 1px further right than the padding alone now gives it. Restored
+	   here instead, so the geometry — not a rule nobody can see — still carries
+	   it: `.ds-nav-item` pads 0.625rem and the icon is 1.125rem, so 1.1875rem
+	   (margin) + 0.625rem plus the former border's 1px (this padding) +
+	   0.625rem (the child's own padding) lands its label at 2.5rem, exactly
+	   under the parent's. */
 	.ds-nav-children {
 		display: flex;
 		flex-direction: column;
 		gap: 0.125rem;
 		margin-top: 0.125rem;
 		margin-left: 1.1875rem;
-		padding-left: 0.625rem;
+		padding-left: calc(0.625rem + 1px);
 	}
 
 	/* The rail's foot: where you configure the app, and which build you are on.
