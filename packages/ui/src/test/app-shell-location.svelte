@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Harness for the bar's location row: the derived label, the page's
-	// registered controls, and the rail's resize handle.
+	// registered controls, the rail's foot, and the rail's resize handle.
 	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
 	import ShellControls from '$lib/components/ui/app-shell/shell-controls.svelte';
 	import { Segmented } from '$lib/components/ui/segmented/index.js';
@@ -33,7 +33,7 @@
 
 <div data-testid="probe-year">{year}</div>
 
-<AppShell {nav} {currentPath} bind:collapsed brandTitle="Harness">
+<AppShell {nav} {currentPath} bind:collapsed brandTitle="Harness" settingsHref="/settings">
 	{#if withControls}
 		<ShellControls>
 			<Segmented bind:value={year} options={years} label="Financial year" size="sm" />

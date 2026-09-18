@@ -90,7 +90,7 @@
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import AppNav from './app-nav.svelte';
-	import { activeNavLabel, toItems, type NavSource } from './types.js';
+	import { activeNavLabel, matchesPrefix, toItems, type NavSource } from './types.js';
 	import { provideShellControls, type ShellControlsSlot } from './controls.js';
 	import { cn } from '$lib/utils.js';
 
@@ -233,9 +233,19 @@
 
 	const hasNav = $derived(toItems(nav).length > 0);
 
+	// The foot's Settings row owns its subtree, matched exactly as a nav `href`
+	// is, so the row's own current state and the bar's label cannot disagree.
+	const atSettings = $derived(
+		!!settingsHref && !!currentPath && matchesPrefix(currentPath, settingsHref)
+	);
+
 	// Where the user is, in words: the rail is icons when collapsed and a closed
-	// drawer on a phone, so the bar names the section.
-	const location = $derived(activeNavLabel(nav, currentPath));
+	// drawer on a phone, so the bar names the section. Settings is a section like
+	// any other and is named the same way — by the foot row's own label, since
+	// the shell knows nothing of the pages inside it.
+	const location = $derived(
+		activeNavLabel(nav, currentPath) ?? (atSettings ? settingsLabel : undefined)
+	);
 
 	// The page's scope controls, registered by `<ShellControls>` from the route.
 	const controls: ShellControlsSlot = $state({ content: null });
@@ -674,7 +684,7 @@
 					<a
 						href={settingsHref}
 						class="ds-nav-item"
-						aria-current={currentPath?.startsWith(settingsHref) ? 'page' : undefined}
+						aria-current={atSettings ? 'page' : undefined}
 						onclick={() => (mobileNavOpen = false)}
 					>
 						<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />

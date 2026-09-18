@@ -179,7 +179,7 @@ export function toItems(nav: NavSource | undefined): NavItem[] {
 }
 
 /** Prefix-match `path` against `prefix`, without running past a path segment. */
-function matchesPrefix(path: string, prefix: string): boolean {
+export function matchesPrefix(path: string, prefix: string): boolean {
 	return path === prefix || path.startsWith(prefix + '/');
 }
 

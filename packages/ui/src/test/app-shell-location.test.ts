@@ -38,6 +38,22 @@ describe('AppShell — location row', () => {
 		expect(screen.queryByTestId('ds-shell-location')).not.toBeInTheDocument();
 	});
 
+	it('names the settings section, on the same match the foot row lights on', async () => {
+		const { rerender } = render(Harness, { currentPath: '/settings/about' });
+		const settings = screen.getByRole('link', { name: 'Settings' });
+		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Settings');
+		expect(settings).toHaveAttribute('aria-current', 'page');
+
+		// A route that merely starts with the same characters is not inside it.
+		await rerender({ currentPath: '/settings-archive' });
+		expect(screen.queryByTestId('ds-shell-location')).not.toBeInTheDocument();
+		expect(settings).not.toHaveAttribute('aria-current');
+
+		// A nav route still names itself.
+		await rerender({ currentPath: '/overview' });
+		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Overview');
+	});
+
 	it('carries the page’s registered controls, live, and withdraws them on unmount', async () => {
 		const { rerender } = render(Harness, { currentPath: '/securities', withControls: true });
 		const row = screen.getByTestId('ds-shell-location');
