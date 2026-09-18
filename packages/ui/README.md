@@ -85,30 +85,31 @@ app — the page chrome is. These are the cross-cutting surfaces every route
 composes from, so a household app gets its layout language from the package
 rather than rebuilding it:
 
-| Import                                          | What it is                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                       |
-| `panel`                                         | The generic titled card: optional icon, subtitle and trailing actions over a body that can opt out of padding.                                                                                                                                                                                                                                              |
-| `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                          |
-| `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select. Below `xl` (1280px), where the column has nowhere to sit, the same content opens from a floating trigger instead of disappearing.                                                                                                                  |
-| `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                           |
-| `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                |
-| `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                    |
-| `stat-list`                                     | A route's low-context integers as a label→value list. Zero-aware: `muted` keeps a healthy zero quiet.                                                                                                                                                                                                                                                       |
-| `arc-gauge`                                     | A radial capacity/percentage ring for a single 0–100 metric, in a footprint too compact for a `stat-card`.                                                                                                                                                                                                                                                  |
-| `bar-row`                                       | A labelled horizontal bar with a trailing tabular value, for a ranked list (usage, rank, token burn).                                                                                                                                                                                                                                                       |
-| `scorecard`                                     | A compact 0/1/2 dot-row health strip for several independent checks read at a glance.                                                                                                                                                                                                                                                                       |
-| `sparkline`                                     | An inline multi-series area+line trend for a row or card with room for a trend but not a full chart.                                                                                                                                                                                                                                                        |
-| `status` / `status-badge`                       | The fixed five-state vocabulary (`success \| warning \| error \| info \| neutral`) and the one state chip, with `pulse` for a state still in motion and `class` for placement. `status-badge` alone also accepts `'primary'`, a brand-emphasis extension outside the shared vocabulary — `stat-card`, `stat-list` and `data-table-toolbar` never see it.    |
-| `empty-state` / `error-state` / `loading-state` | The shared blank, error and loading surfaces. Never hand-roll one.                                                                                                                                                                                                                                                                                          |
-| `info-tip`                                      | One tooltip pattern: a small info trigger, or wrap an existing affordance as children.                                                                                                                                                                                                                                                                      |
-| `data-table-toolbar`                            | Search field plus filter-chip groups for a TanStack table. Owns no state; fires callbacks.                                                                                                                                                                                                                                                                  |
-| `schema-form`                                   | The renderer for a config object the server described: a JSON Schema plus a JSON Forms UI Schema in, a form out. Anything it cannot dispatch renders flagged, never blank; see [Server-described forms](#server-described-forms) below.                                                                                                                     |
-| `data-table-tanstack`                           | The TanStack-backed table: global search, column filters, master-detail row select, opt-in bulk selection, responsive column hiding, a first-class empty branch.                                                                                                                                                                                            |
-| `library-browse`                                | The faceted catalogue index: search, facet rail, active filter chips, the document table and a pager, all over plain props (`LibraryDocument[]`, `LibraryFacet[]`). The page fetches, maps and routes; the component renders. Library data is fixed components because its shape is stable; configuration is `schema-form` because its shape changes (#30). |
-| `collection-detail`                             | One collection's surface: identity (`detail-panel`), an at-a-glance `stat-list`, and the documents it holds, with `actions` and `children` slots for the app-specific rest.                                                                                                                                                                                 |
-| `document-detail`                               | One document's surface: identity fields, locations, tags and collection memberships, each section present exactly when its data is. Membership links are the app's own via `collectionHref`.                                                                                                                                                                |
-| `search-results`                                | A ranked retrieval answer: title, the matched passage with accent-tinted highlights, source chip, mapped state and a mono relevance figure per hit; plus the before-any-search and matched-nothing empties.                                                                                                                                                 |
+| Import                                          | What it is                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                                   |
+| `panel`                                         | The generic titled card, and the settings section: optional icon, a clamped one-line `subtitle` or a wrapping `description`, trailing `action`s, a body that can opt out of padding, an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
+| `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                                      |
+| `settings-shell`                                | The settings destination: a grouped section list of `NavItem` rows beside the section you are reading, both scrolling independently from `md`, stacked below it. Render it inside `AppShell` with `padded={false}`.                                                                                                                                                     |
+| `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select. Below `xl` (1280px), where the column has nowhere to sit, the same content opens from a floating trigger instead of disappearing.                                                                                                                              |
+| `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                                       |
+| `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                            |
+| `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
+| `stat-list`                                     | A route's low-context integers as a label→value list. Zero-aware: `muted` keeps a healthy zero quiet.                                                                                                                                                                                                                                                                   |
+| `arc-gauge`                                     | A radial capacity/percentage ring for a single 0–100 metric, in a footprint too compact for a `stat-card`.                                                                                                                                                                                                                                                              |
+| `bar-row`                                       | A labelled horizontal bar with a trailing tabular value, for a ranked list (usage, rank, token burn).                                                                                                                                                                                                                                                                   |
+| `scorecard`                                     | A compact 0/1/2 dot-row health strip for several independent checks read at a glance.                                                                                                                                                                                                                                                                                   |
+| `sparkline`                                     | An inline multi-series area+line trend for a row or card with room for a trend but not a full chart.                                                                                                                                                                                                                                                                    |
+| `status` / `status-badge`                       | The fixed five-state vocabulary (`success \| warning \| error \| info \| neutral`) and the one state chip, with `pulse` for a state still in motion and `class` for placement. `status-badge` alone also accepts `'primary'`, a brand-emphasis extension outside the shared vocabulary — `stat-card`, `stat-list` and `data-table-toolbar` never see it.                |
+| `empty-state` / `error-state` / `loading-state` | The shared blank, error and loading surfaces. Never hand-roll one.                                                                                                                                                                                                                                                                                                      |
+| `info-tip`                                      | One tooltip pattern: a small info trigger, or wrap an existing affordance as children.                                                                                                                                                                                                                                                                                  |
+| `data-table-toolbar`                            | Search field plus filter-chip groups for a TanStack table. Owns no state; fires callbacks.                                                                                                                                                                                                                                                                              |
+| `schema-form`                                   | The renderer for a config object the server described: a JSON Schema plus a JSON Forms UI Schema in, a form out. Anything it cannot dispatch renders flagged, never blank; see [Server-described forms](#server-described-forms) below.                                                                                                                                 |
+| `data-table-tanstack`                           | The TanStack-backed table: global search, column filters, master-detail row select, opt-in bulk selection, responsive column hiding, a first-class empty branch.                                                                                                                                                                                                        |
+| `library-browse`                                | The faceted catalogue index: search, facet rail, active filter chips, the document table and a pager, all over plain props (`LibraryDocument[]`, `LibraryFacet[]`). The page fetches, maps and routes; the component renders. Library data is fixed components because its shape is stable; configuration is `schema-form` because its shape changes (#30).             |
+| `collection-detail`                             | One collection's surface: identity (`detail-panel`), an at-a-glance `stat-list`, and the documents it holds, with `actions` and `children` slots for the app-specific rest.                                                                                                                                                                                             |
+| `document-detail`                               | One document's surface: identity fields, locations, tags and collection memberships, each section present exactly when its data is. Membership links are the app's own via `collectionHref`.                                                                                                                                                                            |
+| `search-results`                                | A ranked retrieval answer: title, the matched passage with accent-tinted highlights, source chip, mapped state and a mono relevance figure per hit; plus the before-any-search and matched-nothing empties.                                                                                                                                                             |
 
 **The application shell** (`app-shell`, `command-palette`). Page chrome is not
 what makes an app feel like an app either — the shell is. Five household
@@ -301,6 +302,105 @@ palette:
 
 `AppNav` used outside the chrome (a navigation list inside a page) keeps the
 page's ink, so inverting the rail does not drag it along.
+
+### The settings destination
+
+Settings is the one destination with a second column, and it takes one shape in
+every app. `SettingsShell` is that shape: a grouped section list beside the
+section you are reading, both panes scrolling independently from `md`.
+
+```svelte
+<script lang="ts">
+	import { page } from '$app/state';
+	import AppShell from '@poodle64/ui/app-shell';
+	import type { NavSource } from '@poodle64/ui/app-shell';
+	import SettingsShell from '@poodle64/ui/settings-shell';
+	import Users from '@lucide/svelte/icons/users';
+	import Gavel from '@lucide/svelte/icons/gavel';
+
+	// Grouped by WHOSE setting it is: the person's, then the workspace's. It is
+	// the only split a reader can predict: "yours" changes what you see, "this
+	// company" changes what everyone sees. A group with no items renders nothing,
+	// so an app with no personal sections yet can leave it in the list.
+	const sections: NavSource = [
+		{ heading: 'Yours', items: [] },
+		{
+			heading: 'This company',
+			items: [
+				{ label: 'Users', href: '/settings/users', icon: Users },
+				{ label: 'Delegation limits', href: '/settings/delegation-limits', icon: Gavel }
+			]
+		}
+	];
+</script>
+
+<!-- padded={false}: the list's rule and tint have to reach the content area's
+     edges, and SettingsShell pads its own content pane to the same rhythm. -->
+<AppShell {nav} currentPath={page.url.pathname} settingsHref="/settings" padded={false}>
+	<SettingsShell {sections} currentPath={page.url.pathname}>
+		{@render children()}
+	</SettingsShell>
+</AppShell>
+```
+
+| Prop          | Purpose                                                                        |
+| ------------- | ------------------------------------------------------------------------------ |
+| `sections`    | Groups of `NavItem`, bare items, or a mix: the rail's own vocabulary.         |
+| `currentPath` | Which row is the page. Prefix-matched on the segment boundary, as the rail is. |
+| `listLabel`   | The list's accessible name. Defaults to `Settings sections`.                   |
+
+A row at the settings ROOT (`/settings`) needs `exact: true`, or its prefix match
+keeps it lit on every section beneath it alongside the section's own row.
+
+Three things are settled here and are not props:
+
+**Rows are icon plus label, with nothing beneath.** A description long enough to
+be worth reading does not fit a 240px column; every one of them truncated to an
+ellipsis and told the reader less than the label already did.
+
+**There is no "Settings" heading above the list.** The bar already names the
+section you are on, so a heading here is the same word twice.
+
+**Below `md` the list stacks above the content and the page scrolls as one.** A
+horizontally scrollable strip of the same rows was the alternative and loses on
+the requirement it was meant to serve: it fits about two and a half rows at
+375px, so the rest are behind a sideways swipe with no scrollbar advertising
+them — a swipe _then_ a tap, where a stack is a scroll the reader is already
+doing. It also has to drop the group labels for width.
+
+Density works here as it does in the rail, because the list _is_ the rail's
+list: the controls inside a section ride the `--ds-control-*` ramp and shrink
+under `data-ds-density="compact"`, while a section row keeps `AppNav`'s own
+36px whatever the density. A row that shrank here and not in the rail would be
+the drift, not the fix.
+
+#### The sections themselves are `Panel`s
+
+There is no `SettingsSection`, and deliberately so: it would have been `Panel`
+with a different name (same surface, same header, same title), and the estate
+would then hold two answers to "a titled section of a route", which is the drift
+this package exists to end. What settings actually needed was three props, and
+all three serve any route:
+
+```svelte
+<Panel title="Delegation limits"
+       description="Who can approve a bill, and up to what value.">
+	<!-- controls -->
+	{#snippet footer()}
+		<Button variant="ghost" size="sm">Cancel</Button>
+		<Button size="sm">Save</Button>
+	{/snippet}
+</Panel>
+
+<Panel title="Delete this workspace" tone="destructive" icon={Trash2}
+       description="Every project, document and filing decision goes with it.">
+	<Button variant="destructive" size="sm">Delete</Button>
+</Panel>
+```
+
+`description` wraps; `subtitle` is the one-line qualifier beside the title and
+truncates. Carry one or the other. A page writes a run of `Panel`s and no
+wrapper: the pane stacks them on the package's section rhythm itself.
 
 ### The content measure
 

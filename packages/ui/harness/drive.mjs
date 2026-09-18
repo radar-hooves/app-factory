@@ -3165,6 +3165,301 @@ for (const scheme of ['light', 'dark']) {
 	await context.close();
 }
 
+// ---------------------------------------------------------------------------
+// The settings destination (#39).
+//
+// Every claim here is a layout fact, which is exactly why it is not in
+// src/test/: whether the section list is really 240px, whether the two panes
+// scroll INDEPENDENTLY (`overflow-y: auto` does nothing unless a height bounds
+// the box, and jsdom reports every scrollHeight as 0 either way), whether the
+// pane's text lands on the same rhythm as an ordinary page's, and whether the
+// same markup stacks below md instead of crushing the content into a sliver.
+// ---------------------------------------------------------------------------
+{
+	const { context, page, errors } = await open('surface=settings', { width: 1440, height: 900 });
+	await page.waitForSelector('.ds-settings-pane');
+	await page.addStyleTag({ content: SETTLE });
+
+	const desktop = await page.evaluate(() => {
+		const list = document.querySelector('.ds-settings > nav');
+		const pane = document.querySelector('.ds-settings-pane');
+		const active = document.querySelector('.ds-settings a[aria-current="page"]');
+		return {
+			listWidth: list.getBoundingClientRect().width,
+			listOverflowY: getComputedStyle(list).overflowY,
+			listScrolls: list.scrollHeight > list.clientHeight,
+			paneOverflowY: getComputedStyle(pane).overflowY,
+			paneScrolls: pane.scrollHeight > pane.clientHeight,
+			// Side by side, not stacked: the pane's top is the list's top.
+			stacked: pane.getBoundingClientRect().top > list.getBoundingClientRect().top + 1,
+			// The rule is on the inline-end edge, where a left-to-right reader
+			// expects it, and it is a real resolved width rather than a class that
+			// compiled to nothing.
+			listBorderInlineEnd: getComputedStyle(list).borderInlineEndWidth,
+			listBorderBottom: getComputedStyle(list).borderBottomWidth,
+			// A tint, not transparent: the two panes have to read as two surfaces.
+			listBackground: getComputedStyle(list).backgroundColor,
+			activeIndicatorWidth: active
+				? getComputedStyle(active.querySelector('.ds-nav-indicator')).width
+				: null,
+			// The one row that says which section you are in.
+			activeCount: document.querySelectorAll('.ds-settings a[aria-current="page"]').length,
+			// The personal group is present in the data and EMPTY; it must not
+			// render an eyebrow with nothing under it.
+			headings: [...document.querySelectorAll('.ds-settings .ds-nav-heading')].map((h) =>
+				h.textContent.trim()
+			)
+		};
+	});
+
+	check(
+		'settings: the section list is 240px wide at 1440',
+		Math.round(desktop.listWidth) === 240,
+		`${desktop.listWidth.toFixed(1)}px`
+	);
+	check(
+		'settings: the two panes are side by side, not stacked',
+		!desktop.stacked,
+		desktop.stacked ? 'the pane starts below the list' : 'same top edge'
+	);
+	// The pair that matters: BOTH boxes are their own scroller, so a long
+	// settings page cannot push the section list out of reach. The list is short
+	// here, so its own claim is that it CAN scroll, not that it does.
+	check(
+		'settings: each pane is its own scroller, and the content pane is actually scrolling',
+		desktop.listOverflowY === 'auto' && desktop.paneOverflowY === 'auto' && desktop.paneScrolls,
+		`list ${desktop.listOverflowY}, pane ${desktop.paneOverflowY}, pane scrollable ${desktop.paneScrolls}`
+	);
+	check(
+		'settings: the list carries an inline-end rule and no bottom rule',
+		parseFloat(desktop.listBorderInlineEnd) > 0 &&
+			parseFloat(desktop.listBorderBottom) === 0,
+		`inline-end ${desktop.listBorderInlineEnd}, bottom ${desktop.listBorderBottom}`
+	);
+	check(
+		'settings: the list sits on its own tint rather than the page background',
+		desktop.listBackground !== 'rgba(0, 0, 0, 0)' && desktop.listBackground !== 'transparent',
+		desktop.listBackground
+	);
+	// Colour alone never carries the active state (WCAG 1.4.1). The edge bar is
+	// the rail's own element, so this also proves the list is AppNav rather than
+	// a hand-rolled copy that forgot it.
+	check(
+		'settings: exactly one row is the page, and it carries the rail edge bar',
+		desktop.activeCount === 1 && parseFloat(desktop.activeIndicatorWidth) > 0,
+		`${desktop.activeCount} current row(s), indicator ${desktop.activeIndicatorWidth}`
+	);
+	check(
+		'settings: an empty group renders no eyebrow',
+		!desktop.headings.includes('Yours') &&
+			desktop.headings.join('|') === 'This company|About',
+		desktop.headings.join(' | ') || '(none)'
+	);
+	check('settings: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// The content pane's padding is the shell's own. If the two ever drift, the
+// settings destination becomes the one route whose text sits somewhere else —
+// which is invisible until you put the two pages side by side.
+for (const width of [1440, 800, 375]) {
+	const { context: c1, page: p1 } = await open('surface=settings', { width, height: 900 });
+	await p1.waitForSelector('.ds-settings-pane');
+	const settingsPad = await p1.evaluate(() => {
+		const style = getComputedStyle(document.querySelector('.ds-settings-pane'));
+		return `${style.paddingTop}/${style.paddingRight}/${style.paddingBottom}/${style.paddingLeft}`;
+	});
+	await c1.close();
+
+	const { context: c2, page: p2 } = await open('surface=shell', { width, height: 900 });
+	await p2.waitForSelector('[data-slot="app-shell-content"]');
+	const shellPad = await p2.evaluate(() => {
+		const style = getComputedStyle(
+			document.querySelector('[data-slot="app-shell-content"] > div')
+		);
+		return `${style.paddingTop}/${style.paddingRight}/${style.paddingBottom}/${style.paddingLeft}`;
+	});
+	await c2.close();
+
+	check(
+		`settings @ ${width}px: the content pane pads exactly as an ordinary page does`,
+		settingsPad === shellPad,
+		`settings ${settingsPad} vs page ${shellPad}`
+	);
+}
+
+// The phone. The list stacks above the content and the PAGE scrolls as one —
+// two nested scrollers at 375px is the sideways/nested-scroll hazard this
+// package already carries a gate for, and a 240px column here would leave the
+// content pane a sliver.
+for (const width of [375, 320]) {
+	const { context, page, errors } = await open('surface=settings', { width, height: 780 });
+	await page.waitForSelector('.ds-settings-pane');
+	await page.addStyleTag({ content: SETTLE });
+
+	const phone = await page.evaluate(() => {
+		const list = document.querySelector('.ds-settings > nav');
+		const pane = document.querySelector('.ds-settings-pane');
+		const main = document.querySelector('[data-slot="app-shell-content"]');
+		const rows = [...document.querySelectorAll('.ds-settings .ds-nav-item')];
+		return {
+			listRect: list.getBoundingClientRect(),
+			paneRect: pane.getBoundingClientRect(),
+			listOverflowY: getComputedStyle(list).overflowY,
+			paneOverflowY: getComputedStyle(pane).overflowY,
+			listScrollsItself: list.scrollHeight > list.clientHeight,
+			paneScrollsItself: pane.scrollHeight > pane.clientHeight,
+			mainScrolls: main.scrollHeight > main.clientHeight,
+			listBorderBottom: getComputedStyle(list).borderBottomWidth,
+			listBorderInlineEnd: getComputedStyle(list).borderInlineEndWidth,
+			documentWidth: document.documentElement.scrollWidth,
+			// Every section reachable: each row is in the document, has a real box,
+			// and is inside the viewport horizontally. That is what "one tap" means
+			// once there is no horizontal strip hiding rows behind a swipe.
+			rows: rows.map((row) => {
+				const rect = row.getBoundingClientRect();
+				return { label: row.textContent.trim(), width: rect.width, left: rect.left, right: rect.right };
+			})
+		};
+	});
+
+	check(
+		`settings @ ${width}px: the list stacks above the content, full width`,
+		Math.round(phone.listRect.width) === width &&
+			phone.paneRect.top >= phone.listRect.bottom - 0.5,
+		`list ${phone.listRect.width.toFixed(1)}px wide, pane top ${phone.paneRect.top.toFixed(1)} vs list bottom ${phone.listRect.bottom.toFixed(1)}`
+	);
+	check(
+		`settings @ ${width}px: the rule follows the axis — bottom, not inline-end`,
+		parseFloat(phone.listBorderBottom) > 0 && parseFloat(phone.listBorderInlineEnd) === 0,
+		`bottom ${phone.listBorderBottom}, inline-end ${phone.listBorderInlineEnd}`
+	);
+	check(
+		`settings @ ${width}px: one scroller, the page — neither pane scrolls inside itself`,
+		!phone.listScrollsItself && !phone.paneScrollsItself && phone.mainScrolls,
+		`list ${phone.listOverflowY}/${phone.listScrollsItself}, pane ${phone.paneOverflowY}/${phone.paneScrollsItself}, page ${phone.mainScrolls}`
+	);
+	check(
+		`settings @ ${width}px: every section is a real box inside the viewport`,
+		phone.rows.length === 5 &&
+			phone.rows.every((r) => r.width > 0 && r.left >= -0.5 && r.right <= width + 0.5),
+		phone.rows
+			.map((r) => `${r.label} ${r.width.toFixed(0)}px@${r.left.toFixed(0)}`)
+			.join(', ')
+	);
+	check(
+		`settings @ ${width}px: the page does not scroll sideways`,
+		phone.documentWidth <= width,
+		`${phone.documentWidth}px in ${width}px`
+	);
+	check(`settings @ ${width}px: no page error`, errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// Panel's settings-section props, which have no meaning without a layout: a
+// description that WRAPS (the whole reason it is not `subtitle`), a footer strip
+// at the foot of the card, and a destructive tone that is actually a different
+// colour from the default one.
+{
+	const { context, page, errors } = await open('surface=settings', { width: 900, height: 900 });
+	await page.waitForSelector('.ds-settings-pane section');
+	await page.addStyleTag({ content: SETTLE });
+
+	const panels = await page.evaluate(() => {
+		const sections = [...document.querySelectorAll('.ds-settings-pane > section')];
+		const users = sections[0];
+		const danger = sections.find((s) => s.dataset.tone === 'destructive');
+		const description = users.querySelector('header p');
+		const footer = users.querySelector('[data-slot="panel-footer"]');
+		const line = parseFloat(getComputedStyle(description).lineHeight);
+		return {
+			descriptionHeight: description.getBoundingClientRect().height,
+			descriptionLine: line,
+			// The actions row and the title block, so "tops-aligned" is measured
+			// rather than read off a class name.
+			titleTop: users.querySelector('h2').getBoundingClientRect().top,
+			footerTop: footer.getBoundingClientRect().top,
+			bodyBottom: users.querySelector('header').nextElementSibling.getBoundingClientRect().bottom,
+			footerBorderTop: getComputedStyle(footer).borderTopWidth,
+			footerBackground: getComputedStyle(footer).backgroundColor,
+			// Right-aligned: the last button's right edge is at the strip's
+			// padding edge, not its left one.
+			footerJustify: getComputedStyle(footer).justifyContent,
+			defaultBorder: getComputedStyle(users).borderTopColor,
+			dangerBorder: getComputedStyle(danger).borderTopColor,
+			dangerTitle: getComputedStyle(danger.querySelector('h2')).color,
+			defaultTitle: getComputedStyle(users.querySelector('h2')).color
+		};
+	});
+
+	check(
+		'settings: a section description WRAPS rather than truncating to one line',
+		panels.descriptionHeight > panels.descriptionLine * 1.5,
+		`${panels.descriptionHeight.toFixed(1)}px over a ${panels.descriptionLine.toFixed(1)}px line`
+	);
+	check(
+		'settings: the footer sits below the body on a top-bordered tinted strip, right-aligned',
+		panels.footerTop >= panels.bodyBottom - 0.5 &&
+			parseFloat(panels.footerBorderTop) > 0 &&
+			panels.footerBackground !== 'rgba(0, 0, 0, 0)' &&
+			panels.footerJustify === 'flex-end',
+		`footer top ${panels.footerTop.toFixed(1)} vs body bottom ${panels.bodyBottom.toFixed(1)}, border ${panels.footerBorderTop}, bg ${panels.footerBackground}, justify ${panels.footerJustify}`
+	);
+	// A tone that resolved to the same colour is the dead affordance this package
+	// treats as worse than an absent one, and `border-destructive/40` compiling
+	// to nothing would look exactly like this passing.
+	check(
+		'settings: the destructive tone actually paints a different rule and title',
+		panels.dangerBorder !== panels.defaultBorder && panels.dangerTitle !== panels.defaultTitle,
+		`rule ${panels.dangerBorder} vs ${panels.defaultBorder}; title ${panels.dangerTitle} vs ${panels.defaultTitle}`
+	);
+	check('settings: no page error (panels)', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// Density. The need (#39) asks that the destination follow `data-ds-density`,
+// and the two halves of that answer differently, which is worth pinning rather
+// than leaving a consumer to discover:
+//
+//   - the CONTROLS in the content pane ride the `--ds-control-*` ramp, so a
+//     compact app's Save button is 28px here as it is everywhere else;
+//   - the LIST ROWS do not move, because `.ds-nav-item` carries its own padding
+//     and always has. That is not the settings list opting out — it is the rail,
+//     and the requirement was that this list read as the rail's does. A row that
+//     shrank here and not in the rail would be the drift, not the fix.
+//
+// So the claim measured is equality with the rail at BOTH densities, in the one
+// document that holds both.
+for (const density of ['comfortable', 'compact']) {
+	const { context, page, errors } = await open(`surface=settings&density=${density}`, {
+		width: 1440,
+		height: 900
+	});
+	await page.waitForSelector('.ds-settings-pane');
+	await page.addStyleTag({ content: SETTLE });
+
+	const measured = await page.evaluate(() => ({
+		railRow: document.querySelector('.ds-shell-rail .ds-nav-item').getBoundingClientRect().height,
+		settingsRow: document.querySelector('.ds-settings .ds-nav-item').getBoundingClientRect().height,
+		paneButton: document
+			.querySelector('.ds-settings-pane [data-slot="panel-footer"] button')
+			.getBoundingClientRect().height
+	}));
+
+	check(
+		`settings @ density=${density}: a section row is the rail's row, to the pixel`,
+		Math.abs(measured.settingsRow - measured.railRow) < 0.5,
+		`settings ${measured.settingsRow.toFixed(1)}px vs rail ${measured.railRow.toFixed(1)}px`
+	);
+	check(
+		`settings @ density=${density}: a control in the pane takes the density ramp`,
+		Math.round(measured.paneButton) === (density === 'compact' ? 28 : 36),
+		`${measured.paneButton.toFixed(1)}px`
+	);
+	check(`settings @ density=${density}: no page error`, errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
 server.close();
 

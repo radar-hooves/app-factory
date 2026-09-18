@@ -878,6 +878,64 @@
 		padding-inline: 0;
 	}
 
+	/* The settings destination's two panes (SettingsShell).
+
+	   Only the SHAPE is here; the list's width, tint and rule are utilities on the
+	   AppNav element itself, because AppNav declares `flex-1` there and a
+	   base-layer `flex: none` would lose to it by layer order rather than by
+	   position — the cascade trap recorded against `.ds-nav`'s ink. What is left is
+	   the axis swap and the scroll bounding, which nothing else declares.
+
+	   48rem is Tailwind's own --breakpoint-md, written literally for the reason
+	   `.ds-shell-rail` writes it literally: a media query cannot read a custom
+	   property, so an app that retunes md retunes this with it. */
+	.ds-settings {
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+	}
+
+	/* `min-height: 0` is what buys the two independent scrollers, and it is
+	   deliberately NOT set below md. A flex item is floored at its content height
+	   unless it is allowed to shrink past it, so without this neither pane ever
+	   scrolls and the whole content area does instead. Below md that floor is
+	   exactly what is wanted: the list stacks above the content and the page
+	   scrolls as one, which is the only sane arrangement on a phone — two nested
+	   scrollers at 375px is the sideways-scroll hazard this package already carries
+	   a gate for. */
+	@media (min-width: 48rem) {
+		.ds-settings {
+			flex-direction: row;
+			min-height: 0;
+		}
+	}
+
+	.ds-settings-pane {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	/* The pane stacks its sections itself, so a settings page writes a run of
+	   Panels and no wrapper — the framing markup this surface exists to stop a
+	   consumer writing. 1.25rem is the package's existing section rhythm, the same
+	   gap `.ds-dialog-section` puts between adjacent sections.
+
+	   A margin rule rather than `display: flex; gap`, because at md and up this box
+	   is a height-bounded scroller: as a flex column its children carry
+	   `flex-shrink: 1` and get squashed toward min-content before the scrollbar is
+	   ever reached, so a tall section would compress instead of scrolling. Block
+	   flow overflows, which is what a scroller wants. */
+	.ds-settings-pane > * + * {
+		margin-top: 1.25rem;
+	}
+
+	@media (min-width: 48rem) {
+		.ds-settings-pane {
+			min-height: 0;
+			overflow-y: auto;
+		}
+	}
+
 	/* A hard ceiling on the whole shell, in the one unit that names the actual
 	   drawn surface rather than a percentage of an ancestor. `.ds-shell` is
 	   already `flex` with `overflow-hidden` in the component markup, which

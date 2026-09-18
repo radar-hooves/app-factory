@@ -2,6 +2,46 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.17] - 2026-09-18
+
+### Added
+
+- **`SettingsShell`** (`@poodle64/ui/settings-shell`): the settings destination,
+  one shape for every app. A grouped section list beside the section you are
+  reading, both panes scrolling independently from `md` and the list stacking
+  above the content below it. `sections` is the rail's own `NavSource`, so a
+  settings row is the same row as a rail row and a group with no items renders
+  nothing; the list is `AppNav`, so the group eyebrow, the active row's edge bar,
+  tint and weight, `aria-current="page"`, the segment-safe prefix match and the
+  density ramp are the rail's and not a second copy of them. Render it inside
+  `AppShell` with `padded={false}`. Two apps had hand-rolled it: one as two
+  panes, one as a card of tab links in a 3/9 grid (#39). Density is the rail's
+  answer, measured at both settings in the browser gate: a section's controls
+  ride the `--ds-control-*` ramp and shrink under
+  `data-ds-density="compact"`, a section row keeps `AppNav`'s 36px, and the two
+  lists stay identical to the pixel.
+- **`Panel` is also the settings section**, and there is no `SettingsSection`:
+  that would have been this card under a second name, and the estate would hold
+  two answers to "a titled section of a route". Three new props, all of which
+  serve any route — `description` (the sentence or two under the title, wrapped;
+  `subtitle` stays the truncating one-line qualifier every existing call site is
+  written against), `footer` (a snippet of right-aligned actions on a top-bordered muted
+  strip, the same treatment as `CardFooter`'s) and `tone="destructive"` (the
+  danger zone: the rule, the title and the icon in the destructive ink, and
+  nothing else).
+
+### Changed
+
+- **`Panel` resolves its `class` through `cn()`** rather than appending it raw.
+  A consumer's utility now wins over the component's by tailwind-merge rather
+  than by whichever Tailwind happened to emit last — which is what makes the new
+  tone overridable, and what every other component in this package already did.
+- **The shell's content padding is one declaration**, `CONTENT_PADDING` in
+  `app-shell/padding.ts`, read by `AppShell` and by `SettingsShell`'s content
+  pane. `harness/drive.mjs` compares the two boxes' resolved padding at 1440,
+  800 and 375px, so the settings destination cannot become the one route whose
+  text sits somewhere else. No change to what `AppShell` renders.
+
 ## [2026.9.9] - 2026-09-15
 
 ### Fixed
@@ -70,7 +110,7 @@ All notable changes to this package are documented here. Format follows [Keep a 
   capturing `document.body` with `html-to-image`, where a capture the page
   cannot produce is tolerated silently (the report sends with a null image).
   Submit POSTs one JSON body — `{ message, route, user_agent, viewport:
-  { width, height }, session_id, screenshot }` — to the `endpoint` prop
+{ width, height }, session_id, screenshot }` — to the `endpoint` prop
   (default `/api/feedback`); the endpoint answers `{ id }`, the dialogue shows
   the id with a thank-you and fires `onSubmitted(id)`, and a failure keeps the
   draft and offers Retry, because the message the user typed is the hard half
@@ -95,7 +135,7 @@ All notable changes to this package are documented here. Format follows [Keep a 
   quiet support link — there beside it. Two apps solving that two ways in the
   same bar is the drift this package exists to end, so it is solved once,
   here: `links?: { label: string; icon?: Component<{ class?: string }>;
-  onSelect: () => void }[]` renders as its own `DropdownMenu.Group` behind a
+onSelect: () => void }[]` renders as its own `DropdownMenu.Group` behind a
   separator, after the identity block and Members and before the theme toggle
   — Sign out stays last whatever is added above it. A LIST, not a snippet: a
   snippet would let each app invent its own row shape, which is the thing

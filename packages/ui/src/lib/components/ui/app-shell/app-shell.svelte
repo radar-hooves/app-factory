@@ -79,6 +79,7 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import type { ShellMeasure } from './measure.js';
+	import { CONTENT_PADDING } from './padding.js';
 	import type { ShellTexture } from './texture.js';
 	import { toggleMode } from 'mode-watcher';
 	import Menu from '@lucide/svelte/icons/menu';
@@ -917,8 +918,7 @@
 						'flex min-h-0 min-w-0 flex-1 flex-col',
 						'w-full',
 						capped && 'ds-shell-measure',
-						padded &&
-							'px-4 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pt-7 md:pb-[calc(1.75rem+env(safe-area-inset-bottom))] 2xl:px-12'
+						padded && CONTENT_PADDING
 					)}
 					data-measure={capped ?? undefined}
 				>

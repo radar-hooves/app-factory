@@ -33,6 +33,8 @@
 	import Avatar from '../dist/components/ui/avatar/avatar.svelte';
 	import AvatarImage from '../dist/components/ui/avatar/avatar-image.svelte';
 	import AvatarFallback from '../dist/components/ui/avatar/avatar-fallback.svelte';
+	import SettingsShell from '../dist/components/ui/settings-shell/settings-shell.svelte';
+	import Panel from '../dist/components/ui/panel/panel.svelte';
 	import Card from '../dist/components/ui/card/card.svelte';
 	import CardHeader from '../dist/components/ui/card/card-header.svelte';
 	import CardTitle from '../dist/components/ui/card/card-title.svelte';
@@ -85,6 +87,12 @@
 	import KeySquare from '@lucide/svelte/icons/key-square';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import BookOpen from '@lucide/svelte/icons/book-open';
+	import Users from '@lucide/svelte/icons/users';
+	import Gavel from '@lucide/svelte/icons/gavel';
+	import Receipt from '@lucide/svelte/icons/receipt';
+	import Zap from '@lucide/svelte/icons/zap';
+	import Info from '@lucide/svelte/icons/info';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
 
 	// `?surface=nested` drives nested navigation. Three of its four claims are
 	// beyond jsdom entirely: the indent geometry is a layout fact, the chevron's
@@ -177,6 +185,12 @@
 	// `overflow-y-auto` does anything depends entirely on whether a height
 	// constrains the box, which is a layout fact, and jsdom has no layout — it
 	// reports scrollHeight and clientHeight as 0 either way.
+	// `?surface=settings` drives the settings destination. Every claim it makes is
+	// a layout fact jsdom cannot hold: whether the section list is actually 240px
+	// wide, whether the two panes scroll INDEPENDENTLY (which depends entirely on
+	// whether a height bounds them — jsdom reports every scrollHeight as 0), and
+	// whether the same markup stacks below md instead of crushing the content pane
+	// into a sliver. `?settings=path` moves the current row.
 	const surface = params.get('surface') ?? 'shell';
 	const wrapper = params.get('wrapper') ?? 'plain';
 	// `?identity=bare` — see the mobile-audit fixture below.
@@ -500,6 +514,26 @@
 	// 800px viewport by a clear margin, so a missing cap cannot be mistaken for
 	// a rounding error.
 	const LONG_LIST = Array.from({ length: 36 }, (_, i) => `Option ${String(i + 1).padStart(2, '0')}`);
+
+	// The settings destination, in the shape a consuming app uses it: grouped by
+	// whose setting it is, the personal group present but EMPTY (an app with no
+	// personal sections yet leaves it in and `toGroups` drops it), and enough
+	// sections in the last group to overflow a phone so the stacked list has to
+	// scroll with the page rather than inside itself.
+	const settingsSections: NavSource = [
+		{ heading: 'Yours', items: [] },
+		{
+			heading: 'This company',
+			items: [
+				{ label: 'Users', href: '#/settings/users', icon: Users },
+				{ label: 'Delegation limits', href: '#/settings/delegation-limits', icon: Gavel },
+				{ label: 'Overhead suppliers', href: '#/settings/overhead-suppliers', icon: Receipt },
+				{ label: 'Breaker events', href: '#/settings/breaker-events', icon: Zap }
+			]
+		},
+		{ heading: 'About', items: [{ label: 'About', href: '#/settings/about', icon: Info }] }
+	];
+	const settingsPath = params.get('settings') ?? '#/settings/users';
 
 	let phase: 'idle' | 'loading' | 'failed' | 'empty' = $state('idle');
 
@@ -1316,6 +1350,51 @@
 		nav={auditNav}
 		onNavigate={(href) => (location.hash = href.slice(1))}
 	/>
+{:else if surface === 'settings'}
+	<!--
+		`padded={false}` is not incidental: the section list's rule and tint have to
+		reach the content area's edges or the two panes read as a floating card, and
+		SettingsShell pads its own content pane to the shell's own rhythm instead.
+		The shell is what bounds the height the panes scroll inside, so the surface
+		has to be driven through it rather than standalone.
+	-->
+	<AppShell
+		nav={[{ label: 'Overview', href: '#/overview', icon: LayoutDashboard }]}
+		currentPath={settingsPath}
+		brandTitle="Harness"
+		settingsHref="#/settings"
+		padded={false}
+	>
+		<SettingsShell sections={settingsSections} currentPath={settingsPath}>
+			<Panel
+				title="Users"
+				description="Who can sign in, what each of them may do, and which of them are notified when a bill needs approving. Removing someone here does not remove what they filed."
+			>
+				<p class="text-sm">Controls.</p>
+				{#snippet footer()}
+					<Button variant="ghost" size="sm">Cancel</Button>
+					<Button size="sm">Save</Button>
+				{/snippet}
+			</Panel>
+			<!-- Tall enough that the content pane has something to scroll. -->
+			<Panel title="Notification rules">
+				{#each LONG_LIST as option (option)}
+					<p class="text-sm">{option}</p>
+				{/each}
+			</Panel>
+			<Panel
+				title="Delete this workspace"
+				description="Every project, document and filing decision goes with it."
+				tone="destructive"
+				icon={Trash2}
+			>
+				<p class="text-sm">Gone for good.</p>
+				{#snippet footer()}
+					<Button variant="destructive" size="sm">Delete</Button>
+				{/snippet}
+			</Panel>
+		</SettingsShell>
+	</AppShell>
 {:else}
 	<AppShell
 		{nav}

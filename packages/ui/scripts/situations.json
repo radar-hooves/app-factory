@@ -119,8 +119,8 @@
       "components": [
         {
           "name": "Panel",
-          "props": "children, title?, subtitle?, icon?, action?, pad?",
-          "insteadOf": "raw Card + CardHeader + CardTitle assembled by hand on every route"
+          "props": "children, title?, subtitle?, description?, icon?, action?, footer?, tone?, pad?",
+          "insteadOf": "raw Card + CardHeader + CardTitle assembled by hand on every route; also the settings section — there is no separate SettingsSection, `description` wraps, `footer` carries Save/Cancel, `tone=\"destructive\"` is the danger zone"
         }
       ]
     },
@@ -249,6 +249,18 @@
           "name": "AppIdentity",
           "props": "user, workspace?, role?, entitlements?, onSignOut, onAccountSettings?, onSwitchTheme?",
           "insteadOf": "a hand-rolled account/avatar dropdown wired to raw DropdownMenu.* + Avatar.*"
+        }
+      ]
+    },
+    {
+      "key": "settings-destination",
+      "title": "The settings destination",
+      "description": "The one settings surface: a grouped section list beside the section you are reading, inside AppShell’s content area (give AppShell padded={false}). Sections are grouped by whose setting it is — the person’s, then the workspace’s. The sections themselves are Panels.",
+      "components": [
+        {
+          "name": "SettingsShell",
+          "props": "sections, children, currentPath?, listLabel?",
+          "insteadOf": "a hand-built two-pane settings layout, or a card of tab links in a grid, per app"
         }
       ]
     },
