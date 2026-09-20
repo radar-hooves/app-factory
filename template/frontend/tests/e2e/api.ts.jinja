@@ -1,0 +1,72 @@
+import type { APIResponse } from '@playwright/test';
+
+/**
+ * The one door every direct HTTP call in this suite goes through.
+ *
+ * Playwright's `APIRequestContext` resolves on any answer it gets, so
+ * `(await (await ctx.get(path)).json()) as Membership[]` hands a 409, a 500 or
+ * a 429 body straight back wearing the success type. Nothing notices at the
+ * call: the suite fails several steps later, wherever something first iterates
+ * or indexes the value, as `TypeError: (intermediate value) is not iterable` —
+ * a message naming neither the endpoint, nor the status, nor the fact that the
+ * request failed at all, which sends the reader hunting a bug in the domain
+ * that answered correctly.
+ *
+ * The cast itself does not go away — this suite drives raw HTTP across two
+ * identities and cannot go through the generated client — but it is made in
+ * exactly one place, on a response already proved successful, instead of at
+ * every call site on a response nothing looked at.
+ *
+ * Deliberately no retry and no back-off. A suite that quietly waits out a
+ * refusal hides the fact that it is provoking one, and every status this throws
+ * on is a true statement about the backend it is running against.
+ */
+
+const MAX_BODY = 400;
+
+async function failure(response: APIResponse): Promise<string> {
+	let body: string;
+	try {
+		body = (await response.text()).slice(0, MAX_BODY);
+	} catch (cause) {
+		body = `<body unreadable: ${cause instanceof Error ? cause.message : String(cause)}>`;
+	}
+	return `${response.url()} answered HTTP ${response.status()} ${response.statusText()}: ${body}${advice(response)}`;
+}
+
+/**
+ * The one status whose cause is almost never in the app: its own limiter.
+ *
+ * A full pass of this suite drives well over a hundred requests a minute
+ * through one address, and both identities here share that address, so the
+ * shipped `rate_limit_default` of 100/minute is tripped by the suite running
+ * normally rather than by anything being wrong. A CI job that boots the backend
+ * itself sets the variable below for the run; a backend a developer started by
+ * hand is the one place the refusal appears, and the one place nothing was
+ * there to explain it.
+ */
+function advice(response: APIResponse): string {
+	if (response.status() !== 429) {
+		return '';
+	}
+	return (
+		`\n\nThis is {{ project_name }}'s own rate limiter (backend ` +
+		`config/sections/security.py, \`rate_limit_default\`), keyed per address. ` +
+		`A full E2E pass exceeds it, so start the backend this suite runs against ` +
+		`with {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED=false.`
+	);
+}
+
+/** Await a call, returning its response, and throw a diagnosed error unless it succeeded. */
+export async function ok(call: APIResponse | Promise<APIResponse>): Promise<APIResponse> {
+	const response = await call;
+	if (!response.ok()) {
+		throw new Error(await failure(response));
+	}
+	return response;
+}
+
+/** Await a call and read its JSON body, on the same terms as `ok`. */
+export async function readJson<T>(call: APIResponse | Promise<APIResponse>): Promise<T> {
+	return (await (await ok(call)).json()) as T;
+}

@@ -1,5 +1,7 @@
 import { expect, request, test, type APIRequestContext } from '@playwright/test';
 
+import { ok, readJson } from './api';
+
 // The tenancy surface, driven end to end — the factory's, like shell.spec.ts,
 // and not the scaffold's to delete. It proves what master-project#291 asked
 // for from the running app rather than from a unit test: a second person is
@@ -31,8 +33,8 @@ type Person = { id: string; username: string };
 
 let partner: APIRequestContext;
 
-const memberships = async (ctx: APIRequestContext) =>
-	(await (await ctx.get('/api/workspaces/me')).json()) as Membership[];
+const memberships = (ctx: APIRequestContext) =>
+	readJson<Membership[]>(ctx.get('/api/workspaces/me'));
 
 test.beforeAll(async () => {
 	partner = await request.newContext({ baseURL: BACKEND, extraHTTPHeaders: PARTNER });
@@ -59,10 +61,10 @@ test.afterAll(async () => {
  * pass leaves the identity behind.
  */
 async function retractStraySeats(page: import('@playwright/test').Page): Promise<void> {
-	const me = (await (await page.request.get('/api/users/me')).json()) as Person;
+	const me = await readJson<Person>(page.request.get('/api/users/me'));
 	for (const held of await memberships(partner)) {
 		if (held.role === 'owner' && !held.workspace.slug.startsWith('personal-')) {
-			await partner.delete(`/api/workspaces/${held.workspace.id}/members/${me.id}`);
+			await ok(partner.delete(`/api/workspaces/${held.workspace.id}/members/${me.id}`));
 		}
 	}
 }
@@ -80,7 +82,7 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 	page
 }) => {
 	await page.goto('/');
-	const me = (await (await page.request.get('/api/users/me')).json()) as Person;
+	const me = await readJson<Person>(page.request.get('/api/users/me'));
 	const mine = await memberships(page.request);
 	expect(mine).toHaveLength(1);
 	const own = mine[0]!.workspace;
@@ -97,12 +99,14 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 
 	// The partner makes a workspace and grants this person a seat in it.
 	const shared = `Shared ${Date.now()}`;
-	const created = (await (
-		await partner.post('/api/workspaces/', { data: { name: shared } })
-	).json()) as Membership;
-	const grant = await partner.post(`/api/workspaces/${created.workspace.id}/members`, {
-		data: { user_id: me.id, role: 'member' }
-	});
+	const created = await readJson<Membership>(
+		partner.post('/api/workspaces/', { data: { name: shared } })
+	);
+	const grant = await ok(
+		partner.post(`/api/workspaces/${created.workspace.id}/members`, {
+			data: { user_id: me.id, role: 'member' }
+		})
+	);
 	expect(grant.status()).toBe(201);
 
 	// Two memberships and nothing remembered: a choice, never a silent default.
@@ -168,5 +172,5 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 	// every other spec that follows in the same worker or suite hits the
 	// chooser instead of the page it expects. beforeEach only self-heals THIS
 	// test's own next run, never a spec that runs after it in the same pass.
-	await partner.delete(`/api/workspaces/${created.workspace.id}/members/${me.id}`);
+	await ok(partner.delete(`/api/workspaces/${created.workspace.id}/members/${me.id}`));
 });

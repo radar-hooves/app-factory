@@ -1,4 +1,6 @@
-import { expect, request, test } from '@playwright/test';
+import { expect, request, test, type APIResponse } from '@playwright/test';
+
+import { ok, readJson } from './api';
 
 // The scaffold's example E2E spec — delete it once this app has real ones.
 // It exists so a freshly stamped app has a playwright run that passes, and
@@ -37,11 +39,11 @@ test.beforeEach(async ({ page }) => {
 	const partner = await request.newContext({ baseURL: BACKEND, extraHTTPHeaders: PARTNER });
 	try {
 		await page.goto('/');
-		const me = (await (await page.request.get('/api/users/me')).json()) as { id: string };
-		const held = (await (await partner.get('/api/workspaces/me')).json()) as Membership[];
+		const me = await readJson<{ id: string }>(page.request.get('/api/users/me'));
+		const held = await readJson<Membership[]>(partner.get('/api/workspaces/me'));
 		for (const membership of held) {
 			if (membership.role === 'owner' && !membership.workspace.slug.startsWith('personal-')) {
-				await partner.delete(`/api/workspaces/${membership.workspace.id}/members/${me.id}`);
+				await ok(partner.delete(`/api/workspaces/${membership.workspace.id}/members/${me.id}`));
 			}
 		}
 	} finally {
@@ -62,25 +64,25 @@ test('two people each see their own items, and a granted member sees the shared 
 	// The partner may hold several workspaces from earlier runs (nothing deletes
 	// one), so their scoped calls name the personal one explicitly rather than
 	// relying on a sole membership the way a fresh identity can.
-	const partnerHome = (await (await partner.get('/api/workspaces/me')).json()) as Membership[];
+	const partnerHome = await readJson<Membership[]>(partner.get('/api/workspaces/me'));
 	const home = partnerHome.find((m) => m.workspace.slug.startsWith('personal-'))!.workspace;
 	const inHome = { 'x-workspace-id': String(home.id) };
-	const titles = async (res: Promise<{ json(): Promise<{ title: string }[]> }>) =>
-		(await (await res).json()).map((item) => item.title);
+	const titles = async (res: Promise<APIResponse>) =>
+		(await readJson<{ title: string }[]>(res)).map((item) => item.title);
 
 	try {
 		await page.goto('/');
-		const me = (await (await page.request.get('/api/users/me')).json()) as { id: string };
+		const me = await readJson<{ id: string }>(page.request.get('/api/users/me'));
 
 		// Each writes into their own workspace; each sees only their own row.
 		const mineTitle = `mine ${stamp}`;
 		const theirsTitle = `theirs ${stamp}`;
 		expect(
-			(await page.request.post('/api/example/', { data: { title: mineTitle } })).status()
+			(await ok(page.request.post('/api/example/', { data: { title: mineTitle } }))).status()
 		).toBe(201);
 		expect(
 			(
-				await partner.post('/api/example/', { data: { title: theirsTitle }, headers: inHome })
+				await ok(partner.post('/api/example/', { data: { title: theirsTitle }, headers: inHome }))
 			).status()
 		).toBe(201);
 
@@ -100,15 +102,17 @@ test('two people each see their own items, and a granted member sees the shared 
 		// the same choice, returns.
 		const sharedName = `Shared ${stamp}`;
 		const shared = (
-			(await (
-				await partner.post('/api/workspaces/', { data: { name: sharedName } })
-			).json()) as Membership
+			await readJson<Membership>(partner.post('/api/workspaces/', { data: { name: sharedName } }))
 		).workspace;
-		await partner.post(`/api/workspaces/${shared.id}/members`, {
-			data: { user_id: me.id, role: 'member' }
-		});
+		await ok(
+			partner.post(`/api/workspaces/${shared.id}/members`, {
+				data: { user_id: me.id, role: 'member' }
+			})
+		);
 		const inShared = { 'x-workspace-id': String(shared.id) };
-		await partner.post('/api/example/', { data: { title: `shared ${stamp}` }, headers: inShared });
+		await ok(
+			partner.post('/api/example/', { data: { title: `shared ${stamp}` }, headers: inShared })
+		);
 
 		await page.goto('/');
 		await page.getByRole('button', { name: sharedName }).click();
@@ -118,7 +122,7 @@ test('two people each see their own items, and a granted member sees the shared 
 		]);
 
 		// The seat is retracted and the shared row is gone from this person's view.
-		await partner.delete(`/api/workspaces/${shared.id}/members/${me.id}`);
+		await ok(partner.delete(`/api/workspaces/${shared.id}/members/${me.id}`));
 		expect((await page.request.get('/api/example/', { headers: inShared })).status()).toBe(403);
 	} finally {
 		await partner.dispose();

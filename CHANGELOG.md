@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.19] - 2026-09-21
+
+### Fixed
+
+- Every direct HTTP call in the E2E specs now goes through one new factory file, `frontend/tests/e2e/api.ts` (`ok`, `readJson`). `APIRequestContext` resolves on any answer, so the shape the specs carried — `(await (await ctx.get('/api/workspaces/me')).json()) as Membership[]`, and nine more like it across `workspaces.spec.ts` and `example.spec.ts` — handed an error body back wearing the success type, and the run failed several steps later at whatever first iterated it. Measured in the consuming app on 21/09/2026: a 429 reached `for (const held of await memberships(partner))` as `TypeError: (intermediate value) is not iterable`, which names neither the endpoint, nor the status, nor the fact that a request failed at all, and sent the reader hunting a tenancy bug that was not there. The helper throws naming the URL, the status, the status text and the body, and a 429 additionally names the limiter that refused: a full pass drives more requests a minute than the shipped `rate_limit_default` of 100/minute admits from one address, and both identities in the suite share one. No retry and no back-off — a suite that waits out its own refusal hides that it is provoking one. The factory cannot disable that limiter for a local run (`playwright.config.ts` boots the frontend only; the backend is whatever the developer started), so the message names `<APP>_RATE_LIMIT_ENABLED=false` instead, which is why a CI job that boots its own backend never saw this and a developer's own run is the one place it appears; `docs/development/working-on-the-template.md` records the decision. Calls whose status the specs already asserted keep that assertion. Dispatched from eight's panel session, which hit it on a local run and holds a parity exception on `workspaces.spec.ts` expiring 21/10/2026; consumer evidence `radar-hooves/eight#72`, whose re-stamp takes this. Proven by rendering a throwaway stamp from this commit: `pnpm check` reports 0 errors and 0 warnings across 1187 files, `pnpm lint` passes, and a throwaway Playwright spec driving a real 429 through both helpers gets `…/api/workspaces/me answered HTTP 429 Too Many Requests: {"detail":"Rate limit exceeded. Please retry later."}` followed by the limiter sentence, where the cast it replaces gets `is not iterable`.
+
 ## [2026.9.18] - 2026-09-16
 
 ### Changed
