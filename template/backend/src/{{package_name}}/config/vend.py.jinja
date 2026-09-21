@@ -129,6 +129,30 @@ class VendError(RuntimeError):
     """A value the app cannot start without could not be vended."""
 
 
+class BrokerUnavailableError(VendError):
+    """The broker will not serve this process right now (locked, unreachable, out of scope)."""
+
+
+def broker_serves(credential: str, field: str) -> None:
+    """Raise BrokerUnavailableError unless the broker serves ``credential`` right now.
+
+    A child process that vends its own secrets at startup (an agent's stdio MCP
+    server, a worker subprocess) fails silently into running tool-less when the
+    broker will not serve: nothing raises, the child just starts short of what
+    it needs. Proving the door is open before spawning it turns that into a
+    typed error the caller can park work on, rather than a child missing tools
+    nobody notices until its output does. Without a signet binary there is no
+    broker to ask (the suite, a machine that supplies its values in the
+    environment), so nothing is proved and nothing is refused.
+    """
+    if shutil.which("signet") is None:
+        return
+    try:
+        vend(credential, field)
+    except VendError as exc:
+        raise BrokerUnavailableError(str(exc)) from exc
+
+
 def vend(credential: str, field: str) -> str:
     """Return one field of a broker credential.
 

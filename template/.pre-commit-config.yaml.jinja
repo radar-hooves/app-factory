@@ -19,6 +19,13 @@ repos:
         language: system
         types: [text]
 
+      - id: rules-fence
+        name: 'governance - Rule content lands only at an open sunset-review sitting'
+        entry: household-precommit-rules-fence
+        language: system
+        pass_filenames: true
+        files: '^\.claude/rules/.*\.md$'
+
       - id: check-handoff-tracks-work
         name: 'governance - Handoff outstanding work is tracked'
         entry: household-precommit-handoff-tracking
