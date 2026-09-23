@@ -14,8 +14,8 @@
  * THREE RULES:
  *   1. vendored-copy — a local component whose name matches one @poodle64/ui
  *      ships, and which does not delegate to it.
- *   2. hand-rolled-page-title — a route writing its own <h1> instead of
- *      composing the shared PageHeader.
+ *   2. hand-rolled-page-title — a route writing its own title, as an <h1> or
+ *      as an <h2> nothing sits above, instead of composing PageHeader.
  *   3. surface-brief-divergence — a route composing a package component its
  *      surface brief does not name. Inert until the app grows
  *      `docs/product/surfaces/`; surface briefs are optional, so an app
@@ -118,7 +118,7 @@ for (const f of files.filter((f) => f.endsWith('.svelte'))) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. A route page that writes its own <h1> instead of composing PageHeader.
+// 2. A route page that writes its own title instead of composing PageHeader.
 //
 // Each hand-rolled title looks perfectly reasonable in its own file; the
 // divergence is only visible across files, which is why a human never catches
@@ -130,6 +130,9 @@ for (const f of files.filter((f) => f.endsWith('.svelte'))) {
 // routes is argued as an app-local exception with its reason recorded — never
 // inherited from another app.
 // ---------------------------------------------------------------------------
+const H1 = /<h1[\s>]/;
+const composesTitle = (src) => /<PageHeader[\s>/]/.test(src) || H1.test(src);
+
 for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
 	const src = readFileSync(f, 'utf8');
 	// Deliberately NOT "…and does not import PageHeader": a page that swapped its
@@ -137,11 +140,32 @@ for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
 	// would satisfy that condition. PageHeader emits the page's <h1> itself, so a
 	// route writing its own is wrong either way — it has abandoned the shared
 	// treatment, or it has shipped two h1s.
-	if (/<h1[\s>]/.test(src)) {
+	if (H1.test(src)) {
 		findings.push({
 			rule: 'hand-rolled-page-title',
 			file: rel(f),
 			detail: 'writes its own <h1>; compose PageHeader so every route shares one title treatment'
+		});
+		continue;
+	}
+	// An <h2> is also the right element for a section heading, so the element
+	// proves nothing on its own; what sits above it does. The shell renders no
+	// heading, so where neither the route nor a component it composes supplies
+	// the <h1> (PageHeader, or a child's own), the <h2> is the page's top heading
+	// and so its title. Measured in pebblestone 23/09/2026: 11 routes titled
+	// `<h2>{record}</h2>` beside a back button with no PageHeader, while every
+	// route with section h2s had an <h1> above them, PageHeader's on seven of
+	// eight. Children are read one level deep, as rule 3 reads them; a title
+	// any deeper is not seen, and the page reports.
+	if (
+		/<h2[\s>]/.test(src) &&
+		![src, ...childComponentFiles(src).map((c) => readFileSync(c, 'utf8'))].some(composesTitle)
+	) {
+		findings.push({
+			rule: 'hand-rolled-page-title',
+			file: rel(f),
+			detail:
+				'titles the page with an <h2> and composes no PageHeader; compose PageHeader so every route shares one title treatment'
 		});
 	}
 }
