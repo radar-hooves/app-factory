@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.20] - 2026-09-23
+
 ### Added
 
 - The `rules-fence` hook (`entry: household-precommit-rules-fence`, gated on `^\.claude/rules/.*\.md$`) in `template/.pre-commit-config.yaml.jinja`'s local block, beside `check-pii` and the handoff three. `rules-library/core/pre-commit-config.md` requires `household-precommit-rules-fence` in every repo; the template carried the other four household gates but not this one, so a stamped app either ran without it or added it locally, which then fails Canonical Shape parity for editing a factory-owed file. godswood did the latter (`radar-hooves/godswood#817`, measured 21/09/2026: `Canonical Shape` red on every push to main since 19/09/2026 over this exact line). Copied verbatim from godswood's `.pre-commit-config.yaml`, same position — immediately after `check-pii`, before `check-handoff-tracks-work`. Proven by re-parsing the rendered YAML (`rules-fence` present in the local block, ahead of the handoff three) and running this repo's own pre-commit gate against the changed file.
