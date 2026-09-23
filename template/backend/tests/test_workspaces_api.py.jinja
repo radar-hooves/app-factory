@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
-from {{ package_name }}.db.session import get_session_factory
+from {{ package_name }}.db.session import get_session, get_session_factory
 
 
 async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
@@ -175,6 +175,9 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
 # ── First sight is race-safe ────────────────────────────────────────────────
 
 
+# Each request holds a pooled connection and a worker thread while it waits, so
+# this must stay below the engine's pool (SQLAlchemy's 5 + 10 overflow) and
+# anyio's 40-thread limiter, or the barrier times out instead of the race running.
 FAN_OUT = 8
 
 
@@ -193,6 +196,7 @@ async def test_a_fanned_out_first_load_creates_one_user_and_every_request_succee
     must answer 200 as the one person, with one user row and one personal
     workspace between them (full-stack-app-template#17).
     """
+    assert get_session not in app.dependency_overrides, "a leftover override would serialise every request"
     uid = f"fan-out-{uuid.uuid4()}"
     real_lookup = users_service.get_by_uid
     everyone_has_looked = threading.Barrier(FAN_OUT, timeout=10)
