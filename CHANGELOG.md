@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.22] - 2026-09-23
+
 ### Added
 
 - `backend/src/<package>/scripts/__init__.py` states the one home for operator-run scripts (one-off fixes, hand-run importers, backfills, maintenance tools): a module per script in the package, run as `python -m <package>.scripts.<name>` from `backend/` or via `docker exec <app>`. An in-package script ships in the image; one in `backend/scripts/` needs its own Dockerfile line, as library's and Pebblestone's have, or cannot run there at all, as godswood's and cadmus's cannot. On 23/09/2026 the fleet had three styles and no factory opinion. Dispatched from Pebblestone (`pebblestone`).
