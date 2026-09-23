@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.23] - 2026-09-24
+
 ### Fixed
 
 - `api/workspaces/service.py.jinja`'s `create_workspace`, `add_member`, `remove_member`, `rename_workspace` and `ensure_personal_workspace` now commit their own writes, matching the pattern `api/agent/ownership.py.jinja`'s `claim()` already carries (#47). All five relied on `session.flush()` alone and the request-scoped `get_session()` dependency's post-`yield` `session.commit()`, which Starlette runs after the response has already left the process — a caller that acts on its own write in the very next request can read ahead of that commit. Reproduced by Pebblestone (`pebblestone`) against this template's exact pinned versions (fastapi 0.137.0, starlette 1.3.1, uvicorn 0.49.0): its own E2E suite creates a workspace, then immediately grants the first member as the same identity, and hit a 403 9.86ms after the create's 201 in CI's slower Postgres hop — the create's own membership row had not committed yet. Not reproducible against a fast local Postgres, which is why the fleet's own suites never tripped it. Dispatched from Pebblestone (`pebblestone`, 24/09/2026). Proven by stamping a throwaway app from this commit and running the full backend suite against a real Postgres testcontainer (145 passed), including `test_workspaces_api.py`'s real eight-request fan-out through `ensure_personal_workspace`.
