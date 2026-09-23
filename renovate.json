@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "The template's OWN dependency automation — distinct from template/renovate.json, which is what gets STAMPED into every consumer app. This repo had none until 23/09/2026: with `requireConfig: required` on the estate runner, an unconfigured repo is skipped on every run, so the two design-system floors below sat unwatched (radar-hooves/godswood, found running @poodle64/ui 2026.9.9 against a published 2026.9.17).",
+  "extends": ["local>radar-hooves/master-project"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "template/frontend/package.json.jinja is real JSON wearing a .jinja extension for its scaffold interpolations elsewhere in the file; Renovate's built-in npm manager only recognises a literal package.json and never opens here. This regex manager reads the two shared design-system floors directly, so a new @poodle64/ui or @poodle64/design-tokens publish reaches this repo exactly as it reaches any consumer app — the shared packageRule below (matchPackageNames, automerge:false) already governs both by name.",
+      "managerFilePatterns": ["/^template/frontend/package\\.json\\.jinja$/"],
+      "matchStrings": ["\"(?<depName>@poodle64/(?:design-tokens|ui))\":\\s*\"(?<currentValue>\\^?[^\"]+)\""],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    }
+  ]
+}

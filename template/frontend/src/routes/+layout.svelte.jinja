@@ -73,6 +73,12 @@
      them, and do not hand-roll a dot-grid class in app.css. `measure` is left
      at its `full` default; pick one once a page needs a narrower cap (see the
      component's own doc comment). -->
+<!-- No settingsHref (@poodle64/ui 2026.9.10's rail-foot Settings row): absent
+     renders no row, and the factory ships no /settings route for it to point
+     at — settings content is each app's own domain (compare Pebblestone's
+     breaker-events, delegation-limits, overhead-suppliers panes), the same
+     reason identity() below leaves onAccountSettings unset. An app wires
+     settingsHref itself once it has a real destination to send it to. -->
 <AppShell
 	brandTitle="{% endraw %}{{ project_title }}{% raw %}"
 	currentPath={page.url.pathname}
