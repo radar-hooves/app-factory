@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.21] - 2026-09-23
+
+### Fixed
+
+- `check-ui-drift.mjs` rule 2 (`hand-rolled-page-title`) reads a page title written as an `<h2>`. It matched only `<h1`, so a route titled `<h2>{record}</h2>` beside a back button, composing no PageHeader, passed. An `<h2>` is also the section-heading element, so the test is what sits above it: the shell renders no heading, so where neither the route nor a component it composes one level deep (as rule 3 reads children) supplies the `<h1>` — PageHeader, or a child's own — the `<h2>` is the page's title. Same rule, same baseline key, one finding per file. Measured against every local app with the gate installed: exactly the 11 routes the consumer named in pebblestone, plus godswood's `travel/status-credits`, whose outline starts at an `<h2>` under no `<h1>`; cadmus's `strategy/papers` "See also" `<h2>` stays silent because its child `MarkdownDocumentPage` supplies the `<h1>`, where a bare "`<h2>` and no PageHeader" test would have reported it. Dispatched from pebblestone's frontend code-diet lane (`pebblestone`, 23/09/2026).
+- `check-ui-drift.mjs` rule 1 (`vendored-copy`) no longer skips `components/ui/` wholesale. The skip rested on those being primitives the package does not ship, a reason that expires the day it does and that nothing re-read. Each directory directly under `components/ui/` whose name `@poodle64/ui` ships is now reported once, with no delegating exception: a primitive is the package's to own, and a part only the local copy carries is a need filed with the package. Measured 23/09/2026: `form` in cadmus, godswood and mission-command (the package's own file set), and `dropdown-menu`, `popover` and `switch` in pebblestone, none of which it imports from the package; thoth carries `form` too but its installed package predates it. Found by the same pebblestone audit, which left the call here.
+
+Taking this file surfaces those findings as new in each app named above, to fix or bank with `--baseline`. Declined from the same audit: a rule against `<Table.Root>` composed in a route. `table` is a primitive the package ships on purpose, whether a given table is a catalogue (`DataTable`'s job) or a small fixed grid is a judgement no pattern makes, and the "register component" the audit named is one app's own, which a factory gate cannot name. Proven by rendering a throwaway stamp from this commit: the fresh stamp is clean (exit 0) and passes its own `prettier --check` and `eslint`. Planted violations were then driven through it one at a time. An `<h2>` title with no PageHeader fails, and so does one where PageHeader is imported but not composed. A section `<h2>` under PageHeader passes, and so does one under a child that composes PageHeader. A page's own `<h1>` beside an `<h2>` gives one finding. A vendored `components/ui/switch/` fails and `components/ui/chart/` does not, and banking clears it. The whole fleet was also run against the previous and the new version through symlinked mirrors, which is where the counts above come from.
+
 ## [2026.9.20] - 2026-09-23
 
 ### Added
