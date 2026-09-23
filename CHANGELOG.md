@@ -6,9 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- `backend/src/<package>/scripts/__init__.py` states the one home for operator-run scripts (one-off fixes, hand-run importers, backfills, maintenance tools): a module per script in the package, run as `python -m <package>.scripts.<name>` from `backend/` or via `docker exec <app>`. An in-package script ships in the image; one in `backend/scripts/` needs its own Dockerfile line, as library's and Pebblestone's have, or cannot run there at all, as godswood's and cadmus's cannot. On 23/09/2026 the fleet had three styles and no factory opinion. Dispatched from Pebblestone (`pebblestone`).
+
 ### Changed
 
-- `test_workspaces_api.py` proves first sight under a real fan-out instead of by construction (#17). Eight concurrent `GET /api/users/me` for one new uid, each on its own pooled session and committing, each held after its own lookup until all eight have looked: every one misses and inserts, Postgres refuses seven, and all eight must answer 200 as one user with one personal workspace, with seven recoveries logged. It replaces the test that made one lookup miss by monkeypatch. The fix itself shipped in `v2026.9.5` (727411e, the savepoint in `upsert_from_identity`); this is the proof the issue asked for. Against the pre-fix read-then-insert the test fails with seven 500s; against the fix it passed ten runs of ten. Dispatched from Pebblestone (`pebblestone`), which takes the users and workspaces slices and fans out on every dashboard load.
+- `test_workspaces_api.py` proves first sight under a real fan-out (#17): eight concurrent `GET /api/users/me` for one new uid, each on its own pooled session and held after its own lookup until all have looked, must all answer 200 as one user with one personal workspace. It replaces a test that forced the race by monkeypatch. The savepoint fix itself shipped in `v2026.9.5`; against the code before it this test fails with seven 500s. Dispatched from Pebblestone (`pebblestone`), which fans out on every dashboard load.
 
 ## [2026.9.20] - 2026-09-23
 

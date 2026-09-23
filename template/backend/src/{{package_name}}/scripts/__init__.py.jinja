@@ -1,0 +1,28 @@
+"""Operator-run scripts: what a person or an agent runs by hand, on purpose.
+
+One-off data fixes, hand-run importers, backfills, maintenance tools. One module
+per script, a subpackage per domain once there are several, each exposing
+``main(argv: list[str] | None = None) -> int`` behind ``if __name__ ==
+"__main__"`` as ``db/stamp.py`` does, and always run as a module, from
+``backend/`` in a checkout or inside the deployed container::
+
+    uv run python -m {{ package_name }}.scripts.<name>
+    docker exec {{ project_name }} python -m {{ package_name }}.scripts.<name>
+
+They live in the package because the image carries the installed package and,
+from the rest of ``backend/``, only the runtime files its Dockerfile names. A
+script here ships in the build it belongs to and runs in the deployed container
+against that deployment's own settings; one outside it needs a Dockerfile line
+of its own. Settings come from ``get_settings()`` and the session from
+``db/session.py``, never from an exported variable. A script that must never
+write to production refuses when ``db/environment.py``'s ``is_production()``
+says so.
+
+What does not belong here:
+
+- a data change every deployment must make, which is an Alembic migration;
+- pre-commit and CI tooling, which sits beside the gate that runs it
+  (``frontend/scripts/``).
+
+Delete a one-off once it has run everywhere it had to; git keeps it.
+"""
