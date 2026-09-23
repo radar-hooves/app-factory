@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Changed
+
+- `test_workspaces_api.py` proves first sight under a real fan-out instead of by construction (#17). Eight concurrent `GET /api/users/me` for one new uid, each on its own pooled session and committing, each held after its own lookup until all eight have looked: every one misses and inserts, Postgres refuses seven, and all eight must answer 200 as one user with one personal workspace, with seven recoveries logged. It replaces the test that made one lookup miss by monkeypatch. The fix itself shipped in `v2026.9.5` (727411e, the savepoint in `upsert_from_identity`); this is the proof the issue asked for. Against the pre-fix read-then-insert the test fails with seven 500s; against the fix it passed ten runs of ten. Dispatched from Pebblestone (`pebblestone`), which takes the users and workspaces slices and fans out on every dashboard load.
+
 ## [2026.9.20] - 2026-09-23
 
 ### Added

@@ -12,13 +12,21 @@ same reason `test_example.py` is: an app that does not carry the code does not
 carry its test.
 """
 
+import asyncio
+import logging
+import threading
+import uuid
+
 import pytest
-from httpx import AsyncClient, Response
-from sqlalchemy import select
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient, Response
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
+from {{ package_name }}.db.session import get_session_factory
 
 
 async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
@@ -167,32 +175,67 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
 # ── First sight is race-safe ────────────────────────────────────────────────
 
 
-def test_two_first_sight_requests_racing_share_one_user_row(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The SPA's two startup calls both arrive before either has inserted.
+FAN_OUT = 8
 
-    Reproduced deterministically: the row exists, but this request's own
-    lookup is made to miss it — exactly what the loser of the race sees — so
-    its insert is refused by the unique index. It must recover onto the
-    existing row rather than 500, and leave the session usable afterwards.
+
+async def test_a_fanned_out_first_load_creates_one_user_and_every_request_succeeds(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A dashboard's first load fires eight requests before any of them has inserted.
+
+    Driven, not constructed: eight real requests, each on its own session from
+    the app's own pool, committing for real — so this bypasses the `client`
+    fixture, whose one shared rollback session would serialise them. Each request
+    is held after its own lookup until all eight have looked, which is the
+    interleaving a fan-out produces and the one a test left to chance mostly
+    misses: every lookup misses, every request inserts, Postgres holds seven on
+    the unique index until the first commits and then refuses them. All eight
+    must answer 200 as the one person, with one user row and one personal
+    workspace between them (full-stack-app-template#17).
     """
-    winner = users_service.upsert_from_identity(session, authentik_uid="raced-uid", username="raced")
-    session.flush()
-
+    uid = f"fan-out-{uuid.uuid4()}"
     real_lookup = users_service.get_by_uid
-    misses = iter([True])
+    everyone_has_looked = threading.Barrier(FAN_OUT, timeout=10)
+    this_request = threading.local()
 
-    def lookup_that_misses_once(db: Session, authentik_uid: str) -> User | None:
-        if next(misses, False):
-            return None
-        return real_lookup(db, authentik_uid)
+    def lookup_then_wait_for_the_rest(db: Session, authentik_uid: str) -> User | None:
+        user = real_lookup(db, authentik_uid)
+        # Only a request's first lookup waits; the loser's recovery read after
+        # the refused insert runs on the same thread and must go straight through.
+        if not getattr(this_request, "waited", False):
+            this_request.waited = True
+            everyone_has_looked.wait()
+        return user
 
-    monkeypatch.setattr(users_service, "get_by_uid", lookup_that_misses_once)
+    monkeypatch.setattr(users_service, "get_by_uid", lookup_then_wait_for_the_rest)
+    caplog.set_level(logging.INFO, logger=users_service.__name__)
 
-    loser = users_service.upsert_from_identity(session, authentik_uid="raced-uid", username="raced")
+    headers = {"x-authentik-uid": uid, "x-authentik-username": "fanned-out"}
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+        ) as client:
+            responses = await asyncio.gather(*(client.get("/api/users/me", headers=headers) for _ in range(FAN_OUT)))
 
-    assert loser.id == winner.id
-    # The session survived the refused insert: a further statement still works.
-    assert session.execute(select(User).where(User.authentik_uid == "raced-uid")).scalar_one().id == winner.id
+        assert [response.status_code for response in responses] == [200] * FAN_OUT
+        assert len({response.json()["id"] for response in responses}) == 1
+        # The race was run, not dodged: seven inserts were refused and recovered.
+        recovered = [r for r in caplog.records if r.getMessage() == "A concurrent request created this user first"]
+        assert len(recovered) == FAN_OUT - 1
+
+        with get_session_factory()() as db:
+            user_ids = db.execute(select(User.id).where(User.authentik_uid == uid)).scalars().all()
+            assert len(user_ids) == 1
+            memberships = db.execute(select(WorkspaceMembership).where(WorkspaceMembership.user_id == user_ids[0]))
+            assert len(memberships.scalars().all()) == 1
+    finally:
+        with get_session_factory()() as db, db.begin():
+            this_user = select(User.id).where(User.authentik_uid == uid)
+            held = select(WorkspaceMembership.workspace_id).where(WorkspaceMembership.user_id.in_(this_user))
+            workspace_ids = db.execute(held).scalars().all()
+            db.execute(delete(WorkspaceMembership).where(WorkspaceMembership.user_id.in_(this_user)))
+            db.execute(delete(Workspace).where(Workspace.id.in_(workspace_ids)))
+            db.execute(delete(User).where(User.authentik_uid == uid))
 
 
 # ── A machine principal may use an identity, never mint one ─────────────────
