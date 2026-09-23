@@ -13,7 +13,8 @@
  *
  * THREE RULES:
  *   1. vendored-copy — a local component whose name matches one @poodle64/ui
- *      ships, and which does not delegate to it.
+ *      ships, and which does not delegate to it; or a `components/ui/`
+ *      primitive the package has since shipped.
  *   2. hand-rolled-page-title — a route writing its own title, as an <h1> or
  *      as an <h2> nothing sits above, instead of composing PageHeader.
  *   3. surface-brief-divergence — a route composing a package component its
@@ -95,17 +96,40 @@ const findings = [];
 // the copy grows a prop, the shared one grows a different one, and the two
 // diverge silently because nothing compares them.
 //
-// `components/ui/` is excluded: those are this app's own shadcn primitives for
-// things the package genuinely does not ship (chart, form, sheet, sidebar).
-//
-// A local file that IMPORTS the shipped component of the same name is excluded
-// too, and that distinction is the rule rather than a hole in it: a DELEGATING
+// A local file that IMPORTS the shipped component of the same name is excluded,
+// and that distinction is the rule rather than a hole in it: a DELEGATING
 // composition is the opposite of a fork — a thin wrapper that adapts the
 // package's API to a call shape this app repeats. A genuine fork cannot pass
 // the test, because it does not import the thing it forked.
+//
+// `components/ui/<name>/` is judged as a whole instead: it holds a shadcn
+// primitive this app vendored because the package did not ship <name>, and
+// that reason expires the day the package does. A primitive is the package's
+// to own, so there is no delegating exception; a part the local copy has and
+// the package lacks is a need filed with the package. Measured 23/09/2026: four
+// apps still carried `form` and a fifth `dropdown-menu`, `popover` and
+// `switch`, all shipped since, while this rule skipped the directory entirely.
 // ---------------------------------------------------------------------------
+const UI_DIR = `${path.sep}components${path.sep}ui${path.sep}`;
+const vendoredPrimitives = new Set();
+for (const f of files) {
+	const at = f.indexOf(UI_DIR);
+	if (at === -1) continue;
+	const [name, ...rest] = f.slice(at + UI_DIR.length).split(path.sep);
+	if (rest.length && shipped.has(name))
+		vendoredPrimitives.add(f.slice(0, at + UI_DIR.length) + name);
+}
+for (const dir of vendoredPrimitives) {
+	const name = path.basename(dir);
+	findings.push({
+		rule: 'vendored-copy',
+		file: rel(dir),
+		detail: `local ${name} primitive duplicates @poodle64/ui/${name}, which ships it now; import the shipped one`
+	});
+}
+
 for (const f of files.filter((f) => f.endsWith('.svelte'))) {
-	if (f.includes(`${path.sep}components${path.sep}ui${path.sep}`)) continue;
+	if (f.includes(UI_DIR)) continue;
 	const name = path.basename(f, '.svelte');
 	if (!shipped.has(kebab(name))) continue;
 	const src = readFileSync(f, 'utf8');
