@@ -390,6 +390,15 @@ genuinely constrains it, it scrolls, and its last row is reachable at both
 heights. Its cap does not track the viewport, but at 288px it does not need to —
 it is asserted at both heights precisely so that stops being an assumption.
 
+### Verify reachability at both ends
+
+A probe that only asks "is the last option reachable?" passes on this defect's
+mirror image too: an uncapped overlay that floating-ui shifts upward to fit
+pushes the _first_ options off-screen while the last one sits comfortably in
+view. Assert `firstItemInViewport` and `lastItemInViewport` separately, target
+whichever is out of view, and let the click's own actionability timeout be the
+verdict — geometry alone can say "visible" for an element nothing can reach.
+
 ## Nav ink against the chrome (`?surface=shell`, three palettes) — #11
 
 The defect class this exists for: **a shared component painting a colour the
