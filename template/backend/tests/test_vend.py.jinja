@@ -5,17 +5,31 @@ right credential; this file proves the mechanism itself, independent of any
 one field's business meaning — the environment wins, an empty field vends by
 its declared (credential, field), a vend failure retries with backoff then
 raises the broker's own diagnostic and nothing more, and the boot-lane file
-escape hatch answers before the broker is ever asked.
+escape hatch answers before the broker is ever asked. The attest-flow tests
+further down prove `vend`'s own in-process software-key mechanics: a missing
+key file, and a real P-256 signature the broker could actually verify.
 """
 
-from typing import Annotated
+import base64
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 from pydantic import SecretStr
 from pydantic_settings import SettingsConfigDict
 
 from {{ package_name }}.config import vend as vend_module
 from {{ package_name }}.config.vend import Vended, VendedSettings, VendError
+
+
+@pytest.fixture(autouse=True)
+def _reset_bearer_cache() -> None:
+    """The in-memory bearer cache is process-global; a test that attests must not leak into the next one."""
+    vend_module._BEARER_CACHE.clear()
 
 
 class _ExampleSettings(VendedSettings):
@@ -117,7 +131,111 @@ def test_the_vend_switch_leaves_a_field_empty_and_unset_still_raises(monkeypatch
 
     monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)
     monkeypatch.setattr(
-        vend_module, "vend", lambda credential, field: (_ for _ in ()).throw(VendError("signet is not on PATH"))
+        vend_module, "vend", lambda credential, field: (_ for _ in ()).throw(VendError("no software identity key"))
     )
     with pytest.raises(VendError):
         _ExampleSettings()
+
+
+# ---------------------------------------------------------------------------
+# `vend`'s own mechanics: the in-process software-key attest client
+# ---------------------------------------------------------------------------
+
+
+def _generate_key_file(path) -> ec.EllipticCurvePrivateKey:
+    """Write a fresh P-256 key to `path`, exactly as the host mints one at activation."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    path.write_bytes(pem)
+    return key
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, payload: dict[str, Any]) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+
+def test_missing_key_file_raises_vend_error_naming_the_path(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No key file -- this app was never activated on this host -- is a clear, named-path VendError."""
+    missing = tmp_path / "never-minted.key"
+    monkeypatch.setattr(vend_module, "PORTCULLIS_KEY_FILE", str(missing))
+
+    with pytest.raises(VendError, match=str(missing)):
+        vend_module.vend("example-credential", "plain-field")
+
+
+def test_the_attest_flow_signs_a_real_challenge_and_vends_the_field(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Challenge -> sign -> token -> vend against a mocked broker, with a REAL P-256 key.
+
+    The broker would reject a forged or mis-targeted signature, so verifying it
+    against the presented public key is the only way this test would fail if the
+    flow signed the wrong message, the wrong bytes, or the wrong encoding.
+    """
+    key_path = tmp_path / "consumer.key"
+    key = _generate_key_file(key_path)
+    monkeypatch.setattr(vend_module, "PORTCULLIS_KEY_FILE", str(key_path))
+    expected_spki_b64 = base64.b64encode(
+        key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+    ).decode()
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+    def fake_post(url: str, *, json: dict[str, Any], timeout: float) -> _FakeResponse:
+        if url.endswith("/v1/attest/challenge"):
+            assert json == {"public_key_der": expected_spki_b64}
+            return _FakeResponse(200, {"challenge_id": "chal_1", "nonce": "nonce_1"})
+        if url.endswith("/v1/attest/token"):
+            assert json["challenge_id"] == "chal_1"
+            assert json["nonce"] == "nonce_1"
+            raw = base64.b64decode(json["signature_b64"])
+            r, s = int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
+            key.public_key().verify(
+                encode_dss_signature(r, s), b"chal_1.nonce_1", ec.ECDSA(hashes.SHA256())
+            )
+            return _FakeResponse(200, {"key": "pc_test_bearer", "expires_at": future, "max_expires_at": future})
+        raise AssertionError(f"unexpected POST {url}")
+
+    def fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _FakeResponse:
+        assert url.endswith("/v1/credentials/example-credential")
+        assert headers == {"Authorization": "Bearer pc_test_bearer"}
+        return _FakeResponse(
+            200,
+            {"material": {"kind": "static", "fields": [{"name": "plain-field", "value": "vended-value"}]}},
+        )
+
+    monkeypatch.setattr(vend_module.httpx, "post", fake_post)
+    monkeypatch.setattr(vend_module.httpx, "get", fake_get)
+
+    assert vend_module.vend("example-credential", "plain-field") == "vended-value"
+
+
+def test_a_cached_bearer_is_reused_without_re_attesting(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bearer well inside its lifetime is reused: no second challenge/token round trip."""
+    key_path = tmp_path / "consumer.key"
+    _generate_key_file(key_path)
+    monkeypatch.setattr(vend_module, "PORTCULLIS_KEY_FILE", str(key_path))
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    attest_calls = 0
+
+    def fake_post(url: str, *, json: dict[str, Any], timeout: float) -> _FakeResponse:
+        nonlocal attest_calls
+        attest_calls += 1
+        if url.endswith("/v1/attest/challenge"):
+            return _FakeResponse(200, {"challenge_id": "chal_1", "nonce": "nonce_1"})
+        return _FakeResponse(200, {"key": "pc_test_bearer", "expires_at": future, "max_expires_at": future})
+
+    def fake_get(url: str, *, headers: dict[str, str], timeout: float) -> _FakeResponse:
+        return _FakeResponse(200, {"material": {"kind": "static", "fields": [{"name": "f", "value": "v"}]}})
+
+    monkeypatch.setattr(vend_module.httpx, "post", fake_post)
+    monkeypatch.setattr(vend_module.httpx, "get", fake_get)
+
+    vend_module.vend("example-credential", "f")
+    vend_module.vend("example-credential", "f")
+
+    assert attest_calls == 2  # one challenge + one token; the second vend hit the cache

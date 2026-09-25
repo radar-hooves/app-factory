@@ -2,21 +2,24 @@
 
 Development holds no env file. Every fact a checkout can know is stamped into
 this app's own config defaults; what it cannot know — a database password, any
-other credential a section owns — is fetched here, keyed by this app's
-enrolled signet identity. A fresh clone needs nothing filled in, and there is
-no per-consumer copy of the value to drift.
+other credential a section owns — is fetched here, keyed by this app's own
+software identity: a P-256 key file the host mints at activation and grants in
+the broker's declared consumers (never minted or enrolled by this app itself).
+A fresh clone needs nothing filled in, and there is no per-consumer copy of the
+value to drift.
 
 `Vended` and `VendedSettings` below are the declarative surface every secret
 setting uses: a field names its credential and field, `VendedSettings` fills
 it in when the environment left it empty, and no settings section hand-writes
 its own environment/file/broker resolution order.
 
-`signet` writes to a file rather than stdout, so a vended value cannot land in a
-log, a shell history, or an agent transcript. Keep it that way: nothing in this
-module may return, log, or interpolate a value into a message.
+A vended value never touches a subprocess, a shell, or stdout: the attest and
+the fetch both happen in-process over HTTPS, and the value that comes back is a
+plain string handed straight to its caller. Keep it that way: nothing in this
+module may log, or interpolate a value into a message, beyond returning it.
 
-A context with no signet identity -- CI foremost -- has no way to answer any of
-this, and adding fields to `Vended` should never mean adding one dummy value per
+A context with no key file -- CI foremost -- has no way to answer any of this,
+and adding fields to `Vended` should never mean adding one dummy value per
 secret name per workflow. Setting `<APP>_VEND=off` (see `_VEND_SWITCH_ENV`
 below) skips the broker for whatever `Vended` field the environment and any
 boot-lane file still leave empty, logging once per process and leaving that
@@ -26,19 +29,21 @@ container that somehow started without a name still fails closed exactly as
 before.
 """
 
-import json
+import base64
 import logging
 import os
-import shutil
-import subprocess
-import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Self
 
 import httpx
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, load_pem_private_key
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings
 
@@ -69,36 +74,19 @@ def _broker_env(name: str, default: str) -> str:
 #: Overridable per host; the default is the household's own broker.
 BROKER_URL = _broker_env("PORTCULLIS_URL", "{{ portcullis_url }}")
 
-#: This app's enrolled consumer identity. One per app per machine, enrolled once
-#: (`signet enrol --identity <app>`), granted only the credentials it needs.
-SIGNET_IDENTITY = _broker_env("PORTCULLIS_SIGNET_IDENTITY", "{{ project_name }}")
-
-#: The signet-agent socket to sign through, when this process cannot reach the
-#: hardware itself. A container has no path to the host's YubiKey, so the host
-#: runs ONE `signet agent` owning the token and signing over a Unix socket per
-#: consumer, each bound to that consumer's own PIV slot -- the shape every other
-#: containerised consumer on the fleet already uses. Unset on a workstation,
-#: where signet reaches the Secure Enclave directly and this changes nothing.
-SIGNET_AGENT_SOCKET = os.environ.get("SIGNET_AGENT_SOCKET")
+#: This app's software identity key: a P-256 PKCS8 PEM, mode 0600. The host
+#: mints it at activation and grants it in the broker's declared consumers;
+#: this app never mints or enrols one itself, and a missing file means this
+#: consumer was never activated on this host. One per app per machine.
+PORTCULLIS_KEY_FILE = _broker_env(
+    "PORTCULLIS_KEY_FILE", os.path.expanduser("~/.config/portcullis/{{ project_name }}.key")
+)
 
 _TIMEOUT_SECONDS = 30
 
 
-def _identity_flags() -> list[str]:
-    """Return the flags every signet subcommand here shares.
-
-    With an agent socket the backend and slot are the AGENT's concern -- it is
-    pinned to this consumer's slot and signs only as that identity -- so the
-    only thing to add is where to reach it.
-    """
-    flags = ["--identity", SIGNET_IDENTITY]
-    if SIGNET_AGENT_SOCKET:
-        flags += ["--agent", SIGNET_AGENT_SOCKET]
-    return flags
-
-
 #: Set to ``off`` to skip the broker entirely -- the one declared way a context
-#: with no signet identity (CI) constructs settings without vending. Read fresh
+#: with no key file (CI) constructs settings without vending. Read fresh
 #: on every resolution rather than cached at import, so a test can flip it with
 #: `monkeypatch.setenv` exactly as it flips any other input to this module.
 _VEND_SWITCH_ENV = f"{_PREFIX}_VEND"
@@ -133,6 +121,10 @@ class BrokerUnavailableError(VendError):
     """The broker will not serve this process right now (locked, unreachable, out of scope)."""
 
 
+def _key_file_path() -> Path:
+    return Path(PORTCULLIS_KEY_FILE).expanduser()
+
+
 def broker_serves(credential: str, field: str) -> None:
     """Raise BrokerUnavailableError unless the broker serves ``credential`` right now.
 
@@ -141,16 +133,108 @@ def broker_serves(credential: str, field: str) -> None:
     broker will not serve: nothing raises, the child just starts short of what
     it needs. Proving the door is open before spawning it turns that into a
     typed error the caller can park work on, rather than a child missing tools
-    nobody notices until its output does. Without a signet binary there is no
-    broker to ask (the suite, a machine that supplies its values in the
-    environment), so nothing is proved and nothing is refused.
+    nobody notices until its output does. Without a software identity key file
+    there is no way to attest, so nothing is proved and nothing is refused (the
+    suite, a machine that supplies its values in the environment).
     """
-    if shutil.which("signet") is None:
+    if not _key_file_path().exists():
         return
     try:
         vend(credential, field)
     except VendError as exc:
         raise BrokerUnavailableError(str(exc)) from exc
+
+
+def _load_key() -> ec.EllipticCurvePrivateKey:
+    """Load this app's P-256 software identity key from ``PORTCULLIS_KEY_FILE``.
+
+    Never minted here: the host mints it at activation and grants it in the
+    broker's declared consumers. A missing or malformed file is a clear,
+    named-path VendError rather than a fallback to generating one -- an app
+    minting its own key would enrol itself, which is the broker's job alone.
+    """
+    path = _key_file_path()
+    if not path.exists():
+        raise VendError(
+            f"no software identity key at {path}. This app never mints its own key -- the host "
+            "mints one at activation and grants it in the broker's declared consumers."
+        )
+    try:
+        key = load_pem_private_key(path.read_bytes(), password=None)
+    except Exception as exc:
+        raise VendError(f"could not load the software identity key at {path}: {exc}") from exc
+    if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
+        raise VendError(f"the key at {path} is not a P-256 (SECP256R1) key")
+    return key
+
+
+def _public_key_der_b64(key: ec.EllipticCurvePrivateKey) -> str:
+    """This key's SPKI DER, base64-encoded -- the shape ``/v1/attest/challenge`` wants."""
+    der = key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+    return base64.b64encode(der).decode()
+
+
+def _sign(key: ec.EllipticCurvePrivateKey, message: str) -> str:
+    """Sign ``message``; return the base64 IEEE P1363 (raw r||s) signature the broker verifies."""
+    signature_der = key.sign(message.encode(), ec.ECDSA(hashes.SHA256()))
+    r, s = decode_dss_signature(signature_der)
+    p1363 = r.to_bytes(32, "big") + s.to_bytes(32, "big")
+    return base64.b64encode(p1363).decode()
+
+
+def _error_reason(response: httpx.Response) -> str:
+    """The one part of a broker error response safe to quote: its own ``code``/``error`` key."""
+    try:
+        body = response.json()
+    except ValueError:
+        return "unparseable"
+    if isinstance(body, dict):
+        return str(body.get("code") or body.get("error") or "unknown")
+    return "unknown"
+
+
+#: The bearer this process last attested, cached in memory only -- never on
+#: disk, never logged. One process, one identity, one cache.
+_BEARER_CACHE: dict[str, Any] = {}
+_BEARER_EXPIRY_MARGIN_SECONDS = 60
+
+
+def _post_attest(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    response = httpx.post(f"{BROKER_URL.rstrip('/')}{path}", json=payload, timeout=_TIMEOUT_SECONDS)
+    if response.status_code != HTTPStatus.OK:
+        raise VendError(f"broker refused {path}: HTTP {response.status_code} ({_error_reason(response)})")
+    return dict(response.json())
+
+
+def _attest_bearer() -> str:
+    """Return a Portcullis bearer for this app's key file, attesting fresh once the cached one nears expiry.
+
+    Challenge -> sign -> token: the same door every other estate consumer uses
+    (mcp-servers' ``mcp-common/mcp_common/portcullis_attest.py`` -- read as the
+    reference implementation, never imported; an app does not depend on the MCP
+    fleet's library). No renew leg: re-attesting on expiry is fewer lines than
+    tracking a renew window, and attest is already infrequent -- roughly once
+    per bearer lifetime.
+    """
+    now = datetime.now(timezone.utc)
+    cached = _BEARER_CACHE
+    if cached and now < cached["expires_at"] - timedelta(seconds=_BEARER_EXPIRY_MARGIN_SECONDS):
+        return str(cached["key"])
+
+    key = _load_key()
+    challenge = _post_attest("/v1/attest/challenge", {"public_key_der": _public_key_der_b64(key)})
+    signature = _sign(key, f"{challenge['challenge_id']}.{challenge['nonce']}")
+    token = _post_attest(
+        "/v1/attest/token",
+        {
+            "challenge_id": challenge["challenge_id"],
+            "nonce": challenge["nonce"],
+            "signature_b64": signature,
+        },
+    )
+    _BEARER_CACHE["key"] = token["key"]
+    _BEARER_CACHE["expires_at"] = datetime.fromisoformat(str(token["expires_at"]).replace("Z", "+00:00"))
+    return str(_BEARER_CACHE["key"])
 
 
 def vend(credential: str, field: str) -> str:
@@ -160,42 +244,22 @@ def vend(credential: str, field: str) -> str:
     an empty value: a blank password fails later, somewhere else, as a connection
     error that names neither the cause nor the fix.
     """
-    signet = shutil.which("signet")
-    if signet is None:
+    bearer = _attest_bearer()
+    response = httpx.get(
+        f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
+        headers={"Authorization": f"Bearer {bearer}"},
+        timeout=_TIMEOUT_SECONDS,
+    )
+    if response.status_code != HTTPStatus.OK:
         raise VendError(
-            f"signet is not on PATH, so '{credential}' cannot be vended. Install signet and enrol "
-            f"this app's identity ('signet enrol --identity {SIGNET_IDENTITY}'), or supply the "
-            "value in the environment."
+            f"could not vend '{credential}.{field}' from {BROKER_URL}: "
+            f"HTTP {response.status_code} ({_error_reason(response)})"
         )
-
-    with tempfile.TemporaryDirectory() as tmp:
-        destination = Path(tmp) / field
-        result = subprocess.run(
-            [
-                signet,
-                "vend-to-file",
-                "--broker",
-                BROKER_URL,
-                *_identity_flags(),
-                "--field",
-                field,
-                "--mode",
-                "0600",
-                credential,
-                str(destination),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=_TIMEOUT_SECONDS,
-            check=False,
-        )
-        if result.returncode != 0:
-            # signet's diagnostics carry no value — the value only ever reaches
-            # the destination file — so this is safe to surface and is usually
-            # the whole answer ("broker locked", "credential out of scope").
-            detail = result.stderr.strip() or result.stdout.strip()
-            raise VendError(f"could not vend '{credential}.{field}' from {BROKER_URL}: {detail}")
-        return destination.read_text().strip()
+    material = dict(response.json()).get("material") or {}
+    for entry in material.get("fields", []):
+        if entry.get("name") == field and entry.get("value"):
+            return str(entry["value"])
+    raise VendError(f"credential '{credential}' carries no non-empty field named '{field}'")
 
 
 _VEND_ATTEMPTS = 3
@@ -295,49 +359,14 @@ class VendedSettings(BaseSettings):
         return self
 
 
-def _broker_auth_header() -> dict[str, str]:
-    """Return a fresh Portcullis Authorization header from ``signet auth``.
-
-    ``signet auth`` is a credential helper in the ``git credential`` /
-    ``credential_process`` shape: it attests in hardware, mints (or reuses its
-    cached) short-lived broker bearer, and prints ``{"Authorization": "Bearer
-    ..."}``. The bearer is held in this process and handed to the broker; it is
-    never logged, and no diagnostic below ever carries it.
-    """
-    signet = shutil.which("signet")
-    if signet is None:
-        raise VendError(
-            "signet is not on PATH, so the credential broker cannot be reached. Install signet "
-            f"and enrol this app's identity ('signet enrol --identity {SIGNET_IDENTITY}')."
-        )
-
-    result = subprocess.run(
-        [signet, "auth", *_identity_flags(), BROKER_URL],
-        capture_output=True,
-        text=True,
-        timeout=_TIMEOUT_SECONDS,
-        check=False,
-    )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or "signet auth failed"
-        raise VendError(f"could not attest to {BROKER_URL}: {detail}")
-    try:
-        header = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise VendError("signet auth returned output this app could not parse") from exc
-    if not isinstance(header, dict) or "Authorization" not in header:
-        raise VendError("signet auth returned no Authorization header")
-    return {"Authorization": str(header["Authorization"])}
-
-
 def vend_envelope(credential: str) -> dict[str, Any]:
     """Return the broker's whole credential envelope for ``credential``.
 
-    ``vend`` covers a static credential, whose value is one field written to a
-    file. A SESSION credential is not reducible that way: ``signet
-    vend-to-file`` yields only ``access_token``, while the identity constants a
-    signing client needs sit under ``material.connection``. This reads the same
-    door the rest of the estate's consumers use --
+    ``vend`` covers a static credential, whose value is one field. A SESSION
+    credential is not reducible that way: the identity constants a signing
+    client needs sit under ``material.connection``, not one flat field. This
+    attests through this app's own software key exactly as `vend` does, then
+    reads the same door the rest of the estate's consumers use --
     ``GET /v1/credentials/{name}`` -- and returns the parsed JSON.
 
     The return value CARRIES SECRET MATERIAL. Hand it straight to the client
@@ -347,18 +376,9 @@ def vend_envelope(credential: str) -> dict[str, Any]:
     """
     response = httpx.get(
         f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
-        headers=_broker_auth_header(),
+        headers={"Authorization": f"Bearer {_attest_bearer()}"},
         timeout=_TIMEOUT_SECONDS,
     )
     if response.status_code != HTTPStatus.OK:
-        # Explicit key lookup, never the body: an error body is the only part
-        # of this response that is safe to quote, and only these two keys of it.
-        reason = "unknown"
-        try:
-            body = response.json()
-            if isinstance(body, dict):
-                reason = str(body.get("code") or body.get("error") or "unknown")
-        except ValueError:
-            reason = "unparseable"
-        raise VendError(f"broker refused '{credential}': HTTP {response.status_code} ({reason})")
+        raise VendError(f"broker refused '{credential}': HTTP {response.status_code} ({_error_reason(response)})")
     return dict(response.json())

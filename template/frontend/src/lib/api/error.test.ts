@@ -67,9 +67,9 @@ describe('extractApiError', () => {
 			const info = extractApiError({
 				error: 'unavailable',
 				message: 'Upstream refused',
-				details: { detail: 'signet is not on PATH' }
+				details: { detail: 'no software identity key' }
 			});
-			expect(info.description).toBe('signet is not on PATH');
+			expect(info.description).toBe('no software identity key');
 		});
 
 		it('falls through to the message when details carry nothing renderable', () => {

@@ -14,6 +14,9 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     # httpx: the MCP bearer gate's userinfo client (mcp/http_auth.py).
     "httpx>=0.28.1",
+    # cryptography: config/vend.py's in-process P-256 attest signer -- this
+    # app's own software identity key, never signet.
+    "cryptography>=42.0.0",
     # pyyaml: the MCP actor allow-list loader (mcp/actors.py).
     "pyyaml>=6.0.2",
     # slowapi: the app's one rate limiter (rate_limit.py). Storage is chosen at

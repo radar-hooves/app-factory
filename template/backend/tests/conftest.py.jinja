@@ -23,9 +23,9 @@ os.environ.setdefault("DEBUG", "true")
 
 # The suite must never depend on a live broker being reachable: the database
 # credential above is always an ephemeral testcontainer's, never vended, and any
-# OTHER `Vended` field an app's own domain settings declare has no signet
-# identity to vend under here either — this process runs as CI does, not as a
-# developer session. `config/vend.py`'s `<APP>_VEND=off` is the declared way to
+# OTHER `Vended` field an app's own domain settings declare has no software
+# identity key to attest with here either — this process runs as CI does, not
+# as a developer session. `config/vend.py`'s `<APP>_VEND=off` is the declared way to
 # say so; test_vend.py itself proves the mechanism by monkeypatching `vend`
 # directly, so it is unaffected by the default set here. `setdefault`, not a
 # plain assignment: a developer deliberately exercising a real vend for one
