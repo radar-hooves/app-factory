@@ -174,7 +174,7 @@ def _log_exception(request: Request, exc: BackendBaseException) -> None:
       ``raise SomeError(...) from exc``, and none of that reached stdout: a
       broker outage on 27/08/2026 logged nothing but ``BrokerUnavailable:
       Live IBKR figures are unavailable`` for two hours, and the actual cause
-      (``signet is not on PATH``, carried on the ``VendError`` underneath) had
+      (``portcullis is not on PATH``, carried on the ``VendError`` underneath) had
       to be recovered by shelling into the running container. ``exc_info``
       renders the whole ``__cause__`` chain under every formatter here,
       including the plain one, where a structured ``extra=`` key is simply not

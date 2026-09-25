@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.25] - 2026-09-26
+
+### Changed
+
+- `signet` is retired everywhere in this repo, following `radar-hooves/portcullis` release v2026.9.42: `frontend/dev-identity.ts.jinja`'s `vendDevUid()` now shells to `portcullis vend-to-file`, not `signet vend-to-file` — every flag unchanged (`--broker`, `--identity`, `--field uid`, `--mode 0600`, the `dev-identity` credential name and destination path), matching portcullis's own dogfooding caller (its `frontend/dev-identity.ts`) flag-for-flag. The dispatching brief asked for `--broker` to be dropped ("same verb, no backend flag"); the shipped v2026.9.42 binary still declares it a required flag with no environment-variable fallback (`cli/cmd/portcullis/main.go`'s `runVendToFile`), so it stays — verified against the binary's own source and its own migrated caller rather than the brief's premise. The refusal message `resolveDevIdentity` throws when no dev identity is available now names `portcullis verify`, not `signet verify`. Two comments (`backend/pyproject.toml.jinja`'s `cryptography` dependency note; `frontend/vite.config.ts.jinja`'s note on a machine without an identity binary) and one illustrative log excerpt in `backend/src/{package}/exceptions.py`'s `_log_exception` docstring (`portcullis is not on PATH`, previously `signet is not on PATH`) now name the current tool; none of this repo's `docs/`, `README.md` or `.env.example` carried the old name. Programme Plainkey (radar-hooves/master-project#355). Proven by rendering a throwaway stamp from this commit and running its full backend suite (148 passed, `ruff check` and `mypy src` both clean) and full frontend suite (76 vitest passed, `eslint`, `svelte-check` and `vite build` all clean), plus `git grep -ni signet -- template docs README.md` returning nothing.
+
 ## [2026.9.24] - 2026-09-25
 
 ### Changed
