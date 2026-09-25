@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.24] - 2026-09-25
+
+### Changed
+
+- `config/vend.py.jinja` (and its test twin) no longer shell out to `signet`: this app now attests to the broker as a software identity in-process, with `cryptography`. `PORTCULLIS_KEY_FILE` (default `~/.config/portcullis/<project>.key`) names a P-256 PKCS8 PEM the host mints at activation — never this app — and `vend()`/`vend_envelope()` do the broker's own challenge → sign → token dance directly (`POST /v1/attest/challenge`, sign `f"{challenge_id}.{nonce}"`, `POST /v1/attest/token`, then `GET /v1/credentials/<name>` with the bearer), caching the bearer in memory for the process and re-attesting on expiry rather than tracking a renew window. `PORTCULLIS_SIGNET_IDENTITY`, `SIGNET_AGENT_SOCKET`, `--agent`/`--identity` and every other signet notion are gone from the backend; `PORTCULLIS_URL` is unchanged, and callers see no change to `Vended`, `<APP>_VEND=off`, the one-warning-per-process behaviour, or `VendError`. Docs, `.env.example` and `.github/image-smoke.sh` now describe the key-file shape rather than signet enrolment or an agent socket. Programme Plainkey, lane F1 (radar-hooves/master-project#355): the operator's ruling of 25/09/2026 retires hardware attestation from the estate in favour of one software P-256 key file per consumer. `frontend/dev-identity.ts` still shells to `signet vend-to-file` for the operator's dev uid — untouched here, and due the same treatment once signet's own cut (lane B, a separate repo) retires that verb. Proven by rendering a throwaway stamp from this commit and running its full backend suite (148 passed), `ruff check` and `mypy` both clean, including a new attest-flow test that signs a real challenge and verifies the signature against the presented public key, and a missing-key-file test asserting `VendError` names the path.
+
 ## [2026.9.23] - 2026-09-24
 
 ### Fixed
