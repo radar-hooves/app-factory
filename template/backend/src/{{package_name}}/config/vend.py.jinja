@@ -78,9 +78,7 @@ BROKER_URL = _broker_env("PORTCULLIS_URL", "{{ portcullis_url }}")
 #: mints it at activation and grants it in the broker's declared consumers;
 #: this app never mints or enrols one itself, and a missing file means this
 #: consumer was never activated on this host. One per app per machine.
-PORTCULLIS_KEY_FILE = _broker_env(
-    "PORTCULLIS_KEY_FILE", os.path.expanduser("~/.config/portcullis/{{ project_name }}.key")
-)
+PORTCULLIS_KEY_FILE = _broker_env("PORTCULLIS_KEY_FILE", os.path.expanduser("~/.config/portcullis/{{ project_name }}.key"))
 
 _TIMEOUT_SECONDS = 30
 

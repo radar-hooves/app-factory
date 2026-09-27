@@ -192,9 +192,7 @@ def test_missing_key_file_raises_vend_error_naming_the_path(tmp_path, monkeypatc
         vend_module.vend("example-credential", "plain-field")
 
 
-def test_the_attest_flow_signs_a_real_challenge_and_vends_the_field(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_attest_flow_signs_a_real_challenge_and_vends_the_field(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Challenge -> sign -> token -> vend against a mocked broker, with a REAL P-256 key.
 
     The broker would reject a forged or mis-targeted signature, so verifying it
@@ -218,9 +216,7 @@ def test_the_attest_flow_signs_a_real_challenge_and_vends_the_field(
             assert json["nonce"] == "nonce_1"
             raw = base64.b64decode(json["signature_b64"])
             r, s = int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
-            key.public_key().verify(
-                encode_dss_signature(r, s), b"chal_1.nonce_1", ec.ECDSA(hashes.SHA256())
-            )
+            key.public_key().verify(encode_dss_signature(r, s), b"chal_1.nonce_1", ec.ECDSA(hashes.SHA256()))
             return _FakeResponse(200, {"key": "pc_test_bearer", "expires_at": future, "max_expires_at": future})
         raise AssertionError(f"unexpected POST {url}")
 
