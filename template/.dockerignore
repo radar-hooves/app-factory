@@ -18,20 +18,23 @@ DESIGN.md
 # Claude Code
 .claude/
 
-# Python
-__pycache__/
-*.py[cod]
-*.so
-.venv/
-venv/
-*.egg-info/
+# Python. `**/` because a .dockerignore pattern is anchored at the context
+# root: a bare `.venv/` lets a developer's backend/.venv into the build, where
+# it overlays the builder's venv and the package stage fails "No interpreter
+# found".
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/.venv/
+**/venv/
+**/*.egg-info/
 dist/
 build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
 
 # Node — exclude installed/build artefacts but keep the frontend source: the
 # Dockerfile's frontend stage builds the SPA inside the image.
@@ -40,10 +43,10 @@ node_modules/
 frontend/build/
 frontend/.svelte-kit/
 
-# Environment & secrets
-.env
-.env.*
-!.env.example
+# Environment & secrets, at any depth (backend/.env is the one that exists).
+**/.env
+**/.env.*
+!**/.env.example
 .envrc*
 .direnv/
 .mcp.json
