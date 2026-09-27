@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **A form test has 20 seconds, not 5.** The backend suite now runs across eight workers on the same host as the frontend check, and the 5s vitest default failed five of godswood's form tests on its first parallel run.
+
 ## [2026.9.29] - 2026-09-27
 
 ### Changed
