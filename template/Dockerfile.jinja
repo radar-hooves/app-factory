@@ -44,7 +44,7 @@ WORKDIR /app/backend
 # depends on a sibling published there (ragify, core-memory, redactyl-core, …).
 # The read credential arrives as a BuildKit secret mounted at /root/.netrc, and
 # NETRC points uv at it explicitly — the same env var the CI runner sets for
-# host-run uv, fed to the build by the golden docker-image caller's
+# host-run uv, fed to the build by the deploy caller's
 # build-secret-files input.
 #
 # An app with only PUBLIC dependencies builds unchanged, with nothing to pass or
@@ -55,26 +55,29 @@ WORKDIR /app/backend
 # The secret is mounted only for this RUN, so the credential never enters image
 # history the way a build ARG would; the default build network reaches the index.
 #
-# --no-editable copies the source into the venv (no dangling .pth pointers) so
-# the runtime stage's copied venv is fully self-contained.
-COPY backend/ ./
+# From the manifest and lockfile ALONE, so a change to the app's own code reuses
+# this layer and installs nothing.
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=netrc,target=/root/.netrc \
-    NETRC=/root/.netrc uv sync --frozen --no-default-groups --no-dev --no-editable
+    NETRC=/root/.netrc uv sync --frozen --no-default-groups --no-dev --no-install-project
 
-# Stage 3: Runtime
+
+# Stage 3: This app's own package, on its own
+FROM builder AS package
+# Installed beside the venv rather than into it, so the runtime stage copies the
+# dependencies and the package as two layers and a code change rewrites only the
+# small one; the whole venv as one layer is hundreds of MB rewritten per commit.
+COPY backend/ ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-deps --python .venv/bin/python --target /app/package . \
+    && mkdir -p /app/package-bin \
+    && if [ -d /app/package/bin ]; then mv /app/package/bin/* /app/package-bin/ && rmdir /app/package/bin; fi
+
+# Stage 4: Runtime
 FROM python:3.14-slim-bookworm
 
 WORKDIR /app
-
-# Deploy-revision stamping, so a deploy proof can read which build is
-# answering (GET /api/system/health -> Settings.revision). Empty for a local
-# `docker build` with no --build-arg. GIT_SHA is the fleet's established arg
-# name (pebblestone's own Dockerfile bakes the same); keep it in step rather
-# than mint a second name for the same value.
-# Usage: docker build --build-arg GIT_SHA=$(git rev-parse HEAD) .
-ARG GIT_SHA=""
-ENV REVISION=${GIT_SHA}
 
 ENV TZ=Australia/Brisbane
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
@@ -120,9 +123,32 @@ RUN rm -rf \
 # every COPY below sets ownership by numeric --chown, so nothing depends on
 # the username matching the package.
 RUN useradd -m -u 1000 -s /bin/bash appuser
+USER 1000:1000
 
-# Self-contained venv from the builder.
+# Claude Code, the engine the agent slice drives (api/agent/session.py spawns
+# `claude -p` per persona per question). Installed with the vendor's native
+# installer under the runtime user's own home, because uid 1000 owns ~/.local.
+# The signed apt repo would be better supply chain, but adding an apt source
+# is a change to this factory-owned block and so a parity exception; a pinned
+# installer keeps the factory's copy byte-identical, which is the trade taken.
+# Above every app-code COPY, so a commit does not re-download it.
+#
+# The version is PINNED and the autoupdater disabled, together: an image whose
+# binary rewrites itself at runtime is not the image that was tested, and a
+# container that reaches the network on start is one more thing to diagnose.
+# Bump this line deliberately, the same as any other dependency.
+ENV DISABLE_AUTOUPDATER=1
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+RUN curl -fsSL -o /tmp/install-claude.sh https://claude.ai/install.sh \
+    && bash /tmp/install-claude.sh 2.1.257 \
+    && rm -f /tmp/install-claude.sh \
+    && claude --version
+
+# The dependencies, then this app's own package into the same venv: two layers,
+# so a code change leaves the large one cached.
 COPY --from=builder --chown=1000:1000 /app/backend/.venv /app/backend/.venv
+COPY --from=package --chown=1000:1000 /app/package /app/backend/.venv/lib/python3.14/site-packages
+COPY --from=package --chown=1000:1000 /app/package-bin /app/backend/.venv/bin
 ENV PATH="/app/backend/.venv/bin:$PATH"
 
 # alembic.ini + migration scripts are plain files, not part of the installed
@@ -154,38 +180,28 @@ ENV {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH=/app/confi
 # process cwd (WORKDIR /app) — frontend/build.
 COPY --from=frontend --chown=1000:1000 /frontend/build ./frontend/build
 
-USER 1000:1000
-
 EXPOSE {{ backend_port }}
 
 CMD ["./backend/entrypoint.sh"]
 
-# Claude Code, the engine the agent slice drives (api/agent/session.py spawns
-# `claude -p` per persona per question). Installed with the vendor's native
-# installer under the runtime user's own home, because this runs after USER
-# and uid 1000 owns ~/.local. The signed apt repo would be better supply
-# chain, but adding an apt source is a change ABOVE the marker below and so a
-# parity exception; a pinned installer here keeps the factory's copy
-# byte-identical, which is the trade taken.
-#
-# The version is PINNED and the autoupdater disabled, together: an image whose
-# binary rewrites itself at runtime is not the image that was tested, and a
-# container that reaches the network on start is one more thing to diagnose.
-# Bump this line deliberately, the same as any other dependency.
-ENV DISABLE_AUTOUPDATER=1
-ENV PATH="/home/appuser/.local/bin:${PATH}"
-RUN curl -fsSL -o /tmp/install-claude.sh https://claude.ai/install.sh \
-    && bash /tmp/install-claude.sh 2.1.257 \
-    && rm -f /tmp/install-claude.sh \
-    && claude --version
+# Deploy-revision stamping, so a deploy proof can read which build is
+# answering (GET /api/system/health -> Settings.revision). Empty for a local
+# `docker build` with no --build-arg. GIT_SHA is the fleet's established arg
+# name (pebblestone's own Dockerfile bakes the same); keep it in step rather
+# than mint a second name for the same value. LAST on purpose: it changes on
+# every commit and rebuilds every layer after it.
+# Usage: docker build --build-arg GIT_SHA=$(git rev-parse HEAD) .
+ARG GIT_SHA=""
+ENV REVISION=${GIT_SHA}
 
 # A Dockerfile has no include directive, so app image content takes the same
 # terminal extension point `.gitignore` does: everything above this marker is
 # owed byte-identical, and an app appends its own COPY/ENV below it with a
 # reason per line. After CMD on purpose — CMD is metadata, so a trailing COPY
 # still lands in the image, and app content invalidating only the last layers is
-# the cache order you want. Two constraints: USER is already set, so a tail step
-# runs as uid 1000 (use `COPY --chown=1000:1000`, not a root RUN); and anything
-# the FRONTEND or BUILDER stage needs cannot live here — that is a real
-# exception, not a tail.
+# the cache order you want. Three constraints: USER is already set, so a tail step
+# runs as uid 1000 (use `COPY --chown=1000:1000`, not a root RUN); REVISION
+# above changes on every commit, so a tail step reruns on every build and a
+# download here is paid per deploy; and anything the FRONTEND, BUILDER or
+# PACKAGE stage needs cannot live here — that is a real exception, not a tail.
 # App-owned below this line; the factory owns everything above it.

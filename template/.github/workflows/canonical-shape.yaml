@@ -2,10 +2,11 @@ name: Canonical Shape
 
 # Structural gate for rules-library/platform/canonical-app-shape.md.
 # A green run means the LAYOUT conforms, not that the repo is fully canonical.
+# On every feature branch, never on main: the merge is the go-live and the
+# branch already answered.
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches-ignore: [main]
   workflow_dispatch:
 
 concurrency:

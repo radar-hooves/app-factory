@@ -1,0 +1,89 @@
+name: Deploy
+
+# A merge to main IS the go-live (the operator's ruling, 27/09/2026): this
+# builds the image of that commit on the host that runs it, boots it, and swaps
+# it in. There are no tags, no versions and no registry: the commit is the
+# version, and the image is `{{ project_name }}:<commit>` in the host's daemon.
+#
+#   checks  python-ci and frontend-ci run on the feature branch. Here they run
+#           only for a commit whose checked paths never passed there (a direct
+#           push to main, a merge commit); a fast-forward merge of a green
+#           branch goes straight to the build. Merge once the branch is green.
+#   build   the Dockerfile on the host daemon's own layer cache: a code-only
+#           change reinstalls no dependency.
+#   boot    `.github/image-smoke.sh`, the app-owned probe: the image must serve
+#           before anything live is touched (full-stack-app-template#4).
+#   swap    `app-deploy`, the host's command: runs this image's migration while
+#           the old container still serves, swaps, and puts the old image back
+#           if the new one never turns healthy. The same command rolls back:
+#           `app-deploy {{ project_name }} <commit>` on the host.
+#
+# The security battery is not on this path; security.yaml runs it weekly and on
+# a dependency change, which is scanned on its branch before the merge.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A deploy is never cancelled mid-swap; a newer merge queues behind it.
+{% raw %}concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false{% endraw %}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  checked:
+    runs-on: [self-hosted, atlas]
+    outputs:
+      python: {% raw %}${{ steps.python.outputs.passed }}{% endraw %}
+      frontend: {% raw %}${{ steps.frontend.outputs.passed }}{% endraw %}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: python
+        uses: radar-hooves/master-project/.github/actions/workflow-passed@main
+        with:
+          workflow: python-ci.yaml
+      - id: frontend
+        uses: radar-hooves/master-project/.github/actions/workflow-passed@main
+        with:
+          workflow: frontend-ci.yaml
+
+  python-ci:
+    needs: checked
+    if: needs.checked.outputs.python != 'true'
+    uses: ./.github/workflows/python-ci.yaml
+    permissions:
+      contents: read
+
+  frontend-ci:
+    needs: checked
+    if: needs.checked.outputs.frontend != 'true'
+    uses: ./.github/workflows/frontend-ci.yaml
+    permissions:
+      contents: read
+
+  deploy:
+    needs: [python-ci, frontend-ci]
+    # Skipped checks are passed checks; a failed or cancelled one stops here.
+    if: {% raw %}${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' }}{% endraw %}
+    uses: radar-hooves/master-project/.github/workflows/image-deploy.yaml@main
+    # packages: the Dockerfile's uv base image is on ghcr.io, which refuses the
+    # runner an anonymous pull.
+    permissions:
+      contents: read
+      packages: read
+    with:
+      image-name: {{ project_name }}
+      # The household private-index read credential, mounted into the build as a
+      # BuildKit secret (never a build arg) so it stays out of image history.
+      # Passed by every app: the Dockerfile's mount is optional, so an app with
+      # only public dependencies mounts a file `uv` never reads.
+      build-secret-files: |
+        netrc=/run/github-runner/devpi-read.netrc
+      # The app-owned probe (canonical-app-shape.md §Sanctioned per-app files);
+      # $IMAGE is the image just built.
+      smoke-command: bash .github/image-smoke.sh
+      deploy-command: app-deploy {{ project_name }} "$REVISION"

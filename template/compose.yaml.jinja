@@ -4,7 +4,7 @@
 # database the dev server uses — there is no separate development database
 # (rules-library/stacks/dev-environment.md). It is NOT the
 # production deployment — that lives as its own stack under the operator's
-# fleet repo, using the published image. Stop any local dev server on
+# fleet repo, running the image deploy.yaml built. Stop any local dev server on
 # {{ backend_port }} before bringing this up; both bind the same host port.
 
 include:
@@ -24,7 +24,7 @@ services:
       context: .
       dockerfile: Dockerfile
       # The private-index read credential, as the same optional `netrc` BuildKit
-      # secret the Dockerfile mounts and the docker-image caller passes in CI —
+      # secret the Dockerfile mounts and the deploy caller passes in CI —
       # one mechanism, declared by every app whether or not it has a private
       # dependency, because a per-app knob is the divergence three apps recorded
       # separately for one credential.

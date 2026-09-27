@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# THE extension point for docker-image.yaml's smoke gate (canonical-app-shape.md
+# THE extension point for deploy.yaml's boot check (canonical-app-shape.md
 # §Extension points): proves THIS app's image boots and serves. App-owned after the
-# stamp. `$IMAGE` is the image just built; a non-zero exit stops the publish.
+# stamp. `$IMAGE` is the image just built; a non-zero exit stops the deploy.
 # DB-free: create_app() defers database access to the lifespan, so the server is
 # booted directly, bypassing entrypoint.sh, and must serve /openapi.json 200.
 set -eu
@@ -28,5 +28,5 @@ for _ in $(seq 1 30); do
   fi
   sleep 2
 done
-echo "smoke: {{ project_name }} never served /openapi.json 200 within the timeout — image will NOT be published"
+echo "smoke: {{ project_name }} never served /openapi.json 200 within the timeout — image will NOT be deployed"
 exit 1

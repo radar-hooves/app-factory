@@ -6,6 +6,19 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.29] - 2026-09-27
+
+### Changed
+
+- A merge to main is the go-live (the operator's ruling of 27/09/2026, lodged on master-project#233; the rule text follows at the next sitting). `.github/workflows/docker-image.yaml` is gone: no tag, no version, no registry, no Watchtower. The new `deploy.yaml` runs on push to main, builds `<app>:<commit>` in the atlas daemon (master-project's `image-deploy.yaml`), boots it with `.github/image-smoke.sh`, and hands it to the host's `app-deploy <app> <commit>` (yggdrasil `87b01e18`): the new image migrates while the old container serves, the swap waits on the container's own healthcheck, and a failure puts the old image back. The same command rolls back by commit.
+- python-ci, frontend-ci and canonical-shape run on feature-branch pushes, never on main. `deploy.yaml` re-runs python-ci or frontend-ci only for a commit whose checked paths never passed on a branch (master-project's `workflow-passed` action), so a fast-forward merge of a green branch goes straight to the build.
+- security runs weekly and on a dependency change pushed to a branch, never on main, and no longer gates any build; the weekly run also Trivy-scans `<app>:live`, the image actually serving.
+- `Dockerfile`: dependencies install from `pyproject.toml` and `uv.lock` alone, and the app's own package installs in its own stage and layer, so a code-only change reinstalls nothing; the Claude Code install moved above the app code; `ARG GIT_SHA` moved to the end, because at the top it rebuilt every layer on every commit. Measured on a fresh stamp on atlas's daemon: a code-only rebuild 14 s against 57-74 s before, the dependency and Claude layers cached.
+- `backend/entrypoint.sh migrate` runs the migration and the environment stamp and exits, for the deploy's pre-flight; a database at a revision the image does not carry (a rollback) starts without migrating instead of refusing to start.
+- `pytest-xdist` joins the dev group and python-ci runs `-n 8 --dist loadfile`. Whole files per worker: the factory's own `test_agent_api.py` fails under per-test distribution. godswood's suite on a loaded atlas: 691 s serial, 343 s at `-n 8 --dist loadfile`.
+
+Adopting it (godswood first, from its own session): take this version on a feature branch and `uv lock`; delete `docker-image.yaml` and any registry-cleanup workflow; push and let the checks go green. Then cut the stack over in yggdrasil `hosts/poodle64/atlas/stacks/<app>/`: the app service gets `image: <app>:live` and `pull_policy: never` and loses its Watchtower label, `deploy.sh` becomes `exec app-deploy <app> "$@"`, and `docker tag "$(docker inspect -f '{{.Image}}' <app>)" <app>:live` seeds the tag from what is running. Fast-forward the branch onto main; the Deploy run is the first go-live. `app-deploy` refuses a stack that has not been cut over.
+
 ## [2026.9.28] - 2026-09-27
 
 ### Fixed

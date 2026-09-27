@@ -1,26 +1,19 @@
 name: Python CI
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
+# On every feature branch, never on main: a merge to main is the go-live, and
+# deploy.yaml runs this there only for a commit whose checked paths never passed
+# on a branch. It reads the `paths` below to decide, so they are the one list.
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
     paths:
       - 'backend/**'
-      # backend/tests/test_version.py reads frontend/package.json, so a release
-      # that bumps the frontend manifest alone gets no Python verdict at all and
-      # the last one on main stays whatever it was — including a failure the
-      # bump had just corrected. Measured on seshat 2026.8.20, where a tag was
-      # one command away from being cut against a stale red signal.
-      - 'frontend/package.json'
-      - '.github/workflows/python-ci.yaml'
-  pull_request:
-    paths:
-      - 'backend/**'
+      # backend/tests/test_version.py reads frontend/package.json, so a change
+      # to the frontend manifest alone must still get a Python verdict.
       - 'frontend/package.json'
       - '.github/workflows/python-ci.yaml'
   workflow_dispatch:
-  # Called by the image build, which must not publish an image whose own tests
-  # or types are red.
   workflow_call:
 
 # Prefixed with this workflow's own name, not `github.workflow` alone: in a
@@ -35,25 +28,17 @@ permissions:
 
 jobs:
   python-ci:
-    # No worker count is set here, deliberately. The reusable runs `pytest -q`
-    # in ONE process and exposes no workers input, and a caller's `env:` does
-    # not cross into a called workflow, so there is nothing here to set.
-    #
-    # An app that parallelises its suite — pytest-xdist, `-n auto` in addopts —
-    # must cap it. `-n auto` reads the RUNNER's core count, and the household
-    # runner is shared and 28-core, so one run asks for 28 pytest processes and
-    # 28 of everything each one starts. `PYTEST_XDIST_AUTO_NUM_WORKERS` is the
-    # cap, wherever the environment genuinely reaches the suite: the runner
-    # itself, a developer's shell, a local workflow's `env:`. From THIS file the
-    # only channel into the job is the reusable's own `pytest-args` input
-    # (`-q -n 4`). The suite's Postgres is shared across workers
-    # (backend/tests/conftest.py), so what a worker costs is CPU and memory —
-    # not a database container each.
     uses: radar-hooves/master-project/.github/workflows/python-ci.yaml@main
     with:
       working-directory: backend
       lint-paths: 'src tests'
       mypy-paths: 'src'
+      # A fixed worker count, never `-n auto`: auto reads the core count of a
+      # host eight runners share, so one run would ask for twenty of everything.
+      # The suite's Postgres is shared across workers (backend/tests/conftest.py),
+      # so a worker costs CPU and memory, not a database container. Whole files
+      # per worker: tests/test_agent_api.py fails when its tests are split.
+      pytest-args: '-q -n 8 --dist loadfile'
       # Base + dev, and nothing else. A repo's non-dev groups carry editable
       # overrides onto sibling checkouts that exist only beside a developer's
       # clone; taking the defaults in CI resolves those to paths that are not

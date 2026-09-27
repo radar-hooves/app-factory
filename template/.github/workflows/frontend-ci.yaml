@@ -13,22 +13,22 @@ name: Frontend CI
 # this comment, deliberately: the parity gate rewrites an app's own name wherever
 # it appears, so naming one here hashes differently in that app than in every
 # other and the file reads as drift on an otherwise identical copy.
+#
+# On every feature branch, never on main, as python-ci.yaml says why.
 on:
   push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'docs/development/openapi.json'
-      - '.github/workflows/frontend-ci.yaml'
-  pull_request:
+    branches-ignore: [main]
     paths:
       - 'frontend/**'
       - 'docs/development/openapi.json'
       - '.github/workflows/frontend-ci.yaml'
   workflow_dispatch:
+  workflow_call:
 
+# Prefixed with this workflow's own name: called from deploy.yaml,
+# `github.workflow` is the caller's.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

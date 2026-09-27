@@ -1,13 +1,28 @@
 #!/bin/sh
 # Container entrypoint: migrate, stamp, then start the application server.
 # If the database isn't ready, alembic fails and Docker restarts the container.
+#
+# `entrypoint.sh migrate` stops after the stamp. The deploy runs it with the NEW
+# image while the old container still serves, so a migration that fails against
+# production leaves the old one serving instead of restart-looping the new one.
 
 set -e
 
 echo "Running database migrations..."
 cd /app/backend
-alembic upgrade head
-echo "Migrations complete."
+# A database at a revision this image does not carry was migrated by a newer
+# build, so this start is a rollback onto that build's schema: start without
+# migrating rather than refuse to start at all. Any other failure stops here.
+if ! out=$(alembic upgrade head 2>&1); then
+  printf '%s\n' "$out"
+  case "$out" in
+    *"Can't locate revision"*) echo "Database is ahead of this image (a rollback): starting without migrating." ;;
+    *) exit 1 ;;
+  esac
+else
+  printf '%s\n' "$out"
+  echo "Migrations complete."
+fi
 
 # Production declares itself in its own database. A development session can
 # reach the same database through a tunnel, where it presents as localhost on
@@ -17,6 +32,8 @@ echo "Migrations complete."
 # anyone remembering to.
 echo "Stamping deployment environment..."
 python -m {{ package_name }}.db.stamp production
+
+[ "${1:-}" = "migrate" ] && exit 0
 
 cd /app
 echo "Starting application server..."
