@@ -171,11 +171,10 @@ def _log_exception(request: Request, exc: BackendBaseException) -> None:
       into the JSON error body, so a caller can read it and the log could not;
       that asymmetry is the defect, not a precaution.
     * the CHAINED CAUSE, via ``exc_info``. Raise sites across these apps write
-      ``raise SomeError(...) from exc``, and none of that reached stdout: a
-      broker outage on 27/08/2026 logged nothing but ``BrokerUnavailable:
-      Live IBKR figures are unavailable`` for two hours, and the actual cause
-      (``portcullis is not on PATH``, carried on the ``VendError`` underneath) had
-      to be recovered by shelling into the running container. ``exc_info``
+      ``raise SomeError(...) from exc``, and without it a broker failure logs
+      only ``BrokerUnavailable: Live IBKR figures are unavailable`` while the
+      cause (``no software identity key at <path>``, carried on the
+      ``VendError`` underneath) stays inside the running container. ``exc_info``
       renders the whole ``__cause__`` chain under every formatter here,
       including the plain one, where a structured ``extra=`` key is simply not
       printed.
