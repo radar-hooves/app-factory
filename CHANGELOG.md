@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.27] - 2026-09-27
+
+### Fixed
+
+- `config/vend.py.jinja` and its test render ruff-format-clean, so an app stamped from them no longer reformats both on its first commit and reads as drift (`full-stack-app-template#49`).
+
 ## [2026.9.26] - 2026-09-27
 
 ### Fixed
