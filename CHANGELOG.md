@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.26] - 2026-09-27
+
+### Fixed
+
+- `config/vend.py.jinja`'s `resolve_vended_fields()` no longer `setattr`s a `Vended` field back to the value it already holds. A section with `validate_assignment=True` (a field range-checked on every mutation, not only at construction) re-runs every model validator on assignment, including this one — an unconditional `setattr` of a value already in place recursed without bound the moment a second `Vended` field landed on such a section. The guard: track the value as first read (`value`) separately from what gets resolved (`resolved`), and only `setattr` when `resolved != value`. `test_vend.py.jinja` gains `_ValidateAssignmentSettings` and `test_validate_assignment_section_settles_without_recursing`, proving a `validate_assignment=True` section with a `Vended` field settles and still resolves; run against the pre-fix code it fails with `RecursionError`. Reported from godswood (`radar-hooves/godswood` v2026.9.70, commit f00c96a35), which hit this the moment its `CacheSettings` (already `validate_assignment=True` for its range-checked fields) took a second `Vended` field (`redis_password`); the template carried the same bug since v2026.9.24 introduced software-key vending. Proven by rendering a throwaway stamp from this commit and running its full backend suite (149 passed), `ruff check` and `mypy` both clean.
+
 ## [2026.9.25] - 2026-09-26
 
 ### Changed

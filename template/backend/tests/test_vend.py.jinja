@@ -41,6 +41,18 @@ class _ExampleSettings(VendedSettings):
     secret_field: Annotated[SecretStr, Vended("example-credential", "secret-field")] = SecretStr("")
 
 
+class _ValidateAssignmentSettings(VendedSettings):
+    """A synthetic settings model carrying `validate_assignment=True` -- a range-checked
+    field re-validates the whole model on every assignment, including its own
+    after-validator, so this is the shape that recursed before `resolve_vended_fields`
+    learned to skip a no-op `setattr`.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="EXAMPLE_VENDED_TEST_", validate_assignment=True)
+
+    plain_field: Annotated[str, Vended("example-credential", "plain-field")] = ""
+
+
 class _FiledSettings(VendedSettings):
     """A synthetic settings model exercising the boot-lane file escape hatch."""
 
@@ -76,6 +88,18 @@ def test_empty_vends_by_credential_and_field(monkeypatch: pytest.MonkeyPatch) ->
     assert settings.plain_field == "vended-plain-field"
     assert settings.secret_field.get_secret_value() == "vended-secret-field"
     assert set(calls) == {("example-credential", "plain-field"), ("example-credential", "secret-field")}
+
+
+def test_validate_assignment_section_settles_without_recursing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A section with `validate_assignment=True` resolves its Vended field and settles:
+    the resolved value's own `setattr` re-enters this model's after-validator once
+    more, and a second pass with nothing left to change must not `setattr` again --
+    that unconditional `setattr` was the unbounded recursion this guards against.
+    """
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)  # conftest defaults it off for the suite
+    monkeypatch.setattr(vend_module, "vend", lambda credential, field: f"vended-{field}")
+    settings = _ValidateAssignmentSettings()
+    assert settings.plain_field == "vended-plain-field"
 
 
 def test_a_vend_failure_retries_then_raises_without_the_value(monkeypatch: pytest.MonkeyPatch) -> None:
