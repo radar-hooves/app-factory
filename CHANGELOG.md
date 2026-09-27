@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.28] - 2026-09-27
+
 ### Fixed
 
 - `frontend/eslint.config.js` ignores `coverage/`, `playwright-report/` and `test-results/`, the run artefacts `.prettierignore` already lists. ESLint does not read `.gitignore`, so a local `pnpm test:e2e` or coverage run left bundled report JS that `eslint .` walked: 3,966 findings on a fresh stamp with a real Playwright trace-viewer bundle planted, 0 after. Reported from earworm's local E2E run against v2026.9.27; asked for as `frontend/.gitignore` lines, but the template ships no such file and its root `.gitignore` already ignores all three, so git was never the gap.
