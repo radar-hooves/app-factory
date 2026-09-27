@@ -377,6 +377,27 @@ def _ensure_test_database_ready() -> None:
         )
 
 
+def _copy_test_database(template: str) -> None:
+    """Make this worker's database a fresh copy of `template`, which the controller migrated.
+
+    Dropped first rather than reused: on an explicit server a previous run's copy
+    is still there, at whatever revision that run left it. FORCE, because a killed
+    run can leave a connection holding it.
+    """
+    from sqlalchemy import create_engine, text
+
+    from {{ package_name }}.config import get_settings
+
+    maintenance_url = get_settings().database.database_url.rsplit("/", 1)[0] + "/postgres"
+    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}" TEMPLATE "{template}"'))
+    finally:
+        engine.dispose()
+
+
 def pytest_sessionstart(session) -> None:
     """Build the test database before anything can try to connect to it.
 
@@ -385,16 +406,34 @@ def pytest_sessionstart(session) -> None:
     does not guarantee a schema-building fixture wins that race. A
     session-start hook precedes every fixture, so there is no race to lose.
 
-    Under xdist the controller runs no tests and needs no database: each worker
-    builds its own on the shared server. It still resolved that server at
-    import, because it is the process that started the container.
+    Under xdist the migrations run ONCE, in the controller, and each worker
+    copies the result (`CREATE DATABASE … TEMPLATE`) rather than migrating its
+    own. Workers migrating at the same moment share one lock table on the one
+    server: 64 slots per connection, 7,808 in all on postgres:17's defaults, and
+    one of godswood's migrations holds about 3,000 until it commits, so workers
+    in step died "out of shared memory" (godswood's CI at `-n 8`, 27/09/2026; 14
+    of 20 on atlas). Twenty copies at once held 111 locks. The controller builds
+    before any worker exists, because xdist spawns them from a `trylast`
+    sessionstart of its own; `pytest_configure_node` hands each the name, and a
+    worker handed none migrates its own.
     """
     if session.config.pluginmanager.hasplugin("dsession"):  # xdist registers it in the controller only
+        _ensure_test_database_ready()
         return
-    _ensure_test_database_ready()
+    template = getattr(session.config, "workerinput", {}).get("test_database_template")
+    if template:
+        _copy_test_database(template)
+    else:
+        _ensure_test_database_ready()
     # Whatever this app needs doing once, after the schema exists and before any
     # test runs (tests/app_fixtures.py). No-op unless the app defines one.
     app_session_start()
+
+
+@pytest.hookimpl(optionalhook=True)  # xdist's hook; optional, so the file still loads without xdist
+def pytest_configure_node(node) -> None:
+    """Hand each xdist worker the controller's migrated database to copy (`pytest_sessionstart`)."""
+    node.workerinput["test_database_template"] = TEST_DATABASE_NAME
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:

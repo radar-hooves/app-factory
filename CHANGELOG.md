@@ -8,6 +8,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ### Fixed
 
+- **Parallel tests migrate once, not once per worker.** Under xdist, `backend/tests/conftest.py` runs `alembic upgrade head` once, in the controller, before any worker starts, and each worker's database is a copy of it (`CREATE DATABASE … TEMPLATE`). Workers migrating at the same moment shared one Postgres lock table, 7,808 slots on postgres:17's defaults, and a migration that alters many tables in one transaction holds thousands: godswood's CI at `-n 8` lost 7 of 8 workers to "out of shared memory" before a test ran (run 36308955436), and on atlas 16 and 20 concurrent runs of its tenancy migration lost 12 and 14. Twenty concurrent copies held 111 locks. Setup also got cheaper: one migration and eight copies took 13-16 s where eight concurrent migrations took 18-22 s, most of them failing. godswood's full suite on this conftest: 5,877 passed, 22 skipped at `-n 8 --dist loadfile`, and its setup passed at `-n 16` and `-n 20`. On an explicit `<APP>_TEST_POSTGRES_*` server a worker's database is now dropped and re-copied each run rather than reused and upgraded. Asked for by godswood.
 - **A form test has 20 seconds, not 5.** The backend suite now runs across eight workers on the same host as the frontend check, and the 5s vitest default failed five of godswood's form tests on its first parallel run.
 
 ## [2026.9.29] - 2026-09-27
