@@ -202,7 +202,10 @@ export default ts.config(
 		ignores: ['src/lib/components/ui/**']
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/']
+		// Build output and run artefacts. ESLint does not read .gitignore, so a
+		// local `pnpm test:e2e` or coverage run leaves bundled report JS that
+		// `eslint .` would otherwise walk; the same set as .prettierignore.
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'coverage/', 'playwright-report/', 'test-results/']
 	},
 
 	// App-owned lint debt, banked in eslint.debt.js and spread LAST so each block
