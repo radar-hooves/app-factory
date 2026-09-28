@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.33] - 2026-09-28
+
+### Added
+
+- **`tauri-plugin-telemetry` gives a synchronous Tauri command the same span `traced` gives an async one.** `traced_sync`/`traced_with_span_sync` (`kits/rust/tauri-plugin-telemetry/src/span.rs`) open the identical span as their async counterparts — same `tauri_plugin_telemetry::commands` target, same `command`/`outcome` fields, same duration from the span's own start/close timestamps — over a plain closure instead of a future, via `tracing::Span::in_scope` rather than `.instrument()`. The existing rule holds: neither function is ever handed a command's arguments, so there is structurally nothing here that could carry one into a span. Need from Thoth's move onto the kit (radar-hooves/thoth#178): 87 of its 156 commands lost the `#[tracing::instrument]` timing they carried before the kit because they are plain sync functions called from contexts that cannot be async — `get_config` (57 call sites, including Tauri's own setup hook and the tray-menu builder), `set_config`, the dictionary and canonical-term CRUD, `transcribe_file`, `register_shortcut`. Relayed by master-project's bragi2 session through the attended master-project session on atlas, 28/09/2026.
+
 ## [2026.9.32] - 2026-09-28
 
 ### Changed
