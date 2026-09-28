@@ -44,7 +44,7 @@ use tauri::plugin::{Builder as PluginBuilder, TauriPlugin};
 use tauri::{AppHandle, Manager, RunEvent, Runtime};
 
 pub use commands::{Error, TelemetryProbeResult, TelemetryStatus};
-pub use span::{COMMAND_SPAN_TARGET, traced, traced_with_span};
+pub use span::{COMMAND_SPAN_TARGET, traced, traced_sync, traced_with_span, traced_with_span_sync};
 pub use telemetry::{Exporter, Guard, ProbeError};
 
 /// What an app's Settings pane needs to read and write to persist a chosen

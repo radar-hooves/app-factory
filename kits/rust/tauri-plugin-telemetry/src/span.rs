@@ -20,6 +20,12 @@
 //! their own span with [`traced_with_span`] instead, adding exactly the
 //! fields that explain the work.
 //!
+//! A Tauri command that must stay `fn`, never `async fn` — Tauri's own setup
+//! hook, a tray-menu builder, anything else that cannot await — gets the
+//! identical span from [`traced_sync`]/[`traced_with_span_sync`]: same
+//! target, same `command`/`outcome` fields, same closure with no access to
+//! the arguments that produced it.
+//!
 //! [`COMMAND_SPAN_TARGET`] must reach the allow-list an app hands to
 //! [`crate::init`]'s `allow` argument — `tracing`'s span macros place the
 //! `target` field in a `static` initializer, so it must be a compile-time
@@ -71,6 +77,41 @@ where
     F: std::future::Future<Output = Result<T, E>>,
 {
     let result = fut.instrument(span.clone()).await;
+    span.record("outcome", if result.is_ok() { "ok" } else { "err" });
+    result
+}
+
+/// [`traced`]'s own shape for a command that cannot be `async` — Tauri's
+/// setup hook and the tray-menu builder call synchronously, and no future
+/// exists there to `.instrument`. Same target, same `command`/`outcome`
+/// fields, same "no argument capture" guarantee: `f` is a plain closure with
+/// no access to whatever arguments produced it, exactly as `fut` gives
+/// `traced` none.
+pub fn traced_sync<F, T, E>(command: &'static str, f: F) -> Result<T, E>
+where
+    F: FnOnce() -> Result<T, E>,
+{
+    traced_with_span_sync(
+        tracing::info_span!(
+            target: COMMAND_SPAN_TARGET,
+            "ipc_command",
+            command,
+            outcome = tracing::field::Empty,
+        ),
+        f,
+    )
+}
+
+/// [`traced_with_span`]'s sync counterpart — [`Span::in_scope`] rather than
+/// `.instrument()`, since there is no future to carry the span across await
+/// points; the closure runs to completion inline, on the calling thread.
+///
+/// [`Span::in_scope`]: tracing::Span::in_scope
+pub fn traced_with_span_sync<F, T, E>(span: tracing::Span, f: F) -> Result<T, E>
+where
+    F: FnOnce() -> Result<T, E>,
+{
+    let result = span.in_scope(f);
     span.record("outcome", if result.is_ok() { "ok" } else { "err" });
     result
 }
@@ -134,6 +175,21 @@ mod tests {
         let output = {
             let _guard = tracing::dispatcher::set_default(&dispatch);
             f.await
+        };
+        let spans = spans.lock().unwrap().values().cloned().collect();
+        (output, spans)
+    }
+
+    /// [`captured_spans`]'s sync counterpart, for `traced_sync`/
+    /// `traced_with_span_sync` — no future, so no dispatcher needs to
+    /// outlive an `.await`; `f` runs to completion before the guard drops.
+    fn captured_spans_sync<F: FnOnce() -> R, R>(f: F) -> (R, Vec<(&'static str, String)>) {
+        let captured = Captured::default();
+        let spans = captured.0.clone();
+        let dispatch = tracing::Dispatch::new(registry().with(captured));
+        let output = {
+            let _guard = tracing::dispatcher::set_default(&dispatch);
+            f()
         };
         let spans = spans.lock().unwrap().values().cloned().collect();
         (output, spans)
@@ -210,5 +266,81 @@ mod tests {
         assert_eq!(*target, APP_TARGET);
         assert!(fields.contains("outcome=\"ok\""), "{fields}");
         assert!(fields.contains("query=\"duran duran\""), "{fields}");
+    }
+
+    /// The same span shape as `traced`'s own test of the same name — target,
+    /// `command` field, `outcome="ok"` — proving `traced_sync` gives a
+    /// synchronous command what `traced` gives an async one.
+    #[test]
+    fn a_successful_sync_command_carries_the_name_and_an_ok_outcome() {
+        let (result, spans) =
+            captured_spans_sync(|| traced_sync("get_config", || Ok::<_, &'static str>(42)));
+
+        result.unwrap();
+        assert_eq!(spans.len(), 1, "one span per command: {spans:?}");
+        let (target, fields) = &spans[0];
+        assert_eq!(*target, COMMAND_SPAN_TARGET);
+        assert!(fields.contains("command=\"get_config\""), "{fields}");
+        assert!(fields.contains("outcome=\"ok\""), "{fields}");
+    }
+
+    #[test]
+    fn a_failed_sync_command_carries_an_err_outcome_and_no_error_content() {
+        let (result, spans) = captured_spans_sync(|| {
+            traced_sync("set_config", || {
+                Err::<(), _>("wrong password for user secret@example.com".to_string())
+            })
+        });
+
+        result.unwrap_err();
+        let (_, fields) = &spans[0];
+        assert!(fields.contains("outcome=\"err\""), "{fields}");
+        assert!(
+            !fields.contains("secret@example.com"),
+            "the error's content leaked into the span: {fields}"
+        );
+    }
+
+    /// `traced_sync` is generic over the closure alone; a caller that closes
+    /// over a track title, a search term, dictation or a credential has no
+    /// field on this function through which it could reach the span. Mirrors
+    /// `traced_never_sees_the_wrapped_futures_captured_state`.
+    #[test]
+    fn traced_sync_never_sees_the_wrapped_closures_captured_state() {
+        let dictation = "a listening-history or dictation value".to_string();
+        let (result, spans) = captured_spans_sync(|| {
+            traced_sync("some_command", || {
+                let _ = &dictation;
+                Ok::<_, &'static str>(())
+            })
+        });
+
+        result.unwrap();
+        let (_, fields) = &spans[0];
+        assert!(!fields.contains("listening-history"), "{fields}");
+    }
+
+    /// A curated sync call site builds its own span with
+    /// `traced_with_span_sync`, on whatever target it likes — mirrors
+    /// `traced_with_span_carries_the_callers_curated_field_and_target`.
+    #[test]
+    fn traced_with_span_sync_carries_the_callers_curated_field_and_target() {
+        const APP_TARGET: &str = "some_app::commands";
+        let (result, spans) = captured_spans_sync(|| {
+            let span = tracing::info_span!(
+                target: APP_TARGET,
+                "ipc_command",
+                command = "register_shortcut",
+                outcome = tracing::field::Empty,
+                shortcut = "ctrl+shift+d",
+            );
+            traced_with_span_sync(span, || Ok::<_, &'static str>(()))
+        });
+
+        result.unwrap();
+        let (target, fields) = &spans[0];
+        assert_eq!(*target, APP_TARGET);
+        assert!(fields.contains("outcome=\"ok\""), "{fields}");
+        assert!(fields.contains("shortcut=\"ctrl+shift+d\""), "{fields}");
     }
 }

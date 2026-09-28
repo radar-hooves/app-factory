@@ -47,6 +47,16 @@ That call installs everything Thoth's `telemetry_settings.rs` and Bragi's `comma
 - The returned `Guard` is managed as `Mutex<Option<Guard>>` and taken and dropped in this plugin's own `on_event` hook on `RunEvent::Exit`, on the main thread — Tauri drops no managed state at exit, so this is the only thing that flushes the batch processors, and `Guard`'s own drop requires the main thread.
 - [`sample_process_metrics`](../telemetry) is spawned once, in the same setup hook.
 - Command spans carry a name, a duration (the span's own start/close timestamps) and an outcome, and nothing else — see [`traced`]/[`COMMAND_SPAN_TARGET`] in `src/span.rs`. **Not** Tauri's own `tracing` cargo feature: as of tauri 2.11–2.12, that feature's `ipc::request` span records the whole request body and its `ipc::request::response` span the whole response, at TRACE level — the opposite of "no argument capture by default." This crate never enables it.
+- A command that cannot be `async` (Tauri's own setup hook, a tray-menu builder) gets the identical span from [`traced_sync`]: same target, same `command`/`outcome` fields, same "no argument capture" guarantee, just a closure instead of a future:
+
+  ```rust
+  #[tauri::command]
+  fn get_config(app: tauri::AppHandle) -> Result<Config, Error> {
+      tauri_plugin_telemetry::traced_sync("get_config", || load_config(&app))
+  }
+  ```
+
+  A curated call that needs its span to carry more than `command` builds its own with [`traced_with_span_sync`], exactly as [`traced_with_span`] does for an async command.
 - `telemetry_get`/`telemetry_set`/`telemetry_probe` are this plugin's own commands (see `src/commands.rs`), invoked from the frontend exactly as an app's own commands are: `invoke('plugin:telemetry|telemetry_get')`. The fleet environment wins and the pane shows it read-only (`TelemetryStatus.from_env`); the Settings pane's own contract is to call `telemetry_probe` **before** `telemetry_set`, so a bad address is tested before it is saved; `telemetry_set` runs `set_exporter` off the async runtime (`spawn_blocking`), since it runs the header helper on the calling thread.
 - Each app still passes its own allow-list — `init`'s third argument — and this plugin adds its own command-span target to it automatically, so an app's `allow` only ever needs to name its OWN extra targets.
 
