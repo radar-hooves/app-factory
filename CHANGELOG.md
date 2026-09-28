@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.32] - 2026-09-28
+
 ### Changed
 
 - **The factory tree no longer names the household's own domain or its two internal addresses, ahead of this repo going public as `radar-hooves/app-factory`.** `portcullis_url` drops its hardcoded household default, and the private-package-index name and URL — previously hardcoded as `"godswood"`/`https://pypi.example.com/poodle64/prod/+simple/` in `template/backend/pyproject.toml.jinja` — become two new copier questions, `private_index_name`/`private_index_url`, also with no factory default. Every mention of the household's app, hostnames or the two addresses in prose (`CHANGELOG.md`, `docs/development/tenancy-design.md`, `renovate.json`, a handful of template comments) is now generic. None of this is a behaviour change for an app that already answered these questions: an app's own `.copier-answers.yml` still wins.
