@@ -1,4 +1,4 @@
-# kit/rust
+# kits/rust
 
 Shared Rust app code, versioned and consumed as a Cargo git dependency — never copied into an app (`full-stack-app-template#55`). The skeleton this repo's `template/` stamps stays thin; a kit is born when a second app in a language needs the same code.
 
@@ -15,7 +15,7 @@ telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", t
 tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
 ```
 
-No `path` key: Cargo traverses a git repository's whole file tree looking for the named crate's `Cargo.toml`, so a uniquely-named crate resolves regardless of where in the tree it lives. Pin `tag` to whatever release tag the change you need landed in — this repo's own calendar tags (`vYYYY.M.D`), never a crate-internal version.
+No `path` key: Cargo traverses a git repository's whole file tree looking for the named crate's `Cargo.toml`, so a uniquely-named crate resolves regardless of where in the tree it lives. Pin `tag` to whatever release tag the change you need landed in — this repo's own calendar tags (`vYYYY.M.x`), never a crate-internal version.
 
 **A Nix-built app must also refresh its own `flake.nix`.** Both Thoth and Bragi build via `rustPlatform.buildRustPackage` with `cargoLock.lockFile = ./src-tauri/Cargo.lock` and a per-git-dependency `outputHashes` entry, keyed `"<crate-name>-<version>"` — Thoth's today reads `"telemetry-0.4.0" = "sha256-...";`. Two things move that key out from under it here: the git URL changes (`telemetry-rs` → `full-stack-app-template`) and this lane bumped the crate's own version (0.5.0 → 0.6.0), so the key becomes `"telemetry-0.6.0"` and needs a fresh hash regardless — an app that only edits `Cargo.toml`'s `git =`/`tag =` and forgets `outputHashes` fails Nix's fixed-output check rather than silently building the old source (this already happened to Thoth on an earlier telemetry tag bump). A new consumer of `tauri-plugin-telemetry` needs its own `"tauri-plugin-telemetry-0.1.0"` entry alongside. After editing `Cargo.toml`, running `cargo update -p telemetry -p tauri-plugin-telemetry` in the consuming app, and updating the `outputHashes` key name: set that entry's value to `pkgs.lib.fakeHash`, run `nix build`, and paste back the hash Nix reports the mismatch as.
 

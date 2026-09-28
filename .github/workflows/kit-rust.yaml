@@ -1,6 +1,6 @@
-name: kit/rust
+name: kits/rust
 
-# The fast gate for kit/rust (radar-hooves/full-stack-app-template#55): format,
+# The fast gate for kits/rust (radar-hooves/full-stack-app-template#55): format,
 # clippy, check, test over the whole workspace. Runs from THIS repo's own
 # workflows, never template/.github — that tree is what copier stamps into a
 # scaffolded app, and nothing under kit/ reaches an app that way (a kit is a
@@ -13,7 +13,7 @@ name: kit/rust
 # own Cargo.toml makes `gtk` an unconditional target dependency (not gated by
 # any Cargo feature), so tauri-plugin-telemetry needs GTK3/WebKitGTK headers to
 # even `cargo check`, which rustup alone cannot supply. `nix develop` against
-# `kit/rust/flake.nix` is the household's own Rust-on-atlas pattern for this —
+# `kits/rust/flake.nix` is the household's own Rust-on-atlas pattern for this —
 # mirrored from Bragi's own `rust-linux` CI job, which builds the same
 # tauri + GTK combination today.
 
@@ -21,11 +21,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'kit/rust/**'
+      - 'kits/rust/**'
       - '.github/workflows/kit-rust.yaml'
   pull_request:
     paths:
-      - 'kit/rust/**'
+      - 'kits/rust/**'
       - '.github/workflows/kit-rust.yaml'
   workflow_dispatch:
 
@@ -53,7 +53,7 @@ jobs:
           # rustup shim; the runner keeps a warm crate cache here across jobs
           # (Bragi's own `rust-linux` CI job, same pattern).
           export CARGO_HOME="$HOME/.cargo"
-          cd kit/rust
+          cd kits/rust
           nix develop --command bash -c '
             set -euo pipefail
             cargo fmt --all --check
@@ -65,5 +65,5 @@ jobs:
         if: (failure() || cancelled()) && github.event_name != 'pull_request'
         uses: radar-hooves/master-project/.github/actions/ntfy-failure@main
         with:
-          title: 'full-stack-app-template kit/rust: CI failed'
+          title: 'full-stack-app-template kits/rust: CI failed'
           token: ${{ secrets.NTFY_TOKEN }}

@@ -2,7 +2,7 @@
 
 The household's one Rust telemetry call. Every Rust process — Tauri app, daemon, CLI — gets its `tracing` subscriber from here and owns nothing else about logging. It writes no file, exports no metrics, reads no settings file of its own, and knows no broker, identity or token: the endpoint and the credential reach it as standard environment variables the fleet sets, or as a value the application hands it from its own Settings pane.
 
-Lives in `radar-hooves/full-stack-app-template` under `kit/rust/telemetry` (moved from the standalone `telemetry-rs` repo with its history, `full-stack-app-template#55`). A Tauri 2 app wires this crate through `kit/rust/tauri-plugin-telemetry` with one `.plugin(...)` call instead of by hand — see that crate's README; the wiring below is what the plugin does internally, and is still how a non-Tauri process (a CLI, a daemon) uses this crate directly.
+Lives in `radar-hooves/full-stack-app-template` under `kits/rust/telemetry` (moved from the standalone `telemetry-rs` repo with its history, `full-stack-app-template#55`). A Tauri 2 app wires this crate through `kits/rust/tauri-plugin-telemetry` with one `.plugin(...)` call instead of by hand — see that crate's README; the wiring below is what the plugin does internally, and is still how a non-Tauri process (a CLI, a daemon) uses this crate directly.
 
 ```toml
 telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }

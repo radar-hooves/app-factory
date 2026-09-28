@@ -1,5 +1,5 @@
 {
-  description = "kit/rust devShell: Rust plus the GTK/WebKit headers tauri-plugin-telemetry needs to even compile on Linux";
+  description = "kits/rust devShell: Rust plus the GTK/WebKit headers tauri-plugin-telemetry needs to even compile on Linux";
 
   # On Linux, tauri's own Cargo.toml declares `gtk` as an UNCONDITIONAL
   # target dependency (not gated behind any Cargo feature), so anything that

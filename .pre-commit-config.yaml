@@ -93,12 +93,12 @@ repos:
       # A formatter, not the gate: it rewrites the file and pre-commit reports
       # the change. Enforcement is CI's `cargo fmt --check` plus clippy, one
       # layer only (`rules-library/core/ci-workflow-standard.md`), recorded in
-      # kit/rust/telemetry/README.md. CI floats to whatever `stable` is that
+      # kits/rust/telemetry/README.md. CI floats to whatever `stable` is that
       # day and there is no rust-toolchain.toml, so a rustfmt release can
       # still part the two.
       - id: cargo-fmt
-        name: 'rust · cargo fmt (kit/rust)'
-        entry: bash -c 'cd kit/rust && cargo fmt --all'
+        name: 'rust · cargo fmt (kits/rust)'
+        entry: bash -c 'cd kits/rust && cargo fmt --all'
         language: system
-        files: '^kit/rust/.*\.rs$'
+        files: '^kits/rust/.*\.rs$'
         pass_filenames: false

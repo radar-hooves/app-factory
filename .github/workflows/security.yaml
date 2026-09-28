@@ -1,10 +1,10 @@
 name: Security
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
-# This repo's own first-party code is kit/rust only (template/ is jinja source
+# This repo's own first-party code is kits/rust only (template/ is jinja source
 # stamped into apps, not runnable code of this repo's own — its own audit runs
 # in the scaffolded app via template/.github/workflows/security.yaml.jinja),
-# so python and node-dir stay off; trivy-fs still covers kit/rust/Cargo.lock
+# so python and node-dir stay off; trivy-fs still covers kits/rust/Cargo.lock
 # (Trivy parses it natively), which is this repo's cargo-audit-equivalent gate
 # (rules-library/core/supply-chain.md).
 #
@@ -17,7 +17,7 @@ on:
   push:
     branches-ignore: [main]
     paths:
-      - 'kit/rust/**/Cargo.lock'
+      - 'kits/rust/**/Cargo.lock'
       - '.github/workflows/security.yaml'
   workflow_dispatch:
 

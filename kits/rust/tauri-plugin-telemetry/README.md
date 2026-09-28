@@ -73,4 +73,4 @@ A kit ships behaviour, never a storage schema an app must adopt.
 
 ## Gates
 
-`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`, over the whole `kit/rust` workspace — one layer only, enforced in `.github/workflows/kit-rust.yaml`.
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`, over the whole `kits/rust` workspace — one layer only, enforced in `.github/workflows/kit-rust.yaml`.
