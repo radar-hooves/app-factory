@@ -36,6 +36,9 @@ repos:
     hooks:
       - id: end-of-file-fixer
         name: 'files · Fix end of files'
+        # Tauri's plugin builder regenerates this on every build without a final
+        # newline; adding one here dirtied the tree on each build.
+        exclude: ^kits/rust/tauri-plugin-telemetry/permissions/schemas/schema\.json$
       - id: trailing-whitespace
         name: 'files · Trim trailing whitespace'
         args: [--markdown-linebreak-ext=md]
