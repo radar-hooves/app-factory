@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.34] - 2026-09-28
+
+### Added
+
+- **kits/rust: `traced_sync_value` for a command that cannot fail.** The body returns `T` directly and the span is `traced_sync`'s own, with outcome always `ok`: no `Ok::<_, Infallible>` wrapper and no `unwrap()` at the call site. Consumer: Thoth (47 commands), relayed by master-project's bragi2 session through the attended session on atlas.
+
 ## [2026.9.33] - 2026-09-28
 
 ### Added

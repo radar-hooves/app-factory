@@ -116,6 +116,18 @@ where
     result
 }
 
+/// [`traced_sync`] for a command that cannot fail: the body returns `T`
+/// itself, and the span's `outcome` is always `ok`.
+pub fn traced_sync_value<F, T>(command: &'static str, f: F) -> T
+where
+    F: FnOnce() -> T,
+{
+    match traced_sync(command, || Ok::<T, std::convert::Infallible>(f())) {
+        Ok(value) => value,
+        Err(never) => match never {},
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -342,5 +354,20 @@ mod tests {
         assert_eq!(*target, APP_TARGET);
         assert!(fields.contains("outcome=\"ok\""), "{fields}");
         assert!(fields.contains("shortcut=\"ctrl+shift+d\""), "{fields}");
+    }
+
+    #[test]
+    fn an_infallible_sync_command_returns_its_value_with_an_ok_outcome() {
+        let (value, spans) = captured_spans_sync(|| traced_sync_value("list_audio_devices", || 7));
+
+        assert_eq!(value, 7);
+        assert_eq!(spans.len(), 1, "one span per command: {spans:?}");
+        let (target, fields) = &spans[0];
+        assert_eq!(*target, COMMAND_SPAN_TARGET);
+        assert!(
+            fields.contains("command=\"list_audio_devices\""),
+            "{fields}"
+        );
+        assert!(fields.contains("outcome=\"ok\""), "{fields}");
     }
 }

@@ -56,6 +56,8 @@ That call installs everything Thoth's `telemetry_settings.rs` and Bragi's `comma
   }
   ```
 
+  A command that cannot fail returns its value through [`traced_sync_value`], with no `Result` and no `unwrap`: `fn list_audio_devices() -> Vec<AudioDevice> { tauri_plugin_telemetry::traced_sync_value("list_audio_devices", || enumerate()) }`.
+
   A curated call that needs its span to carry more than `command` builds its own with [`traced_with_span_sync`], exactly as [`traced_with_span`] does for an async command.
 - `telemetry_get`/`telemetry_set`/`telemetry_probe` are this plugin's own commands (see `src/commands.rs`), invoked from the frontend exactly as an app's own commands are: `invoke('plugin:telemetry|telemetry_get')`. The fleet environment wins and the pane shows it read-only (`TelemetryStatus.from_env`); the Settings pane's own contract is to call `telemetry_probe` **before** `telemetry_set`, so a bad address is tested before it is saved; `telemetry_set` runs `set_exporter` off the async runtime (`spawn_blocking`), since it runs the header helper on the calling thread.
 - Each app still passes its own allow-list — `init`'s third argument — and this plugin adds its own command-span target to it automatically, so an app's `allow` only ever needs to name its OWN extra targets.
