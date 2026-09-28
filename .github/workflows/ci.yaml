@@ -3,13 +3,9 @@ name: CI
 # Verifies both workspace packages on every push/PR so Renovate PRs and
 # token/component edits carry a real signal.
 #
-# Runner: GitHub-hosted (ubuntu-latest) was a by-exception choice dated
-# 2026-07-03 because this repo was public and a self-hosted runner exposed to
-# fork PRs is an execution risk. The repo went PRIVATE on 2026-09-04 and that
-# reason no longer holds, so this job SHOULD move to [self-hosted, atlas] —
-# the standard every private household repo uses. Not yet done: the move needs
-# a real run to verify, tracked rather than changed in the same commit that
-# flipped visibility. Unlike publish.yaml, nothing here blocks the move.
+# Runner: the repo is public, so a fork's pull request runs on a GitHub-hosted
+# runner and never reaches the self-hosted atlas runner; everything else runs
+# on atlas. security.yaml's jobs choose the same way.
 
 on:
   push:
@@ -23,7 +19,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, atlas]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

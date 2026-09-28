@@ -6,41 +6,16 @@ name: Security
 # scan plus a Trivy filesystem scan (dependency vulnerabilities + working-tree
 # secrets).
 #
-# by-exception (2026-08-11): this is a BESPOKE in-repo workflow, not the estate
-# standard thin caller of radar-hooves/master-project's security-checks.yaml
-# reusable (ci-workflow-standard.md §"The factory, in preference order",
-# preference 1). It COULD NOT be the thin caller while design-system was PUBLIC
-# and master-project, which hosts the shared reusable, is PRIVATE — GitHub does
-# not
-# let a public repository call a reusable workflow (or a composite action) that
-# lives in a private one — the run never reaches a job, it dies at startup
-# validation with "This run likely failed because of a workflow file issue" and
-# an empty job list. Proven twice on this repo: runs 31097907321 (2026-08-06)
-# and 31363763671 (2026-08-10), both 0 jobs, both 0s, both shown by filename
-# because the name never parsed. Preference 3 (bespoke) applies because
-# preferences 1 and 2 genuinely do not fit; recorded on
-# radar-hooves/master-project#169.
+# by-exception: a BESPOKE in-repo workflow, not the estate thin caller of
+# radar-hooves/master-project's security-checks.yaml reusable
+# (ci-workflow-standard.md §"The factory, in preference order"). GitHub does not
+# let a public repository call a reusable workflow or composite action in a
+# private one: the run dies at startup with an empty job list (runs
+# 31097907321 and 31363763671; master-project#169). For the same reason there
+# is no ntfy-failure step; failures surface in the run and PR UI.
 #
-# SUPERSEDED 2026-09-04: this repo went PRIVATE, so the blocking condition is
-# gone and every exception below rests on it. A private repo may call the
-# private reusable, may run on [self-hosted, atlas], and may use the private
-# ntfy-failure composite action. This file should collapse back to the golden
-# thin caller; it has not yet, because that needs a verified run rather than a
-# comment. The #169 estate-wide fix is no longer needed FOR THIS REPO, though
-# it still stands for any repo that must genuinely stay public.
-#
-# by-exception (2026-08-11): GitHub-hosted runners (ubuntu-latest), not the
-# self-hosted [self-hosted, atlas] label the reusable and every private repo
-# default to — exposing a self-hosted runner to a public repo is a fork-PR
-# execution risk. This matches the same dated deviation already recorded in
-# ci.yaml and publish.yaml for this public repo.
-#
-# by-exception (2026-08-11): no ntfy-failure notify step. That composite action
-# also lives in the private master-project and so is likewise unusable from a
-# public repo, and this repo holds no NTFY_TOKEN secret for the inline-curl
-# fallback (ci-workflow-standard.md §failure-notify). Failures surface in the
-# GitHub run/PR UI, which the operator watches directly — the same no-notify
-# convention already in ci.yaml and publish.yaml.
+# Jobs run on [self-hosted, atlas], except a fork's pull request, which runs on
+# a GitHub-hosted runner so outside code never reaches atlas.
 #
 # The scan mechanics track the estate reusable's intent, adapted to
 # ubuntu-latest: gitleaks runs as the pinned CLI (the reusable's explicit
@@ -93,7 +68,7 @@ permissions:
 jobs:
   gitleaks:
     name: Secret scan (gitleaks)
-    runs-on: [self-hosted, atlas]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -123,7 +98,7 @@ jobs:
 
   trivy-fs:
     name: Trivy filesystem scan
-    runs-on: [self-hosted, atlas]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     timeout-minutes: 15
     steps:
       - name: Checkout

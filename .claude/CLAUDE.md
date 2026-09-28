@@ -34,20 +34,16 @@ palette only (`master-project#174`, WP-51).
   printWidth 100, single quotes) — nothing runs it; it exists because a
   prettier invoked without it walks up to the master-project root's
   2-space config and reindents whole files.
-- The REPO is private; the PACKAGES are public on npm. Those are separate
-  settings and the split is deliberate: publishing to public npm rather than
-  GitHub Packages means a consumer needs no token to install (GitHub Packages
+- The repo and the packages are public. Packages publish to public npm, not
+  GitHub Packages, so a consumer needs no token to install (GitHub Packages
   requires an authenticated request for every install, public packages
-  included — broke onboarding twice). The repo went private on 2026-09-04;
-  trusted publishing still works, but npm will not generate provenance
-  attestations from a private repo, which is why both packages set
-  `publishConfig.provenance: false`.
-- CI runs on GitHub-hosted runners, not the self-hosted `atlas` runner every
-  other repo defaults to. `publish.yaml` must stay there permanently — npm
-  trusted publishing does not support self-hosted runners. `ci.yaml` and
-  `security.yaml` only did so because the repo was public and can now move
-  back to `atlas`; they have not yet, because the move needs a verified run.
-  Reasons recorded in each workflow's own header.
+  included — broke onboarding twice). The packages set
+  `publishConfig.provenance: false`; npm would now generate provenance, and
+  switching it on waits for a publish that proves it.
+- `publish.yaml` runs on a GitHub-hosted runner permanently: npm trusted
+  publishing does not support self-hosted runners. `ci.yaml` and
+  `security.yaml` run on `atlas`, except a fork's pull request, which runs
+  on a GitHub-hosted runner so outside code never reaches `atlas`.
 - Release tags are **per-package**, not the household's global
   `v{YYYY}.{M}.{x}` scheme: `design-tokens-v<version>` publishes
   `@poodle64/design-tokens`, `ui-v<version>` publishes `@poodle64/ui`.
