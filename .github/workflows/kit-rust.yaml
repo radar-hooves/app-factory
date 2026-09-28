@@ -35,6 +35,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# No ntfy-failure step: a public repo cannot call master-project's private
+# composite action, so failures show in the run and PR UI only.
+
 permissions:
   contents: read
 
@@ -71,10 +74,3 @@ jobs:
             cargo clippy --all-targets -- -D warnings
             cargo test
           '
-
-      - name: Notify failure (ntfy infra)
-        if: (failure() || cancelled()) && github.event_name != 'pull_request'
-        uses: radar-hooves/master-project/.github/actions/ntfy-failure@main
-        with:
-          title: 'full-stack-app-template kits/rust: CI failed'
-          token: ${{ secrets.NTFY_TOKEN }}
