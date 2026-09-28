@@ -25,7 +25,11 @@ name: Publish Package
 #
 # The trusted publisher can only be configured through npmjs' own form, with a
 # real second factor: npm refuses `npm trust` from a bypass-2FA token by design
-# (403, measured 2026-08-14), so there is no unattended path to recreate it.
+# (403, measured 2026-08-14). The broker holds that factor as the npm passkey
+# (catalogue `npmjs-web`), so browser-driver can re-make it unattended. npm binds
+# the connection to the repository it was made against: after this repo was
+# recreated (28/09/2026) every publish failed 404 until each package's
+# connection was deleted and added again.
 #
 # Deviation from 10-ci-workflow-standard (jobs on [self-hosted, atlas]): npm
 # trusted publishing does not support self-hosted runners
