@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+Moved into `radar-hooves/full-stack-app-template` under `kit/rust/telemetry`, with its full git history, on the operator's ruling of 28/09/2026 (`full-stack-app-template#55`): this repo is now the one home for shared app code in every language, skeletons plus kits, and telemetry is the first one. The standalone `telemetry-rs` repo is archived; behaviour is unchanged. Release tags move from this crate's own `vX.Y.Z` to the whole repo's calendar tag (`vYYYY.M.D`); the dependency line becomes `telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "<release tag>" }` — no `path` key needed, since Cargo finds a uniquely-named crate anywhere in a git repository's tree.
+
+`report_error_with_cause` now scrubs a `reqwest::Error` or `reqwest_middleware::Error`'s URL out of the chain it exports, wherever in the chain it appears — structural, not an opt-in: a caller could previously forget the `.without_url()` step before handing an error over (`mediaserver/subsonic/client.rs` in the app this crate serves still calls it explicitly), since the error's own `Display` embeds the full URL and a query string can carry a signed token. `error`'s bound tightens from `&dyn std::error::Error` to `&(dyn std::error::Error + 'static)` so it can be downcast; every real caller already hands over an owned error type, so no existing call site changes.
+
+Added `kit/rust/tauri-plugin-telemetry`, a Tauri 2 plugin wiring this crate's whole contract — `init` off the async runtime, the `Guard` dropped on `RunEvent::Exit`, command spans with no argument capture, the Settings-pane commands, the process sampler — behind one `.plugin(...)` call, replacing what Thoth and Bragi each wired by hand.
+
 ## 0.5.0
 
 The client span (`telemetry::client`, force-allowed) now carries `url.path` — `/Items/{id}`, `/rest/search3.view` — alongside the method, host and status it already recorded. Still on the operator's 28/09/2026 ruling: the path is his own listening history and travels to his stack. The query string is unchanged — still withheld, since that is where a Subsonic request signs its auth token, and `url::Url::path()` never includes it.

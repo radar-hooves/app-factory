@@ -1,0 +1,4 @@
+# This repo's own build artefacts — kit/rust's Cargo workspace. The template's
+# own ignores (what a scaffolded app's own gitignore carries) live at
+# template/.gitignore instead.
+target/

@@ -121,15 +121,27 @@ pub fn report_error(context: &'static str) {
 /// full `Display` message and its whole `source()` chain, so a caller stops
 /// flattening a real error to a static label. `context` still identifies the
 /// call site, exactly as it does for [`report_error`].
-pub fn report_error_with_cause(context: &'static str, error: &dyn std::error::Error) {
+///
+/// A `reqwest::Error` or `reqwest_middleware::Error` anywhere in `error`'s own
+/// chain has its URL scrubbed from the joined text first — see
+/// [`scrub_urls`]. `error` takes `+ 'static` (tightened on the operator's
+/// ruling of 28/09/2026, `full-stack-app-template#55`) so this can downcast
+/// it; every real caller already hands over an owned error type, so no
+/// existing call site is affected.
+pub fn report_error_with_cause(context: &'static str, error: &(dyn std::error::Error + 'static)) {
     let chain = error_chain(error);
     tracing::error!(target: TARGET, context, chain, "error");
 }
 
+/// How deep to walk a `source()` chain looking for a `reqwest`/
+/// `reqwest_middleware` error to scrub. Matches `probe::CHAIN_DEPTH`'s own
+/// bound for the same reason: a cyclic chain must not spin forever.
+const URL_SCRUB_DEPTH: usize = 8;
+
 /// The error's own message, then each `source()` after it, joined so the
 /// whole chain reads as one line: an app's error wraps a lower one for a
 /// reason, and the reason is only visible with both ends of the chain.
-fn error_chain(error: &dyn std::error::Error) -> String {
+fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
     let mut chain = error.to_string();
     let mut source = error.source();
     while let Some(cause) = source {
@@ -137,7 +149,40 @@ fn error_chain(error: &dyn std::error::Error) -> String {
         chain.push_str(&cause.to_string());
         source = cause.source();
     }
+    scrub_urls(error, &mut chain);
     chain
+}
+
+/// Replace every URL a `reqwest::Error` or `reqwest_middleware::Error`
+/// anywhere in `error`'s own chain carries, wherever it appears in `chain`'s
+/// text — including inside another error's own `Display`, which is how a
+/// `reqwest_middleware::Error` carries one too (`#[error(transparent)]`
+/// forwards straight to the inner `reqwest::Error`'s rendering). A query
+/// string can hold a signed token (a Subsonic request signs its own there),
+/// so this is what makes `.without_url()` impossible to forget: a caller
+/// used to have to remember it at every call site (as `mediaserver/subsonic/
+/// client.rs` still does, in the app this crate serves); this function never
+/// trusted `Display` or `Debug` not to have embedded a URL in the first
+/// place, so there is nothing left for a caller to forget.
+///
+/// `reqwest::Error::url()` and `reqwest_middleware::Error::url()` are the two
+/// accessors that hand a URL back without rendering the error at all.
+fn scrub_urls(error: &(dyn std::error::Error + 'static), chain: &mut String) {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    for _ in 0..URL_SCRUB_DEPTH {
+        let Some(err) = current else { break };
+        let url = err
+            .downcast_ref::<reqwest::Error>()
+            .and_then(reqwest::Error::url)
+            .or_else(|| {
+                err.downcast_ref::<reqwest_middleware::Error>()
+                    .and_then(reqwest_middleware::Error::url)
+            });
+        if let Some(url) = url {
+            *chain = chain.replace(url.as_str(), "<url withheld>");
+        }
+        current = err.source();
+    }
 }
 
 /// `panic!("literal")`, `unreachable!()` and `todo!()` all downcast to
@@ -336,6 +381,83 @@ mod tests {
         let chain = attribute(&record.record, "chain").expect("a chain field");
         assert!(chain.contains("the wrapping failure"), "{chain}");
         assert!(chain.contains("the root cause"), "{chain}");
+    }
+
+    /// A bare `reqwest::Error`, passed the way a caller who forgot
+    /// `.without_url()` would pass it — `mediaserver/subsonic/client.rs`
+    /// still calls it explicitly today, which is exactly the shape a caller
+    /// can forget. `reqwest::Error`'s own `Display` appends `" for url
+    /// (...)"`, so this proves the scrub runs even on the top-level error,
+    /// not only on something nested under `source()`.
+    #[test]
+    #[serial]
+    fn report_error_with_cause_scrubs_a_bare_reqwest_errors_url() {
+        let (providers, logs) = in_memory();
+        set_live(Some(&providers.logs));
+        let (subscriber, _reload) = subscriber(&[], otlp_layers("test-service", &providers));
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        tracing::subscriber::with_default(subscriber, || {
+            runtime.block_on(async {
+                crate::ensure_crypto_provider();
+                // Port 1 on loopback refuses immediately; nothing leaves the host.
+                let error = reqwest::Client::new()
+                    .get("http://127.0.0.1:1/rest/search3.view?u=demo&t=leaked-token&s=salt")
+                    .send()
+                    .await
+                    .expect_err("port 1 refuses a connection");
+                report_error_with_cause("request failed", &error);
+            });
+        });
+        set_live(None);
+
+        let exported = logs.get_emitted_logs().expect("logs");
+        let record = exported.first().expect("one error event");
+        let chain = attribute(&record.record, "chain").expect("a chain field");
+        for forbidden in ["leaked-token", "demo", "salt", "127.0.0.1:1"] {
+            assert!(!chain.contains(forbidden), "{forbidden} in {chain}");
+        }
+        assert!(chain.contains("<url withheld>"), "{chain}");
+    }
+
+    /// The same proof through `reqwest_middleware::Error` — what
+    /// `crate::http_client()` actually hands a caller — since `#[error(
+    /// transparent)]` makes it a DIFFERENT concrete type wrapping the
+    /// `reqwest::Error` rather than one, so the scrub has to recognise both.
+    #[test]
+    #[serial]
+    fn report_error_with_cause_scrubs_a_middleware_errors_url() {
+        let (providers, logs) = in_memory();
+        set_live(Some(&providers.logs));
+        let (subscriber, _reload) = subscriber(&[], otlp_layers("test-service", &providers));
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        tracing::subscriber::with_default(subscriber, || {
+            runtime.block_on(async {
+                // Port 1 on loopback refuses immediately; nothing leaves the host.
+                let error = crate::http_client()
+                    .get("http://127.0.0.1:1/rest/search3.view?u=demo&t=leaked-token&s=salt")
+                    .send()
+                    .await
+                    .expect_err("port 1 refuses a connection");
+                report_error_with_cause("request failed", &error);
+            });
+        });
+        set_live(None);
+
+        let exported = logs.get_emitted_logs().expect("logs");
+        let record = exported.first().expect("one error event");
+        let chain = attribute(&record.record, "chain").expect("a chain field");
+        for forbidden in ["leaked-token", "demo", "salt", "127.0.0.1:1"] {
+            assert!(!chain.contains(forbidden), "{forbidden} in {chain}");
+        }
+        assert!(chain.contains("<url withheld>"), "{chain}");
     }
 
     #[test]
