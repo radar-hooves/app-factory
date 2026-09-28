@@ -40,7 +40,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=0
 WORKDIR /app/backend
 
-# The builder can read the household private index (pypi.example.com) when an app
+# The builder can read the app's private package index when it
 # depends on a sibling published there (ragify, core-memory, redactyl-core, …).
 # The read credential arrives as a BuildKit secret mounted at /root/.netrc, and
 # NETRC points uv at it explicitly — the same env var the CI runner sets for

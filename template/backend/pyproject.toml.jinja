@@ -76,8 +76,8 @@ environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
 # the runner's netrc, the Docker build mounts one as a BuildKit secret and points
 # NETRC at it, and a dev machine uses ~/.netrc — no per-repo GitHub secret.
 [[tool.uv.index]]
-name = "godswood"
-url = "https://pypi.example.com/poodle64/prod/+simple/"
+name = "{{ private_index_name }}"
+url = "{{ private_index_url }}"
 explicit = true
 
 # Every private package is pinned to that index here: under an explicit index an
@@ -86,9 +86,9 @@ explicit = true
 # not found, so it must also be declared above. Do NOT add a path override; it
 # would be written into the committed uv.lock and break every other checkout.
 [tool.uv.sources]
-api-common = { index = "godswood" }
-redactyl-core = { index = "godswood" }
-nextcloud = { index = "godswood" }
+api-common = { index = "{{ private_index_name }}" }
+redactyl-core = { index = "{{ private_index_name }}" }
+nextcloud = { index = "{{ private_index_name }}" }
 
 [tool.ruff]
 line-length = 120

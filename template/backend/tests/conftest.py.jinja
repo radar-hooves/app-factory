@@ -410,8 +410,8 @@ def pytest_sessionstart(session) -> None:
     copies the result (`CREATE DATABASE … TEMPLATE`) rather than migrating its
     own. Workers migrating at the same moment share one lock table on the one
     server: 64 slots per connection, 7,808 in all on postgres:17's defaults, and
-    one of godswood's migrations holds about 3,000 until it commits, so workers
-    in step died "out of shared memory" (godswood's CI at `-n 8`, 27/09/2026; 14
+    one of a fleet app's migrations holds about 3,000 until it commits, so workers
+    in step died "out of shared memory" (that app's CI at `-n 8`, 27/09/2026; 14
     of 20 on atlas). Twenty copies at once held 111 locks. The controller builds
     before any worker exists, because xdist spawns them from a `trylast`
     sessionstart of its own; `pytest_configure_node` hands each the name, and a

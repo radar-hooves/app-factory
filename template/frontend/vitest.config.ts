@@ -16,7 +16,7 @@ export default defineConfig({
 		// A form test that types and submits takes 1-2.5s alone, and CI runs it on
 		// the host that also runs the backend suite across eight workers and the
 		// apps themselves. At the 5s default that contention failed five of them
-		// on godswood's first parallel run (27/09/2026); a real hang still fails.
+		// on a fleet app's first parallel run (27/09/2026); a real hang still fails.
 		testTimeout: 20_000,
 		setupFiles: ['src/test/setup.ts'],
 		include: ['src/**/*.{test,spec}.{js,ts}'],

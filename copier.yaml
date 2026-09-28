@@ -97,9 +97,20 @@ postgres_host:
 
 portcullis_url:
   type: str
-  default: https://portcullis.example.com
   help: >-
-    Base URL of the household secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py and the frontend's dev-identity.ts both resolve the database password and the operator's dev identity through it. PORTCULLIS_URL still overrides at runtime.
+    Base URL of your secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py and the frontend's dev-identity.ts both resolve the database password and the operator's dev identity through it. PORTCULLIS_URL still overrides at runtime. No factory default — a fleet stamping its own apps supplies it from its own declaration (`--data-file`) rather than typing it per app; postgres_host below took the same lesson the hard way.
+
+
+private_index_name:
+  type: str
+  help: >-
+    Alias for your private Python package index, used as `[[tool.uv.index]] name = ...` and in `[tool.uv.sources]` below (backend/pyproject.toml.jinja). No factory default: this app resolves sibling packages published outside PyPI (api-common, redactyl-core, nextcloud) from a private index only you can name.
+
+
+private_index_url:
+  type: str
+  help: >-
+    Base URL of that index's simple API (e.g. `https://your-index.example/your-user/prod/+simple/`). No factory default, for the same reason as private_index_name — a fleet stamping its own apps supplies both from its own declaration rather than typing them per app.
 
 
 postgres_user:

@@ -17,7 +17,7 @@ import { ok, readJson } from './api';
 //
 // The port: read from `{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET`,
 // the same env var vite.config.ts's dev proxy already reads to redirect its
-// own `/api` target (godswood#772) — an app whose E2E backend cannot bind the
+// own `/api` target (a fleet app's own #772) — an app whose E2E backend cannot bind the
 // interactive port (dev-environment.md "There Is No Development Database")
 // sets it once and both consumers see it. Falls back to the copier-stamped
 // port so a freshly stamped app needs nothing set.
