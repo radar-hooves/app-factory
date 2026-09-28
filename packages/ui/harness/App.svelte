@@ -61,6 +61,9 @@
 	import CollectionDetail from '../dist/components/ui/collection-detail/collection-detail.svelte';
 	import DocumentDetail from '../dist/components/ui/document-detail/document-detail.svelte';
 	import SearchResults from '../dist/components/ui/search-results/search-results.svelte';
+	import PageCanvas from '../dist/components/ui/page-canvas/page-canvas.svelte';
+	import type { PageCanvasRegion } from '../dist/components/ui/page-canvas/types.js';
+	import FactGrid from '../dist/components/ui/fact-grid/fact-grid.svelte';
 	import ContextColumn from '../dist/components/ui/context-column/context-column.svelte';
 	import TileGrid from '../dist/components/ui/tile-grid/tile-grid.svelte';
 	import { AppIdentity } from '../dist/components/ui/app-identity/index.js';
@@ -504,6 +507,40 @@
 	const ICON_SIZES = ['icon-xs', 'icon-sm', 'icon', 'icon-lg'] as const;
 
 	let overlayDialogOpen = $state(false);
+
+	// PageCanvas (#839): a tall receipt in a wide pane (room beside for a
+	// label) and an A4 page in a narrow one (no room, so the label falls back
+	// above). Inline SVG data URIs: the harness serves no assets, and the
+	// claim is about fit/zoom/focus geometry, not about what the picture is.
+	const svgPage = (w: number, h: number, bands: [number, number][]) =>
+		`data:image/svg+xml;utf8,${encodeURIComponent(
+			`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="white"/>${bands
+				.map(([y, bh]) => `<rect x="0" y="${y}" width="${w}" height="${bh}" fill="#ddd"/>`)
+				.join('')}</svg>`
+		)}`;
+	const RECEIPT_IMG = svgPage(537, 2339, [
+		[80, 60],
+		[1100, 40]
+	]);
+	const A4_IMG = svgPage(595, 842, [[60, 24]]);
+	const receiptRegions: PageCanvasRegion[] = [
+		{ id: 'r-header', page: 1, box: { x: 0.05, y: 0.034, w: 0.9, h: 0.026 }, label: 'Header' }
+	];
+	const receiptLooked: PageCanvasRegion[] = [
+		{ id: 'r-bottom', page: 1, box: { x: 0, y: 0.47, w: 1, h: 0.017 }, label: 'Bottom half' }
+	];
+	const a4Regions: PageCanvasRegion[] = [
+		{
+			id: 'a-invoice',
+			page: 1,
+			box: { x: 0.067, y: 0.071, w: 0.866, h: 0.028 },
+			label: 'Invoice number'
+		}
+	];
+	let receiptActive = $state<string | null>(null);
+	let receiptFocused = $state<string | null>(null);
+	let a4Active = $state<string | null>(null);
+	let a4Focused = $state<string | null>(null);
 	// A 1x1 transparent GIF, inline: the harness serves no assets and the claim
 	// is about the load-state machine, not about what the picture is.
 	const REAL_IMAGE =
@@ -673,6 +710,107 @@
 				<p>Display body</p>
 			</DetailPanel>
 		</div>
+	</div>
+{:else if surface === 'page-canvas'}
+	<!-- design-system#839: PageCanvas's whole reason to exist is pixel
+	     geometry — the whole-page fit, the beside/above label choice, and the
+	     focus-and-centre zoom — none of which jsdom can see (it never lays
+	     anything out, so bind:clientWidth/clientHeight read 0 and the
+	     component's `layout` derivation never leaves null there). Two panes:
+	     a tall receipt in a WIDE pane (room beside the page for a label) and
+	     an A4 page in a NARROW one (no room, so the label falls back above).
+	     Scripted in drive.mjs. -->
+	<div class="flex flex-wrap items-start gap-8 p-8">
+		<div class="flex flex-col gap-2">
+			<p class="text-sm">Receipt, wide pane (label beside)</p>
+			<div data-probe="receipt" style="width: 480px; height: 640px; border: 1px solid #ccc;">
+				<PageCanvas
+					pageCount={1}
+					regions={receiptRegions}
+					lookedRegions={receiptLooked}
+					bind:activeRegionId={receiptActive}
+					bind:focusedRegionId={receiptFocused}
+					class="h-full w-full"
+				>
+					{#snippet page(_pageNumber, info)}
+						<img
+							src={RECEIPT_IMG}
+							alt="receipt"
+							style="width: {info.size.width ? info.size.width + 'px' : 'auto'}; height: {info
+								.size.height
+								? info.size.height + 'px'
+								: 'auto'};"
+							onload={(e) =>
+								info.reportSize(
+									(e.currentTarget as HTMLImageElement).naturalWidth,
+									(e.currentTarget as HTMLImageElement).naturalHeight
+								)}
+						/>
+					{/snippet}
+				</PageCanvas>
+			</div>
+			<button
+				type="button"
+				data-action="hover-header"
+				onclick={() => (receiptActive = receiptActive === 'r-header' ? null : 'r-header')}
+				>Hover Header</button
+			>
+		</div>
+		<div class="flex flex-col gap-2">
+			<p class="text-sm">A4, narrow pane (label above)</p>
+			<div data-probe="a4" style="width: 480px; height: 460px; border: 1px solid #ccc;">
+				<PageCanvas
+					pageCount={1}
+					regions={a4Regions}
+					bind:activeRegionId={a4Active}
+					bind:focusedRegionId={a4Focused}
+					class="h-full w-full"
+				>
+					{#snippet page(_pageNumber, info)}
+						<img
+							src={A4_IMG}
+							alt="a4"
+							style="width: {info.size.width ? info.size.width + 'px' : 'auto'}; height: {info
+								.size.height
+								? info.size.height + 'px'
+								: 'auto'};"
+							onload={(e) =>
+								info.reportSize(
+									(e.currentTarget as HTMLImageElement).naturalWidth,
+									(e.currentTarget as HTMLImageElement).naturalHeight
+								)}
+						/>
+					{/snippet}
+				</PageCanvas>
+			</div>
+			<button
+				type="button"
+				data-action="focus-invoice"
+				onclick={() => (a4Focused = a4Focused === 'a-invoice' ? null : 'a-invoice')}
+				>Focus Invoice number</button
+			>
+		</div>
+	</div>
+{:else if surface === 'fact-grid'}
+	<!-- design-system#839: the borderless-inside-a-Panel claim (no double
+	     border) and the numeric/plain-words face split need a real cascade to
+	     resolve font-family and border colour; kept short since the geometry
+	     (col-span-full) is already proved under jsdom in fact-grid.test.ts. -->
+	<div class="max-w-2xl p-8">
+		<Panel title="What it read">
+			<FactGrid
+				facts={[
+					{ key: 'store', label: 'Store', value: 'Aldi' },
+					{ key: 'date', label: 'Date', value: '18/09/2026' },
+					{ key: 'total', label: 'Total', value: '175.98', numeric: true },
+					{
+						key: 'address',
+						label: 'Address',
+						value: '221B Baker Street, Marylebone, London NW1 6XE'
+					}
+				]}
+			/>
+		</Panel>
 	</div>
 {:else if surface === 'theming'}
 	<!-- design-system#8: scoped theming. jsdom cannot make either claim here —

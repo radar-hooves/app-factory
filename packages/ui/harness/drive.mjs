@@ -3460,6 +3460,211 @@ for (const density of ['comfortable', 'compact']) {
 	await context.close();
 }
 
+// ── PageCanvas: the fit/zoom/focus overlay geometry (#839) ──────────────────
+// This component's whole reason to exist is pixel geometry — the whole-page
+// fit, the beside/above choice for a region's label, and the focus-and-centre
+// zoom — and jsdom cannot see any of it: it never lays anything out, so
+// `bind:clientWidth`/`clientHeight` on the stage read 0 there and the
+// component's own `layout` derivation never leaves null (src/test/
+// page-canvas.test.ts covers everything that IS provable without one: the
+// pager, the zoom control, the keyboard wiring, the empty state).
+//
+// Two panes (App.svelte, ?surface=page-canvas): a tall receipt in a pane WIDE
+// enough that the whole-page view has room beside it for a label, and an A4
+// page in one narrow enough that it never does. Both consumer call sites
+// (godswood's DocumentViewer, pebblestone's PdfViewer) size this component
+// with an explicit `class="h-full w-full"` on a flex-sized ancestor — the
+// harness panes reproduce that contract with a fixed-size block instead of a
+// flex ancestor, which is the more demanding case: a block box gives a
+// zero-size child no size at all unless the child itself is told to fill it.
+{
+	const { context, page, errors } = await open('surface=page-canvas');
+	await page.waitForSelector('[data-probe="receipt"] img');
+	await page.waitForTimeout(300);
+
+	const rect = (sel) =>
+		page.evaluate((s) => {
+			const el = document.querySelector(s);
+			return el ? el.getBoundingClientRect().toJSON() : null;
+		}, sel);
+
+	// The whole-page fit: an explicit `h-full w-full` on the component reaches
+	// all the way down to a real box, and the fitted page is centred inside it
+	// on both axes (never flush left/top, never overflowing the pane).
+	const receiptPane = await rect('[data-probe="receipt"]');
+	const receiptImg = await rect('[data-probe="receipt"] img');
+	check(
+		'PageCanvas: an explicit h-full w-full reaches a real box (no size is 0)',
+		receiptPane.width > 0 && receiptImg.width > 0 && receiptImg.height > 0,
+		`pane ${receiptPane.width}x${receiptPane.height}, page ${receiptImg.width.toFixed(1)}x${receiptImg.height.toFixed(1)}`
+	);
+	check(
+		'PageCanvas: the fitted page never exceeds its pane',
+		receiptImg.width <= receiptPane.width && receiptImg.height <= receiptPane.height,
+		`page ${receiptImg.width.toFixed(1)}x${receiptImg.height.toFixed(1)} vs pane ${receiptPane.width}x${receiptPane.height}`
+	);
+	check(
+		'PageCanvas: the fitted page is centred, not flush to a corner',
+		Math.abs(receiptImg.x - receiptPane.x) > 20 && Math.abs(receiptImg.x + receiptImg.width - (receiptPane.x + receiptPane.width)) > 20,
+		`left gap ${(receiptImg.x - receiptPane.x).toFixed(1)}px, right gap ${(receiptPane.x + receiptPane.width - receiptImg.x - receiptImg.width).toFixed(1)}px`
+	);
+
+	// Hovering the region beside the page (the app's own list, here a single
+	// button standing in for it) outlines it AND, because this pane is wide
+	// enough, puts the label beside the outline rather than above it.
+	await page.click('[data-action="hover-header"]');
+	await page.waitForTimeout(200);
+	const outlineWrap = await page.evaluate(() => {
+		const el = document.querySelector('[data-probe="receipt"] [role="button"]');
+		return el ? el.parentElement.getBoundingClientRect().toJSON() : null;
+	});
+	const outlineTag = await page.evaluate(() => {
+		const wrap = document.querySelector('[data-probe="receipt"] [role="button"]')?.parentElement;
+		const tag = wrap?.querySelector('span:not([role])');
+		return tag ? { text: tag.textContent.trim(), rect: tag.getBoundingClientRect().toJSON() } : null;
+	});
+	check(
+		'PageCanvas: hovering a region draws a real outline box on the page',
+		!!outlineWrap && outlineWrap.width > 0 && outlineWrap.height > 0,
+		JSON.stringify(outlineWrap)
+	);
+	check(
+		'PageCanvas: the label carries the region\'s own text',
+		outlineTag?.text === 'Header',
+		outlineTag?.text
+	);
+	check(
+		'PageCanvas: with room beside the page, the label sits beside the outline, not above it',
+		outlineTag.rect.x >= outlineWrap.x + outlineWrap.width,
+		`tag left ${outlineTag.rect.x.toFixed(1)} vs outline right ${(outlineWrap.x + outlineWrap.width).toFixed(1)}`
+	);
+
+	// The dashed "where it looked" region draws independently of hover/focus.
+	const lookedBox = await rect('[data-probe="receipt"] [aria-hidden="true"]');
+	check(
+		'PageCanvas: the "where it looked" region draws even with nothing hovered or focused',
+		!!lookedBox && lookedBox.width > 0 && lookedBox.height > 0,
+		JSON.stringify(lookedBox)
+	);
+
+	// Clicking the outlined region focuses it: the page zooms in and centres on
+	// the region, a "Whole page" affordance appears, and it returns exactly to
+	// the prior fit on click.
+	await page.click('[data-probe="receipt"] [role="button"]');
+	await page.waitForTimeout(300);
+	const focusedImg = await rect('[data-probe="receipt"] img');
+	const wholePageBtn = () =>
+		page.evaluate(
+			() =>
+				!!Array.from(document.querySelectorAll('[data-probe="receipt"] button')).find(
+					(b) => b.textContent.trim() === 'Whole page'
+				)
+		);
+	check(
+		'PageCanvas: focusing a region zooms in past the whole-page fit',
+		focusedImg.width > receiptImg.width * 1.5,
+		`${focusedImg.width.toFixed(1)}px vs whole-page ${receiptImg.width.toFixed(1)}px`
+	);
+	check('PageCanvas: a "Whole page" way back appears once focused', await wholePageBtn(), 'present');
+
+	await page.locator('[data-probe="receipt"]').getByText('Whole page').click();
+	await page.waitForTimeout(300);
+	const unfocusedImg = await rect('[data-probe="receipt"] img');
+	check(
+		'PageCanvas: "Whole page" returns to exactly the prior fit',
+		Math.abs(unfocusedImg.width - receiptImg.width) < 0.5 && Math.abs(unfocusedImg.height - receiptImg.height) < 0.5,
+		`${unfocusedImg.width.toFixed(1)}x${unfocusedImg.height.toFixed(1)} vs ${receiptImg.width.toFixed(1)}x${receiptImg.height.toFixed(1)}`
+	);
+	check('PageCanvas: "Whole page" is gone once left', !(await wholePageBtn()), 'gone');
+
+	// The A4 pane is deliberately narrow: even the WHOLE-PAGE view has no room
+	// beside it, so a focused region's label must fall back above the outline
+	// instead — the same room-check, a different answer.
+	const a4WholeImg = await rect('[data-probe="a4"] img');
+	await page.click('[data-action="focus-invoice"]');
+	await page.waitForTimeout(300);
+	const a4FocusedImg = await rect('[data-probe="a4"] img');
+	const a4Tag = await page.evaluate(() => {
+		const wrap = document.querySelector('[data-probe="a4"] [role="button"]')?.parentElement;
+		const tag = wrap?.querySelector('span:not([role])');
+		return tag ? { text: tag.textContent.trim(), rect: tag.getBoundingClientRect().toJSON() } : null;
+	});
+	const a4OutlineWrap = await page.evaluate(() => {
+		const el = document.querySelector('[data-probe="a4"] [role="button"]');
+		return el ? el.parentElement.getBoundingClientRect().toJSON() : null;
+	});
+	check(
+		'PageCanvas: focusing in the narrow pane still zooms in past the whole-page fit',
+		a4FocusedImg.width > a4WholeImg.width * 1.5,
+		`${a4FocusedImg.width.toFixed(1)}px vs whole-page ${a4WholeImg.width.toFixed(1)}px`
+	);
+	check(
+		'PageCanvas: with no room beside the page, the label falls back ABOVE the outline',
+		a4Tag.rect.y + a4Tag.rect.height <= a4OutlineWrap.y + 1,
+		`tag bottom ${(a4Tag.rect.y + a4Tag.rect.height).toFixed(1)} vs outline top ${a4OutlineWrap.y.toFixed(1)}`
+	);
+
+	// Escape is the keyboard way back, proved on the pane already focused.
+	await page.locator('[data-probe="a4"] [role="document"]').focus();
+	await page.keyboard.press('Escape');
+	await page.waitForTimeout(200);
+	const a4WholePageBtn = await page.evaluate(
+		() =>
+			!!Array.from(document.querySelectorAll('[data-probe="a4"] button')).find(
+				(b) => b.textContent.trim() === 'Whole page'
+			)
+	);
+	check('PageCanvas: Escape is also a way back to the whole page', !a4WholePageBtn, 'gone');
+
+	check('PageCanvas: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// ── FactGrid inside a Panel: no double border (#839) ─────────────────────────
+// The whole reason FactGrid exists beside StatList: a Panel already draws the
+// card, so FactGrid must draw none of its own — a claim about a resolved
+// border WIDTH, which jsdom cannot make (fact-grid.test.ts already covers the
+// class-name half: numeric-vs-plain-words and the long-value row span).
+{
+	const { context, page, errors } = await open('surface=fact-grid');
+	await page.waitForSelector('dl');
+
+	const measured = await page.evaluate(() => {
+		const panel = document.querySelector('section');
+		const dl = document.querySelector('dl');
+		const cells = Array.from(dl.children);
+		const find = (text) => cells.find((c) => c.textContent.includes(text));
+		return {
+			panelBorder: getComputedStyle(panel).borderWidth,
+			gridBorder: getComputedStyle(dl).borderWidth,
+			addressWidth: find('Address').getBoundingClientRect().width,
+			gridWidth: dl.getBoundingClientRect().width,
+			totalFont: getComputedStyle(find('Total').querySelector('dd')).fontFamily,
+			storeFont: getComputedStyle(find('Store').querySelector('dd')).fontFamily
+		};
+	});
+
+	check('FactGrid: the Panel draws a real border', measured.panelBorder !== '0px', measured.panelBorder);
+	check('FactGrid: FactGrid itself draws none — no box in a box', measured.gridBorder === '0px', measured.gridBorder);
+	check(
+		'FactGrid: a long value spans the full grid row width',
+		Math.abs(measured.addressWidth - measured.gridWidth) < 1,
+		`${measured.addressWidth.toFixed(1)}px vs grid ${measured.gridWidth.toFixed(1)}px`
+	);
+	check(
+		'FactGrid: a numeric fact resolves the mono figures face',
+		measured.totalFont.includes('JetBrains Mono'),
+		measured.totalFont
+	);
+	check(
+		'FactGrid: a plain-words fact does NOT resolve the mono face',
+		!measured.storeFont.includes('JetBrains Mono'),
+		measured.storeFont
+	);
+	check('FactGrid: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
 server.close();
 

@@ -2,6 +2,40 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.18] - 2026-09-28
+
+### Added
+
+- **`PageCanvas`** (`@poodle64/ui/page-canvas`): one page at a time, fitted to
+  its pane both ways so an A4 statement and a tall phone-scanned receipt alike
+  fill it, with what a reading points at outlined on the page. Two apps had
+  each hand-built their own page viewer with no way to do this next part:
+  godswood's `DocumentViewer` (image URLs, one page at a time) and
+  pebblestone's `PdfViewer` (pdf.js canvas) — this is the shared engine
+  behind both, ported from the fat-controller run-view's approved design
+  (radar-hooves/godswood#839). The package fetches nothing and renders
+  nothing of the page itself: a consumer supplies the render through the
+  `page` snippet (an `<img>`, a PDF canvas, anything) and reports each page's
+  own intrinsic size once known via `reportSize` — `PageCanvas` owns only the
+  fit/zoom/pan/pager arithmetic and the evidence overlay on top of it.
+  A region (`PageCanvasRegion`) is a box in PAGE FRACTIONS (0–1 each way),
+  optionally tilted a few degrees for a sloped scan, with a label. One region
+  can be `activeRegionId` (hovered in a list the consumer renders beside the
+  page) or `focusedRegionId` (clicked), both drawn with the same solid
+  outline; focusing additionally zooms in on and centres the region, leaving
+  room for its label beside it where there is room and above it where there
+  is not, with a "Whole page" affordance (and Escape) back out. A further,
+  non-interactive `lookedRegions` set draws dashed — "where it looked" — for
+  the current page only.
+- **`FactGrid`** (`@poodle64/ui/fact-grid`): a document's key facts read at a
+  glance — eyebrow label over value, figures in mono, a long sentence-length
+  value spanning the row — with no border or title of its own, for the spot
+  where a Panel or DetailPanel already supplies the card. StatList is this
+  same "several bare figures together" situation as a titled card for the
+  context column; nesting that inside another bordered panel is a box in a
+  box, which is exactly the stop-gap godswood had built and asked this
+  package to absorb (#839).
+
 ## [2026.9.17] - 2026-09-18
 
 ### Added

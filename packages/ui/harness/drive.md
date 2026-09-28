@@ -6,7 +6,10 @@ heading mode), `overlays`, `overflow`, `avatar`, `palette` (the palette
 catalogue), `theming`, `detail-panel`, `nested` (nested navigation),
 `console` (the console-dashboard primitives) and `mobile-audit` (a realistic
 composed page, driven by eye at phone/tablet/desktop) — each in its own
-section at the end.
+section at the end. (This count predates several later additions —
+`page-canvas` and `fact-grid` among them — that were never folded back into
+the tally; read the `{#if surface === '…'}` chain in `App.svelte` for the
+actual list.)
 
 ## Two ways to drive it
 
@@ -1184,3 +1187,75 @@ so the range below the floor is not silent.
 What replaced the version range is the scripted overlay gate above. A range can
 only express a break someone has already characterised; driving the four overlays
 on every CI run catches the class of defect whatever causes it.
+
+## PageCanvas: the fit/zoom/focus overlay (`?surface=page-canvas`) — #839
+
+The whole reason this component exists is pixel geometry — the whole-page
+fit, the beside/above choice for a region's label, and the focus-and-centre
+zoom — and jsdom is structurally blind to every part of it: it never lays
+anything out, so `bind:clientWidth`/`clientHeight` on the stage read 0 there
+and the component's own `layout` derivation never leaves `null`.
+`src/test/page-canvas.test.ts` covers everything that IS provable without a
+layout engine — the pager, the zoom control, the keyboard wiring, the empty
+state, and how focus and page navigation interact with each other. Scripted
+here is the geometry those tests cannot reach.
+
+Two panes (`App.svelte`): a tall receipt in a pane wide enough that the
+whole-page view has room beside it for a label, and an A4 page in one narrow
+enough that it never does. Both real consumer call sites (godswood's
+`DocumentViewer`, pebblestone's `PdfViewer`) size this component with an
+explicit `class="h-full w-full"` on a flex-sized ancestor; the harness panes
+reproduce that contract with a fixed-size **block** ancestor instead, which
+is the more demanding case — a block box gives a zero-size child no size at
+all unless the child is told to fill it. The first check below exists
+because this shape caught a real defect while the surface was being built:
+the harness's own PageCanvas instances initially carried no sizing class,
+and every pane measured 0×0 forever — silent under jsdom (0 there is
+indistinguishable from "not yet measured"), loud here (nothing painted).
+
+| Claim                                                              | Why jsdom cannot make it                                              | Observed                                                          |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| An explicit `h-full w-full` reaches a real box; nothing is 0×0      | `clientWidth`/`clientHeight` read 0 regardless, so 0 reads as a pass   | pane 480×640, fitted page 129.0×562.0                             |
+| The fitted page never exceeds its pane, either axis                | no layout to compare against                                          | 129.0×562.0 inside 480×640                                        |
+| The fitted page is centred, not flush to a corner                  | no layout                                                              | 175.5px clear on both sides                                       |
+| Hovering a region (the app's own list, driving `activeRegionId`) draws a real outline box | no layout, no resolved geometry                       | a 116.1×14.6px box on the page                                    |
+| The label carries the region's own text                            | —                                                                      | "Header"                                                          |
+| With room beside the page, the label sits beside the outline       | needs the same room-check the fit itself needed                       | tag left 342.0 vs outline right 330.0                             |
+| The "where it looked" dashed region draws with nothing hovered or focused | no layout                                                        | a 129.0×9.5px box, independent of the hover state above           |
+| Focusing a region (a click) zooms in past the whole-page fit       | a scale comparison needs two resolved sizes                           | 438.7px vs whole-page 129.0px                                     |
+| A "Whole page" way back appears once focused                       | —                                                                      | present                                                           |
+| "Whole page" returns to exactly the prior fit                      | a pixel-exact round trip needs resolved geometry twice                | 129.0×562.0 both times                                            |
+| "Whole page" is gone once left                                     | —                                                                      | gone                                                              |
+| Focusing in the NARROW (A4) pane still zooms in past its own fit   | as above, a different pane                                            | 454.0px vs whole-page 269.9px                                     |
+| With no room beside the page, the label falls back ABOVE the outline | the same room-check as the wide pane, a different pane's answer      | tag bottom 110.6 vs outline top 118.6                             |
+| Escape is also a way back to the whole page                        | a keyboard-driven state change, not a class name                      | gone                                                               |
+
+### What the room-check gets right that a single test case could not
+
+The wide receipt pane has room beside the page for a label at the
+**whole-page** fit (129px wide, 480px pane) — but the SAME pane's label falls
+back to ABOVE once that region is FOCUSED, because focusing zooms the page to
+roughly 3.4× its whole-page fit (438.7px), and at that size the same 480px
+pane no longer has 300px clear beside it. `layout`'s `tagRight` is
+recomputed from whichever scale is actually in effect, not decided once for
+the whole pane — this is what makes the wide pane genuinely exercise BOTH
+branches of the room-check in one surface, rather than needing a third pane.
+
+## FactGrid inside a Panel: no box in a box (`?surface=fact-grid`) — #839
+
+FactGrid's one reason to exist beside StatList is that it draws no border of
+its own, so nesting it inside a Panel or DetailPanel never doubles the card.
+That is a claim about a resolved border WIDTH, which jsdom cannot make — it
+returns whatever class is present with no cascade behind it, so a stray
+`border` utility would read as a pass under a class-name check.
+`src/test/fact-grid.test.ts` already covers the class-name half (the
+numeric/plain-words face split, the long-value full-row span); scripted here
+is the resolved half.
+
+| Claim                                                    | Why jsdom cannot make it                              | Observed                                                                                    |
+| --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| The Panel draws a real border                            | `getComputedStyle` on a border returns the class, not a resolved width under jsdom | `1px`                                                          |
+| FactGrid itself draws none — no box in a box              | as above                                                  | `0px`                                                                                        |
+| A long, sentence-length value spans the full grid row     | `col-span-full` is a class; the CLAIM is the resolved width | 574.0px, exactly the grid's own 574.0px                                                  |
+| A numeric fact resolves the mono figures face             | `font-family` is unresolved (`var(--…)`-free here, but still a cascade fact) under jsdom | `"JetBrains Mono", "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace` |
+| A plain-words fact does NOT resolve the mono face         | as above                                                  | `"Avenir Next", "Hanken Grotesk", "Hanken Grotesk Variable", ui-sans-serif, system-ui, -apple-system, sans-serif` |

@@ -22,6 +22,11 @@
           "name": "StatList",
           "props": "items, title?, info?",
           "insteadOf": "a hand-built <dl> or a stack of label/value <div>s"
+        },
+        {
+          "name": "FactGrid",
+          "props": "facts",
+          "insteadOf": "the same figures inside a Panel or DetailPanel that already supplies the card — StatList's own border would nest a box in a box; FactGrid is the borderless, wrapping-grid answer for that spot"
         }
       ]
     },
@@ -212,6 +217,18 @@
           "name": "SearchResults",
           "props": "results, query?, total?, loading?, error?, resultHref?, onOpen?, onRetry?",
           "insteadOf": "a hand-built ranked hit list minting its own highlight and relevance styling"
+        }
+      ]
+    },
+    {
+      "key": "document-evidence",
+      "title": "A document a machine read, with evidence outlined",
+      "description": "One page at a time, fitted to its pane both ways so an A4 statement and a tall receipt alike fill it, with what a reading points at outlined on the page — a hovered or clicked region with its label, a dashed 'where it looked' set, and a focus that zooms in and centres. The app supplies the page render (image, PDF canvas, anything) and the region coordinates as page fractions; this owns the fit/zoom/pan and the overlay only.",
+      "components": [
+        {
+          "name": "PageCanvas",
+          "props": "pageCount, page, currentPage?, regions?, lookedRegions?, activeRegionId?, focusedRegionId?, zoom?",
+          "insteadOf": "a hand-built page viewer per app (godswood's DocumentViewer, pebblestone's PdfViewer) each re-deriving fit/zoom/pan, now with no way to outline what was read (#839)"
         }
       ]
     },
