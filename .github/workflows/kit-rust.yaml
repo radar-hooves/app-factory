@@ -1,0 +1,69 @@
+name: kit/rust
+
+# The fast gate for kit/rust (radar-hooves/full-stack-app-template#55): format,
+# clippy, check, test over the whole workspace. Runs from THIS repo's own
+# workflows, never template/.github — that tree is what copier stamps into a
+# scaffolded app, and nothing under kit/ reaches an app that way (a kit is a
+# versioned Cargo dependency, pinned to this repo's own release tag instead).
+#
+# This repo is PRIVATE, so the household CI rule's self-hosted default applies
+# (rules-library/fleet/ci.md) — unlike telemetry-rs's own former CI, which was
+# public and stayed on ubuntu-latest by a recorded exception. It also cannot
+# stay on dtolnay/rust-toolchain the way telemetry-rs's did: on Linux, tauri's
+# own Cargo.toml makes `gtk` an unconditional target dependency (not gated by
+# any Cargo feature), so tauri-plugin-telemetry needs GTK3/WebKitGTK headers to
+# even `cargo check`, which rustup alone cannot supply. `nix develop` against
+# `kit/rust/flake.nix` is the household's own Rust-on-atlas pattern for this —
+# mirrored from Bragi's own `rust-linux` CI job, which builds the same
+# tauri + GTK combination today.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kit/rust/**'
+      - '.github/workflows/kit-rust.yaml'
+  pull_request:
+    paths:
+      - 'kit/rust/**'
+      - '.github/workflows/kit-rust.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (Linux)
+    runs-on: [self-hosted, atlas]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Rust checks (fmt, clippy, check, test) in flake devShell
+        run: |
+          # A clean cargo home under the runner's own HOME so `cargo fmt`/
+          # `clippy` resolve to the flake devShell's toolchain, never a stray
+          # rustup shim; the runner keeps a warm crate cache here across jobs
+          # (Bragi's own `rust-linux` CI job, same pattern).
+          export CARGO_HOME="$HOME/.cargo"
+          cd kit/rust
+          nix develop --command bash -c '
+            set -euo pipefail
+            cargo fmt --all --check
+            cargo clippy --all-targets -- -D warnings
+            cargo test
+          '
+
+      - name: Notify failure (ntfy infra)
+        if: (failure() || cancelled()) && github.event_name != 'pull_request'
+        uses: radar-hooves/master-project/.github/actions/ntfy-failure@main
+        with:
+          title: 'full-stack-app-template kit/rust: CI failed'
+          token: ${{ secrets.NTFY_TOKEN }}

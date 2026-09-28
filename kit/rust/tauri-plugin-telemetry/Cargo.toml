@@ -1,0 +1,34 @@
+[package]
+name = "tauri-plugin-telemetry"
+version = "0.1.0"
+description = "A Tauri 2 app switches the household telemetry crate's whole contract on with one .plugin(...) call: init off the async runtime, the Guard dropped on RunEvent::Exit, allow-listed command spans with no argument capture, Settings-pane commands, and the process sampler"
+authors = ["poodle64"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.87"
+publish = false
+links = "tauri-plugin-telemetry"
+build = "build.rs"
+
+[lib]
+name = "tauri_plugin_telemetry"
+path = "src/lib.rs"
+
+[dependencies]
+telemetry = { path = "../telemetry" }
+tauri = { version = "2", default-features = false }
+tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+# Unifies with the [dependencies] `tauri` above for test builds only — a real
+# consumer's build never sees "test", the mock runtime, or an extra window
+# system.
+tauri = { version = "2", default-features = false, features = ["test"] }

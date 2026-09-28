@@ -1,0 +1,10 @@
+"$schema" = "schemas/schema.json"
+[default]
+description = """
+Read the live and saved telemetry exporter, change it, and test a
+collector address before saving it. No listening history, dictation or
+credential ever reaches these commands' arguments or return values —
+only an endpoint URL and a header-helper command string.
+"""
+
+permissions = ["allow-telemetry-get", "allow-telemetry-set", "allow-telemetry-probe"]
