@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.31] - 2026-09-28
+
+### Added
+
+- **The factory's first kit: `kits/rust`.** telemetry-rs moves in with its full history as `kits/rust/telemetry` (behaviour unchanged from its v0.5.0), and `kits/rust/tauri-plugin-telemetry` switches the whole telemetry contract on in a Tauri 2 app with one `.plugin(...)` call: `init` off the async runtime, the Guard dropped on exit, one span per command with no argument capture, the Settings-pane get/set/probe commands, and the process sampler. A reqwest URL never reaches an error report. Apps depend on it by this repo's tag as a Cargo git dependency (`kits/rust/README.md`). Nothing under `kits/` is stamped into an app. On the operator's ruling that this repo is the one home for shared app code in every language (#55).
+- **Unchanged for web apps:** a docstring in `exceptions.py` now quotes today's vend error.
+
 ## [2026.9.30] - 2026-09-27
 
 ### Fixed
