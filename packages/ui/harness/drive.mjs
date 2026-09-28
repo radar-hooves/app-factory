@@ -3616,6 +3616,126 @@ for (const density of ['comfortable', 'compact']) {
 	);
 	check('PageCanvas: Escape is also a way back to the whole page', !a4WholePageBtn, 'gone');
 
+	// ── Fix 2 (review of 6a5e2fe): focusing a region on ANOTHER page turns to
+	// it, as the approved canvas does (`pg = pinned ? line.page : st.pg`);
+	// hovering (never decisive enough to leave the page being read) must not.
+	// The receipt pane is a second page (App.svelte) with its OWN image, since
+	// reusing one <img src> across pages never re-fires `onload` — the exact
+	// shape of bug that would have hidden this fix behind an unmeasured page.
+	await page.click('[data-action="focus-page2"]');
+	await page.waitForTimeout(300);
+	const crossPageTag = await page.evaluate(() => {
+		const wrap = document.querySelector('[data-probe="receipt"] [role="button"]')?.parentElement;
+		return wrap?.querySelector('span:not([role])')?.textContent?.trim();
+	});
+	const crossPageWholeBtn = await page.evaluate(
+		() =>
+			!!Array.from(document.querySelectorAll('[data-probe="receipt"] button')).find(
+				(b) => b.textContent.trim() === 'Whole page'
+			)
+	);
+	check(
+		'PageCanvas: focusing a region on another page turns to that page and focuses it',
+		crossPageTag === 'On page 2' && crossPageWholeBtn,
+		`tag "${crossPageTag}", Whole page ${crossPageWholeBtn ? 'present' : 'absent'}`
+	);
+
+	// The pager is not on screen while focused ("Whole page" takes its place),
+	// so clear the focus before paging back.
+	await page.locator('[data-probe="receipt"]').getByText('Whole page').click();
+	await page.waitForTimeout(300);
+	await page.click('[data-probe="receipt"] [aria-label="Previous page"]');
+	await page.waitForTimeout(300);
+	await page.click('[data-action="hover-page2"]');
+	await page.waitForTimeout(200);
+	const pageAfterHoveringElsewhere = await page
+		.evaluate(() => document.querySelector('[data-probe="receipt"] .tabular-nums')?.textContent)
+		.then((t) => t?.trim());
+	check(
+		'PageCanvas: hovering (activeRegionId), unlike focusing, does NOT turn the page',
+		pageAfterHoveringElsewhere === '1 / 2',
+		pageAfterHoveringElsewhere
+	);
+	await page.click('[data-action="hover-page2"]');
+
+	// ── Fix 3 (review of 6a5e2fe): a dashed region's label must land at the
+	// same spot beside the page regardless of the region's OWN x offset — the
+	// pre-fix formula (`left: layout.width + 10`, inside a box already offset
+	// by the region's x) put a region starting away from the page's left edge
+	// past the page's right edge by that same offset. Two "looked" regions on
+	// this page (App.svelte): one at x=0, one at x=0.3.
+	const lookedTagLefts = await page.evaluate(() =>
+		Array.from(document.querySelectorAll('[data-probe="receipt"] .border-dashed span')).map(
+			(el) => el.getBoundingClientRect().x
+		)
+	);
+	check(
+		"PageCanvas: a dashed region's label sits beside the PAGE's edge, not offset by the region's own x",
+		lookedTagLefts.length === 2 && Math.abs(lookedTagLefts[0] - lookedTagLefts[1]) < 1,
+		JSON.stringify(lookedTagLefts)
+	);
+
+	// ── Fix 1 (review of 6a5e2fe): zoomed past 100%, the page must scroll
+	// inside the pane rather than clip with no way to reach its edges, and
+	// the pager/zoom controls must stay pinned to the pane's corners rather
+	// than scrolling away with it. The receipt (tall, narrow) overflows
+	// VERTICALLY at 300%; the A4 pane (wider) below overflows HORIZONTALLY —
+	// between the two, both axes of the fix are exercised for real.
+	const zoomCtrlBeforeScroll = await page.evaluate(() =>
+		document.querySelector('[data-probe="receipt"] [aria-label="Zoom in"]').getBoundingClientRect().toJSON()
+	);
+	await page.click('[data-action="zoom-300-receipt"]');
+	await page.waitForTimeout(300);
+	const receiptScroll = await page.evaluate(() => {
+		const stage = document.querySelector('[data-probe="receipt"] .overflow-auto');
+		return { scrollHeight: stage.scrollHeight, clientHeight: stage.clientHeight };
+	});
+	check(
+		'PageCanvas: zoomed past the pane, the stage genuinely scrolls (vertical)',
+		receiptScroll.scrollHeight > receiptScroll.clientHeight + 10,
+		JSON.stringify(receiptScroll)
+	);
+	const receiptScrolledTop = await page.evaluate(() => {
+		const stage = document.querySelector('[data-probe="receipt"] .overflow-auto');
+		stage.scrollTo({ top: stage.scrollHeight - stage.clientHeight });
+		return stage.scrollTop;
+	});
+	check(
+		"PageCanvas: the page's far (bottom) edge is actually reachable by scrolling",
+		receiptScrolledTop > 0,
+		`scrollTop ${receiptScrolledTop}`
+	);
+	const zoomCtrlAfterScroll = await page.evaluate(() =>
+		document.querySelector('[data-probe="receipt"] [aria-label="Zoom in"]').getBoundingClientRect().toJSON()
+	);
+	check(
+		'PageCanvas: the zoom control stays pinned to the pane corner while the page scrolls under it',
+		zoomCtrlBeforeScroll.x === zoomCtrlAfterScroll.x && zoomCtrlBeforeScroll.y === zoomCtrlAfterScroll.y,
+		`before ${JSON.stringify(zoomCtrlBeforeScroll)}, after ${JSON.stringify(zoomCtrlAfterScroll)}`
+	);
+
+	await page.click('[data-action="zoom-300-a4"]');
+	await page.waitForTimeout(300);
+	const a4Scroll = await page.evaluate(() => {
+		const stage = document.querySelector('[data-probe="a4"] .overflow-auto');
+		return { scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth };
+	});
+	check(
+		'PageCanvas: zoomed past the pane, the stage genuinely scrolls (horizontal)',
+		a4Scroll.scrollWidth > a4Scroll.clientWidth + 10,
+		JSON.stringify(a4Scroll)
+	);
+	const a4ScrolledLeft = await page.evaluate(() => {
+		const stage = document.querySelector('[data-probe="a4"] .overflow-auto');
+		stage.scrollTo({ left: stage.scrollWidth - stage.clientWidth });
+		return stage.scrollLeft;
+	});
+	check(
+		"PageCanvas: the page's far (right) edge is actually reachable by scrolling",
+		a4ScrolledLeft > 0,
+		`scrollLeft ${a4ScrolledLeft}`
+	);
+
 	check('PageCanvas: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }

@@ -1229,6 +1229,50 @@ indistinguishable from "not yet measured"), loud here (nothing painted).
 | Focusing in the NARROW (A4) pane still zooms in past its own fit   | as above, a different pane                                            | 454.0px vs whole-page 269.9px                                     |
 | With no room beside the page, the label falls back ABOVE the outline | the same room-check as the wide pane, a different pane's answer      | tag bottom 110.6 vs outline top 118.6                             |
 | Escape is also a way back to the whole page                        | a keyboard-driven state change, not a class name                      | gone                                                               |
+| Focusing a region on ANOTHER page turns to that page and focuses it | a page turn is a state change; the resulting outline needs resolved geometry too | tag "On page 2", "Whole page" present               |
+| Hovering (`activeRegionId`), unlike focusing, does NOT turn the page | as above                                                              | stays on "1 / 2"                                                   |
+| A dashed region's label sits beside the PAGE's edge, not offset by the region's own x | needs two regions' resolved positions compared against each other    | both land at x = 348.5, one region at box.x = 0, the other at 0.3 |
+| Zoomed past the pane, the stage genuinely scrolls (vertical, the tall receipt) | `scrollHeight`/`clientHeight` are both 0 without layout               | 1698 vs 638                                                        |
+| The page's far (bottom) edge is actually reachable by scrolling    | needs a real scroll to move and land                                  | scrollTop 1060                                                     |
+| The zoom control stays pinned to the pane corner while the page scrolls under it | needs two resolved positions, before and after a real scroll         | identical rect before and after                                    |
+| Zoomed past the pane, the stage genuinely scrolls (horizontal, the wider A4) | as above, the other axis                                             | scrollWidth 810 vs clientWidth 478                                 |
+| The page's far (right) edge is actually reachable by scrolling     | as above                                                              | scrollLeft 332                                                     |
+
+### The pan, cross-page-focus and dashed-label invariants
+
+Three claims worth recording the mechanism behind, since each is a case a
+single happy-path render cannot show.
+
+**Pan.** The stage is two nested boxes: an outer `position: relative` one
+holding the pager, "Whole page" and zoom controls as its own
+absolutely-positioned children, and an inner `absolute inset-0 overflow-auto`
+one holding the fitted page frame. Controls sitting OUTSIDE the scrollable
+box is what keeps them pinned to the pane's corners while the page scrolls
+under them, proved above by an identical control rect before and after a
+real scroll. `left`/`top` are floored at 0, never negative, because an
+`overflow: auto` box can only scroll into the positive space beyond its
+edges — flooring is what makes a page's own top-left corner the reachable
+start of that range, whichever axis (or both) the current zoom overflows.
+The receipt (tall, narrow) exercises the vertical axis; the A4 pane's wider
+aspect is what genuinely overflows sideways at 300%, so the two panes
+together prove both axes without a third fixture.
+
+**Cross-page focus.** A `$effect` turns `currentPage` to match a focused
+region's own page, the same rule the approved canvas encodes
+(`pg = pinned ? line.page : st.pg`); hovering does not, since only a click is
+decisive enough to leave the page someone is reading. Proving this needs a
+SECOND page with its own genuinely different content: an `<img src>` that
+does not change between pages never re-fires `onload`, so a page turned to
+for the first time would stay unmeasured and its whole layout `null` — the
+harness's receipt pane's second page renders a distinct SVG for exactly this
+reason.
+
+**The dashed label's x-offset.** A "looked" region's label is positioned at
+`layout.width * (1 - box.x) + 10`, inside a wrapper already offset by the
+region's own `box.x` — the two terms cancel, so the label always lands the
+same distance beside the PAGE's edge regardless of where the region itself
+starts. Proved here with two "looked" regions, one at `box.x = 0` and one at
+`box.x = 0.3`, whose labels measure to the same x.
 
 ### What the room-check gets right that a single test case could not
 

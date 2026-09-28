@@ -151,12 +151,8 @@ describe('PageCanvas — focus and the way back', () => {
 		expect(screen.getByText('Whole page')).toBeInTheDocument();
 	});
 
-	it('does not show it for a focused region on a different page', () => {
-		render(Harness, {
-			props: { pageCount: 2, regions: [{ ...region, page: 2 }], focusedRegionId: 'r1' }
-		});
-		expect(screen.queryByText('Whole page')).not.toBeInTheDocument();
-	});
+	// Focusing a region on ANOTHER page turns to it rather than doing nothing
+	// — see "PageCanvas — focusing a region turns to its own page" below.
 
 	it('clears the focus and returns to the pager on "Whole page"', async () => {
 		render(Harness, { props: { pageCount: 2, regions: [region], focusedRegionId: 'r1' } });
@@ -179,5 +175,72 @@ describe('PageCanvas — focus and the way back', () => {
 		await fireEvent.keyDown(stage(), { key: 'ArrowRight' });
 		expect(screen.queryByText('Whole page')).not.toBeInTheDocument();
 		expect(pageLabel()).toHaveTextContent('2 / 2');
+	});
+});
+
+describe('PageCanvas — focusing a region turns to its own page', () => {
+	const onPageOne: PageCanvasRegion = {
+		id: 'p1',
+		page: 1,
+		box: { x: 0.1, y: 0.1, w: 0.2, h: 0.05 },
+		label: 'On page 1'
+	};
+	const onPageTwo: PageCanvasRegion = {
+		id: 'p2',
+		page: 2,
+		box: { x: 0.1, y: 0.1, w: 0.2, h: 0.05 },
+		label: 'On page 2'
+	};
+
+	it('turns to a focused region\'s own page, from elsewhere', () => {
+		render(Harness, {
+			props: { pageCount: 2, regions: [onPageOne, onPageTwo], focusedRegionId: 'p2' }
+		});
+		expect(screen.getByTestId('page-content')).toHaveTextContent('page 2');
+		expect(screen.getByText('Whole page')).toBeInTheDocument();
+	});
+
+	it('turns pages again when the focus moves to a region on a further page', async () => {
+		const { rerender } = render(Harness, {
+			props: { pageCount: 2, regions: [onPageOne, onPageTwo], focusedRegionId: 'p1' }
+		});
+		expect(screen.getByTestId('page-content')).toHaveTextContent('page 1');
+		await rerender({ focusedRegionId: 'p2' });
+		expect(screen.getByTestId('page-content')).toHaveTextContent('page 2');
+	});
+
+	it('does NOT turn the page for a hovered (active, not focused) region elsewhere', () => {
+		render(Harness, {
+			props: { pageCount: 2, regions: [onPageOne, onPageTwo], activeRegionId: 'p2' }
+		});
+		expect(screen.getByTestId('page-content')).toHaveTextContent('page 1');
+	});
+});
+
+describe('PageCanvas — panning past 100%', () => {
+	// jsdom lays nothing out, so the actual scroll behaviour (the reason this
+	// exists) is proved in harness/drive.mjs; this is the cheap structural
+	// regression guard: the controls must not be descendants of the
+	// scrollable region, or they would scroll away with it.
+	it('keeps the pager and zoom controls outside the scrollable stage', () => {
+		render(Harness, { props: { pageCount: 2 } });
+		const scroller = document.querySelector('.overflow-auto');
+		expect(scroller).not.toBeNull();
+		expect(scroller?.contains(screen.getByLabelText('Zoom in'))).toBe(false);
+		expect(scroller?.contains(screen.getByLabelText('Next page'))).toBe(false);
+	});
+
+	it('keeps "Whole page" outside the scrollable stage too', () => {
+		render(Harness, {
+			props: {
+				pageCount: 1,
+				regions: [
+					{ id: 'r1', page: 1, box: { x: 0.1, y: 0.1, w: 0.2, h: 0.05 } }
+				],
+				focusedRegionId: 'r1'
+			}
+		});
+		const scroller = document.querySelector('.overflow-auto');
+		expect(scroller?.contains(screen.getByText('Whole page'))).toBe(false);
 	});
 });

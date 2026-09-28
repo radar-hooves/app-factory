@@ -522,12 +522,23 @@
 		[80, 60],
 		[1100, 40]
 	]);
+	// A distinct image per page: reusing one `src` across pages never re-fires
+	// `onload`, so a page turned to for the first time would never report its
+	// own size and stay stuck unmeasured — the exact shape of bug the cross-
+	// page focus fix (#839 review, fix 2) needs a second page to expose at all.
+	const RECEIPT_IMG_PAGE2 = svgPage(537, 2339, [[400, 80]]);
 	const A4_IMG = svgPage(595, 842, [[60, 24]]);
 	const receiptRegions: PageCanvasRegion[] = [
-		{ id: 'r-header', page: 1, box: { x: 0.05, y: 0.034, w: 0.9, h: 0.026 }, label: 'Header' }
+		{ id: 'r-header', page: 1, box: { x: 0.05, y: 0.034, w: 0.9, h: 0.026 }, label: 'Header' },
+		{ id: 'r-page2', page: 2, box: { x: 0.3, y: 0.1, w: 0.4, h: 0.03 }, label: 'On page 2' }
 	];
 	const receiptLooked: PageCanvasRegion[] = [
-		{ id: 'r-bottom', page: 1, box: { x: 0, y: 0.47, w: 1, h: 0.017 }, label: 'Bottom half' }
+		{ id: 'r-bottom', page: 1, box: { x: 0, y: 0.47, w: 1, h: 0.017 }, label: 'Bottom half' },
+		// x > 0, on purpose: a region that does NOT start at the page's own left
+		// edge is what exposed the label-offset defect (#839 review, fix 3) —
+		// a full-width region (above) never can, since layout.width*(1-0)
+		// and the pre-fix left:layout.width+10 formula agree when box.x is 0.
+		{ id: 'r-partial', page: 1, box: { x: 0.3, y: 0.6, w: 0.3, h: 0.017 }, label: 'Partial band' }
 	];
 	const a4Regions: PageCanvasRegion[] = [
 		{
@@ -539,8 +550,11 @@
 	];
 	let receiptActive = $state<string | null>(null);
 	let receiptFocused = $state<string | null>(null);
+	let receiptZoom = $state(1);
+	let receiptPage = $state(1);
 	let a4Active = $state<string | null>(null);
 	let a4Focused = $state<string | null>(null);
+	let a4Zoom = $state(1);
 	// A 1x1 transparent GIF, inline: the harness serves no assets and the claim
 	// is about the load-state machine, not about what the picture is.
 	const REAL_IMAGE =
@@ -725,16 +739,18 @@
 			<p class="text-sm">Receipt, wide pane (label beside)</p>
 			<div data-probe="receipt" style="width: 480px; height: 640px; border: 1px solid #ccc;">
 				<PageCanvas
-					pageCount={1}
+					pageCount={2}
+					bind:currentPage={receiptPage}
 					regions={receiptRegions}
 					lookedRegions={receiptLooked}
 					bind:activeRegionId={receiptActive}
 					bind:focusedRegionId={receiptFocused}
+					bind:zoom={receiptZoom}
 					class="h-full w-full"
 				>
-					{#snippet page(_pageNumber, info)}
+					{#snippet page(pageNumber, info)}
 						<img
-							src={RECEIPT_IMG}
+							src={pageNumber === 2 ? RECEIPT_IMG_PAGE2 : RECEIPT_IMG}
 							alt="receipt"
 							style="width: {info.size.width ? info.size.width + 'px' : 'auto'}; height: {info
 								.size.height
@@ -749,12 +765,29 @@
 					{/snippet}
 				</PageCanvas>
 			</div>
-			<button
-				type="button"
-				data-action="hover-header"
-				onclick={() => (receiptActive = receiptActive === 'r-header' ? null : 'r-header')}
-				>Hover Header</button
-			>
+			<div class="flex flex-wrap gap-2">
+				<button
+					type="button"
+					data-action="hover-header"
+					onclick={() => (receiptActive = receiptActive === 'r-header' ? null : 'r-header')}
+					>Hover Header</button
+				>
+				<button
+					type="button"
+					data-action="focus-page2"
+					onclick={() => (receiptFocused = receiptFocused === 'r-page2' ? null : 'r-page2')}
+					>Focus region on page 2</button
+				>
+				<button
+					type="button"
+					data-action="hover-page2"
+					onclick={() => (receiptActive = receiptActive === 'r-page2' ? null : 'r-page2')}
+					>Hover region on page 2</button
+				>
+				<button type="button" data-action="zoom-300-receipt" onclick={() => (receiptZoom = 3)}
+					>Zoom to 300%</button
+				>
+			</div>
 		</div>
 		<div class="flex flex-col gap-2">
 			<p class="text-sm">A4, narrow pane (label above)</p>
@@ -764,6 +797,7 @@
 					regions={a4Regions}
 					bind:activeRegionId={a4Active}
 					bind:focusedRegionId={a4Focused}
+					bind:zoom={a4Zoom}
 					class="h-full w-full"
 				>
 					{#snippet page(_pageNumber, info)}
@@ -783,12 +817,20 @@
 					{/snippet}
 				</PageCanvas>
 			</div>
-			<button
-				type="button"
-				data-action="focus-invoice"
-				onclick={() => (a4Focused = a4Focused === 'a-invoice' ? null : 'a-invoice')}
-				>Focus Invoice number</button
-			>
+			<div class="flex flex-wrap gap-2">
+				<button
+					type="button"
+					data-action="focus-invoice"
+					onclick={() => (a4Focused = a4Focused === 'a-invoice' ? null : 'a-invoice')}
+					>Focus Invoice number</button
+				>
+				<!-- A4's wider aspect (unlike the tall, narrow receipt) genuinely
+				     overflows this pane HORIZONTALLY at 300%, so this pane proves
+				     the fix's other axis. -->
+				<button type="button" data-action="zoom-300-a4" onclick={() => (a4Zoom = 3)}
+					>Zoom to 300%</button
+				>
+			</div>
 		</div>
 	</div>
 {:else if surface === 'fact-grid'}

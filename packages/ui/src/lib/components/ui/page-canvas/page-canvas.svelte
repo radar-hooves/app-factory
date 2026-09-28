@@ -118,6 +118,15 @@
 		focusedRegionId = null;
 	}
 
+	// Focusing a region on another page turns to that page — the approved
+	// canvas's own rule (`pg = pinned ? line.page : st.pg`). Hover does not:
+	// only a click is decisive enough to leave the page the caller is reading.
+	$effect(() => {
+		if (focusedRegionId === null) return;
+		const region = regions.find((r) => r.id === focusedRegionId);
+		if (region && region.page !== currentPage) currentPage = region.page;
+	});
+
 	function handleWheel(event: WheelEvent) {
 		if (!event.ctrlKey && !event.metaKey) return;
 		event.preventDefault();
@@ -160,7 +169,13 @@
 
 	// The whole-page fit, then a focused region's own zoom-and-centre, ported
 	// from the fat-controller run-view design canvas (godswood
-	// docs/design/fat-controller/project/Run-*.dc.html, `renderVals`).
+	// docs/design/fat-controller/project/Run-*.dc.html, `renderVals`). Past
+	// the fit, the frame outgrows the pane; `left`/`top` are floored at 0 so
+	// the page's own top-left corner is always the reachable start of the
+	// scrollable stage below rather than an offset an `overflow: auto` box
+	// can never scroll to (a negative position is outside its scroll range),
+	// and whatever spills past the pane's other edges scrolls into view there
+	// instead of the centring maths trying to pre-empt every edge itself.
 	const layout = $derived.by(() => {
 		const n = size;
 		if (!n || stageW <= PAD_X || stageH <= PAD_TOP + PAD_BOTTOM) return null;
@@ -182,10 +197,15 @@
 			left = tagRight
 				? Math.max(PAD_X / 2, (stageW - LABEL_RESERVE - n.width * scale) / 2)
 				: (stageW - n.width * scale) / 2;
-		} else if (zoom > 1) {
-			left = Math.max(PAD_X / 2, left);
 		}
-		return { scale, top, left, tagRight, width: n.width * scale, height: n.height * scale };
+		return {
+			scale,
+			top: Math.max(0, top),
+			left: Math.max(0, left),
+			tagRight,
+			width: n.width * scale,
+			height: n.height * scale
+		};
 	});
 
 	const renderInfo = $derived<PageCanvasRenderInfo>({
@@ -220,7 +240,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	bind:this={ref}
-	class={cn('relative flex flex-col overflow-hidden outline-none', klass)}
+	class={cn('relative outline-none', klass)}
 	bind:clientWidth={stageW}
 	bind:clientHeight={stageH}
 	onwheel={handleWheel}
@@ -235,58 +255,65 @@
 			No pages available
 		</div>
 	{:else}
-		<div style={frameStyle}>
-			{#if !size}
-				<Skeleton class="absolute inset-0" />
-			{/if}
-			{@render page(currentPage, renderInfo)}
-
-			{#if layout}
-				{#each lookedOnPage as region (region.id)}
-					<div
-						class="border-muted-foreground/70 bg-transparent pointer-events-none absolute rounded-sm border-2 border-dashed"
-						style={regionBoxStyle(region)}
-						aria-hidden="true"
-					>
-						{#if region.label}
-							<span
-								class="bg-card border-border text-muted-foreground absolute rounded-md border px-2 py-0.5 text-xs whitespace-nowrap"
-								style={layout.tagRight
-									? `left:${layout.width + 10}px; top:0;`
-									: 'left:4px; top:4px;'}
-							>
-								{region.label}
-							</span>
-						{/if}
-					</div>
-				{/each}
-
-				{#if shownRegion}
-					<div style={regionBoxStyle(shownRegion)} class="absolute">
-						<span
-							role="button"
-							tabindex="0"
-							class="border-primary bg-primary/10 absolute inset-0 cursor-pointer rounded-sm border-2"
-							style="transform: rotate({shownRegion.rotateDeg ?? 0}deg); transition: all 160ms ease;"
-							onclick={() => toggleFocus(shownRegion)}
-							onkeydown={(e) => onRegionKeydown(e, shownRegion)}
-							aria-label={shownRegion.label
-								? `Focus the outlined region: ${shownRegion.label}`
-								: 'Focus the outlined region'}
-						></span>
-						{#if shownRegion.label}
-							<span
-								class="bg-card border-border text-foreground absolute rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap"
-								style={layout.tagRight
-									? 'left: calc(100% + 12px); top: 50%; transform: translateY(-50%);'
-									: 'left: 0; bottom: calc(100% + 8px);'}
-							>
-								{shownRegion.label}
-							</span>
-						{/if}
-					</div>
+		<!--
+			The controls below are siblings of this scroller, not children of it,
+			so a page zoomed or focused past the pane scrolls under them rather
+			than carrying them away with it.
+		-->
+		<div class="absolute inset-0 overflow-auto">
+			<div style={frameStyle}>
+				{#if !size}
+					<Skeleton class="absolute inset-0" />
 				{/if}
-			{/if}
+				{@render page(currentPage, renderInfo)}
+
+				{#if layout}
+					{#each lookedOnPage as region (region.id)}
+						<div
+							class="border-muted-foreground/70 bg-transparent pointer-events-none absolute rounded-sm border-2 border-dashed"
+							style={regionBoxStyle(region)}
+							aria-hidden="true"
+						>
+							{#if region.label}
+								<span
+									class="bg-card border-border text-muted-foreground absolute rounded-md border px-2 py-0.5 text-xs whitespace-nowrap"
+									style={layout.tagRight
+										? `left:${layout.width * (1 - region.box.x) + 10}px; top:0;`
+										: 'left:4px; top:4px;'}
+								>
+									{region.label}
+								</span>
+							{/if}
+						</div>
+					{/each}
+
+					{#if shownRegion}
+						<div style={regionBoxStyle(shownRegion)} class="absolute">
+							<span
+								role="button"
+								tabindex="0"
+								class="border-primary bg-primary/10 absolute inset-0 cursor-pointer rounded-sm border-2"
+								style="transform: rotate({shownRegion.rotateDeg ?? 0}deg); transition: all 160ms ease;"
+								onclick={() => toggleFocus(shownRegion)}
+								onkeydown={(e) => onRegionKeydown(e, shownRegion)}
+								aria-label={shownRegion.label
+									? `Focus the outlined region: ${shownRegion.label}`
+									: 'Focus the outlined region'}
+							></span>
+							{#if shownRegion.label}
+								<span
+									class="bg-card border-border text-foreground absolute rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap"
+									style={layout.tagRight
+										? 'left: calc(100% + 12px); top: 50%; transform: translateY(-50%);'
+										: 'left: 0; bottom: calc(100% + 8px);'}
+								>
+									{shownRegion.label}
+								</span>
+							{/if}
+						</div>
+					{/if}
+				{/if}
+			</div>
 		</div>
 
 		<div class="absolute bottom-3 left-3 flex items-center gap-2">
