@@ -11,8 +11,8 @@ Shared Rust app code, versioned and consumed as a Cargo git dependency — never
 
 ```toml
 [dependencies]
-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
-tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
+telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.9.31" }
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.9.31" }
 ```
 
 No `path` key: Cargo traverses a git repository's whole file tree looking for the named crate's `Cargo.toml`, so a uniquely-named crate resolves regardless of where in the tree it lives. Pin `tag` to whatever release tag the change you need landed in — this repo's own calendar tags (`vYYYY.M.x`), never a crate-internal version.
