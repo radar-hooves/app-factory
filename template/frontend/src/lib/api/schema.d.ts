@@ -361,10 +361,11 @@ export interface paths {
         };
         /**
          * Get Settings Document
-         * @description The JSON Schema, effective values, and which keys are overridden.
+         * @description The JSON Schema, the effective values, and their declared defaults.
          *
          *     Everything `<SchemaForm>` needs to render the page, and everything the
-         *     "overridden from default" panel needs beside it.
+         *     "overridden from default" panel needs beside it — which keys are
+         *     overridden is left for the frontend to derive from `value`/`defaults`.
          */
         get: operations["getSettings"];
         put?: never;
@@ -1049,7 +1050,7 @@ export interface components {
         };
         /**
          * SettingUpdate
-         * @description Request body for `PATCH /api/admin/settings/{key}` — one field's next value.
+         * @description Request body for `PATCH /api/settings/{key}` — one field's next value.
          */
         SettingUpdate: {
             /** Value */
@@ -1063,6 +1064,10 @@ export interface components {
          *     its own layout from the JSON Schema alone (`docs/design/settings.md`
          *     §The page), which is the only mode in which a declared setting cannot be
          *     missing from the rendered form.
+         *
+         *     Carries no `overridden` field: which keys differ from their default is
+         *     derivable from `value` and `defaults` alone, so the frontend derives it
+         *     rather than the two ever risking disagreement.
          */
         SettingsDocument: {
             /** Schema */
@@ -1077,8 +1082,6 @@ export interface components {
             defaults: {
                 [key: string]: boolean | number | string;
             };
-            /** Overridden */
-            overridden: string[];
         };
         /**
          * UserSummary

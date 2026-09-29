@@ -2,7 +2,7 @@
 
 A ``Setting`` is a typed default plus operator-facing metadata — never a value.
 The value is the code default until an operator overrides it through
-``PATCH /api/admin/settings``, at which point ``service.get_value`` starts
+``PATCH /api/settings/{key}``, at which point ``service.get_value`` starts
 returning the override instead (``api/settings/models.py``). Declaring one
 does not touch the database and needs no migration of its own; only the two
 factory-owned tables (``setting_overrides``, ``setting_changes``) do.
@@ -41,6 +41,8 @@ _FORBIDDEN_SUBSTRINGS = (
     "private_key",
     "mailbox",
     "recipient",
+    "email",
+    "phone",
 )
 
 

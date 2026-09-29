@@ -9,7 +9,8 @@ worker processes must see a write the instant it commits, with no restart.
 import logging
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.settings.declare import Setting, SettingType, all_settings, get_declared
@@ -93,6 +94,12 @@ def set_value(
     Returns the `(new_value, default)` pair the route needs to build a
     `SettingRead`.
 
+    One INSERT … ON CONFLICT rather than a read then a conditional INSERT, so
+    two admins saving the same key's first override at once cannot both find
+    no row and both try to insert it — the loser used to crash with an
+    uncaught `IntegrityError` (500) instead of simply overwriting, exactly the
+    idiom `api/alerts/service.py`'s `raise_alert` already uses.
+
     Raises:
         NotFoundError: nothing declared this key.
         ValidationError: `value` fails the declared type, bounds, choices, or
@@ -102,13 +109,17 @@ def set_value(
     _validate(setting, value)
 
     old_value = get_value(session, key)
-    row = session.get(SettingOverride, key)
-    if row is None:
-        row = SettingOverride(key=key, value=value, updated_by_id=actor_user_id)
-        session.add(row)
-    else:
-        row.value = value
-        row.updated_by_id = actor_user_id
+    statement = (
+        insert(SettingOverride)
+        .values(key=key, value=value, updated_by_id=actor_user_id)
+        .on_conflict_do_update(
+            index_elements=[SettingOverride.key],
+            set_={"value": value, "updated_by_id": actor_user_id, "updated_at": func.now()},
+        )
+        .returning(SettingOverride)
+        .execution_options(populate_existing=True)
+    )
+    session.scalars(statement).one()
     session.add(SettingChange(key=key, old_value=old_value, new_value=value, changed_by_id=actor_user_id))
     session.flush()
     logger.info("Setting changed", extra={"setting_key": key})
@@ -121,14 +132,20 @@ def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool
     A no-op that still logs the reset when `key` had no override: the operator
     asked for the default and now has it, whether or not anything changed.
 
+    A Core `DELETE`, not `session.delete()` on a loaded row: the ORM checks
+    the deleted row count against its identity map and raises `StaleDataError`
+    when a concurrent reset already removed it, the same crash-on-race shape
+    `set_value` above no longer has. A `DELETE` matching zero rows is not an
+    error here — the operator asked for the default and a concurrent reset
+    already got them there.
+
     Raises:
         NotFoundError: nothing declared this key.
     """
     setting = _require_declared(key)
     row = session.get(SettingOverride, key)
     old_value = row.value if row is not None else setting.default
-    if row is not None:
-        session.delete(row)
+    session.execute(delete(SettingOverride).where(SettingOverride.key == key))
     session.add(SettingChange(key=key, old_value=old_value, new_value=setting.default, changed_by_id=actor_user_id))
     session.flush()
     return setting.default

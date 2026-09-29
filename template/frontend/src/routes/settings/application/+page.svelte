@@ -25,6 +25,14 @@
 
 	let settingsDoc = $state<SettingsDocument | null>(null);
 	let loadError = $state<string | null>(null);
+	/** Keys whose effective value differs from its default — derived, never a second copy the API and this page could disagree on. */
+	let overridden = $derived(
+		settingsDoc
+			? Object.keys(settingsDoc.value).filter(
+					(key) => settingsDoc!.value[key] !== settingsDoc!.defaults[key]
+				)
+			: []
+	);
 
 	async function load() {
 		const { data, error } = await api.GET('/api/settings/');
@@ -54,7 +62,6 @@
 			toast.error(info.title, { description: info.description });
 			return;
 		}
-		if (!settingsDoc.overridden.includes(key)) settingsDoc.overridden.push(key);
 		settingsDoc.value[key] = data.value as never;
 	}
 
@@ -69,8 +76,6 @@
 			return;
 		}
 		settingsDoc.value[key] = data.value as never;
-		const index = settingsDoc.overridden.indexOf(key);
-		if (index !== -1) settingsDoc.overridden.splice(index, 1);
 	}
 </script>
 
@@ -88,10 +93,10 @@
 		<SchemaForm schema={settingsDoc.schema} value={settingsDoc.value} onChange={handleChange} />
 	</Panel>
 
-	{#if settingsDoc.overridden.length}
-		<Panel title="Overridden from default" subtitle="{settingsDoc.overridden.length} changed">
+	{#if overridden.length}
+		<Panel title="Overridden from default" subtitle="{overridden.length} changed">
 			<ul class="grid gap-2">
-				{#each settingsDoc.overridden as key (key)}
+				{#each overridden as key (key)}
 					{@const label = (settingsDoc.schema as FieldSchema).properties?.[key]?.title ?? key}
 					<li class="flex items-center justify-between gap-4">
 						<span class="text-sm">

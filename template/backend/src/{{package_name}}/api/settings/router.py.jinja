@@ -33,15 +33,15 @@ MAX_HISTORY_PAGE_SIZE = 200
 
 @router.get("/", response_model=SettingsDocument, operation_id="getSettings")
 def get_settings_document(session: SessionDep) -> SettingsDocument:
-    """The JSON Schema, effective values, and which keys are overridden.
+    """The JSON Schema, the effective values, and their declared defaults.
 
     Everything `<SchemaForm>` needs to render the page, and everything the
-    "overridden from default" panel needs beside it.
+    "overridden from default" panel needs beside it — which keys are
+    overridden is left for the frontend to derive from `value`/`defaults`.
     """
     values = service.get_effective_values(session)
     defaults = {setting.key: setting.default for setting in all_settings()}
-    overridden = [key for key in values if values[key] != defaults.get(key)]
-    return SettingsDocument(schema_=service.build_schema(), value=values, defaults=defaults, overridden=overridden)
+    return SettingsDocument(schema_=service.build_schema(), value=values, defaults=defaults)
 
 
 @router.patch(

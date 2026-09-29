@@ -8,15 +8,21 @@ gateway-reachability and `narrow` behaviour is proved directly against
 this suite.
 """
 
+import asyncio
+import threading
 import uuid
 
 import pytest
-from httpx import AsyncClient
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.settings import service
 from {{ package_name }}.api.settings.declare import SettingType, declare_setting
+from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
 from {{ package_name }}.api.users.models import User
+from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import NotFoundError, ValidationError
 
 
@@ -84,7 +90,10 @@ async def test_the_document_carries_the_schema_and_the_defaults(client: AsyncCli
     assert body["value"]["example.max_items_per_page"] == 20
     assert body["defaults"]["example.new_item_button_enabled"] is True
     assert body["defaults"]["example.max_items_per_page"] == 20
-    assert "example.new_item_button_enabled" not in body["overridden"]
+    # No `overridden` field on the wire: which keys differ is derivable from
+    # `value`/`defaults` alone, and the frontend derives it (`+page.svelte`).
+    assert "overridden" not in body
+    assert body["value"]["example.new_item_button_enabled"] == body["defaults"]["example.new_item_button_enabled"]
 
 
 # ── Writing, resetting, and the trail they leave ─────────────────────────────
@@ -100,7 +109,7 @@ async def test_a_write_then_a_reset_round_trips_through_the_override(client: Asy
 
     document = (await client.get("/api/settings/", headers=admin)).json()
     assert document["value"]["example.max_items_per_page"] == 50
-    assert "example.max_items_per_page" in document["overridden"]
+    assert document["value"]["example.max_items_per_page"] != document["defaults"]["example.max_items_per_page"]
 
     reset = await client.post("/api/settings/example.max_items_per_page/reset", headers=admin)
     assert reset.status_code == 200
@@ -126,6 +135,61 @@ async def test_an_undeclared_key_is_not_found(client: AsyncClient) -> None:
     assert missing.status_code == 404
 
 
+# Each fanned-out request holds a pooled connection and a worker thread while it
+# waits — see test_workspaces_api.py's own FAN_OUT for the same pool-size ceiling.
+FAN_OUT = 5
+
+
+async def test_fanned_out_first_writes_to_a_setting_all_succeed(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Several admins save the same never-before-overridden setting at once.
+
+    Driven for real, like the workspaces slice's own first-sight race
+    (`test_workspaces_api.py`): bypasses the `client` fixture's one shared
+    rollback session, since a real race needs real concurrent transactions.
+    Each request's read of the current value is held until every request has
+    read, which is the interleaving where every one of them finds no override
+    row and tries to write the first one. With a `session.get` then a
+    conditional INSERT, all but one of these used to crash with an uncaught
+    `IntegrityError` (500); the INSERT … ON CONFLICT idiom makes every request
+    succeed and still leaves one `SettingChange` per write.
+    """
+    key = f"test.{uuid.uuid4().hex}.race"
+    declare_setting(key, type=SettingType.integer, default=0, title="Race", description="")
+
+    real_get_value = service.get_value
+    everyone_has_read = threading.Barrier(FAN_OUT, timeout=10)
+    this_request = threading.local()
+
+    def read_then_wait_for_the_rest(session: Session, read_key: str):
+        value = real_get_value(session, read_key)
+        if read_key == key and not getattr(this_request, "waited", False):
+            this_request.waited = True
+            everyone_has_read.wait()
+        return value
+
+    monkeypatch.setattr(service, "get_value", read_then_wait_for_the_rest)
+
+    admin = _headers("the-racer", "admin:write")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+        ) as race_client:
+            responses = await asyncio.gather(
+                *(race_client.patch(f"/api/settings/{key}", json={"value": n}, headers=admin) for n in range(FAN_OUT))
+            )
+
+        assert [response.status_code for response in responses] == [200] * FAN_OUT
+
+        with get_session_factory()() as db:
+            assert db.get(SettingOverride, key) is not None
+            changes = db.execute(select(SettingChange).where(SettingChange.key == key)).scalars().all()
+            assert len(changes) == FAN_OUT
+    finally:
+        with get_session_factory()() as db, db.begin():
+            db.execute(delete(SettingChange).where(SettingChange.key == key))
+            db.execute(delete(SettingOverride).where(SettingOverride.key == key))
+
+
 # ── Declaring a setting ───────────────────────────────────────────────────────
 
 
@@ -145,6 +209,35 @@ def test_declaring_the_same_key_twice_is_refused() -> None:
     declare_setting(key, type=SettingType.boolean, default=True, title="Once", description="")
     with pytest.raises(ValueError, match="already declared"):
         declare_setting(key, type=SettingType.boolean, default=True, title="Twice", description="")
+
+
+def test_an_email_shaped_key_is_refused_at_declaration() -> None:
+    """The worked example `_FORBIDDEN_SUBSTRINGS`' own comment names: a `string`
+    called `notification_email` holds a person's identifier under a permitted
+    type, so the substring check — not the closed `SettingType` enum — is what
+    has to catch it."""
+    with pytest.raises(ValueError, match="secret or a person's identifier"):
+        declare_setting(
+            f"test.{uuid.uuid4().hex}.notification_email",
+            type=SettingType.string,
+            default="",
+            title="Notification email",
+            description="Where to send an alert when the nightly job fails.",
+        )
+
+
+def test_an_ordinary_key_naming_nothing_forbidden_is_accepted() -> None:
+    key = f"test.{uuid.uuid4().hex}.digest_frequency_hours"
+    setting = declare_setting(
+        key,
+        type=SettingType.integer,
+        default=24,
+        minimum=1,
+        maximum=168,
+        title="Digest frequency",
+        description="How often, in hours, the summary digest runs.",
+    )
+    assert setting.key == key
 
 
 # ── model_alias: reachability, narrowing, and degrading when the gateway is down ──
