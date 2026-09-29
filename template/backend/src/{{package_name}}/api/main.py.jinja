@@ -4,12 +4,13 @@ Include one sub-router per vertical domain slice. Each slice lives in
 api/<domain>/ with its own router.py, schemas.py, models.py, service.py,
 and dependencies.py.
 
-``users``, ``workspaces``, ``admin``, ``feedback`` and ``alerts`` come from the
-factory and are not this app's domain (`rules-library/platform/canonical-app-shape.md`
+``users``, ``workspaces``, ``admin``, ``feedback``, ``alerts`` and ``settings``
+come from the factory and are not this app's domain (`rules-library/platform/canonical-app-shape.md`
 §Shared Domains Belong to the Factory): identity, the access boundary,
-administration, how a user reports a problem and how a machine tells the
-operator something are cross-cutting, and an app that builds its own is
-diverging on a solved problem.
+administration, how a user reports a problem, how a machine tells the
+operator something, and how the operator changes a runtime setting are
+cross-cutting, and an app that builds its own is diverging on a solved
+problem.
 
 ``agent`` is the factory's too: the persona chat slice
 (`docs/design/agent-console.md`). It renders nothing until this app has a
@@ -32,6 +33,7 @@ from {{ package_name }}.api.agent.router import router as agent_router
 from {{ package_name }}.api.alerts.router import router as alerts_router
 from {{ package_name }}.api.example.router import router as example_router
 from {{ package_name }}.api.feedback.router import router as feedback_router
+from {{ package_name }}.api.settings.router import router as settings_router
 from {{ package_name }}.api.system.router import router as system_router
 from {{ package_name }}.api.users.router import router as users_router
 from {{ package_name }}.api.workspaces.router import router as workspaces_router
@@ -42,6 +44,7 @@ api_router.include_router(workspaces_router, prefix="/workspaces", tags=["worksp
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
 api_router.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(settings_router, prefix="/settings", tags=["settings"])
 api_router.include_router(agent_router, prefix="/agent", tags=["agent"])
 api_router.include_router(example_router, prefix="/example", tags=["example"])
 api_router.include_router(system_router, prefix="/system", tags=["system"])

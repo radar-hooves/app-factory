@@ -1,0 +1,214 @@
+"""Business logic for the settings slice.
+
+The one rule everything else follows: read the effective value FRESH, on the
+session passed in, every time (`docs/design/settings.md` §Shape). No
+module-level cache and no read-at-import — a deployment running several
+worker processes must see a write the instant it commits, with no restart.
+"""
+
+import logging
+import uuid
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.settings.declare import Setting, SettingType, all_settings, get_declared
+from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
+from {{ package_name }}.api.settings.schemas import SettingChangeRead
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.exceptions import NotFoundError, ValidationError
+
+logger = logging.getLogger(__name__)
+
+
+def get_value(session: Session, key: str) -> bool | int | float | str:
+    """The effective value of `key`: the override if one exists, else the code default.
+
+    Raises:
+        NotFoundError: nothing declared this key.
+    """
+    setting = _require_declared(key)
+    row = session.get(SettingOverride, key)
+    return row.value if row is not None else setting.default
+
+
+def get_effective_values(session: Session) -> dict[str, bool | int | float | str]:
+    """The effective value of every declared setting, keyed by its key."""
+    overrides = {row.key: row.value for row in session.scalars(select(SettingOverride))}
+    return {setting.key: overrides.get(setting.key, setting.default) for setting in all_settings()}
+
+
+def build_schema() -> dict:
+    """The JSON Schema `<SchemaForm>` renders: one property per declared setting.
+
+    A `model_alias` setting whose `list_models` call fails (the gateway is
+    down) ships with no `enum` — a free-text field rather than a page that
+    fails to load, since GETting the settings page must survive a gateway
+    outage even though a WRITE to that field cannot validate against it.
+    """
+    properties: dict[str, dict] = {}
+    for setting in all_settings():
+        prop: dict = {"title": setting.title, "description": setting.description}
+        if setting.type is SettingType.boolean:
+            prop["type"] = "boolean"
+        elif setting.type in (SettingType.integer, SettingType.number):
+            prop["type"] = "integer" if setting.type is SettingType.integer else "number"
+            if setting.minimum is not None:
+                prop["minimum"] = setting.minimum
+            if setting.maximum is not None:
+                prop["maximum"] = setting.maximum
+        else:
+            prop["type"] = "string"
+            if setting.choices:
+                prop["enum"] = list(setting.choices)
+            elif setting.type is SettingType.model_alias and setting.list_models is not None:
+                try:
+                    reachable = setting.list_models()
+                except Exception:  # a gateway hiccup must not break the page
+                    logger.warning("Could not list reachable models for setting %r", setting.key, exc_info=True)
+                    reachable = []
+                    prop["description"] += " (could not confirm which models are reachable right now)"
+                # `narrow` filters what is OFFERED, not only what is accepted:
+                # a setting an app has narrowed to (say) Tier-3 aliases must
+                # never show a Tier-1 one as a choice, only to refuse it on
+                # save — the page would be inviting a policy breach it then
+                # blocks, rather than not offering it at all.
+                if setting.narrow is not None:
+                    reachable = [alias for alias in reachable if setting.narrow(alias) is None]
+                if reachable:
+                    prop["enum"] = reachable
+        properties[setting.key] = prop
+    return {"type": "object", "properties": properties}
+
+
+def set_value(
+    session: Session,
+    key: str,
+    value: bool | int | float | str,
+    *,
+    actor_user_id: uuid.UUID,
+) -> tuple[bool | int | float | str, bool | int | float | str]:
+    """Validate and store `value` as `key`'s override; record the change.
+
+    Returns the `(new_value, default)` pair the route needs to build a
+    `SettingRead`.
+
+    Raises:
+        NotFoundError: nothing declared this key.
+        ValidationError: `value` fails the declared type, bounds, choices, or
+            (for `model_alias`) reachability or the app's own `narrow` rule.
+    """
+    setting = _require_declared(key)
+    _validate(setting, value)
+
+    old_value = get_value(session, key)
+    row = session.get(SettingOverride, key)
+    if row is None:
+        row = SettingOverride(key=key, value=value, updated_by_id=actor_user_id)
+        session.add(row)
+    else:
+        row.value = value
+        row.updated_by_id = actor_user_id
+    session.add(SettingChange(key=key, old_value=old_value, new_value=value, changed_by_id=actor_user_id))
+    session.flush()
+    logger.info("Setting changed", extra={"setting_key": key})
+    return value, setting.default
+
+
+def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool | int | float | str:
+    """Delete `key`'s override, reverting it to its declared default. Records the change.
+
+    A no-op that still logs the reset when `key` had no override: the operator
+    asked for the default and now has it, whether or not anything changed.
+
+    Raises:
+        NotFoundError: nothing declared this key.
+    """
+    setting = _require_declared(key)
+    row = session.get(SettingOverride, key)
+    old_value = row.value if row is not None else setting.default
+    if row is not None:
+        session.delete(row)
+    session.add(SettingChange(key=key, old_value=old_value, new_value=setting.default, changed_by_id=actor_user_id))
+    session.flush()
+    return setting.default
+
+
+def list_history(session: Session, *, limit: int, offset: int) -> tuple[list[SettingChangeRead], int]:
+    """The most recent setting changes, newest first, with the total count."""
+    total = session.execute(select(func.count()).select_from(SettingChange)).scalar_one()
+    rows = session.execute(
+        select(SettingChange, User.username)
+        .outerjoin(User, User.id == SettingChange.changed_by_id)
+        .order_by(SettingChange.changed_at.desc(), SettingChange.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    changes = [
+        SettingChangeRead(
+            id=change.id,
+            key=change.key,
+            old_value=change.old_value,
+            new_value=change.new_value,
+            changed_by=username,
+            changed_at=change.changed_at,
+        )
+        for change, username in rows
+    ]
+    return changes, total
+
+
+def _require_declared(key: str) -> Setting:
+    setting = get_declared(key)
+    if setting is None:
+        raise NotFoundError(f"No setting {key!r} is declared")
+    return setting
+
+
+def _validate(setting: Setting, value: bool | int | float | str) -> None:
+    """Raise ValidationError unless `value` is a legal value for `setting`."""
+    if setting.type is SettingType.boolean:
+        if not isinstance(value, bool):
+            raise ValidationError(f"{setting.key!r} takes a boolean")
+        return
+
+    if setting.type in (SettingType.integer, SettingType.number):
+        # bool is an int subclass in Python; a boolean here is a type error, not 0/1.
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValidationError(f"{setting.key!r} takes a number")
+        if setting.type is SettingType.integer and not isinstance(value, int):
+            raise ValidationError(f"{setting.key!r} takes a whole number")
+        if setting.minimum is not None and value < setting.minimum:
+            raise ValidationError(f"{setting.key!r} must be at least {setting.minimum}")
+        if setting.maximum is not None and value > setting.maximum:
+            raise ValidationError(f"{setting.key!r} must be at most {setting.maximum}")
+        return
+
+    # string and model_alias
+    if not isinstance(value, str):
+        raise ValidationError(f"{setting.key!r} takes a string")
+    if setting.choices and value not in setting.choices:
+        raise ValidationError(f"{setting.key!r} must be one of {', '.join(setting.choices)}")
+    if setting.type is SettingType.model_alias:
+        if setting.list_models is not None:
+            try:
+                reachable = setting.list_models()
+            except Exception:  # an unreachable gateway degrades, it does not refuse the write
+                logger.warning(
+                    "Could not check reachable models for %r; accepting %r without the check",
+                    setting.key,
+                    value,
+                    exc_info=True,
+                )
+                reachable = []
+            # An EMPTY list means "could not confirm" (the call failed, or the
+            # gateway genuinely has nothing to offer) and is never grounds to
+            # refuse — only a gateway that answered and did not list the alias
+            # does that. Refusing on empty would lock every model_alias
+            # setting on every app for the length of a gateway restart.
+            if reachable and value not in reachable:
+                raise ValidationError(f"{value!r} is not a model this app's gateway can currently reach")
+        if setting.narrow is not None:
+            refusal = setting.narrow(value)
+            if refusal is not None:
+                raise ValidationError(refusal)

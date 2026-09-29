@@ -1,0 +1,150 @@
+"""Declare a runtime setting where the code that uses it already lives.
+
+A ``Setting`` is a typed default plus operator-facing metadata — never a value.
+The value is the code default until an operator overrides it through
+``PATCH /api/admin/settings``, at which point ``service.get_value`` starts
+returning the override instead (``api/settings/models.py``). Declaring one
+does not touch the database and needs no migration of its own; only the two
+factory-owned tables (``setting_overrides``, ``setting_changes``) do.
+
+Call ``declare_setting`` at IMPORT time, in the domain module the setting
+governs (`docs/design/settings.md` §Shape) — not here, and not in a per-app
+settings.py that also holds unrelated ones. Then import that module from
+``api/settings/registry.py``, exactly as a new ORM model is imported into
+``db/registry.py``: the registry's job is knowing what exists, never
+declaring anything itself.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+
+# A denylist backstop, not the only defence: the closed SettingType enum below
+# already has no `secret` or `identifier` member, so those SHAPES cannot be
+# declared regardless of a key's spelling. This catches the mechanically
+# detectable case of a secret- or identifier-shaped key slipping in under a
+# permitted type (a `string` called `notification_email`). A setting that
+# identifies a person by a name with no such telltale substring is not caught
+# here — that is a review-time judgement call on the declare_setting() call
+# site, the same one db/registry.py's three-bucket classification already
+# asks of every new table.
+_FORBIDDEN_SUBSTRINGS = (
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "credential",
+    "api_key",
+    "apikey",
+    "private_key",
+    "mailbox",
+    "recipient",
+)
+
+
+class SettingType(StrEnum):
+    """The closed set of shapes a setting may take.
+
+    Closed on purpose: there is no ``secret`` or ``identifier`` member, so
+    those kinds cannot be declared by picking a type — only a string's NAME
+    can accidentally look like one, which is what ``_FORBIDDEN_SUBSTRINGS``
+    catches.
+    """
+
+    boolean = "boolean"
+    integer = "integer"
+    number = "number"
+    string = "string"
+    # A LiteLLM-style alias (`<peer>/<what>`), stored as a bare string — never
+    # a pinned model version. `list_models`/`narrow` below are what make this
+    # more than a plain string (`docs/design/settings.md` §Model alias).
+    model_alias = "model_alias"
+
+
+@dataclass(frozen=True)
+class Setting:
+    """One declared setting: its shape, its default, and how the page shows it."""
+
+    key: str
+    type: SettingType
+    default: bool | int | float | str
+    title: str
+    description: str
+    minimum: float | None = None
+    maximum: float | None = None
+    # A closed set of strings a plain `string` setting may take. Mutually
+    # exclusive with `list_models` — a `model_alias` setting's choices come
+    # from the gateway, live, never from a fixed list declared alongside it.
+    choices: tuple[str, ...] | None = None
+    # `model_alias` only: a zero-arg callable returning the alias IDs the
+    # app's OWN gateway key can currently reach (`api/settings/gateway_models.py`
+    # wraps the HTTP call; the app closes over its own settings to supply the
+    # URL and key). No field here holds a URL or a key directly, so a
+    # declaration cannot smuggle either past the config/ boundary.
+    list_models: Callable[[], list[str]] | None = None
+    # `model_alias` only: an app-specific narrowing rule, called after the
+    # reachability check. Returns an error message to refuse the alias, or
+    # None to allow it. The factory declares no default narrowing — "any
+    # alias the gateway can reach" is correct until an app states otherwise.
+    narrow: Callable[[str], str | None] | None = None
+
+
+_REGISTRY: dict[str, Setting] = {}
+
+
+def declare_setting(
+    key: str,
+    *,
+    type: SettingType,
+    default: bool | int | float | str,
+    title: str,
+    description: str,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    choices: tuple[str, ...] | None = None,
+    list_models: Callable[[], list[str]] | None = None,
+    narrow: Callable[[str], str | None] | None = None,
+) -> Setting:
+    """Register a setting and return it. Raises at import time, not at use.
+
+    Raises:
+        ValueError: ``key`` is already declared, or ``key``/``title``/
+            ``description`` matches a forbidden substring — an app that hits
+            this fails to start rather than shipping the field.
+    """
+    if key in _REGISTRY:
+        raise ValueError(f"Setting {key!r} is already declared")
+    haystack = f"{key} {title} {description}".lower()
+    for forbidden in _FORBIDDEN_SUBSTRINGS:
+        if forbidden in haystack:
+            raise ValueError(
+                f"Setting {key!r} looks like it would hold a secret or a person's identifier "
+                f"(matched {forbidden!r}) — settings are operator-facing application data, "
+                "never a credential or an identifier; keep those in config/ or a domain table"
+            )
+    setting = Setting(
+        key=key,
+        type=type,
+        default=default,
+        title=title,
+        description=description,
+        minimum=minimum,
+        maximum=maximum,
+        choices=choices,
+        list_models=list_models,
+        narrow=narrow,
+    )
+    _REGISTRY[key] = setting
+    return setting
+
+
+def all_settings() -> list[Setting]:
+    """Every declared setting, in declaration order."""
+    return list(_REGISTRY.values())
+
+
+def get_declared(key: str) -> Setting | None:
+    """The declared ``Setting`` for ``key``, or ``None`` if nothing declared it."""
+    return _REGISTRY.get(key)

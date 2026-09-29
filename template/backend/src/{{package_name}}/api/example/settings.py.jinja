@@ -1,0 +1,26 @@
+"""The example domain's own declared settings — deleted with the rest of api/example/.
+
+Kept here rather than in service.py so a real domain's own settings module can
+copy this file's shape wholesale: one call per setting, at import time, beside
+the code that reads it.
+"""
+
+from {{ package_name }}.api.settings.declare import SettingType, declare_setting
+
+NEW_ITEM_BUTTON_ENABLED = declare_setting(
+    "example.new_item_button_enabled",
+    type=SettingType.boolean,
+    default=True,
+    title="Show the new-item button",
+    description="Whether the example page offers a button to create a new item.",
+)
+
+MAX_ITEMS_PER_PAGE = declare_setting(
+    "example.max_items_per_page",
+    type=SettingType.integer,
+    default=20,
+    minimum=1,
+    maximum=100,
+    title="Items per page",
+    description="How many example items the list page shows at once.",
+)

@@ -1,0 +1,197 @@
+"""The settings slice, driven through HTTP, plus the declare-time refusal it cannot skip.
+
+Exercises the two example settings the scaffold domain declares
+(`api/example/settings.py`) — a boolean and a bounds-checked integer — for the
+schema, the write, the reset, and the history trail. `model_alias`'s
+gateway-reachability and `narrow` behaviour is proved directly against
+`declare.py`/`service.py`, with a fake gateway, since no live one exists in
+this suite.
+"""
+
+import uuid
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.settings import service
+from {{ package_name }}.api.settings.declare import SettingType, declare_setting
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.exceptions import NotFoundError, ValidationError
+
+
+def _make_user(session: Session) -> uuid.UUID:
+    """A real `users` row, for a direct service-layer test with no HTTP request to upsert one.
+
+    `SettingOverride.updated_by_id`/`SettingChange.changed_by_id` are real
+    foreign keys, so a synthetic `uuid4()` with no backing row would fail the
+    insert rather than exercise the behaviour under test.
+    """
+    uid = f"test-{uuid.uuid4().hex}"
+    user = User(authentik_uid=uid, username=uid)
+    session.add(user)
+    session.flush()
+    return user.id
+
+
+def _headers(uid: str, entitlements: str | None = None) -> dict[str, str]:
+    headers = {"x-authentik-uid": uid, "x-authentik-username": uid}
+    if entitlements is not None:
+        headers["x-authentik-entitlements"] = entitlements
+    return headers
+
+
+async def _sign_in(client: AsyncClient, uid: str) -> None:
+    await client.get("/api/users/me", headers=_headers(uid))
+
+
+# ── The gate ─────────────────────────────────────────────────────────────────
+
+
+async def test_a_caller_without_the_admin_entitlement_is_refused(client: AsyncClient) -> None:
+    refused = await client.get("/api/settings/", headers=_headers("somebody"))
+    assert refused.status_code == 403
+    assert refused.json()["details"] == {"module": "admin", "grade": "read"}
+
+
+async def test_a_read_admin_can_look_but_not_write(client: AsyncClient) -> None:
+    listed = await client.get("/api/settings/", headers=_headers("the-viewer", "admin"))
+    assert listed.status_code == 200
+
+    refused = await client.patch(
+        "/api/settings/example.new_item_button_enabled",
+        json={"value": False},
+        headers=_headers("the-viewer", "admin"),
+    )
+    assert refused.status_code == 403
+    assert refused.json()["details"] == {"module": "admin", "grade": "write"}
+
+
+# ── The document ─────────────────────────────────────────────────────────────
+
+
+async def test_the_document_carries_the_schema_and_the_defaults(client: AsyncClient) -> None:
+    body = (await client.get("/api/settings/", headers=_headers("an-admin", "admin"))).json()
+
+    toggle = body["schema"]["properties"]["example.new_item_button_enabled"]
+    assert toggle["type"] == "boolean"
+    bounded = body["schema"]["properties"]["example.max_items_per_page"]
+    assert bounded["type"] == "integer"
+    assert bounded["minimum"] == 1
+    assert bounded["maximum"] == 100
+
+    assert body["value"]["example.new_item_button_enabled"] is True
+    assert body["value"]["example.max_items_per_page"] == 20
+    assert body["defaults"]["example.new_item_button_enabled"] is True
+    assert body["defaults"]["example.max_items_per_page"] == 20
+    assert "example.new_item_button_enabled" not in body["overridden"]
+
+
+# ── Writing, resetting, and the trail they leave ─────────────────────────────
+
+
+async def test_a_write_then_a_reset_round_trips_through_the_override(client: AsyncClient) -> None:
+    admin = _headers("the-writer", "admin:write")
+    await _sign_in(client, "the-writer")
+
+    written = await client.patch("/api/settings/example.max_items_per_page", json={"value": 50}, headers=admin)
+    assert written.status_code == 200
+    assert written.json() == {"key": "example.max_items_per_page", "value": 50, "default": 20, "overridden": True}
+
+    document = (await client.get("/api/settings/", headers=admin)).json()
+    assert document["value"]["example.max_items_per_page"] == 50
+    assert "example.max_items_per_page" in document["overridden"]
+
+    reset = await client.post("/api/settings/example.max_items_per_page/reset", headers=admin)
+    assert reset.status_code == 200
+    assert reset.json() == {"key": "example.max_items_per_page", "value": 20, "default": 20, "overridden": False}
+
+    history = (await client.get("/api/settings/history", headers=admin)).json()
+    keys_and_values = [(c["key"], c["old_value"], c["new_value"]) for c in history["changes"]]
+    assert ("example.max_items_per_page", 20, 50) in keys_and_values
+    assert ("example.max_items_per_page", 50, 20) in keys_and_values
+    written_entry = next(c for c in history["changes"] if c["new_value"] == 50)
+    assert written_entry["changed_by"] == "the-writer"
+
+
+async def test_a_value_outside_the_declared_bounds_is_refused(client: AsyncClient) -> None:
+    admin = _headers("the-writer", "admin:write")
+    refused = await client.patch("/api/settings/example.max_items_per_page", json={"value": 500}, headers=admin)
+    assert refused.status_code == 422
+
+
+async def test_an_undeclared_key_is_not_found(client: AsyncClient) -> None:
+    admin = _headers("the-writer", "admin:write")
+    missing = await client.patch("/api/settings/no.such.setting", json={"value": 1}, headers=admin)
+    assert missing.status_code == 404
+
+
+# ── Declaring a setting ───────────────────────────────────────────────────────
+
+
+def test_a_secret_shaped_key_is_refused_at_declaration() -> None:
+    with pytest.raises(ValueError, match="secret or a person's identifier"):
+        declare_setting(
+            f"test.{uuid.uuid4().hex}.api_key",
+            type=SettingType.string,
+            default="",
+            title="A gateway key",
+            description="",
+        )
+
+
+def test_declaring_the_same_key_twice_is_refused() -> None:
+    key = f"test.{uuid.uuid4().hex}"
+    declare_setting(key, type=SettingType.boolean, default=True, title="Once", description="")
+    with pytest.raises(ValueError, match="already declared"):
+        declare_setting(key, type=SettingType.boolean, default=True, title="Twice", description="")
+
+
+# ── model_alias: reachability, narrowing, and degrading when the gateway is down ──
+
+
+def test_model_alias_offers_and_accepts_only_what_narrow_admits(session: Session) -> None:
+    key = f"test.{uuid.uuid4().hex}.model_alias"
+    declare_setting(
+        key,
+        type=SettingType.model_alias,
+        default="mimir/deep",
+        title="A model",
+        description="",
+        list_models=lambda: ["mimir/deep", "goku/fast"],
+        narrow=lambda alias: None if alias.startswith("mimir/") else f"{alias} is not a Tier-3 alias",
+    )
+    schema = service.build_schema()
+    assert schema["properties"][key]["enum"] == ["mimir/deep"]
+
+    admin_id = _make_user(session)
+    with pytest.raises(ValidationError, match="not a Tier-3 alias"):
+        service.set_value(session, key, "goku/fast", actor_user_id=admin_id)
+    service.set_value(session, key, "mimir/deep", actor_user_id=admin_id)  # does not raise
+
+
+def test_model_alias_degrades_rather_than_refuses_when_the_gateway_is_unreachable(session: Session) -> None:
+    key = f"test.{uuid.uuid4().hex}.model_alias"
+
+    def _broken() -> list[str]:
+        raise ConnectionError("gateway is down")
+
+    declare_setting(
+        key,
+        type=SettingType.model_alias,
+        default="anything/goes",
+        title="A model",
+        description="",
+        list_models=_broken,
+    )
+    schema = service.build_schema()
+    assert "enum" not in schema["properties"][key]
+    assert "could not confirm" in schema["properties"][key]["description"]
+
+    # A write still succeeds — an unreachable gateway degrades, it never refuses.
+    service.set_value(session, key, "whatever/works", actor_user_id=_make_user(session))
+
+
+def test_get_value_raises_not_found_for_an_undeclared_key(session: Session) -> None:
+    with pytest.raises(NotFoundError):
+        service.get_value(session, f"test.{uuid.uuid4().hex}.nope")

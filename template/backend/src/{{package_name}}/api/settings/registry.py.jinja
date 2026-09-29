@@ -1,0 +1,15 @@
+"""Import every module that declares a setting, so the admin route can see all of them.
+
+Exactly `db/registry.py`'s own shape: a declaration lives with the domain code
+it governs (`declare.py`'s `declare_setting`, called at import time), and this
+file's only job is knowing which modules to import — never declaring anything
+itself. Add one import per domain module that calls `declare_setting`, e.g.:
+
+    from {{ package_name }}.api.fat_controller.settings import stage_models  # noqa: F401
+
+The scaffold example domain declares two, for its own page and as a copyable
+shape for a real domain's first settings module; both are deleted along with
+the rest of ``api/example/`` once the app has a real domain.
+"""
+
+from {{ package_name }}.api.example import settings as _example_settings  # noqa: F401
