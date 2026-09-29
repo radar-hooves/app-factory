@@ -154,17 +154,21 @@ async def report_outcome(
                     jobs_models.set_lesson_decision(db, job_id, decision_id)
 
             await run_in_threadpool(_save_decision)
-        await _call(settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result})
+        await _call(
+            settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
+        )
     except ToolError as exc:
         # Refused, not failed: a cited lesson is unknown or no longer active, and asking again
         # changes nothing — this is the report's final state, same as a recorded success.
+        reason = str(exc)[:500]
+
         def _save_refusal() -> None:
             with db_session_factory() as db:
                 bind_session(db, workspace_id=workspace_id)
-                jobs_models.settle_lesson_report(db, job_id, refused=str(exc)[:500])
+                jobs_models.settle_lesson_report(db, job_id, refused=reason)
 
         await run_in_threadpool(_save_refusal)
-        logger.warning("core-memory refused the lesson report for job %s: %s", job_id, exc)
+        logger.warning("core-memory refused the lesson report for job %s: %s", job_id, reason)
         return
 
     def _save_success() -> None:

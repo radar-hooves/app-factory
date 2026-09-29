@@ -158,12 +158,22 @@ async def test_a_call_repeated_once_recorded_reports_nothing_again(
     job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
     settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
     await lessons.report_outcome(
-        get_session_factory(), settings, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT,
+        get_session_factory(),
+        settings,
+        job_id,
+        workspace_id=workspace_id,
+        domain_name=DOMAIN,
+        context_key=CONTEXT,
         result=lessons.CONFIRM,
     )
     calls.clear()
     await lessons.report_outcome(
-        get_session_factory(), settings, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT,
+        get_session_factory(),
+        settings,
+        job_id,
+        workspace_id=workspace_id,
+        domain_name=DOMAIN,
+        context_key=CONTEXT,
         result=lessons.CONFIRM,
     )
     assert calls == []
@@ -206,7 +216,12 @@ async def test_core_memorys_refusal_is_final_and_never_retried(
     settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
 
     await lessons.report_outcome(
-        get_session_factory(), settings, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT,
+        get_session_factory(),
+        settings,
+        job_id,
+        workspace_id=workspace_id,
+        domain_name=DOMAIN,
+        context_key=CONTEXT,
         result=lessons.CONFIRM,
     )
     report = _report(job_id, workspace_id)
@@ -216,7 +231,12 @@ async def test_core_memorys_refusal_is_final_and_never_retried(
 
     calls.clear()
     await lessons.report_outcome(
-        get_session_factory(), settings, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT,
+        get_session_factory(),
+        settings,
+        job_id,
+        workspace_id=workspace_id,
+        domain_name=DOMAIN,
+        context_key=CONTEXT,
         result=lessons.CONFIRM,
     )
     assert calls == []
