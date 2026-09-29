@@ -83,12 +83,16 @@ dispatcher, a different feature for a different job than a headless
   turn/tool-call model. godswood's `TurnRecorder`/`turns.py` stays
   godswood's own — an interpretation of the stream for ITS OWN execution
   view, layered on top of this slice's raw log, never absorbed into it. The
-  one structural fact this slice DOES read off an event — `message.stop_reason`,
-  the Anthropic Messages API's own field, populated only once a turn
-  completes — decides storage, never content: `_is_partial()` skips
-  persisting a still-growing `--include-partial-messages` chunk (it is
-  broadcast live regardless), so `agent_job_events` grows one row per
-  settled message, not one per token.
+  one structural fact this slice DOES read off an event — its OWN top-level
+  `type` — decides storage, never content: `_is_partial()` skips persisting a
+  `type: "stream_event"` line (`--include-partial-messages`' own token-level
+  delta, wrapping the raw Anthropic streaming sub-events — measured against
+  the real, installed CLI with this slice's own `build_argv` flags, not
+  guessed) and broadcasts it live regardless, so `agent_job_events` grows one
+  row per settled message, not one per token. `message.stop_reason` was tried
+  first and rejected: the real CLI carries `null` there on EVERY `assistant`
+  frame, settled or not, so keying on it dropped every assistant message from
+  a finished job's own replay — the exact thing a caller opens a job to read.
 - **No per-job personal owner.** Unlike `ownership.py`'s private chat
   sessions, a job belongs to no ASKER — `created_by_id` is attribution only.
   It DOES belong to a workspace: any caller entitled to the persona
@@ -106,12 +110,18 @@ binds a request's own session), so every write path calls
 `db.scoping.bind_session()` itself before touching either model.
 `jobs.authorize()` is the one read with no workspace bound yet — an explicit
 `unscoped()` lookup by `job_id` alone, comparing what it finds against the
-caller's own `workspace_id` and refusing (404, one answer for "no such job"
-and "not yours") on any mismatch, mirroring `ownership.DENIAL`'s reasoning
-for a private chat session. The three HTTP routes all call it before doing
-anything else; `jobs.start()`'s caller supplies `workspace_id` directly, since
-it usually has a `CurrentWorkspace` already resolved from wherever the job's
-own trigger fired.
+caller's own `workspace_id` **and** `persona`, refusing (404, one answer for
+every way to fail the check) on either mismatch, mirroring `ownership.DENIAL`'s
+reasoning for a private chat session. The persona half is not redundant with
+`workspace_id`: a caller's `agent-<name>` entitlement and workspace membership
+together say nothing about a DIFFERENT persona's job in that same workspace —
+a member holding only `agent-milton` could otherwise watch, message or stop a
+`fat_controller` job by naming `milton` in the URL and the job's own id
+(measured in a verification review of the first cut, which checked only
+`workspace_id`). The three HTTP routes all call `authorize()` before doing
+anything else, passing the URL's own `{persona}` segment; `jobs.start()`'s
+caller supplies `workspace_id` directly, since it usually has a
+`CurrentWorkspace` already resolved from wherever the job's own trigger fired.
 
 ## Concurrency
 
@@ -155,12 +165,22 @@ run, exactly the two decisions that needed to stop racing.
   Nothing calls it automatically — the default lifetime is forever, same as
   `persona.py`'s seeded homes — an app calls it once its own record of the
   job is settled.
-- **A job's own MCP identity.** `start()`'s `mcp_config` is a parsed
-  `.mcp.json` object, persisted on the job row and rewritten to disk on every
-  run including a resume: this is how a caller binds the job's own identity
-  (a stdio server's own args, an HTTP header) into the servers it reaches —
-  godswood's `pipeline/mcp_config.py` builds exactly this shape today, bound
-  by hand into a file the old private runner wrote itself.
+- **A job's own MCP identity, with no credential ever persisted.** `start()`'s
+  `mcp_config` is a parsed `.mcp.json` object, persisted on the job row and
+  rewritten to disk on every run including a resume: this is how a caller
+  binds the job's own identity (a stdio server's own args, an HTTP header)
+  into the servers it reaches — godswood's `pipeline/mcp_config.py` builds
+  exactly this shape today, bound by hand into a file the old private runner
+  wrote itself. A credential in that shape is minted by a `headersHelper`
+  command run at spawn, never a literal `headers` value — the SAME contract
+  a persona's own `.mcp.json` already holds its `headersHelper` to
+  (`session.py`) — because a literal one would sit unencrypted in
+  `job_dir/.mcp.json` and in the `AgentJob.mcp_config` column for as long as
+  the job exists. `_refuse_literal_mcp_credentials()` refuses `start()`
+  outright on a credential-shaped header (`Authorization`, `X-Api-Key`, ...)
+  set directly; a `headersHelper` command string is fine to persist, because
+  running it is what produces a credential — the string itself is a recipe,
+  not a secret.
 
 ## Sequence
 

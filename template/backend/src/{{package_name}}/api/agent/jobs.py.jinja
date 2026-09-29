@@ -161,29 +161,69 @@ def _job_dir(job_id: str) -> Path:
 
 
 def _is_partial(event: dict[str, object]) -> bool:
-    """Whether `event` is a still-growing chunk of an assistant message
-    (`--include-partial-messages`' own token-level deltas) rather than its
-    settled, final content.
+    """Whether `event` is one of `--include-partial-messages`' own token-level
+    deltas rather than a settled, final frame.
 
-    Structural, not a guess about Claude Code's own wire format: `stop_reason`
-    is the Anthropic Messages API's field on the `message` object, populated
-    only once a turn actually completes (`end_turn`, `tool_use`, `max_tokens`,
-    ...) — a chunk still being generated carries `None` there. Skipping these
-    (need 6: "storage must stay bounded... persist whole messages and stream
-    partials only to live watchers") is `_record()`'s own choice below; this
-    function only names which lines qualify. Restricted to `assistant`:
-    a `user` (tool-result) event carries no `stop_reason` field AT ALL — it
-    is a different object shape, not a still-growing one — so treating its
-    absence there as "partial" would silently drop every tool result.
+    Measured against the real, installed CLI (2.1.283) driven with this
+    module's own `build_argv` flags, not guessed: a delta arrives as its own
+    top-level `type: "stream_event"` (wrapping the raw Anthropic streaming
+    sub-events — `message_start`, `content_block_delta`, `message_delta`,
+    `message_stop`), and it is the ONLY structural signal that means
+    "still growing" — `message.stop_reason` is `null` on EVERY `assistant`
+    frame this CLI emits, settled or not, so it is not usable as that signal
+    (an earlier cut of this function tried, and its replay of a finished job
+    carried no assistant text at all — the exact thing a caller opens a job to
+    read). `_record()` below skips persisting a `stream_event` and broadcasts
+    it live regardless (need 6: "storage must stay bounded... persist whole
+    messages and stream partials only to live watchers"); every `assistant`,
+    `user`, `system` and `result` frame is a settled frame and is always
+    persisted, so a finished job's replay is the whole transcript, not a
+    filtered one.
     """
-    if event.get("type") != "assistant":
-        return False
-    message = event.get("message")
-    return isinstance(message, dict) and message.get("stop_reason") is None
+    return event.get("type") == "stream_event"
 
 
 def _write_mcp_config(job_dir: Path, mcp_config: dict[str, object]) -> None:
     (job_dir / ".mcp.json").write_text(json.dumps(mcp_config))
+
+
+#: Header names a credential is ever named under. Matched case-insensitively —
+#: a literal value here would be written to disk (`job_dir/.mcp.json`) AND to
+#: the `AgentJob.mcp_config` JSONB column, unencrypted, for as long as the job
+#: exists, and rewritten there again on every resume.
+_CREDENTIAL_HEADER_NAMES = frozenset({"authorization", "x-api-key", "api-key", "x-auth-token", "cookie"})
+
+
+def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
+    """Refuse an `mcp_config` that carries a credential as a literal header value.
+
+    The persona `.mcp.json` pattern this slice already reuses
+    (`session.build_argv`'s own `--mcp-config`) never stores a bearer either:
+    its `headersHelper` is a shell command that MINTS a fresh credential at
+    spawn time, run once per process start rather than written to disk once
+    and read back for the job's whole lifetime. A job's own `mcp_config`
+    takes the same shape — a `headersHelper` command is fine to persist (it is
+    a RECIPE, not a secret: running it is what produces one), a literal
+    `headers` value under a credential-shaped name is refused outright.
+
+    Raises:
+        BadRequestError: a server entry sets a credential-shaped header directly.
+    """
+    servers = mcp_config.get("mcpServers")
+    if not isinstance(servers, dict):
+        return
+    for name, server in servers.items():
+        if not isinstance(server, dict):
+            continue
+        headers = server.get("headers")
+        if not isinstance(headers, dict):
+            continue
+        literal = sorted(key for key in headers if key.lower() in _CREDENTIAL_HEADER_NAMES)
+        if literal:
+            raise BadRequestError(
+                f"mcp_config server {name!r} sets {literal!r} as a literal header value — "
+                "mint it at spawn time with headersHelper instead; a job never persists a credential"
+            )
 
 
 async def start(
@@ -216,12 +256,15 @@ async def start(
     given, becomes the job's own `.mcp.json` (`--strict-mcp-config`'d exactly
     as a persona's own is, `session.build_argv`) — this is how a caller binds
     the job's own identity into the MCP servers it reaches: build the dict
-    naming whichever user/workspace this specific run acts as (a stdio
-    server's own args, an HTTP header) and pass it here. Omit it and the job
-    reaches the persona's own servers instead. Persisted on the job row and
-    rewritten to disk on every resumed run too, so a later `send_message()`
-    reaches the SAME servers under the SAME identity without having to know
-    or resupply it.
+    naming whichever user/workspace this specific run acts as, with any
+    credential minted by a `headersHelper` command (never a literal `headers`
+    value — `_refuse_literal_mcp_credentials` rejects one outright, the same
+    contract `session.py`'s own persona `.mcp.json` already holds its
+    `headersHelper` to) and pass it here. Omit it and the job reaches the
+    persona's own servers instead. Persisted on the job row and rewritten to
+    disk on every resumed run too, so a later `send_message()` reaches the
+    SAME servers under the SAME identity without having to know or resupply
+    it — and mints a FRESH credential each time, never a stored one.
 
     Returns immediately — the caller gets `job_id` back before the CLI has
     even spawned, so it can hand that id to whoever asked for the read
@@ -229,7 +272,12 @@ async def start(
     Controller starts reading it... a structured answer that the app code
     which started it gets back" is `watch()` or a later read of the job row,
     not this call).
+
+    Raises:
+        BadRequestError: `mcp_config` sets a literal credential header.
     """
+    if mcp_config is not None:
+        _refuse_literal_mcp_credentials(mcp_config)
     job_id = str(uuid.uuid4())
     job_dir = _job_dir(job_id)
     prompt = await run_in_threadpool(redact, persona.name, created_by_id, prompt)
@@ -477,7 +525,22 @@ async def _run(
             await asyncio.wait_for(process.wait(), timeout=5)
         try:
             stderr_tail = await asyncio.wait_for(stderr_task, timeout=5)
-        except TimeoutError, asyncio.CancelledError:
+        except TimeoutError:
+            stderr_task.cancel()
+            stderr_tail = b""
+        except asyncio.CancelledError:
+            # THIS run's own task was cancelled while waiting here (a genuine
+            # restart, or `reconcile_orphaned_jobs()`'s own test scenario) --
+            # never swallow it. Re-raising skips `_finish()` below, which is
+            # the point: nothing settles the row, so a reconcile sweep is
+            # what moves it out of `running` later.
+            raise
+        except Exception:
+            # `stderr_task` itself failed for some OTHER reason (a genuine
+            # read error, not a timeout or our own cancellation) -- the run
+            # still finished, and losing the stderr tail is not a reason to
+            # also lose `_finish()`/`_bus.close()` and strand the job at
+            # `running` forever (fresh-context review, ALSO 1).
             stderr_task.cancel()
             stderr_tail = b""
         # Identity, not just job_id: a resumed run's own `_run()` may already
@@ -548,7 +611,7 @@ async def send_message(
                 process.stdin.write(frame.encode() + b"\n")
                 await process.stdin.drain()
                 return
-            except BrokenPipeError, ConnectionResetError:
+            except (BrokenPipeError, ConnectionResetError):
                 # The process exited in the gap between the liveness check
                 # above and this write — fall through to the resume path
                 # below exactly as if it had already been absent.
@@ -655,21 +718,31 @@ async def watch(
         _bus.unsubscribe(job_id, queue)
 
 
-async def authorize(db_session_factory: sessionmaker[Session], job_id: str, workspace_id: int) -> AgentJob:
-    """Return `job_id`'s row if it belongs to `workspace_id`, else refuse.
+async def authorize(
+    db_session_factory: sessionmaker[Session], job_id: str, workspace_id: int, persona: str
+) -> AgentJob:
+    """Return `job_id`'s row if it belongs to `workspace_id` AND `persona`, else refuse.
+
+    `persona` matters as much as `workspace_id` does: a caller's `agent-milton`
+    entitlement and workspace membership say nothing about a `fat_controller`
+    job in the same workspace — the URL's own `{persona}` segment is a path a
+    caller chose, not a claim this slice verified, and a member holding only
+    `agent-milton` could otherwise watch, message or stop a `fat_controller`
+    job by dialling `/api/agent/milton/jobs/<id>/...` on its id (fresh-context
+    review, CRITICAL 1, the part `workspace_id` alone left open).
 
     The one place this slice reads a job with NO workspace bound yet
     (`jobs_models.get_job_unscoped`) — the caller's own workspace is exactly
     what this call is deciding whether to trust, so binding to it first would
     be circular; the read is confined to that one `unscoped()` block, per
     `platform/tenancy.md`, and never reused as a way around the check it
-    exists to make. One answer covers "no such job" and "not yours", the same
+    exists to make. One answer covers every way to fail this check, the same
     choice `ownership.DENIAL` makes for a private chat session: a status code
-    that told them apart would let an entitled caller enumerate the ids of
-    jobs in workspaces they are not a member of.
+    that told "no such job" apart from "not yours" or "wrong persona" would let
+    an entitled caller enumerate the ids and personas of jobs it cannot reach.
 
     Raises:
-        NotFoundError: no such job, or it belongs to a different workspace.
+        NotFoundError: no such job, or it belongs to a different workspace or persona.
     """
 
     def _load() -> AgentJob | None:
@@ -677,12 +750,12 @@ async def authorize(db_session_factory: sessionmaker[Session], job_id: str, work
             return jobs_models.get_job_unscoped(db, job_id)
 
     job = await run_in_threadpool(_load)
-    if job is None or job.workspace_id != workspace_id:
+    if job is None or job.workspace_id != workspace_id or job.persona != persona:
         raise NotFoundError(f"no such job: {job_id}")
     return job
 
 
-async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int) -> None:
+async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int, persona: str) -> None:
     """Remove `job_id`'s own working folder from disk, once it is no longer resumable.
 
     Nothing calls this automatically — `_job_dir`'s own docstring states the
@@ -692,10 +765,10 @@ async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, wor
     files again.
 
     Raises:
-        NotFoundError: no such job in `workspace_id`.
+        NotFoundError: no such job in `workspace_id` under `persona`.
         BadRequestError: the job is still running — stop it first.
     """
-    job = await authorize(db_session_factory, job_id, workspace_id)
+    job = await authorize(db_session_factory, job_id, workspace_id, persona)
     if job.status == jobs_models.RUNNING:
         raise BadRequestError("this job is still running; stop it before cleaning up its files")
     await run_in_threadpool(_remove_job_dir, job_id)

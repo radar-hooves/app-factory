@@ -47,19 +47,22 @@ Several more triggers stand in for what `jobs.py`'s tests need that none of
 the above does. `__await_stdin__` blocks on ONE line of stream-json input
 before answering -- `jobs.send_message()`'s live-stdin path writes it -- and
 `__hang__` blocks forever, standing in for a turn still genuinely working
-when `jobs.stop()` kills it. `__partial__` emits TWO `assistant` frames
-sharing one message id -- the first with `stop_reason: null`, still growing,
-the second `end_turn` and final -- standing in for `--include-partial-messages`'
-own token-level deltas, so a test can prove a still-growing chunk is
-broadcast live but never persisted. `__chatty_stderr__` writes well past a
-64 KiB pipe buffer to stderr WITHOUT anything reading stdout in between,
-proving stderr is drained concurrently rather than only after stdout closes.
-Every `assistant` frame below except `__partial__`'s first carries
-`stop_reason: "end_turn"` on its nested `message`, matching what a genuinely
-complete Anthropic message carries on the wire -- `jobs.py`'s own
-`_is_partial()` reads exactly that field. All of them, and the ordinary echo
-path below, emit `structured_output` on the result line whenever
-`--json-schema` rode on the argv, exactly as the real CLI would.
+when `jobs.stop()` kills it. `__chatty_stderr__` writes well past a 64 KiB
+pipe buffer to stderr WITHOUT anything reading stdout in between, proving
+stderr is drained concurrently rather than only after stdout closes.
+
+`__partial__` models `--include-partial-messages` as the real, installed CLI
+(2.1.283) actually emits it -- measured directly, not guessed, against this
+module's own `build_argv` flags: token deltas arrive as their own top-level
+`type: "stream_event"` line (wrapping the raw Anthropic streaming sub-events
+-- `message_start`, `content_block_delta`, `message_stop`), and the ONE
+settled `assistant` frame that follows carries `message.stop_reason: null`
+JUST LIKE EVERY OTHER assistant frame this fake CLI emits below -- that field
+is never a "still growing" signal on the real wire, which is exactly why
+`jobs.py`'s `_is_partial()` keys on `type == "stream_event"` alone and
+persists every `assistant`/`user`/`system`/`result` frame regardless of its
+`stop_reason`. `stop_reason: null` is therefore the DEFAULT below, not a
+special case for one trigger.
 """
 
 import json
@@ -150,7 +153,7 @@ def main() -> None:
         _emit(
             {
                 "type": "assistant",
-                "message": {"content": [{"type": "text", "text": "x" * GIANT_TEXT_SIZE}], "stop_reason": "end_turn"},
+                "message": {"content": [{"type": "text", "text": "x" * GIANT_TEXT_SIZE}], "stop_reason": None},
             }
         )
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": "", "is_error": False})
@@ -160,9 +163,7 @@ def main() -> None:
         result = _probe_mcp(argv)
         echo = json.dumps(result)
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        _emit(
-            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
-        )
+        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
         return
 
@@ -180,32 +181,50 @@ def main() -> None:
         content = (frame.get("message") or {}).get("content") or []
         text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
         echo = f"stdin: {text}"
-        _emit(
-            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
-        )
+        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
         _emit(_result(session_id, echo, argv))
         return
 
     if question == PARTIAL_TRIGGER:
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
         message_id = f"msg-{uuid.uuid4().hex[:8]}"
+        final_text = "growing, then settled"
+        # Three `stream_event` deltas -- the shape measured against the real
+        # CLI: message_start, one content_block_delta per token-ish chunk,
+        # message_stop. These are what a LIVE watcher sees arrive one at a
+        # time; `jobs.py` never persists a `stream_event` line.
+        _emit({"type": "stream_event", "event": {"type": "message_start", "message": {"id": message_id}}})
         _emit(
             {
-                "type": "assistant",
-                "message": {"id": message_id, "content": [{"type": "text", "text": "growing"}], "stop_reason": None},
-            }
-        )
-        _emit(
-            {
-                "type": "assistant",
-                "message": {
-                    "id": message_id,
-                    "content": [{"type": "text", "text": "growing, then settled"}],
-                    "stop_reason": "end_turn",
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": "growing"},
                 },
             }
         )
-        _emit(_result(session_id, "growing, then settled", argv))
+        _emit(
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": ", then settled"},
+                },
+            }
+        )
+        _emit({"type": "stream_event", "event": {"type": "message_stop"}})
+        # The ONE settled `assistant` frame -- carrying `stop_reason: null`
+        # exactly like every other assistant frame this fake CLI emits, never
+        # a special "I am final" marker. `jobs.py` persists this one.
+        _emit(
+            {
+                "type": "assistant",
+                "message": {"id": message_id, "content": [{"type": "text", "text": final_text}], "stop_reason": None},
+            }
+        )
+        _emit(_result(session_id, final_text, argv))
         return
 
     if question == CHATTY_STDERR_TRIGGER:
@@ -217,9 +236,7 @@ def main() -> None:
         sys.stderr.write("x" * CHATTY_STDERR_BYTES)
         sys.stderr.flush()
         echo = "survived a chatty stderr"
-        _emit(
-            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
-        )
+        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
         _emit(_result(session_id, echo, argv))
         return
 
@@ -251,7 +268,7 @@ def main() -> None:
     )
 
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
-    _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}})
+    _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
     _emit(_result(session_id, echo, argv))
 
 

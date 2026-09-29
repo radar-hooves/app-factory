@@ -6,11 +6,12 @@ app-started job (`docs/design/agent-jobs.md`).
 name is not known until the path parameter is: `require_module` is called
 directly as the plain function it already is, inside the route, instead of
 through `Depends()` (`entitlements.py`'s own factory shape covers both). The
-three job routes below take the same gate, AND `CurrentWorkspace`: a job acts
-on behalf of a workspace as much as a persona entitlement, and
-`jobs.authorize()` is what actually enforces the second half — the
-entitlement alone would let anyone holding it read or steer another
-workspace's job (fresh-context review, CRITICAL 1).
+three job routes below take the same gate, AND `CurrentWorkspace`: a job
+belongs to a workspace and a persona, and `jobs.authorize()` checks both —
+the entitlement alone would let anyone holding it read or steer another
+workspace's job, and the workspace check alone would let a caller entitled to
+ONE persona reach a DIFFERENT persona's job in the same workspace by naming
+it in the URL (fresh-context review, CRITICAL 1, both halves).
 
 There is no `POST /{persona}/jobs` here — starting a job is need 1's own
 point ("started by the app itself, with no person asking"): `jobs.start()`
@@ -75,13 +76,13 @@ async def watch_job(
 
     Raises:
         NotFoundError: no such job, or it belongs to a different workspace
-            (`jobs.authorize`, one answer for both — checked before the
-            stream opens, so a bad or foreign id 404s rather than opening an
-            SSE response with nothing in it).
+            or persona (`jobs.authorize`, one answer for all three — checked
+            before the stream opens, so a bad, foreign or mismatched-persona
+            id 404s rather than opening an SSE response with nothing in it).
     """
     require_module(f"agent-{persona}")(identity)
     db_session_factory = get_session_factory()
-    await jobs_module.authorize(db_session_factory, job_id, workspace.id)
+    await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
 
     async def frames() -> AsyncIterator[str]:
         async for event in jobs_module.watch(db_session_factory, job_id, workspace_id=workspace.id):
@@ -104,7 +105,7 @@ async def message_job(
     """Send `request.text` to `job_id` (need 4): onto its stdin if it is still working, a resumed run if it has finished."""
     require_module(f"agent-{persona}")(identity)
     db_session_factory = get_session_factory()
-    await jobs_module.authorize(db_session_factory, job_id, workspace.id)
+    await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
     config = persona_module.load(settings.agent, persona)
     await jobs_module.send_message(
         db_session_factory,
@@ -123,5 +124,5 @@ async def stop_job(
 ) -> None:
     """Stop `job_id` (need 5). A no-op once it has already finished on its own."""
     require_module(f"agent-{persona}")(identity)
-    await jobs_module.authorize(get_session_factory(), job_id, workspace.id)
+    await jobs_module.authorize(get_session_factory(), job_id, workspace.id, persona)
     await jobs_module.stop(job_id)
