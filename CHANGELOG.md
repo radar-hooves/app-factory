@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.35] - 2026-09-29
+
+### Changed
+
+- **CI runs once per go-live, never per push.** `python-ci`, `frontend-ci` and `canonical-shape` lose their branch-push triggers: `deploy.yaml` runs the checks when no passing run exists for the commit, so they run exactly once, at the merge that goes live. `security` scans weekly and on a dependency pull request. Pushes had been 70% of the org's CI hours (27 hours to 29/09); the operator asked for CI proportionate to a small shop. Consumer: master-project's attended session.
+
 ## [2026.9.34] - 2026-09-28
 
 ### Added

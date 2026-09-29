@@ -15,13 +15,8 @@ name: Frontend CI
 # other and the file reads as drift on an otherwise identical copy.
 #
 # On every feature branch, never on main, as python-ci.yaml says why.
+# Called by deploy.yaml once per go-live, or run by hand; never per push.
 on:
-  push:
-    branches-ignore: [main]
-    paths:
-      - 'frontend/**'
-      - 'docs/development/openapi.json'
-      - '.github/workflows/frontend-ci.yaml'
   workflow_dispatch:
   workflow_call:
 

@@ -4,15 +4,8 @@ name: Python CI
 # On every feature branch, never on main: a merge to main is the go-live, and
 # deploy.yaml runs this there only for a commit whose checked paths never passed
 # on a branch. It reads the `paths` below to decide, so they are the one list.
+# Called by deploy.yaml once per go-live, or run by hand; never per push.
 on:
-  push:
-    branches-ignore: [main]
-    paths:
-      - 'backend/**'
-      # backend/tests/test_version.py reads frontend/package.json, so a change
-      # to the frontend manifest alone must still get a Python verdict.
-      - 'frontend/package.json'
-      - '.github/workflows/python-ci.yaml'
   workflow_dispatch:
   workflow_call:
 

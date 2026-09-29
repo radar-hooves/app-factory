@@ -14,8 +14,7 @@ name: Security
 on:
   schedule:
     - cron: '0 18 * * 0' # Monday 04:00 AEST
-  push:
-    branches-ignore: [main]
+  pull_request:
     paths:
       - '**/pyproject.toml'
       - '**/uv.lock'

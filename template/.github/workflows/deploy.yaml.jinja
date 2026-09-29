@@ -5,10 +5,8 @@ name: Deploy
 # it in. There are no tags, no versions and no registry: the commit is the
 # version, and the image is `{{ project_name }}:<commit>` in the host's daemon.
 #
-#   checks  python-ci and frontend-ci run on the feature branch. Here they run
-#           only for a commit whose checked paths never passed there (a direct
-#           push to main, a merge commit); a fast-forward merge of a green
-#           branch goes straight to the build. Merge once the branch is green.
+#   checks  python-ci and frontend-ci run here, once per go-live, unless a run
+#           by hand already passed for this commit. No branch push runs them.
 #   build   the Dockerfile on the host daemon's own layer cache: a code-only
 #           change reinstalls no dependency.
 #   boot    `.github/image-smoke.sh`, the app-owned probe: the image must serve
@@ -19,7 +17,7 @@ name: Deploy
 #           `app-deploy {{ project_name }} <commit>` on the host.
 #
 # The security battery is not on this path; security.yaml runs it weekly and on
-# a dependency change, which is scanned on its branch before the merge.
+# a dependency pull request.
 on:
   push:
     branches: [main]
