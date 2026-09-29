@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.21] - 2026-09-29
+
+### Added
+
+- **`AlertBell`** (`@poodle64/ui/alerts`): the top-bar bell over the app
+  factory's alerts slice, which machines raise to through an app's `/mcp`.
+  Like `ReportWidget`, it is app machinery the layout mounts once, reaching the
+  factory's routes through an `endpoint` prop (default `/api/alerts`). It shows
+  the unread count, marks an alert read as it is opened and follows its link,
+  and dismisses it. It renders nothing while no alert is open. Asked for by
+  the app factory (radar-hooves/app-factory, for radar-hooves/cadmus), which
+  mounts it from its layout rather than carrying its own copy.
+
 ## [2026.9.20] - 2026-09-29
 
 ### Added
