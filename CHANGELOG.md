@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.37] - 2026-09-29
+
+### Added
+
+- **Agent jobs: a persona session the app itself starts, beside the existing chat slice.** `api/agent/jobs.py` and `jobs_models.py`, plus three routes on the existing `/api/agent/{persona}` router (`GET .../jobs/{job_id}/watch`, `POST .../jobs/{job_id}/message`, `POST .../jobs/{job_id}/stop`). `jobs.start()` is a plain function, not a route: an app spawns a job with a per-run working folder of files and an optional `--json-schema`, gets `job_id` back before the CLI has even run, and the run keeps going as an `asyncio.Task` independent of the request that started it. Any caller entitled to the persona can then watch it — from the start if it already finished, caught up and live if it is still going, on the exact SSE frame shape `ask()` already produces — message it while it is working (written straight onto its open stdin, `--input-format stream-json`) or after it has finished (a resumed run under the same job id), and stop it. `agent_jobs`/`agent_job_events` (migration `6278d62d47c2`) persist every event verbatim, replayed to a caller who opens the job late. `docs/design/agent-jobs.md` carries the decision, the ~620-line cost against godswood's 931-line private runner it replaces, and why the CLI's own `--bg` was measured and rejected (it refuses `--print` outright — a different feature, the interactive coding-agent dispatcher, not a headless structured turn). Consumer: godswood's Fat Controller document pipeline (radar-hooves/godswood#839), per the operator's 29/09/2026 ruling that every persona runs on the same agent code.
+
 ## [2026.9.36] - 2026-09-29
 
 ### Changed
