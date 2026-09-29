@@ -1,0 +1,67 @@
+"""Every write route's session commits before its response is sent
+(master-project#233, cadmus, 29/09/2026): the Graph slice's e2e seed created
+rows through the API and immediately hit 404s reading them back, and worked
+around it with a retry loop instead of a fix. `db/session.py`'s `get_session`
+yields, commits after `yield`, and rolls back on exception -- an ordinary
+FastAPI yield dependency. FastAPI's OWN default for a yield dependency defers
+that exit code until AFTER the response has already gone out
+(`Depends(..., scope="request")`, the implicit default when none is given);
+`scope="function"` is what runs it BEFORE the response is built, and every
+`Depends(get_session)` call site (`deps.py`, `api/users/dependencies.py`,
+`api/workspaces/dependencies.py`) declares it for exactly this reason.
+
+The defect is invisible to the ordinary `client` fixture: its `get_session`
+override (`conftest.py`) is a plain callable returning the fixture's session,
+not a generator, so there is no exit-stack scope for it to get wrong. It is
+also invisible to `httpx.ASGITransport`, what that fixture is built on:
+`ASGITransport.handle_async_request` awaits the WHOLE ASGI call -- exit stacks
+included -- before it ever builds the `httpx.Response`, so by the time a test
+sees a response the write is always durable regardless of scope. Only a real
+socket exposes the race, because a real ASGI server can push response bytes to
+the wire the moment `send()` is called -- before a "request"-scoped
+dependency's exit code has even started. Hence a real second `uvicorn`
+process here, the same reason `test_agent_jobs_api.py` uses one.
+"""
+
+import uuid
+
+import httpx
+from sqlalchemy import select
+
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.db.session import get_session_factory
+from tests.support import live_server
+
+# Measured against FastAPI 0.136.3 over a real loopback socket (no artificial
+# delay in get_session's own commit): the default "request" scope misses the
+# just-written row on the large majority of individual attempts. One miss in
+# this many is already proof; the fixed "function" scope has no window in
+# which to miss at all, so it is not a matter of running enough attempts.
+ITERATIONS = 20
+
+
+async def test_a_written_row_is_visible_to_a_second_session_immediately_after_the_response() -> None:
+    """`GET /api/workspaces/me` upserts the caller's user row on every call
+    (`get_identity`) -- the one write every authenticated request in every app
+    makes, so proving it proves the shared dependency chain rather than one
+    app's own domain route.
+    """
+    async with live_server.run_server() as (base_url, _pid):
+        async with httpx.AsyncClient(base_url=base_url, timeout=5) as client:
+            for _ in range(ITERATIONS):
+                uid = f"race-{uuid.uuid4()}"
+                response = await client.get(
+                    "/api/workspaces/me",
+                    headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+                )
+                assert response.status_code == 200
+
+                with get_session_factory()() as second_session:
+                    row = second_session.execute(
+                        select(User).where(User.authentik_uid == uid)
+                    ).scalar_one_or_none()
+
+                assert row is not None, (
+                    f"user {uid!r} was in the response but a second session could not "
+                    "see it -- get_session's commit ran after the response was sent"
+                )

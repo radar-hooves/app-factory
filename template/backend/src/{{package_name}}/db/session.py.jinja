@@ -64,7 +64,15 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 def get_session() -> Generator[Session]:
-    """FastAPI dependency: yields a sync database session per request."""
+    """FastAPI dependency: yields a sync database session per request.
+
+    Every `Depends(get_session)` call site must pass `scope="function"`
+    (`deps.py`, `api/users/dependencies.py`, `api/workspaces/dependencies.py`):
+    FastAPI's default "request" scope runs the commit below AFTER the response
+    has already been sent, so a client's next request can miss a row its own
+    previous response just returned, and a failed commit has nobody left to
+    hand the error to (master-project#233).
+    """
     factory = get_session_factory()
     with factory() as session:
         try:

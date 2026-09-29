@@ -39,7 +39,9 @@ class WorkspaceContext:
 
 def get_current_workspace(
     identity: CurrentIdentity,
-    session: Annotated[Session, Depends(get_session)],
+    # scope="function": see deps.py's SessionDep -- commits the binding and any
+    # write this request makes before the response is built, not after it is sent.
+    session: Annotated[Session, Depends(get_session, scope="function")],
     x_workspace_id: Annotated[int | None, Header(alias="x-workspace-id")] = None,
 ) -> WorkspaceContext:
     """Resolve the request's workspace and BIND the session to it.

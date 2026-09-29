@@ -1,0 +1,63 @@
+"""Boot a real second process of this app under uvicorn: its own event loop and
+children, on the same database and data directory -- what another gunicorn
+worker is to the one running the current test process.
+
+Needed wherever a test must prove something across a genuine process boundary
+that an in-process ASGI transport cannot show. `httpx.ASGITransport` awaits the
+whole ASGI call -- exit stacks included -- before it builds the `httpx.Response`
+it hands back, so by the time a test sees a response every dependency has
+already finished cleaning up, whatever scope it declared. Only a real socket
+lets a client receive a response before a dependency's own exit code has run.
+"""
+
+import asyncio
+import contextlib
+import os
+import socket
+import subprocess
+import sys
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+import httpx
+
+BACKEND = Path(__file__).resolve().parents[1]
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+@contextlib.asynccontextmanager
+async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[str, int]]:
+    """Run `{{ package_name }}.server:app` under uvicorn in its own process; yield its base URL and pid."""
+    port = free_port()
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "{{ package_name }}.server:app",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=BACKEND,
+        env={**os.environ, **(env or {})},
+    )
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        async with asyncio.timeout(60), httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
+            while True:
+                assert process.poll() is None, "the server process exited during startup"
+                with contextlib.suppress(httpx.TransportError):
+                    if (await probe.get("/openapi.json")).status_code == 200:
+                        break
+                await asyncio.sleep(0.1)
+        yield base_url, process.pid
+    finally:
+        process.terminate()
+        process.wait(timeout=30)

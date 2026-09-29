@@ -38,7 +38,15 @@ from {{ package_name }}.api.workspaces.dependencies import (
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.db.session import get_session
 
-SessionDep = Annotated[Session, Depends(get_session)]
+# scope="function": FastAPI's default for a yield dependency ("request" scope)
+# runs the code after `yield` -- get_session's commit -- AFTER the response
+# has already gone out, so a client's next request can miss a row its own
+# previous response just returned, and a failed commit raises with nobody
+# left to hand the error to. "function" scope runs it before the response is
+# built, inside the same exception handling that turns a raised commit into
+# the response. Every Depends(get_session) call site needs this, not only
+# this one -- see api/users/dependencies.py and api/workspaces/dependencies.py.
+SessionDep = Annotated[Session, Depends(get_session, scope="function")]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 __all__ = [
