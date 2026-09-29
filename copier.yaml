@@ -29,6 +29,14 @@ _skip_if_exists:
   # and re-exports this file from. App-owned by definition: what it exports IS
   # this app's domain surface, so an update must never overwrite it.
   - frontend/src/lib/api/app.ts
+  # THE extension point for frontend/src/routes/(app)/+layout.svelte: this app's
+  # shell, nav and top bar. Stamped with the factory's composition, then the
+  # app's — an update must never overwrite the nav it has declared.
+  - frontend/src/lib/app-frame.svelte
+  # The scaffold slice's landing page, like api/example/: the app replaces it
+  # with its real home or a redirect, and an update must never put it back.
+  - frontend/src/routes/(app)/+page.svelte
+  - frontend/src/routes/(app)/+page.ts
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
@@ -72,6 +80,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/api/error.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/routes/(app)/layout.test.ts{% endif %}"
 
 project_name:
   type: str

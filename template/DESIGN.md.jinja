@@ -40,8 +40,8 @@ the comment inline).
 
 ## Shell
 
-`+layout.svelte` wraps every route in `AppShell` (`variant="rail"`, the
-package default) with `content="standard"`. Sidebar and chart colours are the
+`src/lib/app-frame.svelte` wraps every route under `routes/(app)/` in
+`AppShell` (`variant="rail"`, the package default) with `content="standard"`. Sidebar and chart colours are the
 one surface the package leaves to each app — declared and registered in
 `app.css` alongside the primary override.
 
@@ -51,6 +51,6 @@ To change the accent colour or shell variant:
 
 1. Edit the `--ds-color-primary` (and `--ds-color-ring`) values in
    `frontend/src/app.css`.
-2. Pass `variant="header"` to `AppShell` in `+layout.svelte` if primary
+2. Pass `variant="header"` to `AppShell` in `app-frame.svelte` if primary
    navigation should live in the top bar instead of a rail.
 3. Update this file's `status` frontmatter field once the identity is settled.
