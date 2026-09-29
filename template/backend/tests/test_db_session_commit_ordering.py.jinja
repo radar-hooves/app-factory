@@ -1,7 +1,7 @@
 """Every write route's session commits before its response is sent
-(master-project#233, cadmus, 29/09/2026): the Graph slice's e2e seed created
-rows through the API and immediately hit 404s reading them back, and worked
-around it with a retry loop instead of a fix. `db/session.py`'s `get_session`
+(cadmus, 29/09/2026): the Graph slice's e2e seed created rows through the API
+and immediately hit 404s reading them back, and worked around it with a
+retry loop instead of a fix. `db/session.py`'s `get_session`
 yields, commits after `yield`, and rolls back on exception -- an ordinary
 FastAPI yield dependency. FastAPI's OWN default for a yield dependency defers
 that exit code until AFTER the response has already gone out
