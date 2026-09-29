@@ -10,6 +10,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **An app's CI runs on the runners it deploys from.** `runner_labels` reached only the deploy job, so an app answering another host's runners still had its python, frontend, security and canonical-shape checks asked of atlas's. All four callers now pass it; an app that answers nothing runs where it did. For pebblestone, which answers titan's runners.
 
+### Fixed
+
+- **The settings slice stands on its own: an app that deleted the scaffold's `api/example/` converges green.** `api/settings/registry.py` imported the example domain by name; it now imports every `api/<domain>/settings.py` it finds, so adding or deleting a domain never edits it. `tests/test_settings_api.py` asserted on the example's two declarations; each test now runs against a fresh registry holding two settings of its own. Need: godswood (app-factory#5), 30/09/2026.
+
 ## [2026.9.52] - 2026-09-30
 
 ### Fixed
