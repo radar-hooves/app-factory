@@ -76,6 +76,17 @@ class AgentSettings(BaseSettings):
     # Empty means `{{ project_name }}-gateway`.
     gateway_key_credential: str = ""
 
+    # core-memory's MCP endpoint, for `api/agent/lessons.py`'s report of a job's
+    # cited lessons at the moment a person accepts or corrects its result.
+    # Deployment configuration, not a secret — the bearer that reaches it is
+    # vended fresh per call (`config.vend.vend_envelope`, credential
+    # `mcp-gateway-api`) and never held here. Empty (the default) opts this
+    # deployment OUT of the learning loop entirely: `lessons.report_outcome`
+    # is a no-op, so a persona with nothing to say about lessons costs nothing
+    # ("build nothing central" — a deployment names its own core-memory rather
+    # than the factory assuming a household-wide one).
+    core_memory_url: str = ""
+
     # Claude Code runs a small model for background work as well as the one
     # answering. Through a gateway it can only be a model the gateway serves,
     # so it is named rather than left to a default that resolves to nothing.

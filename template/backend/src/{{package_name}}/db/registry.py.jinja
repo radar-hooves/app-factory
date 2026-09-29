@@ -14,7 +14,7 @@ what stops a new table quietly shipping with no access predicate
 (`rules-library/platform/tenancy.md`).
 """
 
-from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent  # noqa: F401
+from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent, AgentJobLessonReport  # noqa: F401
 from {{ package_name }}.api.agent.ownership import AgentSession
 from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401

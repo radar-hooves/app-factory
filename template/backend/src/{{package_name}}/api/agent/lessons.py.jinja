@@ -1,0 +1,175 @@
+"""Tell core-memory how a persona job's cited lessons turned out (radar-hooves/godswood#840).
+
+core-memory already holds the learning loop — beliefs, confidence, decisions,
+outcomes, calibration, promotion. What it cannot know on its own is the one
+moment a human accepts a persona's result as-is or corrects it, because only
+the APP sees that moment. This module is the standard shape every persona job
+uses to close that loop, so no app hand-writes it twice:
+
+1. A job cites the lessons it followed in its own structured answer, under the
+   reserved `lessons_used` key (a JSON array of belief ids from
+   `belief_retrieve` — `[]` when it followed none). This is a convention, not
+   an enforced schema: `json_schema` is the app's own contract with its
+   persona (`jobs.py`), and this module only ever reads the key back.
+2. Once a person accepts or corrects the job's result, the app makes ONE call
+   here: `report_outcome(..., result="confirm" | "contradict")`. Nothing else
+   in this slice knows that moment happened.
+3. This module tells core-memory: `decision_record` citing the ids from (1),
+   then `outcome_record` with the app's own `result`.
+
+Only ids ever leave the app — never a job's content, which may carry a
+household document's own detail. The bearer that reaches core-memory is
+vended fresh for this call and held nowhere (`config/vend.vend_envelope`,
+the same `mcp-gateway-api` credential a job's own `.mcp.json` is built from),
+matching `platform/canonical-app-shape.md`'s broker contract.
+
+`AgentJobLessonReport` (`jobs_models.py`) is this call's own progress marker,
+because the two-call sequence must survive a network fault without recording
+the same outcome twice: a call repeated after a crash resumes from whichever
+half core-memory does not have yet, and a call repeated once the report has
+settled — successfully or refused — is a no-op, since a refusal is final
+(a cited belief unknown or no longer active refuses the WHOLE decision, and
+asking again changes nothing) and reporting a success twice would double its
+evidence weight.
+
+Whether the instructions a persona needs to use this loop (retrieve before
+working, propose what would have got it right first time, cite what was
+followed under `lessons_used`) belong in code here or in prose is settled by
+what `config/personas/` is: an app-owned directory this slice reads fresh on
+every spawn (`persona.py`), never rendered by the template. There is nothing
+in the factory to inject them into. The canonical wording every persona's own
+`CLAUDE.md` carries verbatim lives in `docs/design/agent-lessons.md` instead —
+`platform/canonical-app-shape.md`'s "sameness extends to prose" applies to an
+app-owned file exactly as to a factory one; the factory just cannot enforce it
+mechanically here, only state it once for every app to copy.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastmcp import Client
+from fastmcp.client.auth import BearerAuth
+from fastmcp.exceptions import ToolError
+from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
+
+from {{ package_name }}.api.agent import jobs_models
+from {{ package_name }}.api.agent.jobs_models import AgentJob
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.config.vend import vend_envelope
+from {{ package_name }}.db.scoping import bind_session
+
+logger = logging.getLogger(__name__)
+
+#: `result` as `report_outcome` and core-memory's own `outcome_record` both take it.
+CONFIRM = "confirm"
+CONTRADICT = "contradict"
+
+#: The broker credential a job's own MCP identity is vended from
+#: (`jobs.py`'s `_write_mcp_config`/`docs/design/agent-jobs.md` §Operational),
+#: reused here because reporting a job's outcome is this same app speaking to
+#: the same gateway, never a second identity.
+_CORE_MEMORY_CREDENTIAL = "mcp-gateway-api"
+
+
+def cited(job: AgentJob) -> list[str]:
+    """The belief ids `job`'s structured answer names in `lessons_used` — `[]` when it named none
+    or carries no structured answer at all."""
+    lessons = (job.structured_output or {}).get("lessons_used")
+    return [str(item) for item in lessons] if isinstance(lessons, list) else []
+
+
+async def _call(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Call one core-memory tool, under a bearer vended fresh for this call and kept nowhere."""
+    envelope = await run_in_threadpool(vend_envelope, _CORE_MEMORY_CREDENTIAL)
+    token = envelope["material"]["access_token"]
+    async with Client(settings.core_memory_url, auth=BearerAuth(token)) as memory:
+        result = await memory.call_tool(tool, arguments)
+    return dict(result.structured_content or {})
+
+
+async def report_outcome(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    job_id: str,
+    *,
+    workspace_id: int,
+    domain_name: str,
+    context_key: str,
+    result: str,
+) -> None:
+    """Tell core-memory how `job_id`'s cited lessons turned out.
+
+    The one call an app makes at the moment a person accepts (`result=CONFIRM`)
+    or corrects (`result=CONTRADICT`) the job's result. A no-op when this
+    deployment names no `core_memory_url` (the learning loop is opt-in per
+    deployment, never a standing default), when `job_id` names no job in
+    `workspace_id`, or when its structured answer cited no lessons — there is
+    nothing for core-memory to confirm or contradict.
+
+    Safe to call more than once for the same `job_id`: idempotent once the
+    report has settled (`AgentJobLessonReport.recorded_at` set, success or a
+    final refusal alike), and resumed rather than restarted when a prior call
+    got as far as `decision_record` but not `outcome_record`.
+    """
+    if not settings.core_memory_url:
+        return
+
+    def _load_job() -> AgentJob | None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            return jobs_models.get_job(db, job_id)
+
+    job = await run_in_threadpool(_load_job)
+    if job is None:
+        return
+    lessons = cited(job)
+    if not lessons:
+        return
+
+    def _ensure_report() -> jobs_models.AgentJobLessonReport:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            return jobs_models.ensure_lesson_report(
+                db, job_id, domain_name=domain_name, context_key=context_key, result=result
+            )
+
+    report = await run_in_threadpool(_ensure_report)
+    if report.recorded_at is not None:
+        return
+
+    decision_id = report.decision_id
+    try:
+        if decision_id is None:
+            decision = await _call(
+                settings, "decision_record", {"domain_name": domain_name, "context_key": context_key, "cites": lessons}
+            )
+            decision_id = str(decision["id"])
+
+            def _save_decision() -> None:
+                with db_session_factory() as db:
+                    bind_session(db, workspace_id=workspace_id)
+                    jobs_models.set_lesson_decision(db, job_id, decision_id)
+
+            await run_in_threadpool(_save_decision)
+        await _call(settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result})
+    except ToolError as exc:
+        # Refused, not failed: a cited lesson is unknown or no longer active, and asking again
+        # changes nothing — this is the report's final state, same as a recorded success.
+        def _save_refusal() -> None:
+            with db_session_factory() as db:
+                bind_session(db, workspace_id=workspace_id)
+                jobs_models.settle_lesson_report(db, job_id, refused=str(exc)[:500])
+
+        await run_in_threadpool(_save_refusal)
+        logger.warning("core-memory refused the lesson report for job %s: %s", job_id, exc)
+        return
+
+    def _save_success() -> None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            jobs_models.settle_lesson_report(db, job_id, refused=None)
+
+    await run_in_threadpool(_save_success)
