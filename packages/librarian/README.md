@@ -228,7 +228,15 @@ again after sending a message folds only what is new.
 	oncite={(citation) => showPage(citation.document_id)}
 >
 	{#snippet composer()}
-		<Composer bind:value {running} {name} note="It carries on from where it stopped." {onsubmit} {onstop} />
+		<Composer
+			bind:value
+			{running}
+			{name}
+			sendWhileRunning
+			note="It carries on from where it stopped."
+			{onsubmit}
+			{onstop}
+		/>
 	{/snippet}
 </Conversation>
 ```
@@ -244,6 +252,7 @@ end that way.
 | An artefact            | `turn.artefact = { title, summary }` cards under the prose once the turn settles; `isAnswer: true` is an artefact that IS the prose, and replaces it                  |
 | Opening it             | `onopenartefact(turn)` and `showing` (the turn id the host shows). Without a handler, an `isAnswer` artefact opens in `ArtefactPane` and any other offers no action |
 | "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no shelf                                                                                                     |
+| Saying something mid-run | `Composer`'s `sendWhileRunning`: while the session works the box stays open and Send sits beside Stop. For a route that reads a message while the run works; a chat leaves it off and waits for its answer |
 
 ### Citations
 

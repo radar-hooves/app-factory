@@ -2,6 +2,28 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.20] - 2026-09-29
+
+Saying something to a session while it works. Asked for by godswood
+(`radar-hooves/godswood#839`), whose operator messages a running job as well
+as stopping it; the factory's message route writes a message sent mid-run
+onto the running process.
+
+### Added
+
+- **`Composer`'s `sendWhileRunning`**: while `running`, the box stays open and
+  Send sits beside Stop, by button or Enter. Words only: the paperclip still
+  waits for the run. Without it a chat keeps waiting for its answer, as
+  before.
+- The lab's `job-live` takes a message mid-run, and the grid asserts the box
+  is open, sending clears it, and Stop stays.
+
+### Changed
+
+- **Focus comes back to the box only if it had been disabled.** A box that
+  stayed open while a run worked no longer pulls the reader back from
+  wherever they went when the run finishes.
+
 ## [2026.9.19] - 2026-09-29
 
 A session somebody else started, read as a conversation. Asked for by

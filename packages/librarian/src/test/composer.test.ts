@@ -5,8 +5,8 @@
  * "The whole library" as the sole entry — and a sole entry is console
  * furniture, not a control.
  */
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
 describe('Composer scope chip', () => {
@@ -114,5 +114,44 @@ describe('Composer placeholder', () => {
 	it('says who is answering while the box is disabled', () => {
 		composer({ name: 'penny', running: true });
 		expect(screen.getByPlaceholderText('Penny is answering…')).toBeInTheDocument();
+	});
+});
+
+describe('Composer while a session works', () => {
+	function composer(props: Record<string, unknown>) {
+		const onsubmit = vi.fn();
+		const onstop = vi.fn();
+		render(Composer, {
+			props: { value: 'Skip the voided line.', running: true, onsubmit, onstop, ...props }
+		});
+		return { onsubmit, onstop };
+	}
+
+	it('waits, for a chat whose answer is still coming', () => {
+		const { onsubmit } = composer({});
+		expect(screen.getByRole('textbox')).toBeDisabled();
+		expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+		expect(onsubmit).not.toHaveBeenCalled();
+	});
+
+	it('takes a message and offers Stop beside Send, for a session that reads one', async () => {
+		const { onsubmit, onstop } = composer({ sendWhileRunning: true });
+		expect(screen.getByRole('textbox')).toBeEnabled();
+		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+
+		await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+		expect(onsubmit).toHaveBeenCalledTimes(2);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+		expect(onstop).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps files for after the run', () => {
+		composer({ sendWhileRunning: true });
+		expect(screen.getByRole('button', { name: 'Attach a file' })).toBeDisabled();
 	});
 });

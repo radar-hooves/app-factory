@@ -7,8 +7,10 @@
   chrome grows with the text and nothing else moves.
 
   While Milton is answering the box is disabled and the send button becomes a
-  stop button. Queuing the next message is not built, and a box that takes
-  typing it will then discard is worse than one that plainly waits.
+  stop button: an ask route takes one question per request, and a box that
+  takes typing it will then discard is worse than one that plainly waits. A
+  host whose session reads messages while it works (`sendWhileRunning`) keeps
+  the box open, with Send beside Stop.
 -->
 <script lang="ts">
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
@@ -52,6 +54,11 @@
 		name?: string;
 		/** Overrides for the package's own words. */
 		copy?: Partial<LibrarianCopy>;
+		/** The session reads a message sent while it works — a job whose
+		 *  route writes it onto the running process — so the box stays open
+		 *  and Send sits beside Stop. Words only: the paperclip still waits for
+		 *  the run. Absent, a chat waits for its answer. */
+		sendWhileRunning?: boolean;
 		/** One quiet line in the box's footer, where a scope choice would
 		 *  sit, in the host's words: what sending does here ("It carries on
 		 *  from where it stopped."). */
@@ -72,8 +79,12 @@
 		onbriefing,
 		name = DEFAULT_PERSONA,
 		copy,
-		note
+		note,
+		sendWhileRunning = false
 	}: Props = $props();
+
+	/** Nothing can be said right now: a chat whose answer is still coming. */
+	const waiting = $derived(running && !sendWhileRunning);
 
 	const words = $derived(resolveCopy(copy, name));
 
@@ -124,21 +135,23 @@
 	});
 
 	// Focus comes back once Milton is done, so a reader can keep going without
-	// reaching for the mouse. It has to be the transition OUT of `running`: a
+	// reaching for the mouse. It has to be the transition OUT of `waiting`: a
 	// disabled element cannot hold focus, so the focus call in `submit()` below
-	// survives only for a host that never sets `running` — measured, focus lands
-	// on `body` the frame the box disables and comes back here.
+	// survives only for a box that never disables — measured, focus lands on
+	// `body` the frame the box disables and comes back here. A box that stayed
+	// open never lost focus, so it takes none back from wherever the reader
+	// went while the run worked.
 	//
 	// Plain, not `$state`: read and written in the same effect, which would
 	// otherwise re-trigger itself forever.
-	let wasRunning = false;
+	let wasWaiting = false;
 	$effect(() => {
-		if (wasRunning && !running) textarea?.focus();
-		wasRunning = running;
+		if (wasWaiting && !waiting) textarea?.focus();
+		wasWaiting = waiting;
 	});
 
 	function submit() {
-		if (!value.trim() || running) return;
+		if (!value.trim() || waiting) return;
 		onsubmit();
 		textarea?.focus();
 	}
@@ -225,8 +238,8 @@
 			oninput={grow}
 			onkeydown={keydown}
 			rows="1"
-			disabled={running}
-			placeholder={running ? words.answeringPlaceholder : words.askPlaceholder}
+			disabled={waiting}
+			placeholder={waiting ? words.answeringPlaceholder : words.askPlaceholder}
 			class="ds-lib-input"
 		></textarea>
 
@@ -287,7 +300,8 @@
 				<button type="button" class="ds-lib-stop" onclick={onstop} aria-label="Stop">
 					<SquareIcon size={14} fill="currentColor" />
 				</button>
-			{:else}
+			{/if}
+			{#if !waiting}
 				<button
 					type="button"
 					class="ds-lib-send"

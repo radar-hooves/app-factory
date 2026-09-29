@@ -306,6 +306,19 @@ for (const theme of THEMES) {
 	if (!(await page.getByRole('button', { name: 'Working…' }).count())) {
 		failures.push('job-live: the run in flight does not read as working');
 	}
+
+	// A message said while the run works: the box is open, Send sits beside
+	// Stop, and sending clears the box without stopping anything.
+	const box = page.getByRole('textbox');
+	if (await box.isDisabled()) failures.push('job-live: the box will not take a message mid-run');
+	const articles = await page.locator('article').count();
+	await box.fill('Skip the voided line.');
+	await box.press('Enter');
+	await page.waitForFunction((had) => document.querySelectorAll('article').length > had, articles);
+	if ((await box.inputValue()) !== '') failures.push('job-live: a mid-run message was not sent');
+	if (!(await page.getByRole('button', { name: 'Stop' }).count())) {
+		failures.push('job-live: sending a message mid-run took Stop away');
+	}
 	await context.close();
 }
 

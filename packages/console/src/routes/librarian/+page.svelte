@@ -174,6 +174,7 @@
 						{name}
 						copy={JOB_COPY}
 						note={JOB_NOTE}
+						sendWhileRunning
 						onsubmit={send}
 						onstop={() => (running = false)}
 					/>
