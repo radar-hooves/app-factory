@@ -22,7 +22,7 @@ class SettingsDocument(BaseModel):
 
 
 class SettingUpdate(BaseModel):
-    """Request body for `PATCH /api/admin/settings/{key}` — one field's next value."""
+    """Request body for `PATCH /api/settings/{key}` — one field's next value."""
 
     value: bool | int | float | str
 

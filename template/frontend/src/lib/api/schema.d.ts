@@ -352,6 +352,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings Document
+         * @description The JSON Schema, effective values, and which keys are overridden.
+         *
+         *     Everything `<SchemaForm>` needs to render the page, and everything the
+         *     "overridden from default" panel needs beside it.
+         */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Setting
+         * @description Set `key`'s override to `data.value`.
+         *
+         *     Raises:
+         *         NotFoundError: nothing declared `key`.
+         *         ValidationError: the value fails the declared type, bounds, choices,
+         *             or (for `model_alias`) a reachable gateway's own alias list.
+         */
+        patch: operations["updateSetting"];
+        trace?: never;
+    };
+    "/api/settings/{key}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Setting
+         * @description Delete `key`'s override, reverting it to its declared default.
+         *
+         *     Raises:
+         *         NotFoundError: nothing declared `key`.
+         */
+        post: operations["resetSetting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get History
+         * @description The append-only change log, newest first — who changed what, when.
+         */
+        get: operations["listSettingHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/personas": {
         parameters: {
             query?: never;
@@ -408,7 +499,7 @@ export interface paths {
         };
         /**
          * Watch Job
-         * @description Watch `job_id`'s events from the first, live if it is still running (need 3).
+         * @description Watch `job_id`'s events from the first, then follow them until its run settles, from any worker.
          *
          *     The SAME frame shape `ask`'s stream produces — one Claude Code event per
          *     frame, no `event:` name, `library_error` the one synthetic addition — so
@@ -906,6 +997,88 @@ export interface components {
         MembershipRead: {
             workspace: components["schemas"]["WorkspaceRead"];
             role: components["schemas"]["WorkspaceRole"];
+        };
+        /**
+         * SettingChangeRead
+         * @description One row of the append-only history — who changed what, when.
+         */
+        SettingChangeRead: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Old Value */
+            old_value: boolean | number | string | null;
+            /** New Value */
+            new_value: boolean | number | string;
+            /** Changed By */
+            changed_by: string | null;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+        };
+        /**
+         * SettingHistoryList
+         * @description One page of the settings history, newest first.
+         */
+        SettingHistoryList: {
+            /** Changes */
+            changes: components["schemas"]["SettingChangeRead"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * SettingRead
+         * @description One setting's effective state, returned after a write or a reset.
+         */
+        SettingRead: {
+            /** Key */
+            key: string;
+            /** Value */
+            value: boolean | number | string;
+            /** Default */
+            default: boolean | number | string;
+            /** Overridden */
+            overridden: boolean;
+        };
+        /**
+         * SettingUpdate
+         * @description Request body for `PATCH /api/admin/settings/{key}` — one field's next value.
+         */
+        SettingUpdate: {
+            /** Value */
+            value: boolean | number | string;
+        };
+        /**
+         * SettingsDocument
+         * @description What `<SchemaForm>` needs to render the whole page: a JSON Schema and a value.
+         *
+         *     No UI Schema travels alongside it — `@poodle64/ui/schema-form` generates
+         *     its own layout from the JSON Schema alone (`docs/design/settings.md`
+         *     §The page), which is the only mode in which a declared setting cannot be
+         *     missing from the rendered form.
+         */
+        SettingsDocument: {
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
+            /** Value */
+            value: {
+                [key: string]: boolean | number | string;
+            };
+            /** Defaults */
+            defaults: {
+                [key: string]: boolean | number | string;
+            };
+            /** Overridden */
+            overridden: string[];
         };
         /**
          * UserSummary
@@ -1469,6 +1642,126 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsDocument"];
+                };
+            };
+        };
+    };
+    updateSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resetSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listSettingHistory: {
+        parameters: {
+            query?: {
+                /** @description Page size */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingHistoryList"];
+                };
             };
             /** @description Validation Error */
             422: {
