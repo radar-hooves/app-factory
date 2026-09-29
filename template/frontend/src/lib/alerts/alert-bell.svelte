@@ -7,6 +7,9 @@
 	no bell. The layout mounts it only for a caller holding `admin`; the
 	server's gate on `/api/alerts` is the real one.
 
+	`size-9` is the shell's own top-bar control size (its search and theme
+	buttons), which `size="icon"` follows only at one density.
+
 	Polls once a minute, and again as the panel opens. Opening an alert marks
 	it read and follows its link; the cross dismisses it until its producer
 	raises it again.
@@ -19,7 +22,7 @@
 	import { Button } from '@poodle64/ui/button';
 	import * as Popover from '@poodle64/ui/popover';
 	import { api, toastApiError } from '$lib/api';
-	import type { components } from '$lib/api/schema';
+	import type { components } from '$api/schema';
 	import { cn } from '$lib/utils';
 
 	type Alert = components['schemas']['AlertRead'];
@@ -32,16 +35,14 @@
 	let unread = $state(0);
 	let open = $state(false);
 
+	// A failed poll keeps what the bell last showed and is not worth a toast:
+	// the next one, a minute on, tries again.
 	async function load() {
-		try {
-			const { data } = await api.GET('/api/alerts/');
-			if (!data) return;
-			alerts = data.alerts;
-			total = data.total;
-			unread = data.unread;
-		} catch {
-			// A poll that times out is retried by the next one; it is not worth a toast.
-		}
+		const { data } = await api.GET('/api/alerts/');
+		if (!data) return;
+		alerts = data.alerts;
+		total = data.total;
+		unread = data.unread;
 	}
 
 	async function markRead(alert: Alert) {
@@ -89,7 +90,7 @@
 					{...props}
 					variant="outline"
 					size="icon"
-					class="relative"
+					class="relative size-9"
 					aria-label={unread > 0 ? `Alerts, ${unread} unread` : 'Alerts'}
 					data-testid="alert-bell"
 				>

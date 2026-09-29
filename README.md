@@ -1,10 +1,10 @@
 # full-stack-app-template
 
-The copier source for every household full-stack app — FastAPI backend, SvelteKit SPA, embedded MCP surface, shipped as one container.
+The copier source for every household full-stack app: FastAPI backend, SvelteKit SPA and embedded MCP surface, shipped as one container.
 
 ## The Problem
 
-Ten apps built from one shape drift apart quietly. Every variant compiles, type-checks and passes its tests, so the divergence is invisible to every gate there is — it only shows when someone lines two repos up side by side, which nobody does. Measured on 2026-08-14: across ten apps, 125 files that should have been 13 carbon copies were 62 distinct versions.
+Ten apps built from one shape drift apart quietly. Every variant compiles, type-checks and passes its tests, so the divergence is invisible to every gate there is. It only shows when someone lines two repos up side by side, which nobody does. Measured on 2026-08-14: across ten apps, 125 files that should have been 13 carbon copies were 62 distinct versions.
 
 ## The Solution
 
@@ -30,10 +30,11 @@ Written for the next agent working here, not for onboarding.
 
 | Document | What it covers |
 | --- | --- |
-| [Working on this template](docs/development/working-on-the-template.md) | **Read before editing `template/`.** The two disciplines that fail silently — untagged changes reach nothing, stale parity manifests measure against an old factory — plus the traps in the shape itself. |
+| [Working on this template](docs/development/working-on-the-template.md) | **Read before editing `template/`.** The two disciplines that fail silently (untagged changes reach nothing, stale parity manifests measure against an old factory), plus the traps in the shape itself. |
 | [Adopting an existing app](docs/development/adopting-an-existing-app.md) | Stamping over a repo that already has an app: the reconcile after the stamp is the job, not the stamp. |
 | [Agent console](docs/design/agent-console.md) | Design: the persona chat slice the factory carries, what stays the library's, the persona contract, and the sequence by which the library and Pebblestone take it. |
 | [Agent jobs](docs/design/agent-jobs.md) | Design: the app-started persona session beside the chat one, its start/watch/message/stop API, and why `--bg` was rejected |
+| [Alerts](docs/design/alerts.md) | Design: what a machine raises over `/mcp` and the operator reads in the top-bar bell; the producer contract, and why not ntfy |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
 
 Deliberately not documented here: the file tree, the copier questions and the dependency list. All three are readable from the repo, and a transcription of them is wrong from the first commit that touches anything.

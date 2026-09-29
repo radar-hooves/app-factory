@@ -4,7 +4,7 @@ Status: **design, 29/09/2026.** The operator, the same day: "we should start to 
 
 ## Decision
 
-**The factory gains an `alerts` slice: one table, one `/mcp` tool producers write through, three admin-gated routes, and a bell in the shell's top bar.** An alert is what a machine told this deployment's operator. Feedback is the same inbox from the other side: people telling the operator. Both are read under the reserved `admin` entitlement. Cost is about 500 lines of product code: `api/alerts/` 230, `mcp/dispatchers/alerts.py` 70, the migration 50 and `lib/alerts/alert-bell.svelte` 150. Tests add about 300.
+**The factory gains an `alerts` slice: one table, one `/mcp` tool producers write through, three admin-gated routes, and a bell in the shell's top bar.** An alert is what a machine told this deployment's operator. Feedback is the same inbox from the other side: people telling the operator. Both are read under the reserved `admin` entitlement. Cost is about 530 lines of product code: `api/alerts/` 250, `mcp/dispatchers/alerts.py` 65, the migration 50 and `lib/alerts/alert-bell.svelte` 170. Tests add about 330.
 
 ```text
 n8n / estate service ──POST /mcp/ tools/call "alerts"──┐   (Authentik bearer + actors.yaml)
@@ -48,7 +48,7 @@ The answer arrives as one server-sent event. A refused argument comes back as `r
 ## Rejected
 
 - **An ntfy subscriber.** atlas's ntfy keeps a message about 12 hours and has no read state and no action. It stays the channel for what must interrupt.
-- **An `/api` route for machines.** The human surface trusts forward-auth headers, and `get_identity` refuses to mint a user for a machine principal. The factory's own error message there sends a machine to `/mcp`.
+- **An `/api` route for machines.** `platform/authentication.md` does admit a service account to the proxy-fronted surface on an app password. But `get_identity` refuses to mint a user row for a machine principal, the factory has no way to link one, and its refusal message sends the machine to `/mcp`.
 - **Workspace-scoped alerts.** A producer would have to name a workspace it cannot know, and `/mcp` has no actor-to-membership link to authorise it against. Building that link is a general `/mcp` tenancy change, not an alerts need.
 - **Pebblestone's notifications** (`api/notifications/`) are addressed to a person or a role, for a human workflow such as approval outcomes. That is a different thing, and pebblestone keeps it. Its bell is the precedent the factory's bell follows.
 

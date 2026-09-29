@@ -286,6 +286,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Alerts
+         * @description The newest-raised alerts, with the total and unread counts of all of them.
+         */
+        get: operations["listAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/{alert_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Alert Read
+         * @description Mark one alert read.
+         *
+         *     Raises:
+         *         NotFoundError: no such alert exists.
+         */
+        post: operations["markAlertRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/{alert_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss Alert
+         * @description Dismiss one alert. It returns, unread, if its producer raises it again.
+         *
+         *     Raises:
+         *         NotFoundError: no such alert exists.
+         */
+        delete: operations["dismissAlert"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/personas": {
         parameters: {
             query?: never;
@@ -327,6 +393,77 @@ export interface paths {
          *         NotFoundError: `persona` names no directory under `config/personas/`.
          */
         post: operations["askAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/jobs/{job_id}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch Job
+         * @description Watch `job_id`'s events from the first, live if it is still running (need 3).
+         *
+         *     The SAME frame shape `ask`'s stream produces — one Claude Code event per
+         *     frame, no `event:` name, `library_error` the one synthetic addition — so
+         *     `@poodle64/librarian`'s transcript renderer needs no second code path for
+         *     a job it opens instead of a chat turn.
+         *
+         *     Raises:
+         *         NotFoundError: no such job, or it belongs to a different workspace
+         *             (`jobs.authorize`, one answer for both — checked before the
+         *             stream opens, so a bad or foreign id 404s rather than opening an
+         *             SSE response with nothing in it).
+         */
+        get: operations["watchAgentJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/jobs/{job_id}/message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Message Job
+         * @description Send `request.text` to `job_id` (need 4): onto its stdin if it is still working, a resumed run if it has finished.
+         */
+        post: operations["messageAgentJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/jobs/{job_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Job
+         * @description Stop `job_id` (need 5). A no-op once it has already finished on its own.
+         */
+        post: operations["stopAgentJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -495,6 +632,50 @@ export interface components {
         AdminUserUpdate: {
             /** Is Active */
             is_active: boolean;
+        };
+        /**
+         * AgentJobMessageRequest
+         * @description A message to an app-started job (`api/agent/jobs.py`), while it is
+         *     running or after it has finished — `jobs.send_message` decides which.
+         */
+        AgentJobMessageRequest: {
+            /** Text */
+            text: string;
+        };
+        /**
+         * AlertList
+         * @description The newest alerts, and the counts the bell's badge needs beyond them.
+         */
+        AlertList: {
+            /** Alerts */
+            alerts: components["schemas"]["AlertRead"][];
+            /** Total */
+            total: number;
+            /** Unread */
+            unread: number;
+        };
+        /**
+         * AlertRead
+         * @description An alert as the bell shows it.
+         */
+        AlertRead: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string | null;
+            /** Link */
+            link: string | null;
+            /**
+             * Raised At
+             * Format: date-time
+             */
+            raised_at: string;
+            /** Read At */
+            read_at: string | null;
         };
         /** AskRequest */
         AskRequest: {
@@ -1206,6 +1387,96 @@ export interface operations {
             };
         };
     };
+    listAlerts: {
+        parameters: {
+            query?: {
+                /** @description How many of the newest to return */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    markAlertRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listAgentPersonas: {
         parameters: {
             query?: never;
@@ -1249,6 +1520,108 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    watchAgentJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: number | null;
+            };
+            path: {
+                persona: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    messageAgentJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: number | null;
+            };
+            path: {
+                persona: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentJobMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stopAgentJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-workspace-id"?: number | null;
+            };
+            path: {
+                persona: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
