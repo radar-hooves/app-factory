@@ -624,7 +624,8 @@ export function summariseActivity(group: ActivityGroup): string {
 export function readFrom(blocks: Block[], describeTool?: DescribeTool): Citation[] {
 	const out: Citation[] = [];
 	for (const block of blocks) {
-		if (block.kind !== 'tool' || block.result === undefined || block.isError) continue;
+		if (block.kind !== 'tool' || !isStep(block) || block.result === undefined || block.isError)
+			continue;
 		const source = wordsFor(block, describeTool).source;
 		if (!source || out.some((c) => c.document_id === source.id)) continue;
 		out.push({

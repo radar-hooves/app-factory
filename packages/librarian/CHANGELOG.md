@@ -14,8 +14,8 @@ now this package's `schema-session` fixture.
 - **The words before a structured answer folded away as narration.** A run
   under a schema ends by calling the CLI's own `StructuredOutput` tool, and
   `segment()` counted it as a call still to come. That call hands in the
-  answer; it is no longer a step of the work, a row, or a count, and the
-  prose before it stays the answer.
+  answer; it is no longer a step of the work, a row, a count, or something
+  `readFrom()` lists as read, and the prose before it stays the answer.
 - **A run that said nothing never settled.** A turn settled only on prose or
   a failure, so a run whose calls were a Read and the handing-in showed no
   card for its artefact and no actions. A turn whose run ended (it has an

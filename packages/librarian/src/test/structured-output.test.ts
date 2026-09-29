@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
 import { Session } from '$lib/session.svelte';
-import { segment, type TextBlock, type Turn } from '$lib/transcript.svelte';
+import { readFrom, segment, type TextBlock, type Turn } from '$lib/transcript.svelte';
 import { captured } from './fixtures/captured';
 
 const session = new Session();
@@ -53,6 +53,15 @@ describe('a session under a JSON schema', () => {
 		expect(group.kind === 'activity' && group.steps.map((s) => s.block)).toEqual([
 			expect.objectContaining({ kind: 'tool', name: 'Read' })
 		]);
+	});
+
+	it('never lists the handing-in as something read, whatever the host says of it', () => {
+		const everything = (block: { name: string }) => ({
+			verb: 'Read',
+			object: block.name,
+			source: { id: block.name, title: block.name }
+		});
+		expect(readFrom(read.blocks, everything).map((c) => c.title)).toEqual(['Read']);
 	});
 
 	it('shows neither side the CLI nudging its own model', () => {
