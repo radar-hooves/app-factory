@@ -1,47 +1,61 @@
 """The app-started job slice (`docs/design/agent-jobs.md`), driven through a
 REAL subprocess exactly as `test_agent_api.py` drives the chat `ask()` flow --
-`AgentSettings.executable` points at the same `fake_agent_cli.py`, so these
-tests prove `jobs.py`'s actual argv, environment, persistence and fan-out
-rather than a mock standing in for the claim that they work.
+`AgentSettings.executable` points at the same `fake_agent_cli.py`, which under
+`--input-format stream-json` behaves as the real CLI measures: the prompt comes
+on stdin, each frame is a turn, `--replay-user-messages` echoes it, and the
+process exits once stdin closes. These tests prove `jobs.py`'s actual argv,
+environment, stdin, persistence and settling rather than a mock standing in
+for the claim that they work.
 
 Two things do NOT mirror `test_agent_api.py`. First: a job's rows are written
 through `get_session_factory()` (the app's real, engine-bound sessionmaker),
-never the `session` fixture's rollback-wrapped connection -- deliberately,
-the same way `jobs.py`'s own module docstring explains it: a job must outlive
-the one request that reads it back, and a connection whose every write rolls
-back at test teardown cannot hold state across the several calls these tests
-make. Second: `AgentJob`/`AgentJobEvent` are `WorkspaceScoped`, so a job needs
-an actually-COMMITTED workspace to satisfy its own foreign key -- `_provision`
+never the `session` fixture's rollback-wrapped connection -- a job must
+outlive the one request that reads it back, and a connection whose every
+write rolls back at test teardown cannot hold state across the several calls
+these tests make, nor be seen by a second worker process. Second:
+`AgentJob`/`AgentJobEvent` are `WorkspaceScoped`, so a job needs an
+actually-COMMITTED workspace to satisfy its own foreign key -- `_provision`
 below replicates `get_identity`'s own upsert chain directly against a real
-session, since the ordinary `client`/`session` fixture's auto-provisioning
-lives inside a transaction that is rolled back at teardown and was never
-visible to the separate connection `jobs.py` writes through in the first
-place. Job and workspace rows this file commits are real; they are not
+session. Job and workspace rows this file commits are real; they are not
 cleaned up, the same way `test_workspaces_api.py`'s own stable-uid fixtures
 are not -- each test's own fresh `uuid4()` job id keeps them from colliding.
+
+The in-process suite runs one worker; the deployment runs several.
+`test_a_second_worker_process_watches_messages_stops_and_resumes_a_job` boots
+a real second worker -- the same app under uvicorn, on the same database and
+data directory -- and drives a job this process runs through it.
 """
 
 import asyncio
+import base64
 import contextlib
+import datetime
 import json
 import os
+import socket
 import stat
+import subprocess
+import sys
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 
+from {{ package_name }} import app_hooks
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import jobs_models
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent.jobs_models import AgentJob
+from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.workspaces import service as workspaces_service
 from {{ package_name }}.config import Settings, get_settings
+from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
@@ -49,12 +63,13 @@ from {{ package_name }}.exceptions import BadRequestError
 from tests.support import fake_agent_cli
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
+BACKEND = Path(__file__).parents[1]
 
 ENTITLED = {"x-authentik-uid": "job-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-jobagent"}
 UNENTITLED = {"x-authentik-uid": "job-2", "x-authentik-username": "bystander"}
 #: A SECOND identity holding the SAME persona entitlement but never granted
-#: membership of ENTITLED's workspace -- what CRITICAL 1's tests need to tell
-#: "not entitled" apart from "entitled, but this job is not yours".
+#: membership of ENTITLED's workspace -- what tells "not entitled" apart from
+#: "entitled, but this job is not yours".
 OTHER_WORKSPACE = {
     "x-authentik-uid": "job-3",
     "x-authentik-username": "outsider",
@@ -64,9 +79,17 @@ OTHER_WORKSPACE = {
 #: Bounds every poll loop below -- the fake CLI answers in well under a
 #: second, so a real hang reads as a clean failure rather than the suite
 #: stalling.
-_POLL_TIMEOUT_SECONDS = 5.0
+_POLL_TIMEOUT_SECONDS = 10.0
 
 JOB_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+#: A Luhn-valid card number, as a statement prints one.
+CARD = "4111 1111 1111 1111"
+#: A 1x1 PNG, the smallest real image a Read can return.
+PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d49444154789c6300010000050001"
+    "0d0a2db40000000049454e44ae426082"
+)
 
 
 def _write_persona(root: Path, name: str) -> Path:
@@ -81,26 +104,23 @@ def _write_persona(root: Path, name: str) -> Path:
 def personas_dir(tmp_path: Path) -> Path:
     root = tmp_path / "personas"
     _write_persona(root, "jobagent")
-    # A second persona, so a mismatch between the URL's own `{persona}` and a
-    # job's actual `persona` column has something real to be a mismatch
-    # against (CRITICAL 1's other half: entitlement to one persona proves
-    # nothing about a DIFFERENT persona's job in the same workspace).
+    # A second persona, so a job whose `persona` differs from the URL's has something real to differ from.
     _write_persona(root, "otherpersona")
     return root
 
 
 @pytest.fixture(autouse=True)
-def agent_settings(app: FastAPI, personas_dir: Path) -> Iterator[AgentSettings]:
-    """Point the agent slice at a throwaway persona directory and the fake CLI.
+def agent_settings(app: FastAPI, personas_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[AgentSettings]:
+    """Point the agent slice at a throwaway persona directory and the fake CLI, polling fast.
 
     Returns the constructed `AgentSettings` rather than only overriding
     `get_settings` for the app's own request handling: `jobs.start()` and
-    friends are called DIRECTLY in most of these tests (need 1 -- "started by
-    the app itself" -- means there is no request to hang a dependency
-    override off), so a test needs the same settings object in hand, not just
-    routed through FastAPI's DI.
+    friends are called DIRECTLY in most of these tests (a job is started by
+    the app itself, so there is no request to hang a dependency override
+    off), so a test needs the same settings object in hand.
     """
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    monkeypatch.setattr(jobs_module, "_POLL_SECONDS", 0.05)
     agent: AgentSettings = AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)
     configured: Settings = get_settings().model_copy(update={"agent": agent})
     app.dependency_overrides[get_settings] = lambda: configured
@@ -122,7 +142,7 @@ def _provision(authentik_uid: str, username: str) -> tuple[uuid.UUID, int]:
     """A real user + personal workspace, ACTUALLY committed -- replicates `get_identity`'s own
     upsert chain (`upsert_from_identity` then `ensure_personal_workspace`) against a real session,
     since `jobs.start()`'s `workspace_id` is a foreign key a separate, never-rolled-back connection
-    must be able to see (this module's own docstring has the fuller account of why)."""
+    must be able to see."""
     with get_session_factory()() as db:
         user = users_service.upsert_from_identity(db, authentik_uid=authentik_uid, username=username)
         db.commit()
@@ -135,45 +155,77 @@ def identity() -> tuple[uuid.UUID, int]:
     return _provision(ENTITLED["x-authentik-uid"], "asker")
 
 
+@pytest.fixture
+def settled_calls(monkeypatch: pytest.MonkeyPatch) -> list[JobOutcome]:
+    """Every outcome `app_hooks.agent_job_settled` receives."""
+    calls: list[JobOutcome] = []
+    monkeypatch.setattr(app_hooks, "agent_job_settled", calls.append, raising=False)
+    return calls
+
+
 async def _start(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, workspace_id: int, **kwargs: object
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, workspace_id: int, **kwargs: Any
 ) -> str:
     kwargs.setdefault("created_by_id", None)
     return await jobs_module.start(get_session_factory(), agent_settings, persona, workspace_id=workspace_id, **kwargs)
 
 
+async def _message(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, job_id: str, workspace_id: int, text: str
+) -> None:
+    await jobs_module.send_message(
+        get_session_factory(), agent_settings, persona, job_id, text, workspace_id=workspace_id, user_id=None
+    )
+
+
 async def _wait_until(predicate: Callable[[], bool], *, timeout: float = _POLL_TIMEOUT_SECONDS) -> None:
-    """Poll `predicate` until it is true. `_job_status`'s reads are cheap, real, committed rows --
-    polling them is the correct way to observe a background `asyncio.Task` from a test that is not
-    itself inside that task."""
+    """Poll `predicate` until it is true -- the correct way to observe a background `asyncio.Task`
+    from a test that is not itself inside that task."""
     async with asyncio.timeout(timeout):
         while not predicate():
             await asyncio.sleep(0.02)
 
 
-def _job_status(job_id: str, workspace_id: int) -> AgentJob | None:
+def _job(job_id: str, workspace_id: int) -> AgentJob:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        return jobs_models.get_job(db, job_id)
-
-
-def _events(job_id: str, workspace_id: int) -> list[tuple[int, dict[str, object]]]:
-    with get_session_factory()() as db:
-        bind_session(db, workspace_id=workspace_id)
-        return jobs_models.list_events(db, job_id)
-
-
-async def _wait_until_settled(job_id: str, workspace_id: int, *, timeout: float = _POLL_TIMEOUT_SECONDS) -> AgentJob:
-    await _wait_until(
-        lambda: (job := _job_status(job_id, workspace_id)) is not None and job.status != jobs_models.RUNNING,
-        timeout=timeout,
-    )
-    job = _job_status(job_id, workspace_id)
+        job = jobs_models.get_job(db, job_id)
     assert job is not None
     return job
 
 
-def _http_events(body: str) -> list[dict[str, object]]:
+def _events(job_id: str, workspace_id: int) -> list[dict[str, Any]]:
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        return [event for _, event in jobs_models.list_events(db, job_id)]
+
+
+def _answers(job_id: str, workspace_id: int) -> list[str]:
+    """Each `assistant` text in the log, in order."""
+    return [
+        block["text"]
+        for event in _events(job_id, workspace_id)
+        if event.get("type") == "assistant"
+        for block in event["message"]["content"]
+        if block.get("type") == "text"
+    ]
+
+
+def _echo_field(answer: str, name: str) -> str:
+    """One `name=value` field of the fake CLI's diagnostic echo."""
+    return next(part.removeprefix(f"{name}=") for part in answer.split(" | ") if part.startswith(f"{name}="))
+
+
+async def _wait_until_settled(job_id: str, workspace_id: int) -> AgentJob:
+    await _wait_until(lambda: _job(job_id, workspace_id).status != jobs_models.RUNNING)
+    return _job(job_id, workspace_id)
+
+
+async def _wait_until_running(job_id: str) -> None:
+    await _wait_until(lambda: (run := jobs_module._runs.get(job_id)) is not None and run.process is not None)
+
+
+def _http_events(body: str) -> list[dict[str, Any]]:
     frames = []
     for block in body.split("\n\n"):
         for line in block.splitlines():
@@ -182,84 +234,153 @@ def _http_events(body: str) -> list[dict[str, object]]:
     return frames
 
 
-# -- Need 1: started by the app, no asker ------------------------------------
+# -- Started by the app, with no asker ---------------------------------------
 
 
-async def test_a_job_is_returned_before_the_agent_has_finished(
+async def test_a_job_id_comes_back_and_the_run_settles_on_its_own(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """`start()` hands back `job_id` at once -- the app never waits on the run to get it."""
+    """The prompt reaches the CLI on stdin -- the only place `--input-format stream-json` reads it
+    -- and once it is answered the CLI's stdin closes, so the run ends rather than idling out."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hello")
-    assert job_id
     job = await _wait_until_settled(job_id, workspace_id)
     assert job.status == jobs_models.COMPLETED
+    answer = _answers(job_id, workspace_id)[0]
+    assert _echo_field(answer, "question") == "hello"
+    assert _echo_field(answer, "input_format") == "stream-json"
 
 
 async def test_a_jobs_structured_output_is_the_apps_own_schema(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """Need 1's own point: "a structured answer that the app code which started it gets back"."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="file this", json_schema=JOB_SCHEMA)
     job = await _wait_until_settled(job_id, workspace_id)
-    # The fake CLI's `structured_output.text` is its own diagnostic echo (argv/env, for the OTHER
-    # tests to assert on) rather than a clean answer -- the schema's presence on the wire is the point here.
-    assert "question=file this" in job.structured_output["text"]
+    assert job.structured_output is not None
+    assert _echo_field(job.structured_output["text"], "question") == "file this"
 
 
-async def test_a_jobs_own_working_folder_seeds_the_files_it_was_given(
+async def test_a_jobs_own_folder_is_seeded_with_the_files_it_was_given(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """ "with files to work on": `files` land at their given relative path under the job's own cwd."""
     _, workspace_id = identity
-    job_id = await _start(
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hello", files={"pages/1.png": PNG})
+    await _wait_until_settled(job_id, workspace_id)
+    assert (jobs_module.job_dir(job_id) / "pages" / "1.png").read_bytes() == PNG
+
+
+async def test_a_caller_minted_id_lets_the_prompt_name_a_seeded_file_by_absolute_path(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """Claude Code's Read takes an absolute path only: the starter knows the folder before the job exists."""
+    _, workspace_id = identity
+    job_id = jobs_module.new_job_id()
+    page = jobs_module.job_dir(job_id) / "pages" / "1.png"
+    returned = await _start(
         agent_settings,
         persona,
         workspace_id,
-        prompt="hello",
-        files={"pages/1.png": b"not a real image, just proving the path"},
+        job_id=job_id,
+        prompt=f"{fake_agent_cli.IMAGE_TRIGGER}{page}",
+        files={"pages/1.png": PNG},
     )
+    assert returned == job_id
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+    read = next(e for e in _events(job_id, workspace_id) if e.get("type") == "assistant")
+    assert read["message"]["content"][0]["input"]["file_path"] == str(page)
+
+
+async def test_a_job_id_that_is_not_a_uuid_is_refused(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """It doubles as Claude Code's `--session-id`, which takes nothing else."""
+    _, workspace_id = identity
+    with pytest.raises(BadRequestError):
+        await _start(agent_settings, persona, workspace_id, job_id="not-a-uuid", prompt="hi")
+
+
+async def test_the_starters_model_is_used_on_every_run_including_a_resume(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """The app decides the model per job; the persona's settings.json is only the default."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="first", model="local/reader")
     await _wait_until_settled(job_id, workspace_id)
-    assert (jobs_module._job_dir(job_id) / "pages" / "1.png").read_bytes() == b"not a real image, just proving the path"
+    await _message(agent_settings, persona, job_id, workspace_id, "second")
+    await _wait_until_settled(job_id, workspace_id)
 
-
-# -- Need 2: keeps running whether or not anyone is watching -----------------
+    first, second = _answers(job_id, workspace_id)
+    assert _echo_field(first, "model_flag") == "local/reader"
+    assert _echo_field(second, "resumed") == "True"
+    assert _echo_field(second, "model_flag") == "local/reader"
 
 
 async def test_a_job_keeps_running_with_nobody_watching_it(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """Nothing subscribes to the bus at all -- `start()`'s caller never opens `watch()` -- and it still finishes."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="unobserved")
     job = await _wait_until_settled(job_id, workspace_id)
     assert job.status == jobs_models.COMPLETED
 
 
-# -- Need 3: opened by an entitled user at any time, WITHIN their own workspace
+async def test_the_settle_hook_hears_every_run_that_settles_including_a_resumed_one(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    settled_calls: list[JobOutcome],
+) -> None:
+    """A resumed answer reaches the app that started the job without it polling the row."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="first", json_schema=JOB_SCHEMA)
+
+    def ours() -> list[JobOutcome]:
+        return [call for call in settled_calls if call.job_id == job_id]
+
+    await _wait_until(lambda: len(ours()) == 1)
+    await _message(agent_settings, persona, job_id, workspace_id, "second")
+    await _wait_until(lambda: len(ours()) == 2)
+
+    first, second = ours()
+    assert (first.job_id, first.status, first.workspace_id) == (job_id, jobs_models.COMPLETED, workspace_id)
+    assert first.structured_output is not None and "question=first" in first.structured_output["text"]
+    assert second.structured_output is not None and "question=second" in second.structured_output["text"]
 
 
-async def test_watching_an_already_finished_job_replays_from_the_start(
+# -- Watched by an entitled member of its workspace, at any time -------------
+
+
+async def test_watching_a_finished_job_replays_both_sides_of_the_conversation_in_order(
     client: AsyncClient,
     agent_settings: AgentSettings,
     persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
 ) -> None:
+    """What the agent was asked is in the log beside what it answered: the prompt and each
+    message, as the CLI's own `isReplay` echo at the start of the turn that consumed it."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt="already done")
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="the prompt")
+    await _wait_until_settled(job_id, workspace_id)
+    await _message(agent_settings, persona, job_id, workspace_id, "a follow-up")
     await _wait_until_settled(job_id, workspace_id)
 
     response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
     assert response.status_code == 200
-    events = _http_events(response.text)
-    assert events[0].get("subtype") == "init"
-    assert any(e.get("type") == "result" for e in events)
-    # The whole point of opening a finished job: reading what the agent
-    # actually did. An earlier (wrong) persistence gate dropped every
-    # assistant frame from a finished job's replay entirely.
-    assistants = [e for e in events if e.get("type") == "assistant"]
-    assert "question=already done" in assistants[0]["message"]["content"][0]["text"]
+    spoken = [
+        ("asked", e["message"]["content"][0]["text"])
+        if e.get("type") == "user"
+        else ("answered", _echo_field(e["message"]["content"][0]["text"], "question"))
+        for e in _http_events(response.text)
+        if (e.get("type") == "user" and e.get("isReplay")) or e.get("type") == "assistant"
+    ]
+    assert spoken == [
+        ("asked", "the prompt"),
+        ("answered", "the prompt"),
+        ("asked", "a follow-up"),
+        ("answered", "a follow-up"),
+    ]
 
 
 async def test_watching_a_job_that_never_existed_answers_not_found(client: AsyncClient) -> None:
@@ -277,6 +398,7 @@ async def test_watching_is_gated_on_the_persona_entitlement(
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=UNENTITLED)
     assert response.status_code == 403
+    await _wait_until_settled(job_id, workspace_id)
 
 
 async def test_watching_a_job_from_a_different_workspace_is_refused_even_with_the_entitlement(
@@ -285,8 +407,8 @@ async def test_watching_a_job_from_a_different_workspace_is_refused_even_with_th
     persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
 ) -> None:
-    """CRITICAL 1: the entitlement alone used to be the whole gate -- a caller who held it could
-    read or steer ANY workspace's job. `jobs.authorize()` is what closes that."""
+    """The persona entitlement admits a caller to the persona; `jobs.authorize()` confines them
+    to their own workspace's jobs."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="private to job-1's workspace")
     await _wait_until_settled(job_id, workspace_id)
@@ -295,132 +417,108 @@ async def test_watching_a_job_from_a_different_workspace_is_refused_even_with_th
     assert refused.status_code == 404  # NOT 403 -- one answer for "not yours" and "never existed"
 
 
-async def test_watching_a_job_of_a_different_persona_is_refused_even_in_the_same_workspace(
+@pytest.mark.parametrize(("method", "route"), [("GET", "watch"), ("POST", "message"), ("POST", "stop")])
+async def test_a_job_of_a_different_persona_is_refused_on_every_route_even_in_the_same_workspace(
     client: AsyncClient,
     agent_settings: AgentSettings,
     other_persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
+    method: str,
+    route: str,
 ) -> None:
-    """CRITICAL 1's other half: the workspace check alone used to be the whole gate -- ENTITLED
-    holds only `agent-jobagent`, but the job below belongs to `otherpersona`, in ENTITLED's OWN
-    workspace. `require_module("agent-jobagent")` passes (ENTITLED does hold it); `jobs.authorize()`
-    is what still refuses, because the job's own `persona` column is `otherpersona`, not `jobagent`.
-    """
+    """ENTITLED holds only `agent-jobagent`; the job is `otherpersona`'s, in ENTITLED's OWN
+    workspace. The entitlement check passes on the URL's persona; `jobs.authorize()` refuses on
+    the job's own."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, other_persona, workspace_id, prompt="otherpersona's own job, same workspace")
+    job_id = await _start(agent_settings, other_persona, workspace_id, prompt="otherpersona's own job")
     await _wait_until_settled(job_id, workspace_id)
 
-    refused = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
+    refused = await client.request(
+        method, f"/api/agent/jobagent/jobs/{job_id}/{route}", json={"text": "hi"}, headers=ENTITLED
+    )
     assert refused.status_code == 404
+    assert len(_answers(job_id, workspace_id)) == 1  # nothing resumed it
 
 
-async def test_a_still_running_job_is_caught_up_and_then_watched_live(
+async def test_two_watchers_on_one_job_each_see_the_whole_stream(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """`watch()` subscribes before it reads the persisted tail, so nothing published in between is lost."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER)
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+    await _wait_until_running(job_id)
+
+    async def _drain() -> list[dict[str, object]]:
+        return [event async for event in jobs_module.watch(get_session_factory(), job_id, workspace_id=workspace_id)]
+
+    watchers = [asyncio.create_task(_drain()), asyncio.create_task(_drain())]
+    await asyncio.sleep(0.2)
+    await _message(agent_settings, persona, job_id, workspace_id, "seen by both")
+    first, second = await asyncio.wait_for(asyncio.gather(*watchers), timeout=_POLL_TIMEOUT_SECONDS)
+
+    assert first == second
+    assert [e.get("type") for e in first].count("result") == 2
+
+
+async def test_a_still_running_job_is_caught_up_and_then_followed_until_it_settles(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+    await _wait_until_running(job_id)
 
     collected: list[dict[str, object]] = []
 
     async def _drain() -> None:
         async for event in jobs_module.watch(get_session_factory(), job_id, workspace_id=workspace_id):
             collected.append(event)
-            if event.get("type") == "result":
-                return
 
     drain_task = asyncio.create_task(_drain())
-    await asyncio.sleep(0.1)  # let watch() subscribe and read the init-only tail before the reply unblocks it
-    await jobs_module.send_message(
-        get_session_factory(), agent_settings, persona, job_id, "live reply", workspace_id=workspace_id, user_id=None
-    )
-    await asyncio.wait_for(drain_task, timeout=_POLL_TIMEOUT_SECONDS)
+    await _wait_until(lambda: any(e.get("isReplay") for e in collected))  # caught up on the turn in progress
+    await _message(agent_settings, persona, job_id, workspace_id, "live reply")
+    await asyncio.wait_for(drain_task, timeout=_POLL_TIMEOUT_SECONDS)  # the stream ends as the run settles
 
     assert collected[0].get("subtype") == "init"
-    result = next(e for e in collected if e.get("type") == "result")
-    assert result.get("structured_output") is None  # no json_schema on this job -- see the schema test above instead
+    assert [e.get("type") for e in collected].count("result") == 2
 
 
-async def test_two_live_watchers_on_one_job_each_see_the_whole_stream(
+# -- Messaged while it works, and resumed once it has finished ---------------
+
+
+async def test_a_message_sent_while_a_turn_is_working_is_answered_by_the_same_run(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """`_JobBus` fans out to every subscriber, not just the first -- two entitled callers watching
-    the same job (need 3 says "any" entitled user, not "the first one to open it") each get their
-    own queue and their own complete replay-then-live stream, neither starving the other."""
+    """Queued on the row, written onto the running CLI's stdin by its own process, answered as
+    the next turn -- by the same CLI process, never a resume."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER)
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+    await _wait_until_running(job_id)
 
-    collected_a: list[dict[str, object]] = []
-    collected_b: list[dict[str, object]] = []
+    await _message(agent_settings, persona, job_id, workspace_id, "the human's answer")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
 
-    async def _drain(sink: list[dict[str, object]]) -> None:
-        async for event in jobs_module.watch(get_session_factory(), job_id, workspace_id=workspace_id):
-            sink.append(event)
-            if event.get("type") == "result":
-                return
-
-    task_a = asyncio.create_task(_drain(collected_a))
-    task_b = asyncio.create_task(_drain(collected_b))
-    await asyncio.sleep(0.1)  # let both watchers subscribe before the reply unblocks the run
-    await jobs_module.send_message(
-        get_session_factory(), agent_settings, persona, job_id, "seen by both", workspace_id=workspace_id, user_id=None
-    )
-    await asyncio.wait_for(asyncio.gather(task_a, task_b), timeout=_POLL_TIMEOUT_SECONDS)
-
-    for collected in (collected_a, collected_b):
-        assert collected[0].get("subtype") == "init"
-        echoed = next(e for e in collected if e.get("type") == "assistant")
-        assert "stdin: seen by both" in echoed["message"]["content"][0]["text"]
-        assert any(e.get("type") == "result" for e in collected)
-
-
-# -- Need 4: a message while working, and a reply once it has finished -------
-
-
-async def test_a_message_sent_while_the_job_is_still_working_reaches_its_stdin(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
-) -> None:
-    _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER)
-    await _wait_until(lambda: job_id in jobs_module._processes)  # the fake CLI is blocked on stdin by now
-
-    await jobs_module.send_message(
-        get_session_factory(),
-        agent_settings,
-        persona,
-        job_id,
-        "the human's answer",
-        workspace_id=workspace_id,
-        user_id=None,
-    )
-    await _wait_until_settled(job_id, workspace_id)
-
-    echoed = next(e for _, e in _events(job_id, workspace_id) if e.get("type") == "assistant")
-    assert "stdin: the human's answer" in echoed["message"]["content"][0]["text"]
+    first, second = _answers(job_id, workspace_id)
+    assert _echo_field(second, "question") == "the human's answer"
+    assert _echo_field(second, "pid") == _echo_field(first, "pid")
+    assert _echo_field(second, "resumed") == "False"
 
 
 async def test_a_message_sent_after_the_job_has_finished_resumes_it(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """Need 4's second case: "its session must outlive the run" -- the SAME job id, a second round of events."""
+    """The SAME job id, the same Claude Code session, a second run."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="first turn")
     await _wait_until_settled(job_id, workspace_id)
 
-    await jobs_module.send_message(
-        get_session_factory(), agent_settings, persona, job_id, "second turn", workspace_id=workspace_id, user_id=None
-    )
+    await _message(agent_settings, persona, job_id, workspace_id, "second turn")
     await _wait_until_settled(job_id, workspace_id)
 
-    events = _events(job_id, workspace_id)
-    inits = [e for _, e in events if e.get("subtype") == "init"]
-    assert len(inits) == 2
-    # The fake CLI re-emits the ORIGINAL id on `--resume`, exactly as the real CLI does (`ownership.py`'s
-    # own measurement, and the reason a job's id can double as its Claude Code session id at all).
+    inits = [e for e in _events(job_id, workspace_id) if e.get("subtype") == "init"]
     assert {i["session_id"] for i in inits} == {job_id}
-    questions = [e for _, e in events if e.get("type") == "assistant"]
-    assert "question=first turn" in questions[0]["message"]["content"][0]["text"]
-    assert "question=second turn" in questions[1]["message"]["content"][0]["text"]
+    first, second = _answers(job_id, workspace_id)
+    assert _echo_field(first, "question") == "first turn"
+    assert (_echo_field(second, "question"), _echo_field(second, "resumed")) == ("second turn", "True")
 
 
 async def test_messaging_is_gated_on_the_persona_entitlement(
@@ -433,6 +531,7 @@ async def test_messaging_is_gated_on_the_persona_entitlement(
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "hi"}, headers=UNENTITLED)
     assert response.status_code == 403
+    await _wait_until_settled(job_id, workspace_id)
 
 
 async def test_messaging_a_job_from_a_different_workspace_is_refused(
@@ -441,7 +540,6 @@ async def test_messaging_a_job_from_a_different_workspace_is_refused(
     persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
 ) -> None:
-    """CRITICAL 1, the `message` route."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     await _wait_until_settled(job_id, workspace_id)
@@ -451,64 +549,60 @@ async def test_messaging_a_job_from_a_different_workspace_is_refused(
     assert refused.status_code == 404
 
 
-async def test_two_concurrent_resumes_only_spawn_one_process(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+async def test_two_messages_at_once_to_a_finished_job_start_one_run_that_answers_both(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CRITICAL 2: without the per-job lock, both concurrent calls see `status != running` and
-    both spawn a `--resume` process for the SAME Claude Code session."""
-    user_id, workspace_id = identity
+    """The first reopens the job under the row's lock; the second finds it running and queues --
+    so one `--resume` process for one Claude Code session, never two racing."""
+    _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="first")
     await _wait_until_settled(job_id, workspace_id)
 
-    results = await asyncio.gather(
-        jobs_module.send_message(
-            get_session_factory(), agent_settings, persona, job_id, "a", workspace_id=workspace_id, user_id=user_id
-        ),
-        jobs_module.send_message(
-            get_session_factory(), agent_settings, persona, job_id, "b", workspace_id=workspace_id, user_id=user_id
-        ),
-        return_exceptions=True,
-    )
-    successes = [r for r in results if r is None]
-    failures = [r for r in results if isinstance(r, BaseException)]
-    assert len(successes) == 1
-    assert len(failures) == 1
-    assert isinstance(failures[0], BadRequestError)
+    decided: list[object] = []
+    enqueue_or_reopen = jobs_models.enqueue_or_reopen
 
+    def _recording(*args: Any, **kwargs: Any) -> object:
+        decided.append(outcome := enqueue_or_reopen(*args, **kwargs))
+        return outcome
+
+    monkeypatch.setattr(jobs_models, "enqueue_or_reopen", _recording)
+    async with asyncio.TaskGroup() as group:
+        group.create_task(_message(agent_settings, persona, job_id, workspace_id, "a"))
+        group.create_task(_message(agent_settings, persona, job_id, workspace_id, "b"))
+    await _wait_until(lambda: len(_answers(job_id, workspace_id)) == 3)
     await _wait_until_settled(job_id, workspace_id)
-    inits = [e for _, e in _events(job_id, workspace_id) if e.get("subtype") == "init"]
-    assert len(inits) == 2  # the original run, plus exactly ONE resume -- never two racing
+
+    assert sorted(type(d).__name__ for d in decided) == ["RunSpec", "str"]
+    assert jobs_models.QUEUED in decided
+    _, *resumed = _answers(job_id, workspace_id)
+    assert sorted(_echo_field(a, "question") for a in resumed) == ["a", "b"]
 
 
-async def test_a_stop_issued_the_instant_a_resume_is_scheduled_is_still_honoured(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+async def test_a_message_to_a_job_that_is_stopping_is_refused(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CRITICAL 3: `stop()` called in the gap between a resume being scheduled and its process
-    actually existing used to no-op silently -- `_run()` now checks its own cancel event the
-    moment its process is registered, so a stop that arrived earlier still lands.
+    """A stop another worker requested, not yet acted on by the running process: a message then
+    would be killed with the run, so it is refused rather than accepted and lost."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(job_id)
+    monkeypatch.setattr(jobs_module, "_POLL_SECONDS", 3600)
+    await asyncio.sleep(0.2)  # past the poll in flight: the running process does not look again
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.request_stop(db, job_id)
 
-    `send_message()` returning hands control back to this test WITHOUT `_run()` having had any
-    chance to execute yet (`asyncio.create_task` only schedules it; nothing here yields to the
-    event loop in between) -- `stop()` on the very next line deterministically lands in exactly
-    the gap this fix closes, not merely near it.
-    """
-    user_id, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt="first")
-    await _wait_until_settled(job_id, workspace_id)
+    with pytest.raises(BadRequestError):
+        await _message(agent_settings, persona, job_id, workspace_id, "too late")
 
-    await jobs_module.send_message(
-        get_session_factory(),
-        agent_settings,
-        persona,
-        job_id,
-        fake_agent_cli.HANG_TRIGGER,
-        workspace_id=workspace_id,
-        user_id=user_id,
-    )
-    await jobs_module.stop(job_id)
-
-    job = await _wait_until_settled(job_id, workspace_id)
-    assert job.status == jobs_models.CANCELLED
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    assert (await _wait_until_settled(job_id, workspace_id)).status == jobs_models.CANCELLED
 
 
 async def test_a_jobs_own_prompt_is_redacted_before_the_agent_sees_it(
@@ -517,9 +611,7 @@ async def test_a_jobs_own_prompt_is_redacted_before_the_agent_sees_it(
     identity: tuple[uuid.UUID, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CRITICAL 4: `app_hooks.agent_turn` used to run for a chat question and never for a job's own prompt."""
-    from {{ package_name }} import app_hooks
-
+    """`app_hooks.agent_turn` runs on a job's own prompt, as on a chat question."""
     calls: list[tuple[str, str, str]] = []
 
     def _fake_hook(persona_name: str, user: str, text: str) -> str:
@@ -532,8 +624,7 @@ async def test_a_jobs_own_prompt_is_redacted_before_the_agent_sees_it(
     job_id = await _start(agent_settings, persona, workspace_id, prompt="my secret plan", created_by_id=user_id)
     await _wait_until_settled(job_id, workspace_id)
 
-    echoed = next(e for _, e in _events(job_id, workspace_id) if e.get("type") == "assistant")
-    assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
+    assert _echo_field(_answers(job_id, workspace_id)[0], "question") == "my [redacted] plan"
     assert calls == [("jobagent", str(user_id), "my secret plan")]
 
 
@@ -543,30 +634,198 @@ async def test_a_message_sent_to_a_job_is_redacted_before_the_agent_sees_it(
     identity: tuple[uuid.UUID, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from {{ package_name }} import app_hooks
-
     monkeypatch.setattr(app_hooks, "agent_turn", lambda p, u, t: t.replace("secret", "[redacted]"), raising=False)
 
-    user_id, workspace_id = identity
+    _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="first")
     await _wait_until_settled(job_id, workspace_id)
+    await _message(agent_settings, persona, job_id, workspace_id, "second secret turn")
+    await _wait_until_settled(job_id, workspace_id)
 
-    await jobs_module.send_message(
-        get_session_factory(),
+    assert _echo_field(_answers(job_id, workspace_id)[-1], "question") == "second [redacted] turn"
+
+
+# -- What comes out is the app's to rewrite ----------------------------------
+
+
+def _scrub_card(persona_name: str, event: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(json.dumps(event).replace(CARD, "[card]"))
+
+
+async def test_the_output_hook_rewrites_every_event_before_it_is_kept_or_watched(
+    client: AsyncClient,
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What the agent read and repeated is scrubbed on the way out -- in the log, in what a
+    watcher receives, and in the structured answer on the row -- with nothing redacted going in."""
+    monkeypatch.setattr(app_hooks, "agent_event", _scrub_card, raising=False)
+
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=f"the card is {CARD}", json_schema=JOB_SCHEMA)
+    job = await _wait_until_settled(job_id, workspace_id)
+
+    assert CARD not in json.dumps(_events(job_id, workspace_id))
+    assert "[card]" in json.dumps(_events(job_id, workspace_id))
+    assert job.structured_output is not None and CARD not in job.structured_output["text"]
+    watched = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
+    assert CARD not in watched.text
+
+
+async def test_the_output_hook_covers_the_slices_own_error_and_the_job_error(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CLI's stderr tail reaches the log and `job.error` only through the factory's credential
+    scrub and then the app's own hook."""
+    monkeypatch.setattr(
+        app_hooks,
+        "agent_event",
+        lambda p, e: {**e, "error": e["error"].replace("401", "[status]")} if "error" in e else e,
+        raising=False,
+    )
+
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.SECRET_STDERR_TRIGGER)
+    job = await _wait_until_settled(job_id, workspace_id)
+
+    assert job.status == jobs_models.FAILED
+    assert job.error is not None and "[status]" in job.error and "401" not in job.error
+    logged = json.dumps(_events(job_id, workspace_id))
+    for leaked in ("sk-live-123", "sig=abc", "401"):
+        assert leaked not in logged
+        assert leaked not in job.error
+
+
+async def test_an_event_the_output_hook_drops_is_neither_kept_nor_watched(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_hooks, "agent_event", lambda p, e: None if e.get("subtype") == "init" else e, raising=False)
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED  # the run still ends: settling never depends on the hook
+    types = [e.get("type") for e in _events(job_id, workspace_id)]
+    assert "system" not in types
+    assert types.count("result") == 1
+
+
+# -- Bounded storage -----------------------------------------------------------
+
+
+async def test_an_image_the_agent_read_is_kept_by_reference_never_by_its_bytes(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """A Read of an image returns its bytes twice; the log keeps the file it was read from and its
+    pixel size, and neither copy of the bytes."""
+    _, workspace_id = identity
+    job_id = await _start(
         agent_settings,
         persona,
-        job_id,
-        "second secret turn",
-        workspace_id=workspace_id,
-        user_id=user_id,
+        workspace_id,
+        prompt=f"{fake_agent_cli.IMAGE_TRIGGER}pages/1.png",
+        files={"pages/1.png": PNG},
     )
     await _wait_until_settled(job_id, workspace_id)
 
-    assistants = [e for _, e in _events(job_id, workspace_id) if e.get("type") == "assistant"]
-    assert "question=second [redacted] turn" in assistants[-1]["message"]["content"][0]["text"]
+    events = _events(job_id, workspace_id)
+    assert base64.b64encode(PNG).decode() not in json.dumps(events)
+    result = next(e for e in events if e.get("type") == "user" and "tool_use_result" in e)
+    assert result["message"]["content"][0]["content"][0]["source"] == {
+        "type": "base64",
+        "media_type": "image/png",
+        "data": "",
+    }
+    assert result["tool_use_result"]["file"]["base64"] == ""
+    assert result["tool_use_result"]["file"]["dimensions"]["displayWidth"] == 1
+    call = next(e for e in events if e.get("type") == "assistant")
+    assert call["message"]["content"][0]["input"]["file_path"].endswith("pages/1.png")
 
 
-# -- Need 5: stopped by the user ----------------------------------------------
+async def test_a_job_asks_for_whole_messages_and_keeps_every_one(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """No token deltas are requested, so one row per settled message -- every `assistant` event
+    kept, `stop_reason: null` as stream-json prints them all."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    await _wait_until_settled(job_id, workspace_id)
+    assistants = [e for e in _events(job_id, workspace_id) if e.get("type") == "assistant"]
+    assert len(assistants) == 1
+    assert assistants[0]["message"]["stop_reason"] is None
+    assert _echo_field(_answers(job_id, workspace_id)[0], "partial") == "False"
+
+
+async def test_a_stderr_read_error_does_not_strand_the_job(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Losing the stderr tail loses the diagnostic, never the run's settling."""
+
+    async def _broken_drain(stream: object) -> bytes:
+        raise RuntimeError("a genuine stderr read error, not a timeout")
+
+    monkeypatch.setattr(jobs_module, "_drain_stderr", _broken_drain)
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+
+
+async def test_a_chatty_stderr_does_not_block_the_run(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """Stderr is drained beside stdout: a child writing past the OS pipe buffer never blocks the
+    stdout line after it."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.CHATTY_STDERR_TRIGGER)
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+
+
+async def test_cleanup_removes_the_folder_and_the_clis_own_transcript_of_that_job_only(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """The persona's home is shared by every job; its transcript of this one holds every string the
+    agent read, and goes with the job's folder -- another job's stays."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi", files={"a.txt": b"x"})
+    kept_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    await _wait_until_settled(job_id, workspace_id)
+    await _wait_until_settled(kept_id, workspace_id)
+    assert list(persona.home.glob(f"projects/*/{job_id}.jsonl"))
+
+    await jobs_module.cleanup(get_session_factory(), job_id, workspace_id=workspace_id, persona=persona.name)
+
+    assert not jobs_module.job_dir(job_id).exists()
+    assert not list(persona.home.glob(f"*/*{job_id}*"))
+    assert list(persona.home.glob(f"projects/*/{kept_id}.jsonl"))
+
+
+async def test_cleanup_refuses_a_still_running_job(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(job_id)
+
+    with pytest.raises(BadRequestError):
+        await jobs_module.cleanup(get_session_factory(), job_id, workspace_id=workspace_id, persona=persona.name)
+
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    await _wait_until_settled(job_id, workspace_id)
+
+
+# -- Stopped by the user -------------------------------------------------------
 
 
 async def test_a_job_can_be_stopped_while_it_is_working(
@@ -577,13 +836,14 @@ async def test_a_job_can_be_stopped_while_it_is_working(
 ) -> None:
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
-    await _wait_until(lambda: job_id in jobs_module._processes)
+    await _wait_until_running(job_id)
 
     response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
 
     job = await _wait_until_settled(job_id, workspace_id)
     assert job.status == jobs_models.CANCELLED
+    assert not any(e.get("type") == "library_error" for e in _events(job_id, workspace_id))
 
 
 async def test_stopping_an_already_finished_job_is_a_no_op(
@@ -598,9 +858,7 @@ async def test_stopping_an_already_finished_job_is_a_no_op(
 
     response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
-    assert (
-        _job_status(job_id, workspace_id).status == jobs_models.COMPLETED
-    )  # unchanged -- there was nothing left to stop
+    assert _job(job_id, workspace_id).status == jobs_models.COMPLETED
 
 
 async def test_stopping_is_gated_on_the_persona_entitlement(
@@ -613,9 +871,9 @@ async def test_stopping_is_gated_on_the_persona_entitlement(
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=UNENTITLED)
     assert response.status_code == 403
-    # Still running -- the refused caller's attempt must not have reached `stop()`.
-    assert _job_status(job_id, workspace_id).status == jobs_models.RUNNING
-    await jobs_module.stop(job_id)  # cleanup: this test's own job would otherwise hang for the whole suite
+    assert _job(job_id, workspace_id).status == jobs_models.RUNNING  # the refused caller reached nothing
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    await _wait_until_settled(job_id, workspace_id)
 
 
 async def test_stopping_a_job_from_a_different_workspace_is_refused(
@@ -624,158 +882,259 @@ async def test_stopping_a_job_from_a_different_workspace_is_refused(
     persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
 ) -> None:
-    """CRITICAL 1, the `stop` route."""
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
-    await _wait_until(lambda: job_id in jobs_module._processes)
+    await _wait_until_running(job_id)
 
     refused = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=OTHER_WORKSPACE)
     assert refused.status_code == 404
-    assert _job_status(job_id, workspace_id).status == jobs_models.RUNNING  # the foreign caller's attempt had no effect
-    await jobs_module.stop(job_id)  # cleanup
+    await asyncio.sleep(0.2)  # several polls: nothing was asked of the running process
+    assert _job(job_id, workspace_id).status == jobs_models.RUNNING
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    await _wait_until_settled(job_id, workspace_id)
 
 
-# -- HIGH 5: a restart leaves no orphaned `running` row ----------------------
-
-
-async def test_reconcile_orphaned_jobs_fails_a_row_a_restart_left_running(
+async def test_a_stop_issued_the_instant_a_resume_is_scheduled_is_still_honoured(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """A genuine restart destroys the `_run()` task along with the whole process, mid-flight,
-    with nothing left to settle the row. Cancelling the task (rather than merely forgetting our
-    own dict entries) is what actually reproduces that: the `CancelledError` propagates PAST
-    `_run()`'s own `_finish()` call once its `finally` block has killed the subprocess and swept
-    `_processes`/`_cancel_events`, leaving the DB row `running` with nothing live behind it --
-    exactly the shape a restart leaves, and without leaking the underlying OS process either.
-    """
+    """`send_message()` returns with the resumed run scheduled but its CLI not yet spawned -- nothing
+    here yields to the event loop in between -- so the stop lands in exactly that gap."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
-    await _wait_until(lambda: job_id in jobs_module._processes)
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="first")
+    await _wait_until_settled(job_id, workspace_id)
 
-    task = jobs_module._tasks[job_id]
+    await _message(agent_settings, persona, job_id, workspace_id, fake_agent_cli.HANG_TRIGGER)
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.CANCELLED
+
+
+# -- Any worker ------------------------------------------------------------------
+
+
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+@contextlib.asynccontextmanager
+async def _second_worker(agent_settings: AgentSettings) -> AsyncIterator[tuple[str, int]]:
+    """Another worker process of this deployment: the same app, database and data directory, its
+    own process, event loop and children -- what gunicorn's other workers are to the one running a
+    job. Yields its base URL and pid."""
+    port = _free_port()
+    prefix = "{{ project_name | upper | replace('-', '_') }}_AGENT_"
+    env = {
+        **os.environ,
+        f"{prefix}PERSONAS_DIR": str(agent_settings.personas_dir),
+        f"{prefix}EXECUTABLE": agent_settings.executable,
+        f"{prefix}TIMEOUT_SECONDS": str(agent_settings.timeout_seconds),
+        "DATA_DIR": str(data_dir()),
+    }
+    process = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "{{ package_name }}.server:app", "--port", str(port), "--log-level", "warning"],
+        cwd=BACKEND,
+        env=env,
+    )
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        async with asyncio.timeout(60), httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
+            while True:
+                assert process.poll() is None, "the second worker exited during startup"
+                with contextlib.suppress(httpx.TransportError):
+                    if (await probe.get("/openapi.json")).status_code == 200:
+                        break
+                await asyncio.sleep(0.1)
+        yield base_url, process.pid
+    finally:
+        process.terminate()
+        process.wait(timeout=30)
+
+
+async def _collect(stream: AsyncIterator[str], into: list[dict[str, Any]]) -> None:
+    async for line in stream:
+        if line.startswith("data: "):
+            into.append(json.loads(line.removeprefix("data: ")))
+
+
+async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """Every request about a job lands on whichever worker the proxy picked, and the job's CLI is
+    a child of just one. Here this test process is the worker running the jobs and a real uvicorn
+    process is another: it boots beside a live job and leaves it alone, stops one, follows another
+    live while messaging it -- answered by this process's CLI, not a resume -- then resumes it
+    itself once it has settled."""
+    _, workspace_id = identity
+    hanging = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(hanging)
+
+    async with (
+        _second_worker(agent_settings) as (base_url, other_pid),
+        httpx.AsyncClient(base_url=base_url, headers=ENTITLED, timeout=_POLL_TIMEOUT_SECONDS) as other,
+    ):
+        # Booted, and swept for dead runs, beside a live one.
+        assert _job(hanging, workspace_id).status == jobs_models.RUNNING
+
+        assert (await other.post(f"/api/agent/jobagent/jobs/{hanging}/stop")).status_code == 204
+        assert (await _wait_until_settled(hanging, workspace_id)).status == jobs_models.CANCELLED
+
+        job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+        await _wait_until_running(job_id)
+        watched: list[dict[str, Any]] = []
+        async with other.stream("GET", f"/api/agent/jobagent/jobs/{job_id}/watch") as response:
+            assert response.status_code == 200
+            follower = asyncio.create_task(_collect(response.aiter_lines(), watched))
+            await _wait_until(lambda: any(e.get("isReplay") for e in watched))
+            sent = await other.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "from elsewhere"})
+            assert sent.status_code == 204
+            await asyncio.wait_for(follower, timeout=_POLL_TIMEOUT_SECONDS)  # ends as the run settles
+
+        assert _job(job_id, workspace_id).status == jobs_models.COMPLETED
+        first, second = _answers(job_id, workspace_id)
+        assert _echo_field(second, "question") == "from elsewhere"
+        assert _echo_field(second, "pid") == _echo_field(first, "pid")
+        assert _echo_field(second, "ppid") == str(os.getpid())  # this worker's own CLI answered it
+        assert [e.get("type") for e in watched].count("result") == 2
+
+        resumed = await other.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "resume there"})
+        assert resumed.status_code == 204
+        await _wait_until(lambda: len(_answers(job_id, workspace_id)) == 3)
+        await _wait_until_settled(job_id, workspace_id)
+        third = _answers(job_id, workspace_id)[2]
+        assert (_echo_field(third, "question"), _echo_field(third, "resumed")) == ("resume there", "True")
+        assert _echo_field(third, "ppid") == str(other_pid)  # resumed by the other worker's own child
+
+
+# -- A job whose process is gone -------------------------------------------------
+
+
+def _age_heartbeat(job_id: str, workspace_id: int) -> None:
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        job = jobs_models.get_job(db, job_id)
+        assert job is not None
+        job.heartbeat_at = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
+        db.commit()
+
+
+async def _orphan(agent_settings: AgentSettings, persona: persona_module.PersonaConfig, workspace_id: int) -> str:
+    """A job whose worker died mid-run: its task destroyed with nothing left to settle the row."""
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(job_id)
+    task = next(t for t in jobs_module._tasks if t.get_name() == f"agent-job-{job_id}")
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await task
-
-    assert _job_status(job_id, workspace_id).status == jobs_models.RUNNING
-
-    reconciled = await jobs_module.reconcile_orphaned_jobs(get_session_factory())
-    assert reconciled >= 1
-    job = _job_status(job_id, workspace_id)
-    assert job.status == jobs_models.FAILED
-    assert "restarted" in job.error
+    jobs_module._runs.pop(job_id, None)
+    assert _job(job_id, workspace_id).status == jobs_models.RUNNING
+    return job_id
 
 
-# -- HIGH 6: bounded storage under `--include-partial-messages` --------------
-
-
-async def test_stream_event_deltas_are_broadcast_live_but_never_persisted(
+async def test_a_sweep_leaves_a_job_whose_process_is_alive_alone(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
-    """HIGH 6, corrected against the real CLI: the delta wrapper is `type: "stream_event"`, not a
-    still-growing `assistant` frame -- `_is_partial()` keys on that alone, so `agent_job_events`
-    grows one row per settled message, not one per token, while a LIVE watcher still sees every
-    delta as it lands."""
+    """Every worker sweeps as it boots and every minute after; a job another worker is running
+    keeps its heartbeat fresh, so no sweep, from any worker, ever fails it."""
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.PARTIAL_TRIGGER)
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(job_id)
 
-    collected: list[dict[str, object]] = []
+    await jobs_module.reconcile_orphaned_jobs(get_session_factory())
+    assert _job(job_id, workspace_id).status == jobs_models.RUNNING
 
-    async def _drain() -> None:
-        async for event in jobs_module.watch(get_session_factory(), job_id, workspace_id=workspace_id):
-            collected.append(event)
-            if event.get("type") == "result":
-                return
-
-    await asyncio.wait_for(_drain(), timeout=_POLL_TIMEOUT_SECONDS)
-
-    live_types = [e.get("type") for e in collected]
-    assert live_types.count("stream_event") == 4  # message_start, two content_block_delta, message_stop
-    live_assistants = [e for e in collected if e.get("type") == "assistant"]
-    assert [a["message"]["content"][0]["text"] for a in live_assistants] == ["growing, then settled"]
-
-    persisted = _events(job_id, workspace_id)
-    assert not any(e.get("type") == "stream_event" for _, e in persisted)  # never written to disk
-    persisted_assistants = [e for _, e in persisted if e.get("type") == "assistant"]
-    # A finished job's replay carries its whole transcript, not a filtered one -- this is the
-    # exact regression the earlier (wrong) stop_reason-keyed design produced: a finished job
-    # whose replay had NO assistant text at all.
-    assert [a["message"]["content"][0]["text"] for a in persisted_assistants] == ["growing, then settled"]
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    await _wait_until_settled(job_id, workspace_id)
 
 
-# -- MEDIUM 7: a chatty child cannot deadlock the read loop -------------------
-
-
-async def test_a_chatty_stderr_does_not_block_the_run(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
-) -> None:
-    """Without concurrent draining, the child's stderr write past the OS pipe buffer blocks it
-    before it can write its next stdout line -- this test times out (`_wait_until_settled`'s own
-    bounded wait) rather than merely running slow if that regresses."""
-    _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.CHATTY_STDERR_TRIGGER)
-    job = await _wait_until_settled(job_id, workspace_id)
-    assert job.status == jobs_models.COMPLETED
-
-
-async def test_a_stderr_read_error_does_not_strand_the_job(
+async def test_a_running_process_keeps_its_heartbeat_fresh(
     agent_settings: AgentSettings,
     persona: persona_module.PersonaConfig,
     identity: tuple[uuid.UUID, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ALSO 1: an exception from the stderr-draining task (a genuine read error, never a timeout
-    and never this run's own cancellation) used to propagate straight out of `_run()`'s finally
-    block, skipping `_finish()`/`_bus.close()` entirely and stranding the job at `running` forever
-    with nothing left alive to finish it."""
+    monkeypatch.setattr(jobs_module, "_HEARTBEAT_SECONDS", 0.1)
     _, workspace_id = identity
-
-    async def _broken_drain(stream: object) -> bytes:
-        raise RuntimeError("a genuine stderr read error, not a timeout")
-
-    monkeypatch.setattr(jobs_module, "_drain_stderr", _broken_drain)
-
-    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
-    job = await _wait_until_settled(job_id, workspace_id)
-    assert job.status == jobs_models.COMPLETED
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    await _wait_until_running(job_id)
+    first = _job(job_id, workspace_id).heartbeat_at
+    await _wait_until(lambda: _job(job_id, workspace_id).heartbeat_at != first)
+    await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
+    await _wait_until_settled(job_id, workspace_id)
 
 
-# -- MEDIUM 8: an app can reclaim a job's working folder ----------------------
-
-
-async def test_cleanup_removes_a_finished_jobs_working_folder(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+async def test_a_sweep_settles_a_job_whose_heartbeat_went_stale(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    settled_calls: list[JobOutcome],
 ) -> None:
     _, workspace_id = identity
-    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi", files={"a.txt": b"x"})
-    await _wait_until_settled(job_id, workspace_id)
-    assert jobs_module._job_dir(job_id).is_dir()
+    job_id = await _orphan(agent_settings, persona, workspace_id)
+    _age_heartbeat(job_id, workspace_id)
 
-    await jobs_module.cleanup(get_session_factory(), job_id, workspace_id=workspace_id, persona=persona.name)
-    assert not jobs_module._job_dir(job_id).exists()
+    assert await jobs_module.reconcile_orphaned_jobs(get_session_factory()) >= 1
+    job = _job(job_id, workspace_id)
+    assert job.status == jobs_models.FAILED
+    assert job.error is not None and "orphaned" in job.error
+    assert [c.status for c in settled_calls if c.job_id == job_id] == [jobs_models.FAILED]
 
 
-async def test_cleanup_refuses_a_still_running_job(
+async def test_a_message_to_a_job_whose_process_is_gone_resumes_it(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """A stale `running` row is no live run: the message resumes the job rather than waiting on nothing."""
+    _, workspace_id = identity
+    job_id = await _orphan(agent_settings, persona, workspace_id)
+    _age_heartbeat(job_id, workspace_id)
+
+    await _message(agent_settings, persona, job_id, workspace_id, "are you there")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+    assert _echo_field(_answers(job_id, workspace_id)[-1], "resumed") == "True"
+
+
+async def test_shutdown_ends_this_workers_runs_as_failed(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    settled_calls: list[JobOutcome],
 ) -> None:
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
-    await _wait_until(lambda: job_id in jobs_module._processes)
+    await _wait_until_running(job_id)
 
-    with pytest.raises(BadRequestError):
-        await jobs_module.cleanup(get_session_factory(), job_id, workspace_id=workspace_id, persona=persona.name)
+    await jobs_module.shutdown()
 
-    await jobs_module.stop(job_id)  # cleanup: this test's own job would otherwise hang for the whole suite
+    job = _job(job_id, workspace_id)
+    assert job.status == jobs_models.FAILED
+    assert job.error is not None and "shut down" in job.error
+    assert [c.status for c in settled_calls if c.job_id == job_id] == [jobs_models.FAILED]
+
+
+async def test_the_app_starts_while_the_sweep_cannot_reach_the_database(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker boots with no database (the image smoke does exactly that): the sweep runs beside
+    the app, and a failed one is logged and retried rather than failing startup."""
+
+    async def _unreachable(db_session_factory: object) -> int:
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(jobs_module, "reconcile_orphaned_jobs", _unreachable)
+    async with app.router.lifespan_context(app):
+        await asyncio.sleep(0.05)  # the sweep has run, and failed
 
 
 # -- A job's own MCP identity --------------------------------------------------
 #
-# godswood's own adoption need: a job's `/mcp` calls must act as the job's own
-# user and workspace, which a persona's static `.mcp.json` cannot express.
-# `start()`'s `mcp_config` is how a caller binds that in -- proven here against
-# a real local HTTP server exactly as `test_agent_api.py`'s own headersHelper
-# test proves the persona-level mechanism, so this is the job-level sibling of
-# that proof, not a second design.
+# A job's `/mcp` calls must act as the job's own user and workspace, which a
+# persona's static `.mcp.json` cannot express. `start()`'s `mcp_config` is how
+# a caller binds that in -- proven here against a real local HTTP server exactly
+# as `test_agent_api.py`'s own headersHelper test proves the persona-level
+# mechanism.
 
 
 class _BearerRequiredHandler(BaseHTTPRequestHandler):
@@ -810,11 +1169,6 @@ def fake_mcp_server() -> Iterator[tuple[str, str]]:
         thread.join()
 
 
-def _probe_result(text: str) -> dict[str, object]:
-    result: dict[str, object] = json.loads(text)
-    return result
-
-
 async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
     agent_settings: AgentSettings,
     persona: persona_module.PersonaConfig,
@@ -822,10 +1176,8 @@ async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
     fake_mcp_server: tuple[str, str],
     tmp_path: Path,
 ) -> None:
-    """The credential is minted at spawn by `headersHelper`, never written as a literal `headers`
-    value -- CRITICAL/NEW 3: `mcp_config` is persisted verbatim (`AgentJob.mcp_config`, and to
-    `job_dir/.mcp.json` on every run including a resume), so a literal bearer there would sit on
-    disk and in the database, unencrypted, for as long as the job exists."""
+    """The credential is minted at spawn by `headersHelper`: `mcp_config` is kept on the job row
+    and in its folder for as long as the job exists, so it carries a recipe, never a secret."""
     _, workspace_id = identity
     url, token = fake_mcp_server
     token_path = tmp_path / "job.bearer"
@@ -838,26 +1190,13 @@ async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
         agent_settings, persona, workspace_id, prompt=fake_agent_cli.MCP_PROBE_TRIGGER, mcp_config=mcp_config
     )
     await _wait_until_settled(job_id, workspace_id)
-
-    first = next(e for _, e in _events(job_id, workspace_id) if e.get("type") == "assistant")
-    assert _probe_result(first["message"]["content"][0]["text"])["status_code"] == 200
+    assert json.loads(_answers(job_id, workspace_id)[0])["status_code"] == 200
 
     # A resumed run reaches the same server under the same identity -- the caller never
-    # re-supplies `mcp_config`; `jobs.py` reused what `start()` persisted on the job row, and
-    # `headersHelper` mints a FRESH credential for this run rather than replaying a stored one.
-    await jobs_module.send_message(
-        get_session_factory(),
-        agent_settings,
-        persona,
-        job_id,
-        fake_agent_cli.MCP_PROBE_TRIGGER,
-        workspace_id=workspace_id,
-        user_id=None,
-    )
+    # re-supplies `mcp_config`; `jobs.py` reused what `start()` persisted on the job row.
+    await _message(agent_settings, persona, job_id, workspace_id, fake_agent_cli.MCP_PROBE_TRIGGER)
     await _wait_until_settled(job_id, workspace_id)
-
-    second = [e for _, e in _events(job_id, workspace_id) if e.get("type") == "assistant"][-1]
-    assert _probe_result(second["message"]["content"][0]["text"])["status_code"] == 200
+    assert json.loads(_answers(job_id, workspace_id)[-1])["status_code"] == 200
 
 
 async def test_a_literal_credential_in_mcp_config_is_refused(
@@ -866,13 +1205,8 @@ async def test_a_literal_credential_in_mcp_config_is_refused(
     _, workspace_id = identity
     mcp_config = {
         "mcpServers": {
-            "app": {
-                "type": "http",
-                "url": "http://127.0.0.1:1/mcp/",
-                "headers": {"Authorization": "Bearer literal-secret"},
-            }
+            "app": {"type": "http", "url": "http://127.0.0.1:1/mcp/", "headers": {"Authorization": "Bearer literal"}}
         }
     }
-
     with pytest.raises(BadRequestError):
         await _start(agent_settings, persona, workspace_id, prompt="hi", mcp_config=mcp_config)

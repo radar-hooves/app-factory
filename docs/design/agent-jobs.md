@@ -3,203 +3,181 @@
 Status: **design, 29/09/2026.** `docs/design/agent-console.md` gave every
 stamped app one persona chat: a person asks, `session.ask()` spawns `claude
 -p`, streams its events back over the request, and the process dies with the
-request. godswood's Fat Controller needed a different shape for the same
-persona machinery — a document arrives with nobody asking, the agent reads it
+request. An app-started persona session is a different shape for the same
+machinery — a document arrives with nobody asking, the agent reads it
 unattended, and whoever is entitled opens the run afterwards or while it is
-still going — and built it as a private runner
+still going. godswood's Fat Controller built that as a private runner
 (`godswood/backend/src/godswood/api/fat_controller/pipeline/{agent,job}.py`,
 931 lines with `worker.py`/`mcp_config.py`/`turns.py`) because the factory had
 nowhere for it to land. Per the operator's ruling on 29/09/2026 (every
 household app is the same shape with different business logic, and every
-persona — Milton, Penny, the Fat Controller, Taxpert — runs on the same agent
-code), this is that home.
+persona runs on the same agent code), this is that home.
 
 ## Decision
 
-**The factory gains an agent JOB slice beside the existing chat one:
-`jobs.py` (spawn, in-process pub/sub, the five operations below),
-`jobs_models.py` (the job row and its verbatim event log), `redact.py` (the
-one redaction seam, shared with the chat slice) and three routes on the
-existing `api/agent` router. Cost: about 850 lines against godswood's
-931-line private runner it replaces — `jobs_models.py` 145, `jobs.py` 650,
-the router/schema/redact additions 90, the migration 95 — because this slice
-carries none of godswood's own document-pipeline vocabulary (`turns.py`'s
-180-line turn/tool-call interpreter, `worker.py`'s 531-line poll loop) — only
-the primitive every app needs under it. The jump from the first cut's ~620 is
-tenancy, the two spawn/cancel races, and bounded storage — §Tenancy and
-§Concurrency below — caught by a fresh-context review of that cut before
-anything had adopted it.**
+**The factory carries an agent JOB slice beside the chat one: `jobs.py` (the
+run, its control loop and the operations below), `jobs_models.py` (the job row
+and its event log), `redact.py` (the in and out seams, shared with the chat)
+and three routes on the existing `api/agent` router. The job row is the bus:
+a deployment runs several worker processes and a job's CLI is a child of one
+of them, so every request about a job, on whichever worker it lands, acts
+through the row. Cost: about 1,400 lines of source, 680 of them code
+(`jobs.py` 820, `jobs_models.py` 450, `redact.py` 70, two migrations 170),
+against godswood's 931-line runner, which ran in one process and carried its
+own document-pipeline vocabulary; this carries none of that vocabulary, and
+what it adds over it is any-worker operation, resume, and the two seams.**
 
 `--bg`/`claude agents` (the CLI's own background-session dispatcher) was
 measured and rejected: `claude -p --bg` refuses outright ("--bg and --print
 conflict: --print never starts the interactive session that `claude agents`
-attaches to"), because it is the CLI's own worktree-based coding-agent
-dispatcher, a different feature for a different job than a headless
-`-p --output-format stream-json` turn.
+attaches to"), because it is the CLI's worktree-based coding-agent
+dispatcher, a different feature from a headless `-p --output-format
+stream-json` turn.
 
-## The five needs, and what answers each
+## The CLI as it measures
+
+Driven as a job drives it (2.1.283, `--input-format stream-json`):
+
+- A prompt on the command line is ignored; with stdin closed at once the CLI
+  exits 0 having printed nothing. Every turn, the first included, is a `user`
+  frame on stdin.
+- After a turn's `result` the CLI stays alive for as long as stdin is open,
+  and exits once stdin closes and every frame it has read is answered — two
+  frames then EOF is two turns, then exit.
+- `--replay-user-messages` echoes each frame back (`type: "user"`,
+  `isReplay: true`) at the start of the turn that consumes it.
+- Every `assistant` frame carries `stop_reason: null`; `--include-partial-messages`
+  adds token deltas as their own `type: "stream_event"` lines.
+- A Read of an image returns its bytes twice: the Messages API
+  `{"type": "base64", "data": ...}` source inside the `tool_result`, and the
+  CLI's own `tool_use_result.file.base64` beside the pixel dimensions.
+- Each session keeps a transcript at `$CLAUDE_CONFIG_DIR/projects/<cwd>/<session>.jsonl`.
+
+So a job writes its prompt and every message as frames, asks for the echo
+(which is also how a watcher sees both sides of the conversation, in order),
+and closes stdin once a `result` has arrived and every frame written has been
+echoed back. It asks for no token deltas: every event it keeps is whole.
+
+## What answers each need
 
 1. **Started by the app, no asker.** `jobs.start(db_session_factory,
    settings, persona, workspace_id=..., created_by_id=..., prompt=...,
-   files=..., json_schema=..., append_system_prompt=..., mcp_config=...)` is
-   a plain async function, not a route — seeds a per-run working folder
-   under `data/agent-jobs/<job_id>/` with the given `files`, inserts the job
-   row (stamped to `workspace_id`), and returns `job_id` before the CLI has
-   even spawned.
+   job_id=..., files=..., json_schema=..., append_system_prompt=...,
+   mcp_config=..., model=...)` is a plain async function, not a route. It
+   seeds the job's folder (`jobs.job_dir(job_id)`) with `files`, inserts the
+   row, and returns `job_id` before the CLI has spawned. A caller that must
+   name a seeded file by absolute path in the prompt (Read takes nothing
+   else) mints the id first with `jobs.new_job_id()`.
 2. **Keeps running with nobody watching.** The run is an `asyncio.Task` held
-   in a module dict (`_tasks`) so nothing garbage-collects it, independent of
-   any request's lifetime; a closed tab has never held a reference to it.
-3. **Opened by an entitled user at any time, within their own workspace.**
-   `GET /api/agent/{persona}/jobs/{job_id}/watch` checks the job belongs to
-   the caller's `CurrentWorkspace` (`jobs.authorize()`), replays the job's
-   persisted event log, then — if the job is still running — subscribes to
-   its live fan-out (`_JobBus`, an in-process `asyncio.Queue` per open job)
-   and keeps streaming, on the SAME frame shape `ask()` already produces, so
-   `@poodle64/librarian`'s renderer needs no second code path.
-4. **A message while it is working, a reply once it has finished.** `POST
-   .../message` branches on whether the job's process is still alive: while
-   it is, the message is a `stream-json` frame written straight onto its open
-   stdin (`--input-format stream-json`); once it has exited, the same call
-   starts a NEW run under the SAME job id via `--resume`, replaying the
-   `json_schema`/`append_system_prompt`/`mcp_config` the job started with.
-   The whole check-then-spawn decision runs under a per-job `asyncio.Lock`
-   (`_lock_for`), so two messages arriving the instant a run finishes cannot
-   both spawn a resume for the same Claude Code session.
-5. **Stopped by the user.** `POST .../stop` sets the CURRENT run's cancel
-   `Event` (created fresh at spawn, before the lock that decided to spawn is
-   released) and kills any live process group; `_run()` checks its own event
-   the moment its process is registered, so a stop arriving in the gap
-   between a resume being scheduled and its process existing still lands.
+   in `_tasks`, independent of any request.
+3. **Watched from any worker.** `GET .../jobs/{job_id}/watch` reads the event
+   log forward from the database until no live process is running the job,
+   then ends; every worker sees the same stream.
+4. **Messaged from any worker.** `POST .../message` queues onto the row when
+   a live process is running the job, which writes it onto its CLI's stdin
+   within a poll; otherwise it reopens the job and resumes it here via
+   `--resume`, replaying the schema, system prompt, MCP config and model the
+   job started with. A run that ends with messages still queued is resumed
+   with them rather than settled, so nothing sent is dropped between runs.
+5. **Stopped from any worker.** `POST .../stop` flags the row; the running
+   process kills its CLI's process group at its next poll, or at once when
+   the stop lands on that process, and the run settles `cancelled`.
+6. **On the starter's model.** `model` is `--model` on every run, a resume
+   from any worker included; the persona's `settings.json` is the default.
+7. **What comes out is the app's to rewrite.** `app_hooks.agent_event(persona,
+   event)` sees every event before a job keeps it or a chat forwards it, and
+   returns it rewritten or `None` to drop it. The job's own synthetic error
+   event goes through it too, and `job.error`/`job.structured_output` are
+   read off what it returned. The CLI's stderr tail is first stripped of
+   anything shaped like a bearer token or a URL query string.
+8. **Bounded storage.** No token deltas are asked for; an image or document
+   is kept by reference (the `tool_use` naming its file, the dimensions beside
+   it), never its bytes. `jobs.cleanup()` removes the job's folder and every
+   artefact the CLI kept under the persona's shared home for that session,
+   its transcript included.
+9. **Told when a run settles.** `app_hooks.agent_job_settled(outcome)` is
+   called with each settled run's `JobOutcome` — a resumed one's answer
+   included — in whichever process settled it. Polling the row is not the
+   intended shape.
 
-## What stays out
+## Any worker
 
-- **No queue, no worker process.** A job is one `asyncio.Task` on the app's
-  own event loop — the monolith-with-in-process-jobs constraint this slice
-  was built to. `jobs.py`'s own pub/sub (`_JobBus`) is the in-process
-  equivalent of godswood's thread-based `SseEventBus`, ported to `asyncio`
-  because the app it lives in is async.
-- **No house vocabulary.** Every event persisted and replayed is exactly what
-  Claude Code printed; `AgentJobEvent.event` is one JSONB column, not a typed
-  turn/tool-call model. godswood's `TurnRecorder`/`turns.py` stays
-  godswood's own — an interpretation of the stream for ITS OWN execution
-  view, layered on top of this slice's raw log, never absorbed into it. The
-  one structural fact this slice DOES read off an event — its OWN top-level
-  `type` — decides storage, never content: `_is_partial()` skips persisting a
-  `type: "stream_event"` line (`--include-partial-messages`' own token-level
-  delta, wrapping the raw Anthropic streaming sub-events — measured against
-  the real, installed CLI with this slice's own `build_argv` flags, not
-  guessed) and broadcasts it live regardless, so `agent_job_events` grows one
-  row per settled message, not one per token. `message.stop_reason` was tried
-  first and rejected: the real CLI carries `null` there on EVERY `assistant`
-  frame, settled or not, so keying on it dropped every assistant message from
-  a finished job's own replay — the exact thing a caller opens a job to read.
-- **No per-job personal owner.** Unlike `ownership.py`'s private chat
-  sessions, a job belongs to no ASKER — `created_by_id` is attribution only.
-  It DOES belong to a workspace: any caller entitled to the persona
-  (`agent-<name>`) *and* a member of that workspace may watch, message or
-  stop it.
+The running process holds the job by `run_id` and refreshes `heartbeat_at`
+every 10 s; a `running` row whose heartbeat is older than 90 s (gunicorn's
+60 s worker timeout plus a beat) has no process behind it. Every transition
+is one `SELECT ... FOR UPDATE` and one commit on the row
+(`jobs_models.enqueue_or_reopen`/`poll_run`/`settle_or_continue`), so two
+workers acting on one job serialise on the row: two messages at once reopen it
+once and queue the second. Every write the running process makes is
+conditional on its own `run_id`, so a process that lost the job can change
+nothing.
+
+Every worker runs `jobs.supervise()` from its lifespan, as a background task:
+a sweep at boot and every 60 s settles a job whose heartbeat has gone stale
+as `failed` — never a live job another worker holds — and a failed sweep is
+logged and retried, so a worker boots with no database reachable. On
+shutdown a worker kills its own runs and settles them `failed`. An app that
+starts long jobs sets `GUNICORN_MAX_REQUESTS=0` (`gunicorn.conf.py`), or a
+worker recycle ends its runs every thousand requests.
 
 ## Tenancy
 
 `AgentJob`/`AgentJobEvent` are `WorkspaceScoped` — a document belongs to a
 workspace, and a job reading one does too. Every session `jobs.py` opens is
-created OUTSIDE a request (`db_session_factory()`, the app's plain
-engine-bound sessionmaker — a job's writes must outlive the one request that
-triggered them, so nothing binds it to a workspace the way `CurrentWorkspace`
-binds a request's own session), so every write path calls
-`db.scoping.bind_session()` itself before touching either model.
-`jobs.authorize()` is the one read with no workspace bound yet — an explicit
-`unscoped()` lookup by `job_id` alone, comparing what it finds against the
-caller's own `workspace_id` **and** `persona`, refusing (404, one answer for
-every way to fail the check) on either mismatch, mirroring `ownership.DENIAL`'s
-reasoning for a private chat session. The persona half is not redundant with
-`workspace_id`: a caller's `agent-<name>` entitlement and workspace membership
-together say nothing about a DIFFERENT persona's job in that same workspace —
-a member holding only `agent-milton` could otherwise watch, message or stop a
-`fat_controller` job by naming `milton` in the URL and the job's own id
-(measured in a verification review of the first cut, which checked only
-`workspace_id`). The three HTTP routes all call `authorize()` before doing
-anything else, passing the URL's own `{persona}` segment; `jobs.start()`'s
-caller supplies `workspace_id` directly, since it usually has a
-`CurrentWorkspace` already resolved from wherever the job's own trigger fired.
+created outside a request (the app's plain engine-bound sessionmaker; a job's
+writes outlive the request that triggered them), so every path binds it with
+`db.scoping.bind_session()` before touching either model. `jobs.authorize()`
+is the one read with no workspace bound yet — an explicit `unscoped()` lookup
+by `job_id`, compared against the caller's `workspace_id` and the URL's
+`persona`, refusing with one 404 for every way to fail, as `ownership.DENIAL`
+does for a private chat. The persona half matters: an `agent-<name>`
+entitlement and workspace membership say nothing about a different persona's
+job in the same workspace. The orphan sweep is the other `unscoped()` read,
+the carve-out `platform/tenancy.md` gives a job whose job is the whole estate.
 
-## Concurrency
+## What stays out
 
-Two failure modes needed their own fix, both from the SAME root cause — job
-state (`_processes`, `_tasks`, and now `_cancel_events`) living in plain
-module dicts with no synchronisation of its own:
-
-- **Two resumes racing.** `send_message()`'s whole "is it live, is it
-  between runs, mark it running, spawn the resume" decision runs inside one
-  per-job `asyncio.Lock`, held across the `await` that flips the row to
-  `running` — so a second concurrent call, once it acquires the lock, always
-  sees the up-to-date status and is refused (`BadRequestError`) rather than
-  also spawning.
-- **A stop arriving before its process exists.** `_spawn_run()` creates a
-  fresh `asyncio.Event` and registers it BEFORE the task that will use it is
-  even created — synchronously, with no `await` in between — so `stop()`,
-  whenever it runs, always has something to set. `_run()` checks that same
-  event the moment its subprocess is registered, closing the gap where a
-  stop issued the instant a resume is scheduled used to no-op silently.
-
-Neither is a general-purpose actor/mailbox pattern — one lock, one flag per
-run, exactly the two decisions that needed to stop racing.
+- **No queue service, no worker process.** A job is an `asyncio.Task` on the
+  app's own event loop; the database the app already runs is the only thing
+  its workers share.
+- **No house vocabulary.** Every event kept is Claude Code's own, less what
+  the app's hook rewrites and the bytes of an image; `AgentJobEvent.event` is
+  one JSONB column, not a typed turn model. godswood's `turns.py` stays
+  godswood's, reading this log for its own execution view.
+- **No personal owner.** A job belongs to no asker — `created_by_id` is
+  attribution only — but to a workspace and a persona.
 
 ## Operational
 
-- **A restart cannot orphan a job.** `main.py`'s `_db_lifespan` calls
-  `jobs.reconcile_orphaned_jobs()` once at startup: any row still `running`
-  belonged to a process that no longer exists (its subprocess died with it),
-  so it is marked `failed` rather than left permanently unresumable. Factory-
-  owned rather than an `app_hooks.lifespan_tasks` default, since an app's own
-  `app_hooks.py` is sanctioned-per-app and never overwritten by `copier
-  update` — a default living there would reach only a brand-new stamp.
-- **Concurrent stderr draining.** A child that fills its stderr pipe (64 KiB)
-  before anything reads it blocks on that write — and since nothing was
-  reading stdout either at that moment, the whole turn would deadlock rather
-  than merely running noisily. `_drain_stderr()` runs alongside the stdout
-  read loop as its own task, keeping only a bounded tail for the failure
-  diagnostic.
-- **Reclaiming a job's own disk.** `jobs.cleanup(job_id, workspace_id=...)`
-  removes its working folder, refusing while the job is still `running`.
-  Nothing calls it automatically — the default lifetime is forever, same as
-  `persona.py`'s seeded homes — an app calls it once its own record of the
-  job is settled.
-- **A job's own MCP identity, with no credential ever persisted.** `start()`'s
-  `mcp_config` is a parsed `.mcp.json` object, persisted on the job row and
-  rewritten to disk on every run including a resume: this is how a caller
-  binds the job's own identity (a stdio server's own args, an HTTP header)
-  into the servers it reaches — godswood's `pipeline/mcp_config.py` builds
-  exactly this shape today, bound by hand into a file the old private runner
-  wrote itself. A credential in that shape is minted by a `headersHelper`
-  command run at spawn, never a literal `headers` value — the SAME contract
-  a persona's own `.mcp.json` already holds its `headersHelper` to
-  (`session.py`) — because a literal one would sit unencrypted in
-  `job_dir/.mcp.json` and in the `AgentJob.mcp_config` column for as long as
-  the job exists. `_refuse_literal_mcp_credentials()` refuses `start()`
-  outright on a credential-shaped header (`Authorization`, `X-Api-Key`, ...)
-  set directly; a `headersHelper` command string is fine to persist, because
-  running it is what produces a credential — the string itself is a recipe,
-  not a secret.
+- **Concurrent stderr draining.** `_drain_stderr()` reads stderr beside the
+  stdout loop, keeping a bounded tail; a child filling its 64 KiB stderr pipe
+  otherwise blocks before its next stdout line. A read error there loses the
+  tail, never the run's settling.
+- **A job's own MCP identity, with no credential persisted.** `mcp_config` is a
+  parsed `.mcp.json` object, kept on the row and rewritten to the job's folder
+  on every run: how a caller binds the job's own identity into the servers it
+  reaches. A credential in it is minted by a `headersHelper` command at spawn,
+  the contract a persona's own `.mcp.json` is held to;
+  `_refuse_literal_mcp_credentials()` refuses a credential-shaped header set
+  directly.
+- **The gateway.** `AgentSettings.gateway_url` is deployment configuration;
+  `gateway_key` is vended from the broker (`<app>-gateway`, field `value`)
+  only while a URL is set, under the name in `gateway_key_credential` when
+  the gateway named the key itself. With a URL set, the child reaches the
+  gateway and nothing else: the OAuth token the direct path uses is withheld.
 
 ## Sequence
 
-1. **Factory.** `jobs_models.py`, `jobs.py`, `redact.py`, the three routes,
-   the `agent_jobs`/`agent_job_events` migration, `test_agent_jobs_api.py`
-   driving the fake CLI through a fresh start, a live stdin message, a
-   post-finish resume, a stop, cross-workspace refusal on all three routes,
-   the two concurrency fixes, orphan reconciliation, bounded partial
-   storage, a chatty child's stderr, working-folder cleanup and a resumed
-   run's MCP identity. Tag.
+1. **Factory.** The slice, its two migrations, and `test_agent_jobs_api.py`
+   driving a fake CLI that behaves as the real one measures — including a
+   second real worker process that boots beside a live job, stops one, and
+   watches, messages and resumes another. Tag.
 2. **godswood moves its reader onto it.** `pipeline/agent.py::run_agent` and
-   `pipeline/job.py::run_job` are replaced by calls into `jobs.start`/
-   `jobs.send_message`; `pipeline/worker.py`'s poll loop, `sse.py` and
-   `mcp_config.py` retire with them — `turns.py` stays, reading this slice's
-   event log instead of `on_event` callbacks, since the execution view it
-   feeds is godswood's own. `job.py`'s own document-pipeline logic (context
-   resolution, dedupe, reconcile rules, the look-again pass) is unaffected:
-   it is business logic ABOVE the session primitive, not part of it.
-3. **library and pebblestone take it on their next copier update.** No
-   change needed on their side until a persona of theirs needs an
-   app-started run; the chat slice they already carry is untouched by this
-   one landing beside it.
+   `pipeline/job.py::run_job` become calls into `jobs.start`/
+   `jobs.send_message` with `app_hooks.agent_event` carrying its scrub and
+   `app_hooks.agent_job_settled` taking an answer back into its pipeline;
+   `pipeline/worker.py`'s poll loop, `sse.py` and `mcp_config.py` retire —
+   `turns.py` stays, reading this slice's event log. `job.py`'s document
+   logic is business logic above the session primitive and is unaffected.
+3. **library and pebblestone take it on their next copier update.** Nothing
+   changes for them until a persona of theirs needs an app-started run.

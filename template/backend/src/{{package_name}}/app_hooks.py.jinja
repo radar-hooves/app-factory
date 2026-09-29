@@ -28,10 +28,18 @@ none of them behaves exactly as it does today.
   - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
     after every worker is dead, for an app supervising a child process or a
     process-local session a worker must not end.
-  - `agent_turn(persona: str, user: str, text: str) -> str` — `api/agent/ask.py`
-    runs a persona's incoming question through this before spawning the CLI,
-    for an app that must redact what reaches the model and the logs beneath
-    it. Absent by default: the factory's own agent slice redacts nothing.
+  - `agent_turn(persona: str, user: str, text: str) -> str` — `api/agent/redact.py`
+    runs a chat question, a job's prompt and every message sent to a job
+    through this before the CLI sees it, for an app that must redact what
+    reaches the model and the logs beneath it.
+  - `agent_event(persona: str, event: dict) -> dict | None` — the same for
+    what comes OUT: every event a job keeps or a chat forwards, the slice's
+    own error events included, returned rewritten or `None` to drop it. For
+    what the agent read off a document and repeated back.
+  - `agent_job_settled(outcome: JobOutcome) -> None` — `api/agent/jobs.py`
+    calls this each time a job's run settles, a resumed one included, in
+    whichever worker process settled it, for an app that acts on a job's
+    answer (`jobs_models.JobOutcome`).
 """
 
 from collections.abc import AsyncGenerator

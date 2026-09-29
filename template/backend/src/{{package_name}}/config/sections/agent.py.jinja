@@ -15,11 +15,13 @@ not this one's.
 """
 
 from pathlib import Path
+from typing import Annotated, Self
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from {{ package_name }}.config.paths import project_root
+from {{ package_name }}.config.vend import Vended, resolve_vended_fields
 
 
 def _default_personas_dir() -> Path:
@@ -53,16 +55,25 @@ class AgentSettings(BaseSettings):
 
     # The gateway Claude Code is pointed at, and the key it presents. Set,
     # they become ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN on the child
-    # process; empty, the child inherits whatever the process environment
-    # already carries — which is the contract this slice is built on:
+    # process, and every persona session goes through it and nowhere else;
+    # empty, the child inherits whatever the process environment already
+    # carries — which is the contract this slice is built on:
     # CLAUDE_CODE_OAUTH_TOKEN vended onto the app process authenticates the
     # CLI against Anthropic directly, with no gateway in the path
     # (`docs/design/agent-console.md` §Decision). The gateway pair stays for a
     # genuinely Anthropic-compatible one; unlike the library's own default,
     # this factory names no household gateway, because a stamped app has no
-    # standing opinion on one.
+    # standing opinion on one. The URL is deployment configuration; the key
+    # is a secret, vended like every other (`config/vend.py`) and only while
+    # a URL is set, so an app with no gateway never asks the broker for one.
     gateway_url: str = ""
-    gateway_key: SecretStr = SecretStr("")
+    gateway_key: Annotated[
+        SecretStr, Vended("{{ project_name }}-gateway", "value", credential_field="gateway_key_credential")
+    ] = SecretStr("")
+    # The broker credential holding the key, when the gateway named it rather
+    # than this app (one that mints a key per consumer under its own scheme).
+    # Empty means `{{ project_name }}-gateway`.
+    gateway_key_credential: str = ""
 
     # Claude Code runs a small model for background work as well as the one
     # answering. Through a gateway it can only be a model the gateway serves,
@@ -85,3 +96,15 @@ class AgentSettings(BaseSettings):
     # One question's wall clock. The loop is bounded by the model deciding it
     # is finished; this is the backstop for one that does not.
     timeout_seconds: float = 600.0
+
+    @model_validator(mode="after")
+    def _resolve_gateway_key_when_configured(self) -> Self:
+        """Vend the gateway key only for a deployment that names a gateway.
+
+        Not `VendedSettings`, which vends unconditionally at construction —
+        `config/sections/files.py` gates its own credential on its URL the
+        same way, for the same reason.
+        """
+        if self.gateway_url:
+            resolve_vended_fields(self)
+        return self

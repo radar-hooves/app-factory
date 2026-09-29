@@ -66,6 +66,16 @@ def list_personas(settings: AgentSettings) -> list[str]:
     )
 
 
+def home(name: str) -> Path:
+    """Where persona `name`'s writable home lives: its seeded files and the CLI's own state.
+
+    Under data/, resolved through config/paths.py's data_dir() — the one
+    place this app writes state it did not receive from its database
+    (`rules-library/platform/canonical-app-shape.md` §Development launch).
+    """
+    return data_dir() / "agent-homes" / name
+
+
 def _copy_shipped_files(source: Path, target: Path) -> None:
     """Copy each shipped file into `target`, overwriting whatever is there."""
     for filename in SOURCE_FILES:
@@ -148,18 +158,15 @@ def load(settings: AgentSettings, name: str) -> PersonaConfig:
     if not (source / "CLAUDE.md").is_file():
         raise NotFoundError(f"no such persona: {name}")
 
-    # Under data/, resolved through config/paths.py's data_dir() — the one
-    # place this app writes state it did not receive from its database
-    # (`rules-library/platform/canonical-app-shape.md` §Development launch).
-    home = data_dir() / "agent-homes" / name
-    _seed(source, home)
+    persona_home = home(name)
+    _seed(source, persona_home)
 
-    settings_path = home / "settings.json"
+    settings_path = persona_home / "settings.json"
     settings_json = json.loads(settings_path.read_text()) if settings_path.is_file() else {}
 
     return PersonaConfig(
         name=name,
-        home=home,
+        home=persona_home,
         allowed_tools=_tool_list(settings_json, "allow"),
         disallowed_tools=_tool_list(settings_json, "deny"),
     )

@@ -67,7 +67,7 @@ async def ask(
 async def watch_job(
     persona: str, job_id: str, identity: CurrentIdentity, workspace: CurrentWorkspace, settings: SettingsDep
 ) -> StreamingResponse:
-    """Watch `job_id`'s events from the first, live if it is still running (need 3).
+    """Watch `job_id`'s events from the first, then follow them until its run settles, from any worker.
 
     The SAME frame shape `ask`'s stream produces — one Claude Code event per
     frame, no `event:` name, `library_error` the one synthetic addition — so
@@ -124,5 +124,6 @@ async def stop_job(
 ) -> None:
     """Stop `job_id` (need 5). A no-op once it has already finished on its own."""
     require_module(f"agent-{persona}")(identity)
-    await jobs_module.authorize(get_session_factory(), job_id, workspace.id, persona)
-    await jobs_module.stop(job_id)
+    db_session_factory = get_session_factory()
+    await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
+    await jobs_module.stop(db_session_factory, job_id, workspace_id=workspace.id)

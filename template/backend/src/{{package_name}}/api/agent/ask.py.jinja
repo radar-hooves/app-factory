@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 from {{ package_name }}.api.agent import ownership
 from {{ package_name }}.api.agent import session as agent_session
 from {{ package_name }}.api.agent.persona import PersonaConfig
-from {{ package_name }}.api.agent.redact import redact
+from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.api.agent.schemas import AskRequest
 from {{ package_name }}.config.sections.agent import AgentSettings
 
@@ -60,11 +60,13 @@ def stream(
                 # that waited would leave it unowned in between.
                 if event.get("subtype") == "init" and isinstance(event.get("session_id"), str):
                     await run_in_threadpool(ownership.claim, db, str(event["session_id"]), user_id)
-                # One event per frame, verbatim, with no `event:` name — the
-                # type is inside the payload where Claude Code puts it, and
-                # inventing a second place for it is the translation this
-                # slice refuses.
-                yield f"data: {json.dumps(event)}\n\n"
+                # Through the app's own output hook before it leaves, then one
+                # event per frame, with no `event:` name — the type is inside
+                # the payload where Claude Code puts it, and inventing a second
+                # place for it is the translation this slice refuses.
+                rewritten = redact_event(persona.name, event)
+                if rewritten is not None:
+                    yield f"data: {json.dumps(rewritten)}\n\n"
         except AskRefused as refused:
             yield f"data: {json.dumps({'type': agent_session.ERROR_EVENT, 'error': str(refused)})}\n\n"
 

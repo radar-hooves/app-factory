@@ -13,28 +13,42 @@ opens is bound with `bind_session()` before it touches either model, since a
 job's writes happen outside any one request's own `CurrentWorkspace`-bound
 session (`jobs.py`'s own module docstring has the fuller account of why).
 
-``job_id`` IS Claude Code's own session id: minted here before the CLI ever
-runs (``--session-id`` on the first spawn, ``--resume`` on every one after),
-so a caller has the id to watch from the moment ``jobs.start()`` returns
-rather than waiting on an `init` event to learn it — `ownership.py`'s
-claim-on-init dance is needed there because the CLI assigns the id; it is not
-needed here because this slice assigns it.
+The job row is also the one place every worker process of a deployment
+agrees on (`docs/design/agent-jobs.md` §Any worker): the process running a
+job holds it by ``run_id`` and keeps ``heartbeat_at`` fresh, and any other
+process asks it to do something by writing ``pending_messages`` or
+``stop_requested`` under the row's own lock. Every transition below is one
+``SELECT ... FOR UPDATE`` and one commit, so two processes acting on one job
+at once serialise on the row rather than on anything process-local.
+
+``job_id`` IS Claude Code's own session id: minted before the CLI ever runs
+(``--session-id`` on the first spawn, ``--resume`` on every one after), so a
+caller has the id to watch from the moment ``jobs.start()`` returns rather
+than waiting on an `init` event to learn it — `ownership.py`'s claim-on-init
+dance is needed there because the CLI assigns the id; it is not needed here
+because this slice assigns it.
 """
 
 import datetime
+import uuid
+from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func, select
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, false, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.sql.elements import ColumnElement
 
 from {{ package_name }}.db.base import Base, TimestampMixin, WorkspaceScoped
 from {{ package_name }}.db.scoping import unscoped
 
 #: A job's lifecycle. ``running`` covers a fresh turn and a resumed one alike
 #: — nothing here distinguishes them, because a watcher only ever needs to
-#: know whether the process behind ``job_id`` is alive right now.
+#: know whether a process is working on ``job_id`` right now.
 RUNNING, COMPLETED, FAILED, CANCELLED = "running", "completed", "failed", "cancelled"
+
+#: `enqueue_or_reopen`'s two answers that start no run.
+QUEUED, STOPPING = "queued", "stopping"
 
 
 class AgentJob(Base, TimestampMixin, WorkspaceScoped):
@@ -43,10 +57,10 @@ class AgentJob(Base, TimestampMixin, WorkspaceScoped):
 
     __tablename__ = "agent_jobs"
 
-    #: Claude Code's own session id, minted by `jobs.start()` before the CLI
-    #: first runs. A str column, not a UUID one, for the same reason
-    #: `ownership.AgentSession.session_id` is: the format is the CLI's to
-    #: change, and a column that could reject a future one would refuse the
+    #: Claude Code's own session id, minted by `jobs.start()` (or its caller)
+    #: before the CLI first runs. A str column, not a UUID one, for the same
+    #: reason `ownership.AgentSession.session_id` is: the format is the CLI's
+    #: to change, and a column that could reject a future one would refuse the
     #: job rather than record it.
     job_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     persona: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -64,15 +78,36 @@ class AgentJob(Base, TimestampMixin, WorkspaceScoped):
     #: bound to the SAME identity, the job started with. `None` means the
     #: job reaches the persona's own `.mcp.json` instead.
     mcp_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: `--model`, held for the same reason as `json_schema`: the starter chose
+    #: it for this job, and a resume from anywhere runs on the same one.
+    #: `None` leaves the persona's own `settings.json` to decide.
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: The final turn's structured answer, set once `status` leaves `running`
     #: and only when a `json_schema` was given.
     structured_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     #: What went wrong, when `status == "failed"`.
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The current run, minted fresh each time a process starts one. Every
+    #: write the running process makes is conditional on it, so a process
+    #: that lost the job (declared dead while it was merely stalled) can
+    #: change nothing once another has taken over.
+    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    #: Refreshed by the running process; a `running` row whose heartbeat is
+    #: older than the caller's staleness bound has no process behind it.
+    heartbeat_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Set by a stop from any process; the running process kills its CLI
+    #: when it next looks, and settles the run `cancelled`.
+    stop_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    #: Messages sent while a run is working, waiting for its process to write
+    #: them onto the CLI's stdin. A run that ends with some still here is
+    #: resumed with them rather than settled.
+    pending_messages: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
 
 
 class AgentJobEvent(Base, WorkspaceScoped):
-    """One Claude Code event, kept verbatim, in the order it landed.
+    """One Claude Code event, in the order it landed.
 
     No `TimestampMixin`: `recorded_at` alone is what a replay needs, and
     `updated_at` would claim an event is ever revised, which it never is.
@@ -88,23 +123,92 @@ class AgentJobEvent(Base, WorkspaceScoped):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.job_id", ondelete="CASCADE"), nullable=False, index=True)
-    #: The event exactly as Claude Code printed it — never reshaped, per the
-    #: household rule this whole slice is built on: the stream is Claude
-    #: Code's own vocabulary, never this app's.
+    #: The event as Claude Code printed it, less two things `jobs.py` takes
+    #: out before it lands here: whatever the app's own `agent_event` hook
+    #: rewrites, and the bytes of an image or document (`_without_bytes`).
+    #: Never reshaped otherwise — the stream is Claude Code's own vocabulary,
+    #: never this app's.
     event: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     recorded_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-def create_job(
-    db: Session,
-    *,
-    job_id: str,
-    persona: str,
-    json_schema: dict[str, Any] | None,
-    append_system_prompt: str | None,
-    mcp_config: dict[str, Any] | None,
-) -> None:
-    """Insert the job row and commit — the caller has the id back before the CLI has even started.
+@dataclass(frozen=True, slots=True)
+class RunSpec:
+    """What a run needs from its job row, read inside the transaction that opened the run.
+
+    A snapshot rather than the ORM row, because the row's session is closed
+    before the run starts and a run may outlive many of them.
+    """
+
+    job_id: str
+    persona: str
+    workspace_id: int
+    created_by_id: uuid.UUID | None
+    run_id: str
+    json_schema: dict[str, Any] | None
+    append_system_prompt: str | None
+    mcp_config: dict[str, Any] | None
+    model: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class JobOutcome:
+    """A job whose run has settled, as `app_hooks.agent_job_settled` receives it."""
+
+    job_id: str
+    persona: str
+    workspace_id: int
+    created_by_id: uuid.UUID | None
+    status: str
+    structured_output: dict[str, Any] | None
+    error: str | None
+
+
+def _spec(job: AgentJob) -> RunSpec:
+    return RunSpec(
+        job_id=job.job_id,
+        persona=job.persona,
+        workspace_id=job.workspace_id,
+        created_by_id=job.created_by_id,
+        run_id=str(job.run_id),
+        json_schema=job.json_schema,
+        append_system_prompt=job.append_system_prompt,
+        mcp_config=job.mcp_config,
+        model=job.model,
+    )
+
+
+def _outcome(job: AgentJob) -> JobOutcome:
+    return JobOutcome(
+        job_id=job.job_id,
+        persona=job.persona,
+        workspace_id=job.workspace_id,
+        created_by_id=job.created_by_id,
+        status=job.status,
+        structured_output=job.structured_output,
+        error=job.error,
+    )
+
+
+def _stale(stale_seconds: float) -> ColumnElement[bool]:
+    """A heartbeat older than ``stale_seconds`` by the DATABASE's clock, or none at all.
+
+    The database's clock rather than this process's: every worker compares
+    against the one clock that wrote the heartbeat.
+    """
+    return or_(
+        AgentJob.heartbeat_at.is_(None),
+        AgentJob.heartbeat_at < func.now() - datetime.timedelta(seconds=stale_seconds),
+    )
+
+
+def _locked(db: Session, job_id: str, *criteria: ColumnElement[bool]) -> AgentJob | None:
+    statement = select(AgentJob).where(AgentJob.job_id == job_id, *criteria).with_for_update()
+    return db.execute(statement).scalar_one_or_none()
+
+
+def create_job(db: Session, spec: RunSpec) -> None:
+    """Insert the job row, running and held by ``spec.run_id``, and commit.
 
     `db` must already be bound to the owning workspace (`db.scoping.bind_session`)
     — `before_flush` stamps `workspace_id`/`created_by_id` from that binding,
@@ -114,12 +218,17 @@ def create_job(
     """
     db.add(
         AgentJob(
-            job_id=job_id,
-            persona=persona,
+            job_id=spec.job_id,
+            persona=spec.persona,
             status=RUNNING,
-            json_schema=json_schema,
-            append_system_prompt=append_system_prompt,
-            mcp_config=mcp_config,
+            json_schema=spec.json_schema,
+            append_system_prompt=spec.append_system_prompt,
+            mcp_config=spec.mcp_config,
+            model=spec.model,
+            run_id=spec.run_id,
+            heartbeat_at=func.now(),
+            stop_requested=False,
+            pending_messages=[],
         )
     )
     db.commit()
@@ -145,8 +254,8 @@ def get_job_unscoped(db: Session, job_id: str) -> AgentJob | None:
 
 
 def record_event(db: Session, job_id: str, event: dict[str, Any]) -> int:
-    """Append one event, verbatim, and commit. Returns its `id` — the monotonic
-    `seq` `jobs.watch()` uses to tell a replayed event apart from a live one."""
+    """Append one event and commit. Returns its `id` — the monotonic `seq`
+    `jobs.watch()` reads forward from."""
     row = AgentJobEvent(job_id=job_id, event=event)
     db.add(row)
     db.commit()
@@ -154,36 +263,187 @@ def record_event(db: Session, job_id: str, event: dict[str, Any]) -> int:
     return row.id
 
 
-def list_events(db: Session, job_id: str) -> list[tuple[int, dict[str, Any]]]:
-    """Every event recorded for `job_id` so far, oldest first, each with its `seq`."""
+def list_events(db: Session, job_id: str, *, after: int = 0) -> list[tuple[int, dict[str, Any]]]:
+    """Every event recorded for `job_id` past `after`, oldest first, each with its `seq`."""
     rows = db.execute(
-        select(AgentJobEvent.id, AgentJobEvent.event).where(AgentJobEvent.job_id == job_id).order_by(AgentJobEvent.id)
+        select(AgentJobEvent.id, AgentJobEvent.event)
+        .where(AgentJobEvent.job_id == job_id, AgentJobEvent.id > after)
+        .order_by(AgentJobEvent.id)
     )
     return [(row.id, row.event) for row in rows]
 
 
-def mark_running(db: Session, job_id: str) -> None:
-    """Reopen `job_id` for a resumed run (`jobs.send_message`, once the prior process has exited)."""
-    job = db.get(AgentJob, job_id)
-    if job is None:
-        return
+def read_progress(
+    db: Session, job_id: str, *, after: int, stale_seconds: float
+) -> tuple[bool, list[tuple[int, dict[str, Any]]]]:
+    """Whether a live process is still working on `job_id`, then every event past `after`.
+
+    In that order: a run records its last event before it settles, so events
+    read AFTER a settled answer here include everything that run will ever
+    write. A `running` row with a stale heartbeat answers not-live — nothing
+    will write to it again until `reconcile_orphaned_jobs` or a message moves it.
+    """
+    live = (
+        db.execute(
+            select(AgentJob.job_id).where(AgentJob.job_id == job_id, AgentJob.status == RUNNING, ~_stale(stale_seconds))
+        ).first()
+        is not None
+    )
+    return live, list_events(db, job_id, after=after)
+
+
+def enqueue_or_reopen(
+    db: Session, job_id: str, message: str, *, run_id: str, stale_seconds: float
+) -> RunSpec | str | None:
+    """Hand ``message`` to whichever process is running ``job_id``, or reopen it for a new run.
+
+    Returns `QUEUED` when a live run will write it onto its CLI's stdin,
+    `STOPPING` when that run has been asked to stop, the new run's `RunSpec`
+    (held by ``run_id``) when there was no live run and the caller must start
+    one, or `None` for no such job. A `running` row with a stale heartbeat
+    counts as no live run: its process is gone, and waiting on it would
+    strand the message.
+    """
+    row = db.execute(
+        select(AgentJob, _stale(stale_seconds).label("stale"))
+        .where(AgentJob.job_id == job_id)
+        .with_for_update(of=AgentJob)
+    ).one_or_none()
+    if row is None:
+        return None
+    job, stale = row
+    if job.status == RUNNING and not stale:
+        if job.stop_requested:
+            db.rollback()
+            return STOPPING
+        job.pending_messages = [*job.pending_messages, message]
+        db.commit()
+        return QUEUED
     job.status = RUNNING
+    job.run_id = run_id
+    job.heartbeat_at = func.now()
+    job.stop_requested = False
+    job.pending_messages = []
+    job.error = None
+    spec = _spec(job)
+    db.commit()
+    return spec
+
+
+def poll_run(
+    db: Session, job_id: str, run_id: str, *, take_messages: bool, beat: bool
+) -> tuple[bool, list[str]] | None:
+    """The running process's look at its own row: ``(stop_requested, messages to write)``.
+
+    Takes the pending messages only when ``take_messages`` (its CLI's stdin is
+    still open), refreshes the heartbeat when ``beat``. `None` when the row is
+    no longer this run's — settled or reopened by another process — which is
+    the running process's signal to kill its CLI and write nothing further.
+    """
+    job = _locked(db, job_id, AgentJob.run_id == run_id, AgentJob.status == RUNNING)
+    if job is None:
+        db.rollback()
+        return None
+    messages = list(job.pending_messages) if take_messages else []
+    if messages:
+        job.pending_messages = []
+    if beat:
+        job.heartbeat_at = func.now()
+    stop = job.stop_requested
+    if messages or beat:
+        db.commit()
+    else:
+        db.rollback()
+    return stop, messages
+
+
+def requeue(db: Session, job_id: str, run_id: str, messages: list[str]) -> None:
+    """Put back messages this run took but could not write, ahead of any newer ones."""
+    job = _locked(db, job_id, AgentJob.run_id == run_id, AgentJob.status == RUNNING)
+    if job is None:
+        db.rollback()
+        return
+    job.pending_messages = [*messages, *job.pending_messages]
     db.commit()
 
 
-def finish_job(
+def request_stop(db: Session, job_id: str) -> None:
+    """Ask whichever process is running `job_id` to stop it. Nothing to do once it has settled."""
+    job = _locked(db, job_id, AgentJob.status == RUNNING)
+    if job is None:
+        db.rollback()
+        return
+    job.stop_requested = True
+    db.commit()
+
+
+def settle_or_continue(
     db: Session,
     job_id: str,
+    run_id: str,
     *,
     status: str,
-    structured_output: dict[str, Any] | None = None,
-    error: str | None = None,
-) -> None:
-    """Move `job_id` to a terminal status. A job not found (deleted mid-run) is silently skipped."""
-    job = db.get(AgentJob, job_id)
+    structured_output: dict[str, Any] | None,
+    error: str | None,
+    next_run_id: str | None,
+) -> tuple[RunSpec, list[str]] | JobOutcome | None:
+    """End run ``run_id``: settle the job, or hand it straight to a new run.
+
+    A run whose process has exited with messages still pending — sent after
+    its CLI's stdin was closed, or while its process was already on its way
+    out — is not settled: the row stays `running` under ``next_run_id`` and
+    the caller resumes it with those messages, so nothing sent to a job is
+    ever dropped between runs. ``next_run_id=None`` refuses that (a process
+    shutting down cannot start one) and settles regardless. A requested stop
+    always settles, `cancelled`, whatever the run itself reported.
+
+    `None` when the row is no longer this run's: another process took the job
+    over, and this run's outcome is not the job's.
+    """
+    job = _locked(db, job_id, AgentJob.run_id == run_id, AgentJob.status == RUNNING)
     if job is None:
-        return
+        db.rollback()
+        return None
+    if job.stop_requested:
+        status, structured_output, error = CANCELLED, None, None
+    elif job.pending_messages and next_run_id is not None:
+        messages = list(job.pending_messages)
+        job.pending_messages = []
+        job.run_id = next_run_id
+        job.heartbeat_at = func.now()
+        spec = _spec(job)
+        db.commit()
+        return spec, messages
     job.status = status
     job.structured_output = structured_output
     job.error = error
+    job.pending_messages = []
+    job.heartbeat_at = None
+    outcome = _outcome(job)
     db.commit()
+    return outcome
+
+
+def fail_orphans(db: Session, *, stale_seconds: float, error: str) -> list[JobOutcome]:
+    """Settle every `running` job whose heartbeat has gone stale as `failed`, across every workspace.
+
+    `SKIP LOCKED`: a row another process holds right now is, by that fact, not
+    orphaned. An explicit `unscoped()` sweep, the carve-out `platform/tenancy.md`
+    gives a background job whose job IS to sweep the whole estate.
+    """
+    with unscoped(db):
+        orphaned = list(
+            db.execute(
+                select(AgentJob)
+                .where(AgentJob.status == RUNNING, _stale(stale_seconds))
+                .with_for_update(skip_locked=True)
+            ).scalars()
+        )
+        for job in orphaned:
+            job.status = FAILED
+            job.error = error
+            job.pending_messages = []
+            job.heartbeat_at = None
+        outcomes = [_outcome(job) for job in orphaned]
+        db.commit()
+    return outcomes

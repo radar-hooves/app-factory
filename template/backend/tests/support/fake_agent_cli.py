@@ -43,30 +43,36 @@ demands, without depending on the real `claude` binary's own headersHelper
 implementation (verified separately, out of this fake CLI's reach, against
 the pinned Dockerfile version's own bundled schema).
 
-Several more triggers stand in for what `jobs.py`'s tests need that none of
-the above does. `__await_stdin__` blocks on ONE line of stream-json input
-before answering -- `jobs.send_message()`'s live-stdin path writes it -- and
-`__hang__` blocks forever, standing in for a turn still genuinely working
-when `jobs.stop()` kills it. `__chatty_stderr__` writes well past a 64 KiB
-pipe buffer to stderr WITHOUT anything reading stdout in between, proving
-stderr is drained concurrently rather than only after stdout closes.
+Every `assistant` frame carries `stop_reason: null`, as every one stream-json
+prints does (measured on 2.1.283), and the result line carries
+`structured_output` whenever `--json-schema` rode on the argv, exactly as the
+real CLI would.
 
-`__partial__` models `--include-partial-messages` as the real, installed CLI
-(2.1.283) actually emits it -- measured directly, not guessed, against this
-module's own `build_argv` flags: token deltas arrive as their own top-level
-`type: "stream_event"` line (wrapping the raw Anthropic streaming sub-events
--- `message_start`, `content_block_delta`, `message_stop`), and the ONE
-settled `assistant` frame that follows carries `message.stop_reason: null`
-JUST LIKE EVERY OTHER assistant frame this fake CLI emits below -- that field
-is never a "still growing" signal on the real wire, which is exactly why
-`jobs.py`'s `_is_partial()` keys on `type == "stream_event"` alone and
-persists every `assistant`/`user`/`system`/`result` frame regardless of its
-`stop_reason`. `stop_reason: null` is therefore the DEFAULT below, not a
-special case for one trigger.
+With `--input-format stream-json` on the argv this is a different program,
+as the real CLI is (measured on 2.1.283, `stream_json_session` below): the
+prompt on the command line is ignored, every `user` frame on stdin is one
+turn, `--replay-user-messages` echoes each frame back as its turn starts,
+the process stays alive between turns for as long as stdin is open, and it
+exits once stdin closes and every frame already read has been answered. Each
+turn's frame text is the trigger there. `__hang__` never answers, standing
+in for a turn still working when a test stops it; `__chatty_stderr__` writes
+past a 64 KiB pipe buffer to stderr before answering, so a run whose stderr
+is not drained beside its stdout blocks; `__await_message__` holds its turn
+open until the NEXT frame is on stdin, so a test can send a message while a
+turn is genuinely still working; `__image__:<path>` answers with a Read of
+that file in the real tool-result shape (the image's bytes twice, as the
+Messages API block and as the CLI's own `tool_use_result`);
+`__secret_stderr__` exits 2 having written a bearer token and a signed URL
+to stderr. Every turn appends its frame to a transcript at
+`$CLAUDE_CONFIG_DIR/projects/<cwd>/<session>.jsonl`, where the real CLI
+keeps one.
 """
 
+import base64
 import json
 import os
+import re
+import select
 import subprocess
 import sys
 import time
@@ -80,10 +86,13 @@ GIANT_TRIGGER = "__giant__"
 #: only survives the read loop when `ask()` passes its own `limit=`.
 GIANT_TEXT_SIZE = 200_000
 MCP_PROBE_TRIGGER = "__mcp_probe__"
-AWAIT_STDIN_TRIGGER = "__await_stdin__"
 HANG_TRIGGER = "__hang__"
-PARTIAL_TRIGGER = "__partial__"
 CHATTY_STDERR_TRIGGER = "__chatty_stderr__"
+AWAIT_MESSAGE_TRIGGER = "__await_message__"
+IMAGE_TRIGGER = "__image__:"
+SECRET_STDERR_TRIGGER = "__secret_stderr__"
+#: How long `__await_message__` holds its turn open for a next frame before answering anyway.
+AWAIT_MESSAGE_SECONDS = 5.0
 #: Past the 64 KiB default pipe buffer a stderr write blocks on once full.
 CHATTY_STDERR_BYTES = 200_000
 
@@ -140,8 +149,185 @@ def _result(session_id: str, text: str, argv: list[str]) -> dict[str, object]:
     return result
 
 
+def _echo(question: str, argv: list[str]) -> str:
+    """This process's own argv and environment, reported back as an assistant's text."""
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")
+    settings_path = os.path.join(config_dir, "settings.json") if config_dir else ""
+    model = ""
+    if settings_path and os.path.isfile(settings_path):
+        with open(settings_path) as handle:
+            model = json.load(handle).get("model", "")
+    return " | ".join(
+        [
+            f"question={question}",
+            f"model={model}",
+            f"model_flag={_flag(argv, '--model')}",
+            f"resumed={'--resume' in argv}",
+            f"pid={os.getpid()}",
+            f"ppid={os.getppid()}",
+            f"partial={'--include-partial-messages' in argv}",
+            f"allowed={_flag(argv, '--allowedTools')}",
+            f"disallowed={_flag(argv, '--disallowedTools')}",
+            f"mcp_config={_flag(argv, '--mcp-config')}",
+            f"strict_mcp_config={'--strict-mcp-config' in argv}",
+            f"effort={_flag(argv, '--effort')}",
+            f"permission_mode={_flag(argv, '--permission-mode')}",
+            f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
+            f"append_system_prompt={_flag(argv, '--append-system-prompt')}",
+            f"input_format={_flag(argv, '--input-format')}",
+            # Present only if session.py leaked the parent's own environment
+            # through rather than building the child's from scratch.
+            f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
+            "telemetry=" + ",".join(f"{name}={os.environ.get(name, 'absent')}" for name in TELEMETRY_VARS),
+        ]
+    )
+
+
+class _Stdin:
+    """Stdin read by line off the raw descriptor, so "is another frame waiting" can be asked of it.
+
+    `sys.stdin`'s own buffering reads ahead, and a frame sitting in that
+    buffer is invisible to `select()` on the descriptor.
+    """
+
+    def __init__(self) -> None:
+        self._buffer = b""
+
+    def waiting(self, timeout: float) -> bool:
+        if b"\n" in self._buffer:
+            return True
+        readable, _, _ = select.select([0], [], [], timeout)
+        return bool(readable)
+
+    def line(self) -> bytes | None:
+        while b"\n" not in self._buffer:
+            chunk = os.read(0, 65536)
+            if not chunk:
+                return None
+            self._buffer += chunk
+        line, self._buffer = self._buffer.split(b"\n", 1)
+        return line
+
+
+def _assistant(session_id: str, content: list[dict[str, object]]) -> dict[str, object]:
+    """An `assistant` event as stream-json prints it: `stop_reason` is null on every one."""
+    return {
+        "type": "assistant",
+        "message": {
+            "id": f"msg_{uuid.uuid4().hex[:24]}",
+            "type": "message",
+            "role": "assistant",
+            "model": "fake",
+            "content": content,
+            "stop_reason": None,
+            "stop_sequence": None,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        },
+        "parent_tool_use_id": None,
+        "session_id": session_id,
+        "uuid": str(uuid.uuid4()),
+    }
+
+
+def _image_turn(session_id: str, relative: str) -> str:
+    """A Read of ``relative`` in the real tool-result shape; returns the closing text."""
+    path = os.path.abspath(relative)
+    with open(path, "rb") as handle:
+        data = base64.b64encode(handle.read()).decode()
+    call_id = f"toolu_{uuid.uuid4().hex[:24]}"
+    _emit(_assistant(session_id, [{"type": "tool_use", "id": call_id, "name": "Read", "input": {"file_path": path}}]))
+    _emit(
+        {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "tool_use_id": call_id,
+                        "type": "tool_result",
+                        "content": [
+                            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": data}}
+                        ],
+                    }
+                ],
+            },
+            "parent_tool_use_id": None,
+            "session_id": session_id,
+            "uuid": str(uuid.uuid4()),
+            "timestamp": "2026-09-29T00:00:00.000Z",
+            "tool_use_result": {
+                "type": "image",
+                "file": {
+                    "base64": data,
+                    "type": "image/png",
+                    "originalSize": len(data),
+                    "dimensions": {"originalWidth": 1, "originalHeight": 1, "displayWidth": 1, "displayHeight": 1},
+                },
+            },
+        }
+    )
+    return f"read {relative}"
+
+
+def stream_json_session(argv: list[str]) -> None:
+    """The CLI under `--input-format stream-json`: one turn per stdin frame, until stdin closes."""
+    session_id = _flag(argv, "--resume") or _flag(argv, "--session-id") or f"fake-{uuid.uuid4().hex[:12]}"
+    replay = "--replay-user-messages" in argv
+    transcript = os.path.join(
+        os.environ.get("CLAUDE_CONFIG_DIR", "."), "projects", re.sub(r"[^A-Za-z0-9]", "-", os.getcwd())
+    )
+    os.makedirs(transcript, exist_ok=True)
+    stdin = _Stdin()
+    while (raw := stdin.line()) is not None:
+        if not raw.strip():
+            continue
+        frame = json.loads(raw)
+        with open(os.path.join(transcript, f"{session_id}.jsonl"), "a") as handle:
+            handle.write(raw.decode() + "\n")
+        content = (frame.get("message") or {}).get("content") or []
+        text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
+        if text == CRASH_TRIGGER:
+            sys.exit(3)
+        if text == SECRET_STDERR_TRIGGER:
+            sys.stderr.write(
+                "gateway said 401 for Authorization: Bearer sk-live-123 at https://gw.example/v1?sig=abc\n"
+            )
+            sys.exit(2)
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": "fake", "cwd": os.getcwd()})
+        if replay:
+            _emit(
+                {
+                    "type": "user",
+                    "message": frame.get("message"),
+                    "parent_tool_use_id": None,
+                    "session_id": session_id,
+                    "uuid": str(uuid.uuid4()),
+                    "timestamp": "2026-09-29T00:00:00.000Z",
+                    "isReplay": True,
+                }
+            )
+        if text == HANG_TRIGGER:
+            time.sleep(3600)
+        if text == AWAIT_MESSAGE_TRIGGER:
+            stdin.waiting(AWAIT_MESSAGE_SECONDS)
+        if text == CHATTY_STDERR_TRIGGER:
+            sys.stderr.write("x" * CHATTY_STDERR_BYTES)
+            sys.stderr.flush()
+        if text == MCP_PROBE_TRIGGER:
+            answer = json.dumps(_probe_mcp(argv))
+        elif text.startswith(IMAGE_TRIGGER):
+            answer = _image_turn(session_id, text.removeprefix(IMAGE_TRIGGER))
+        else:
+            answer = _echo(text, argv)
+        _emit(_assistant(session_id, [{"type": "text", "text": answer}]))
+        _emit(_result(session_id, answer, argv))
+
+
 def main() -> None:
     argv = sys.argv[1:]
+    if _flag(argv, "--input-format") == "stream-json":
+        stream_json_session(argv)
+        return
     question = _flag(argv, "-p") or ""
     if question == CRASH_TRIGGER:
         sys.exit(3)
@@ -167,106 +353,8 @@ def main() -> None:
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
         return
 
-    if question == HANG_TRIGGER:
-        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        # Killed by the test (`jobs.stop()`), never exits on its own -- stands
-        # in for a turn genuinely still working.
-        time.sleep(3600)
-        return
-
-    if question == AWAIT_STDIN_TRIGGER:
-        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        line = sys.stdin.readline()
-        frame = json.loads(line) if line.strip() else {}
-        content = (frame.get("message") or {}).get("content") or []
-        text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
-        echo = f"stdin: {text}"
-        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
-        _emit(_result(session_id, echo, argv))
-        return
-
-    if question == PARTIAL_TRIGGER:
-        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        message_id = f"msg-{uuid.uuid4().hex[:8]}"
-        final_text = "growing, then settled"
-        # Three `stream_event` deltas -- the shape measured against the real
-        # CLI: message_start, one content_block_delta per token-ish chunk,
-        # message_stop. These are what a LIVE watcher sees arrive one at a
-        # time; `jobs.py` never persists a `stream_event` line.
-        _emit({"type": "stream_event", "event": {"type": "message_start", "message": {"id": message_id}}})
-        _emit(
-            {
-                "type": "stream_event",
-                "event": {
-                    "type": "content_block_delta",
-                    "index": 0,
-                    "delta": {"type": "text_delta", "text": "growing"},
-                },
-            }
-        )
-        _emit(
-            {
-                "type": "stream_event",
-                "event": {
-                    "type": "content_block_delta",
-                    "index": 0,
-                    "delta": {"type": "text_delta", "text": ", then settled"},
-                },
-            }
-        )
-        _emit({"type": "stream_event", "event": {"type": "message_stop"}})
-        # The ONE settled `assistant` frame -- carrying `stop_reason: null`
-        # exactly like every other assistant frame this fake CLI emits, never
-        # a special "I am final" marker. `jobs.py` persists this one.
-        _emit(
-            {
-                "type": "assistant",
-                "message": {"id": message_id, "content": [{"type": "text", "text": final_text}], "stop_reason": None},
-            }
-        )
-        _emit(_result(session_id, final_text, argv))
-        return
-
-    if question == CHATTY_STDERR_TRIGGER:
-        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        # Written before the reply, and before this process's own stdout is
-        # read again -- if stderr is not drained concurrently, this write
-        # blocks once the pipe buffer fills, and the stdout line below never
-        # arrives until something reads stderr.
-        sys.stderr.write("x" * CHATTY_STDERR_BYTES)
-        sys.stderr.flush()
-        echo = "survived a chatty stderr"
-        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
-        _emit(_result(session_id, echo, argv))
-        return
-
-    config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")
-    settings_path = os.path.join(config_dir, "settings.json") if config_dir else ""
-    model = ""
-    if settings_path and os.path.isfile(settings_path):
-        with open(settings_path) as handle:
-            model = json.load(handle).get("model", "")
-
-    echo = " | ".join(
-        [
-            f"question={question}",
-            f"model={model}",
-            f"allowed={_flag(argv, '--allowedTools')}",
-            f"disallowed={_flag(argv, '--disallowedTools')}",
-            f"mcp_config={_flag(argv, '--mcp-config')}",
-            f"strict_mcp_config={'--strict-mcp-config' in argv}",
-            f"effort={_flag(argv, '--effort')}",
-            f"permission_mode={_flag(argv, '--permission-mode')}",
-            f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
-            f"append_system_prompt={_flag(argv, '--append-system-prompt')}",
-            f"input_format={_flag(argv, '--input-format')}",
-            # Present only if session.py leaked the parent's own environment
-            # through rather than building the child's from scratch.
-            f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
-            "telemetry=" + ",".join(f"{name}={os.environ.get(name, 'absent')}" for name in TELEMETRY_VARS),
-        ]
-    )
-
+    echo = _echo(question, argv)
+    model = next(p.removeprefix("model=") for p in echo.split(" | ") if p.startswith("model="))
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
     _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
     _emit(_result(session_id, echo, argv))

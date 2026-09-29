@@ -14,8 +14,8 @@ would have to be re-serialised, and re-serialising is translating.
 Lifted from `library.api.agent.session` (radar-hooves/library) and generalised
 from one shipped home to N persona homes (`persona.py`). Two things the
 library's version needed that this one does not, both because a persona's
-`settings.json` decides them instead of a per-question prompt: there is no
-`--model` flag (Claude Code reads it from the seeded settings.json) and
+`settings.json` decides them instead of a per-question prompt: a chat turn
+passes no `--model` (Claude Code reads it from the seeded settings.json) and
 `ask()` itself passes no `--append-system-prompt` (CLAUDE.md in the persona's
 home IS the system prompt for a CHAT turn — Claude Code loads it from
 CLAUDE_CONFIG_DIR the same way it loads a user's own `~/.claude/CLAUDE.md`).
@@ -25,9 +25,9 @@ not depend on where the subprocess happens to run.
 
 `build_argv` carries a second, wider contract than `ask()` alone uses:
 `jobs.py`'s app-started session is a different kind of turn, with its own
-per-run system-prompt addendum, JSON schema and working directory
-(`docs/design/agent-jobs.md`), so the flags that carry those stay optional
-parameters here rather than a second copy of this function.
+per-run system-prompt addendum, JSON schema, model, working directory and
+stdin (`docs/design/agent-jobs.md`), so the flags that carry those stay
+optional parameters here rather than a second copy of this function.
 """
 
 import asyncio
@@ -37,6 +37,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 from {{ package_name }}.api.agent.persona import PersonaConfig
+from {{ package_name }}.api.agent.redact import scrub_credentials
 from {{ package_name }}.config.sections.agent import AgentSettings
 
 #: The error frame's `type`. Not this app's own vocabulary — it is
@@ -102,7 +103,12 @@ def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, s
     if not settings.thinking:
         env["MAX_THINKING_TOKENS"] = "0"
 
-    if settings.gateway_key.get_secret_value():
+    if settings.gateway_url:
+        # Keyed on the URL, never on whether a key resolved: a deployment that
+        # names a gateway is confined to it, and a missing key must fail the
+        # turn at the gateway rather than fall through to the OAuth token and
+        # reach Anthropic directly. The token is dropped for the same reason.
+        env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
         env["ANTHROPIC_BASE_URL"] = settings.gateway_url
         env["ANTHROPIC_AUTH_TOKEN"] = settings.gateway_key.get_secret_value()
         env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = settings.haiku_model
@@ -116,7 +122,7 @@ def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, s
 def build_argv(
     settings: AgentSettings,
     persona: PersonaConfig,
-    question: str,
+    question: str | None,
     *,
     resume: str | None,
     session_id: str | None = None,
@@ -124,31 +130,43 @@ def build_argv(
     append_system_prompt: str | None = None,
     json_schema: dict[str, object] | None = None,
     input_format: str | None = None,
+    model: str | None = None,
+    partial_messages: bool = True,
 ) -> list[str]:
     """The exact command line. Split out so a test can assert it without a subprocess.
 
-    The five keyword args past `resume` are the app-started job's own, never
-    the per-question `ask()` flow's (`docs/design/agent-jobs.md`): a chat turn
-    supplies none of them, so their absence here leaves `ask()`'s own argv
+    The keyword args past `resume` are the app-started job's own, never the
+    per-question `ask()` flow's (`docs/design/agent-jobs.md`): a chat turn
+    supplies none of them, so their defaults leave `ask()`'s own argv
     byte-for-byte what it always built. `session_id` and `resume` are
     mutually exclusive the way the CLI's own `--session-id`/`--resume` are —
     the former MINTS a job's id before the CLI has run at all, the latter
     continues one already minted.
+
+    `input_format="stream-json"` takes every turn from stdin, so `question`
+    is `None` there: the CLI ignores a prompt on the command line in that
+    mode (measured, 2.1.283 — it exits having answered nothing). It also adds
+    `--replay-user-messages`, which echoes each stdin frame back as the turn
+    that consumes it starts: the only record of what the agent was sent, and
+    how `jobs.py` knows every frame it wrote has been answered.
     """
-    argv = [
-        settings.executable,
-        "-p",
-        question,
+    argv = [settings.executable, "-p"]
+    if question is not None:
+        argv.append(question)
+    argv += [
         "--output-format",
         "stream-json",
         # --verbose is REQUIRED for stream-json to emit anything but the final
         # result; without it the endpoint streams one frame at the very end and
         # looks like a hang.
         "--verbose",
+    ]
+    if partial_messages:
         # Token-level deltas. Without this, `assistant` events arrive as whole
         # blocks and the Console renders in paragraph-sized jumps rather than
         # streaming the way the editor does.
-        "--include-partial-messages",
+        argv.append("--include-partial-messages")
+    argv += [
         "--allowedTools",
         persona.allowed_tools,
         "--disallowedTools",
@@ -170,8 +188,12 @@ def build_argv(
         argv += ["--append-system-prompt", append_system_prompt]
     if json_schema is not None:
         argv += ["--json-schema", json.dumps(json_schema)]
+    if model:
+        argv += ["--model", model]
     if input_format:
         argv += ["--input-format", input_format]
+        if input_format == "stream-json":
+            argv.append("--replay-user-messages")
     if session_id:
         argv += ["--session-id", session_id]
     if resume:
@@ -240,5 +262,5 @@ async def ask(
         yield {
             "type": ERROR_EVENT,
             "error": f"agent exited {process.returncode}",
-            "detail": stderr[-2000:],
+            "detail": scrub_credentials(stderr[-2000:]),
         }

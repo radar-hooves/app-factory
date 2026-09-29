@@ -298,11 +298,17 @@ class Vended:
     the stack that cannot vend for itself (postgres), or this app's own
     identity when it IS the broker (portcullis, which cannot vend from
     itself). Every other field leaves it unset and just vends when empty.
+
+    ``credential_field`` names a sibling field that, when set, replaces
+    ``credential`` — for a secret whose broker name its ISSUER chose rather
+    than this app (a gateway that names the keys it mints), which a
+    deployment then declares instead of the broker holding a second copy.
     """
 
     credential: str
     field: str
     file_field: str | None = None
+    credential_field: str | None = None
 
 
 def resolve_vended_fields(settings: BaseSettings) -> None:
@@ -345,7 +351,8 @@ def resolve_vended_fields(settings: BaseSettings) -> None:
             if _vend_switched_off():
                 _log_vend_switched_off_once()
             else:
-                resolved = _vend_with_retry(spec.credential, spec.field)
+                named = getattr(settings, spec.credential_field, "") if spec.credential_field else ""
+                resolved = _vend_with_retry(named or spec.credential, spec.field)
         if resolved != value:
             setattr(settings, name, SecretStr(resolved) if is_secret else resolved)
 

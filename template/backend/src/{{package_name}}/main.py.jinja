@@ -20,6 +20,8 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
     `app_hooks.mcp_auth` instead; everything else here is unchanged.
 """
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -109,21 +111,29 @@ class _SPAStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Warm the database engine, reconcile agent jobs a previous process left
-    running, and dispose the engine on shutdown.
+    """Warm the database engine, supervise agent jobs for the life of the
+    worker, end this worker's own runs on shutdown, then dispose the engine.
 
-    The reconcile call is factory-owned (never an `app_hooks.lifespan_tasks`
-    default) so every app that carries the agent-jobs slice gets it via
-    `copier update` picking up this file, not only a fresh stamp — an app's
-    own `app_hooks.py` is sanctioned-per-app and copier never overwrites it,
-    so a default living there would reach nobody who already has one
-    (`docs/design/agent-jobs.md`, fresh-context review, HIGH 5).
+    The supervisor settles a job whose process has died, in whichever worker
+    sweeps first (`jobs.supervise`); `jobs.shutdown` ends the runs THIS
+    worker holds, while the engine they settle through is still open. Both
+    are factory-owned (never an `app_hooks.lifespan_tasks` default) so every
+    app that carries the agent-jobs slice gets them via `copier update`
+    picking up this file, not only a fresh stamp — an app's own
+    `app_hooks.py` is sanctioned-per-app and copier never overwrites it, so a
+    default living there would reach nobody who already has one.
     """
     engine = get_engine()
     app.state.engine = engine
-    await agent_jobs.reconcile_orphaned_jobs(get_session_factory())
-    yield
-    engine.dispose()
+    supervisor = asyncio.create_task(agent_jobs.supervise(get_session_factory()))
+    try:
+        yield
+    finally:
+        supervisor.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await supervisor
+        await agent_jobs.shutdown()
+        engine.dispose()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

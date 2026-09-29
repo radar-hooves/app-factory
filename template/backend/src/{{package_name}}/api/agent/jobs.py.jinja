@@ -2,209 +2,158 @@
 
 `session.ask()` is one HTTP request, one subprocess, one stream: the request
 handler owns the whole thing, and the process dies when the handler returns
-or the client disconnects. That is wrong for a session the APP starts —
-"a document arrives and the Fat Controller starts reading it" — because
-nothing asked a question and nobody is necessarily watching
-(`docs/design/agent-jobs.md`). This module is that other shape: an in-process
-`asyncio.Task`, independent of any request, whose every event is persisted as
-it lands (`jobs_models.py`) and fanned out live to whoever is watching
-(`_JobBus`) — so a caller can open the job at any time, from the start if it
-already finished or caught up and then live if it is still running, on the
-SAME verbatim event stream `session.ask()` already produces.
+or the client disconnects. That is wrong for a session the APP starts — a
+document arrives and a persona starts reading it — because nothing asked a
+question and nobody is necessarily watching (`docs/design/agent-jobs.md`).
+This module is that other shape: an `asyncio.Task`, independent of any
+request, whose every event is persisted as it lands (`jobs_models.py`), so a
+caller can open the job at any time and read it from the start, then follow
+it until its run settles.
 
-No queue, no worker process, no new service: the task IS the job, held alive
-by nothing but this module's own `_tasks` dict (an unreferenced `asyncio.Task`
-is eligible for garbage collection mid-run — the classic "fire and forget"
-trap), and it keeps running for exactly as long as the process it wraps does,
-whether or not any request is in flight and whether or not anyone is watching
-(`start()`'s docstring; `docs/design/agent-jobs.md` §Constraints).
+The job row is the bus (`docs/design/agent-jobs.md` §Any worker). A
+deployment runs several worker processes and a job's CLI is a child of
+exactly one of them, so nothing process-local can answer a request that
+lands on another: `watch()` reads the event log forward from the database,
+`send_message()` queues onto the row, `stop()` flags the row, and the
+running process's own control loop (`_control`) acts on both. That process
+keeps a heartbeat on the row; a `running` job whose heartbeat has gone stale
+has no process behind it, which is how every worker tells a dead run from a
+live one held by a sibling.
 
-`--bg`/`claude agents` was measured and is not this: it is the CLI's own
-interactive-session dispatcher, spawning a worktree and refusing `--print`
-outright ("--bg and --print conflict: --print never starts the interactive
-session that `claude agents` attaches to"). A job here answers a structured
-question or reads a document from a working folder, headless, exactly the
-`-p --output-format stream-json` shape `session.py` already drives — a
-different CLI feature for a different job.
+The CLI is driven the way it measures (2.1.283): with `--input-format
+stream-json` it ignores a prompt on the command line and reads each turn as
+a `user` frame on stdin, stays alive after a turn's `result` for as long as
+stdin is open, and exits once stdin closes and every frame already read has
+been answered. So the prompt and every later message are frames on stdin,
+`--replay-user-messages` has the CLI echo each one back as the turn that
+consumes it starts — which is also how a watcher sees both sides of the
+conversation — and `_control` closes stdin once a `result` has arrived and
+every frame written has been echoed.
 
-A job belongs to a workspace (`AgentJob`/`AgentJobEvent` are `WorkspaceScoped`
-— `docs/design/agent-jobs.md` §Tenancy, added on review after the first cut of
-this slice gated only on the persona entitlement and let any caller who held
-it read or steer any workspace's job). Every session this module opens is
-created OUTSIDE a request — `db_session_factory()` is the app's plain,
-engine-bound sessionmaker, never `SessionDep`'s request-scoped one, because a
-job's writes must outlive the one request that triggered them — so nothing
-binds it to a workspace the way `CurrentWorkspace` binds a request's own
-session. Every function below that touches the database therefore calls
+A job belongs to a workspace (`AgentJob`/`AgentJobEvent` are
+`WorkspaceScoped`, `docs/design/agent-jobs.md` §Tenancy). Every session this
+module opens is created OUTSIDE a request — `db_session_factory()` is the
+app's plain, engine-bound sessionmaker, never `SessionDep`'s request-scoped
+one, because a job's writes must outlive the one request that triggered them
+— so every function below that touches the database calls
 `db.scoping.bind_session()` on its own freshly-opened session BEFORE it
-touches `AgentJob`/`AgentJobEvent`, using the `workspace_id`/`created_by_id`
-its caller supplied. `authorize()` is the one exception, reading with
-`unscoped()` because the caller's workspace is exactly what it is deciding
-whether to trust.
+touches either model. `authorize()` and the orphan sweep are the exceptions,
+reading with `unscoped()` because the workspace is exactly what the first is
+deciding whether to trust and the second spans every workspace.
 """
 
 import asyncio
 import contextlib
+import glob
 import json
 import logging
 import os
+import shutil
 import signal
+import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import jobs_models
+from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent import session as agent_session
-from {{ package_name }}.api.agent.jobs_models import AgentJob
+from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome, RunSpec
 from {{ package_name }}.api.agent.persona import PersonaConfig
-from {{ package_name }}.api.agent.redact import redact
+from {{ package_name }}.api.agent.redact import redact, redact_event, scrub_credentials
 from {{ package_name }}.api.agent.session import ERROR_EVENT
 from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
-from {{ package_name }}.db.scoping import bind_session, unscoped
+from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.exceptions import BadRequestError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
-#: Held so a running task is never garbage-collected mid-run (`asyncio`'s own
-#: warning: "Task was destroyed but it is pending"). Popped by `_run()`'s own
-#: finally block, never by whoever called `start()` — a job outlives the
-#: request that started it, so nothing about the request's lifetime may own
-#: this reference.
-_tasks: dict[str, asyncio.Task[None]] = {}
-#: The live subprocess behind a running job, so `send_message()` can write to
-#: its stdin and `stop()` can kill it. Absent for a job that has finished
-#: (whether or not `_tasks` has been swept yet).
-_processes: dict[str, asyncio.subprocess.Process] = {}
-#: One lock per job, guarding "is it running, and if not, start a resume" as
-#: one atomic step (`send_message()`). Without it, two concurrent messages to
-#: a just-finished job can both see `status != running`, both mark it running
-#: and both spawn a `--resume` process — two CLIs racing to resume one Claude
-#: Code session. Never popped: a `Lock` costs nothing idle, and popping it
-#: would itself need the same race it exists to prevent.
-_locks: dict[str, asyncio.Lock] = {}
-#: One `asyncio.Event` per RUN (not per job — a resumed run gets a fresh one),
-#: created synchronously at spawn time, before the lock that guarded the
-#: decision to spawn is released. `stop()` sets whichever one is current;
-#: `_run()` checks its own the moment its process is registered, closing the
-#: gap where a stop arrives after a run is scheduled but before its process
-#: exists yet (`docs/design/agent-jobs.md`'s fresh-context review, CRITICAL 3).
-_cancel_events: dict[str, asyncio.Event] = {}
+#: How often a running process looks at its own row for messages and a stop,
+#: and how often `watch()` reads the event log forward.
+_POLL_SECONDS = 0.5
+#: How often a running process refreshes its heartbeat.
+_HEARTBEAT_SECONDS = 10.0
+#: How old a heartbeat must be before its run counts as dead. Past gunicorn's
+#: own worker timeout (60 s) plus a heartbeat: a worker whose event loop is
+#: blocked that long is killed by the arbiter anyway, so a live run is never
+#: this quiet.
+_STALE_SECONDS = 90.0
+#: How often every worker sweeps for dead runs (`supervise`).
+_SWEEP_SECONDS = 60.0
+#: Kept only for the failure diagnostic — matches `session.ask()`'s own budget.
+_STDERR_TAIL_BYTES = 4096
+
+_ORPHANED = "orphaned: the process running this job stopped before it finished"
+_SHUT_DOWN = "stopped: the worker process running this job shut down"
 
 
-def _lock_for(job_id: str) -> asyncio.Lock:
-    lock = _locks.get(job_id)
-    if lock is None:
-        lock = _locks[job_id] = asyncio.Lock()
-    return lock
+@dataclass(slots=True)
+class _LocalRun:
+    """This process's handle on a run it is working, for the same-process fast paths.
 
-
-class _JobBus:
-    """In-process pub/sub for one job's live events, keyed by job id.
-
-    A queue exists only while its job is open (`open()`..`close()`); a
-    `subscribe()` outside that window returns `None`, which is `watch()`'s
-    signal that there is nothing live left to wait for — the job already
-    finished, or never started, and a persisted replay is the whole answer.
-    Mirrors the shape of an SSE fan-out bus (`queue.Queue` in a thread-based
-    app); this one is `asyncio.Queue`, because the app it lives in is async.
-
-    `seq` is `None` for a partial message chunk that was never persisted
-    (`_is_partial`) — it has no row to be caught twice via, so `watch()`
-    never dedups it against the replay and always passes it straight through.
+    Everything another process might need lives on the job row instead; this
+    only lets a stop that lands on the owning process kill at once rather than
+    at the next poll, and lets `shutdown()` find what to kill.
     """
 
-    def __init__(self) -> None:
-        self._subscribers: dict[str, list[asyncio.Queue[tuple[int | None, dict[str, object]] | None]]] = {}
-
-    def open(self, job_id: str) -> None:
-        self._subscribers.setdefault(job_id, [])
-
-    def subscribe(self, job_id: str) -> asyncio.Queue[tuple[int | None, dict[str, object]] | None] | None:
-        if job_id not in self._subscribers:
-            return None
-        queue: asyncio.Queue[tuple[int | None, dict[str, object]] | None] = asyncio.Queue()
-        self._subscribers[job_id].append(queue)
-        return queue
-
-    def unsubscribe(self, job_id: str, queue: asyncio.Queue[tuple[int | None, dict[str, object]] | None]) -> None:
-        subscribers = self._subscribers.get(job_id)
-        if subscribers is not None and queue in subscribers:
-            subscribers.remove(queue)
-
-    def publish(self, job_id: str, seq: int | None, event: dict[str, object]) -> None:
-        for queue in self._subscribers.get(job_id, []):
-            queue.put_nowait((seq, event))
-
-    def close(self, job_id: str) -> None:
-        for queue in self._subscribers.pop(job_id, []):
-            queue.put_nowait(None)
+    process: asyncio.subprocess.Process | None = None
+    stopping: bool = False
+    shutting_down: bool = False
 
 
-_bus = _JobBus()
+#: The run this process is working on, per job.
+_runs: dict[str, _LocalRun] = {}
+#: Held so a running task is never garbage-collected mid-run (`asyncio`'s own
+#: warning: "Task was destroyed but it is pending"). Discarded by the task's
+#: own done callback, never by whoever started it — a job outlives the request
+#: that started it.
+_tasks: set[asyncio.Task[None]] = set()
 
 
-def _job_dir(job_id: str) -> Path:
-    """This job's own working folder: the files it reads and its own `.mcp.json`.
+def new_job_id() -> str:
+    """A fresh job id, for a caller that must know its job's folder before starting it (`job_dir`)."""
+    return str(uuid.uuid4())
+
+
+def job_dir(job_id: str) -> Path:
+    """This job's own working folder: its `cwd`, the files it was seeded with, and its `.mcp.json`.
+
+    Public so a starter can name a seeded file by absolute path in the job's
+    own prompt — Claude Code's Read tool takes nothing else — before the job
+    exists: mint the id with `new_job_id()`, build the prompt from this
+    folder, then pass both to `start()`.
 
     Under `data_dir()`, alongside `persona.py`'s seeded homes — an app's own
     runtime state, never the repo (`platform/canonical-app-shape.md`
     §Development launch). Left on disk after the job finishes: a watcher may
-    open it hours later, and there is nothing here that needs cleaning up
-    before then. `cleanup()` is how an app that wants it gone removes it.
+    open it hours later and a message may resume it. `cleanup()` is how an app
+    that wants it gone removes it.
     """
     return data_dir() / "agent-jobs" / job_id
 
 
-def _is_partial(event: dict[str, object]) -> bool:
-    """Whether `event` is one of `--include-partial-messages`' own token-level
-    deltas rather than a settled, final frame.
-
-    Measured against the real, installed CLI (2.1.283) driven with this
-    module's own `build_argv` flags, not guessed: a delta arrives as its own
-    top-level `type: "stream_event"` (wrapping the raw Anthropic streaming
-    sub-events — `message_start`, `content_block_delta`, `message_delta`,
-    `message_stop`), and it is the ONLY structural signal that means
-    "still growing" — `message.stop_reason` is `null` on EVERY `assistant`
-    frame this CLI emits, settled or not, so it is not usable as that signal
-    (an earlier cut of this function tried, and its replay of a finished job
-    carried no assistant text at all — the exact thing a caller opens a job to
-    read). `_record()` below skips persisting a `stream_event` and broadcasts
-    it live regardless (need 6: "storage must stay bounded... persist whole
-    messages and stream partials only to live watchers"); every `assistant`,
-    `user`, `system` and `result` frame is a settled frame and is always
-    persisted, so a finished job's replay is the whole transcript, not a
-    filtered one.
-    """
-    return event.get("type") == "stream_event"
+def _write_mcp_config(folder: Path, mcp_config: dict[str, object]) -> None:
+    (folder / ".mcp.json").write_text(json.dumps(mcp_config))
 
 
-def _write_mcp_config(job_dir: Path, mcp_config: dict[str, object]) -> None:
-    (job_dir / ".mcp.json").write_text(json.dumps(mcp_config))
-
-
-#: Header names a credential is ever named under. Matched case-insensitively —
-#: a literal value here would be written to disk (`job_dir/.mcp.json`) AND to
-#: the `AgentJob.mcp_config` JSONB column, unencrypted, for as long as the job
-#: exists, and rewritten there again on every resume.
+#: Header names a credential is ever named under, matched case-insensitively.
 _CREDENTIAL_HEADER_NAMES = frozenset({"authorization", "x-api-key", "api-key", "x-auth-token", "cookie"})
 
 
 def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
     """Refuse an `mcp_config` that carries a credential as a literal header value.
 
-    The persona `.mcp.json` pattern this slice already reuses
-    (`session.build_argv`'s own `--mcp-config`) never stores a bearer either:
-    its `headersHelper` is a shell command that MINTS a fresh credential at
-    spawn time, run once per process start rather than written to disk once
-    and read back for the job's whole lifetime. A job's own `mcp_config`
-    takes the same shape — a `headersHelper` command is fine to persist (it is
-    a RECIPE, not a secret: running it is what produces one), a literal
-    `headers` value under a credential-shaped name is refused outright.
+    A job's `mcp_config` is persisted on its row and written to its folder on
+    every run, so a literal bearer would sit on disk and in the database for
+    as long as the job exists. A `headersHelper` command is a recipe, not a
+    secret — it mints a fresh credential each time a run spawns — the same
+    contract a persona's own `.mcp.json` is held to.
 
     Raises:
         BadRequestError: a server entry sets a credential-shaped header directly.
@@ -213,9 +162,7 @@ def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
     if not isinstance(servers, dict):
         return
     for name, server in servers.items():
-        if not isinstance(server, dict):
-            continue
-        headers = server.get("headers")
+        headers = server.get("headers") if isinstance(server, dict) else None
         if not isinstance(headers, dict):
             continue
         literal = sorted(key for key in headers if key.lower() in _CREDENTIAL_HEADER_NAMES)
@@ -226,6 +173,49 @@ def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
             )
 
 
+def _seed_files(folder: Path, files: dict[str, bytes]) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    for relative, content in files.items():
+        path = folder / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+
+def _without_bytes(value: Any) -> Any:
+    """``value`` with the bytes of every image or document emptied out.
+
+    A Read of a page image returns it twice — once as the Messages API's
+    `{"type": "base64", "data": ...}` source inside the `tool_result`, once as
+    `tool_use_result.file.base64` (the CLI's own Read output schema) — and a
+    200-DPI page is megabytes either way. Everything else stays: the
+    `tool_use` block naming the file it was read from, and the media type and
+    pixel dimensions beside the bytes, which is the image by reference.
+    """
+    if isinstance(value, dict):
+        emptied = {key: _without_bytes(item) for key, item in value.items()}
+        if emptied.get("type") == "base64" and isinstance(emptied.get("data"), str):
+            emptied["data"] = ""
+        if isinstance(emptied.get("base64"), str):
+            emptied["base64"] = ""
+        return emptied
+    if isinstance(value, list):
+        return [_without_bytes(item) for item in value]
+    return value
+
+
+def _frame(text: str) -> bytes:
+    """One user turn, as `--input-format stream-json` reads it."""
+    message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
+    return json.dumps(message).encode() + b"\n"
+
+
+def _kill(process: asyncio.subprocess.Process) -> None:
+    """Kill the CLI's whole process group, so nothing it spawned outlives it."""
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+
+
 async def start(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
@@ -234,10 +224,12 @@ async def start(
     workspace_id: int,
     created_by_id: uuid.UUID | None,
     prompt: str,
+    job_id: str | None = None,
     files: dict[str, bytes] | None = None,
     json_schema: dict[str, object] | None = None,
     append_system_prompt: str | None = None,
     mcp_config: dict[str, object] | None = None,
+    model: str | None = None,
 ) -> str:
     """Start a persona session with no asker, and return its job id at once.
 
@@ -245,135 +237,93 @@ async def start(
     own `CurrentWorkspace.id`, since a job started from a request handler has
     one, or another value the app is confident is correct for a job started
     from elsewhere (a scheduled sweep). `created_by_id` is attribution only
-    (`platform/tenancy.md`): `None` is fine for a job with no real asker
-    (need 1) and never gates who may later watch, message or stop it — that
-    is `workspace_id` plus the caller's own persona entitlement, checked by
+    (`platform/tenancy.md`): `None` is fine for a job with no real asker and
+    never gates who may later watch, message or stop it — that is
+    `workspace_id` plus the caller's own persona entitlement, checked by
     `authorize()` and the router.
 
-    `files` seeds the job's own working folder before the CLI ever runs —
-    every key is a path relative to that folder, so `{"pages/1.png": ...}`
-    reads back at `pages/1.png` from the job's own `cwd`. `mcp_config`, if
-    given, becomes the job's own `.mcp.json` (`--strict-mcp-config`'d exactly
-    as a persona's own is, `session.build_argv`) — this is how a caller binds
-    the job's own identity into the MCP servers it reaches: build the dict
-    naming whichever user/workspace this specific run acts as, with any
-    credential minted by a `headersHelper` command (never a literal `headers`
-    value — `_refuse_literal_mcp_credentials` rejects one outright, the same
-    contract `session.py`'s own persona `.mcp.json` already holds its
-    `headersHelper` to) and pass it here. Omit it and the job reaches the
-    persona's own servers instead. Persisted on the job row and rewritten to
-    disk on every resumed run too, so a later `send_message()` reaches the
-    SAME servers under the SAME identity without having to know or resupply
-    it — and mints a FRESH credential each time, never a stored one.
+    `job_id` is minted here unless the caller minted it (`new_job_id()`) so
+    it could name the job's folder (`job_dir`) in `prompt`,
+    `append_system_prompt` or `mcp_config` before calling this. `files`
+    seeds that folder before the CLI ever runs — every key is a path relative
+    to it. `mcp_config`, if given, becomes the job's own `.mcp.json`
+    (`--strict-mcp-config`'d exactly as a persona's own is,
+    `session.build_argv`) — how a caller binds the job's own identity into the
+    MCP servers it reaches, with any credential minted by a `headersHelper`
+    command, never a literal header (`_refuse_literal_mcp_credentials`).
+    `model` is `--model` for this job, on every run
+    including a resume; omitted, the persona's `settings.json` decides.
+    All four are persisted on the job row and replayed on every resumed run,
+    so a later `send_message()` from any worker reaches the same servers
+    under the same identity on the same model without knowing any of it.
 
     Returns immediately — the caller gets `job_id` back before the CLI has
-    even spawned, so it can hand that id to whoever asked for the read
-    without waiting on any of it (need 1: "a document arrives and the Fat
-    Controller starts reading it... a structured answer that the app code
-    which started it gets back" is `watch()` or a later read of the job row,
-    not this call).
+    even spawned. The structured answer arrives on the job row once the run
+    settles, and `app_hooks.agent_job_settled` is called with it then.
 
     Raises:
-        BadRequestError: `mcp_config` sets a literal credential header.
+        BadRequestError: `job_id` is not a UUID — it doubles as Claude Code's
+            own `--session-id`, which takes nothing else — or `mcp_config`
+            sets a literal credential header.
     """
     if mcp_config is not None:
         _refuse_literal_mcp_credentials(mcp_config)
-    job_id = str(uuid.uuid4())
-    job_dir = _job_dir(job_id)
+    if job_id is None:
+        job_id = new_job_id()
+    else:
+        try:
+            uuid.UUID(job_id)
+        except ValueError as exc:
+            raise BadRequestError(f"a job id must be a UUID: {job_id!r}") from exc
+    folder = job_dir(job_id)
     prompt = await run_in_threadpool(redact, persona.name, created_by_id, prompt)
-    await run_in_threadpool(_seed_files, job_dir, files or {})
+    await run_in_threadpool(_seed_files, folder, files or {})
     if mcp_config is not None:
-        await run_in_threadpool(_write_mcp_config, job_dir, mcp_config)
+        await run_in_threadpool(_write_mcp_config, folder, mcp_config)
+
+    spec = RunSpec(
+        job_id=job_id,
+        persona=persona.name,
+        workspace_id=workspace_id,
+        created_by_id=created_by_id,
+        run_id=str(uuid.uuid4()),
+        json_schema=json_schema,
+        append_system_prompt=append_system_prompt,
+        mcp_config=mcp_config,
+        model=model,
+    )
 
     def _create() -> None:
         with db_session_factory() as db:
             bind_session(db, workspace_id=workspace_id, created_by_id=created_by_id)
-            jobs_models.create_job(
-                db,
-                job_id=job_id,
-                persona=persona.name,
-                json_schema=json_schema,
-                append_system_prompt=append_system_prompt,
-                mcp_config=mcp_config,
-            )
+            jobs_models.create_job(db, spec)
 
     await run_in_threadpool(_create)
-
-    _bus.open(job_id)
-    _spawn_run(
-        db_session_factory,
-        settings,
-        persona,
-        job_id,
-        job_dir,
-        prompt,
-        workspace_id=workspace_id,
-        created_by_id=created_by_id,
-        json_schema=json_schema,
-        append_system_prompt=append_system_prompt,
-        mcp_config=mcp_config,
-        resume=None,
-    )
+    _spawn(db_session_factory, settings, persona, spec, [prompt], resume=False)
     return job_id
 
 
-def _seed_files(job_dir: Path, files: dict[str, bytes]) -> None:
-    job_dir.mkdir(parents=True, exist_ok=True)
-    for relative, content in files.items():
-        path = job_dir / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-
-
-def _spawn_run(
+def _spawn(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
     persona: PersonaConfig,
-    job_id: str,
-    job_dir: Path,
-    prompt: str,
+    spec: RunSpec,
+    messages: list[str],
     *,
-    workspace_id: int,
-    created_by_id: uuid.UUID | None,
-    json_schema: dict[str, object] | None,
-    append_system_prompt: str | None,
-    mcp_config: dict[str, object] | None,
-    resume: str | None,
-) -> asyncio.Event:
+    resume: bool,
+) -> None:
     """Create and hold the `_run()` task, so nothing about a caller's own lifetime bounds it.
 
-    Returns the fresh cancel `Event` this run was given, registered in
-    `_cancel_events` BEFORE this function returns — synchronously, no
-    `await` in between — so a `stop()` racing the caller that invoked this
-    has something to set no matter how quickly it arrives.
+    The run's local handle is registered synchronously, before the task can
+    run, so a same-process `stop()` arriving before its CLI exists still has
+    something to mark.
     """
-    cancel_event = asyncio.Event()
-    _cancel_events[job_id] = cancel_event
-    task = asyncio.create_task(
-        _run(
-            db_session_factory,
-            settings,
-            persona,
-            job_id,
-            job_dir,
-            prompt,
-            workspace_id=workspace_id,
-            created_by_id=created_by_id,
-            json_schema=json_schema,
-            append_system_prompt=append_system_prompt,
-            mcp_config=mcp_config,
-            resume=resume,
-            cancel_event=cancel_event,
-        )
-    )
-    _tasks[job_id] = task
-    task.add_done_callback(lambda t: _tasks.pop(job_id, None) if _tasks.get(job_id) is t else None)
-    return cancel_event
-
-
-#: Kept only for the failure diagnostic slice `_finish`'s `error` carries —
-#: matches `session.ask()`'s own stderr-tail budget.
-_STDERR_TAIL_BYTES = 4096
+    local = _LocalRun()
+    _runs[spec.job_id] = local
+    run = _run(db_session_factory, settings, persona, spec, local, messages, resume=resume)
+    task = asyncio.create_task(run, name=f"agent-job-{spec.job_id}")
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
 
 
 async def _drain_stderr(stream: asyncio.StreamReader) -> bytes:
@@ -393,175 +343,258 @@ async def _drain_stderr(stream: asyncio.StreamReader) -> bytes:
         tail = (tail + chunk)[-_STDERR_TAIL_BYTES:]
 
 
+@dataclass(slots=True)
+class _Turns:
+    """What `_run`'s stdout loop and `_control` share about the frames on stdin."""
+
+    written: int = 0
+    echoed: int = 0
+    #: A `result` arrived after every frame written had been echoed: the CLI
+    #: has nothing left to answer, so stdin may close.
+    idle: bool = False
+
+
+async def _write_frames(process: asyncio.subprocess.Process, turns: _Turns, messages: list[str]) -> int:
+    """Write ``messages`` onto the CLI's stdin; return how many were written before the pipe broke."""
+    assert process.stdin is not None
+    for written, message in enumerate(messages):
+        try:
+            process.stdin.write(_frame(message))
+            await process.stdin.drain()
+        except BrokenPipeError, ConnectionResetError:
+            return written
+        turns.written += 1
+        turns.idle = False
+    return len(messages)
+
+
+async def _control(
+    db_session_factory: sessionmaker[Session],
+    spec: RunSpec,
+    local: _LocalRun,
+    process: asyncio.subprocess.Process,
+    turns: _Turns,
+) -> None:
+    """The running process's side of the job row: messages in, a stop, a heartbeat, and closing stdin.
+
+    Runs beside `_run`'s stdout loop for the life of the CLI. Closing stdin is
+    decided here and only here, AFTER a poll that found no message to write,
+    so a message is either written before the close or still pending on the
+    row when the run ends — where `settle_or_continue` resumes with it.
+    """
+    assert process.stdin is not None
+    last_beat = time.monotonic()
+    while process.returncode is None:
+        await asyncio.sleep(_POLL_SECONDS)
+        beat = time.monotonic() - last_beat >= _HEARTBEAT_SECONDS
+        stdin_open = not process.stdin.is_closing()
+
+        def _poll(take: bool = stdin_open, heartbeat: bool = beat) -> tuple[bool, list[str]] | None:
+            with db_session_factory() as db:
+                bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
+                return jobs_models.poll_run(db, spec.job_id, spec.run_id, take_messages=take, beat=heartbeat)
+
+        polled = await run_in_threadpool(_poll)
+        if beat:
+            last_beat = time.monotonic()
+        if polled is None or polled[0]:
+            # A stop from any worker, or the row is no longer this run's.
+            local.stopping = True
+            _kill(process)
+            return
+        messages = polled[1]
+        written = await _write_frames(process, turns, messages)
+        if written < len(messages):
+
+            def _requeue(unwritten: list[str] = messages[written:]) -> None:
+                with db_session_factory() as db:
+                    bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
+                    jobs_models.requeue(db, spec.job_id, spec.run_id, unwritten)
+
+            await run_in_threadpool(_requeue)
+        elif not messages and turns.idle and stdin_open:
+            process.stdin.close()
+
+
 async def _run(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
     persona: PersonaConfig,
-    job_id: str,
-    job_dir: Path,
-    prompt: str,
+    spec: RunSpec,
+    local: _LocalRun,
+    messages: list[str],
     *,
-    workspace_id: int,
-    created_by_id: uuid.UUID | None,
-    json_schema: dict[str, object] | None,
-    append_system_prompt: str | None,
-    mcp_config: dict[str, object] | None,
-    resume: str | None,
-    cancel_event: asyncio.Event,
+    resume: bool,
 ) -> None:
-    """Spawn the CLI, persist and publish every event as it lands, then settle the job row.
+    """Spawn the CLI with ``messages`` as its first turns, record every event, then end the run.
 
     The per-line read timeout (`settings.timeout_seconds`, the same knob
-    `session.ask()` bounds a question's turn with) is deliberately an IDLE
-    timeout, not a total wall clock: it fires only when the child has gone
-    quiet, which is exactly as wrong to allow whether the child is thinking
-    or waiting on a `send_message()` that never comes. A human expected to
-    take longer than that replies after the job has finished instead (need 4's
-    second case) — a live stdin message is for interjecting on a turn still
-    actively running, not for an open-ended wait.
+    `session.ask()` bounds a question's turn with) is an IDLE timeout, not a
+    total wall clock: it fires only when the child has gone quiet while it
+    still owes an answer. A child with nothing left to answer is never quiet
+    for long, because `_control` closes its stdin and it exits.
+
+    Every event, the slice's own synthetic `ERROR_EVENT` included, goes
+    through `_record`: the app's `agent_event` hook first, then `_without_bytes`,
+    then the log. The run's outcome is read off what the hook returned, so
+    `job.error` and `job.structured_output` carry nothing the log does not.
     """
-    if mcp_config is not None:
-        await run_in_threadpool(_write_mcp_config, job_dir, mcp_config)
-    mcp_config_path = job_dir / ".mcp.json"
+    folder = job_dir(spec.job_id)
+    if spec.mcp_config is not None:
+        await run_in_threadpool(_write_mcp_config, folder, spec.mcp_config)
+    mcp_config_path = folder / ".mcp.json"
     argv = agent_session.build_argv(
         settings,
         persona,
-        prompt,
-        resume=resume,
-        session_id=None if resume else job_id,
+        None,
+        resume=spec.job_id if resume else None,
+        session_id=None if resume else spec.job_id,
         mcp_config=mcp_config_path if mcp_config_path.is_file() else None,
-        append_system_prompt=append_system_prompt,
-        json_schema=json_schema,
+        append_system_prompt=spec.append_system_prompt,
+        json_schema=spec.json_schema,
         input_format="stream-json",
+        model=spec.model,
+        partial_messages=False,
     )
 
-    async def _record(event: dict[str, object]) -> None:
-        if _is_partial(event):
-            _bus.publish(job_id, None, event)
-            return
+    def _bound(db: Session) -> Session:
+        bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
+        return db
 
-        def _write() -> int:
-            with db_session_factory() as db:
-                bind_session(db, workspace_id=workspace_id, created_by_id=created_by_id)
-                return jobs_models.record_event(db, job_id, event)
+    async def _record(event: dict[str, Any]) -> dict[str, Any] | None:
+        def _write() -> dict[str, Any] | None:
+            rewritten = redact_event(persona.name, event)
+            if rewritten is not None:
+                with db_session_factory() as db:
+                    jobs_models.record_event(_bound(db), spec.job_id, _without_bytes(rewritten))
+            return rewritten
 
-        seq = await run_in_threadpool(_write)
-        _bus.publish(job_id, seq, event)
+        return await run_in_threadpool(_write)
 
-    async def _finish(
-        *, status: str, structured_output: dict[str, object] | None = None, error: str | None = None
-    ) -> None:
-        def _write() -> None:
-            with db_session_factory() as db:
-                bind_session(db, workspace_id=workspace_id, created_by_id=created_by_id)
-                jobs_models.finish_job(db, job_id, status=status, structured_output=structured_output, error=error)
+    async def _failure(error: str) -> str:
+        """Record the slice's own error event; `job.error` is whatever of it the app's hook kept."""
+        recorded = await _record({"type": ERROR_EVENT, "error": error})
+        return str(recorded.get("error") or "agent failed") if recorded is not None else "agent failed"
 
-        await run_in_threadpool(_write)
-        _bus.close(job_id)
-
+    status, error, structured_output = jobs_models.COMPLETED, None, None
     try:
         process = await asyncio.create_subprocess_exec(
             *argv,
-            cwd=str(job_dir),
+            cwd=str(folder),
             env=agent_session._environment(settings, persona),
-            # PIPE, not DEVNULL: unlike `ask()`'s one-shot question, a job's
-            # stdin stays open for `send_message()` to write a follow-up
-            # while it is still working (`--input-format stream-json`).
+            # PIPE, not DEVNULL: every turn is a frame on stdin, the prompt
+            # included (`--input-format stream-json` ignores one on the
+            # command line), and a message sent while it works is another.
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            # Its own process group, like the cancel-safe pattern every
-            # long-running agent runner in this household uses: `stop()`
-            # kills the whole group, not just the CLI's own pid, so nothing
-            # it spawned survives it.
+            # Its own process group: `_kill` ends the whole group, not just
+            # the CLI's own pid, so nothing it spawned survives it.
             start_new_session=True,
             limit=16 * 1024 * 1024,
         )
     except OSError as exc:
-        await _finish(status=jobs_models.FAILED, error=f"agent could not start: {exc}")
-        return
-
-    _processes[job_id] = process
-    assert process.stdout is not None
-    assert process.stderr is not None
-    stderr_task = asyncio.create_task(_drain_stderr(process.stderr))
-
-    if cancel_event.is_set():
-        # A stop() landed between _spawn_run() registering this event and this
-        # line — the process exists now, so honour it immediately rather than
-        # running a turn nobody wants (fresh-context review, CRITICAL 3).
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-
-    status, error, structured_output = jobs_models.COMPLETED, None, None
-    try:
-        while True:
-            try:
-                line = await asyncio.wait_for(process.stdout.readline(), timeout=settings.timeout_seconds)
-            except TimeoutError:
-                await _record({"type": ERROR_EVENT, "error": "agent exceeded its wall clock"})
-                status, error = jobs_models.FAILED, "agent exceeded its wall clock"
-                break
-            if not line:
-                break
-            text = line.decode(errors="replace").strip()
-            if not text.startswith("{"):
-                continue
-            try:
-                event = json.loads(text)
-            except json.JSONDecodeError:
-                continue
-            await _record(event)
-            if event.get("type") == "result":
-                if event.get("is_error"):
-                    status, error = jobs_models.FAILED, str(event.get("result") or "agent reported an error")
-                else:
-                    structured_output = event.get("structured_output")
-    finally:
-        if process.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(process.wait(), timeout=5)
+        status, error = jobs_models.FAILED, await _failure(f"agent could not start: {exc}")
+    else:
+        local.process = process
+        if local.stopping or local.shutting_down:
+            _kill(process)
+        assert process.stdout is not None
+        assert process.stderr is not None
+        turns = _Turns()
+        stderr_task = asyncio.create_task(_drain_stderr(process.stderr))
+        await _write_frames(process, turns, messages)
+        control_task = asyncio.create_task(_control(db_session_factory, spec, local, process, turns))
         try:
-            stderr_tail = await asyncio.wait_for(stderr_task, timeout=5)
-        except TimeoutError:
-            stderr_task.cancel()
-            stderr_tail = b""
-        except asyncio.CancelledError:
-            # THIS run's own task was cancelled while waiting here (a genuine
-            # restart, or `reconcile_orphaned_jobs()`'s own test scenario) --
-            # never swallow it. Re-raising skips `_finish()` below, which is
-            # the point: nothing settles the row, so a reconcile sweep is
-            # what moves it out of `running` later.
-            raise
-        except Exception:
-            # `stderr_task` itself failed for some OTHER reason (a genuine
-            # read error, not a timeout or our own cancellation) -- the run
-            # still finished, and losing the stderr tail is not a reason to
-            # also lose `_finish()`/`_bus.close()` and strand the job at
-            # `running` forever (fresh-context review, ALSO 1).
-            stderr_task.cancel()
-            stderr_tail = b""
-        # Identity, not just job_id: a resumed run's own `_run()` may already
-        # have registered ITS process/task under this same job_id by the time
-        # this (superseded) invocation's finally block runs. That should be
-        # unreachable now that `send_message()`'s lock serialises spawns, but
-        # popping only what THIS run itself put there costs nothing and means
-        # a future bug here corrupts nothing rather than corrupting silently.
-        if _processes.get(job_id) is process:
-            del _processes[job_id]
-        if _cancel_events.get(job_id) is cancel_event:
-            del _cancel_events[job_id]
+            while True:
+                try:
+                    line = await asyncio.wait_for(process.stdout.readline(), timeout=settings.timeout_seconds)
+                except TimeoutError:
+                    status, error = jobs_models.FAILED, await _failure("agent exceeded its wall clock")
+                    break
+                if not line:
+                    break
+                text = line.decode(errors="replace").strip()
+                if not text.startswith("{"):
+                    continue
+                try:
+                    event = json.loads(text)
+                except json.JSONDecodeError:
+                    continue
+                recorded = await _record(event)
+                if event.get("type") == "user" and event.get("isReplay"):
+                    turns.echoed += 1
+                elif event.get("type") == "result":
+                    turns.idle = turns.echoed >= turns.written
+                    if event.get("is_error"):
+                        answer = (recorded or {}).get("result")
+                        status, error = jobs_models.FAILED, str(answer or "agent reported an error")
+                    else:
+                        status, error = jobs_models.COMPLETED, None
+                        structured_output = (recorded or {}).get("structured_output")
+        finally:
+            control_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await control_task
+            _kill(process)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(process.wait(), timeout=5)
+            try:
+                stderr_tail = await asyncio.wait_for(stderr_task, timeout=5)
+            except Exception:
+                # A timeout or a read error loses the diagnostic tail, never
+                # the run's settling. This run's own cancellation is a
+                # BaseException and propagates.
+                stderr_task.cancel()
+                stderr_tail = b""
+        killed = local.stopping or local.shutting_down
+        if status == jobs_models.COMPLETED and process.returncode not in (0, None) and not killed:
+            tail = scrub_credentials(stderr_tail.decode(errors="replace"))
+            status, error = jobs_models.FAILED, await _failure(f"agent exited {process.returncode}: {tail}")
 
-    if cancel_event.is_set():
-        status, error, structured_output = jobs_models.CANCELLED, None, None
-    elif status == jobs_models.COMPLETED and process.returncode not in (0, None):
-        status = jobs_models.FAILED
-        error = f"agent exited {process.returncode}: {stderr_tail.decode(errors='replace')}"
-        await _record({"type": ERROR_EVENT, "error": error})
+    if _runs.get(spec.job_id) is local:
+        del _runs[spec.job_id]
+    if local.shutting_down:
+        status, error, structured_output = jobs_models.FAILED, _SHUT_DOWN, None
 
-    await _finish(status=status, structured_output=structured_output, error=error)
+    def _end() -> tuple[RunSpec, list[str]] | JobOutcome | None:
+        with db_session_factory() as db:
+            return jobs_models.settle_or_continue(
+                _bound(db),
+                spec.job_id,
+                spec.run_id,
+                status=status,
+                structured_output=structured_output,
+                error=error,
+                next_run_id=None if local.shutting_down else str(uuid.uuid4()),
+            )
+
+    ended = await run_in_threadpool(_end)
+    if isinstance(ended, tuple):
+        next_spec, pending = ended
+        _spawn(db_session_factory, settings, persona, next_spec, pending, resume=True)
+    elif ended is not None:
+        await _settled(ended)
+
+
+async def _settled(outcome: JobOutcome) -> None:
+    """Call `app_hooks.agent_job_settled`, if this app defines one, in whichever process settled the job.
+
+    That is not necessarily the process that started it: a run resumed by a
+    message settles where the message landed, and a dead one settles in
+    whichever worker's sweep found it. A hook that raises is logged, never
+    re-raised — the job is settled on its row regardless, and the app reads
+    it from there.
+    """
+    from {{ package_name }} import app_hooks
+
+    hook = getattr(app_hooks, "agent_job_settled", None)
+    if hook is None:
+        return
+    try:
+        await run_in_threadpool(hook, outcome)
+    except Exception:
+        logger.exception("app_hooks.agent_job_settled failed for job %s", outcome.job_id)
 
 
 async def send_message(
@@ -574,155 +607,92 @@ async def send_message(
     workspace_id: int,
     user_id: uuid.UUID | None,
 ) -> None:
-    """Send `text` to `job_id`: onto its open stdin while it is running, or a resumed run once it has finished.
+    """Send `text` to `job_id`, from any worker: queued for its running process, or a resumed run.
 
-    The two cases need 4 names are exactly the two branches here. A stream-json
-    frame written to the live process's stdin needs no reply from this call —
-    the answer arrives as further events on the same `watch()` stream. A
-    resume starts a NEW `_run()` under the SAME job id, replaying the
-    `json_schema`/`append_system_prompt`/`mcp_config` the job started with so
-    the answer comes back under the same contract and identity `start()`'s
-    caller asked for, never one `text`'s own sender has to know.
-
-    The whole check-then-act decision — is it live, is it between runs, mark
-    it running, spawn the resume — happens under this job's own lock
-    (`_lock_for`), held for the full body: without it, two concurrent calls
-    arriving the instant a run finishes can both see `status != running` and
-    both spawn a `--resume` process for the same Claude Code session
-    (fresh-context review, CRITICAL 2). `workspace_id` binds every session
-    this call opens; the caller (the router, via `authorize()`) has already
-    checked it matches the job's own.
+    While a live process is running the job, the message is queued on the job
+    row and that process writes it onto its CLI's stdin within a poll; the
+    answer arrives as further events in the same log. Once nothing is running
+    it, this call reopens the job and starts a NEW run under the SAME job id,
+    here, via `--resume`, replaying the `json_schema`/`append_system_prompt`/
+    `mcp_config`/`model` the job started with. Both decisions are one
+    transaction on the job row (`jobs_models.enqueue_or_reopen`), so two
+    messages arriving together from two workers start at most one run.
+    `workspace_id` binds every session this call opens; the caller (the
+    router, via `authorize()`) has already checked it matches the job's own.
 
     Raises:
         NotFoundError: no such job.
-        BadRequestError: the job is between these two states — its process
-            has exited but its row has not yet settled. Retrying shortly
-            resolves it; there is nothing to reconcile by hand.
+        BadRequestError: the job's running process has been asked to stop.
     """
     text = await run_in_threadpool(redact, persona.name, user_id, text)
+    run_id = str(uuid.uuid4())
 
-    async with _lock_for(job_id):
-        process = _processes.get(job_id)
-        if process is not None and process.returncode is None and process.stdin is not None:
-            frame = json.dumps(
-                {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
-            )
-            try:
-                process.stdin.write(frame.encode() + b"\n")
-                await process.stdin.drain()
-                return
-            except (BrokenPipeError, ConnectionResetError) as _exc:
-                # `as _exc`, unused, is deliberate: ruff 0.16.9's formatter has
-                # a measured bug that strips the required parentheses off a
-                # bare multi-exception `except (A, B):` with no binding,
-                # producing a SyntaxError (`except A, B:`) -- reproduced in
-                # total isolation, unrelated to anything else in this file.
-                # Binding a name (even unused) is what keeps `ruff format`
-                # from corrupting this line.
-                # The process exited in the gap between the liveness check
-                # above and this write — fall through to the resume path
-                # below exactly as if it had already been absent.
-                pass
+    def _enqueue() -> RunSpec | str | None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            return jobs_models.enqueue_or_reopen(db, job_id, text, run_id=run_id, stale_seconds=_STALE_SECONDS)
 
-        def _load() -> AgentJob | None:
-            with db_session_factory() as db:
-                bind_session(db, workspace_id=workspace_id)
-                return jobs_models.get_job(db, job_id)
-
-        job = await run_in_threadpool(_load)
-        if job is None:
-            raise NotFoundError(f"no such job: {job_id}")
-        if job.status == jobs_models.RUNNING:
-            raise BadRequestError("this job's process has just stopped; try again")
-
-        def _reopen() -> None:
-            with db_session_factory() as db:
-                bind_session(db, workspace_id=workspace_id)
-                jobs_models.mark_running(db, job_id)
-
-        await run_in_threadpool(_reopen)
-        _bus.open(job_id)
-        _spawn_run(
-            db_session_factory,
-            settings,
-            persona,
-            job_id,
-            _job_dir(job_id),
-            text,
-            workspace_id=workspace_id,
-            created_by_id=job.created_by_id,
-            json_schema=job.json_schema,
-            append_system_prompt=job.append_system_prompt,
-            mcp_config=job.mcp_config,
-            resume=job_id,
-        )
+    outcome = await run_in_threadpool(_enqueue)
+    if outcome is None:
+        raise NotFoundError(f"no such job: {job_id}")
+    if outcome == jobs_models.STOPPING:
+        raise BadRequestError("this job is stopping; send the message again once it has stopped")
+    if isinstance(outcome, RunSpec):
+        _spawn(db_session_factory, settings, persona, outcome, [text], resume=True)
 
 
-async def stop(job_id: str) -> None:
-    """Stop `job_id`. A job with nothing currently running or scheduled is a no-op.
+async def stop(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int) -> None:
+    """Stop `job_id`, from any worker. A job with nothing running is a no-op.
 
-    Sets the run's own cancel event FIRST, unconditionally — even when no
-    process is registered yet, since `_run()` checks that same event the
-    moment its process exists, which is what makes a stop issued the instant
-    a resume is scheduled still take effect (fresh-context review,
-    CRITICAL 3). Killing a currently-live process too is an optimisation, not
-    the mechanism: without it a genuinely running process would only die once
-    it happened to go idle long enough to hit its own timeout.
+    Flags the row, which the running process acts on at its next poll. When
+    that process is this one, its CLI is killed now as well, rather than a
+    poll later.
     """
-    event = _cancel_events.get(job_id)
-    if event is not None:
-        event.set()
-    process = _processes.get(job_id)
-    if process is None or process.returncode is not None:
-        return
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(process.pid, signal.SIGKILL)
+
+    def _flag() -> None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            jobs_models.request_stop(db, job_id)
+
+    await run_in_threadpool(_flag)
+    local = _runs.get(job_id)
+    if local is not None:
+        local.stopping = True
+        if local.process is not None:
+            _kill(local.process)
 
 
 async def watch(
     db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int
 ) -> AsyncIterator[dict[str, object]]:
-    """Yield `job_id`'s events from the first, live if it is still running.
+    """Yield `job_id`'s events from the first, then follow them until its run settles.
 
-    Subscribing BEFORE reading the persisted tail is what makes this
-    gap-free: anything published between the subscribe and the read below is
-    caught by the queue rather than lost in between, and the `seq <= last_seq`
-    check below drops it again if the persisted read had already caught it
-    too — the ordinary race a snapshot-then-tail read always has to name. A
-    partial (never-persisted) event's `seq` is `None` and is never dropped by
-    that check (`_JobBus`'s own docstring).
+    Reads the event log forward from the database, whichever worker is
+    running the job, so a watcher on any worker sees the same stream. The
+    stream ends once no live process is running the job — settled, or dead —
+    after one last read that catches everything that run recorded
+    (`jobs_models.read_progress`). A watcher that sends a message starts a
+    new watch to follow the run it may resume.
 
     The caller (the router, via `authorize()`) has already checked `job_id`
     belongs to `workspace_id`; this only needs it to bind the sessions it
-    opens itself. A `job_id` that has never existed yields nothing at all:
-    `list_events` returns empty and `_bus.subscribe` returns `None`.
+    opens itself.
     """
-    queue = _bus.subscribe(job_id)
-
-    def _read() -> list[tuple[int, dict[str, object]]]:
-        with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            return jobs_models.list_events(db, job_id)
-
-    events = await run_in_threadpool(_read)
     last_seq = 0
-    for seq, event in events:
-        yield event
-        last_seq = seq
+    while True:
 
-    if queue is None:
-        return
-    try:
-        while True:
-            item = await queue.get()
-            if item is None:
-                return
-            live_seq, event = item
-            if live_seq is not None and live_seq <= last_seq:
-                continue
+        def _read(after: int = last_seq) -> tuple[bool, list[tuple[int, dict[str, Any]]]]:
+            with db_session_factory() as db:
+                bind_session(db, workspace_id=workspace_id)
+                return jobs_models.read_progress(db, job_id, after=after, stale_seconds=_STALE_SECONDS)
+
+        live, events = await run_in_threadpool(_read)
+        for seq, event in events:
             yield event
-    finally:
-        _bus.unsubscribe(job_id, queue)
+            last_seq = seq
+        if not live:
+            return
+        await asyncio.sleep(_POLL_SECONDS)
 
 
 async def authorize(
@@ -730,13 +700,10 @@ async def authorize(
 ) -> AgentJob:
     """Return `job_id`'s row if it belongs to `workspace_id` AND `persona`, else refuse.
 
-    `persona` matters as much as `workspace_id` does: a caller's `agent-milton`
-    entitlement and workspace membership say nothing about a `fat_controller`
-    job in the same workspace — the URL's own `{persona}` segment is a path a
-    caller chose, not a claim this slice verified, and a member holding only
-    `agent-milton` could otherwise watch, message or stop a `fat_controller`
-    job by dialling `/api/agent/milton/jobs/<id>/...` on its id (fresh-context
-    review, CRITICAL 1, the part `workspace_id` alone left open).
+    `persona` matters as much as `workspace_id`: a caller's `agent-<name>`
+    entitlement and workspace membership say nothing about a different
+    persona's job in the same workspace, and the URL's `{persona}` segment is
+    a path the caller chose, not a claim this slice verified.
 
     The one place this slice reads a job with NO workspace bound yet
     (`jobs_models.get_job_unscoped`) — the caller's own workspace is exactly
@@ -745,8 +712,8 @@ async def authorize(
     `platform/tenancy.md`, and never reused as a way around the check it
     exists to make. One answer covers every way to fail this check, the same
     choice `ownership.DENIAL` makes for a private chat session: a status code
-    that told "no such job" apart from "not yours" or "wrong persona" would let
-    an entitled caller enumerate the ids and personas of jobs it cannot reach.
+    that told "no such job" apart from "not yours" or "wrong persona" would
+    let an entitled caller enumerate the ids and personas of jobs it cannot reach.
 
     Raises:
         NotFoundError: no such job, or it belongs to a different workspace or persona.
@@ -763,13 +730,16 @@ async def authorize(
 
 
 async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int, persona: str) -> None:
-    """Remove `job_id`'s own working folder from disk, once it is no longer resumable.
+    """Remove everything `job_id` left on disk, once it is no longer resumable.
 
-    Nothing calls this automatically — `_job_dir`'s own docstring states the
-    default lifetime is "forever, same as `persona.py`'s seeded homes" — this
-    is the app's way to reclaim the disk once its own record of the job is
-    settled and it knows no later `send_message()` will need the folder's
-    files again.
+    Its working folder, and what the CLI itself kept under the persona's
+    shared home: the session transcript (`projects/<cwd>/<job_id>.jsonl`,
+    holding every string and image the agent read, for as long as it exists)
+    and any other per-session artefact. Each is named by the job id — the
+    session id, and a working folder no other job shares — so a match on it
+    touches nothing of any other job's. Nothing calls this automatically: an
+    app calls it once its own record of the job is settled and it knows no
+    later `send_message()` will need to resume it.
 
     Raises:
         NotFoundError: no such job in `workspace_id` under `persona`.
@@ -778,42 +748,71 @@ async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, wor
     job = await authorize(db_session_factory, job_id, workspace_id, persona)
     if job.status == jobs_models.RUNNING:
         raise BadRequestError("this job is still running; stop it before cleaning up its files")
-    await run_in_threadpool(_remove_job_dir, job_id)
+    await run_in_threadpool(_remove_job_files, job_id, persona_module.home(job.persona))
 
 
-def _remove_job_dir(job_id: str) -> None:
-    import shutil
-
-    shutil.rmtree(_job_dir(job_id), ignore_errors=True)
+def _remove_job_files(job_id: str, persona_home: Path) -> None:
+    shutil.rmtree(job_dir(job_id), ignore_errors=True)
+    for path in persona_home.glob(f"*/*{glob.escape(job_id)}*"):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink(missing_ok=True)
 
 
 async def reconcile_orphaned_jobs(db_session_factory: sessionmaker[Session]) -> int:
-    """Mark every `AgentJob` left `running` by a PREVIOUS process as `failed`. Returns how many.
+    """Settle every `running` job whose heartbeat has gone stale as `failed`. Returns how many.
 
-    Called once at app startup (`main.py`'s `_db_lifespan`): a job's
-    subprocess belongs to the process group of whichever process spawned it,
-    and does not survive that process restarting — so a row still `running`
-    when a fresh process boots is not being worked by anything, and nothing
-    will ever move it out of that state on its own. Left alone,
-    `send_message()` would refuse it forever (`status == RUNNING`), with no
-    path back (fresh-context review, HIGH 5).
-
-    Cross-workspace by construction — this runs once, for the whole
-    deployment, before any request has resolved a workspace — so it is an
-    explicit `unscoped()` sweep, the same carve-out `platform/tenancy.md`
-    gives a background job whose job IS to sweep the whole estate.
+    A job's CLI is a child of the worker that spawned it and does not survive
+    that worker, so a stale heartbeat means no process will ever move the row
+    out of `running` on its own. A LIVE job held by another worker keeps its
+    heartbeat fresh and is never touched, whichever worker sweeps and
+    whenever — so a worker booting or recycling beside a running job leaves
+    it alone. Each job settled here reaches `app_hooks.agent_job_settled`.
     """
 
-    def _sweep() -> int:
-        with db_session_factory() as db, unscoped(db):
-            orphaned = list(db.execute(select(AgentJob).where(AgentJob.status == jobs_models.RUNNING)).scalars())
-            for job in orphaned:
-                job.status = jobs_models.FAILED
-                job.error = "orphaned: the app restarted while this job was still running"
-            db.commit()
-            return len(orphaned)
+    def _sweep() -> list[JobOutcome]:
+        with db_session_factory() as db:
+            return jobs_models.fail_orphans(db, stale_seconds=_STALE_SECONDS, error=_ORPHANED)
 
-    count = await run_in_threadpool(_sweep)
-    if count:
-        logger.warning("Reconciled %d agent job(s) orphaned by a restart", count)
-    return count
+    outcomes = await run_in_threadpool(_sweep)
+    if outcomes:
+        logger.warning("Settled %d agent job(s) left running by a process that stopped", len(outcomes))
+    for outcome in outcomes:
+        await _settled(outcome)
+    return len(outcomes)
+
+
+async def supervise(db_session_factory: sessionmaker[Session]) -> None:
+    """Sweep for dead runs at startup and every `_SWEEP_SECONDS` after, for the life of the worker.
+
+    Every worker runs it (`main.py`'s lifespan): a run whose worker died
+    becomes stale some time after the survivors booted, so one sweep at
+    startup alone would leave it `running` until the next deploy. A failed
+    sweep is logged and retried at the next interval.
+    """
+    while True:
+        try:
+            await reconcile_orphaned_jobs(db_session_factory)
+        except Exception:
+            logger.exception("Sweeping for agent jobs left running failed; retrying in %.0fs", _SWEEP_SECONDS)
+        await asyncio.sleep(_SWEEP_SECONDS)
+
+
+async def shutdown() -> None:
+    """Kill every run this worker is working and settle each `failed`, before the worker exits.
+
+    Its CLIs cannot outlive it usefully — their stdout is this process's pipe
+    — so each run ends now, recorded as the worker's shutdown rather than left
+    for a sweep to find stale. An app that starts long jobs keeps gunicorn's
+    worker recycling off (`GUNICORN_MAX_REQUESTS=0`, `gunicorn.conf.py`), so
+    this runs at a deploy rather than every thousand requests.
+    """
+    for local in list(_runs.values()):
+        local.shutting_down = True
+        if local.process is not None:
+            _kill(local.process)
+    loop = asyncio.get_running_loop()
+    ours = {task for task in _tasks if task.get_loop() is loop}
+    if ours:
+        await asyncio.wait(ours, timeout=10)

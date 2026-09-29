@@ -6,6 +6,27 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.45] - 2026-09-29
+
+### Fixed
+
+- **A job answers its prompt and ends.** Under `--input-format stream-json` the real CLI (2.1.283) ignores a prompt on the command line and stays alive after a `result` for as long as stdin is open, so every job since 2026.9.37 answered nothing and was failed by its idle timeout. The prompt and every message are now frames on stdin, `--replay-user-messages` echoes each as the turn that consumes it starts, and stdin closes once every frame written has been answered. The echo also puts both sides of the conversation in the log, in order, for a watcher opening the job later.
+- **A worker boots with no database.** `main.py`'s lifespan no longer awaits the orphan sweep: every worker runs `jobs.supervise()` as a background task, which logs and retries a failed sweep. The image smoke gate, which boots gunicorn with no database, passes again (casefile Deploy run 36518487370).
+- **A sweep fails only a job whose process is gone.** It previously failed every `running` job at each worker's boot, a sibling worker's live one included, whenever gunicorn recycled a worker. The running process now keeps a heartbeat on the row, and a sweep, at boot and every 60 s, fails only a job whose heartbeat is stale.
+- **Test prose states what each test proves.** `test_agent_jobs_api.py` no longer narrates earlier forms of the slice, which the estate's history gate refuses on an app's re-stamp (mission-command).
+
+### Added
+
+- **Agent jobs work from any worker process.** Watching, messaging and stopping all act through the job row, so a request lands correctly on whichever of a deployment's workers the proxy picks: `watch` reads the event log forward until no live process runs the job, `message` queues for the running process (or resumes the job where it lands), `stop` flags the row. Proven by a test that boots a real second uvicorn worker beside the suite's own. Migration `082172624b6d` adds `run_id`, `heartbeat_at`, `stop_requested`, `pending_messages` and `model` to `agent_jobs`. `jobs.stop()` takes the session factory and workspace.
+- **The starter names a job's model.** `jobs.start(model=...)` is `--model` on every run, a resume from any worker included.
+- **`app_hooks.agent_event(persona, event)`** rewrites or drops each event before a job keeps it or a chat forwards it; `job.error` and `job.structured_output` are read off what it returns, and the CLI's stderr tail is stripped of bearer tokens and URL query strings first.
+- **`app_hooks.agent_job_settled(outcome)`** is called with each settled run's `JobOutcome`, a resumed one included, in whichever worker settled it — how an app takes a job's answer back without polling the row.
+- **Bounded job storage.** Jobs ask for no token deltas; an image's or document's bytes are emptied from the log, keeping the `tool_use` naming its file and its dimensions; `jobs.cleanup()` also removes the CLI's own transcript and per-session artefacts for that job from the persona's shared home.
+- **`jobs.new_job_id()` and `jobs.job_dir()`** let a starter name a seeded file by absolute path in the job's prompt before the job exists; `start(job_id=...)` takes the id.
+- **The gateway key is vended.** `AgentSettings.gateway_key` resolves from the broker (`<app>-gateway`, field `value`, or the name in `gateway_key_credential`) while `gateway_url` is set; with a URL set, the child reaches the gateway only, never the direct OAuth path.
+
+Consumer: godswood's Fat Controller reader (radar-hooves/godswood#839). Adopting it: take the `api/agent/` slice, `main.py`, `config/vend.py`, `config/sections/agent.py`, the tests and the migration (repoint `down_revision` at the app's own head), and regenerate `.template-parity.json`. An app that starts long jobs sets `GUNICORN_MAX_REQUESTS=0`.
+
 ## [2026.9.44] - 2026-09-29
 
 ### Added

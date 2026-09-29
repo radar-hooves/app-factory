@@ -10,7 +10,7 @@ Three clauses of the request are reshaped and one is refused:
 
 - **The login, not a gateway alias.** Measured on atlas: Claude Code through LiteLLM and Claudette narrates a tool call as text and ends the turn having done nothing, so the deployed library authenticates the CLI with `CLAUDE_CODE_OAUTH_TOKEN` vended from the broker and talks to Anthropic directly. The contract is that token on the app process plus a Claude Code model name per persona; the gateway pair stays optional, for a genuinely Anthropic-compatible one. "Gohan's account through thalamus" is Gohan's token on the app, no LiteLLM in the path.
 - **Tier is an entitlement.** The door is the factory's own: `CurrentUser` plus `require_module("agent-<name>")`, one Authentik entitlement per persona, no tier code. Pebblestone's director and employee tiers become grants, as its handoff already decided.
-- **The redactor is an app hook.** `app_hooks.agent_turn(persona, user, text)` is optional and absent by default; Pebblestone's returns redactyl's output. The factory redacts nothing itself.
+- **The redactor is an app hook.** `app_hooks.agent_turn(persona, user, text)` rewrites what goes in and `app_hooks.agent_event(persona, event)` what comes out; both are optional and absent by default. Pebblestone's `agent_turn` returns redactyl's output. The factory itself strips only bearer tokens and URL query strings from the CLI's stderr.
 - **Refused: a per-turn prompt or working directory.** The library composes Milton's prompt per question and builds a scoped view per asker. That is a reading room, not a chat: it stays a library-owned route importing the factory's spawn and ownership modules, rather than two more seams carried for one consumer.
 
 ## The persona contract

@@ -1,27 +1,38 @@
-"""Run agent-bound text through `app_hooks.agent_turn`, if this app defines one.
+"""The two redaction seams this slice carries, and the one scrub it applies itself.
 
-The one optional seam this slice carries (`docs/design/agent-console.md`
-§Decision: "the redactor is an app hook"). Absent by default — most apps send
-text straight through — and run BEFORE the CLI is spawned or the text reaches
-its stdin, rather than on the streamed answer: the answer is forwarded token
-by token as it arrives, and there is no "before it renders" moment left to
-redact it once it has already been sent.
+Both seams are optional app hooks (`docs/design/agent-console.md` §Decision:
+"the redactor is an app hook"), absent by default, looked up per call:
 
-Shared by `ask.py` (a chat question) and `jobs.py` (a job's own prompt, and a
-message sent to it): one hook, one call site, so an app that defines
-`agent_turn` redacts everything this slice ever hands to a persona, not only
-the half that happened to be written first.
+- `app_hooks.agent_turn` rewrites text going IN — a chat question, a job's
+  prompt, a message sent to a job — before the CLI is spawned or the text
+  reaches its stdin (`redact`).
+- `app_hooks.agent_event` rewrites each event coming OUT — whatever the
+  agent read off a document and repeated, in a tool result or its own
+  answer — before a job persists it or a chat forwards it (`redact_event`).
+
+Shared by `ask.py`/`session.py` (a chat) and `jobs.py` (a job): one hook per
+direction, so an app that defines one covers everything this slice hands to
+a persona or takes back from it, not only the half written first.
+
+`scrub_credentials` is the factory's own, applied to the one text this slice
+writes that neither the persona nor the app chose: the CLI's stderr tail,
+where a gateway or MCP error line can echo a bearer token or a signed URL.
 """
 
+import re
 import uuid
+from typing import Any
+
+_BEARER = re.compile(r"(?i)\bbearer\s+\S+")
+_URL_QUERY = re.compile(r"(https?://[^\s?]+)\?\S*")
 
 
 def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
     """Return `text` as `app_hooks.agent_turn` rewrites it, or unchanged if this app defines no hook.
 
-    `user_id` is `None` for a job started with no asker (need 1) — the hook
-    still runs, with an empty string standing in for "nobody", since a job's
-    own prompt may itself carry what needs redacting even when no person
+    `user_id` is `None` for a job started with no asker — the hook still
+    runs, with an empty string standing in for "nobody", since a job's own
+    prompt may itself carry what needs redacting even when no person
     supplied it.
 
     Local import, not module-level: app_hooks is the app's own extension
@@ -33,3 +44,28 @@ def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
 
     hook = getattr(app_hooks, "agent_turn", None)
     return str(hook(persona, str(user_id) if user_id is not None else "", text)) if hook is not None else text
+
+
+def redact_event(persona: str, event: dict[str, Any]) -> dict[str, Any] | None:
+    """Return `event` as `app_hooks.agent_event` rewrites it, `None` to drop it, or unchanged with no hook.
+
+    Called once per event, in order, with no state carried between calls. A
+    job's events are whole messages (`jobs.py` asks for no token deltas), so a
+    pattern never spans two of them. A chat forwards `stream_event` deltas
+    too, each a fragment of the message that follows it whole: a hook that
+    must never let a pattern through split across fragments drops the deltas
+    and lets the whole `assistant` event carry the text. A chat calls this on
+    its event loop, once per delta, so it must be quick.
+    """
+    from {{ package_name }} import app_hooks
+
+    hook = getattr(app_hooks, "agent_event", None)
+    if hook is None:
+        return event
+    rewritten: dict[str, Any] | None = hook(persona, event)
+    return rewritten
+
+
+def scrub_credentials(text: str) -> str:
+    """Strip anything shaped like a bearer token or a URL query string."""
+    return _URL_QUERY.sub(r"\1?[redacted]", _BEARER.sub("Bearer [redacted]", text))

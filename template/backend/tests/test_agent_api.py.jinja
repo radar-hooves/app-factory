@@ -322,6 +322,27 @@ async def test_a_defined_hook_runs_on_the_question_before_the_cli_sees_it(
     assert calls == [("milton", str(asker.id), "my secret plan")]
 
 
+async def test_the_output_hook_rewrites_what_a_chat_streams_and_drops_what_it_returns_none_for(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`app_hooks.agent_event` sees every event before it leaves: what the agent repeated back is
+    rewritten on the way out, with nothing redacted on the way in."""
+
+    def _fake_hook(persona: str, event: dict[str, object]) -> dict[str, object] | None:
+        if event.get("type") == "result":
+            return None
+        return json.loads(json.dumps(event).replace("secret", "[redacted]"))
+
+    monkeypatch.setattr(app_hooks, "agent_event", _fake_hook, raising=False)
+
+    response = await client.post("/api/agent/milton/ask", json={"question": "my secret plan"}, headers=ASKER)
+    events = _events(response.text)
+    echoed = next(e for e in events if e.get("type") == "assistant")
+    assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
+    assert "secret" not in response.text
+    assert not any(e.get("type") == "result" for e in events)
+
+
 # ── The persona's headersHelper presents the bearer its .mcp.json names ────
 #
 # #34: a persona's `.mcp.json` exists to make the CLI's own `headersHelper`
