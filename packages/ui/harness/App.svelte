@@ -69,6 +69,11 @@
 	import { AppIdentity } from '../dist/components/ui/app-identity/index.js';
 	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
 	import { Segmented } from '../dist/components/ui/segmented/index.js';
+	import ListShell from '../dist/components/ui/list-shell/list-shell.svelte';
+	import Plus from '@lucide/svelte/icons/plus';
+	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	let auditYear = $state('FY26');
 	import { DataTableTanstack } from '../dist/components/ui/data-table-tanstack/index.js';
 	import type { ColumnDef } from '../dist/components/ui/data-table-tanstack/index.js';
@@ -590,6 +595,7 @@
 
 	let paletteOpen = $state(false);
 	let collapsed = $state(false);
+	let listOpen = $state(true);
 	const currentPath = '#/credentials';
 
 	// `?surface=mobile-audit&identity=bare` swaps the fixture below for a
@@ -1530,6 +1536,109 @@
 		nav={auditNav}
 		onNavigate={(href) => (location.hash = href.slice(1))}
 	/>
+{:else if surface === 'list-shell'}
+	<!--
+		design-system: the working-list companion to SettingsShell
+		(radar-hooves/godswood#839). `padded={false}` for the same reason
+		SettingsShell needs it — ListShell has to reach the content area's edge,
+		flush against the rail, or it reads as a floating card. `?open=0` drives
+		the folded state directly (a real click is also exercised, but a
+		reload-survival claim needs the closed state reachable on first paint).
+	-->
+	<AppShell
+		nav={[{ label: 'Home', href: '#/overview', icon: LayoutDashboard }]}
+		currentPath="#/overview"
+		brandTitle="Godswood"
+		padded={false}
+	>
+		<div class="flex min-h-0 flex-1">
+			<ListShell title="Waiting on you" bind:open={listOpen}>
+				{#snippet actions()}
+					<button
+						type="button"
+						aria-label="Add documents"
+						title="Add documents"
+						class="border-border grid size-9 flex-none place-items-center rounded-md border"
+					>
+						<Plus class="size-4" />
+					</button>
+				{/snippet}
+				<div class="px-5 pb-3.5">
+					<div role="tablist" aria-label="Which documents" class="bg-muted/40 flex gap-1 rounded-lg p-1">
+						<button type="button" role="tab" aria-selected="true" class="bg-card flex-1 rounded-md py-1.5 text-sm font-semibold">
+							Waiting <span class="text-muted-foreground font-normal">338</span>
+						</button>
+						<button type="button" role="tab" aria-selected="false" class="text-muted-foreground flex-1 rounded-md py-1.5 text-sm">
+							Filed <span class="font-normal">1500</span>
+						</button>
+					</div>
+				</div>
+				<div class="text-shell-muted-foreground px-5 pt-2 pb-1.5 text-xs font-semibold">
+					Needs an answer <span class="font-normal">118</span>
+				</div>
+				{#each [{ t: 'eBay purchase history', s: 'Which property are these purchases for?', d: '25/12/2021' }, { t: 'Vehicle registration renewal', s: 'A 2016 renewal reminder for a 2004 Ford sedan…', d: '16/04/2016' }] as row (row.t)}
+					<button type="button" class="border-border flex w-full gap-3.5 border-t px-5 py-3 text-left">
+						<span class="min-w-0 flex-1">
+							<span class="block font-medium">{row.t}</span>
+							<span class="text-muted-foreground mt-0.5 block truncate text-xs">{row.s}</span>
+						</span>
+						<span class="text-shell-muted-foreground shrink-0 text-xs">{row.d}</span>
+					</button>
+				{/each}
+				<div class="text-shell-muted-foreground px-5 pt-3 pb-1.5 text-xs font-semibold">
+					Ready to file <span class="font-normal">214</span>
+				</div>
+				{#each [{ t: 'Aldi receipt', s: 'Grocery receipt · 1 page', d: '18/09/2026', active: true }, { t: 'Gas rates change notice', s: 'Document · 2 pages', d: '20/06/2024', active: false }] as row (row.t)}
+					<button
+						type="button"
+						aria-current={row.active ? 'true' : undefined}
+						class="border-border flex w-full gap-3.5 border-t px-5 py-3 text-left {row.active ? 'bg-card' : ''}"
+					>
+						<span class="min-w-0 flex-1">
+							<span class="block font-medium">{row.t}</span>
+							<span class="text-shell-muted-foreground mt-0.5 block truncate text-xs">{row.s}</span>
+						</span>
+						<span class="text-shell-muted-foreground shrink-0 text-xs">{row.d}</span>
+					</button>
+				{/each}
+			</ListShell>
+
+			<div class="flex min-w-0 flex-1 flex-col gap-4 p-6">
+				<div class="flex items-center gap-2.5">
+					{#if !listOpen}
+						<!-- The reopen control: entirely this page's own markup, driving
+						     the same bound `listOpen` — ListShell renders nothing while
+						     closed, by design. -->
+						<button
+							type="button"
+							onclick={() => (listOpen = true)}
+							aria-expanded={listOpen}
+							class="border-border flex h-9 items-center gap-2 rounded-md border px-3 text-sm"
+							data-probe="list-shell-reopen"
+						>
+							<PanelLeftOpen class="size-4" />
+							Waiting on you <span class="text-muted-foreground">338</span>
+						</button>
+						<div class="text-muted-foreground ml-auto flex items-center gap-1.5 text-sm">
+							<button type="button" aria-label="Previous" class="border-border grid size-9 place-items-center rounded-md border">
+								<ChevronLeft class="size-4" />
+							</button>
+							<span>1 of 214 ready to file</span>
+							<button type="button" aria-label="Next" class="border-border grid size-9 place-items-center rounded-md border">
+								<ChevronRight class="size-4" />
+							</button>
+						</div>
+					{/if}
+				</div>
+				<h1 class="font-display text-display font-semibold" data-probe="list-shell-page-title">
+					Grocery Receipt
+				</h1>
+				<p class="text-muted-foreground text-sm">
+					The module's own content, beside the list — {listOpen ? 'open' : 'folded'}.
+				</p>
+			</div>
+		</div>
+	</AppShell>
 {:else if surface === 'settings'}
 	<!--
 		`padded={false}` is not incidental: the section list's rule and tint have to

@@ -402,6 +402,64 @@ all three serve any route:
 truncates. Carry one or the other. A page writes a run of `Panel`s and no
 wrapper: the pane stacks them on the package's section rhythm itself.
 
+### A working list beside a page's own content
+
+AppShell has no second-column slot, on purpose: a module's own **pages**
+belong in the rail (`NavItem.children`), never a hand-rolled column beside it.
+A module's **data** (a queue, an inbox, a working list of things waiting on
+the user) is a different situation, not navigation, so it belongs in the page
+beside the content it serves, exactly as the settings destination does.
+`ListShell` is that shape: a foldable list, in the rail's own chrome, that
+vanishes entirely when closed and hands the freed width back to the page.
+
+```svelte
+<script lang="ts">
+	import AppShell from '@poodle64/ui/app-shell';
+	import ListShell from '@poodle64/ui/list-shell';
+
+	// Bind it to whatever already persists a user preference for this module:
+	// a module-scoped `.svelte.ts` store backed by localStorage, or the app's
+	// own settings. ListShell holds no storage of its own.
+	let listOpen = $state(true);
+</script>
+
+<!-- padded={false}: the list has to reach the content area's edge, flush
+     against the rail, or it reads as a floating card. -->
+<AppShell {nav} currentPath={page.url.pathname} padded={false}>
+	<div class="flex min-h-0 flex-1">
+		<ListShell title="Waiting on you" bind:open={listOpen}>
+			{#snippet actions()}
+				<Button size="icon" variant="outline" aria-label="Add documents"><Plus /></Button>
+			{/snippet}
+			<!-- tabs, group headings, rows: entirely this module's own -->
+		</ListShell>
+		<div class="min-w-0 flex-1">
+			{#if !listOpen}
+				<!-- The reopen control is this module's own markup, at whatever
+				     position it chooses; ListShell never places it. -->
+				<Button onclick={() => (listOpen = true)} aria-expanded={listOpen}>
+					Waiting on you <Badge>{waitingCount}</Badge>
+				</Button>
+			{/if}
+			<!-- the module's own content -->
+		</div>
+	</div>
+</AppShell>
+```
+
+| Prop       | Purpose                                                                      |
+| ---------- | ----------------------------------------------------------------------------- |
+| `title`    | The list's heading, in the shell's display face.                              |
+| `open`     | Bindable. Not persisted by this component; bind it to what already persists a preference for this module. |
+| `label`    | The landmark's accessible name. Defaults to `title`.                          |
+| `actions`  | Leading header actions beside the title: an "Add" button, a filter.           |
+
+Width is fixed at 25rem (400px) and not a prop, the same anti-drift discipline
+`SettingsShell` applies to its own 240px: one width, chosen once, rather than
+every module guessing its own. Below `md` this never renders, at either state,
+since a 400px column has nowhere to go beside a rail that is already a drawer
+there; a module's phone view is its own route.
+
 ### The content measure
 
 How wide the page body may get, chosen once in the layout from a scale of four:

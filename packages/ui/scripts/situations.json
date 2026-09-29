@@ -235,7 +235,7 @@
     {
       "key": "page-frame",
       "title": "The frame every route shares",
-      "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column.",
+      "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column, a foldable working list beside the page's own content.",
       "components": [
         {
           "name": "AppShell",
@@ -261,6 +261,11 @@
           "name": "ContextColumn",
           "props": "stats, statsTitle?, statsInfo?, detail?, ariaLabel?",
           "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane"
+        },
+        {
+          "name": "ListShell",
+          "props": "title, children, label?, open?, actions?",
+          "insteadOf": "a module hand-rolling its own foldable second column beside the rail — a queue, an inbox, a working list"
         },
         {
           "name": "AppIdentity",
