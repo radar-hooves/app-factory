@@ -37,7 +37,6 @@ permanent factory furniture no app ever deletes.
 import uuid
 
 import httpx
-from sqlalchemy import select
 
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
@@ -52,29 +51,31 @@ ITERATIONS = 20
 
 
 async def test_a_written_row_is_visible_to_a_second_session_immediately_after_the_response() -> None:
-    async with live_server.run_server() as (base_url, _pid):
-        async with httpx.AsyncClient(base_url=base_url, timeout=5) as client:
-            for i in range(ITERATIONS):
-                uid = f"race-{uuid.uuid4()}"
-                response = await client.post(
-                    "/api/feedback/",
-                    json={
-                        "message": f"race probe {i}",
-                        "route": "/race-probe",
-                        "user_agent": "pytest",
-                        "viewport": {"width": 1024, "height": 768},
-                        "session_id": str(uuid.uuid4()),
-                    },
-                    headers={"x-authentik-uid": uid, "x-authentik-username": uid},
-                )
-                assert response.status_code == 201
-                report_id = response.json()["id"]
+    async with (
+        live_server.run_server() as (base_url, _pid),
+        httpx.AsyncClient(base_url=base_url, timeout=5) as client,
+    ):
+        for i in range(ITERATIONS):
+            uid = f"race-{uuid.uuid4()}"
+            response = await client.post(
+                "/api/feedback/",
+                json={
+                    "message": f"race probe {i}",
+                    "route": "/race-probe",
+                    "user_agent": "pytest",
+                    "viewport": {"width": 1024, "height": 768},
+                    "session_id": str(uuid.uuid4()),
+                },
+                headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+            )
+            assert response.status_code == 201
+            report_id = response.json()["id"]
 
-                with get_session_factory()() as second_session:
-                    row = second_session.get(FeedbackReport, report_id)
+            with get_session_factory()() as second_session:
+                row = second_session.get(FeedbackReport, report_id)
 
-                assert row is not None, (
-                    f"feedback report {report_id} was in the response but a second "
-                    "session could not see it -- get_session's commit ran after the "
-                    "response was sent"
-                )
+            assert row is not None, (
+                f"feedback report {report_id} was in the response but a second "
+                "session could not see it -- get_session's commit ran after the "
+                "response was sent"
+            )
