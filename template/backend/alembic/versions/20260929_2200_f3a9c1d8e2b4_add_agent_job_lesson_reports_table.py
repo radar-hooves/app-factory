@@ -16,6 +16,7 @@ current head, exactly as the previous revision's docstring says.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -30,6 +31,7 @@ def upgrade() -> None:
     op.create_table(
         "agent_job_lesson_reports",
         sa.Column("job_id", sa.String(length=128), nullable=False),
+        sa.Column("cites", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("domain_name", sa.String(length=255), nullable=False),
         sa.Column("context_key", sa.String(length=255), nullable=False),
         sa.Column("result", sa.String(length=16), nullable=False),

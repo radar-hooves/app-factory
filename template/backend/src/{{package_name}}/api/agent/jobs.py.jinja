@@ -899,7 +899,7 @@ async def supervise(
         except Exception:
             logger.exception("Sweeping for agent jobs left running failed; retrying in %.0fs", _SWEEP_SECONDS)
         try:
-            await lessons.retry_unsettled(db_session_factory, settings)
+            await lessons.retry_unsettled(db_session_factory, settings, stopping)
         except Exception:
             logger.exception("Retrying unsettled lesson reports failed; retrying in %.0fs", _SWEEP_SECONDS)
         with contextlib.suppress(TimeoutError):

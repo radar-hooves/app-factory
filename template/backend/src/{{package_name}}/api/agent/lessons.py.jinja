@@ -10,12 +10,10 @@ import asyncio
 import datetime
 import logging
 import re
-from typing import Any
 
-import httpx
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
-from fastmcp.exceptions import McpError, ToolError
+from fastmcp.exceptions import ToolError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
@@ -26,7 +24,7 @@ from {{ package_name }}.api.alerts import service as alerts_service
 from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
-from {{ package_name }}.config.vend import VendError, vend_envelope
+from {{ package_name }}.config.vend import vend_envelope
 from {{ package_name }}.db.scoping import bind_session, unscoped
 from {{ package_name }}.exceptions import BadRequestError
 
@@ -41,23 +39,37 @@ _DELIVER_TIMEOUT_SECONDS = 90
 _CALL_TIMEOUT_SECONDS = 30
 _INIT_TIMEOUT_SECONDS = 15
 _ABANDON_AFTER = datetime.timedelta(days=14)
+#: Below this age a transient fault is just noise (every deploy risks one); past it, the operator sees it.
+_STALE_TRANSIENT_AFTER = datetime.timedelta(days=1)
 #: Rows delivered per sweep tick, so an outage cannot starve `reconcile_orphaned_jobs`.
 _MAX_PER_SWEEP = 5
+#: One alert for the whole pipeline's health, upserted by key -- never one per job.
+_FAILING_ALERT_KEY = "agent-lessons:failing"
 
 #: A belief id, as `belief_retrieve` mints one — nothing else survives into `cited()`.
-_BELIEF_ID = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+_BELIEF_ID = re.compile(r"[0-9a-f]{32}")
 #: FastMCP's masked generic shape for an unhandled tool exception — ambiguous, so transient.
 _MASKED_TOOL_ERROR = re.compile(r"^Error calling tool '[^']*'$")
 
-_TRANSIENT, _REFUSED, _UNEXPECTED = "transient", "refused", "unexpected"
+
+class _Unexpected(Exception):
+    """core-memory answered, but this slice's own reading of that answer failed."""
 
 
 def cited(job: AgentJob) -> list[str]:
-    """Belief ids `job` named in `lessons_used`, kept only where they look like one."""
+    """Belief ids `job` named in `lessons_used` — lowercased, deduped, kept only where they look
+    like one."""
     lessons = (job.structured_output or {}).get("lessons_used")
     if not isinstance(lessons, list):
         return []
-    return [item for item in (str(entry) for entry in lessons) if _BELIEF_ID.match(item)]
+    seen: set[str] = set()
+    kept: list[str] = []
+    for entry in lessons:
+        candidate = str(entry).lower()
+        if _BELIEF_ID.fullmatch(candidate) and candidate not in seen:
+            seen.add(candidate)
+            kept.append(candidate)
+    return kept
 
 
 def report_outcome(db: Session, job_id: str, *, domain_name: str, context_key: str, result: str) -> None:
@@ -74,51 +86,44 @@ def report_outcome(db: Session, job_id: str, *, domain_name: str, context_key: s
     if not get_settings().agent.core_memory_url:
         return
     job = jobs_models.get_job(db, job_id)
-    if job is None or not cited(job):
+    if job is None:
+        return
+    cites = cited(job)
+    if not cites:
         return
     jobs_models.insert_lesson_report_if_absent(
-        db, job_id, workspace_id=job.workspace_id, domain_name=domain_name, context_key=context_key, result=result
+        db, job_id, cites=cites, domain_name=domain_name, context_key=context_key, result=result
     )
 
 
-async def _call(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Call one core-memory tool, bearer vended fresh and held nowhere, bounded so a hung server
-    cannot stall the sweep."""
-    envelope = await run_in_threadpool(vend_envelope, settings.core_memory_credential)
-    token = envelope["material"]["access_token"]
-    async with Client(
-        settings.core_memory_url,
-        auth=BearerAuth(token),
-        timeout=_CALL_TIMEOUT_SECONDS,
-        init_timeout=_INIT_TIMEOUT_SECONDS,
-    ) as memory:
-        result = await memory.call_tool(tool, arguments)
-    return dict(result.structured_content or {})
-
-
-def _classify(exc: Exception) -> str:
-    """TRANSIENT (retry later), REFUSED (core-memory's own final word), or UNEXPECTED (settle
-    anyway, logged loud, rather than retry a fault this slice does not recognise forever)."""
-    if isinstance(exc, ToolError):
-        return _TRANSIENT if _MASKED_TOOL_ERROR.match(str(exc)) else _REFUSED
-    if isinstance(exc, httpx.HTTPError | McpError | TimeoutError | OSError | VendError):
-        return _TRANSIENT
-    return _UNEXPECTED
-
-
-def _raise_abandoned_alert(
-    db_session_factory: sessionmaker[Session], job_id: str, domain_name: str, context_key: str
-) -> None:
+def _raise_failing_alert(db_session_factory: sessionmaker[Session], reason: str) -> None:
     with db_session_factory() as db:
         alerts_service.raise_alert(
             db,
             AlertRaise(
-                key=f"agent-lessons:abandoned:{job_id}",
-                title="A persona job's lesson report to core-memory was abandoned",
-                body=f"job {job_id} ({domain_name}/{context_key}) stayed unsettled past {_ABANDON_AFTER.days} days.",
+                key=_FAILING_ALERT_KEY,
+                title="The agent-jobs lesson report to core-memory is failing",
+                body=reason[:2000],
             ),
         )
         db.commit()
+
+
+def _clear_failing_alert(db_session_factory: sessionmaker[Session]) -> None:
+    with db_session_factory() as db:
+        alerts_service.clear_alert(db, _FAILING_ALERT_KEY)
+        db.commit()
+
+
+async def _note_transient(
+    db_session_factory: sessionmaker[Session], job_id: str, created_at: datetime.datetime, exc: Exception
+) -> None:
+    """A fault raised while a call was in flight — connection, DNS, an init or read timeout, a
+    vend failure, or a `ToolError` FastMCP's own masking made ambiguous. Left unsettled; alerted
+    only once it has been failing long enough to matter."""
+    logger.warning("Reporting job %s's lesson outcome failed transiently; will retry: %s", job_id, exc)
+    if created_at < datetime.datetime.now(datetime.UTC) - _STALE_TRANSIENT_AFTER:
+        await run_in_threadpool(_raise_failing_alert, db_session_factory, f"still failing: {exc}"[:500])
 
 
 async def _deliver_or_abandon(
@@ -129,6 +134,7 @@ async def _deliver_or_abandon(
     domain_name: str,
     context_key: str,
     result: str,
+    cites: list[str],
     created_at: datetime.datetime,
 ) -> None:
     """Claim `job_id`'s report, then abandon it past `_ABANDON_AFTER` or attempt one delivery."""
@@ -149,19 +155,9 @@ async def _deliver_or_abandon(
 
     if created_at < datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER:
         reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
+        await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
         logger.error("Abandoned job %s's lesson report: %s", job_id, reason)
-        await run_in_threadpool(_raise_abandoned_alert, db_session_factory, job_id, domain_name, context_key)
-        return
-
-    def _load_job() -> AgentJob | None:
-        with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            return jobs_models.get_job(db, job_id)
-
-    job = await run_in_threadpool(_load_job)
-    belief_ids = cited(job) if job is not None else []
-    if not belief_ids:
         return
 
     def _save_decision(new_decision_id: str) -> None:
@@ -171,45 +167,72 @@ async def _deliver_or_abandon(
 
     try:
         async with asyncio.timeout(_DELIVER_TIMEOUT_SECONDS):
-            if decision_id is None:
-                decision = await _call(
-                    settings,
-                    "decision_record",
-                    {
-                        "domain_name": domain_name,
-                        "context_key": context_key,
-                        "cites": belief_ids,
-                        "payload": {"job_id": job_id},
-                    },
+            envelope = await run_in_threadpool(vend_envelope, settings.core_memory_credential)
+            bearer = envelope["material"]["access_token"]
+            async with Client(
+                settings.core_memory_url,
+                auth=BearerAuth(bearer),
+                timeout=_CALL_TIMEOUT_SECONDS,
+                init_timeout=_INIT_TIMEOUT_SECONDS,
+            ) as memory:
+                if decision_id is None:
+                    raw = await memory.call_tool(
+                        "decision_record",
+                        {
+                            "domain_name": domain_name,
+                            "context_key": context_key,
+                            "cites": cites,
+                            "payload": {"job_id": job_id},
+                        },
+                    )
+                    try:
+                        decision_id = str(dict(raw.structured_content or {})["id"])
+                    except Exception as exc:
+                        raise _Unexpected(str(exc)) from exc
+                    await run_in_threadpool(_save_decision, decision_id)
+                await memory.call_tool(
+                    "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
                 )
-                decision_id = str(decision["id"])
-                await run_in_threadpool(_save_decision, decision_id)
-            await _call(
-                settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
-            )
-    except Exception as exc:
-        fault = _classify(exc)
-        if fault == _TRANSIENT:
-            logger.warning("Reporting job %s's lesson outcome failed transiently; will retry: %s", job_id, exc)
+    except _Unexpected as exc:
+        reason = f"unexpected: {exc}"[:500]
+        await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
+        await run_in_threadpool(_settle, reason)
+        logger.error("Settled job %s's lesson report as unexpected: %s", job_id, reason)
+        return
+    except ToolError as exc:
+        if _MASKED_TOOL_ERROR.match(str(exc)):
+            await _note_transient(db_session_factory, job_id, created_at, exc)
             return
         reason = str(exc)[:500]
+        await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
-        (logger.error if fault == _UNEXPECTED else logger.warning)(
-            "Settled job %s's lesson report as %s: %s", job_id, fault, reason
-        )
+        logger.warning("core-memory refused job %s's lesson report: %s", job_id, reason)
+        return
+    except Exception as exc:
+        await _note_transient(db_session_factory, job_id, created_at, exc)
         return
 
+    await run_in_threadpool(_clear_failing_alert, db_session_factory)
     await run_in_threadpool(_settle, None)
 
 
-async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: AgentSettings) -> None:
+async def retry_unsettled(
+    db_session_factory: sessionmaker[Session], settings: AgentSettings, stopping: asyncio.Event
+) -> None:
     """Deliver up to `_MAX_PER_SWEEP` unsettled lesson reports to core-memory. Run from
     `jobs.supervise()`'s sweep — the only place this slice ever calls core-memory.
     """
     if not settings.core_memory_url:
         return
+    if not settings.core_memory_credential:
+        await run_in_threadpool(
+            _raise_failing_alert,
+            db_session_factory,
+            "misconfigured: core_memory_url is set but core_memory_credential is empty",
+        )
+        return
 
-    def _pending() -> list[tuple[str, int, str, str, str, datetime.datetime]]:
+    def _pending() -> list[tuple[str, int, str, str, str, list[str], datetime.datetime]]:
         with db_session_factory() as db, unscoped(db):
             rows = db.execute(
                 select(
@@ -218,6 +241,7 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
                     AgentJobLessonReport.domain_name,
                     AgentJobLessonReport.context_key,
                     AgentJobLessonReport.result,
+                    AgentJobLessonReport.cites,
                     AgentJobLessonReport.created_at,
                 )
                 .where(
@@ -229,7 +253,9 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
             ).all()
         return list(rows)
 
-    for job_id, workspace_id, domain_name, context_key, result, created_at in await run_in_threadpool(_pending):
+    for job_id, workspace_id, domain_name, context_key, result, cites, created_at in await run_in_threadpool(_pending):
+        if stopping.is_set():
+            return
         await _deliver_or_abandon(
-            db_session_factory, settings, job_id, workspace_id, domain_name, context_key, result, created_at
+            db_session_factory, settings, job_id, workspace_id, domain_name, context_key, result, cites, created_at
         )

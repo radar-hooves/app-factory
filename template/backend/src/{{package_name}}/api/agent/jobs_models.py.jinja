@@ -36,7 +36,6 @@ from typing import Any
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, false, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
@@ -140,6 +139,9 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
     __tablename__ = "agent_job_lesson_reports"
 
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.job_id", ondelete="CASCADE"), primary_key=True)
+    #: Snapshotted at filing time, not re-read from the job at delivery: a resumed job's later
+    #: answer must not change what an already-filed verdict cited.
+    cites: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     domain_name: Mapped[str] = mapped_column(String(255), nullable=False)
     context_key: Mapped[str] = mapped_column(String(255), nullable=False)
     #: "confirm" or "contradict" — the app's own read of accepted-unchanged vs corrected.
@@ -153,25 +155,22 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
 
 
 def insert_lesson_report_if_absent(
-    db: Session, job_id: str, *, workspace_id: int, domain_name: str, context_key: str, result: str
+    db: Session, job_id: str, *, cites: list[str], domain_name: str, context_key: str, result: str
 ) -> None:
-    """Insert `job_id`'s report intent, or do nothing if one exists. `INSERT ... ON CONFLICT DO
-    NOTHING` covers a primary-key conflict without raising at all; a SAVEPOINT covers the other
-    way this can fail (the job vanished — a foreign-key violation), so that failure rolls back
-    only this insert, never the caller's own transaction, which this call shares. Explicit
-    `workspace_id`: a Core-style statement bypasses this session's usual auto-stamping
-    (`db/scoping.py`'s documented hole 3).
+    """Insert `job_id`'s report intent, or do nothing if one exists — first write wins; a later
+    call for the same job (a correction after an earlier confirm) is silently dropped, not
+    merged. A SAVEPOINT: a primary-key OR foreign-key conflict rolls back only this insert, never
+    the caller's own transaction, which this call shares. `db.flush()` first, so a violation
+    already pending in the caller's OWN unflushed work surfaces there, not swallowed here.
     """
-    stmt = (
-        pg_insert(AgentJobLessonReport)
-        .values(
-            job_id=job_id, workspace_id=workspace_id, domain_name=domain_name, context_key=context_key, result=result
-        )
-        .on_conflict_do_nothing(index_elements=["job_id"])
-    )
+    db.flush()
     try:
         with db.begin_nested():
-            db.execute(stmt)
+            db.add(
+                AgentJobLessonReport(
+                    job_id=job_id, cites=cites, domain_name=domain_name, context_key=context_key, result=result
+                )
+            )
     except IntegrityError:
         pass
 

@@ -81,9 +81,11 @@ class AgentSettings(BaseSettings):
     # not a secret — the bearer is vended fresh per call under the credential
     # named below.
     core_memory_url: str = ""
-    # The broker credential `lessons.py` vends core-memory's bearer from — this
-    # app's own name for it, not a household constant.
-    core_memory_credential: str = "mcp-gateway-api"
+    # The broker credential `lessons.py` vends core-memory's bearer from — no
+    # default, since no name is derivable the way `{{ project_name }}-gateway`
+    # is; a URL set with this still empty is a misconfiguration, alerted
+    # rather than retried for 14 days.
+    core_memory_credential: str = ""
 
     # Claude Code runs a small model for background work as well as the one
     # answering. Through a gateway it can only be a model the gateway serves,
