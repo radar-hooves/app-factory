@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.53] - 2026-09-30
+
 ### Changed
 
 - **An app's CI runs on the runners it deploys from.** `runner_labels` reached only the deploy job, so an app answering another host's runners still had its python, frontend, security and canonical-shape checks asked of atlas's. All four callers now pass it; an app that answers nothing runs where it did. For pebblestone, which answers titan's runners.
