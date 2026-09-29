@@ -2,7 +2,7 @@
  * The screenshot grid: every state, three widths, both themes.
  *
  * Scripted rather than driven by hand because it is pre-known choreography —
- * eleven states x three widths x two themes is 66 shots, and a person taking
+ * sixteen states x three widths x two themes is 96 shots, and a person taking
  * them by hand takes 66 slightly different ones
  * (`rules-library/core/verification.md` §"Scripts Drive, Models Judge"). The
  * model's time goes on looking at the batch afterwards.
@@ -49,7 +49,10 @@ const STATES = [
 	'error',
 	'stopped',
 	'chat',
-	'persona'
+	'persona',
+	'job',
+	'job-showing',
+	'job-live'
 ];
 
 /** The measure the package guarantees in its OWN stylesheet: `--ds-lib-measure`,
@@ -113,7 +116,9 @@ for (const theme of THEMES) {
 			// `chat` is photographed from the top for the same reason, and it is
 			// the shot the whole redesign answers to: three turns, each bounded,
 			// the reader's words against the persona's.
-			if (state === 'answer' || state === 'chat') {
+			// A job is photographed from the top too: the first run's answer, the
+			// reading carded under it and what it read under that are the claims.
+			if (state === 'answer' || state === 'chat' || state.startsWith('job')) {
 				await page.evaluate(() => {
 					document.querySelector('[role="log"]')?.scrollTo({ top: 0 });
 				});
@@ -138,6 +143,13 @@ for (const theme of THEMES) {
 				await page.getByRole('button', { name: /documents read/ }).click();
 				await page.getByRole('button', { name: 'Thought' }).click();
 				await page.getByText(said, { exact: false }).waitFor();
+			}
+
+			// The live job is taken open: its rows are the host's words for tools
+			// this package does not know, with the last call still in flight.
+			if (state === 'job-live') {
+				await page.getByRole('button', { name: 'Working…' }).click();
+				await page.getByText('page 1, bottom slice').waitFor();
 			}
 
 			// The transcript is photographed at three widths and has to hold its
@@ -240,6 +252,63 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
+// A session the app started, read through the host's own surfaces. The
+// package only hands over the taps: the artefact opens in the host's column,
+// a page it read opens in the host's viewer, and neither opens a pane of the
+// package's own. Asserted by what appears, never by a screenshot.
+{
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	await page.goto(`http://localhost:${PORT}/librarian?state=job`, { waitUntil: 'domcontentloaded' });
+	const log = page.locator('[role="log"]');
+	await page.getByRole('button', { name: '2 slices read · 1 sum checked' }).waitFor();
+
+	const said = await log.innerText();
+	const asked = ['File this document.', 'Which line is the largest', 'Look at the bottom slice again'];
+	const at = asked.map((q) => said.indexOf(q));
+	if (at.some((i) => i < 0) || at.some((i, n) => n > 0 && i < at[n - 1])) {
+		failures.push(`job: the prompt and both messages are not on the reader's side in order (${at})`);
+	}
+	if (!said.includes('Receipt from Corner Grocer')) {
+		failures.push('job: the first answer lost its prose to the artefact card');
+	}
+
+	const card = page.getByRole('button', { name: /What it read/ });
+	if (!(await card.innerText()).includes('Open')) failures.push('job: the card offers no Open');
+	await card.click();
+	await page.locator('aside[aria-label="What it read"]').waitFor();
+	if (!(await card.innerText()).includes('Showing')) {
+		failures.push('job: the card does not say Showing while the host shows it');
+	}
+	if (await page.locator('aside[aria-label="Study artefact"]').count()) {
+		failures.push('job: the package opened a pane of its own over the host');
+	}
+
+	await page.getByRole('button', { name: /Page 1 · top slice/ }).click();
+	await page.locator('aside[aria-label="Page viewer"]', { hasText: 'Page 1 · top slice' }).waitFor();
+	if (await page.locator('aside[aria-label="Source document"]').count()) {
+		failures.push('job: a page it read opened the package source pane, not the host viewer');
+	}
+	if (await page.getByText(/verified/).count()) {
+		failures.push('job: a page it read wears a trust mark nothing checked');
+	}
+
+	await page.goto(`http://localhost:${PORT}/librarian?state=job-live`, {
+		waitUntil: 'domcontentloaded'
+	});
+	await page.getByRole('button', { name: 'Stop' }).waitFor();
+	if (!(await page.getByText('It carries on from where it stopped.').count())) {
+		failures.push('job-live: the composer lost its note');
+	}
+	if (await page.getByText('The whole library').count()) {
+		failures.push('job-live: a surface with one scope offers a scope choice');
+	}
+	if (!(await page.getByRole('button', { name: 'Working…' }).count())) {
+		failures.push('job-live: the run in flight does not read as working');
+	}
+	await context.close();
+}
+
 // The scope statement folds once there is a conversation over it, and the line
 // it folds to is still the way back in. A screenshot shows the folded line; only
 // this shows that it reopens — and it is checked at 390, where a statement that
@@ -293,5 +362,5 @@ if (failures.length) {
 	process.exit(1);
 }
 console.log(
-	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close'
+	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close; a job opens its artefact and pages in the host'
 );

@@ -315,8 +315,12 @@
 </div>
 
 <style>
+	/* `min-width: 0` for a host that sets this in a row beside columns of its
+	   own: a flex item's automatic minimum is its widest content, and a table
+	   in an answer then pushed the whole page sideways at 390. */
 	.ds-lib-surface {
 		display: flex;
+		min-width: 0;
 		min-height: 0;
 		flex: 1;
 	}

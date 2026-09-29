@@ -8,8 +8,15 @@
  * code (`rules-library/core/verification.md` §Scripts Drive, Models Judge).
  */
 
-import type { Block, Turn } from '@poodle64/librarian/transcript';
+/// <reference types="vite/client" />
+import type { Artefact, Block, DescribeTool, Turn } from '@poodle64/librarian/transcript';
 import type { Citation, LoadedDocument } from '@poodle64/librarian/citations';
+import type { AgentEvent } from '@poodle64/librarian/client';
+import type { LibrarianCopy } from '@poodle64/librarian/copy';
+import { Session } from '@poodle64/librarian/session';
+// The package's own fixture, captured from the real CLI — see its
+// `captured.ts` for how, and what was sanitised.
+import jobStream from '../../../librarian/src/test/fixtures/job-stream.jsonl?raw';
 
 /** cadmus prepends this to every question before it reaches the library, and
  *  the transcript must never show it. */
@@ -221,7 +228,10 @@ export type LabState =
 	| 'stopped'
 	| 'not-held'
 	| 'chat'
-	| 'persona';
+	| 'persona'
+	| 'job'
+	| 'job-showing'
+	| 'job-live';
 
 export interface LabScene {
 	turns: Turn[];
@@ -232,6 +242,74 @@ export interface LabScene {
 	 *  which is what keeps the default honest: one scene renames the persona
 	 *  and the whole surface follows, including the words. */
 	name: string;
+	/** A session the app started rather than a question the reader asked:
+	 *  the host's tool words, artefact, page viewer and composer note. */
+	job?: boolean;
+	/** The turn whose artefact the host's column is showing. */
+	showing?: string;
+}
+
+/**
+ * A session the app started: a receipt, read as a job with nobody asking —
+ * the prompt, a second message while the session was open, and a third run
+ * resumed after it finished. The stream is the real CLI's; what the host adds
+ * on top is below, in the host's own words.
+ */
+const JOB: AgentEvent[] = jobStream
+	.trim()
+	.split('\n')
+	.map((line) => JSON.parse(line) as AgentEvent);
+
+/** The host's words for its persona's tools: page slices read, a sum checked. */
+export const JOB_WORDS: DescribeTool = (block) => {
+	let input: Record<string, unknown> = {};
+	try {
+		input = JSON.parse(block.rawInput) as Record<string, unknown>;
+	} catch {
+		/* mid-stream input is partial */
+	}
+	const slice = /page-(\d+)-(\d+)\.png$/.exec(String(input.file_path ?? ''));
+	if (block.name === 'Read' && slice) {
+		const part = slice[2] === '1' ? 'top slice' : 'bottom slice';
+		return {
+			verb: 'Read',
+			object: `page ${slice[1]}, ${part}`,
+			tally: ['slice read', 'slices read'],
+			source: { id: `page-${slice[1]}-${slice[2]}`, title: `Page ${slice[1]}`, section: part }
+		};
+	}
+	if (block.name === 'Bash') {
+		return {
+			verb: 'Added up',
+			object: 'the line amounts',
+			detail: block.result?.split('\n').join(' · '),
+			tally: ['sum checked', 'sums checked']
+		};
+	}
+	return undefined;
+};
+
+export const JOB_COPY: Partial<LibrarianCopy> = {
+	sources: 'Read from',
+	notHeld: '',
+	askAgain: 'Run again',
+	askPlaceholder: 'Tell the clerk something, or ask why it read a line as it did…'
+};
+
+export const JOB_NOTE = 'It carries on from where it stopped.';
+
+/** What the first run handed in, carded under its answer. */
+export const JOB_READING: Artefact = {
+	title: 'What it read',
+	summary: '6 lines and 3 details · adds up to $42.38'
+};
+
+function job(events: AgentEvent[]): Turn[] {
+	const session = new Session();
+	for (const event of events) session.apply(event);
+	return session.turns.map((turn, index) =>
+		index === 0 && turn.outcome ? { ...turn, artefact: JOB_READING } : turn
+	);
 }
 
 /** A second persona's answer, in a second app's subject matter: the package
@@ -254,6 +332,26 @@ export function scene(state: LabState): LabScene {
 	const base: LabScene = { turns: [], running: false, value: '', files: [], name: 'Milton' };
 
 	if (state === 'empty') return base;
+
+	// A session somebody else started, whole: three runs, the reading carded
+	// under the first answer, and what it read listed under that.
+	if (state === 'job' || state === 'job-showing') {
+		const turns = job(JOB);
+		return {
+			...base,
+			name: 'clerk',
+			job: true,
+			turns,
+			showing: state === 'job-showing' ? turns[0].id : undefined
+		};
+	}
+
+	// The same session caught mid-run: the sum is still being checked.
+	if (state === 'job-live') {
+		const firstResult = JOB.findIndex((event) => event.type === 'result');
+		const lastCall = JOB.slice(0, firstResult).findLastIndex((event) => event.type === 'user');
+		return { ...base, name: 'clerk', job: true, running: true, turns: job(JOB.slice(0, lastCall)) };
+	}
 
 	// Everything Milton did, and not one word of the answer yet: the ONE quiet
 	// line with a disclosure that replaced a stack of tool rows.

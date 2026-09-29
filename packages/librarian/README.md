@@ -16,8 +16,9 @@ there.
 
 ```text
 src/lib/
-  client.ts                ask(): streams Claude Code's OWN events, unaltered
+  client.ts                ask() and watch(): Claude Code's OWN events, unaltered
   transcript.svelte.ts     Transcript state, the fold/segment/describe helpers
+  session.svelte.ts        Session: a whole stream of runs, as turns
   citations.ts             the Citation shape, `[n]` markers, the trust mark
   copy.ts                  every word this package says, and the host's overrides
   attachments.ts           what a reader may attach, and the limits
@@ -28,9 +29,9 @@ src/lib/
     scope-statement/       what this room answers from, and what it does not hold
     agent-transcript/      one question and everything Milton did answering it
     document-pane/         the cited document, open at the cited passage
-    artefact-card/         a study artefact's card in the transcript
-    artefact-pane/         a study artefact, open in the reading column
-    composer/              the input box: attachments, scope chips, send/stop
+    artefact-card/         an artefact's card, in the host's words
+    artefact-pane/         an artefact that is its answer's prose, in the column
+    composer/              the input box: attachments, scope chips, a note, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        a whole investigation, as one quiet line
     tool-row/              one tool call
@@ -41,12 +42,12 @@ src/lib/
 ## Installation
 
 ```bash
-pnpm add @poodle64/librarian @poodle64/ui @lucide/svelte
+pnpm add @poodle64/librarian @lucide/svelte
 ```
 
-`svelte`, `@poodle64/ui`, `@lucide/svelte`, `marked`, `isomorphic-dompurify`
-and `shiki` are peer dependencies: declare them yourself so Renovate tracks
-their versions and `pnpm ls` shows them.
+`svelte`, `@lucide/svelte`, `marked`, `isomorphic-dompurify` and `shiki` are
+peer dependencies: declare them yourself so Renovate tracks their versions and
+`pnpm ls` shows them.
 
 **No Tailwind content-scan line, and deliberately none.** These components
 carry their own CSS, written against the `--ds-*` tokens and compiled by
@@ -64,9 +65,6 @@ What it does need is the token layer every app already imports:
 ```css
 @import '@poodle64/design-tokens/tokens.css';
 ```
-
-The composed page chrome this package borrows from `@poodle64/ui` (`Panel`)
-still follows that package's own `@source` line, which every app has.
 
 One knob: `--ds-lib-measure` (default `46rem`) sets the transcript's reading
 column. Set it on any ancestor.
@@ -153,8 +151,6 @@ gives it a height and a composer and nothing else:
 				bind:value={question}
 				bind:files
 				{running}
-				scope="library"
-				onscope={() => {}}
 				onsubmit={submit}
 				onstop={() => controller?.abort()}
 			/>
@@ -183,6 +179,71 @@ on it fires once and never again.
 Nothing here fetches on its own behalf. The library's document read is
 authenticated, and a package that called it directly would be reaching past
 the app's proxy with a session it has no business holding.
+
+### Watching a session somebody else started
+
+A session the APP started — a persona reading a document with nobody asking —
+is watched rather than asked. `watch()` GETs its stream; `Session` folds it
+into turns: the prompt and every later message on the reader's side (the CLI
+echoes each one back under `--replay-user-messages`), each run's answer on the
+persona's, each settled by its own `result`. A stream without deltas is folded
+from its whole messages. Events are deduped by `uuid`, so opening the watch
+again after sending a message folds only what is new.
+
+```svelte
+<script lang="ts">
+	import { watch } from '@poodle64/librarian/client';
+	import { Session } from '@poodle64/librarian/session';
+
+	const session = new Session();
+	let watching = $state(false);
+
+	async function follow(signal: AbortSignal) {
+		watching = true;
+		try {
+			for await (const event of watch({ endpoint: `/api/agent/${persona}/jobs/${id}/watch`, signal }))
+				session.apply(event);
+		} finally {
+			watching = false;
+		}
+	}
+
+	// The host's own additions: what a run handed in, carded under its answer.
+	const turns = $derived(
+		session.turns.map((turn) =>
+			turn.outcome?.structuredOutput ? { ...turn, artefact: artefactFrom(turn) } : turn
+		)
+	);
+</script>
+
+<Conversation
+	{turns}
+	running={watching && session.working}
+	version={session.version}
+	{name}
+	{describeTool}
+	copy={{ sources: 'Read from', notHeld: '' }}
+	onopenartefact={(turn) => (showing = turn.id)}
+	{showing}
+	oncite={(citation) => showPage(citation.document_id)}
+>
+	{#snippet composer()}
+		<Composer bind:value {running} {name} note="It carries on from where it stopped." {onsubmit} {onstop} />
+	{/snippet}
+</Conversation>
+```
+
+`watch()` differs from `ask()` in one way: a clean close with no `result` is
+not a failure, because a stopped run and a session waiting between runs both
+end that way.
+
+| Concern                | How                                                                                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The persona's tools    | `describeTool(block) => ToolWords \| undefined`: the row (`verb`, `object`, `detail`), the activity line's counts (`tally`), and what it read (`source`). `undefined` leaves a call to the package's own words |
+| What an answer read    | `ToolWords.source` lists under the answer, under `copy.sources`; tapping one calls `oncite`. Nothing checked it, so it carries no trust mark                          |
+| An artefact            | `turn.artefact = { title, summary }` cards under the prose once the turn settles; `isAnswer: true` is an artefact that IS the prose, and replaces it                  |
+| Opening it             | `onopenartefact(turn)` and `showing` (the turn id the host shows). Without a handler, an `isAnswer` artefact opens in `ArtefactPane` and any other offers no action |
+| "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no shelf                                                                                                     |
 
 ### Citations
 
@@ -343,7 +404,7 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is thirteen states x three widths x both themes, taken by
+`docs/screenshots/` is sixteen states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
@@ -352,8 +413,11 @@ really draggable, that the scope statement folds once there is a
 conversation over it and reopens from that line, that a follow-up chip asks
 its question and takes the rest of the row with it, that the persona's
 between-tool narration is nowhere in the answer prose before the activity
-line is opened, and that the reading column holds its 46rem measure and stays
-centred at every width. It exits non-zero on any of them.
+line is opened, that a job's artefact and the pages it read open in the
+host's own columns and never in a pane of the package's, and that the reading
+column holds its 46rem measure and stays centred at every width. It exits
+non-zero on any of them. The job states fold a stream captured from the real
+CLI (`src/test/fixtures/`).
 
 The console's `app.css` deliberately does NOT scan this package's `dist`, so
 the grid is taken in a consumer that compiles none of its Tailwind classes —

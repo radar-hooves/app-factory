@@ -2,6 +2,71 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.19] - 2026-09-29
+
+A session somebody else started, read as a conversation. Asked for by
+godswood (`radar-hooves/godswood#839`), whose document-reading persona runs
+as an app-started job on the factory's agent slice (factory v2026.9.39).
+
+### Added
+
+- **`watch()`** in `./client`: GETs a session's stream with `ask()`'s frames
+  and its never-throw contract. A clean close with no `result` is a stopped
+  run or a session between runs, not a failure.
+- **`Session`** in `./session`: folds a whole stream into `Turn[]`. A user
+  frame the CLI replays (`--replay-user-messages`) opens a turn on the
+  reader's side, the run after it folds in, its `result` settles it, and
+  `working` says the last run is open. Events are deduped by `uuid`, so
+  opening a watch again folds only what is new.
+- **`DescribeTool`**: a host's words for its persona's tools. `ToolWords`
+  carries the row (`verb`, `object`, `detail`), the activity line's count
+  (`tally`), how a run of identical calls is counted (`repeat`) and what the
+  call read (`source`), which lists under the answer and opens through
+  `oncite`, with no trust mark. `undefined` leaves a call to `describe()`.
+- **`Turn.artefact`** (`{ title, summary, isAnswer }`): a card in the host's
+  words under the answer's prose once the turn settles, with "Open" and
+  "Showing" (`copy.openArtefact`, `copy.showingArtefact`). `isAnswer` is an
+  artefact that IS the prose, which it replaces as `kind: 'artefact'` did.
+- **`Conversation`**: `onopenartefact(turn)` and `showing` hand artefacts to a
+  host's own column; `oncite` hands every citation tap to a host's own
+  viewer; `describeTool` reaches every turn.
+- **`Composer`**: `scope` and `onscope` are optional, and `note` is one quiet
+  line where a scope choice would sit.
+- **`Outcome.structuredOutput`**: what a run returned under `--json-schema`.
+- Three job states in the lab and the screenshot grid (`job`, `job-showing`,
+  `job-live`), folded from a stream captured from the real CLI, with
+  assertions that the artefact and a page it read open in the host's
+  columns and never in a pane of the package's.
+
+### Changed
+
+- **`Turn.kind` and `Turn.title` are gone**: a briefing is
+  `artefact: { title, isAnswer: true }`. The card and `ArtefactPane` no
+  longer say "Briefing doc" or count sources; `summary` is the host's.
+- **`describe()` returns `ToolWords`**, its "N lines" sub-line now its
+  `detail`; `ActivityGroup` counts `tallies` in the order each first
+  appeared, in place of `searches`, `documents` and `collections`.
+- **`@poodle64/ui` is no longer a dependency.** Its one use, `Panel` under
+  the artefact card, is replaced by the package's own CSS like every other
+  transcript element.
+
+### Fixed
+
+- **A job's answer rendered nothing.** The fold read only token deltas and
+  skipped whole `assistant` messages, which are all a stream without
+  `--include-partial-messages` carries. It now reads either, and prints each
+  block once when a stream carries both. Measured on Claude Code 2.1.283:
+  one whole block per event, every one with `stop_reason: null`.
+- **A result could land under the wrong call.** Two calls made at once are
+  both emitted before either result; the fold pinned each result on the
+  latest open call, so the first page's text sat under the second page's
+  row. Results are matched by `tool_use_id`.
+- **The surface pushed the page sideways inside a row.** A host that sets
+  `Conversation` beside columns of its own made it a flex item whose minimum
+  width was its widest table; it now shrinks.
+- **"Answered without a source" can be switched off** (`notHeld: ''`) for a
+  persona that answers from no shelf.
+
 ## [2026.9.16] - 2026-09-16
 
 Two edges on `ask()`, from the fresh-context review of 2026.9.15.

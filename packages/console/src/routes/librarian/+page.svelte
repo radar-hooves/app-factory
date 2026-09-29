@@ -17,7 +17,18 @@
 	import Conversation from '@poodle64/librarian/conversation';
 	import Composer, { type Scope } from '@poodle64/librarian/composer';
 	import type { Turn } from '@poodle64/librarian/transcript';
-	import { EXAMPLES, loadDocument, scene, SCOPE, type LabState } from '$lib/librarian-fixtures';
+	import type { Citation } from '@poodle64/librarian/citations';
+	import {
+		EXAMPLES,
+		JOB_COPY,
+		JOB_NOTE,
+		JOB_READING,
+		JOB_WORDS,
+		loadDocument,
+		scene,
+		SCOPE,
+		type LabState
+	} from '$lib/librarian-fixtures';
 
 	const STATES: LabState[] = [
 		'empty',
@@ -32,7 +43,10 @@
 		'error',
 		'stopped',
 		'chat',
-		'persona'
+		'persona',
+		'job',
+		'job-showing',
+		'job-live'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -49,6 +63,11 @@
 	// effect; the counter it is set from is a plain variable for that reason.
 	let bump = 0;
 	let scope = $state<Scope>('library');
+	// A job surface: the host keeps its own column for the artefact and its
+	// own page viewer, and the package only hands it the taps.
+	let job = $state(false);
+	let showing = $state<string | undefined>(undefined);
+	let viewing = $state<Citation | null>(null);
 
 	// Re-seeding on the query parameter rather than on a click keeps the driver
 	// and the eye on exactly the same code path.
@@ -59,6 +78,9 @@
 		value = next.value;
 		files = next.files;
 		name = next.name;
+		job = next.job ?? false;
+		showing = next.showing;
+		viewing = null;
 		version = ++bump;
 	});
 
@@ -101,40 +123,85 @@
 		</button>
 	</header>
 
-	<Conversation
-		{turns}
-		{running}
-		{version}
-		{name}
-		examples={EXAMPLES}
-		scope={SCOPE}
-		welcome={name === 'Milton'
-			? 'Ask Milton about ADF pay, allowances, leave and conditions of service.'
-			: undefined}
-		onexample={(question) => {
-			value = question;
-		}}
-		onsuggest={(followUp) => {
-			value = followUp;
-			send();
-		}}
-		onregenerate={() => {
-			running = true;
-			version = ++bump;
-		}}
-		{loadDocument}
-	>
-		{#snippet composer()}
-			<Composer
-				bind:value
-				bind:files
-				{running}
-				{scope}
-				{name}
-				onscope={(next) => (scope = next)}
-				onsubmit={send}
-				onstop={() => (running = false)}
-			/>
-		{/snippet}
-	</Conversation>
+	<div class="flex min-h-0 flex-1">
+		{#if job && showing}
+			<!-- The host's own column, not the package's pane: what the run handed
+			     in, beside the conversation that explains it. -->
+			<aside
+				aria-label={JOB_READING.title}
+				class="border-border hidden w-72 shrink-0 flex-col gap-1 border-r p-4 text-sm md:flex"
+			>
+				<h2 class="font-semibold">{JOB_READING.title}</h2>
+				<p class="text-muted-foreground text-xs">{JOB_READING.summary}</p>
+			</aside>
+		{/if}
+		<Conversation
+			{turns}
+			{running}
+			{version}
+			{name}
+			examples={EXAMPLES}
+			scope={job ? undefined : SCOPE}
+			describeTool={job ? JOB_WORDS : undefined}
+			copy={job ? JOB_COPY : undefined}
+			onopenartefact={job
+				? (turn) => (showing = showing === turn.id ? undefined : turn.id)
+				: undefined}
+			{showing}
+			oncite={job ? (citation) => (viewing = citation) : undefined}
+			welcome={name === 'Milton'
+				? 'Ask Milton about ADF pay, allowances, leave and conditions of service.'
+				: undefined}
+			onexample={(question) => {
+				value = question;
+			}}
+			onsuggest={(followUp) => {
+				value = followUp;
+				send();
+			}}
+			onregenerate={() => {
+				running = true;
+				version = ++bump;
+			}}
+			{loadDocument}
+		>
+			{#snippet composer()}
+				{#if job}
+					<Composer
+						bind:value
+						bind:files
+						{running}
+						{name}
+						copy={JOB_COPY}
+						note={JOB_NOTE}
+						onsubmit={send}
+						onstop={() => (running = false)}
+					/>
+				{:else}
+					<Composer
+						bind:value
+						bind:files
+						{running}
+						{scope}
+						{name}
+						onscope={(next) => (scope = next)}
+						onsubmit={send}
+						onstop={() => (running = false)}
+					/>
+				{/if}
+			{/snippet}
+		</Conversation>
+		{#if viewing}
+			<!-- The host's page viewer, standing in for one that draws the page. -->
+			<aside
+				aria-label="Page viewer"
+				class="border-border hidden w-72 shrink-0 flex-col gap-1 border-l p-4 text-sm md:flex"
+			>
+				<h2 class="font-semibold">{viewing.title} · {viewing.section}</h2>
+				<button type="button" class="text-muted-foreground text-xs" onclick={() => (viewing = null)}>
+					Close
+				</button>
+			</aside>
+		{/if}
+	</div>
 </div>
