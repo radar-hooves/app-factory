@@ -1,0 +1,90 @@
+"""Business logic for machine-raised alerts.
+
+These functions are also the in-process producer API: an app's own scheduled
+job calls `raise_alert` and `clear_alert` on a session it opened, and commits.
+"""
+
+import datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.alerts.models import Alert
+from {{ package_name }}.api.alerts.schemas import AlertRaise
+from {{ package_name }}.exceptions import NotFoundError
+
+
+def raise_alert(session: Session, alert: AlertRaise) -> Alert:
+    """Create the alert for `alert.key`, or update that one in place and mark it unread.
+
+    One INSERT … ON CONFLICT rather than a read then a write, so two producers
+    raising the same key at once cannot both insert. `raised_at` is the app's
+    clock, as `mark_read`'s is: Postgres's `now()` is the transaction's start,
+    so a job raising twice in one transaction would not move it.
+    """
+    content = {**alert.model_dump(exclude={"key"}), "raised_at": datetime.datetime.now(datetime.UTC)}
+    statement = (
+        insert(Alert)
+        .values(key=alert.key, **content)
+        .on_conflict_do_update(
+            index_elements=[Alert.key],
+            set_={**content, "read_at": None, "updated_at": func.now()},
+        )
+        .returning(Alert)
+        .execution_options(populate_existing=True)
+    )
+    return session.scalars(statement).one()
+
+
+def clear_alert(session: Session, key: str) -> bool:
+    """Withdraw the alert for `key`. False when there was none: clearing twice is not an error."""
+    alert = session.scalars(select(Alert).where(Alert.key == key)).one_or_none()
+    if alert is None:
+        return False
+    session.delete(alert)
+    session.flush()
+    return True
+
+
+def list_alerts(session: Session, *, limit: int) -> tuple[list[Alert], int, int]:
+    """Return the newest-raised alerts, with the total and unread counts of all of them."""
+    alerts = session.scalars(select(Alert).order_by(Alert.raised_at.desc(), Alert.id.desc()).limit(limit)).all()
+    total, unread = session.execute(
+        select(func.count(), func.count().filter(Alert.read_at.is_(None))).select_from(Alert)
+    ).one()
+    return list(alerts), total, unread
+
+
+def get_alert(session: Session, alert_id: int) -> Alert:
+    """Return an alert by id.
+
+    Raises:
+        NotFoundError: no such alert exists — or it was dismissed or cleared.
+    """
+    alert = session.get(Alert, alert_id)
+    if alert is None:
+        raise NotFoundError(f"Alert {alert_id} not found")
+    return alert
+
+
+def mark_read(session: Session, alert_id: int) -> None:
+    """Mark an alert read. Reading it again keeps the first read time.
+
+    Raises:
+        NotFoundError: no such alert exists.
+    """
+    alert = get_alert(session, alert_id)
+    if alert.read_at is None:
+        alert.read_at = datetime.datetime.now(datetime.UTC)
+        session.flush()
+
+
+def dismiss(session: Session, alert_id: int) -> None:
+    """Delete an alert; a later raise of its key brings it back unread.
+
+    Raises:
+        NotFoundError: no such alert exists.
+    """
+    session.delete(get_alert(session, alert_id))
+    session.flush()

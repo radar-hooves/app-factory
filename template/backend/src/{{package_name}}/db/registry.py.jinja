@@ -16,6 +16,7 @@ what stops a new table quietly shipping with no access predicate
 
 from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent  # noqa: F401
 from {{ package_name }}.api.agent.ownership import AgentSession
+from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.api.users.models import User
@@ -62,6 +63,7 @@ WORKSPACE_EXEMPT: dict[type, str] = {
     DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
     FeedbackReport: "personal-subject: the person who filed it — a report may carry a screenshot of their own screen",
     AgentSession: "personal-subject: the asker who issued it — a conversation belongs to whoever asked, not a workspace",
+    Alert: "no per-workspace division: what a machine told this deployment's operator, raised naming no workspace and read under the reserved admin entitlement",
 }
 
 __all__ = ["WORKSPACE_EXEMPT", "Base"]

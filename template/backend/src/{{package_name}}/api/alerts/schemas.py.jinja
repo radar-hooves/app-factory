@@ -1,0 +1,56 @@
+"""Pydantic schemas for machine-raised alerts."""
+
+import datetime
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class AlertRaise(BaseModel):
+    """What a producer sends to raise an alert — over `/mcp`, or in-process.
+
+    `key` is the producer's own stable name for the condition, and is what makes
+    a repeat raise an update rather than a second alert. Prefix it with the
+    producer (`osint-scan:dry:<query>`) so two producers never share one.
+    """
+
+    key: Annotated[str, Field(min_length=1, max_length=255)]
+    title: Annotated[str, Field(min_length=1, max_length=200)]
+    body: Annotated[str | None, Field(max_length=20_000)] = None
+    link: Annotated[str | None, Field(max_length=2048)] = None
+
+    @field_validator("link")
+    @classmethod
+    def _link_is_a_path_or_web_url(cls, link: str | None) -> str | None:
+        """An app path or an http(s) URL, and nothing an `href` would execute.
+
+        `//host` is refused with the schemes: a browser reads it as a URL on
+        another host, not as a path in this app.
+        """
+        if link is None:
+            return None
+        if (link.startswith("/") and not link.startswith("//")) or link.startswith(("https://", "http://")):
+            return link
+        raise ValueError("link must be an app path (/…) or an http(s) URL")
+
+
+class AlertRead(BaseModel):
+    """An alert as the bell shows it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    key: str
+    title: str
+    body: str | None
+    link: str | None
+    raised_at: datetime.datetime
+    read_at: datetime.datetime | None
+
+
+class AlertList(BaseModel):
+    """The newest alerts, and the counts the bell's badge needs beyond them."""
+
+    alerts: list[AlertRead]
+    total: int
+    unread: int

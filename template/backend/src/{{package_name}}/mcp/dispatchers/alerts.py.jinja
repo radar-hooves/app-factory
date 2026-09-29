@@ -1,0 +1,63 @@
+"""MCP tool over the alerts slice — how a machine raises an alert.
+
+This is the producer's door (`docs/design/alerts.md`): n8n or another estate
+service holds an Authentik bearer and is listed in `config/actors.yaml`, and
+`ActorGateMiddleware` (`mcp/auth.py`) has refused every other caller before this
+tool runs. Every registered actor may raise and clear any key; reading the
+alerts back is the operator's, through `/api/alerts`.
+"""
+
+from typing import Literal
+
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from pydantic import ValidationError
+
+from {{ package_name }}.api.alerts import service
+from {{ package_name }}.api.alerts.schemas import AlertRaise
+from {{ package_name }}.db.session import get_session_factory
+
+
+def register_alert_tools(mcp: FastMCP) -> None:
+    """Register the `alerts` dispatcher on `mcp`."""
+
+    @mcp.tool()
+    def alerts(
+        action: Literal["raise", "clear"],
+        key: str,
+        title: str | None = None,
+        body: str | None = None,
+        link: str | None = None,
+    ) -> dict[str, object]:
+        """Raise or clear an alert for this app's operator, shown in the app's top-bar bell.
+
+        Actions:
+            raise: create the alert for `key`, or update the open one in place
+                and mark it unread. Needs `title`; `body` and `link` are optional.
+            clear: withdraw the alert for `key` once its condition has passed.
+                Clearing a key with no open alert is not an error.
+
+        Args:
+            action: "raise" or "clear".
+            key: the producer's stable name for the condition, prefixed with the
+                producer ("osint-scan:dry:<query>"). Raising it again updates
+                one alert rather than adding a second.
+            title: one line, at most 200 characters. raise only.
+            body: plain text; line breaks are kept. raise only.
+            link: an app path ("/documents/42") or an http(s) URL. raise only.
+        """
+        with get_session_factory()() as session:
+            if action == "clear":
+                cleared = service.clear_alert(session, key)
+                session.commit()
+                return {"key": key, "cleared": cleared}
+
+            if title is None:
+                raise ToolError("raise needs a title")
+            try:
+                alert = AlertRaise(key=key, title=title, body=body, link=link)
+            except ValidationError as exc:
+                raise ToolError(str(exc)) from exc
+            raised = service.raise_alert(session, alert)
+            session.commit()
+            return {"id": raised.id, "key": raised.key}

@@ -1,0 +1,243 @@
+"""The alerts slice: producers raise over `/mcp` or in-process, the operator reads over `/api/alerts`.
+
+The `alerts` tool opens its OWN session (`get_session_factory()()`), exactly as
+the feedback slice's background filing does; `_reuse_test_session` hands it this
+test's SAVEPOINT-scoped session instead, so a raise over `/mcp` is visible to the
+HTTP reads that follow and rolls back with everything else.
+"""
+
+import json
+from typing import Any
+
+import httpx
+import pytest
+from fastmcp import Client
+from fastmcp.exceptions import ToolError
+from httpx import AsyncClient
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.alerts import service
+from {{ package_name }}.api.alerts.schemas import AlertRaise
+from {{ package_name }}.mcp.dispatchers import alerts as alerts_dispatcher
+from {{ package_name }}.mcp.server import create_mcp_server
+
+ADMIN = {"x-authentik-uid": "the-admin", "x-authentik-username": "the-admin", "x-authentik-entitlements": "admin:write"}
+READ_ONLY_ADMIN = {**ADMIN, "x-authentik-entitlements": "admin"}
+USERINFO_URL = "https://idp.test/application/o/userinfo/"
+
+
+class _ReuseSession:
+    """`with factory() as s: ...` that hands back an already-open session unclosed."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __enter__(self) -> Session:
+        return self._session
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _reuse_test_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> None:
+    monkeypatch.setattr(alerts_dispatcher, "get_session_factory", lambda: lambda: _ReuseSession(session))
+
+
+async def _list(client: AsyncClient) -> dict[str, Any]:
+    response = await client.get("/api/alerts/", headers=ADMIN)
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+# ── Raising ──────────────────────────────────────────────────────────────────
+
+
+async def test_a_raised_alert_reaches_the_operator_unread(client: AsyncClient, session: Session) -> None:
+    service.raise_alert(
+        session, AlertRaise(key="osint:report", title="Scan done", body="3 filed\n2 waiting", link="/review")
+    )
+
+    listed = await _list(client)
+    assert listed["total"] == 1
+    assert listed["unread"] == 1
+    [alert] = listed["alerts"]
+    assert alert["title"] == "Scan done"
+    assert alert["body"] == "3 filed\n2 waiting"
+    assert alert["link"] == "/review"
+    assert alert["read_at"] is None
+
+
+async def test_raising_a_key_again_updates_it_in_place_and_makes_it_unread(
+    client: AsyncClient, session: Session
+) -> None:
+    first = service.raise_alert(session, AlertRaise(key="osint:dry:q1", title="q1 dry 3 runs", link="/queries/1"))
+    first_raised_at = first.raised_at
+    await client.post(f"/api/alerts/{first.id}/read", headers=ADMIN)
+
+    second = service.raise_alert(session, AlertRaise(key="osint:dry:q1", title="q1 dry 4 runs"))
+
+    assert second.id == first.id
+    listed = await _list(client)
+    assert listed["total"] == 1
+    assert listed["unread"] == 1
+    [alert] = listed["alerts"]
+    assert alert["title"] == "q1 dry 4 runs"
+    # Every field is the latest raise's, so a link the producer dropped is gone.
+    assert alert["link"] is None
+    assert alert["read_at"] is None
+    assert second.raised_at > first_raised_at
+
+
+async def test_the_newest_raise_lists_first(client: AsyncClient, session: Session) -> None:
+    service.raise_alert(session, AlertRaise(key="a", title="older"))
+    service.raise_alert(session, AlertRaise(key="b", title="newer"))
+
+    listed = await _list(client)
+    assert [a["title"] for a in listed["alerts"]] == ["newer", "older"]
+
+
+@pytest.mark.parametrize("link", ["javascript:alert(1)", "//elsewhere.test/x", "mailto:someone@example.test", "review"])
+def test_a_link_an_href_could_misuse_is_refused(link: str) -> None:
+    with pytest.raises(ValidationError):
+        AlertRaise(key="k", title="t", link=link)
+
+
+@pytest.mark.parametrize("link", ["/documents/42", "https://n8n.example.test/execution/9", "http://host.test/"])
+def test_an_app_path_or_web_url_is_accepted(link: str) -> None:
+    assert AlertRaise(key="k", title="t", link=link).link == link
+
+
+# ── Reading and dismissing ───────────────────────────────────────────────────
+
+
+async def test_reading_marks_it_read_once(client: AsyncClient, session: Session) -> None:
+    alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
+
+    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
+    first_read = (await _list(client))["alerts"][0]["read_at"]
+    assert first_read is not None
+    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
+
+    listed = await _list(client)
+    assert listed["unread"] == 0
+    assert listed["alerts"][0]["read_at"] == first_read
+
+
+async def test_a_dismissed_alert_is_gone_until_raised_again(client: AsyncClient, session: Session) -> None:
+    alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
+
+    assert (await client.delete(f"/api/alerts/{alert.id}", headers=ADMIN)).status_code == 204
+    assert (await _list(client))["total"] == 0
+
+    service.raise_alert(session, AlertRaise(key="k", title="t again"))
+    listed = await _list(client)
+    assert listed["total"] == 1
+    assert listed["unread"] == 1
+
+
+async def test_an_unknown_alert_answers_404(client: AsyncClient) -> None:
+    assert (await client.post("/api/alerts/999999/read", headers=ADMIN)).status_code == 404
+    assert (await client.delete("/api/alerts/999999", headers=ADMIN)).status_code == 404
+
+
+async def test_a_caller_without_admin_cannot_see_alerts(client: AsyncClient) -> None:
+    assert (await client.get("/api/alerts/")).status_code == 403
+
+
+async def test_acting_on_an_alert_needs_admin_write(client: AsyncClient, session: Session) -> None:
+    alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
+
+    assert (await client.get("/api/alerts/", headers=READ_ONLY_ADMIN)).status_code == 200
+    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=READ_ONLY_ADMIN)).status_code == 403
+    assert (await client.delete(f"/api/alerts/{alert.id}", headers=READ_ONLY_ADMIN)).status_code == 403
+
+
+# ── The producer's door: the `alerts` MCP tool ───────────────────────────────
+
+
+async def test_a_producer_raises_and_clears_through_the_tool(client: AsyncClient) -> None:
+    async with Client(create_mcp_server()) as mcp:
+        raised = await mcp.call_tool("alerts", {"action": "raise", "key": "osint:report", "title": "Scan done"})
+        assert raised.data["key"] == "osint:report"
+        assert (await _list(client))["total"] == 1
+
+        cleared = await mcp.call_tool("alerts", {"action": "clear", "key": "osint:report"})
+        assert cleared.data == {"key": "osint:report", "cleared": True}
+        assert (await _list(client))["total"] == 0
+
+        # Clearing what is not there is a no-op the producer can repeat every run.
+        again = await mcp.call_tool("alerts", {"action": "clear", "key": "osint:report"})
+        assert again.data["cleared"] is False
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"action": "raise", "key": "k"}, "needs a title"),
+        ({"action": "raise", "key": "k", "title": "t", "link": "javascript:alert(1)"}, "link must be"),
+    ],
+)
+async def test_the_tool_refuses_a_raise_it_cannot_show(arguments: dict[str, object], message: str) -> None:
+    async with Client(create_mcp_server()) as mcp:
+        with pytest.raises(ToolError, match=message):
+            await mcp.call_tool("alerts", arguments)
+
+
+@pytest.mark.integration
+async def test_one_stateless_tools_call_is_the_whole_producer_contract(
+    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
+) -> None:
+    """What `docs/design/alerts.md` tells n8n to send: one POST, no initialize first.
+
+    Over the real mounted `/mcp`, behind the bearer gate and the actor allow-list,
+    as a registered identity from the shipped `config/actors.yaml`.
+    """
+
+    real_get = httpx.AsyncClient.get
+
+    async def _userinfo(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        if url != USERINFO_URL:
+            return await real_get(self, url, **kwargs)
+        return httpx.Response(200, json={"preferred_username": "mcp-service"}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", _userinfo)
+
+    from {{ package_name }} import main as main_module
+    from {{ package_name }}.config import get_settings
+
+    configured = get_settings().model_copy(deep=True)
+    configured.mcp.oidc_userinfo_url = USERINFO_URL
+    monkeypatch.setattr(main_module, "get_settings", lambda: configured)
+
+    app = main_module.create_app()
+    transport = httpx.ASGITransport(app=app)
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(transport=transport, base_url="http://localhost") as http,
+    ):
+        response = await http.post(
+            "/mcp/",
+            headers={
+                "Authorization": "Bearer n8n-client-credentials",
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "alerts",
+                    "arguments": {"action": "raise", "key": "osint:report", "title": "Scan done", "link": "/review"},
+                },
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    result = json.loads(response.text.split("data: ", 1)[1])["result"]
+    assert result["isError"] is False, result
+    listed = await _list(client)
+    assert [a["title"] for a in listed["alerts"]] == ["Scan done"]

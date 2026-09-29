@@ -13,6 +13,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import AlertBell from '$lib/alerts/alert-bell.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
 	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
@@ -92,6 +93,16 @@
 	     (rules-library/platform/tenancy.md). -->
 	{#snippet context()}
 		<WorkspaceMenu {membersHref} />
+	{/snippet}
+
+	<!-- What machines told this deployment's operator (docs/design/alerts.md),
+	     for whoever holds admin: the server gates the routes, and this only
+	     spares everyone else a bell whose every call would 403. It renders
+	     nothing while no alert is open. -->
+	{#snippet actions()}
+		{#if auth.can('admin')}
+			<AlertBell />
+		{/if}
 	{/snippet}
 
 	<!-- Who is signed in, and the way out — rendered once, at the end of the

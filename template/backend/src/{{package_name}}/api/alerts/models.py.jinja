@@ -1,0 +1,42 @@
+"""ORM model for machine-raised alerts.
+
+One models.py per domain slice. Import this in db/registry.py so Alembic
+includes the table in autogenerate.
+"""
+
+import datetime
+
+from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from {{ package_name }}.db.base import Base, TimestampMixin
+
+
+class Alert(Base, TimestampMixin):
+    """Something a machine told this deployment's operator, until it is dismissed.
+
+    One row per producer-chosen `key`: raising a key again updates this row and
+    makes it unread, so a recurring condition never stacks. There is no
+    dismissed state — dismissing (the operator) and clearing (the producer) both
+    delete the row, and a later raise brings it back.
+
+    Not WorkspaceScoped: a producer names no workspace, and the reader is whoever
+    holds the reserved `admin` entitlement. The exemption is recorded in
+    `db/registry.py` (`docs/design/alerts.md` §Tenancy).
+    """
+
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An app path or an absolute http(s) URL; `schemas.AlertRaise` refuses anything else.
+    link: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+    # When the producer last raised it, which is what the bell orders by —
+    # `updated_at` also moves when the operator reads it.
+    raised_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    read_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,0 +1,61 @@
+"""HTTP routes for machine-raised alerts: the operator's side of the inbox.
+
+Producers never come through here. They raise over `/mcp` (the `alerts` tool,
+`mcp/dispatchers/alerts.py`), the factory's one machine door, or in-process
+through `service.raise_alert`. What this router serves is the bell.
+
+Gated by the reserved `admin` entitlement, as reading feedback is: the ROUTER
+carries the read gate and each mutating route adds the write gate, per
+entitlements.py.
+"""
+
+from fastapi import APIRouter, Query, status
+
+from {{ package_name }}.api.alerts import service
+from {{ package_name }}.api.alerts.schemas import AlertList, AlertRead
+from {{ package_name }}.deps import SessionDep
+from {{ package_name }}.entitlements import module_dependency
+
+router = APIRouter(dependencies=[module_dependency("admin")])
+
+MAX_PAGE_SIZE = 100
+
+
+@router.get("/", response_model=AlertList, operation_id="listAlerts")
+def list_alerts(
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE, description="How many of the newest to return"),
+) -> AlertList:
+    """The newest-raised alerts, with the total and unread counts of all of them."""
+    alerts, total, unread = service.list_alerts(session, limit=limit)
+    return AlertList(alerts=[AlertRead.model_validate(alert) for alert in alerts], total=total, unread=unread)
+
+
+@router.post(
+    "/{alert_id}/read",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[module_dependency("admin", write=True)],
+    operation_id="markAlertRead",
+)
+def mark_alert_read(alert_id: int, session: SessionDep) -> None:
+    """Mark one alert read.
+
+    Raises:
+        NotFoundError: no such alert exists.
+    """
+    service.mark_read(session, alert_id)
+
+
+@router.delete(
+    "/{alert_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[module_dependency("admin", write=True)],
+    operation_id="dismissAlert",
+)
+def dismiss_alert(alert_id: int, session: SessionDep) -> None:
+    """Dismiss one alert. It returns, unread, if its producer raises it again.
+
+    Raises:
+        NotFoundError: no such alert exists.
+    """
+    service.dismiss(session, alert_id)
