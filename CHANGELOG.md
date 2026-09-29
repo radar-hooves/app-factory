@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **A fresh stamp's settings slice type-checks clean, and listing a gateway's models needs no `openai` package.** 2026.9.51 failed an app's `mypy src` with 9 errors: the override and history columns were typed `object`, three dicts were bare, and `api/settings/gateway_models.py` imported `openai`, which no stamp ships. The columns carry the value union, and the model list is the OpenAI-compatible `GET {base_url}/models` over httpx. Reported by godswood.
+
 ## [2026.9.51] - 2026-09-29
 
 ### Added
