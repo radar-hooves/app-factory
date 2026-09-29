@@ -26,6 +26,10 @@
 			"types": "./dist/transcript.svelte.d.ts",
 			"svelte": "./dist/transcript.svelte.js"
 		},
+		"./session": {
+			"types": "./dist/session.svelte.d.ts",
+			"svelte": "./dist/session.svelte.js"
+		},
 		"./history": {
 			"types": "./dist/history.svelte.d.ts",
 			"svelte": "./dist/history.svelte.js"
@@ -54,7 +58,6 @@
 	"peerDependencies": {
 		"svelte": "^5.54.0",
 		"@poodle64/design-tokens": "^2026.8.1",
-		"@poodle64/ui": "^2026.9.2",
 		"@lucide/svelte": "^1.7.0",
 		"marked": "^18.0.11",
 		"isomorphic-dompurify": "^3.23.0",
@@ -63,7 +66,6 @@
 	"devDependencies": {
 		"@lucide/svelte": "^1.7.0",
 		"@poodle64/design-tokens": "workspace:*",
-		"@poodle64/ui": "workspace:*",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/package": "^2.5.8",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",

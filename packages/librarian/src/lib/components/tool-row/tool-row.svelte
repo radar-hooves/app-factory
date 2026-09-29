@@ -6,12 +6,13 @@
   five separate events rather than one train of thought.
 
   The row says what the persona DID, in a reader's own words — never the
-  tool's name or the raw command it ran. Expanding a settled row shows what
-  came back, never what was typed.
+  tool's name or the raw command it ran: the host's `DescribeTool`, or the
+  package's own `describe()`. Expanding a settled row shows what came back,
+  never what was typed.
 -->
 <script lang="ts">
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import { describe, type ToolBlock } from '../../transcript.svelte';
+	import { describe, type ToolBlock, type ToolWords } from '../../transcript.svelte';
 
 	interface Props {
 		block: ToolBlock;
@@ -19,15 +20,21 @@
 		/** Identical consecutive steps folded into this row — five pages of one
 		 *  document is one act of reading to a human. */
 		repeats?: number;
+		/** The call in the persona's words. Absent takes the package's own. */
+		words?: ToolWords;
 	}
 
-	let { block, running, repeats = 1 }: Props = $props();
+	let { block, running, repeats = 1, words }: Props = $props();
 	let open = $state(false);
 
 	const settled = $derived(block.result !== undefined);
-	const said = $derived(describe(block));
+	const said = $derived(words ?? describe(block));
 	const tone = $derived(block.isError ? 'error' : settled ? 'success' : 'info');
-	const lines = $derived(block.result ? block.result.split('\n').length : 0);
+	const again = $derived(
+		said.repeat
+			? `· ${repeats} ${repeats === 1 ? said.repeat[0] : said.repeat[1]}`
+			: `× ${repeats}`
+	);
 </script>
 
 <div class="ds-lib-tool">
@@ -45,7 +52,7 @@
 		<span class="ds-lib-tool-said">
 			<span class="ds-lib-tool-verb">{said.verb}</span>
 			{#if said.object}<span class="ds-lib-tool-object">{said.object}</span>{/if}
-			{#if repeats > 1}<span>· {repeats} pages</span>{/if}
+			{#if repeats > 1}<span>{again}</span>{/if}
 		</span>
 	</button>
 
@@ -55,8 +62,8 @@
 				<pre class="ds-lib-tool-result">{block.result}</pre>
 			{/if}
 		</div>
-	{:else if settled && lines > 0}
-		<p class="ds-lib-tool-lines">{lines === 1 ? '1 line' : `${lines} lines`}</p>
+	{:else if said.detail}
+		<p class="ds-lib-tool-lines">{said.detail}</p>
 	{/if}
 </div>
 

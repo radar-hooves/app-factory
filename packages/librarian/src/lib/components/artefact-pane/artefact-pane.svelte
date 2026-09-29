@@ -1,5 +1,5 @@
 <!--
-  A study artefact, open in the reading column.
+  An artefact that is its answer's own prose, open in the reading column.
 
   The same shell shape `DocumentPane` uses (a column at 64rem, a bottom sheet
   below it) because decision 2 of the agent surface is that a colleague never
@@ -61,10 +61,10 @@
 
 	<header class="ds-lib-pane-header">
 		<div class="ds-lib-pane-heading">
-			<h2 class="ds-lib-pane-title">{turn.title ?? 'Briefing'}</h2>
-			<p class="ds-lib-pane-subtitle">
-				Briefing doc · {sources.length} source{sources.length === 1 ? '' : 's'}
-			</p>
+			<h2 class="ds-lib-pane-title">{turn.artefact?.title}</h2>
+			{#if turn.artefact?.summary}
+				<p class="ds-lib-pane-subtitle">{turn.artefact.summary}</p>
+			{/if}
 		</div>
 		<button
 			bind:this={closeButton}

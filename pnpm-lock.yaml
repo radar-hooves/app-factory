@@ -108,9 +108,6 @@ importers:
       '@poodle64/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
-      '@poodle64/ui':
-        specifier: workspace:*
-        version: link:../ui
       '@sveltejs/kit':
         specifier: ^2.63.0
         version: 2.70.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.2.0(svelte@5.56.7)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)))(svelte@5.56.7)(typescript@6.0.3)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))

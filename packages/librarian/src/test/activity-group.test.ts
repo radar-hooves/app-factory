@@ -9,9 +9,10 @@ describe('ActivityGroup summary line', () => {
 			kind: 'activity',
 			index: 0,
 			steps: [],
-			collections: ['household-legal'],
-			documents: 2,
-			searches: 1
+			tallies: [
+				{ one: 'search', many: 'searches', count: 1 },
+				{ one: 'document read', many: 'documents read', count: 2 }
+			]
 		};
 
 		render(ActivityGroup, { props: { group, live: false } });

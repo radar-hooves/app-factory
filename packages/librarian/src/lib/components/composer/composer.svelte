@@ -30,7 +30,9 @@
 	interface Props {
 		value: string;
 		running: boolean;
-		scope: Scope;
+		/** What the next message is about. A surface with one scope — a
+		 *  session over one document — passes none and offers no choice. */
+		scope?: Scope;
 		/** Files to send with the next question. Cleared by the caller on send. */
 		files?: File[];
 		/** Names for the two narrower scopes; absent means that scope is unavailable. */
@@ -38,7 +40,7 @@
 		collectionName?: string;
 		/** Hides the paperclip for a host whose ask route takes no files. */
 		attachments?: boolean;
-		onscope: (scope: Scope) => void;
+		onscope?: (scope: Scope) => void;
 		onsubmit: () => void;
 		onstop: () => void;
 		/** Asks for a study artefact instead of an ordinary answer. Omit and no
@@ -50,6 +52,10 @@
 		name?: string;
 		/** Overrides for the package's own words. */
 		copy?: Partial<LibrarianCopy>;
+		/** One quiet line in the box's footer, where a scope choice would
+		 *  sit, in the host's words: what sending does here ("It carries on
+		 *  from where it stopped."). */
+		note?: string;
 	}
 
 	let {
@@ -65,7 +71,8 @@
 		onstop,
 		onbriefing,
 		name = DEFAULT_PERSONA,
-		copy
+		copy,
+		note
 	}: Props = $props();
 
 	const words = $derived(resolveCopy(copy, name));
@@ -87,7 +94,7 @@
 	// passing a name — no pick to make, so the row renders nothing rather
 	// than a chip that only ever reselects itself (design-system, the
 	// fixed-scope Composer defect).
-	const hasChoice = $derived(choices.length > 1);
+	const hasChoice = $derived(scope !== undefined && choices.length > 1);
 
 	// Three chips in a narrow column clipped all three to fragments
 	// ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
@@ -266,12 +273,14 @@
 							type="button"
 							class="ds-lib-scope-chip"
 							class:is-chosen={scope === choice.id}
-							onclick={() => onscope(choice.id)}
+							onclick={() => onscope?.(choice.id)}
 						>
 							{choice.label}
 						</button>
 					{/each}
 				</div>
+			{:else if note}
+				<span class="ds-lib-note">{note}</span>
 			{/if}
 			<span class="ds-lib-spacer"></span>
 			{#if running}
@@ -500,6 +509,12 @@
 
 	.ds-lib-spacer {
 		flex: 1;
+	}
+
+	.ds-lib-note {
+		min-width: 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
 	}
 
 	.ds-lib-rejected {

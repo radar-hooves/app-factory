@@ -11,7 +11,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
-	import type { Turn } from '../../transcript.svelte';
+	import type { DescribeTool, Turn } from '../../transcript.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
@@ -55,6 +55,18 @@
 		copy?: Partial<LibrarianCopy>;
 		/** Enables the source pane. Without it, chips render but do not open. */
 		loadDocument?: LoadDocument;
+		/** Takes every citation tap instead, for a host that shows the source
+		 *  in a viewer of its own. */
+		oncite?: (citation: Citation) => void;
+		/** Takes every artefact card's tap, for a host that shows an artefact
+		 *  in a column of its own. Without it, an artefact that IS its answer
+		 *  opens in this surface's own pane, and any other informs and does
+		 *  not open. */
+		onopenartefact?: (turn: Turn) => void;
+		/** The id of the turn whose artefact the host is showing now. */
+		showing?: string;
+		/** The persona's own words for its tools, and what they read. */
+		describeTool?: DescribeTool;
 		collectionNames?: Set<string>;
 		/** The composer, rendered INSIDE the transcript column so the source
 		 *  pane narrows it too — a composer the host places outside slides
@@ -75,6 +87,10 @@
 		onsuggest,
 		copy,
 		loadDocument,
+		oncite,
+		onopenartefact,
+		showing,
+		describeTool,
 		collectionNames = new Set(),
 		composer
 	}: Props = $props();
@@ -140,7 +156,8 @@
 	// colleague who just asked for one is asking to read it, not merely to
 	// see that it exists. Fires on the RUNNING → settled transition only, so
 	// reopening a past conversation whose last turn happens to be an
-	// artefact does not reopen a pane the reader may have since closed.
+	// artefact does not reopen a pane the reader may have since closed. A
+	// host that opens artefacts itself decides this for itself.
 	//
 	// Plain, not `$state`: read and written in the same effect, which would
 	// otherwise re-trigger itself forever (the pattern this file's `seen`
@@ -148,7 +165,13 @@
 	let wasRunning = false;
 	$effect(() => {
 		const last = turns.at(-1);
-		if (wasRunning && !running && last?.kind === 'artefact' && !last.outcome?.isError) {
+		if (
+			!onopenartefact &&
+			wasRunning &&
+			!running &&
+			last?.artefact?.isAnswer &&
+			!last.outcome?.isError
+		) {
 			column = { kind: 'artefact', turn: last };
 		}
 		wasRunning = running;
@@ -165,14 +188,23 @@
 	}
 
 	function cite(citation: Citation) {
+		if (oncite) return oncite(citation);
 		// A citation derived from the prose has no id to read, so its chip is
 		// legible but inert rather than opening an empty pane. Replaces
 		// whatever the column held, artefact included — never a second pane.
 		if (loadDocument && citation.document_id) column = { kind: 'document', citation };
 	}
 
-	function openArtefact(turn: Turn) {
-		column = { kind: 'artefact', turn };
+	/** Who opens this turn's artefact, if anyone can. */
+	function opener(turn: Turn): (() => void) | undefined {
+		if (onopenartefact) return () => onopenartefact(turn);
+		if (turn.artefact?.isAnswer) return () => (column = { kind: 'artefact', turn });
+		return undefined;
+	}
+
+	function isShowing(turn: Turn): boolean {
+		if (onopenartefact) return showing === turn.id;
+		return column?.kind === 'artefact' && column.turn.id === turn.id;
 	}
 </script>
 
@@ -235,10 +267,11 @@
 							copy={words}
 							name={who}
 							at={turn.at ?? stamps[turn.id]}
-							kind={turn.kind}
-							title={turn.title}
-							onopenartefact={() => openArtefact(turn)}
-							oncite={cite}
+							artefact={turn.artefact}
+							artefactOpen={isShowing(turn)}
+							onopenartefact={opener(turn)}
+							{describeTool}
+							oncite={oncite || loadDocument ? cite : undefined}
 							onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
 							onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
 						/>

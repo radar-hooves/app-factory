@@ -28,7 +28,9 @@ export interface Citation {
 	 * as null.
 	 */
 	verified_at?: string | null;
-	/** True when this came from the prose block rather than the wire event. */
+	/** True when read off the stream — the prose's Sources block, or a call
+	 *  that read it — rather than the library's own frame. Nothing checked it,
+	 *  so it carries no trust mark. */
 	derived?: boolean;
 }
 

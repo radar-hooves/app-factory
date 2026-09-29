@@ -9,7 +9,7 @@
  * and a finished iteration, because the host's loop is what re-enables Send.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ask } from '$lib/client';
+import { ask, watch } from '$lib/client';
 
 function capture() {
 	const calls: Array<[string, RequestInit]> = [];
@@ -210,5 +210,41 @@ describe('ask()', () => {
 		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
 			{ type: 'result', is_error: false, duration_ms: 1200 }
 		]);
+	});
+});
+
+describe('watch()', () => {
+	it('opens the session with a GET that carries the reader\'s session', async () => {
+		const { calls, fetch } = capture();
+		await drain(watch({ endpoint: '/api/agent/clerk/jobs/j1/watch', fetch }));
+		const [url, init] = calls[0];
+		expect(url).toBe('/api/agent/clerk/jobs/j1/watch');
+		expect(init.method).toBeUndefined();
+		expect(init.credentials).toBe('include');
+		expect(new Headers(init.headers).get('accept')).toBe('text/event-stream');
+	});
+
+	it('ends quietly when the session closes with no result', async () => {
+		// A run the reader stopped ends exactly this way, and so does a session
+		// waiting between runs: neither is a failure.
+		const fakeFetch = vi.fn(async () =>
+			streaming([JSON.stringify({ type: 'assistant' })])
+		) as unknown as typeof globalThis.fetch;
+		expect(await collect(watch({ endpoint: '/w', fetch: fakeFetch }))).toEqual([
+			{ type: 'assistant' }
+		]);
+	});
+
+	it('still says so when the stream would not open', async () => {
+		const { fetch } = capture();
+		expect(await collect(watch({ endpoint: '/w', fetch }))).toEqual([{ type: 'library_error' }]);
+	});
+
+	it('still says so when the stream breaks', async () => {
+		const fakeFetch = vi.fn(async () =>
+			streaming([JSON.stringify({ type: 'assistant' })], { truncate: true })
+		) as unknown as typeof globalThis.fetch;
+		const events = await collect(watch({ endpoint: '/w', fetch: fakeFetch }));
+		expect(events.at(-1)).toEqual({ type: 'library_error' });
 	});
 });

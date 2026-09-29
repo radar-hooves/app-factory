@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	segment,
+	summariseActivity,
 	type ActivityGroup,
 	type Block,
 	type Segment,
@@ -64,8 +65,7 @@ describe('narration, then a tool, then the answer', () => {
 	});
 
 	it('still counts only what Milton DID in the summary', () => {
-		expect(groups(out)[0].searches).toBe(1);
-		expect(groups(out)[0].documents).toBe(1);
+		expect(summariseActivity(groups(out)[0])).toBe('1 search · 1 document read');
 	});
 });
 

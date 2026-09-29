@@ -59,9 +59,10 @@ vdescribe('summariseActivity()', () => {
 			kind: 'activity',
 			index: 0,
 			steps: [],
-			collections: ['household-legal'],
-			documents: 2,
-			searches: 1
+			tallies: [
+				{ one: 'search', many: 'searches', count: 1 },
+				{ one: 'document read', many: 'documents read', count: 2 }
+			]
 		};
 		expect(summariseActivity(group)).toBe('1 search · 2 documents read');
 	});
@@ -71,9 +72,7 @@ vdescribe('summariseActivity()', () => {
 			kind: 'activity',
 			index: 0,
 			steps: [],
-			collections: [],
-			documents: 0,
-			searches: 0
+			tallies: []
 		};
 		expect(summariseActivity(group)).toBe('Looked into it');
 	});

@@ -25,6 +25,8 @@ export interface ThinkingBlock {
 export interface ToolBlock {
 	kind: 'tool';
 	index: number;
+	/** The call's `tool_use` id, which its result names. */
+	id?: string;
 	name: string;
 	/** Accumulated `input_json_delta`. Parsed lazily — it is invalid JSON mid-stream. */
 	rawInput: string;
@@ -45,6 +47,9 @@ export interface Outcome {
 	 *  sentence a reader sees is the persona's own (`copy.unreachable`), which
 	 *  only the rendering layer knows, so this carries the FACT and no words. */
 	unreachable?: boolean;
+	/** What the run returned under `--json-schema`: the thing a host cards
+	 *  as a turn's `artefact`. */
+	structuredOutput?: unknown;
 }
 
 /**
@@ -69,6 +74,30 @@ export function readerQuestion(question: string): string {
 	return parts.slice(start).join('\n\n').trim();
 }
 
+/** One tool call in the persona's own words: its row, its part of the
+ *  activity line, and what it read. */
+export interface ToolWords {
+	/** What it did: "Read", "Looked for". */
+	verb: string;
+	/** What it did it to, beside the verb. */
+	object: string;
+	/** One dimmed line under the row. */
+	detail?: string;
+	/** How the activity line counts the call, singular and plural:
+	 *  `['search', 'searches']` reads "2 searches". Absent is not counted. */
+	tally?: [one: string, many: string];
+	/** How the row counts a run of identical calls: `['page', 'pages']`
+	 *  reads "· 5 pages". Absent reads "× 5". */
+	repeat?: [one: string, many: string];
+	/** Something the call read that a reader can open, listed under the
+	 *  answer and handed back to the host's `oncite` when tapped. */
+	source?: { id: string; title: string; section?: string };
+}
+
+/** A host's words for its persona's tools. `undefined` leaves the call to
+ *  `describe()`, the package's own. */
+export type DescribeTool = (block: ToolBlock) => ToolWords | undefined;
+
 /** What Milton DID, in a reader's own words — never the tool's name or the
  * raw command it ran.
  *
@@ -76,17 +105,30 @@ export function readerQuestion(question: string): string {
  * by an engineer: `Bash ls -1 .` tells them nothing and looks like a leak from
  * the machine room. Milton never narrates how he searched, so a tool this
  * does not recognise falls back to something that names no mechanism at all.
+ * A persona with tools of its own brings a `DescribeTool` in front of this.
  */
-export function describe(block: ToolBlock): { verb: string; object: string } {
+export function describe(block: ToolBlock): ToolWords {
+	const said = describeCall(block);
+	const lines = block.result ? block.result.split('\n').length : 0;
+	return lines ? { ...said, detail: lines === 1 ? '1 line' : `${lines} lines` } : said;
+}
+
+const READ: Pick<ToolWords, 'tally' | 'repeat'> = {
+	tally: ['document read', 'documents read'],
+	repeat: ['page', 'pages']
+};
+const SEARCH: Pick<ToolWords, 'tally'> = { tally: ['search', 'searches'] };
+
+function describeCall(block: ToolBlock): ToolWords {
 	const input = parseInput(block);
 	const command = typeof input.command === 'string' ? input.command : '';
 
 	if (block.name === 'Read') {
 		const path = str(input.file_path ?? input.path);
-		return { verb: 'Read', object: documentName(path) };
+		return { verb: 'Read', object: documentName(path), ...READ };
 	}
 	if (block.name === 'Grep') {
-		return { verb: 'Looked for', object: str(input.pattern) };
+		return { verb: 'Looked for', object: str(input.pattern), ...SEARCH };
 	}
 	if (block.name === 'Glob') {
 		return { verb: 'Looked for documents', object: '' };
@@ -94,17 +136,22 @@ export function describe(block: ToolBlock): { verb: string; object: string } {
 	if (block.name === 'Bash') {
 		if (/\bgrep\b|\brg\b/.test(command)) {
 			const quoted = command.match(/["']([^"']{2,60})["']/);
-			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase' };
+			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase', ...SEARCH };
 		}
 		if (/\bls\b/.test(command)) return { verb: 'Looked through the library', object: '' };
 		if (/\bfind\b/.test(command)) return { verb: 'Looked for documents', object: '' };
 		if (/\bcat\b|\bhead\b|\bsed\b/.test(command)) {
-			return { verb: 'Read', object: documentName(lastPath(command)) };
+			return { verb: 'Read', object: documentName(lastPath(command)), ...READ };
 		}
 		if (/\bwc\b/.test(command)) return { verb: 'Checked', object: '' };
 		return { verb: 'Looked into it', object: '' };
 	}
 	return { verb: 'Looked into it', object: '' };
+}
+
+/** The host's words for a call, or the package's where it has none. */
+export function wordsFor(block: ToolBlock, describeTool?: DescribeTool): ToolWords {
+	return describeTool?.(block) ?? describe(block);
 }
 
 function parseInput(block: ToolBlock): Record<string, unknown> {
@@ -189,14 +236,7 @@ export class Transcript {
 	suggestions = $state<string[]>([]);
 	other = $state<AgentEvent[]>([]);
 
-	/** Content-block index is per MESSAGE, so it repeats across turns; this
-	 * maps the live index onto a position in the flat list. Cleared whenever a
-	 * message starts, which is what stops turn two overwriting turn one. */
-	// Deliberately a plain Map, not a SvelteMap: nothing renders it, it is
-	// written on every content-block delta while an answer streams, and giving
-	// each entry its own reactive signal would buy a re-render nobody reads.
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity
-	#open = new Map<number, number>();
+	#fold = foldState();
 
 	reset() {
 		this.blocks = [];
@@ -204,7 +244,7 @@ export class Transcript {
 		this.citations = [];
 		this.suggestions = [];
 		this.other = [];
-		this.#open.clear();
+		this.#fold = foldState();
 	}
 
 	apply(event: AgentEvent) {
@@ -214,99 +254,175 @@ export class Transcript {
 			this.model = (event.model as string) ?? null;
 			return;
 		}
-
-		if (event.type === 'result') {
-			this.outcome = {
-				turns: event.num_turns,
-				costUsd: event.total_cost_usd,
-				durationMs: event.duration_ms,
-				isError: event.is_error
-			};
-			return;
-		}
-
-		// Emitted after the final assistant text, so it lands on a turn that is
-		// otherwise complete. Both frames put their payload on `items`, so each
-		// keeps only what its own shape admits: a `citations` frame carrying
-		// strings, or a `suggestions` frame carrying objects, is the library
-		// having changed under us, and rendering it would be worse than
-		// rendering nothing.
-		if (event.type === 'citations') {
-			this.citations = (event.items ?? []).filter(
-				(item): item is Citation => typeof item === 'object' && item !== null
-			);
-			return;
-		}
-
-		// Last of the two, and only when the librarian named any.
-		if (event.type === 'suggestions') {
-			this.suggestions = (event.items ?? []).filter(
-				(item): item is string => typeof item === 'string' && item.trim().length > 0
-			);
-			return;
-		}
-
-		// No persona and no sentence at this layer: `client.ts` raises this for a
-		// stream that would not open or died half-way, and the turn renders the
-		// unreachable line in whichever persona's voice the host named.
-		if (event.type === 'library_error') {
-			this.outcome = { isError: true, unreachable: true, error: event.error };
-			return;
-		}
-
-		// A tool RESULT arrives as a user message carrying tool_result blocks.
-		if (event.type === 'user') {
-			for (const block of event.message?.content ?? []) {
-				if (block.type !== 'tool_result') continue;
-				const target = [...this.blocks].reverse().find((b) => b.kind === 'tool' && !b.result);
-				if (target && target.kind === 'tool') {
-					target.result = renderResult(block.content);
-					target.isError = block.is_error === true;
-				}
-			}
-			return;
-		}
-
-		if (event.type !== 'stream_event' || !event.event) {
-			if (event.type !== 'assistant') this.other.push(event);
-			return;
-		}
-
-		const inner = event.event;
-		if (inner.type === 'message_start') {
-			this.#open.clear();
-			return;
-		}
-		if (inner.type === 'content_block_start' && inner.index !== undefined) {
-			const cb = inner.content_block;
-			if (!cb) return;
-			const position = this.blocks.length;
-			this.#open.set(inner.index, position);
-			if (cb.type === 'text') this.blocks.push({ kind: 'text', index: position, text: '' });
-			else if (cb.type === 'thinking')
-				this.blocks.push({ kind: 'thinking', index: position, text: '' });
-			else if (cb.type === 'tool_use')
-				this.blocks.push({
-					kind: 'tool',
-					index: position,
-					name: cb.name ?? 'tool',
-					rawInput: ''
-				});
-			return;
-		}
-		if (inner.type === 'content_block_delta' && inner.index !== undefined) {
-			const position = this.#open.get(inner.index);
-			if (position === undefined) return;
-			const block = this.blocks[position];
-			const delta = inner.delta;
-			if (!block || !delta) return;
-			if (delta.type === 'text_delta' && block.kind === 'text') block.text += delta.text ?? '';
-			else if (delta.type === 'thinking_delta' && block.kind === 'thinking')
-				block.text += delta.thinking ?? '';
-			else if (delta.type === 'input_json_delta' && block.kind === 'tool')
-				block.rawInput += delta.partial_json ?? '';
-		}
+		if (!fold(this, this.#fold, event)) this.other.push(event);
 	}
+}
+
+/** What one turn's fold writes: a `Transcript`, or a turn of a `Session`. */
+export interface FoldTarget {
+	blocks: Block[];
+	outcome: Outcome | null;
+	citations?: Citation[];
+	suggestions?: string[];
+}
+
+/** Where one turn's fold keeps its place between events. */
+export interface FoldState {
+	/** Content-block index is per MESSAGE, so it repeats across a turn; this
+	 * maps the live index onto a position in the flat list. Cleared whenever a
+	 * message starts, which is what stops message two overwriting message one. */
+	open: Map<number, number>;
+	/** The stream carries token-level deltas (`--include-partial-messages`),
+	 * and the CLI then ALSO emits every message whole: folding both would
+	 * print each block twice. A stream without the flag carries only the
+	 * whole messages, and those are the turn. */
+	partial: boolean;
+}
+
+// Deliberately a plain Map, not a SvelteMap: nothing renders it, it is
+// written on every content-block delta while an answer streams, and giving
+// each entry its own reactive signal would buy a re-render nobody reads.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity
+export const foldState = (): FoldState => ({ open: new Map(), partial: false });
+
+/**
+ * Fold one event into one turn. False for an event this does not know, which
+ * the caller keeps rather than drops.
+ *
+ * It folds, it does not translate: every block is a real content block from
+ * the stream, assembled from its deltas when the stream carries them and
+ * taken whole when it does not.
+ */
+export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boolean {
+	if (event.type === 'result') {
+		into.outcome = {
+			turns: event.num_turns,
+			costUsd: event.total_cost_usd,
+			durationMs: event.duration_ms,
+			isError: event.is_error,
+			structuredOutput: event.structured_output ?? undefined
+		};
+		return true;
+	}
+
+	// Emitted after the final assistant text, so it lands on a turn that is
+	// otherwise complete. Both frames put their payload on `items`, so each
+	// keeps only what its own shape admits: a `citations` frame carrying
+	// strings, or a `suggestions` frame carrying objects, is the library
+	// having changed under us, and rendering it would be worse than
+	// rendering nothing.
+	if (event.type === 'citations') {
+		into.citations = (event.items ?? []).filter(
+			(item): item is Citation => typeof item === 'object' && item !== null
+		);
+		return true;
+	}
+
+	// Last of the two, and only when the librarian named any.
+	if (event.type === 'suggestions') {
+		into.suggestions = (event.items ?? []).filter(
+			(item): item is string => typeof item === 'string' && item.trim().length > 0
+		);
+		return true;
+	}
+
+	// No persona and no sentence at this layer: `client.ts` raises this for a
+	// stream that would not open or died half-way, and the turn renders the
+	// unreachable line in whichever persona's voice the host named.
+	if (event.type === 'library_error') {
+		into.outcome = { isError: true, unreachable: true, error: event.error };
+		return true;
+	}
+
+	// A tool RESULT arrives as a user message carrying tool_result blocks, and
+	// names its call by id: two calls made at once answer in either order, and
+	// pinning a result on the latest open call put the first page's text under
+	// the second page's row.
+	if (event.type === 'user') {
+		for (const block of contentOf(event)) {
+			if (block.type !== 'tool_result') continue;
+			const open = into.blocks.filter((b): b is ToolBlock => b.kind === 'tool' && !b.result);
+			const target =
+				open.find((b) => b.id !== undefined && b.id === block.tool_use_id) ?? open.at(-1);
+			if (target) {
+				target.result = renderResult(block.content);
+				target.isError = block.is_error === true;
+			}
+		}
+		return true;
+	}
+
+	// One whole content block per event, several events per message — measured
+	// on Claude Code 2.1.283, where every one carries `stop_reason: null`.
+	if (event.type === 'assistant') {
+		if (state.partial) return true;
+		for (const block of contentOf(event)) {
+			const whole = wholeBlock(block, into.blocks.length);
+			if (whole) into.blocks.push(whole);
+		}
+		return true;
+	}
+
+	if (event.type !== 'stream_event' || !event.event) return false;
+
+	state.partial = true;
+	const inner = event.event;
+	if (inner.type === 'message_start') {
+		state.open.clear();
+		return true;
+	}
+	if (inner.type === 'content_block_start' && inner.index !== undefined) {
+		const cb = inner.content_block;
+		if (!cb) return true;
+		const position = into.blocks.length;
+		state.open.set(inner.index, position);
+		if (cb.type === 'text') into.blocks.push({ kind: 'text', index: position, text: '' });
+		else if (cb.type === 'thinking')
+			into.blocks.push({ kind: 'thinking', index: position, text: '' });
+		else if (cb.type === 'tool_use')
+			into.blocks.push({
+				kind: 'tool',
+				index: position,
+				id: cb.id,
+				name: cb.name ?? 'tool',
+				rawInput: ''
+			});
+		return true;
+	}
+	if (inner.type === 'content_block_delta' && inner.index !== undefined) {
+		const position = state.open.get(inner.index);
+		if (position === undefined) return true;
+		const block = into.blocks[position];
+		const delta = inner.delta;
+		if (!block || !delta) return true;
+		if (delta.type === 'text_delta' && block.kind === 'text') block.text += delta.text ?? '';
+		else if (delta.type === 'thinking_delta' && block.kind === 'thinking')
+			block.text += delta.thinking ?? '';
+		else if (delta.type === 'input_json_delta' && block.kind === 'tool')
+			block.rawInput += delta.partial_json ?? '';
+	}
+	return true;
+}
+
+/** A message's content blocks; a user frame may carry a bare string instead. */
+export function contentOf(event: AgentEvent): Array<Record<string, unknown>> {
+	const content = event.message?.content;
+	return Array.isArray(content) ? content : [];
+}
+
+function wholeBlock(block: Record<string, unknown>, index: number): Block | null {
+	if (block.type === 'text') return { kind: 'text', index, text: str(block.text) };
+	if (block.type === 'thinking') return { kind: 'thinking', index, text: str(block.thinking) };
+	if (block.type === 'tool_use') {
+		return {
+			kind: 'tool',
+			index,
+			id: str(block.id) || undefined,
+			name: str(block.name) || 'tool',
+			rawInput: JSON.stringify(block.input ?? {})
+		};
+	}
+	return null;
 }
 
 function renderResult(content: unknown): string {
@@ -333,16 +449,24 @@ export interface ActivityStep {
 	block: Block;
 	/** How many identical consecutive steps collapsed into this one. */
 	repeats: number;
+	/** A tool step in the persona's words, resolved once here so the row, the
+	 *  count and the collapse all agree. */
+	words?: ToolWords;
+}
+
+/** One count on the activity line: "2 searches". */
+export interface Tally {
+	one: string;
+	many: string;
+	count: number;
 }
 
 export interface ActivityGroup {
 	kind: 'activity';
 	index: number;
 	steps: ActivityStep[];
-	/** Distinct collections touched, for the one-line summary. */
-	collections: string[];
-	documents: number;
-	searches: number;
+	/** What the steps counted as, in the order each first appeared. */
+	tallies: Tally[];
 }
 
 export type Segment = ActivityGroup | TextBlock;
@@ -366,12 +490,21 @@ export interface Turn {
 	/** Follow-ups offered after this answer. Absent on a turn read back from
 	 *  history: they belonged to the moment it was asked. */
 	suggestions?: string[];
-	/** A study artefact rather than an ordinary answer: renders as a card once
-	 *  settled, never as prose, and opens the reading column instead of a
-	 *  citation. Absent (or `'answer'`) is every ordinary turn. */
-	kind?: 'answer' | 'artefact';
-	/** The artefact's own name. Only meaningful when `kind` is `'artefact'`. */
-	title?: string;
+	/** Something this turn produced for the reader to open, carded under the
+	 *  answer once the turn settles. */
+	artefact?: Artefact;
+}
+
+/** A turn's artefact, in the host's own words. */
+export interface Artefact {
+	title: string;
+	/** One line under the title: what it holds. */
+	summary?: string;
+	/** The answer's prose IS the artefact (a briefing the persona wrote): it
+	 *  opens in the reading column, and the turn shows the card alone once it
+	 *  settles. Absent, the artefact is something beside the answer, and the
+	 *  card sits under the prose. */
+	isAnswer?: boolean;
 }
 
 /**
@@ -405,7 +538,7 @@ export interface Turn {
  * the position of a block is the only signal the stream gives, and a rule read
  * off the prose itself would be unexplainable the first time it misfired.
  */
-export function segment(blocks: Block[]): Segment[] {
+export function segment(blocks: Block[], describeTool?: DescribeTool): Segment[] {
 	const out: Segment[] = [];
 	let current: ActivityGroup | null = null;
 
@@ -424,62 +557,68 @@ export function segment(blocks: Block[]): Segment[] {
 		// block is the same row, for the same reason.
 		if (block.kind !== 'tool' && !block.text.trim()) continue;
 		if (!current) {
-			current = {
-				kind: 'activity',
-				index: block.index,
-				steps: [],
-				collections: [],
-				documents: 0,
-				searches: 0
-			};
+			current = { kind: 'activity', index: block.index, steps: [], tallies: [] };
 			out.push(current);
 		}
+		const words = block.kind === 'tool' ? wordsFor(block, describeTool) : undefined;
 		const last = current.steps.at(-1);
-		if (last && sameStep(last.block, block)) {
+		if (last && sameStep(last, block, words)) {
 			last.repeats += 1;
 		} else {
-			current.steps.push({ block, repeats: 1 });
+			current.steps.push({ block, repeats: 1, words });
 		}
-		if (block.kind === 'tool') tally(current, block);
+		if (words?.tally) count(current, words.tally);
 	}
 	return out;
 }
 
-function sameStep(a: Block, b: Block): boolean {
-	if (a.kind !== b.kind) return false;
-	if (a.kind === 'thinking') return true;
+function sameStep(last: ActivityStep, block: Block, words: ToolWords | undefined): boolean {
+	if (last.block.kind !== block.kind) return false;
+	if (block.kind === 'thinking') return true;
 	// Two narration sentences are two things Milton said; collapsing them to
 	// one row with a count would lose the second one entirely.
-	if (a.kind === 'text') return false;
-	const left = describe(a as ToolBlock);
-	const right = describe(b as ToolBlock);
-	return left.verb === right.verb && left.object === right.object;
+	if (block.kind === 'text') return false;
+	return last.words?.verb === words?.verb && last.words?.object === words?.object;
 }
 
-function tally(group: ActivityGroup, block: ToolBlock): void {
-	const { verb } = describe(block);
-	if (verb === 'Looked for') group.searches += 1;
-	if (verb === 'Read') group.documents += 1;
-	const collection = collectionOf(block);
-	if (collection && !group.collections.includes(collection)) group.collections.push(collection);
-}
-
-/** The first path segment under the corpus root IS the collection name. */
-function collectionOf(block: ToolBlock): string {
-	const raw = block.rawInput;
-	const match = raw.match(/(?:^|["'\s/])([a-z0-9]+(?:-[a-z0-9]+)+)\/local\//);
-	return match?.[1] ?? '';
+function count(group: ActivityGroup, [one, many]: [string, string]): void {
+	const seen = group.tallies.find((t) => t.one === one && t.many === many);
+	if (seen) seen.count += 1;
+	else group.tallies.push({ one, many, count: 1 });
 }
 
 /** One line describing a whole investigation, for the collapsed state.
  *
- * Counts of what Milton did are fine ("1 search · 2 documents read"); how he
- * organises what he knows is not — no collection count, no shelf, no corpus.
+ * Counts of what the persona did are fine ("1 search · 2 documents read"); how
+ * it organises what it knows is not — no collection count, no shelf, no corpus.
  */
 export function summariseActivity(group: ActivityGroup): string {
-	const parts: string[] = [];
-	if (group.searches) parts.push(`${group.searches} search${group.searches === 1 ? '' : 'es'}`);
-	if (group.documents)
-		parts.push(`${group.documents} document${group.documents === 1 ? '' : 's'} read`);
+	const parts = group.tallies.map((t) => `${t.count} ${t.count === 1 ? t.one : t.many}`);
 	return parts.length ? parts.join(' · ') : 'Looked into it';
+}
+
+/**
+ * What a turn's calls read that a reader can open, numbered in the order it
+ * was first read: the host's `ToolWords.source`, as the sources the answer
+ * lists under itself. A call still running, or one that failed, read nothing.
+ *
+ * `derived`, because nothing checked any of it against a publisher: a trust
+ * mark on a page the persona just looked at would be a claim about a record
+ * nobody read.
+ */
+export function readFrom(blocks: Block[], describeTool?: DescribeTool): Citation[] {
+	const out: Citation[] = [];
+	for (const block of blocks) {
+		if (block.kind !== 'tool' || block.result === undefined || block.isError) continue;
+		const source = wordsFor(block, describeTool).source;
+		if (!source || out.some((c) => c.document_id === source.id)) continue;
+		out.push({
+			n: out.length + 1,
+			document_id: source.id,
+			title: source.title,
+			section: source.section,
+			derived: true
+		});
+	}
+	return out;
 }

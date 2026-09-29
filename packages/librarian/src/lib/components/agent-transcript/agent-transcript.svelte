@@ -18,8 +18,11 @@
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import {
 		readerQuestion,
+		readFrom,
 		segment,
+		type Artefact,
 		type Block,
+		type DescribeTool,
 		type Outcome,
 		type TextBlock
 	} from '../../transcript.svelte';
@@ -64,14 +67,15 @@
 		 *  and a reader scanning back for "what did I ask after lunch" needs the
 		 *  first one. Absent renders no time rather than a guess. */
 		at?: number;
-		/** A study artefact rather than an ordinary answer: once settled, this
-		 *  renders as a card instead of prose. */
-		kind?: 'answer' | 'artefact';
-		/** The artefact's own name, for the card. */
-		title?: string;
-		/** Opens the artefact in the reading column. Required wherever `kind`
-		 *  is `'artefact'`. */
+		/** What this turn produced for the reader to open, carded once it
+		 *  settles: under the prose, or in its place when it IS the prose. */
+		artefact?: Artefact;
+		/** The artefact is open now. */
+		artefactOpen?: boolean;
+		/** Opens it. Omit and the card informs but does not open. */
 		onopenartefact?: () => void;
+		/** The persona's own words for its tools, and what they read. */
+		describeTool?: DescribeTool;
 	}
 
 	let {
@@ -88,12 +92,15 @@
 		copy,
 		name = DEFAULT_PERSONA,
 		at,
-		kind = 'answer',
-		title,
-		onopenartefact
+		artefact,
+		artefactOpen = false,
+		onopenartefact,
+		describeTool
 	}: Props = $props();
 
-	const isArtefact = $derived(kind === 'artefact');
+	// The prose IS the artefact: it reads in the column, and the transcript
+	// shows the card alone.
+	const isArtefact = $derived(artefact?.isAnswer === true);
 
 	const words = $derived(resolveCopy(copy, name));
 	const who = $derived(personaName(name));
@@ -120,7 +127,7 @@
 	// An activity group stays live — and therefore labelled "Working…" — only
 	// while it is the last thing in the turn. As soon as prose arrives, it
 	// settles into its count.
-	const segments = $derived(segment(blocks));
+	const segments = $derived(segment(blocks, describeTool));
 	const lastIndex = $derived(segments.at(-1)?.index ?? -1);
 
 	// An answer can arrive as SEVERAL text blocks with tool calls between them,
@@ -135,7 +142,11 @@
 	const split = $derived(
 		running ? { body: '', citations: [] } : splitSources(texts.at(-1)?.text ?? '')
 	);
-	const sources = $derived(resolveCitations(citations, split.citations));
+	// What the calls read, when the answer names no source of its own.
+	const read = $derived(running ? [] : readFrom(blocks, describeTool));
+	const sources = $derived(
+		resolveCitations(citations, split.citations.length > 0 ? split.citations : read)
+	);
 
 	/** The answer as a reader would paste it: every block, Sources stripped. */
 	const answer = $derived(
@@ -218,13 +229,16 @@
 <article class="ds-lib-turn">
 	<!-- Trailing-edge bubble, following Claude and ChatGPT rather than a
 	     VS Code-style panel: this surface is read by people who arrive with
-	     those two as their model of what a chat looks like. -->
-	<div class="ds-lib-ask">
-		<div class="ds-lib-bubble">{asked}</div>
-		{#if clock}
-			<time class="ds-lib-ask-time" datetime={clock.iso}>{clock.text}</time>
-		{/if}
-	</div>
+	     those two as their model of what a chat looks like. A session whose
+	     stream never carried its prompt has no words to put here. -->
+	{#if asked}
+		<div class="ds-lib-ask">
+			<div class="ds-lib-bubble">{asked}</div>
+			{#if clock}
+				<time class="ds-lib-ask-time" datetime={clock.iso}>{clock.text}</time>
+			{/if}
+		</div>
+	{/if}
 
 	<div class="ds-lib-answer">
 		<header class="ds-lib-answer-head">
@@ -258,19 +272,17 @@
 			{/if}
 		{/each}
 
-		{#if isArtefact && settled}
-			<ArtefactCard
-				title={title ?? 'Briefing'}
-				citationCount={sources.length}
-				onopen={() => onopenartefact?.()}
-			/>
+		{#if artefact && settled}
+			<ArtefactCard {artefact} open={artefactOpen} onopen={onopenartefact} copy={words} />
 		{/if}
 
 		{#if !isArtefact && sources.length > 0}
 			<SourceList {sources} {words} {oncite} />
 		{/if}
 
-		{#if !isArtefact && notHeld}
+		<!-- An empty `notHeld` is a host whose persona answers from no shelf,
+		     where "without a source" would be a claim about nothing. -->
+		{#if !isArtefact && notHeld && words.notHeld}
 			<p class="ds-lib-not-held">{words.notHeld}</p>
 		{/if}
 

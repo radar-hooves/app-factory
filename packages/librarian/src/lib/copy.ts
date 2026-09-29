@@ -54,6 +54,9 @@ export interface LibrarianCopy {
 	jumpToLatest: string;
 	closeSource: string;
 	documentUnavailable: string;
+	/** An artefact card's action, and the same action while it is open. */
+	openArtefact: string;
+	showingArtefact: string;
 }
 
 /**
@@ -107,7 +110,9 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		askAgain: 'Ask again',
 		jumpToLatest: 'Jump to latest',
 		closeSource: 'Close source',
-		documentUnavailable: "That document can't be opened right now."
+		documentUnavailable: "That document can't be opened right now.",
+		openArtefact: 'Open',
+		showingArtefact: 'Showing'
 	};
 }
 

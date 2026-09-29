@@ -52,7 +52,12 @@
 		<div class="ds-lib-activity-steps">
 			{#each group.steps as step (step.block.index)}
 				{#if step.block.kind === 'tool'}
-					<ToolRow block={step.block} repeats={step.repeats} running={live} />
+					<ToolRow
+						block={step.block}
+						repeats={step.repeats}
+						words={step.words}
+						running={live}
+					/>
 				{:else}
 					<ThinkingRow block={step.block} active={false} />
 				{/if}

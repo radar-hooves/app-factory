@@ -20,13 +20,22 @@ export interface AgentEvent {
 		delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
 		content_block?: { type: string; name?: string; id?: string };
 	};
-	message?: { content?: Array<Record<string, unknown>> };
+	/** A whole message; `content` is a plain string only on a user frame. */
+	message?: { id?: string; content?: Array<Record<string, unknown>> | string };
+	/** A user frame the CLI echoed back as the turn that consumes it starts
+	 *  (`--replay-user-messages`): the reader's side of a session. */
+	isReplay?: boolean;
+	uuid?: string;
+	/** ISO 8601, on every user and assistant frame. */
+	timestamp?: string;
 	session_id?: string;
 	result?: string;
 	num_turns?: number;
 	total_cost_usd?: number;
 	duration_ms?: number;
 	is_error?: boolean;
+	/** What a run returned under `--json-schema`, on its `result`. */
+	structured_output?: unknown;
 	error?: string;
 	detail?: string;
 	tools?: string[];
@@ -116,16 +125,60 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
  * where the turn is rendered.
  */
 export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
-	const doFetch = options.fetch ?? fetch;
+	yield* read(
+		() =>
+			(options.fetch ?? fetch)(
+				options.endpoint ?? '/api/agent/ask',
+				requestInit(options, options.signal)
+			),
+		options.signal,
+		true
+	);
+}
+
+export interface WatchOptions {
+	/** The session's watch route, e.g. `/api/agent/{persona}/jobs/{id}/watch`. */
+	endpoint: string;
+	signal?: AbortSignal;
+	fetch?: typeof fetch;
+}
+
+/**
+ * Async-iterate a session somebody else started: every event from the first,
+ * then live while it runs.
+ *
+ * The same frames and the same never-throw contract as `ask()`, with one
+ * difference: a clean close with no `result` is not a failure. A run the
+ * reader stopped ends exactly that way, and so does a session that is
+ * waiting between runs, so only a stream that would not open, or broke,
+ * yields `library_error`. Fold the events with `Session`.
+ */
+export async function* watch(options: WatchOptions): AsyncGenerator<AgentEvent> {
+	yield* read(
+		() =>
+			(options.fetch ?? fetch)(options.endpoint, {
+				headers: { Accept: 'text/event-stream' },
+				credentials: 'include',
+				signal: options.signal
+			}),
+		options.signal,
+		false
+	);
+}
+
+/** One SSE response, as Claude Code's own events. `terminal` demands a
+ *  `result` before the stream closes. */
+async function* read(
+	open: () => Promise<Response>,
+	signal: AbortSignal | undefined,
+	terminal: boolean
+): AsyncGenerator<AgentEvent> {
 	let response: Response;
 	try {
-		response = await doFetch(
-			options.endpoint ?? '/api/agent/ask',
-			requestInit(options, options.signal)
-		);
+		response = await open();
 	} catch {
 		// A reader who pressed stop asked for this one; it is not a failure.
-		if (options.signal?.aborted) return;
+		if (signal?.aborted) return;
 		yield { type: 'library_error' };
 		return;
 	}
@@ -152,7 +205,7 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	// A turn that ends with no terminal frame ended by accident. Tracked here
 	// rather than left to the renderer, which cannot tell a stream that died
 	// from one still arriving.
-	let terminal = false;
+	let ended = false;
 
 	/** One frame's `data:` lines, as the event they carry. */
 	function parse(frame: string): AgentEvent | null {
@@ -177,7 +230,7 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 		try {
 			chunk = await reader.read();
 		} catch {
-			if (options.signal?.aborted) return;
+			if (signal?.aborted) return;
 			yield { type: 'library_error' };
 			return;
 		}
@@ -190,7 +243,7 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 			boundary = buffered.indexOf('\n\n');
 			const event = parse(frame);
 			if (!event) continue;
-			if (event.type === 'result' || event.type === 'library_error') terminal = true;
+			if (event.type === 'result' || event.type === 'library_error') ended = true;
 			yield event;
 		}
 	}
@@ -201,9 +254,9 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	// finished turn look like one that died.
 	const last = parse(buffered);
 	if (last) {
-		if (last.type === 'result' || last.type === 'library_error') terminal = true;
+		if (last.type === 'result' || last.type === 'library_error') ended = true;
 		yield last;
 	}
 
-	if (!terminal && !options.signal?.aborted) yield { type: 'library_error' };
+	if (terminal && !ended && !signal?.aborted) yield { type: 'library_error' };
 }
