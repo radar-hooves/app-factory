@@ -1,23 +1,19 @@
 name: Deploy
 
-# A merge to main IS the go-live (the operator's ruling, 29/09/2026: every app
-# deploys the one ordinary way, master-project#233): CI builds the image,
-# Trivy-scans and smoke-tests it, pushes `<commit sha>` and `:latest` to the
-# registry, and asks Watchtower to pull it.
+# A merge to main is the go-live: CI builds the image, Trivy-scans and
+# smoke-tests it, pushes `<commit sha>` and `:latest`, and asks Watchtower to
+# pull it. A rollback is a revert merged to main.
 #
-#   checks  python-ci and frontend-ci run here, once per go-live, unless a run
-#           by hand already passed for this commit. No branch push runs them.
-#   build   Buildx on the runner's own persistent builder cache
+#   checks  python-ci and frontend-ci, every deploy: neither runs on a push or
+#           a PR, so a branch is untested unless someone dispatched it by hand.
+#   build   Buildx on the runner's persistent builder cache
 #           (radar-hooves/master-project docker-image-simple.yaml).
-#   smoke   `.github/image-smoke.sh`, the app-owned probe: the image must serve
-#           before it is pushed (full-stack-app-template#4).
-#   deploy  Watchtower pulls the `:latest` just pushed, now rather than at its
-#           scheduled poll; the image migrates its database as it starts.
+#   smoke   `.github/image-smoke.sh`, the app-owned probe.
+#   deploy  Watchtower pulls `:latest`; the image migrates its database as it
+#           starts.
 #
-# A rollback is a revert merged to main.
-#
-# The security battery is not on this path; security.yaml runs it weekly and on
-# a dependency pull request.
+# security.yaml runs the security battery weekly and on a dependency PR, not
+# here.
 on:
   push:
     branches: [main]
@@ -38,43 +34,21 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  checked:
-    runs-on: [self-hosted, atlas]
-    outputs:
-      python: {% raw %}${{ steps.python.outputs.passed }}{% endraw %}
-      frontend: {% raw %}${{ steps.frontend.outputs.passed }}{% endraw %}
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - id: python
-        uses: radar-hooves/master-project/.github/actions/workflow-passed@main
-        with:
-          workflow: python-ci.yaml
-      - id: frontend
-        uses: radar-hooves/master-project/.github/actions/workflow-passed@main
-        with:
-          workflow: frontend-ci.yaml
-
   python-ci:
-    needs: checked
-    if: needs.checked.outputs.python != 'true'
     uses: ./.github/workflows/python-ci.yaml
     permissions:
       contents: read
 
   frontend-ci:
-    needs: checked
-    if: needs.checked.outputs.frontend != 'true'
     uses: ./.github/workflows/frontend-ci.yaml
     permissions:
       contents: read
 
   deploy:
     needs: [python-ci, frontend-ci]
-    # Skipped checks are passed checks; a failed or cancelled one stops here.
-    if: {% raw %}${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' }}{% endraw %}
+    if: {% raw %}${{ success() && github.ref == 'refs/heads/main' }}{% endraw %}
     uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     # packages: write because the golden workflow asks for it (its default
     # registry is ghcr.io); a caller granting less fails to start.
@@ -83,6 +57,8 @@ jobs:
       packages: write
     with:
       image-name: {{ project_name }}
+      # JSON array of labels, as the reusable's own `runner` input takes it.
+      runner: '{{ runner_labels }}'
       # The household registry, not the reusable's ghcr.io default; the push
       # credential stays on the runner host.
       registry: {{ registry_host }}

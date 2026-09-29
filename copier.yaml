@@ -188,6 +188,13 @@ watchtower_url:
     Base URL of the deploying host's Watchtower HTTP API, asked to pull the image just pushed (e.g. `http://127.0.0.1:8080`). No factory default.
 
 
+runner_labels:
+  type: str
+  default: '["self-hosted", "atlas"]'
+  help: >-
+    JSON array of GitHub Actions runner labels deploy.yaml's `checked` job and its docker-image-simple.yaml deploy both run on. Defaults to what every existing app already gets (a hardcoded atlas), so answering nothing changes no app's rendered files; a fleet building on a different self-hosted runner (e.g. titan) answers that runner's own labels instead.
+
+
 postgres_user:
   type: str
   default: "{{ project_name | replace('-', '_') }}"
