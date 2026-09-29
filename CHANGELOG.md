@@ -6,6 +6,17 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.43] - 2026-09-29
+
+### Fixed
+
+- **A verification review of v2026.9.38/.39 confirmed five of the earlier fixes and found three genuine gaps, all closed here.** `jobs.authorize()` checked `workspace_id` only; the URL's own `{persona}` segment was never checked against the job's own `persona` column, so a member holding just `agent-milton` could reach a `fat_controller` job in the SAME workspace by naming `milton` in the URL and the job's own id. All three job routes now pass `persona` through, and `jobs.cleanup()` takes it too.
+- **`_is_partial()`'s persistence gate was keyed on a guess (`message.stop_reason`) rather than the real CLI.** Driving the actual, installed `claude` 2.1.283 with this slice's own `build_argv` flags showed token deltas arrive as their own top-level `type: "stream_event"` (wrapping the raw Anthropic streaming sub-events), and that EVERY `assistant` frame carries `stop_reason: null`, settled or not — so the old gate persisted every delta (storage stayed unbounded) AND dropped every assistant frame from a finished job's own replay, breaking the one thing a caller opens a finished job to read. `_is_partial()` now keys on `type == "stream_event"` alone; `fake_agent_cli.py`'s fixtures now match what was actually measured.
+- **`start(mcp_config=...)` wrote a literal bearer to `job_dir/.mcp.json` and to `AgentJob.mcp_config`, unencrypted, for as long as the job existed.** `_refuse_literal_mcp_credentials()` now refuses a credential-shaped header (`Authorization`, `X-Api-Key`, ...) set directly, requiring a `headersHelper` command instead — the same contract a persona's own `.mcp.json` already holds its `headersHelper` to: a command is a recipe, never a secret, so it is fine to persist and rewrite on every resume.
+- The stderr-drain task's own exception handling let an unrelated read error (not a timeout, not this run's own cancellation) propagate straight out of `_run()`'s finally block, skipping `_finish()`/`_bus.close()` entirely and stranding the job at `running` forever. It now re-raises only this run's own cancellation and treats every other exception as an empty tail, never skipping the finish.
+- **Two committed syntax errors** (`except A, B:`, missing the parentheses Python 3 requires around a multi-exception tuple) are fixed. One was this session's own mistake; the other was `ruff format` 0.16.9's own measured bug — reproduced in total isolation — which strips required parens from a bare `except (A, B):` with no `as` binding. Every stamped app running `ruff format` (not just `--check`) on this file was at risk of the same silent corruption; `except (BrokenPipeError, ConnectionResetError) as _exc:` (an unused, underscore-prefixed binding) is what stops the formatter reaching for that transform.
+- Confirmed via `git log` that neither library (`v2026.9.4`) nor pebblestone (`v2026.9.32`) has taken a copier update past `v2026.9.36`, so amending migration `6278d62d47c2` in place remains sound — moot this round regardless, since none of the above needed a schema change.
+
 ## [2026.9.42] - 2026-09-29
 
 ### Fixed
