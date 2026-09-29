@@ -48,6 +48,7 @@ import glob
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import time
@@ -144,32 +145,40 @@ def _write_mcp_config(folder: Path, mcp_config: dict[str, object]) -> None:
 
 #: Header names a credential is ever named under, matched case-insensitively.
 _CREDENTIAL_HEADER_NAMES = frozenset({"authorization", "x-api-key", "api-key", "x-auth-token", "cookie"})
+#: What a stdio server's environment variable carrying a credential is named with.
+_CREDENTIAL_ENV_NAME = re.compile(r"(?i)key|token|secret|passw|auth|credential|cookie")
 
 
 def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
-    """Refuse an `mcp_config` that carries a credential as a literal header value.
+    """Refuse an `mcp_config` that carries a credential as a literal value.
 
     A job's `mcp_config` is persisted on its row and written to its folder on
-    every run, so a literal bearer would sit on disk and in the database for
-    as long as the job exists. A `headersHelper` command is a recipe, not a
-    secret — it mints a fresh credential each time a run spawns — the same
-    contract a persona's own `.mcp.json` is held to.
+    every run, so a literal credential would sit on disk and in the database
+    for as long as the job exists. An HTTP server's credential is minted by a
+    `headersHelper` command at spawn — a recipe, not a secret — the contract a
+    persona's own `.mcp.json` is held to; a stdio server vends its own from
+    the broker, as every household process does. A credential in a server's
+    `args` cannot be told from any other argument, and is the caller's to keep out.
 
     Raises:
-        BadRequestError: a server entry sets a credential-shaped header directly.
+        BadRequestError: a server entry sets a credential-shaped header or
+            environment variable directly.
     """
     servers = mcp_config.get("mcpServers")
     if not isinstance(servers, dict):
         return
     for name, server in servers.items():
-        headers = server.get("headers") if isinstance(server, dict) else None
-        if not isinstance(headers, dict):
+        if not isinstance(server, dict):
             continue
-        literal = sorted(key for key in headers if key.lower() in _CREDENTIAL_HEADER_NAMES)
+        headers = server.get("headers")
+        env = server.get("env")
+        literal = sorted(
+            [key for key in headers if key.lower() in _CREDENTIAL_HEADER_NAMES] if isinstance(headers, dict) else []
+        ) + sorted([key for key in env if _CREDENTIAL_ENV_NAME.search(key)] if isinstance(env, dict) else [])
         if literal:
             raise BadRequestError(
-                f"mcp_config server {name!r} sets {literal!r} as a literal header value — "
-                "mint it at spawn time with headersHelper instead; a job never persists a credential"
+                f"mcp_config server {name!r} sets {literal!r} as a literal value — mint a header with "
+                "headersHelper, or have the server vend its own; a job never persists a credential"
             )
 
 
@@ -324,6 +333,13 @@ def _spawn(
     task = asyncio.create_task(run, name=f"agent-job-{spec.job_id}")
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
+    task.add_done_callback(_log_failure)
+
+
+def _log_failure(task: asyncio.Task[None]) -> None:
+    """Log a run that raised, which leaves its row `running` for the sweep to settle once its heartbeat is stale."""
+    if not task.cancelled() and (exc := task.exception()) is not None:
+        logger.error("Agent job run %s failed", task.get_name(), exc_info=exc)
 
 
 async def _drain_stderr(stream: asyncio.StreamReader) -> bytes:
@@ -394,7 +410,12 @@ async def _control(
                 bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
                 return jobs_models.poll_run(db, spec.job_id, spec.run_id, take_messages=take, beat=heartbeat)
 
-        polled = await run_in_threadpool(_poll)
+        try:
+            polled = await run_in_threadpool(_poll)
+        except Exception:
+            # A database blip: the run carries on, and the next poll asks again.
+            logger.exception("Polling agent job %s's row failed; retrying", spec.job_id)
+            continue
         if beat:
             last_beat = time.monotonic()
         if polled is None or polled[0]:
@@ -411,7 +432,10 @@ async def _control(
                     bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
                     jobs_models.requeue(db, spec.job_id, spec.run_id, unwritten)
 
+            # The CLI's stdin broke: it is exiting, and the run ends with these
+            # pending on the row, where `settle_or_continue` resumes with them.
             await run_in_threadpool(_requeue)
+            return
         elif not messages and turns.idle and stdin_open:
             process.stdin.close()
 
@@ -503,7 +527,8 @@ async def _run(
         assert process.stderr is not None
         turns = _Turns()
         stderr_task = asyncio.create_task(_drain_stderr(process.stderr))
-        await _write_frames(process, turns, messages)
+        delivered = await _write_frames(process, turns, messages)
+        turns.written += len(messages) - delivered  # a frame it never got is a turn it never answered
         control_task = asyncio.create_task(_control(db_session_factory, spec, local, process, turns))
         try:
             while True:
@@ -534,8 +559,12 @@ async def _run(
                         structured_output = (recorded or {}).get("structured_output")
         finally:
             control_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await control_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("Agent job %s's control loop failed", spec.job_id)
             _kill(process)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), timeout=5)
@@ -551,6 +580,11 @@ async def _run(
         if status == jobs_models.COMPLETED and process.returncode not in (0, None) and not killed:
             tail = scrub_credentials(stderr_tail.decode(errors="replace"))
             status, error = jobs_models.FAILED, await _failure(f"agent exited {process.returncode}: {tail}")
+        elif status == jobs_models.COMPLETED and turns.echoed < turns.written and not killed:
+            # Its stdin broke before it read them, or it exited without
+            # answering: a turn it was given is not one it took.
+            answered = f"answered {turns.echoed} of the {turns.written} turn(s) it was given"
+            status, error = jobs_models.FAILED, await _failure(f"agent exited having {answered}")
 
     if _runs.get(spec.job_id) is local:
         del _runs[spec.job_id]

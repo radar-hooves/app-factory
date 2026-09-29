@@ -32,6 +32,7 @@ import contextlib
 import datetime
 import json
 import os
+import shutil
 import socket
 import stat
 import subprocess
@@ -781,6 +782,44 @@ async def test_a_stderr_read_error_does_not_strand_the_job(
     assert job.status == jobs_models.COMPLETED
 
 
+async def test_a_run_that_exits_without_answering_its_turns_fails_and_says_so(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+) -> None:
+    """A CLI that exits 0 having read nothing -- its stdin broken before the prompt, or gone before
+    answering -- has not answered: the job fails naming what went unanswered, never `completed`."""
+    exits_at_once = agent_settings.model_copy(update={"executable": shutil.which("true")})
+    _, workspace_id = identity
+    job_id = await _start(exits_at_once, persona, workspace_id, prompt="hi")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.FAILED
+    assert job.error is not None and "answered 0 of the 1 turn(s)" in job.error
+
+
+async def test_a_failed_poll_is_retried_and_the_run_still_settles(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A database blip under the running process's control loop is logged and asked again at the
+    next poll; the run still closes its CLI's stdin and settles."""
+    poll_run = jobs_models.poll_run
+    failures: list[str] = []
+
+    def _blips_once(*args: Any, **kwargs: Any) -> object:
+        if not failures:
+            failures.append("blip")
+            raise OSError("server closed the connection unexpectedly")
+        return poll_run(*args, **kwargs)
+
+    monkeypatch.setattr(jobs_models, "poll_run", _blips_once)
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    job = await _wait_until_settled(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+    assert failures == ["blip"]
+
+
 async def test_a_chatty_stderr_does_not_block_the_run(
     agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
 ) -> None:
@@ -1199,14 +1238,20 @@ async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
     assert json.loads(_answers(job_id, workspace_id)[-1])["status_code"] == 200
 
 
+@pytest.mark.parametrize(
+    "server",
+    [
+        {"type": "http", "url": "http://127.0.0.1:1/mcp/", "headers": {"Authorization": "Bearer literal"}},
+        {"type": "stdio", "command": "some-server", "env": {"SOME_SERVER_API_TOKEN": "literal"}},
+    ],
+    ids=["http-header", "stdio-env"],
+)
 async def test_a_literal_credential_in_mcp_config_is_refused(
-    agent_settings: AgentSettings, persona: persona_module.PersonaConfig, identity: tuple[uuid.UUID, int]
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    server: dict[str, object],
 ) -> None:
     _, workspace_id = identity
-    mcp_config = {
-        "mcpServers": {
-            "app": {"type": "http", "url": "http://127.0.0.1:1/mcp/", "headers": {"Authorization": "Bearer literal"}}
-        }
-    }
     with pytest.raises(BadRequestError):
-        await _start(agent_settings, persona, workspace_id, prompt="hi", mcp_config=mcp_config)
+        await _start(agent_settings, persona, workspace_id, prompt="hi", mcp_config={"mcpServers": {"app": server}})
