@@ -17,10 +17,13 @@ built once, beside `jobs.py`, rather than hand-written per app.
 
 **A reserved answer key.** A persona names the belief ids it followed
 (`belief_retrieve`) under `lessons_used` in its own structured answer — a
-convention, not a schema `json_schema` enforces. `lessons.cited(job)` reads
-the key back, lowercased and deduped, keeping only values shaped like a
-belief id (`[0-9a-f]{32}`): only ids ever leave the app, never a job's
-content.
+convention, not a schema `json_schema` enforces, EXCEPT that the persona's own
+`json_schema` must still declare the property itself (`lessons.
+declare_lessons_used(schema)`), or a schema carrying `additionalProperties:
+False` refuses the key outright and every report silently no-ops.
+`lessons.cited(job)` reads the key back, lowercased and deduped, keeping only
+values shaped like a belief id (`[0-9a-f]{32}`): only ids ever leave the app,
+never a job's content.
 
 **`report_outcome(db, job_id, *, domain_name, context_key, result)`**, the one
 call an app makes at the moment a person accepts (`result="confirm"`) or
@@ -60,19 +63,22 @@ lease that has since been reclaimed by someone else lands nowhere.
 
 **Classified by WHEN, not by exception type.** A real fastmcp client (3.4.2,
 4.0.10) wraps connection refused, a DNS failure or an init timeout as a bare
-`RuntimeError`, and a read timeout on 4.0.10 arrives as `httpx.ReadTimeout` —
-naming exception types misses both. So anything raised while a call is in
-flight, whatever its type, is TRANSIENT — including a `ToolError` whose
-message is FastMCP's own masked generic shape (`"Error calling tool 'x'"`,
-what `mask_error_details` turns ANY unhandled server exception into), since
-that shape makes a genuine refusal and an unrelated bug identical on the
-wire. A `ToolError` carrying real detail is core-memory's own refusal,
-settled `refused`. Only a failure AFTER a successful response — this
-slice's own reading of it, e.g. `decision["id"]` missing — settles as
-unexpected, logged at ERROR: a fault this slice does not recognise,
-surfaced rather than retried for two weeks on a guess. A report still
-unsettled past 14 days is abandoned the same way — claimed, then settled
-`refused`.
+`RuntimeError`, and a read timeout on 4.0.10 as `MCPError: Request
+'tools/call' timed out` — naming exception types misses both. So anything
+raised while a call is in flight, whatever its type, is TRANSIENT —
+including a `ToolError` whose message matches FastMCP's own tool-call
+wrapper shape (`^Error calling tool '[^']*'(: .*)?$`, what wraps ANY
+unhandled server exception whether or not `mask_error_details` is on — a
+genuine core-memory refusal comes through its `_typed` path and never
+carries this prefix, masked or not) or is one of FastMCP's two literal
+actionable messages ("Rate limited by upstream API, please retry later",
+"Upstream request timed out, please retry"). A `ToolError` carrying neither
+shape is core-memory's own refusal, settled `refused`. Only a failure AFTER
+a successful response — this slice's own reading of it, e.g. `decision["id"]`
+missing — settles as unexpected, logged at ERROR: a fault this slice does not
+recognise, surfaced rather than retried for two weeks on a guess. A report
+still unsettled past 14 days is abandoned the same way — claimed, then
+settled `refused`.
 
 **One alert for the whole pipeline's health**, `agent-lessons:failing`
 (`api/alerts`, upserted by key so there is never more than one), raised
@@ -80,8 +86,12 @@ BEFORE settling on a refusal or an unexpected fault, on abandonment, on a
 transient fault stale for over a day, and on a `core_memory_url` set with no
 `core_memory_credential` — the one deployment-level misconfiguration this
 slice can recognise on its own, checked before ever attempting delivery so
-it alerts once rather than looping uselessly for 14 days. Cleared on the
-next successful delivery.
+it alerts once rather than looping uselessly for 14 days. Never re-raised
+UNCHANGED, since `raise_alert` marks it unread on every call and the
+misconfiguration check runs every sweep in every worker — re-raising an
+identical reason would undo an operator's own dismissal within a minute.
+Cleared once a whole sweep settles with no failures, never by one row's own
+success mid-sweep: a refusal elsewhere in the same batch keeps the alert up.
 
 **The credential is a setting, with no default.**
 `AgentSettings.core_memory_credential` names the broker credential

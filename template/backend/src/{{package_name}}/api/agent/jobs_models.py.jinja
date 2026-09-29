@@ -154,25 +154,44 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
     claimed_until: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+#: Postgres's own default name for an unnamed primary key constraint (`<table>_pkey`) — a second
+#: `report_outcome` for the same job, first-write-wins.
+_LESSON_REPORT_PK = "agent_job_lesson_reports_pkey"
+#: This table's own explicitly-named FK to `agent_jobs` (the migration's own name) — the job
+#: vanished between `report_outcome`'s own lookup and this insert.
+_LESSON_REPORT_JOB_FK = "fk_agent_job_lesson_reports_job_id_agent_jobs"
+
+
 def insert_lesson_report_if_absent(
-    db: Session, job_id: str, *, cites: list[str], domain_name: str, context_key: str, result: str
+    db: Session, job_id: str, *, workspace_id: int, cites: list[str], domain_name: str, context_key: str, result: str
 ) -> None:
     """Insert `job_id`'s report intent, or do nothing if one exists — first write wins; a later
     call for the same job (a correction after an earlier confirm) is silently dropped, not
-    merged. A SAVEPOINT: a primary-key OR foreign-key conflict rolls back only this insert, never
-    the caller's own transaction, which this call shares. `db.flush()` first, so a violation
-    already pending in the caller's OWN unflushed work surfaces there, not swallowed here.
+    merged. A SAVEPOINT: ONLY the two known-benign conflicts (this row's own primary key, or its
+    FK to `agent_jobs`) roll back just this insert, identified by constraint name so a genuinely
+    unexpected violation (the wrong `workspace_id`, an `unscoped()` caller) still raises rather
+    than being silently swallowed. `db.flush()` first, so a violation already pending in the
+    caller's OWN unflushed work surfaces there, not caught by this function's own handler.
+    Explicit `workspace_id` rather than relying on the session's own auto-stamp, so the row is
+    always correct regardless of how `db` is bound.
     """
     db.flush()
     try:
         with db.begin_nested():
             db.add(
                 AgentJobLessonReport(
-                    job_id=job_id, cites=cites, domain_name=domain_name, context_key=context_key, result=result
+                    job_id=job_id,
+                    workspace_id=workspace_id,
+                    cites=cites,
+                    domain_name=domain_name,
+                    context_key=context_key,
+                    result=result,
                 )
             )
-    except IntegrityError:
-        pass
+    except IntegrityError as exc:
+        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        if constraint not in (_LESSON_REPORT_PK, _LESSON_REPORT_JOB_FK):
+            raise
 
 
 def claim_lesson_report(

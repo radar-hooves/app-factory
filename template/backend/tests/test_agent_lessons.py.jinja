@@ -7,6 +7,7 @@ server that never answers, since a real fastmcp client wraps a connection fault 
 
 import asyncio
 import datetime
+import logging
 import socket
 import threading
 import uuid
@@ -17,9 +18,11 @@ from typing import Any
 import pytest
 from fastmcp.exceptions import ToolError
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 
 from {{ package_name }}.api.agent import jobs_models, lessons
 from {{ package_name }}.api.agent.jobs_models import AgentJobLessonReport, RunSpec
+from {{ package_name }}.api.alerts import service as alerts_service
 from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.workspaces import service as workspaces_service
@@ -97,7 +100,7 @@ def _seed_report(workspace_id: int, *, lessons_used: list[str], result: str = le
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
         jobs_models.insert_lesson_report_if_absent(
-            db, job_id, cites=cites, domain_name=DOMAIN, context_key=CONTEXT, result=result
+            db, job_id, workspace_id=workspace_id, cites=cites, domain_name=DOMAIN, context_key=CONTEXT, result=result
         )
         db.commit()
     return job_id, cites
@@ -265,7 +268,13 @@ def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_o
         bind_session(db, workspace_id=workspace_id)
         db.add(jobs_models.AgentJob(job_id=unrelated_job_id, persona="jobagent"))  # staged, unflushed
         jobs_models.insert_lesson_report_if_absent(
-            db, missing_job_id, cites=[BELIEF_1], domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+            db,
+            missing_job_id,
+            workspace_id=workspace_id,
+            cites=[BELIEF_1],
+            domain_name=DOMAIN,
+            context_key=CONTEXT,
+            result=lessons.CONFIRM,
         )
         db.commit()
 
@@ -275,10 +284,49 @@ def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_o
     assert _report(missing_job_id, workspace_id) is None
 
 
+def test_insert_lesson_report_if_absent_raises_on_an_unrecognised_violation(workspace_id: int) -> None:
+    """Only the row's OWN primary key or its FK to `agent_jobs` are swallowed -- a violation of a
+    DIFFERENT constraint (here, a `workspace_id` naming a workspace that does not exist) is a real
+    bug, not a benign race, and must not be silently eaten. `unscoped()`, not a normal bind: a
+    workspace-bound session would refuse the mismatched `workspace_id` itself, before the insert
+    ever reaches the database."""
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db, unscoped(db), pytest.raises(IntegrityError):
+        jobs_models.insert_lesson_report_if_absent(
+            db,
+            job_id,
+            workspace_id=999_999_999,
+            cites=[BELIEF_1],
+            domain_name=DOMAIN,
+            context_key=CONTEXT,
+            result=lessons.CONFIRM,
+        )
+
+
 def test_cited_keeps_only_belief_shaped_ids_lowercased_and_deduped() -> None:
     job = jobs_models.AgentJob(job_id="x", persona="p", status="completed", workspace_id=1)
     job.structured_output = {"lessons_used": [BELIEF_1, BELIEF_1.upper(), "not-a-belief-id", "", 123]}
     assert lessons.cited(job) == [BELIEF_1]
+
+
+def test_declare_lessons_used_adds_the_property_without_mutating_the_original() -> None:
+    schema = {"type": "object", "properties": {"data": {"type": "string"}}, "additionalProperties": False}
+    declared = lessons.declare_lessons_used(schema)
+    assert declared["properties"]["lessons_used"] == {"type": "array", "items": {"type": "string"}}
+    assert declared["properties"]["data"] == {"type": "string"}
+    assert schema["properties"] == {"data": {"type": "string"}}
+
+
+def test_report_outcome_warns_when_the_persona_never_declared_the_key(
+    workspace_id: int, with_core_memory: AgentSettings, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Distinct from an empty `lessons_used: []` (a deliberate "followed nothing"): the key's
+    total absence means the persona's own `json_schema` never declared it at all."""
+    job_id = _seed_job(workspace_id, lessons_used=None)
+    with get_session_factory()() as db, caplog.at_level(logging.WARNING):
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+    assert "lessons_used" in caplog.text
 
 
 def test_a_stale_claim_tokens_writes_land_nowhere(workspace_id: int) -> None:
@@ -423,7 +471,7 @@ async def test_retry_unsettled_alerts_on_a_transient_fault_stale_for_a_day(
     assert _failing_alert() is not None
 
 
-async def test_retry_unsettled_clears_the_alert_on_the_next_success(
+async def test_retry_unsettled_clears_the_alert_only_once_the_whole_sweep_is_clean(
     workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
 ) -> None:
     lessons._raise_failing_alert(get_session_factory(), "a prior failure")
@@ -433,6 +481,45 @@ async def test_retry_unsettled_clears_the_alert_on_the_next_success(
     await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
 
     assert _failing_alert() is None
+
+
+async def test_a_refusal_keeps_the_alert_up_despite_another_rows_success_in_the_same_sweep(
+    workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug this guards: `_deliver_or_abandon` used to clear the shared alert on its OWN
+    success, even when a DIFFERENT row in the same sweep had just raised it."""
+
+    async def _refuse_belief_2(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        if arguments.get("cites") == [BELIEF_2]:
+            raise ToolError(f"belief {BELIEF_2} is not active")
+        content = {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
+        return SimpleNamespace(structured_content=content)
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_refuse_belief_2))
+    _seed_report(workspace_id, lessons_used=[BELIEF_1])  # succeeds
+    _seed_report(workspace_id, lessons_used=[BELIEF_2])  # refused
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
+
+    assert _failing_alert() is not None
+
+
+def test_raise_failing_alert_does_not_undo_a_dismissal_for_an_unchanged_reason() -> None:
+    """The bug this guards: `raise_alert` marks an alert unread on every call, so re-raising the
+    SAME reason every sweep (the misconfiguration check runs on every one) would undo an
+    operator's own dismissal within a minute."""
+    factory = get_session_factory()
+    lessons._raise_failing_alert(factory, "still broken")
+    raised = _failing_alert()
+    assert raised is not None
+    with factory() as db:
+        alerts_service.mark_read(db, raised.id)
+        db.commit()
+
+    lessons._raise_failing_alert(factory, "still broken")  # unchanged -- must not re-mark unread
+
+    dismissed = _failing_alert()
+    assert dismissed is not None and dismissed.read_at is not None
 
 
 async def test_retry_unsettled_abandons_a_stale_report_and_alerts(

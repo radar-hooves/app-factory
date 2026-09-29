@@ -10,6 +10,7 @@ import asyncio
 import datetime
 import logging
 import re
+from typing import Any
 
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
@@ -21,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from {{ package_name }}.api.agent import jobs_models
 from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobLessonReport
 from {{ package_name }}.api.alerts import service as alerts_service
+from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -48,12 +50,32 @@ _FAILING_ALERT_KEY = "agent-lessons:failing"
 
 #: A belief id, as `belief_retrieve` mints one — nothing else survives into `cited()`.
 _BELIEF_ID = re.compile(r"[0-9a-f]{32}")
-#: FastMCP's masked generic shape for an unhandled tool exception — ambiguous, so transient.
-_MASKED_TOOL_ERROR = re.compile(r"^Error calling tool '[^']*'$")
+#: FastMCP's own wrapper shape for an unhandled tool exception, masked or not (a genuine refusal
+#: comes through core-memory's `_typed` path and never carries this prefix) — so always transient.
+_WRAPPED_TOOL_ERROR = re.compile(r"^Error calling tool '[^']*'(: .*)?$")
+#: FastMCP's own literal messages for the two faults it recognises and always lets through as
+#: actionable, even with masking on.
+_TRANSIENT_TOOL_MESSAGES = frozenset(
+    {"Rate limited by upstream API, please retry later", "Upstream request timed out, please retry"}
+)
+
+
+def _is_transient_tool_error(message: str) -> bool:
+    return bool(_WRAPPED_TOOL_ERROR.match(message)) or message in _TRANSIENT_TOOL_MESSAGES
 
 
 class _Unexpected(Exception):
     """core-memory answered, but this slice's own reading of that answer failed."""
+
+
+def declare_lessons_used(schema: dict[str, Any]) -> dict[str, Any]:
+    """`schema` with the reserved `lessons_used` property added — a persona's own `json_schema`
+    must declare it, or `additionalProperties: False` refuses the key outright and every report
+    silently no-ops."""
+    return {
+        **schema,
+        "properties": {**schema.get("properties", {}), "lessons_used": {"type": "array", "items": {"type": "string"}}},
+    }
 
 
 def cited(job: AgentJob) -> list[str]:
@@ -88,22 +110,40 @@ def report_outcome(db: Session, job_id: str, *, domain_name: str, context_key: s
     job = jobs_models.get_job(db, job_id)
     if job is None:
         return
+    if "lessons_used" not in (job.structured_output or {}):
+        logger.warning(
+            "Job %s's structured answer has no lessons_used key -- declare it on the persona's "
+            "json_schema with lessons.declare_lessons_used()",
+            job_id,
+        )
     cites = cited(job)
     if not cites:
         return
     jobs_models.insert_lesson_report_if_absent(
-        db, job_id, cites=cites, domain_name=domain_name, context_key=context_key, result=result
+        db,
+        job_id,
+        workspace_id=job.workspace_id,
+        cites=cites,
+        domain_name=domain_name,
+        context_key=context_key,
+        result=result,
     )
 
 
 def _raise_failing_alert(db_session_factory: sessionmaker[Session], reason: str) -> None:
+    """Raise or refresh the one pipeline-health alert — but never re-raise it UNCHANGED: `raise_alert`
+    marks it unread on every call, so doing that on an unchanged reason would undo an operator's own
+    dismissal every time a still-ongoing, already-known failure (or the misconfiguration check, which
+    runs every sweep) repeats the same reason."""
+    body = reason[:2000]
     with db_session_factory() as db:
+        existing = db.execute(select(Alert.body).where(Alert.key == _FAILING_ALERT_KEY)).scalar_one_or_none()
+        if existing == body:
+            return
         alerts_service.raise_alert(
             db,
             AlertRaise(
-                key=_FAILING_ALERT_KEY,
-                title="The agent-jobs lesson report to core-memory is failing",
-                body=reason[:2000],
+                key=_FAILING_ALERT_KEY, title="The agent-jobs lesson report to core-memory is failing", body=body
             ),
         )
         db.commit()
@@ -117,13 +157,16 @@ def _clear_failing_alert(db_session_factory: sessionmaker[Session]) -> None:
 
 async def _note_transient(
     db_session_factory: sessionmaker[Session], job_id: str, created_at: datetime.datetime, exc: Exception
-) -> None:
+) -> bool:
     """A fault raised while a call was in flight — connection, DNS, an init or read timeout, a
-    vend failure, or a `ToolError` FastMCP's own masking made ambiguous. Left unsettled; alerted
-    only once it has been failing long enough to matter."""
+    vend failure, or a `ToolError` FastMCP's own wrapper made ambiguous. Left unsettled; alerted,
+    and reported as a failure to the caller's sweep, only once it has been failing long enough to
+    matter."""
     logger.warning("Reporting job %s's lesson outcome failed transiently; will retry: %s", job_id, exc)
-    if created_at < datetime.datetime.now(datetime.UTC) - _STALE_TRANSIENT_AFTER:
+    stale = created_at < datetime.datetime.now(datetime.UTC) - _STALE_TRANSIENT_AFTER
+    if stale:
         await run_in_threadpool(_raise_failing_alert, db_session_factory, f"still failing: {exc}"[:500])
+    return stale
 
 
 async def _deliver_or_abandon(
@@ -136,8 +179,11 @@ async def _deliver_or_abandon(
     result: str,
     cites: list[str],
     created_at: datetime.datetime,
-) -> None:
-    """Claim `job_id`'s report, then abandon it past `_ABANDON_AFTER` or attempt one delivery."""
+) -> bool:
+    """Claim `job_id`'s report, then abandon it past `_ABANDON_AFTER` or attempt one delivery.
+    Returns whether this report is (still) a failure, for the caller's sweep to decide whether ANY
+    row failed this tick — a lone success must not clear the pipeline alert out from under a
+    DIFFERENT row's refusal in the same sweep."""
 
     def _claim() -> tuple[bool, str | None, datetime.datetime | None]:
         with db_session_factory() as db:
@@ -146,7 +192,7 @@ async def _deliver_or_abandon(
 
     won, decision_id, token = await run_in_threadpool(_claim)
     if not won or token is None:
-        return
+        return False
 
     def _settle(refused: str | None) -> None:
         with db_session_factory() as db:
@@ -158,7 +204,7 @@ async def _deliver_or_abandon(
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
         logger.error("Abandoned job %s's lesson report: %s", job_id, reason)
-        return
+        return True
 
     def _save_decision(new_decision_id: str) -> None:
         with db_session_factory() as db:
@@ -198,22 +244,20 @@ async def _deliver_or_abandon(
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
         logger.error("Settled job %s's lesson report as unexpected: %s", job_id, reason)
-        return
+        return True
     except ToolError as exc:
-        if _MASKED_TOOL_ERROR.match(str(exc)):
-            await _note_transient(db_session_factory, job_id, created_at, exc)
-            return
+        if _is_transient_tool_error(str(exc)):
+            return await _note_transient(db_session_factory, job_id, created_at, exc)
         reason = str(exc)[:500]
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
         logger.warning("core-memory refused job %s's lesson report: %s", job_id, reason)
-        return
+        return True
     except Exception as exc:
-        await _note_transient(db_session_factory, job_id, created_at, exc)
-        return
+        return await _note_transient(db_session_factory, job_id, created_at, exc)
 
-    await run_in_threadpool(_clear_failing_alert, db_session_factory)
     await run_in_threadpool(_settle, None)
+    return False
 
 
 async def retry_unsettled(
@@ -253,9 +297,13 @@ async def retry_unsettled(
             ).all()
         return list(rows)
 
+    failed = False
     for job_id, workspace_id, domain_name, context_key, result, cites, created_at in await run_in_threadpool(_pending):
         if stopping.is_set():
             return
-        await _deliver_or_abandon(
+        if await _deliver_or_abandon(
             db_session_factory, settings, job_id, workspace_id, domain_name, context_key, result, cites, created_at
-        )
+        ):
+            failed = True
+    if not failed:
+        await run_in_threadpool(_clear_failing_alert, db_session_factory)
