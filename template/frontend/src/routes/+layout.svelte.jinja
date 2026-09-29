@@ -4,6 +4,7 @@
 	import '@fontsource-variable/hanken-grotesk';
 	import '@fontsource-variable/jetbrains-mono';
 	import { ModeWatcher } from 'mode-watcher';
+	import { AlertBell } from '@poodle64/ui/alerts';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
@@ -13,7 +14,6 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import AlertBell from '$lib/alerts/alert-bell.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
 	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';

@@ -4,7 +4,7 @@ Status: **design, 29/09/2026.** The operator, the same day: "we should start to 
 
 ## Decision
 
-**The factory gains an `alerts` slice: one table, one `/mcp` tool producers write through, three admin-gated routes, and a bell in the shell's top bar.** An alert is what a machine told this deployment's operator. Feedback is the same inbox from the other side: people telling the operator. Both are read under the reserved `admin` entitlement. Cost is about 530 lines of product code: `api/alerts/` 250, `mcp/dispatchers/alerts.py` 65, the migration 50 and `lib/alerts/alert-bell.svelte` 170. Tests add about 330.
+**The factory gains an `alerts` slice: one table, one `/mcp` tool producers write through, and three admin-gated routes. The top-bar bell over them is `@poodle64/ui/alerts` (`AlertBell`, 2026.9.21).** An alert is what a machine told this deployment's operator. Feedback is the same inbox from the other side: people telling the operator. Both are read under the reserved `admin` entitlement. Cost is about 360 lines of product code in the factory (`api/alerts/` 250, `mcp/dispatchers/alerts.py` 65, the migration 50) and 170 for the bell in the package. Tests add about 350.
 
 ```text
 n8n / estate service ──POST /mcp/ tools/call "alerts"──┐   (Authentik bearer + actors.yaml)
@@ -20,6 +20,7 @@ bell (admin only) ──GET /api/alerts/, POST …/read, DELETE …/{id}
 - **One row per `key`.** The producer names a stable key, such as `osint-scan:report` or `osint-scan:dry:<query>`. Raising a key that already exists updates that row in place and makes it unread again, through one `INSERT … ON CONFLICT`. A recurring condition is therefore one alert that changes, never a stack. The key is required: it is the only way to raise, so there is one code path.
 - **Unread, read, gone.** Opening an alert marks it read. Dismissing it deletes the row, and so does a producer's `clear`. A later raise of that key brings it back unread. The factory keeps no dismissed state, history or severity, and it has no per-person read state: a deployment's alerts are one inbox, and whoever reads an alert has read it for everyone.
 - **`link`** is an app path (`/documents/42`) or an absolute `http(s)` URL. It is validated at the raise, so no `javascript:` link can reach an `href`.
+- **The bell is the UI package's, like `ReportWidget`.** It is app machinery the layout mounts once, reaching the factory's routes through an `endpoint` prop, so a fix to it is one package release rather than a convergence across every app. `AlertRead`/`AlertList` are its contract.
 - **Inert until used.** A deployment with no producer has no rows, and the bell renders nothing when nothing is open. The bell appears only for callers holding `admin`. There is no setting.
 
 ## Producers
@@ -54,4 +55,4 @@ The answer arrives as one server-sent event. A refused argument comes back as `r
 
 ## Adoption
 
-An app takes `api/alerts/`, `mcp/dispatchers/alerts.py`, `lib/alerts/`, the migration and the layout line on its next convergence. The migration's `down_revision` is repointed at the app's own head. It then registers each producer's Authentik identity in its `config/actors.yaml`.
+An app takes `api/alerts/`, `mcp/dispatchers/alerts.py`, the migration, the layout line and the `@poodle64/ui` 2026.9.21 floor on its next convergence. The migration's `down_revision` is repointed at the app's own head. It then registers each producer's Authentik identity in its `config/actors.yaml`.

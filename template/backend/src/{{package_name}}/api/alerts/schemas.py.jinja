@@ -35,7 +35,12 @@ class AlertRaise(BaseModel):
 
 
 class AlertRead(BaseModel):
-    """An alert as the bell shows it."""
+    """An alert as the bell shows it.
+
+    This and `AlertList` are `@poodle64/ui`'s `AlertBell` contract, not this
+    app's choice: renaming a field here without changing the package silently
+    empties every app's bell.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
