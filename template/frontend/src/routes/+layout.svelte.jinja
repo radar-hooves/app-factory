@@ -1,10 +1,7 @@
 {% raw %}<script lang="ts">
 	import '../app.css';
-	import '@fontsource-variable/fraunces';
-	import '@fontsource-variable/hanken-grotesk';
-	import '@fontsource-variable/jetbrains-mono';
+	import '$lib/fonts';
 	import { ModeWatcher } from 'mode-watcher';
-	import { AlertBell } from '@poodle64/ui/alerts';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
@@ -15,6 +12,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
+	import AdminAlertBell from '$lib/alerts/admin-alert-bell.svelte';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
 	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
 
@@ -95,14 +93,9 @@
 		<WorkspaceMenu {membersHref} />
 	{/snippet}
 
-	<!-- What machines told this deployment's operator (docs/design/alerts.md),
-	     for whoever holds admin: the server gates the routes, and this only
-	     spares everyone else a bell whose every call would 403. It renders
-	     nothing while no alert is open. -->
+	<!-- The bell (docs/design/alerts.md), admin-gated by the component itself. -->
 	{#snippet actions()}
-		{#if auth.can('admin')}
-			<AlertBell />
-		{/if}
+		<AdminAlertBell />
 	{/snippet}
 
 	<!-- Who is signed in, and the way out — rendered once, at the end of the

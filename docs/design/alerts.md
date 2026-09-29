@@ -56,3 +56,5 @@ The answer arrives as one server-sent event. A refused argument comes back as `r
 ## Adoption
 
 An app takes `api/alerts/`, `mcp/dispatchers/alerts.py`, the migration, the layout line and the `@poodle64/ui` 2026.9.21 floor on its next convergence. The migration's `down_revision` is repointed at the app's own head. It then registers each producer's Authentik identity in its `config/actors.yaml`.
+
+The "layout line" is `frontend/src/lib/alerts/admin-alert-bell.svelte` (`<AdminAlertBell />`), which owns the `auth.can('admin')` gate so it is not reimplemented at every mount point. `+layout.svelte` takes it as part of the owed render. An app that owns its own root layout (`canonical-app-shape.md` §Exceptions) still takes `admin-alert-bell.svelte` from the factory and drops the one line into its own chrome — never a hand-rolled gate around `@poodle64/ui/alerts`' `AlertBell`, which goes stale as the gate evolves.
