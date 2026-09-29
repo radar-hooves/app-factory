@@ -252,6 +252,42 @@ repos:
         files: '^frontend/src/.*\.svelte$'
         pass_filenames: false
 
+  # The mechanical fence for master-project#839: a commit that edits a file the
+  # factory owns is refused, derived every run from the factory's own file list
+  # (`git ls-files template/` in check-template-parity.py's `stamped_files()`)
+  # rather than a list hand-kept here — the same derivation canonical-shape.yaml
+  # already runs in CI, now also at commit time, on THIS machine, before the
+  # edit ever reaches a PR. `pass_filenames: false`: DRIFT can appear in any
+  # owed file, not only a staged one, exactly like the mypy hook above.
+  #
+  # Reached through .claude/skills, the relative symlink `/master:setup-symlinks`
+  # gives every repo under master-project's `repos/` (this repo carries the same
+  # symlink itself) — never vendored, never a household PATH command, because
+  # this check has no meaning off a machine that also holds the factory. A
+  # missing symlink fails loudly rather than skipping quietly: a fence nobody
+  # can see go dark is not a fence (core.md "a mechanical fence, not a sentence").
+  #
+  # Passes right after a genuine copier update: that operation re-renders the
+  # owed files AND regenerates .template-parity.json in the same motion (either
+  # `converge-to-template.py --apply`, or a plain `copier update` followed by
+  # `check-template-parity.py --generate .` to resync the manifest — the second
+  # step is the one a bare `copier update` does not do for you), so the file
+  # this gate compares against moves with the files it is comparing.
+  - repo: local
+    hooks:
+      - id: template-parity
+        name: 'governance - No app edit to a file the factory owns'
+        entry: >-
+          bash -c 'set -eu;
+          script=".claude/skills/canonical-app-migration/check-template-parity.py";
+          if [ ! -f "$script" ]; then
+            echo "template-parity: $script is missing — this checkout has no master-project symlinks (run /master:setup-symlinks), so the factory-file fence cannot run" >&2;
+            exit 1;
+          fi;
+          python3 "$script" .'
+        language: system
+        pass_filenames: false
+
   # ────────────────────────── App-owned hooks ──────────────────────────────
   #
   # THE extension point for this file, and the reason nothing above needs an

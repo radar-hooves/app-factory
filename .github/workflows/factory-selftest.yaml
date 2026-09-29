@@ -1,0 +1,139 @@
+name: Factory self-test
+
+# The factory's own answer to master-project#839 NEED 1: "the factory's code is
+# tested in the factory." Renders a throwaway app from THIS commit with
+# `factory_selftest=true` — the one caller allowed to set it (copier.yaml) — so
+# the scratch render carries the ~20 test_*.py/*.test.ts files that assert
+# behaviour of a factory-owned module (auth, rate limiting, the admin/agent/
+# feedback APIs, vend, the mcp mount…) and that an ordinary stamp no longer
+# receives at all. Runs their own suite there, on a rendered app, exactly as a
+# real app would run it — never against template/ source directly, which is
+# Jinja, not Python or TypeScript.
+#
+# Never on the golden reusable callers (python-ci.yaml/frontend-ci.yaml under
+# template/.github): those are what copier stamps INTO an app, and inlining
+# this job there would ship the factory's own self-test into every app's CI,
+# exactly the drift this closes. This workflow lives at THIS repo's own root,
+# beside kit-rust.yaml and security.yaml, which is this repo's first-party CI.
+#
+# Household CI's self-hosted default applies (rules-library/fleet/ci.md), and
+# for a stronger reason than kit-rust.yaml's fork exception: a rendered app's
+# BACKEND resolves real dependencies off the household's PRIVATE package index
+# (redactyl-core, api-common, the nextcloud client), credentialled ambiently on
+# the runner's own file per fleet/ci.md, never a repository secret a fork PR
+# could read (the frontend's @poodle64/* is public on npmjs and carries no such
+# constraint on its own, per frontend-ci.yaml's reusable — the backend half is
+# what forces this job onto the trusted runner only). There is no safe
+# hosted-runner path for this job the way there is for kit-rust's pure Rust/Nix
+# build, so a fork PR skips it outright rather than running it credential-less
+# and red.
+
+on:
+  pull_request:
+    paths:
+      - 'template/**'
+      - 'copier.yaml'
+      - 'variants.yaml'
+      - '.github/workflows/factory-selftest.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# No ntfy-failure step: a public repo cannot call master-project's private
+# composite action, so failures show in the run and PR UI only (kit-rust.yaml).
+
+permissions:
+  contents: read
+
+jobs:
+  render-and-test:
+    name: Render a scratch app and run its own suite
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ['self-hosted', 'atlas']
+    timeout-minutes: 30
+    env:
+      UV_FROZEN: '1' # install from the rendered lockfile; never re-resolve in CI (ci-workflow-standard.md)
+      SCRATCH: ${{ github.workspace }}-scratch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # copier reads the commit history to describe the template's own version
+
+      - name: Set up uv
+        # astral-sh/setup-uv directly, not master-project's setup-uv wrapper
+        # (radar-hooves/master-project/.github/actions/setup-uv): this repo is
+        # PUBLIC and cannot reach a private-repo action, exactly the constraint
+        # security.yaml and kit-rust.yaml already record for ntfy-failure —
+        # by-exception (29/09/2026), same reason. Costs the wrapper's persisted
+        # tool-cache trick (a fresh uv download each run instead of a restored
+        # one); worth it for a job that runs only on template/copier.yaml/
+        # variants.yaml changes, not on every push.
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: '0.9.30' # the household pin (master-project's setup-uv action)
+
+      - name: Render a scratch app (factory_selftest=true)
+        # Fixed, throwaway answers: nothing here is deployed or reached over the
+        # network. postgres_host/port are never connected to — backend tests run
+        # on their own ephemeral testcontainers Postgres (canonical-app-shape.md),
+        # not the dev-server address a real app would give. registry_host/
+        # registry_credential_file/watchtower_url gate deploy.yaml only, which
+        # this job never runs.
+        run: |
+          set -euo pipefail
+          uvx copier copy --defaults --trust --vcs-ref=HEAD \
+            --data factory_selftest=true \
+            --data project_name=factory-selftest \
+            --data description="Factory self-test scratch render — never deployed" \
+            --data backend_port=8398 --data frontend_port=5198 --data frontend_e2e_port=5228 \
+            --data postgres_host=127.0.0.1 --data postgres_port=5432 \
+            --data portcullis_url=http://127.0.0.1:1 \
+            --data private_index_name=godswood --data private_index_url=https://pypi.godswood.au/poodle64/prod/+simple/ \
+            --data registry_host=registry.invalid --data registry_credential_file=/dev/null \
+            --data watchtower_url=http://127.0.0.1:1 \
+            . "$SCRATCH"
+        # private_index_name/url are the SAME values every real app's own
+        # .copier-answers.yml carries (one shared devpi instance) — not a
+        # credential, and read access is the runner's own ambient netrc
+        # (fleet/ci.md), the same mechanism every stamped app's own CI already
+        # relies on to resolve these same packages.
+
+      - name: Backend — install and test
+        # Same sync-args as every real app's python-ci.yaml caller
+        # (template/.github/workflows/python-ci.yaml): base + dev only, so CI
+        # resolves the same packages a real app's CI does, off the household
+        # index rather than an editable sibling path.
+        working-directory: ${{ env.SCRATCH }}/backend
+        run: |
+          uv sync --no-default-groups --group dev
+          uv run pytest -q -n 8 --dist loadfile
+
+      - name: Set up pnpm
+        # Same pin as master-project's frontend-ci.yaml reusable.
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: ${{ env.SCRATCH }}/frontend/package.json
+
+      - name: Set up Node
+        # Same pin as master-project's frontend-ci.yaml reusable. No
+        # registry-url/scope, for the same reason that reusable omits it:
+        # @poodle64/* is public on npmjs, and setting one here 404s the
+        # install (measured 2026-08-14, see that workflow's own comment).
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Frontend — install and test (unit)
+        # `pnpm test -- --run`, the same command frontend-ci.yaml's reusable
+        # runs for `run-tests: true` — vitest once, not watch mode.
+        working-directory: ${{ env.SCRATCH }}/frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test -- --run
+
+      - name: Clean up the scratch render
+        if: always()
+        run: rm -rf "$SCRATCH"

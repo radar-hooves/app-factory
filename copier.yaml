@@ -30,6 +30,49 @@ _skip_if_exists:
   # this app's domain surface, so an update must never overwrite it.
   - frontend/src/lib/api/app.ts
 
+# Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
+# APIs, vend, the mcp mount…) are factory content, not app content: an app has
+# no more business editing or running them than it does the module they test
+# (master-project#839). They stay in template/ so `factory_selftest=true` can
+# still render them for the factory's own CI — a scratch app the factory
+# stamps and runs its suite against — but an ordinary stamp never receives
+# them, so a real app's tree, and its CI, never carries a test of code it
+# does not own. Listed once, here, never per test type: a `test_*.py` and a
+# `*.test.ts` take the same line shape because the reason is the same.
+#
+# NOT here: test infrastructure every app's OWN tests still need to run
+# (conftest.py, app_fixtures.py, the support/ package, vitest.config.ts, the
+# e2e global-setup/api.ts helpers) and the two already-sanctioned scaffold
+# tests (test_example.py, example.spec.ts) that retire with the slice they
+# cover — excluding either would strip the app of the harness its own tests
+# depend on, which is a different failure to the one this closes.
+_exclude:
+  - "{% if not factory_selftest %}backend/tests/test_admin_api.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_agent_api.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_agent_jobs_api.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_agent_persona.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_agent_settings.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_app_posture.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_explicit_test_server_guard.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_feedback_api.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_files_settings.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_logging.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_mcp_auth.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_mcp_stateless.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_rate_limit.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_storage.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_system_health.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_vend.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_version.py{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/dev-identity.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/hooks.client.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/api/client.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/api/error.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
+
 project_name:
   type: str
   help: 'Project name (kebab-case, e.g. my-app)'
@@ -53,6 +96,20 @@ project_title:
   type: str
   when: false
   default: "{{ project_name | replace('-', ' ') | title }}"
+
+# Hidden and never answered by an app — `when: false` keeps a real stamp's
+# rendered value at the default `false` forever, since copier persists only
+# an ASKED question's answer (package_name and project_title above are the
+# same shape and the same proof: neither appears in a real app's own
+# .copier-answers.yml). The one caller that ever needs `true` is the
+# factory's own CI, which passes it explicitly (`--data factory_selftest=true`)
+# to render a scratch app carrying the factory's own tests of its own code
+# (master-project#839 NEED 1) and runs its suite there. Gates the _exclude
+# block above; nothing else in this file reads it.
+factory_selftest:
+  type: bool
+  when: false
+  default: false
 
 dark_first:
   type: bool
