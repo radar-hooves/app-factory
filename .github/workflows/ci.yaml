@@ -8,8 +8,6 @@ name: CI
 # on atlas. security.yaml's jobs choose the same way.
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 # This workflow only reads the repo (checkout, install, build, test) — no
