@@ -1,12 +1,12 @@
 """The app-started job slice (`docs/design/agent-jobs.md`), driven through a
-REAL subprocess exactly as `test_agent_api.py` drives the chat `ask()` flow —
+REAL subprocess exactly as `test_agent_api.py` drives the chat `ask()` flow --
 `AgentSettings.executable` points at the same `fake_agent_cli.py`, so these
 tests prove `jobs.py`'s actual argv, environment, persistence and fan-out
 rather than a mock standing in for the claim that they work.
 
 One thing does NOT mirror `test_agent_api.py`: a job's rows are written
 through `get_session_factory()` (the app's real, engine-bound sessionmaker),
-never the `session` fixture's rollback-wrapped connection — deliberately, the
+never the `session` fixture's rollback-wrapped connection -- deliberately, the
 same way `jobs.py`'s own module docstring explains it: a job must outlive the
 one request that reads it back, and a connection whose every write rolls back
 at test teardown cannot hold state across the several calls these tests make.
@@ -18,7 +18,7 @@ import asyncio
 import json
 import os
 import stat
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -35,11 +35,12 @@ from tests.support import fake_agent_cli
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
 
-ENTITLED = {"x-authentik-uid": "job-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-milton"}
+ENTITLED = {"x-authentik-uid": "job-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-jobagent"}
 UNENTITLED = {"x-authentik-uid": "job-2", "x-authentik-username": "bystander"}
 
-#: Bounds every poll loop below — the fake CLI answers in well under a second,
-#: so a real hang reads as a clean failure rather than the suite stalling.
+#: Bounds every poll loop below -- the fake CLI answers in well under a
+#: second, so a real hang reads as a clean failure rather than the suite
+#: stalling.
 _POLL_TIMEOUT_SECONDS = 5.0
 
 JOB_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
@@ -56,29 +57,38 @@ def _write_persona(root: Path, name: str) -> Path:
 @pytest.fixture
 def personas_dir(tmp_path: Path) -> Path:
     root = tmp_path / "personas"
-    _write_persona(root, "milton")
+    _write_persona(root, "jobagent")
     return root
 
 
 @pytest.fixture(autouse=True)
-def _agent_settings(app: FastAPI, personas_dir: Path) -> Iterator[None]:
+def agent_settings(app: FastAPI, personas_dir: Path) -> Iterator[AgentSettings]:
+    """Point the agent slice at a throwaway persona directory and the fake CLI.
+
+    Returns the constructed `AgentSettings` rather than only overriding
+    `get_settings` for the app's own request handling: `jobs.start()` and
+    friends are called DIRECTLY in most of these tests (need 1 -- "started by
+    the app itself" -- means there is no request to hang a dependency
+    override off), so a test needs the same settings object in hand, not just
+    routed through FastAPI's DI.
+    """
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    configured: Settings = get_settings().model_copy(
-        update={"agent": AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)}
-    )
+    agent: AgentSettings = AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)
+    configured: Settings = get_settings().model_copy(update={"agent": agent})
     app.dependency_overrides[get_settings] = lambda: configured
-    yield
+    yield agent
     app.dependency_overrides.pop(get_settings, None)
 
 
-async def _persona() -> persona_module.PersonaConfig:
-    return persona_module.load(get_settings().agent, "milton")
+@pytest.fixture
+def persona(agent_settings: AgentSettings) -> persona_module.PersonaConfig:
+    return persona_module.load(agent_settings, "jobagent")
 
 
-async def _wait_until(predicate, *, timeout: float = _POLL_TIMEOUT_SECONDS) -> None:
-    """Poll `predicate` (a zero-arg callable) until it is true. `db_session_factory` reads are
-    cheap, real, committed rows — polling them is the correct way to observe a background
-    `asyncio.Task` from a test that is not itself inside that task."""
+async def _wait_until(predicate: Callable[[], bool], *, timeout: float = _POLL_TIMEOUT_SECONDS) -> None:
+    """Poll `predicate` until it is true. `_job_status`'s reads are cheap, real, committed rows --
+    polling them is the correct way to observe a background `asyncio.Task` from a test that is not
+    itself inside that task."""
     async with asyncio.timeout(timeout):
         while not predicate():
             await asyncio.sleep(0.02)
@@ -87,6 +97,13 @@ async def _wait_until(predicate, *, timeout: float = _POLL_TIMEOUT_SECONDS) -> N
 def _job_status(job_id: str) -> jobs_models.AgentJob | None:
     with get_session_factory()() as db:
         return jobs_models.get_job(db, job_id)
+
+
+async def _wait_until_settled(job_id: str) -> jobs_models.AgentJob:
+    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+    job = _job_status(job_id)
+    assert job is not None
+    return job
 
 
 def _events(body: str) -> list[dict[str, object]]:
@@ -98,66 +115,69 @@ def _events(body: str) -> list[dict[str, object]]:
     return frames
 
 
-# ── Need 1: started by the app, no asker ────────────────────────────────────
+# -- Need 1: started by the app, no asker ------------------------------------
 
 
-async def test_a_job_is_returned_before_the_agent_has_finished(client: AsyncClient) -> None:
-    """`start()` hands back `job_id` at once — the app never waits on the run to get it."""
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="hello")
+async def test_a_job_is_returned_before_the_agent_has_finished(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    """`start()` hands back `job_id` at once -- the app never waits on the run to get it."""
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="hello")
     assert job_id
-
-    await _wait_until(lambda: _job_status(job_id) is not None and _job_status(job_id).status != jobs_models.RUNNING)
-    job = _job_status(job_id)
-    assert job is not None
+    job = await _wait_until_settled(job_id)
     assert job.status == jobs_models.COMPLETED
 
 
-async def test_a_jobs_structured_output_is_the_apps_own_schema(client: AsyncClient) -> None:
+async def test_a_jobs_structured_output_is_the_apps_own_schema(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
     """Need 1's own point: "a structured answer that the app code which started it gets back"."""
-    persona = await _persona()
     job_id = await jobs_module.start(
-        get_session_factory(), get_settings().agent, persona, prompt="file this", json_schema=JOB_SCHEMA
+        get_session_factory(), agent_settings, persona, prompt="file this", json_schema=JOB_SCHEMA
     )
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
-    job = _job_status(job_id)
-    assert job.structured_output == {"text": "file this"}
+    job = await _wait_until_settled(job_id)
+    # The fake CLI's `structured_output.text` is its own diagnostic echo (argv/env, for the OTHER
+    # tests to assert on) rather than a clean answer -- the schema's presence on the wire is the point here.
+    assert "question=file this" in job.structured_output["text"]
 
 
-async def test_a_jobs_own_working_folder_seeds_the_files_it_was_given(client: AsyncClient) -> None:
-    """"with files to work on": `files` land at their given relative path under the job's own cwd."""
-    persona = await _persona()
+async def test_a_jobs_own_working_folder_seeds_the_files_it_was_given(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    """ "with files to work on": `files` land at their given relative path under the job's own cwd."""
     job_id = await jobs_module.start(
         get_session_factory(),
-        get_settings().agent,
+        agent_settings,
         persona,
         prompt="hello",
         files={"pages/1.png": b"not a real image, just proving the path"},
     )
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+    await _wait_until_settled(job_id)
     assert (jobs_module._job_dir(job_id) / "pages" / "1.png").read_bytes() == b"not a real image, just proving the path"
 
 
-# ── Need 2: keeps running whether or not anyone is watching ─────────────────
+# -- Need 2: keeps running whether or not anyone is watching -----------------
 
 
-async def test_a_job_keeps_running_with_nobody_watching_it(client: AsyncClient) -> None:
+async def test_a_job_keeps_running_with_nobody_watching_it(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
     """Nothing subscribes to the bus at all -- `start()`'s caller never opens `watch()` -- and it still finishes."""
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="unobserved")
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
-    assert _job_status(job_id).status == jobs_models.COMPLETED
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="unobserved")
+    job = await _wait_until_settled(job_id)
+    assert job.status == jobs_models.COMPLETED
 
 
-# ── Need 3: opened by an entitled user at any time ───────────────────────────
+# -- Need 3: opened by an entitled user at any time ---------------------------
 
 
-async def test_watching_an_already_finished_job_replays_from_the_start(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="already done")
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+async def test_watching_an_already_finished_job_replays_from_the_start(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="already done")
+    await _wait_until_settled(job_id)
 
-    response = await client.get(f"/api/agent/milton/jobs/{job_id}/watch", headers=ENTITLED)
+    response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
     assert response.status_code == 200
     events = _events(response.text)
     assert events[0].get("subtype") == "init"
@@ -165,22 +185,24 @@ async def test_watching_an_already_finished_job_replays_from_the_start(client: A
 
 
 async def test_watching_a_job_that_never_existed_answers_not_found(client: AsyncClient) -> None:
-    response = await client.get("/api/agent/milton/jobs/never-issued/watch", headers=ENTITLED)
+    response = await client.get("/api/agent/jobagent/jobs/never-issued/watch", headers=ENTITLED)
     assert response.status_code == 404
 
 
-async def test_watching_is_gated_on_the_persona_entitlement(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="hi")
-    response = await client.get(f"/api/agent/milton/jobs/{job_id}/watch", headers=UNENTITLED)
+async def test_watching_is_gated_on_the_persona_entitlement(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="hi")
+    response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=UNENTITLED)
     assert response.status_code == 403
 
 
-async def test_a_still_running_job_is_caught_up_and_then_watched_live() -> None:
+async def test_a_still_running_job_is_caught_up_and_then_watched_live(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
     """`watch()` subscribes before it reads the persisted tail, so nothing published in between is lost."""
-    persona = await _persona()
     job_id = await jobs_module.start(
-        get_session_factory(), get_settings().agent, persona, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER
+        get_session_factory(), agent_settings, persona, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER
     )
 
     collected: list[dict[str, object]] = []
@@ -193,26 +215,30 @@ async def test_a_still_running_job_is_caught_up_and_then_watched_live() -> None:
 
     drain_task = asyncio.create_task(_drain())
     await asyncio.sleep(0.1)  # let watch() subscribe and read the init-only tail before the reply unblocks it
-    await jobs_module.send_message(get_session_factory(), get_settings().agent, persona, job_id, "live reply")
+    await jobs_module.send_message(get_session_factory(), agent_settings, persona, job_id, "live reply")
     await asyncio.wait_for(drain_task, timeout=_POLL_TIMEOUT_SECONDS)
 
     assert collected[0].get("subtype") == "init"
     result = next(e for e in collected if e.get("type") == "result")
-    assert result["structured_output"] is None  # no json_schema on this job -- see the schema test above instead
+    # No json_schema on this job, so the CLI's own `result` line carries no
+    # `structured_output` key at all (see the schema test above for the case
+    # where it does) -- `.get` rather than `[...]` is the assertion that.
+    assert result.get("structured_output") is None
 
 
-# ── Need 4: a message while working, and a reply once it has finished ───────
+# -- Need 4: a message while working, and a reply once it has finished -------
 
 
-async def test_a_message_sent_while_the_job_is_still_working_reaches_its_stdin() -> None:
-    persona = await _persona()
+async def test_a_message_sent_while_the_job_is_still_working_reaches_its_stdin(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
     job_id = await jobs_module.start(
-        get_session_factory(), get_settings().agent, persona, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER
+        get_session_factory(), agent_settings, persona, prompt=fake_agent_cli.AWAIT_STDIN_TRIGGER
     )
     await _wait_until(lambda: job_id in jobs_module._processes)  # the fake CLI is blocked on stdin by now
 
-    await jobs_module.send_message(get_session_factory(), get_settings().agent, persona, job_id, "the human's answer")
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+    await jobs_module.send_message(get_session_factory(), agent_settings, persona, job_id, "the human's answer")
+    await _wait_until_settled(job_id)
 
     with get_session_factory()() as db:
         events = jobs_models.list_events(db, job_id)
@@ -220,19 +246,15 @@ async def test_a_message_sent_while_the_job_is_still_working_reaches_its_stdin()
     assert "stdin: the human's answer" in echoed["message"]["content"][0]["text"]
 
 
-async def test_a_message_sent_after_the_job_has_finished_resumes_it(client: AsyncClient) -> None:
+async def test_a_message_sent_after_the_job_has_finished_resumes_it(
+    agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
     """Need 4's second case: "its session must outlive the run" -- the SAME job id, a second round of events."""
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="first turn")
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="first turn")
+    await _wait_until_settled(job_id)
 
-    await jobs_module.send_message(get_session_factory(), get_settings().agent, persona, job_id, "second turn")
-    await _wait_until(
-        lambda: job_id not in jobs_module._processes and _job_status(job_id).status != jobs_models.RUNNING,
-        timeout=_POLL_TIMEOUT_SECONDS,
-    )
-    # give the resumed run's own transition past RUNNING a moment past the process exiting
-    await _wait_until(lambda: _job_status(job_id).status == jobs_models.COMPLETED)
+    await jobs_module.send_message(get_session_factory(), agent_settings, persona, job_id, "second turn")
+    await _wait_until_settled(job_id)
 
     with get_session_factory()() as db:
         events = jobs_models.list_events(db, job_id)
@@ -246,46 +268,46 @@ async def test_a_message_sent_after_the_job_has_finished_resumes_it(client: Asyn
     assert "question=second turn" in questions[1]["message"]["content"][0]["text"]
 
 
-async def test_messaging_is_gated_on_the_persona_entitlement(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="hi")
-    response = await client.post(f"/api/agent/milton/jobs/{job_id}/message", json={"text": "hi"}, headers=UNENTITLED)
+async def test_messaging_is_gated_on_the_persona_entitlement(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="hi")
+    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "hi"}, headers=UNENTITLED)
     assert response.status_code == 403
 
 
-# ── Need 5: stopped by the user ──────────────────────────────────────────────
+# -- Need 5: stopped by the user ----------------------------------------------
 
 
-async def test_a_job_can_be_stopped_while_it_is_working(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(
-        get_session_factory(), get_settings().agent, persona, prompt=fake_agent_cli.HANG_TRIGGER
-    )
+async def test_a_job_can_be_stopped_while_it_is_working(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until(lambda: job_id in jobs_module._processes)
 
-    response = await client.post(f"/api/agent/milton/jobs/{job_id}/stop", headers=ENTITLED)
+    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
 
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
-    assert _job_status(job_id).status == jobs_models.CANCELLED
+    job = await _wait_until_settled(job_id)
+    assert job.status == jobs_models.CANCELLED
 
 
-async def test_stopping_an_already_finished_job_is_a_no_op(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(get_session_factory(), get_settings().agent, persona, prompt="hi")
-    await _wait_until(lambda: (job := _job_status(job_id)) is not None and job.status != jobs_models.RUNNING)
+async def test_stopping_an_already_finished_job_is_a_no_op(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt="hi")
+    await _wait_until_settled(job_id)
 
-    response = await client.post(f"/api/agent/milton/jobs/{job_id}/stop", headers=ENTITLED)
+    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
     assert _job_status(job_id).status == jobs_models.COMPLETED  # unchanged -- there was nothing left to stop
 
 
-async def test_stopping_is_gated_on_the_persona_entitlement(client: AsyncClient) -> None:
-    persona = await _persona()
-    job_id = await jobs_module.start(
-        get_session_factory(), get_settings().agent, persona, prompt=fake_agent_cli.HANG_TRIGGER
-    )
-    response = await client.post(f"/api/agent/milton/jobs/{job_id}/stop", headers=UNENTITLED)
+async def test_stopping_is_gated_on_the_persona_entitlement(
+    client: AsyncClient, agent_settings: AgentSettings, persona: persona_module.PersonaConfig
+) -> None:
+    job_id = await jobs_module.start(get_session_factory(), agent_settings, persona, prompt=fake_agent_cli.HANG_TRIGGER)
+    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=UNENTITLED)
     assert response.status_code == 403
     # Still running -- the refused caller's attempt must not have reached `stop()`.
     assert _job_status(job_id).status == jobs_models.RUNNING

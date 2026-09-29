@@ -111,7 +111,13 @@ def _probe_mcp(argv: list[str]) -> dict[str, object]:
 
 def _result(session_id: str, text: str, argv: list[str]) -> dict[str, object]:
     """The terminal `result` line, carrying `structured_output` when `--json-schema` was on the argv."""
-    result: dict[str, object] = {"type": "result", "subtype": "success", "session_id": session_id, "result": text, "is_error": False}
+    result: dict[str, object] = {
+        "type": "result",
+        "subtype": "success",
+        "session_id": session_id,
+        "result": text,
+        "is_error": False,
+    }
     if _flag(argv, "--json-schema") is not None:
         result["structured_output"] = {"text": text}
     return result
