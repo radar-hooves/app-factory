@@ -1,8 +1,8 @@
 <!--
 	Every declared Setting (docs/design/settings.md), rendered from the JSON
-	Schema `GET /api/settings/` returns — `<SchemaForm>` generates its own
-	layout from the schema alone, so an app that declares a setting adds no
-	code here. The one piece of page-specific UI is the panel below the form:
+	Schema `GET /api/settings/` returns, nested by dot path and laid out one
+	group per domain (`$lib/settings/nest`), so an app that declares a setting
+	adds no code here. The one piece of page-specific UI is the panel below the form:
 	`<SchemaForm>` has no per-field reset affordance, so "default versus
 	override, reset in one act" (the operator's own ask) lives here instead.
 -->
@@ -15,6 +15,8 @@
 	import { Button } from '@poodle64/ui/button';
 	import SchemaForm, { type SchemaFormChange } from '@poodle64/ui/schema-form';
 	import { api, extractApiError } from '$api';
+	import type { JsonSchema } from '@poodle64/ui/schema-form';
+	import { nestSchema, nestValues, settingsLayout } from '$lib/settings/nest';
 	import type { components } from '$api/schema';
 
 	type SettingsDocument = components['schemas']['SettingsDocument'];
@@ -25,6 +27,10 @@
 
 	let settingsDoc = $state<SettingsDocument | null>(null);
 	let loadError = $state<string | null>(null);
+	/** What `<SchemaForm>` renders: the flat document nested by dot path (`$lib/settings/nest`); the flat one stays the state. */
+	let formSchema = $derived(settingsDoc ? nestSchema(settingsDoc.schema as JsonSchema) : null);
+	let formValue = $derived(settingsDoc ? nestValues(settingsDoc.value) : {});
+	let formLayout = $derived(formSchema ? settingsLayout(formSchema) : undefined);
 	/** Keys whose effective value differs from its default — derived, never a second copy the API and this page could disagree on. */
 	let overridden = $derived(
 		settingsDoc
@@ -90,7 +96,12 @@
 	<LoadingState message="Loading…" class="mt-16" />
 {:else}
 	<Panel title="Settings">
-		<SchemaForm schema={settingsDoc.schema} value={settingsDoc.value} onChange={handleChange} />
+		<SchemaForm
+			schema={formSchema!}
+			uischema={formLayout}
+			value={formValue}
+			onChange={handleChange}
+		/>
 	</Panel>
 
 	{#if overridden.length}

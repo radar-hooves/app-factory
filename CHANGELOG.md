@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **The settings page shows every setting's value.** `<SchemaForm>` reads a `.` in a property name as a path, and settings keys are dotted, so every field rendered blank or off while the API held the right values. The page nests the flat document by dot path and gives the form a layout of one group per domain (`$lib/settings/nest`), so each change still reports its dotted key as `change.path`; the API stays flat for its machine readers. `nest.svelte.test.ts` mounts the real `<SchemaForm>` and checks a nested switch and number show their values. Found converging cadmus (radar-hooves/design-system#1), 30/09/2026.
+
 ## [2026.9.54] - 2026-09-30
 
 ### Added
