@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.40] - 2026-09-29
+
+### Changed
+
+- **Deploy is the golden image build again: CI builds and pushes, Watchtower pulls.** `deploy.yaml`'s go-live runs the checks once, then master-project's `docker-image-simple.yaml`: Trivy, `.github/image-smoke.sh`, a push of `<registry>/<owner>/<app>:<commit>` and `:latest`, then a call asking Watchtower to pull it now. No host build, no `<app>:live`, no `app-deploy`. Three new copier questions with no factory default, like `private_index_name`: `registry_host`, `registry_credential_file`, `watchtower_url`. `security.yaml` drops its weekly `<app>:live` scan; every push is Trivy-gated. Per the operator's 29/09/2026 ruling that every app deploys the one ordinary way (master-project#233); asked for by master-project's attended session.
+
 ## [2026.9.39] - 2026-09-29
 
 ### Fixed

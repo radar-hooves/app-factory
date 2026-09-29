@@ -1,20 +1,20 @@
 name: Deploy
 
-# A merge to main IS the go-live (the operator's ruling, 27/09/2026): this
-# builds the image of that commit on the host that runs it, boots it, and swaps
-# it in. There are no tags, no versions and no registry: the commit is the
-# version, and the image is `{{ project_name }}:<commit>` in the host's daemon.
+# A merge to main IS the go-live (the operator's ruling, 29/09/2026: every app
+# deploys the one ordinary way, master-project#233): CI builds the image,
+# Trivy-scans and smoke-tests it, pushes `<commit sha>` and `:latest` to the
+# registry, and asks Watchtower to pull it.
 #
 #   checks  python-ci and frontend-ci run here, once per go-live, unless a run
 #           by hand already passed for this commit. No branch push runs them.
-#   build   the Dockerfile on the host daemon's own layer cache: a code-only
-#           change reinstalls no dependency.
-#   boot    `.github/image-smoke.sh`, the app-owned probe: the image must serve
-#           before anything live is touched (full-stack-app-template#4).
-#   swap    `app-deploy`, the host's command: runs this image's migration while
-#           the old container still serves, swaps, and puts the old image back
-#           if the new one never turns healthy. The same command rolls back:
-#           `app-deploy {{ project_name }} <commit>` on the host.
+#   build   Buildx on the runner's own persistent builder cache
+#           (radar-hooves/master-project docker-image-simple.yaml).
+#   smoke   `.github/image-smoke.sh`, the app-owned probe: the image must serve
+#           before it is pushed (full-stack-app-template#4).
+#   deploy  Watchtower pulls the `:latest` just pushed, now rather than at its
+#           scheduled poll; the image migrates its database as it starts.
+#
+# A rollback is a revert merged to main.
 #
 # The security battery is not on this path; security.yaml runs it weekly and on
 # a dependency pull request.
@@ -31,7 +31,7 @@ on:
       - '.dockerignore'
   workflow_dispatch:
 
-# A deploy is never cancelled mid-swap; a newer merge queues behind it.
+# A deploy is never cancelled mid-push; a newer merge queues behind it.
 {% raw %}concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false{% endraw %}
@@ -75,7 +75,7 @@ jobs:
     needs: [python-ci, frontend-ci]
     # Skipped checks are passed checks; a failed or cancelled one stops here.
     if: {% raw %}${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' }}{% endraw %}
-    uses: radar-hooves/master-project/.github/workflows/image-deploy.yaml@main
+    uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     # packages: the Dockerfile's uv base image is on ghcr.io, which refuses the
     # runner an anonymous pull.
     permissions:
@@ -83,6 +83,12 @@ jobs:
       packages: read
     with:
       image-name: {{ project_name }}
+      # The household registry, not the reusable's ghcr.io default; the push
+      # credential stays on the runner host.
+      registry: {{ registry_host }}
+      registry-credential-file: {{ registry_credential_file }}
+      # The commit is the version: no git tag, no pyproject version.
+      tag: {% raw %}${{ github.sha }}{% endraw %}
       # The household private-index read credential, mounted into the build as a
       # BuildKit secret (never a build arg) so it stays out of image history.
       # Passed by every app: the Dockerfile's mount is optional, so an app with
@@ -90,6 +96,8 @@ jobs:
       build-secret-files: |
         netrc=/run/github-runner/devpi-read.netrc
       # The app-owned probe (canonical-app-shape.md §Sanctioned per-app files);
-      # $IMAGE is the image just built.
+      # $IMAGE is the local tag of the image just built.
       smoke-command: bash .github/image-smoke.sh
-      deploy-command: app-deploy {{ project_name }} "$REVISION"
+      # The go-live: Watchtower pulls the :latest just pushed now, not at its
+      # scheduled poll; the token stays on the runner host.
+      watchtower-url: {{ watchtower_url }}

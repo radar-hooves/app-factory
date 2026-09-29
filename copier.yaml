@@ -113,6 +113,24 @@ private_index_url:
     Base URL of that index's simple API (e.g. `https://your-index.example/your-user/prod/+simple/`). No factory default, for the same reason as private_index_name — a fleet stamping its own apps supplies both from its own declaration rather than typing them per app.
 
 
+registry_host:
+  type: str
+  help: >-
+    Container registry the image is pushed to and Watchtower pulls from (e.g. `registry.example.com`). No factory default, for the same reason as private_index_name.
+
+
+registry_credential_file:
+  type: str
+  help: >-
+    Runner-host path to a `user:password` line that logs in to registry_host; the credential stays on the runner host, never a GitHub secret. No factory default.
+
+
+watchtower_url:
+  type: str
+  help: >-
+    Base URL of the deploying host's Watchtower HTTP API, asked to pull the image just pushed (e.g. `http://127.0.0.1:8080`). No factory default.
+
+
 postgres_user:
   type: str
   default: "{{ project_name | replace('-', '_') }}"

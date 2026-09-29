@@ -8,9 +8,9 @@ name: Security
 # and pre-commit already runs gitleaks on every commit. Measured 06/09/2026:
 # on every push this was 3-5 runner jobs per commit across 22 repos, a third
 # of the fleet's runs. The dependency change is scanned on its feature branch,
-# never again on main: a merge is the go-live and never waits on this. The
-# weekly run also scans the image that is actually live, for the OS packages
-# no lockfile names.
+# never again on main: a merge is the go-live and never waits on this.
+# docker-image-simple.yaml's own Trivy step already gates every image at push
+# time, so this battery carries no image scan of its own.
 on:
   schedule:
     - cron: '0 18 * * 0' # Monday 04:00 AEST
@@ -39,6 +39,3 @@ jobs:
     with:
       working-directory: backend
       node-dir: frontend
-      # The live image (deploy.yaml builds it on this host), on the weekly and
-      # a manual run; a branch push changes a manifest, not what is live.
-      image: ${{ '{{' }} github.event_name != 'push' && '{{ project_name }}:live' || '' {{ '}}' }}
