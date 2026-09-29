@@ -1,16 +1,10 @@
-"""`api/agent/lessons.py`: the standard report of a job's cited lessons to core-memory
-(`docs/design/agent-lessons.md`). core-memory itself is out of scope — the
-factory owns the resume-safe, refusal-is-final shape of the two-call sequence,
-never core-memory's own tool behaviour — so `lessons._call` is monkeypatched
-throughout, the same boundary `test_agent_jobs_api.py` draws around a real CLI
-versus the app's own job machinery.
-
-Jobs are seeded directly through `jobs_models.create_job` rather than run
-through a real persona spawn: what these tests exercise is what happens to a
-job's ALREADY-SETTLED `structured_output`, not how it got there.
+"""`api/agent/lessons.py`. `report_outcome` is a plain insert, tested against the row it leaves;
+`retry_unsettled` is where every core-memory call happens, so `lessons._call` is monkeypatched
+throughout -- core-memory's own tool behaviour is out of scope, the same boundary
+`test_agent_jobs_api.py` draws around a real CLI versus this slice's own machinery.
 """
 
-import asyncio
+import datetime
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -18,25 +12,38 @@ from typing import Any
 import httpx
 import pytest
 from fastmcp.exceptions import ToolError
+from sqlalchemy import delete, select, update
 
 from {{ package_name }}.api.agent import jobs_models, lessons
-from {{ package_name }}.api.agent.jobs_models import RunSpec
+from {{ package_name }}.api.agent.jobs_models import AgentJobLessonReport, RunSpec
+from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.workspaces import service as workspaces_service
+from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
-from {{ package_name }}.db.scoping import bind_session
+from {{ package_name }}.db.scoping import bind_session, unscoped
 from {{ package_name }}.db.session import get_session_factory
+from {{ package_name }}.exceptions import BadRequestError
 
 DOMAIN = "example/lessons-test"
 CONTEXT = "unit-test"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_the_sweep() -> None:
+    """`retry_unsettled` scans every workspace, so a prior test's own still-unsettled row would
+    otherwise compete for `_MAX_PER_SWEEP`'s slots here; rows this file commits are real and
+    otherwise never cleaned up (`test_agent_jobs_api.py`'s own convention)."""
+    with get_session_factory()() as db, unscoped(db):
+        db.execute(delete(AgentJobLessonReport).where(AgentJobLessonReport.recorded_at.is_(None)))
+        db.commit()
 
 
 def _provision(authentik_uid: str, username: str) -> int:
     with get_session_factory()() as db:
         user = users_service.upsert_from_identity(db, authentik_uid=authentik_uid, username=username)
         db.commit()
-        membership = workspaces_service.ensure_personal_workspace(db, user)
-        return membership.workspace_id
+        return workspaces_service.ensure_personal_workspace(db, user).workspace_id
 
 
 @pytest.fixture
@@ -45,7 +52,7 @@ def workspace_id() -> int:
 
 
 def _seed_job(workspace_id: int, *, lessons_used: list[str] | None) -> str:
-    """A settled job whose structured answer cites `lessons_used` (`None` means the key is absent)."""
+    """A settled job whose structured answer cites `lessons_used` (`None` = the key is absent)."""
     job_id = str(uuid.uuid4())
     structured_output: dict[str, Any] = {"data": {}}
     if lessons_used is not None:
@@ -74,10 +81,40 @@ def _seed_job(workspace_id: int, *, lessons_used: list[str] | None) -> str:
     return job_id
 
 
-def _report(job_id: str, workspace_id: int) -> jobs_models.AgentJobLessonReport | None:
+#: Two 32-char lowercase-hex ids -- what `cited()` keeps.
+BELIEF_1, BELIEF_2 = "a" * 32, "b" * 32
+
+
+def _report(job_id: str, workspace_id: int) -> AgentJobLessonReport | None:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        return db.get(jobs_models.AgentJobLessonReport, job_id)
+        return db.get(AgentJobLessonReport, job_id)
+
+
+def _backdate(job_id: str, workspace_id: int, age: datetime.timedelta) -> None:
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        db.execute(
+            update(AgentJobLessonReport)
+            .where(AgentJobLessonReport.job_id == job_id)
+            .values(created_at=datetime.datetime.now(datetime.UTC) - age)
+        )
+        db.commit()
+
+
+@pytest.fixture
+def with_core_memory(monkeypatch: pytest.MonkeyPatch) -> AgentSettings:
+    """Point `report_outcome`'s own `get_settings()` at a deployment that names a core-memory."""
+    agent = AgentSettings(core_memory_url="https://core-memory.example/mcp")
+    configured = get_settings().model_copy(update={"agent": agent})
+    monkeypatch.setattr(lessons, "get_settings", lambda: configured)
+    return agent
+
+
+@pytest.fixture
+def without_core_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    configured = get_settings().model_copy(update={"agent": AgentSettings()})
+    monkeypatch.setattr(lessons, "get_settings", lambda: configured)
 
 
 @pytest.fixture
@@ -87,246 +124,257 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, dict[str,
 
     async def _fake(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         made.append((tool, arguments))
-        if tool == "decision_record":
-            return {"id": "decision-1"}
-        return {"outcome": {"id": "outcome-1"}}
+        return {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
 
     monkeypatch.setattr(lessons, "_call", _fake)
     yield made
 
 
-async def test_a_deployment_naming_no_core_memory_is_a_no_op(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]]
+# -- report_outcome: insert-only, atomic with the caller's own commit -------
+
+
+def test_report_outcome_inserts_the_intent_row_for_the_callers_own_commit(
+    workspace_id: int, with_core_memory: AgentSettings
 ) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
-    await lessons.report_outcome(
-        get_session_factory(),
-        AgentSettings(core_memory_url=""),
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    assert calls == []
-    assert _report(job_id, workspace_id) is None
-
-
-async def test_a_job_that_cited_no_lessons_is_a_no_op(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]]
-) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=[])
-    await lessons.report_outcome(
-        get_session_factory(),
-        AgentSettings(core_memory_url="https://core-memory.example/mcp"),
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    assert calls == []
-    assert _report(job_id, workspace_id) is None
-
-
-async def test_cited_lessons_are_recorded_as_a_decision_then_an_outcome(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]]
-) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1", "belief-2"])
-    await lessons.report_outcome(
-        get_session_factory(),
-        AgentSettings(core_memory_url="https://core-memory.example/mcp"),
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    assert [tool for tool, _ in calls] == ["decision_record", "outcome_record"]
-    decision_args = calls[0][1]
-    assert decision_args == {"domain_name": DOMAIN, "context_key": CONTEXT, "cites": ["belief-1", "belief-2"]}
-    outcome_args = calls[1][1]
-    assert outcome_args == {"domain_name": DOMAIN, "decision_id": "decision-1", "result": lessons.CONFIRM}
-    report = _report(job_id, workspace_id)
-    assert report is not None
-    assert report.decision_id == "decision-1"
-    assert report.recorded_at is not None
-    assert report.refused is None
-
-
-async def test_a_call_repeated_once_recorded_reports_nothing_again(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]]
-) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
-    settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
-    await lessons.report_outcome(
-        get_session_factory(),
-        settings,
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    calls.clear()
-    await lessons.report_outcome(
-        get_session_factory(),
-        settings,
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    assert calls == []
-
-
-async def test_a_call_interrupted_after_the_decision_resumes_at_the_outcome(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A network fault between the two calls is resumed, not restarted -- the decision is never recorded twice."""
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        jobs_models.ensure_lesson_report(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONTRADICT)
-        jobs_models.set_lesson_decision(db, job_id, "decision-1")
-
-    await lessons.report_outcome(
-        get_session_factory(),
-        AgentSettings(core_memory_url="https://core-memory.example/mcp"),
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONTRADICT,
-    )
-    assert [tool for tool, _ in calls] == ["outcome_record"]
-    assert calls[0][1] == {"domain_name": DOMAIN, "decision_id": "decision-1", "result": lessons.CONTRADICT}
-    report = _report(job_id, workspace_id)
-    assert report is not None and report.recorded_at is not None
-
-
-async def test_core_memorys_refusal_is_final_and_never_retried(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    async def _refuse(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        calls.append((tool, arguments))
-        raise ToolError("belief-1 is not active")
-
-    monkeypatch.setattr(lessons, "_call", _refuse)
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
-    settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
-
-    await lessons.report_outcome(
-        get_session_factory(),
-        settings,
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        db.commit()
     report = _report(job_id, workspace_id)
     assert report is not None
-    assert report.refused is not None and "not active" in report.refused
-    assert report.recorded_at is not None
-
-    calls.clear()
-    await lessons.report_outcome(
-        get_session_factory(),
-        settings,
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    assert calls == []
+    assert (report.domain_name, report.context_key, report.result) == (DOMAIN, CONTEXT, lessons.CONFIRM)
+    assert report.decision_id is None and report.recorded_at is None and report.claimed_until is None
 
 
-async def test_a_transport_fault_leaves_the_report_unsettled_until_the_supervisors_retry(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
+def test_report_outcome_rejects_an_unknown_result(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db, pytest.raises(BadRequestError):
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result="maybe")
+
+
+def test_report_outcome_rejects_an_overlong_context_key(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db, pytest.raises(BadRequestError):
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key="x" * 256, result=lessons.CONFIRM)
+
+
+def test_report_outcome_is_a_no_op_without_core_memory_configured(workspace_id: int, without_core_memory: None) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        db.commit()
+    assert _report(job_id, workspace_id) is None
+
+
+def test_report_outcome_is_a_no_op_when_the_job_cited_nothing(
+    workspace_id: int, with_core_memory: AgentSettings
 ) -> None:
-    """`report_outcome` never raises a network fault to its caller -- the report stays unsettled,
-    and `jobs.supervise()`'s own sweep (`lessons.retry_unsettled`) is what retries it, resuming
-    from `decision_id` exactly as a repeated direct call would, never re-recording the decision."""
-    # The lease a fault leaves behind is real backoff (5 minutes by default) -- shrink it to
-    # negative so it has already lapsed by the next line, rather than this test waiting one out.
-    monkeypatch.setattr(lessons, "_LEASE_SECONDS", -1.0)
+    job_id = _seed_job(workspace_id, lessons_used=[])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        db.commit()
+    assert _report(job_id, workspace_id) is None
 
+
+def test_report_outcome_called_twice_leaves_one_row(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    for _ in range(2):
+        with get_session_factory()() as db:
+            bind_session(db, workspace_id=workspace_id)
+            lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+            db.commit()
+    assert _report(job_id, workspace_id) is not None
+
+
+def test_cited_keeps_only_belief_shaped_ids() -> None:
+    job = jobs_models.AgentJob(job_id="x", persona="p", status="completed", workspace_id=1)
+    job.structured_output = {"lessons_used": [BELIEF_1, "not-a-belief-id", "", 123]}
+    assert lessons.cited(job) == [BELIEF_1]
+
+
+# -- retry_unsettled: the only thing that ever calls core-memory ------------
+
+
+async def test_retry_unsettled_records_a_decision_then_an_outcome(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1, BELIEF_2])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    assert [tool for tool, _ in calls] == ["decision_record", "outcome_record"]
+    assert calls[0][1] == {
+        "domain_name": DOMAIN,
+        "context_key": CONTEXT,
+        "cites": [BELIEF_1, BELIEF_2],
+        "payload": {"job_id": job_id},
+    }
+    assert calls[1][1] == {"domain_name": DOMAIN, "decision_id": "decision-1", "result": lessons.CONFIRM}
+    report = _report(job_id, workspace_id)
+    assert report is not None
+    assert (report.decision_id, report.refused, report.recorded_at is not None) == ("decision-1", None, True)
+
+
+async def test_retry_unsettled_resumes_a_saved_decision(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+        # A negative lease is already-expired the moment it's set -- deterministic, not a sleep --
+        # so the sweep below finds this report reclaimable exactly as a lapsed real lease would.
+        won, _, token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=-1.0)
+        assert won
+        jobs_models.set_lesson_decision(db, job_id, "decision-1", claim_token=token)
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    assert [tool for tool, _ in calls] == ["outcome_record"]
+    assert calls[0][1]["decision_id"] == "decision-1"
+
+
+async def test_retry_unsettled_settles_core_memorys_own_refusal(
+    workspace_id: int,
+    with_core_memory: AgentSettings,
+    calls: list[tuple[str, dict[str, Any]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _refuse(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        raise ToolError(f"belief {BELIEF_1} is not active")
+
+    monkeypatch.setattr(lessons, "_call", _refuse)
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    report = _report(job_id, workspace_id)
+    assert report is not None
+    assert report.recorded_at is not None
+    assert report.refused is not None and "not active" in report.refused
+
+
+async def test_retry_unsettled_treats_a_masked_tool_error_as_transient(
+    workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FastMCP's own masking turns ANY unhandled server exception into this exact shape -- a
+    refusal and an unrelated bug are indistinguishable, so it must be retried, not settled."""
+
+    async def _masked(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        raise ToolError(f"Error calling tool {tool!r}")
+
+    monkeypatch.setattr(lessons, "_call", _masked)
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.recorded_at is None
+
+
+async def test_retry_unsettled_treats_a_transport_fault_as_transient(
+    workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def _unreachable(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(lessons, "_call", _unreachable)
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
-    settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
-
-    await lessons.report_outcome(
-        get_session_factory(),
-        settings,
-        job_id,
-        workspace_id=workspace_id,
-        domain_name=DOMAIN,
-        context_key=CONTEXT,
-        result=lessons.CONFIRM,
-    )
-    unsettled = _report(job_id, workspace_id)
-    assert unsettled is not None
-    assert unsettled.decision_id is None
-    assert unsettled.recorded_at is None
-
-    async def _recovered(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        calls.append((tool, arguments))
-        return {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
-
-    monkeypatch.setattr(lessons, "_call", _recovered)
-    retried = await lessons.retry_unsettled(get_session_factory(), settings)
-    assert retried == 1
-    assert [tool for tool, _ in calls] == ["decision_record", "outcome_record"]
-
-    settled = _report(job_id, workspace_id)
-    assert settled is not None
-    assert settled.decision_id == "decision-1"
-    assert settled.recorded_at is not None
-    assert settled.refused is None
-
-
-async def test_concurrent_report_outcome_calls_record_exactly_once(
-    workspace_id: int, calls: list[tuple[str, dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Two `report_outcome` calls for the SAME job overlapping -- the direct call at filing time
-    can race the supervisor's own retry sweep exactly like this -- claim the row atomically, so
-    only one ever reaches core-memory; the loser sees the row already claimed or settled and
-    returns without calling it. Real Postgres row locking, not a mocked lock: each call opens its
-    own session, and a fake core-memory that yields control between its two calls widens the
-    window a missing claim would race in."""
-
-    async def _slow(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        await asyncio.sleep(0.05)
-        calls.append((tool, arguments))
-        return {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
-
-    monkeypatch.setattr(lessons, "_call", _slow)
-    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
-    settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
-
-    def _report_outcome() -> Any:
-        return lessons.report_outcome(
-            get_session_factory(),
-            settings,
-            job_id,
-            workspace_id=workspace_id,
-            domain_name=DOMAIN,
-            context_key=CONTEXT,
-            result=lessons.CONFIRM,
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
         )
+        db.commit()
 
-    await asyncio.gather(_report_outcome(), _report_outcome())
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
 
-    assert [tool for tool, _ in calls].count("decision_record") == 1
-    assert [tool for tool, _ in calls].count("outcome_record") == 1
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.recorded_at is None and report.claimed_until is not None
+
+
+async def test_retry_unsettled_settles_an_unrecognised_fault(
+    workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _boom(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(lessons, "_call", _boom)
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.recorded_at is not None and report.refused == "boom"
+
+
+async def test_retry_unsettled_abandons_a_stale_report_and_raises_an_alert(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+    _backdate(job_id, workspace_id, datetime.timedelta(days=15))
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory)
+
+    assert calls == []  # abandoned before ever reaching core-memory
     report = _report(job_id, workspace_id)
     assert report is not None
-    assert report.decision_id == "decision-1"
     assert report.recorded_at is not None
-    assert report.refused is None
+    assert report.refused is not None and "abandoned" in report.refused
+    with get_session_factory()() as db:
+        alert = db.execute(select(Alert).where(Alert.key == f"agent-lessons:abandoned:{job_id}")).scalar_one_or_none()
+    assert alert is not None
+
+
+def test_a_lease_already_held_refuses_a_second_claim(workspace_id: int) -> None:
+    """Deterministic: claim once (wins), then claim again at once -- the row no longer matches
+    the unclaimed condition, so the second call loses without any timing involved."""
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.insert_lesson_report_if_absent(
+            db, job_id, workspace_id=workspace_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM
+        )
+        db.commit()
+        won1, _, _ = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
+        won2, decision2, token2 = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
+    assert won1 is True
+    assert (won2, decision2, token2) == (False, None, None)

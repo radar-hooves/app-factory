@@ -1,127 +1,157 @@
-"""Tell core-memory how a persona job's cited lessons turned out (radar-hooves/godswood#840).
-
-core-memory already holds the learning loop; what it cannot know on its own is
-the one moment a human accepts a persona's result as-is or corrects it, since
-only the app sees that. Two calls close the loop:
-
-1. A job cites the lessons it followed under the reserved `lessons_used` key
-   in its own structured answer (belief ids from `belief_retrieve`, `[]` when
-   it followed none) — a convention, not an enforced schema; `cited()` reads
-   it back.
-2. Once a person accepts or corrects the result, the app makes ONE call,
-   `report_outcome(..., result="confirm" | "contradict")`, which tells
-   core-memory `decision_record` (citing the ids from step 1) then
-   `outcome_record`.
-
-`AgentJobLessonReport` tracks each report through three states: UNSETTLED
-(just created, or `decision_id` set but `outcome_record` not yet called —
-what a network fault between the two calls, or a crash, leaves behind),
-SETTLED-RECORDED (`recorded_at` set, `refused` null), and SETTLED-REFUSED
-(`recorded_at` set, `refused` holding core-memory's reason — final, since a
-refused decision is refused whole and asking again changes nothing). A
-transport fault is never the caller's: `report_outcome` catches it, logs a
-warning, and leaves the report unsettled; `retry_unsettled` retries it from
-`jobs.supervise()`'s existing sweep, resuming from `decision_id`, and settles
-one still unsettled past `_ABANDON_AFTER` as refused.
-
-`claimed_until` (`jobs_models.claim_lesson_report`) is the lease that keeps
-exactly one caller acting on a given report at a time: the direct call at
-filing time and every worker's own retry sweep can all reach for the same row
-together, and only the one that wins the lease ever speaks to core-memory.
-Only ids ever leave the app; the bearer is vended fresh per call and held
-nowhere (`config/vend.vend_envelope`, the `mcp-gateway-api` credential a
-job's `.mcp.json` already vends from). The persona wording this loop needs
-(retrieve, propose, cite) lives in `docs/design/agent-lessons.md`, not here:
-`config/personas/` is app-owned and never rendered by this template.
+"""core-memory's learning loop needs one moment from every persona job: whether a person accepted
+or corrected its cited lessons. `report_outcome()` records that intent in the caller's own
+transaction; `retry_unsettled()`, run from `jobs.supervise()`'s sweep, is the only thing that ever
+calls core-memory. Full account: `docs/design/agent-lessons.md`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
+import re
 from typing import Any
 
+import httpx
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
-from fastmcp.exceptions import ToolError
-from sqlalchemy import select
+from fastmcp.exceptions import McpError, ToolError
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import jobs_models
 from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobLessonReport
+from {{ package_name }}.api.alerts import service as alerts_service
+from {{ package_name }}.api.alerts.schemas import AlertRaise
+from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
-from {{ package_name }}.config.vend import vend_envelope
+from {{ package_name }}.config.vend import VendError, vend_envelope
 from {{ package_name }}.db.scoping import bind_session, unscoped
+from {{ package_name }}.exceptions import BadRequestError
 
 logger = logging.getLogger(__name__)
 
-#: `result` as `report_outcome` and core-memory's own `outcome_record` both take it.
 CONFIRM = "confirm"
 CONTRADICT = "contradict"
 
-#: The broker credential a job's own MCP identity is vended from
-#: (`jobs.py`'s `_write_mcp_config`/`docs/design/agent-jobs.md` §Operational),
-#: reused here because reporting a job's outcome is this same app speaking to
-#: the same gateway, never a second identity.
-_CORE_MEMORY_CREDENTIAL = "mcp-gateway-api"
-
-#: How long a claim on a report holds, and so how long a report that just lost
-#: a transport fault waits before the next retry can touch it — the lease
-#: doubles as backoff, so a persistently-failing report logs once per lease,
-#: not once a sweep per worker.
+#: The lease, and so a persistently-failing report's own retry backoff (>=3x `_DELIVER_TIMEOUT_SECONDS`).
 _LEASE_SECONDS = 300.0
-
-#: How long `retry_unsettled` keeps retrying a report core-memory has not settled
-#: (refused or recorded) before giving up on it as abandoned.
+_DELIVER_TIMEOUT_SECONDS = 90
+_CALL_TIMEOUT_SECONDS = 30
+_INIT_TIMEOUT_SECONDS = 15
 _ABANDON_AFTER = datetime.timedelta(days=14)
+#: Rows delivered per sweep tick, so an outage cannot starve `reconcile_orphaned_jobs`.
+_MAX_PER_SWEEP = 5
+
+#: A belief id, as `belief_retrieve` mints one — nothing else survives into `cited()`.
+_BELIEF_ID = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+#: FastMCP's masked generic shape for an unhandled tool exception — ambiguous, so transient.
+_MASKED_TOOL_ERROR = re.compile(r"^Error calling tool '[^']*'$")
+
+_TRANSIENT, _REFUSED, _UNEXPECTED = "transient", "refused", "unexpected"
 
 
 def cited(job: AgentJob) -> list[str]:
-    """The belief ids `job`'s structured answer names in `lessons_used` — `[]` when it named none
-    or carries no structured answer at all."""
+    """Belief ids `job` named in `lessons_used`, kept only where they look like one."""
     lessons = (job.structured_output or {}).get("lessons_used")
-    return [str(item) for item in lessons] if isinstance(lessons, list) else []
+    if not isinstance(lessons, list):
+        return []
+    return [item for item in (str(entry) for entry in lessons) if _BELIEF_ID.match(item)]
+
+
+def report_outcome(db: Session, job_id: str, *, domain_name: str, context_key: str, result: str) -> None:
+    """Record, in `db`'s own transaction, that a person accepted or corrected `job_id`'s result.
+
+    Insert-only and synchronous: no network call, no vend, ever happens here. `db` must already be
+    bound to the job's workspace; the caller commits. A no-op when this deployment names no
+    core-memory or the job cited nothing.
+    """
+    if result not in (CONFIRM, CONTRADICT):
+        raise BadRequestError(f"result must be {CONFIRM!r} or {CONTRADICT!r}, not {result!r}")
+    if len(domain_name) > 255 or len(context_key) > 255:
+        raise BadRequestError("domain_name and context_key must be at most 255 characters")
+    if not get_settings().agent.core_memory_url:
+        return
+    job = jobs_models.get_job(db, job_id)
+    if job is None or not cited(job):
+        return
+    jobs_models.insert_lesson_report_if_absent(
+        db, job_id, workspace_id=job.workspace_id, domain_name=domain_name, context_key=context_key, result=result
+    )
 
 
 async def _call(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Call one core-memory tool, under a bearer vended fresh for this call and kept nowhere."""
-    envelope = await run_in_threadpool(vend_envelope, _CORE_MEMORY_CREDENTIAL)
+    """Call one core-memory tool, bearer vended fresh and held nowhere, bounded so a hung server
+    cannot stall the sweep."""
+    envelope = await run_in_threadpool(vend_envelope, settings.core_memory_credential)
     token = envelope["material"]["access_token"]
-    async with Client(settings.core_memory_url, auth=BearerAuth(token)) as memory:
+    async with Client(
+        settings.core_memory_url,
+        auth=BearerAuth(token),
+        timeout=_CALL_TIMEOUT_SECONDS,
+        init_timeout=_INIT_TIMEOUT_SECONDS,
+    ) as memory:
         result = await memory.call_tool(tool, arguments)
     return dict(result.structured_content or {})
 
 
-async def report_outcome(
+def _classify(exc: Exception) -> str:
+    """TRANSIENT (retry later), REFUSED (core-memory's own final word), or UNEXPECTED (settle
+    anyway, logged loud, rather than retry a fault this slice does not recognise forever)."""
+    if isinstance(exc, ToolError):
+        return _TRANSIENT if _MASKED_TOOL_ERROR.match(str(exc)) else _REFUSED
+    if isinstance(exc, httpx.HTTPError | McpError | TimeoutError | OSError | VendError):
+        return _TRANSIENT
+    return _UNEXPECTED
+
+
+def _raise_abandoned_alert(
+    db_session_factory: sessionmaker[Session], job_id: str, domain_name: str, context_key: str
+) -> None:
+    with db_session_factory() as db:
+        alerts_service.raise_alert(
+            db,
+            AlertRaise(
+                key=f"agent-lessons:abandoned:{job_id}",
+                title="A persona job's lesson report to core-memory was abandoned",
+                body=f"job {job_id} ({domain_name}/{context_key}) stayed unsettled past {_ABANDON_AFTER.days} days.",
+            ),
+        )
+        db.commit()
+
+
+async def _deliver_or_abandon(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
     job_id: str,
-    *,
     workspace_id: int,
     domain_name: str,
     context_key: str,
     result: str,
+    created_at: datetime.datetime,
 ) -> None:
-    """Tell core-memory how `job_id`'s cited lessons turned out.
+    """Claim `job_id`'s report, then abandon it past `_ABANDON_AFTER` or attempt one delivery."""
 
-    The one call an app makes at the moment a person accepts (`result=CONFIRM`)
-    or corrects (`result=CONTRADICT`) the job's result. A no-op when this
-    deployment names no `core_memory_url`, when `job_id` names no job in
-    `workspace_id`, or when its structured answer cited no lessons.
+    def _claim() -> tuple[bool, str | None, datetime.datetime | None]:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            return jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
 
-    Safe to call more than once, and safe to call CONCURRENTLY with itself or
-    with `retry_unsettled` for the same `job_id`: idempotent once the report
-    has settled, resumed from `decision_id` rather than restarted when a prior
-    attempt got as far as `decision_record` but not `outcome_record`, and
-    gated by `jobs_models.claim_lesson_report` so exactly one overlapping
-    caller ever reaches core-memory — every other returns at once.
+    won, decision_id, token = await run_in_threadpool(_claim)
+    if not won or token is None:
+        return
 
-    Never raises for a network fault: caught, logged, and left for
-    `retry_unsettled` to pick up from `jobs.supervise()`'s own sweep. A
-    `ToolError` (core-memory's own refusal) is final, not retried.
-    """
-    if not settings.core_memory_url:
+    def _settle(refused: str | None) -> None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            jobs_models.settle_lesson_report(db, job_id, claim_token=token, refused=refused)
+
+    if created_at < datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER:
+        reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
+        await run_in_threadpool(_settle, reason)
+        logger.error("Abandoned job %s's lesson report: %s", job_id, reason)
+        await run_in_threadpool(_raise_abandoned_alert, db_session_factory, job_id, domain_name, context_key)
         return
 
     def _load_job() -> AgentJob | None:
@@ -130,92 +160,54 @@ async def report_outcome(
             return jobs_models.get_job(db, job_id)
 
     job = await run_in_threadpool(_load_job)
-    if job is None:
-        return
-    lessons = cited(job)
-    if not lessons:
+    belief_ids = cited(job) if job is not None else []
+    if not belief_ids:
         return
 
-    def _ensure_report() -> jobs_models.AgentJobLessonReport:
+    def _save_decision(new_decision_id: str) -> None:
         with db_session_factory() as db:
             bind_session(db, workspace_id=workspace_id)
-            return jobs_models.ensure_lesson_report(
-                db, job_id, domain_name=domain_name, context_key=context_key, result=result
-            )
-
-    report = await run_in_threadpool(_ensure_report)
-    if report.recorded_at is not None:
-        return
-
-    def _claim() -> tuple[bool, str | None]:
-        with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            return jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
-
-    won, decision_id = await run_in_threadpool(_claim)
-    if not won:
-        # Already settled, or another caller holds the lease right now.
-        return
+            jobs_models.set_lesson_decision(db, job_id, new_decision_id, claim_token=token)
 
     try:
-        if decision_id is None:
-            decision = await _call(
-                settings, "decision_record", {"domain_name": domain_name, "context_key": context_key, "cites": lessons}
+        async with asyncio.timeout(_DELIVER_TIMEOUT_SECONDS):
+            if decision_id is None:
+                decision = await _call(
+                    settings,
+                    "decision_record",
+                    {
+                        "domain_name": domain_name,
+                        "context_key": context_key,
+                        "cites": belief_ids,
+                        "payload": {"job_id": job_id},
+                    },
+                )
+                decision_id = str(decision["id"])
+                await run_in_threadpool(_save_decision, decision_id)
+            await _call(
+                settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
             )
-            decision_id = str(decision["id"])
-
-            def _save_decision() -> None:
-                with db_session_factory() as db:
-                    bind_session(db, workspace_id=workspace_id)
-                    jobs_models.set_lesson_decision(db, job_id, decision_id)
-
-            await run_in_threadpool(_save_decision)
-        await _call(
-            settings, "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
-        )
-    except ToolError as exc:
-        # Refused, not failed: a cited lesson is unknown or no longer active, and asking again
-        # changes nothing — this is the report's final state, same as a recorded success.
+    except Exception as exc:
+        fault = _classify(exc)
+        if fault == _TRANSIENT:
+            logger.warning("Reporting job %s's lesson outcome failed transiently; will retry: %s", job_id, exc)
+            return
         reason = str(exc)[:500]
-
-        def _save_refusal() -> None:
-            with db_session_factory() as db:
-                bind_session(db, workspace_id=workspace_id)
-                jobs_models.settle_lesson_report(db, job_id, refused=reason)
-
-        await run_in_threadpool(_save_refusal)
-        logger.warning("core-memory refused the lesson report for job %s: %s", job_id, reason)
-        return
-    except Exception:
-        # A transport fault, not a refusal: the report stays unsettled (its
-        # decision_id, if this got that far, is already saved) and the lease
-        # just claimed is left to expire as this report's own retry backoff.
-        logger.warning("Reporting job %s's lesson outcome failed; will retry", job_id, exc_info=True)
+        await run_in_threadpool(_settle, reason)
+        (logger.error if fault == _UNEXPECTED else logger.warning)(
+            "Settled job %s's lesson report as %s: %s", job_id, fault, reason
+        )
         return
 
-    def _save_success() -> None:
-        with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            jobs_models.settle_lesson_report(db, job_id, refused=None)
-
-    await run_in_threadpool(_save_success)
+    await run_in_threadpool(_settle, None)
 
 
-async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: AgentSettings) -> int:
-    """Retry every lesson report a fault left unsettled, across every workspace. Returns how many
-    were acted on (recorded, refused, or abandoned).
-
-    Runs from `jobs.supervise()`'s own sweep. A report reaches here only once
-    `report_outcome` itself already tried and hit something other than
-    core-memory's own refusal — a transport error, a timeout, or the process
-    dying mid-call. Each is retried through `report_outcome` itself, so the
-    SAME claim gates a direct call and a sweep against each other; an
-    abandon (past `_ABANDON_AFTER`) claims the row the same way before
-    settling it, so a report already claimed by a live retry is left alone
-    rather than abandoned out from under it.
+async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: AgentSettings) -> None:
+    """Deliver up to `_MAX_PER_SWEEP` unsettled lesson reports to core-memory. Run from
+    `jobs.supervise()`'s sweep — the only place this slice ever calls core-memory.
     """
     if not settings.core_memory_url:
-        return 0
+        return
 
     def _pending() -> list[tuple[str, int, str, str, str, datetime.datetime]]:
         with db_session_factory() as db, unscoped(db):
@@ -227,41 +219,17 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
                     AgentJobLessonReport.context_key,
                     AgentJobLessonReport.result,
                     AgentJobLessonReport.created_at,
-                ).where(AgentJobLessonReport.recorded_at.is_(None))
+                )
+                .where(
+                    AgentJobLessonReport.recorded_at.is_(None),
+                    or_(AgentJobLessonReport.claimed_until.is_(None), AgentJobLessonReport.claimed_until < func.now()),
+                )
+                .order_by(AgentJobLessonReport.created_at)
+                .limit(_MAX_PER_SWEEP)
             ).all()
         return list(rows)
 
-    pending = await run_in_threadpool(_pending)
-    if not pending:
-        return 0
-
-    cutoff = datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER
-    acted = 0
-    for job_id, workspace_id, domain_name, context_key, result, created_at in pending:
-        if created_at < cutoff:
-            reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
-
-            def _abandon(job_id: str = job_id, workspace_id: int = workspace_id, reason: str = reason) -> bool:
-                with db_session_factory() as db:
-                    bind_session(db, workspace_id=workspace_id)
-                    won, _ = jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
-                    if not won:
-                        return False
-                    jobs_models.settle_lesson_report(db, job_id, refused=reason)
-                    return True
-
-            if await run_in_threadpool(_abandon):
-                logger.warning("Abandoned job %s's lesson report: %s", job_id, reason)
-                acted += 1
-        else:
-            await report_outcome(
-                db_session_factory,
-                settings,
-                job_id,
-                workspace_id=workspace_id,
-                domain_name=domain_name,
-                context_key=context_key,
-                result=result,
-            )
-            acted += 1
-    return acted
+    for job_id, workspace_id, domain_name, context_key, result, created_at in await run_in_threadpool(_pending):
+        await _deliver_or_abandon(
+            db_session_factory, settings, job_id, workspace_id, domain_name, context_key, result, created_at
+        )

@@ -1,117 +1,89 @@
 # Agent job lessons
 
-Status: **design, 29/09/2026.** Consumer: radar-hooves/godswood#840, on
+Status: **design, 30/09/2026.** Consumer: radar-hooves/godswood#840, on
 behalf of every app that runs a persona job (`docs/design/agent-jobs.md`) —
-Milton, Penny, cadmus's models, and a coming Taxpert. About 630 lines:
-267 in `api/agent/lessons.py`, 112 added to `jobs_models.py` (the report row
-and its claim), 89 in the migration, 25 across `jobs.py`/`main.py` to wire the
-retry sweep into the existing supervisor, 10 in `config/sections/agent.py`,
-the rest this note and its test file (332 lines, two review rounds of fixes).
+Milton, Penny, cadmus's models, and a coming Taxpert.
 
 ## The need
 
-core-memory already carries the learning loop — beliefs, confidence,
-decisions, outcomes, calibration, promotion ("that's exactly why core-memory
-exists", the operator, 29/09). What it cannot know on its own is the one
+core-memory carries the learning loop — beliefs, confidence, decisions,
+outcomes, calibration, promotion. What it cannot know on its own is the one
 moment a human accepts a persona's result as-is or corrects it, because only
-the app that showed the person that result sees that moment. godswood built
-this once, for one document pipeline (`pipeline/lesson_outcomes.py`,
-`fc_lesson_outcomes`); the shape it built — cite, then report, resumable,
-refusal-final — is exactly what every app's own persona job needs, so it
-belongs beside `jobs.py`, not hand-written per app.
+the app that showed the person that result sees that moment. This slice is
+the standard shape every app's persona job uses to close that loop, so it is
+built once, beside `jobs.py`, rather than hand-written per app.
 
-## Decision
+## Shape
 
-**Three pieces, all in the existing agent-jobs slice.**
+**A reserved answer key.** A persona names the belief ids it followed
+(`belief_retrieve`) under `lessons_used` in its own structured answer — a
+convention, not a schema `json_schema` enforces. `lessons.cited(job)` reads
+the key back, keeping only values shaped like a belief id (`[0-9a-f]{32}`):
+only ids ever leave the app, never a job's content.
 
-1. **A reserved answer key, not an enforced schema.** A job's `json_schema`
-   is the app's own contract with its persona (`docs/design/agent-jobs.md`
-   §What answers each need, item 7); this slice does not touch it. What it
-   adds is a convention: a persona that followed lessons names their belief
-   ids under `lessons_used` in its structured answer, and `lessons.cited(job)`
-   reads that key back. An app that never asks for the key gets `[]` and the
-   rest of this slice is a no-op for it.
-2. **`api/agent/lessons.py::report_outcome()`, the one call an app makes at
-   accept-or-correct time.** It takes `domain_name`, `context_key` and
-   `result` (`"confirm"` or `"contradict"` — the app's own read of "unchanged"
-   vs "corrected", which stays the app's: comparing a filed value against
-   what was read is a review-form and domain question, and godswood's own
-   tolerant comparator (`lesson_outcomes.py::unchanged`) stays godswood's).
-   It reads the job's cited lessons, then tells core-memory `decision_record`
-   (citing them) followed by `outcome_record` (the app's `result`).
-3. **`AgentJobLessonReport`, one row per job**, the same shape godswood's
-   `FcLessonOutcomeModel` proved: `decision_id` set once the decision is
-   recorded, `recorded_at` set once the whole report is done. A call repeated
-   after a crash resumes from whichever half core-memory does not have yet;
-   a call repeated once `recorded_at` is set is a no-op — success or a final
-   refusal (`ToolError`: a cited belief unknown or no longer active) alike,
-   since core-memory's refusal is all-or-nothing and asking again changes
-   nothing.
+**`report_outcome(db, job_id, *, domain_name, context_key, result)`**, the one
+call an app makes at the moment a person accepts (`result="confirm"`) or
+corrects (`result="contradict"`) a job's result — whether that counts as
+"unchanged" is a review-form and domain question the app has already
+answered; this slice never compares values itself. It validates `result` and
+the key lengths, then inserts the intent (`INSERT ... ON CONFLICT (job_id) DO
+NOTHING`) in the CALLER'S OWN session — atomic with whatever else that
+request writes, never its own transaction — and returns. No network call, no
+vend, ever happens on an app's request path; a no-op when this deployment
+names no `core_memory_url` (`AgentSettings`, empty by default — "build
+nothing central") or the job cited nothing.
 
-A network fault is never the caller's to carry (godswood-ec review, 29/09):
-`report_outcome` records the intent before it ever calls core-memory, so a
-transport error there — never a `ToolError` refusal, which is settled on the
-spot — is logged and leaves the report unsettled rather than raised. The
-retry is the factory's, not each app's: `lessons.retry_unsettled` rides
-`jobs.supervise()`'s own 60s sweep (the one that already reconciles orphaned
-jobs), re-attempting every unsettled report the same way a repeated direct
-call would — resumed from `decision_id`, never re-recorded — and abandoning
-one still unsettled after 14 days with a logged reason rather than retrying
-forever.
+**`retry_unsettled(db_session_factory, settings)`** is the ONLY thing that
+ever calls core-memory, run from `jobs.supervise()`'s existing 60s sweep
+(`docs/design/agent-jobs.md` §Any worker) — never a poller of its own. Each
+tick it claims up to 5 unsettled rows (`AgentJobLessonReport.claimed_until`,
+a lease — `SELECT ... FOR UPDATE` under the row's own unclaimed condition,
+`jobs_models._locked`'s pattern) and attempts delivery: `decision_record`
+(citing the belief ids, `payload={"job_id": job_id}` so a duplicate can be
+traced) then `outcome_record`, each call bounded (`Client(..., timeout=30,
+init_timeout=15)`, the whole attempt inside `asyncio.timeout(90)`). Only the
+lease's holder ever reaches core-memory; every other caller — a second
+worker's sweep, godswood runs five — returns at once. The lease is left to
+expire on a fault rather than cleared, so its 5 minutes (≥3× the bound) is
+also that report's retry backoff, and `set_lesson_decision`/
+`settle_lesson_report` both require the caller's own claim token still
+matches `claimed_until` before writing, so a write from a lease that has
+since been reclaimed by someone else lands nowhere.
 
-`jobs.supervise()` runs in every worker, and godswood runs five — so the
-sweep and the app's own direct call, or two workers' sweeps, can reach for the
-SAME unsettled report at once, and core-memory's `decision_record` takes no
-idempotency key of its own to fall back on (second godswood-ec review, 29/09).
-`claim_lesson_report` is the fix: a nullable `claimed_until` lease, claimed by
-one atomic `SELECT ... FOR UPDATE` under the same WHERE the claim itself
-states (unsettled, and not already leased) — the same "block, then re-check
-the committed row" pattern `jobs_models._locked` already uses for a job's own
-row. Only the winner ever calls core-memory; every loser returns at once, and
-`report_outcome`/`retry_unsettled`'s abandon path both claim through the
-identical function, so one lease gates every way of touching a report. Left
-to expire rather than cleared on a transport fault, the 5-minute lease is
-also that report's retry backoff. `ensure_lesson_report`'s own first insert
-is the same story in miniature — two first calls can race on the primary key
-— so it catches the loser's `IntegrityError` rather than letting it reach the
-app's filing handler.
+**Three outcomes**, `_classify` on the caught exception: `httpx.HTTPError`,
+`McpError`, `TimeoutError`, `OSError` and the vend's own `VendError` are
+TRANSIENT — left unsettled, retried next lease. A `ToolError` whose message
+is FastMCP's own masked generic shape (`"Error calling tool 'x'"`, what
+`mask_error_details` turns ANY unhandled server exception into) is also
+transient — indistinguishable from a genuine refusal, so it cannot be
+trusted as final. A `ToolError` carrying real detail is core-memory's own
+refusal, settled `refused`. Anything else settles too, but logged at ERROR:
+a fault this slice does not recognise, surfaced rather than retried for two
+weeks on the strength of a guess. A report still unsettled past 14 days is
+abandoned the same way — claimed, then settled `refused` — and raises one
+alert (`api/alerts`) so the operator sees a report that never landed, not
+only a log line.
 
-Only ids ever leave the app: `cites` carries belief ids, `report_outcome`
-never sees a job's content. The bearer that reaches core-memory is vended
-fresh per call and held nowhere (`config/vend.vend_envelope`, the
-`mcp-gateway-api` credential a job's own `.mcp.json` already vends from —
-`docs/design/agent-jobs.md` §Operational). `AgentSettings.core_memory_url`
-is deployment configuration, empty by default: a deployment opts into the
-learning loop by naming its core-memory, never carries one because the
-factory assumes a household-wide service exists ("build nothing central").
+**The credential is a setting.** `AgentSettings.core_memory_credential`
+(default `"mcp-gateway-api"`, following the `gateway_key_credential`
+precedent) names the broker credential `vend_envelope` mints core-memory's
+bearer from — this app's own name for it, never a household constant.
 
-## What stays out
+## At-least-once, honestly
 
-- **No comparator.** Whether a result counts as "unchanged" is a review-form
-  and domain question; the factory takes a `result` the app has already
-  decided, never a value pair to compare itself.
-- **No new worker, no new poller.** `report_outcome` attempts the two calls
-  directly, in the request that reports them — a network fault aside, it
-  settles inline exactly as `jobs.stop()` acts on a job row directly. What
-  retries a fault rides the agent-jobs slice's OWN existing sweep
-  (`jobs.supervise()`); this slice adds no second background loop of its own.
-- **No new credential.** The bearer is the same `mcp-gateway-api` broker
-  credential a job's MCP identity already vends from.
+Claiming and fencing stop two callers of THIS app's own slice from both
+telling core-memory the same thing. They do not close every gap: a response
+lost after core-memory has already committed a call still reads as a
+transport fault here, and the retry that follows double-counts it on
+core-memory's own side, until an idempotency key there (core-memory#27)
+closes it. This slice's own claim is at-least-once, not exactly-once, and
+that is the whole of what is honest to say about it.
 
-## The persona contract
+## Persona wording
 
-The lesson instructions every persona needs — retrieve before working
-(`belief_retrieve`), propose what would have got it right first time, cite
-what was followed under `lessons_used` — belong in the factory's persona
-contract in SPIRIT, not in a file the factory renders: `config/personas/` is
-entirely app-owned, read fresh from disk on every spawn and never templated
-(`persona.py`'s whole reason for reading fresh is that an app edits it with
-no rebuild). There is nothing here for `copier` to stamp into.
-
-So the standard is prose, carried here rather than hand-written per app
-(`platform/canonical-app-shape.md` §Sameness extends to prose applies to an
-app-owned file exactly as to a factory one — the difference is this slice
-cannot enforce it mechanically, only state it once):
+Every persona's own `CLAUDE.md` — app-owned, never rendered by this template
+— carries this paragraph verbatim (`platform/canonical-app-shape.md`
+§Sameness extends to prose):
 
 > Before you work, retrieve what this deployment already believes about the
 > task ahead of you (`belief_retrieve` on your own domain and context). As you
@@ -119,24 +91,9 @@ cannot enforce it mechanically, only state it once):
 > the first time. Answer with `lessons_used`: the JSON array of ids of the
 > beliefs you actually followed, `[]` when you followed none.
 
-Every persona's own `CLAUDE.md` carries this paragraph verbatim, the same way
-two apps' error messages and log lines already must
-(`platform/canonical-app-shape.md`). godswood's own `CLAUDE.md`
-(`config/personas/fat-controller/CLAUDE.md`) is the first to converge on it.
-
 ## Sequence
 
-1. **Factory.** This slice, its migration, and `test_agent_lessons.py`
-   proving the resume and refusal shapes against a monkeypatched
-   `lessons._call` — core-memory's own tool behaviour is out of scope, as
-   `test_agent_jobs_api.py` already draws the same line around the real CLI.
-   Tag, once merged (never cut from a worktree branch).
-2. **godswood moves onto it.** `pipeline/lesson_outcomes.py`'s periodic sweep
-   retires in favour of a `report_outcome` call at the moment Fat Controller's
-   own review UI records an execution confirmed or corrected;
-   `unchanged()`/`_pending()` stay godswood's own (the comparator, and reading
-   the execution's own confirmed/corrected state), `fc_lesson_outcomes` is
-   dropped once `agent_job_lesson_reports` holds the same row shape.
-3. **Every other app takes it on its next copier update.** Nothing changes
-   for Milton, Penny or cadmus until a persona of theirs starts citing
-   lessons; Taxpert takes it from its first stamp.
+Factory: this slice, its migration, `test_agent_lessons.py`. Tag, once
+merged (never cut from a worktree branch). Every other app takes it on its
+next copier update; nothing changes until a persona of theirs starts citing
+lessons.

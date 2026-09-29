@@ -891,9 +891,7 @@ async def supervise(
     rather than cancelled, so a sweep in flight finishes on its database
     thread before the lifespan disposes the engine under it.
 
-    `lessons.retry_unsettled` rides the same sweep rather than a poller of its
-    own: a lesson report a network fault left unsettled (`lessons.py`'s module
-    docstring) is retried here, never by the app that called `report_outcome`.
+    `lessons.retry_unsettled` rides the same sweep (`docs/design/agent-lessons.md`).
     """
     while not stopping.is_set():
         try:
