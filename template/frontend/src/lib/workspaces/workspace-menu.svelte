@@ -12,9 +12,9 @@
 
 	Members does not disappear with it. The org-of-one is exactly who has to
 	reach Members to make the FIRST grant (master-project#291), so the
-	layout's own `identity` slot wires `AppIdentity`'s `onManageMembers` for
+	frame's own `identity` slot wires `AppIdentity`'s `onManageMembers` for
 	exactly the callers this component renders nothing for — see
-	`+layout.svelte`. New-workspace creation has no such second door: an
+	`$lib/app-frame.svelte`. New-workspace creation has no such second door: an
 	org-of-one who wants a second workspace reaches it once a second
 	membership makes this menu render again, or from a route the app adds if
 	that act turns out to matter sooner.

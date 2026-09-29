@@ -2,31 +2,14 @@
 	import '../app.css';
 	import '$lib/fonts';
 	import { ModeWatcher } from 'mode-watcher';
-	import { AppIdentity } from '@poodle64/ui/app-identity';
-	import { AppShell } from '@poodle64/ui/app-shell';
-	import { CommandPalette } from '@poodle64/ui/command-palette';
-	import { ReportWidget } from '@poodle64/ui/feedback';
-	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { auth } from '$lib/auth.svelte';
-	import AdminAlertBell from '$lib/alerts/admin-alert-bell.svelte';
-	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
-	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
 
+	// What every route needs, signed in or not. The signed-in app — the shell,
+	// the session guard, the workspace — is (app)/+layout.svelte, so a route that
+	// must render without a session (a no-access page) sits outside (app)/ and
+	// still gets the styles, the mode and the toasts from here.
 	let { children } = $props();
-
-	// Load the caller and their workspace memberships once, at startup
-	// (rules-library/platform/authentication.md §Frontend Auth Store Contract).
-	// It resolves which workspace every subsequent request acts in, so it runs
-	// here rather than per-route — and the page below is NOT rendered until it
-	// has settled: a page that fetched first would send no workspace header
-	// and, for anyone holding two memberships, be answered 409.
-	onMount(() => {
-		void auth.init();
-	});
 
 	// Page title: "Page Name — {% endraw %}{{ project_title }}{% raw %}" or bare app name. This is the
 	// title a reader actually sees; app.html's is only the pre-hydration fallback,
@@ -39,20 +22,6 @@
 	// the only form stable at every length.
 	// prettier-ignore
 	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
-
-	// The global search affordance canonical-app-shape.md requires in the top bar,
-	// and the palette it opens. @poodle64/ui ships both halves; composing them is
-	// what the factory had never done, so four apps wrote these same three lines
-	// four times and three shipped no top-bar search at all
-	// (full-stack-app-template#23). ⌘K is bound by CommandPalette itself — do not
-	// add a keydown handler here.
-	let paletteOpen = $state(false);
-
-	// One route, read by both WorkspaceMenu (its own "Members" item, for
-	// several memberships) and AppIdentity below (onManageMembers, for
-	// exactly one) — so renaming the members route stays a one-line change
-	// rather than two call sites drifting apart.
-	const membersHref = '/workspace';
 </script>
 
 <svelte:head>
@@ -62,87 +31,5 @@
 <ModeWatcher />
 <Toaster richColors closeButton position="top-right" />
 
-<!-- No nav yet — a fresh app has one route. Once there is more than one page to
-     link between (rules-library/stacks/sveltekit-frontend.md), declare the nav
-     ONCE and pass the same value to BOTH the shell and the palette below: one
-     config feeds the rail and the search results, and a palette handed none
-     finds nothing while looking like it works. -->
-<!-- The house floor and the rail's collapse control arrive by default from
-     @poodle64/ui 2026.8.8 — do not pass `texture` or `collapsible` to ask for
-     them, and do not hand-roll a dot-grid class in app.css. `measure` is left
-     at its `full` default; pick one once a page needs a narrower cap (see the
-     component's own doc comment). -->
-
-<AppShell
-	brandTitle="{% endraw %}{{ project_title }}{% raw %}"
-	currentPath={page.url.pathname}
-	onSearch={() => (paletteOpen = true)}
-	settingsHref="/settings"
->
-	<!-- The workspace switch, for whoever has more than one to switch between —
-	     renders nothing for an org-of-one (see workspace-menu.svelte). The
-	     factory owns the component; this is where the app mounts it, and the
-	     one place to say what THIS app calls a workspace — pass
-	     label="Household" here and on the members route
-	     (rules-library/platform/tenancy.md). -->
-	{#snippet context()}
-		<WorkspaceMenu {membersHref} />
-	{/snippet}
-
-	<!-- The bell (docs/design/alerts.md), admin-gated by the component itself. -->
-	{#snippet actions()}
-		<AdminAlertBell />
-	{/snippet}
-
-	<!-- Who is signed in, and the way out — rendered once, at the end of the
-	     top bar (rules-library/platform/authentication.md §Frontend Auth Store
-	     Contract). Waits for auth.user rather than passing it a null one; the
-	     loading and workspace-choice states below still get full shell chrome,
-	     just not yet an avatar. onAccountSettings sends the caller to the same
-	     /settings destination as the rail's own Settings row.
-
-	     onManageMembers is wired ONLY while WorkspaceMenu renders nothing for
-	     this caller (one membership, `!auth.canSwitchWorkspace`): that menu
-	     carries its own Members entry once there is a switch to go with it,
-	     and giving both surfaces the same item at once is the same act listed
-	     twice, not a second door (see workspace-menu.svelte). -->
-	{#snippet identity()}
-		{#if auth.user}
-			<AppIdentity
-				user={auth.user}
-				workspace={auth.activeWorkspace?.name}
-				role={auth.activeRole}
-				entitlements={auth.entitlements}
-				onManageMembers={auth.canSwitchWorkspace ? undefined : () => goto(membersHref)}
-				onAccountSettings={() => goto('/settings')}
-				onSignOut={() => void auth.logout()}
-			/>
-		{/if}
-	{/snippet}
-
-	{#if auth.isLoading}
-		<LoadingState />
-	{:else if auth.needsWorkspaceChoice}
-		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
-		<WorkspaceChooser />
-	{:else}
-		<!-- Keyed on the workspace, so switching remounts the page and it fetches
-		     again. A page therefore never has to know a switch happened, and can
-		     never keep showing the previous workspace's rows. -->
-		{#key auth.activeWorkspace?.id}
-			{@render children()}
-		{/key}
-	{/if}
-</AppShell>
-
-<!-- Routes are the app's own (the parity gate frees frontend/src/routes/), so an
-     app with palette ACTIONS as well as pages adds them as a child command group
-     right here — one app does, which is not enough consumers to earn a seam. -->
-<CommandPalette bind:open={paletteOpen} onNavigate={goto} />
-
-<!-- The feedback widget, for whoever is actually signed in — there is nobody
-     to attribute a report to before then. -->
-{#if auth.user}
-	<ReportWidget />
-{/if}
+{@render children()}
 {% endraw -%}

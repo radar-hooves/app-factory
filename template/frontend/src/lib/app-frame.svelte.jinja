@@ -1,0 +1,112 @@
+{% raw %}<!--
+	This app's frame: the shared shell composed with this app's own nav, brand
+	and top bar.
+
+	THE extension point for routes/(app)/+layout.svelte, which is owed
+	byte-identical and renders this around every signed-in route: the factory's
+	layout owns the session, the workspace and the guard, and this file owns what
+	the app looks like around them. Stamped once and never overwritten, so this
+	is where the app declares its nav, points the brand at its real landing page
+	(`homeHref`), picks its `measure`, and adds its own top-bar actions and
+	palette groups — never by editing the factory's layout.
+
+	`children` is the factory's guarded page: render it inside the shell, once.
+-->
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import { AppIdentity } from '@poodle64/ui/app-identity';
+	import { AppShell } from '@poodle64/ui/app-shell';
+	import { CommandPalette } from '@poodle64/ui/command-palette';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/auth.svelte';
+	import AdminAlertBell from '$lib/alerts/admin-alert-bell.svelte';
+	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
+
+	let { children }: { children: Snippet } = $props();
+
+	// The global search affordance canonical-app-shape.md requires in the top bar,
+	// and the palette it opens. @poodle64/ui ships both halves; composing them is
+	// what the factory had never done, so four apps wrote these same three lines
+	// four times and three shipped no top-bar search at all
+	// (full-stack-app-template#23). ⌘K is bound by CommandPalette itself — do not
+	// add a keydown handler here.
+	let paletteOpen = $state(false);
+
+	// One route, read by both WorkspaceMenu (its own "Members" item, for
+	// several memberships) and AppIdentity below (onManageMembers, for
+	// exactly one) — so renaming the members route stays a one-line change
+	// rather than two call sites drifting apart.
+	const membersHref = '/workspace';
+</script>
+
+<!-- No nav yet — a fresh app has one route. Once there is more than one page to
+     link between (rules-library/stacks/sveltekit-frontend.md), declare the nav
+     ONCE here and pass the same value to BOTH the shell and the palette below:
+     one config feeds the rail and the search results, and a palette handed none
+     finds nothing while looking like it works. -->
+<!-- The house floor and the rail's collapse control arrive by default from
+     @poodle64/ui 2026.8.8 — do not pass `texture` or `collapsible` to ask for
+     them, and do not hand-roll a dot-grid class in app.css. `measure` is left
+     at its `full` default; pick one once a page needs a narrower cap (see the
+     component's own doc comment). -->
+<!-- `padded` is the route's to say, in its load data: a route that pads its own
+     panes (the factory's settings destination) returns `padded: false`, and
+     this passes it on. Keep the line if you compose the shell differently, or
+     the factory's routes lose the edges they asked for. -->
+
+<AppShell
+	brandTitle="{% endraw %}{{ project_title }}{% raw %}"
+	currentPath={page.url.pathname}
+	padded={page.data.padded ?? true}
+	onSearch={() => (paletteOpen = true)}
+	settingsHref="/settings"
+>
+	<!-- The workspace switch, for whoever has more than one to switch between —
+	     renders nothing for an org-of-one (see workspace-menu.svelte). The
+	     factory owns the component; this is where the app mounts it, and the
+	     one place to say what THIS app calls a workspace — pass
+	     label="Household" here and on the members route
+	     (rules-library/platform/tenancy.md). -->
+	{#snippet context()}
+		<WorkspaceMenu {membersHref} />
+	{/snippet}
+
+	<!-- The bell (docs/design/alerts.md), admin-gated by the component itself. -->
+	{#snippet actions()}
+		<AdminAlertBell />
+	{/snippet}
+
+	<!-- Who is signed in, and the way out — rendered once, at the end of the
+	     top bar (rules-library/platform/authentication.md §Frontend Auth Store
+	     Contract). Waits for auth.user rather than passing it a null one; the
+	     loading and workspace-choice states still get full shell chrome, just
+	     not yet an avatar. onAccountSettings sends the caller to the same
+	     /settings destination as the rail's own Settings row.
+
+	     onManageMembers is wired ONLY while WorkspaceMenu renders nothing for
+	     this caller (one membership, `!auth.canSwitchWorkspace`): that menu
+	     carries its own Members entry once there is a switch to go with it,
+	     and giving both surfaces the same item at once is the same act listed
+	     twice, not a second door (see workspace-menu.svelte). -->
+	{#snippet identity()}
+		{#if auth.user}
+			<AppIdentity
+				user={auth.user}
+				workspace={auth.activeWorkspace?.name}
+				role={auth.activeRole}
+				entitlements={auth.entitlements}
+				onManageMembers={auth.canSwitchWorkspace ? undefined : () => goto(membersHref)}
+				onAccountSettings={() => goto('/settings')}
+				onSignOut={() => void auth.logout()}
+			/>
+		{/if}
+	{/snippet}
+
+	{@render children()}
+</AppShell>
+
+<!-- An app with palette ACTIONS as well as pages adds them as a child command
+     group right here. -->
+<CommandPalette bind:open={paletteOpen} onNavigate={goto} />
+{% endraw -%}
