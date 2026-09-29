@@ -186,9 +186,11 @@
 			: (outcome?.error ?? (outcome?.isError ? words.answerFailed : null))
 	);
 
-	// A failed turn settles too, and "Ask again" is the one thing a reader wants
-	// from it — there is just nothing to copy.
-	const settled = $derived(!running && (hasAnswer || Boolean(failure)));
+	// A run that ended has settled, whatever it said: a failed one, where "Ask
+	// again" is the one thing a reader wants, and one that handed in its answer
+	// under a schema and said nothing at all, whose artefact is the answer. A
+	// turn read back from history has no outcome and settles on its prose.
+	const settled = $derived(!running && (hasAnswer || outcome !== null));
 
 	/**
 	 * The persona answered and cited nothing, and we WATCHED it happen.

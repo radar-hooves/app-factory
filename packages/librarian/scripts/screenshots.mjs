@@ -2,7 +2,7 @@
  * The screenshot grid: every state, three widths, both themes.
  *
  * Scripted rather than driven by hand because it is pre-known choreography —
- * sixteen states x three widths x two themes is 96 shots, and a person taking
+ * seventeen states x three widths x two themes is 102 shots, and a person taking
  * them by hand takes 66 slightly different ones
  * (`rules-library/core/verification.md` §"Scripts Drive, Models Judge"). The
  * model's time goes on looking at the batch afterwards.
@@ -52,7 +52,8 @@ const STATES = [
 	'persona',
 	'job',
 	'job-showing',
-	'job-live'
+	'job-live',
+	'job-schema'
 ];
 
 /** The measure the package guarantees in its OWN stylesheet: `--ds-lib-measure`,
@@ -318,6 +319,32 @@ for (const theme of THEMES) {
 	if ((await box.inputValue()) !== '') failures.push('job-live: a mid-run message was not sent');
 	if (!(await page.getByRole('button', { name: 'Stop' }).count())) {
 		failures.push('job-live: sending a message mid-run took Stop away');
+	}
+	await context.close();
+}
+
+// A session under a JSON schema: each run hands in its answer through the
+// CLI's own StructuredOutput call. Both runs settle and card what they handed
+// in, the second keeps its words, and the CLI's nudge to its own model shows
+// on neither side. Over godswood's real recording.
+{
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	await page.goto(`http://localhost:${PORT}/librarian?state=job-schema`, {
+		waitUntil: 'domcontentloaded'
+	});
+	await page.locator('article').nth(1).waitFor();
+	const cards = await page.getByRole('button', { name: /What it read/ }).count();
+	if (cards !== 2) failures.push(`job-schema: ${cards} of 2 runs carded what they handed in`);
+	const said = await page.locator('[role="log"]').innerText();
+	if (!said.includes('The three lines sum correctly')) {
+		failures.push('job-schema: the words before the answer was handed in folded away');
+	}
+	if (said.includes('structured-output-enforce')) {
+		failures.push("job-schema: the CLI's nudge to its own model is on screen");
+	}
+	if (said.includes('Looked into it')) {
+		failures.push('job-schema: handing in the answer shows as a step of the work');
 	}
 	await context.close();
 }

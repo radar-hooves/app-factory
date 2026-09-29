@@ -2,6 +2,31 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.21] - 2026-09-29
+
+A run that hands in its answer under a JSON schema. Found by godswood
+(`radar-hooves/godswood#839`) driving 2026.9.19 with a real two-run session
+recorded from Claude Code 2.1.283 under `--json-schema`; that recording is
+now this package's `schema-session` fixture.
+
+### Fixed
+
+- **The words before a structured answer folded away as narration.** A run
+  under a schema ends by calling the CLI's own `StructuredOutput` tool, and
+  `segment()` counted it as a call still to come. That call hands in the
+  answer; it is no longer a step of the work, a row, or a count, and the
+  prose before it stays the answer.
+- **A run that said nothing never settled.** A turn settled only on prose or
+  a failure, so a run whose calls were a Read and the handing-in showed no
+  card for its artefact and no actions. A turn whose run ended (it has an
+  outcome) is settled whatever it said.
+- **A nudge the CLI sends its own model** (`isSynthetic`,
+  "[structured-output-enforce] …") never opens a turn in a `Session`, even
+  after a run settles. Mid-run it was already dropped.
+- The lab gains `job-schema`, folded from that recording, and the grid
+  asserts both runs card what they handed in, the second keeps its words,
+  and neither the nudge nor the handing-in shows.
+
 ## [2026.9.20] - 2026-09-29
 
 Saying something to a session while it works. Asked for by godswood

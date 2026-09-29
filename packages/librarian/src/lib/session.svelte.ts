@@ -59,6 +59,11 @@ export class Session {
 			return;
 		}
 		if (!FOLDED.has(event.type)) return;
+		// A user frame that is neither a replayed message nor a tool's result is
+		// the CLI nudging its own model (`isSynthetic`: "[structured-output-
+		// enforce] You MUST call the StructuredOutput tool…"): neither side of
+		// the conversation.
+		if (event.type === 'user' && !contentOf(event).some((b) => b.type === 'tool_result')) return;
 
 		// Settled by its own `result`. A stream that broke mid-run is not: the
 		// run goes on, and a watch opened again folds the rest onto it.

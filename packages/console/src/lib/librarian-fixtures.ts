@@ -17,6 +17,7 @@ import { Session } from '@poodle64/librarian/session';
 // The package's own fixture, captured from the real CLI — see its
 // `captured.ts` for how, and what was sanitised.
 import jobStream from '../../../librarian/src/test/fixtures/job-stream.jsonl?raw';
+import schemaStream from '../../../librarian/src/test/fixtures/schema-session.jsonl?raw';
 
 /** cadmus prepends this to every question before it reaches the library, and
  *  the transcript must never show it. */
@@ -231,7 +232,8 @@ export type LabState =
 	| 'persona'
 	| 'job'
 	| 'job-showing'
-	| 'job-live';
+	| 'job-live'
+	| 'job-schema';
 
 export interface LabScene {
 	turns: Turn[];
@@ -255,10 +257,18 @@ export interface LabScene {
  * resumed after it finished. The stream is the real CLI's; what the host adds
  * on top is below, in the host's own words.
  */
-const JOB: AgentEvent[] = jobStream
-	.trim()
-	.split('\n')
-	.map((line) => JSON.parse(line) as AgentEvent);
+const events = (raw: string): AgentEvent[] =>
+	raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line) as AgentEvent);
+
+const JOB = events(jobStream);
+
+/** The same kind of session under a JSON schema, recorded by godswood: each
+ *  run hands in its answer through the CLI's `StructuredOutput` call, the
+ *  first having said nothing, the second after a few lines of prose. */
+const SCHEMA = events(schemaStream);
 
 /** The host's words for its persona's tools: page slices read, a sum checked. */
 export const JOB_WORDS: DescribeTool = (block) => {
@@ -267,6 +277,15 @@ export const JOB_WORDS: DescribeTool = (block) => {
 		input = JSON.parse(block.rawInput) as Record<string, unknown>;
 	} catch {
 		/* mid-stream input is partial */
+	}
+	const page = /page-(\d+)\.png$/.exec(String(input.file_path ?? ''));
+	if (block.name === 'Read' && page) {
+		return {
+			verb: 'Read',
+			object: `page ${page[1]}`,
+			tally: ['page read', 'pages read'],
+			source: { id: `page-${page[1]}`, title: `Page ${page[1]}` }
+		};
 	}
 	const slice = /page-(\d+)-(\d+)\.png$/.exec(String(input.file_path ?? ''));
 	if (block.name === 'Read' && slice) {
@@ -303,6 +322,14 @@ export const JOB_READING: Artefact = {
 	title: 'What it read',
 	summary: '6 lines and 3 details · adds up to $42.38'
 };
+
+/** The host's card for what a run handed in under its schema. */
+function handedIn(output: unknown): Artefact | undefined {
+	const lines = (output as { data?: { lines?: Array<{ line_total?: number }> } })?.data?.lines;
+	if (!Array.isArray(lines)) return undefined;
+	const total = lines.reduce((sum, line) => sum + (line.line_total ?? 0), 0);
+	return { title: 'What it read', summary: `${lines.length} lines · adds up to $${total.toFixed(2)}` };
+}
 
 function job(events: AgentEvent[]): Turn[] {
 	const session = new Session();
@@ -343,6 +370,22 @@ export function scene(state: LabState): LabScene {
 			job: true,
 			turns,
 			showing: state === 'job-showing' ? turns[0].id : undefined
+		};
+	}
+
+	// Under a schema: each run's card comes from what it handed in, and the
+	// second run's few lines stay its answer.
+	if (state === 'job-schema') {
+		const session = new Session();
+		for (const event of SCHEMA) session.apply(event);
+		return {
+			...base,
+			name: 'clerk',
+			job: true,
+			turns: session.turns.map((turn) => ({
+				...turn,
+				artefact: handedIn(turn.outcome?.structuredOutput)
+			}))
 		};
 	}
 

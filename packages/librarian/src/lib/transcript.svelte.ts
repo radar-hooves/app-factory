@@ -543,9 +543,10 @@ export function segment(blocks: Block[], describeTool?: DescribeTool): Segment[]
 	let current: ActivityGroup | null = null;
 
 	let lastTool = -1;
-	for (let i = 0; i < blocks.length; i += 1) if (blocks[i].kind === 'tool') lastTool = i;
+	for (let i = 0; i < blocks.length; i += 1) if (isStep(blocks[i])) lastTool = i;
 
 	for (const [i, block] of blocks.entries()) {
+		if (block.kind === 'tool' && !isStep(block)) continue;
 		if (block.kind === 'text' && i > lastTool) {
 			current = null;
 			out.push(block);
@@ -570,6 +571,20 @@ export function segment(blocks: Block[], describeTool?: DescribeTool): Segment[]
 		if (words?.tally) count(current, words.tally);
 	}
 	return out;
+}
+
+/**
+ * The tool the CLI adds under `--json-schema`. Calling it hands in the run's
+ * answer, which arrives again whole on the `result` (`structured_output`): it
+ * is not a step of the work, and the words before it are the answer, not
+ * narration ahead of more work. Measured on Claude Code 2.1.283, where a run
+ * with a schema always ends in this call.
+ */
+const HANDS_IN = 'StructuredOutput';
+
+/** A call that is part of the work, rather than the handing-in of its answer. */
+function isStep(block: Block): boolean {
+	return block.kind === 'tool' && block.name !== HANDS_IN;
 }
 
 function sameStep(last: ActivityStep, block: Block, words: ToolWords | undefined): boolean {

@@ -187,7 +187,10 @@ is watched rather than asked. `watch()` GETs its stream; `Session` folds it
 into turns: the prompt and every later message on the reader's side (the CLI
 echoes each one back under `--replay-user-messages`), each run's answer on the
 persona's, each settled by its own `result`. A stream without deltas is folded
-from its whole messages. Events are deduped by `uuid`, so opening the watch
+from its whole messages. A run under `--json-schema` hands in its answer by
+calling the CLI's `StructuredOutput` tool: that call is no step of the work,
+the words before it stay the answer, and what it handed in is the run's
+`outcome.structuredOutput`, the natural source of the host's `artefact`. Events are deduped by `uuid`, so opening the watch
 again after sending a message folds only what is new.
 
 ```svelte
@@ -413,7 +416,7 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is sixteen states x three widths x both themes, taken by
+`docs/screenshots/` is seventeen states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane

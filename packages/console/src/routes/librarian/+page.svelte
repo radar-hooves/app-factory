@@ -46,7 +46,8 @@
 		'persona',
 		'job',
 		'job-showing',
-		'job-live'
+		'job-live',
+		'job-schema'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
