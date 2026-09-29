@@ -19,6 +19,22 @@ them:
 Empty by default, and an app with nothing to add leaves it that way.
 """
 
+#: How long this app's own worker process takes to boot under `uvicorn`, from
+#: spawn to answering `/openapi.json` -- the fact
+#: `test_a_second_worker_process_watches_messages_stops_and_resumes_a_job`
+#: (`tests/test_agent_jobs_api.py`) polls a second worker against, and the
+#: floor its hanging job's idle timeout is kept above so the boot itself
+#: never reads as a stall. The scaffold app boots in a couple of seconds; an
+#: app whose import graph is heavier raises this to its own measured boot
+#: time plus margin (radar-hooves/godswood#839: ~35s observed under CI).
+SECOND_WORKER_BOOT_SECONDS = 60.0
+
+#: The host the second-worker test's readiness probe sends as its `Host`
+#: header. A bare loopback IP works for the scaffold; an app whose
+#: trusted-host guard refuses one by design (`platform/proxy-delegated-auth.md`)
+#: overrides this to `"localhost"`, which the guard's dev allowlist accepts.
+SECOND_WORKER_PROBE_HOST = "127.0.0.1"
+
 
 def app_session_start() -> None:
     """This app's own once-per-run setup, called by conftest's session-start hook.

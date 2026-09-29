@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **The second-worker test's boot budget and probe address are an app's own facts.** `test_a_second_worker_process_watches_messages_stops_and_resumes_a_job` (`test_agent_jobs_api.py`) hardcoded a 60 s boot ceiling and probed `127.0.0.1` — fine for the scaffold, wrong for godswood, whose worker takes ~35 s to boot (past the suite's 10 s job idle timeout, so the hanging job it starts beside the boot was failed before the second worker ever came up) and whose trusted-host guard refuses a bare-IP `Host` header by design. Both are now `tests/app_fixtures.py` facts (`SECOND_WORKER_BOOT_SECONDS`, `SECOND_WORKER_PROBE_HOST`, defaulted to today's values), and the hanging job's idle timeout is kept above the declared boot budget rather than fixed at 10 s. Consumer: godswood (radar-hooves/godswood#839).
+
 ## [2026.9.45] - 2026-09-29
 
 ### Fixed

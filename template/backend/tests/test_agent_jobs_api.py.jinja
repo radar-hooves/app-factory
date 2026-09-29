@@ -61,6 +61,7 @@ from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
+from tests.app_fixtures import SECOND_WORKER_BOOT_SECONDS, SECOND_WORKER_PROBE_HOST
 from tests.support import fake_agent_cli
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
@@ -119,10 +120,21 @@ def agent_settings(app: FastAPI, personas_dir: Path, monkeypatch: pytest.MonkeyP
     friends are called DIRECTLY in most of these tests (a job is started by
     the app itself, so there is no request to hang a dependency override
     off), so a test needs the same settings object in hand.
+
+    `timeout_seconds` is kept above `SECOND_WORKER_BOOT_SECONDS`: the one
+    test in this file that boots a second worker leaves a job hanging for the
+    whole of that boot, and nothing here touches its heartbeat meanwhile, so
+    an idle timeout shorter than the boot itself would fail the job before
+    the worker is even up. No other test in this file waits out
+    `timeout_seconds` for real -- each fakes an idle job by backdating the
+    heartbeat directly (`_age_heartbeat`) -- so raising it here costs nothing
+    elsewhere.
     """
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setattr(jobs_module, "_POLL_SECONDS", 0.05)
-    agent: AgentSettings = AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)
+    agent: AgentSettings = AgentSettings(
+        personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=SECOND_WORKER_BOOT_SECONDS + 10.0
+    )
     configured: Settings = get_settings().model_copy(update={"agent": agent})
     app.dependency_overrides[get_settings] = lambda: configured
     yield agent
@@ -991,7 +1003,13 @@ def _free_port() -> int:
 async def _second_worker(agent_settings: AgentSettings) -> AsyncIterator[tuple[str, int]]:
     """Another worker process of this deployment: the same app, database and data directory, its
     own process, event loop and children -- what gunicorn's other workers are to the one running a
-    job. Yields its base URL and pid."""
+    job. Yields its base URL and pid.
+
+    The boot budget it polls against and the host it probes are both
+    `tests/app_fixtures.py` facts (`SECOND_WORKER_BOOT_SECONDS`,
+    `SECOND_WORKER_PROBE_HOST`): how long this app's own import graph takes
+    to answer, and whether its trusted-host guard accepts a bare loopback IP,
+    are this app's facts, not this file's."""
     port = _free_port()
     prefix = "{{ project_name | upper | replace('-', '_') }}_AGENT_"
     env = {
@@ -1006,9 +1024,12 @@ async def _second_worker(agent_settings: AgentSettings) -> AsyncIterator[tuple[s
         cwd=BACKEND,
         env=env,
     )
-    base_url = f"http://127.0.0.1:{port}"
+    base_url = f"http://{SECOND_WORKER_PROBE_HOST}:{port}"
     try:
-        async with asyncio.timeout(60), httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
+        async with (
+            asyncio.timeout(SECOND_WORKER_BOOT_SECONDS),
+            httpx.AsyncClient(base_url=base_url, timeout=1) as probe,
+        ):
             while True:
                 assert process.poll() is None, "the second worker exited during startup"
                 with contextlib.suppress(httpx.TransportError):
