@@ -20,3 +20,23 @@ test('the top bar search affordance opens the command palette', async ({ page })
 	// The palette's own input, so a dialog opened by something else cannot pass.
 	await expect(page.getByPlaceholder('Search…')).toBeFocused();
 });
+
+// Every route the factory stamps sits under routes/(app)/, so it renders inside
+// this app's own frame and behind the session guard with no move, whatever the
+// app has put in the frame (app-factory#6). Each case waits for the page's own
+// heading INSIDE the shell's main landmark: the frame also renders around the
+// loading state, so the chrome alone would pass before the page ever did.
+const STAMPED_ROUTES = [
+	{ path: '/workspace', heading: 'Members' },
+	{ path: '/settings/application', heading: 'Application' },
+	{ path: '/agent/no-such-persona', heading: 'No such persona' }
+];
+
+for (const { path, heading } of STAMPED_ROUTES) {
+	test(`the factory's ${path} renders inside the app's shell`, async ({ page }) => {
+		await page.goto(path);
+
+		await expect(page.locator('#ds-main').getByRole('heading', { name: heading })).toBeVisible();
+		await expect(page.getByTestId('ds-shell-search')).toBeVisible();
+	});
+}
