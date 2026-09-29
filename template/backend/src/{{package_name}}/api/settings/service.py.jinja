@@ -8,6 +8,7 @@ worker processes must see a write the instant it commits, with no restart.
 
 import logging
 import uuid
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -39,7 +40,7 @@ def get_effective_values(session: Session) -> dict[str, bool | int | float | str
     return {setting.key: overrides.get(setting.key, setting.default) for setting in all_settings()}
 
 
-def build_schema() -> dict:
+def build_schema() -> dict[str, Any]:
     """The JSON Schema `<SchemaForm>` renders: one property per declared setting.
 
     A `model_alias` setting whose `list_models` call fails (the gateway is
@@ -47,9 +48,9 @@ def build_schema() -> dict:
     fails to load, since GETting the settings page must survive a gateway
     outage even though a WRITE to that field cannot validate against it.
     """
-    properties: dict[str, dict] = {}
+    properties: dict[str, dict[str, Any]] = {}
     for setting in all_settings():
-        prop: dict = {"title": setting.title, "description": setting.description}
+        prop: dict[str, Any] = {"title": setting.title, "description": setting.description}
         if setting.type is SettingType.boolean:
             prop["type"] = "boolean"
         elif setting.type in (SettingType.integer, SettingType.number):
