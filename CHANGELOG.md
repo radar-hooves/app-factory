@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.39] - 2026-09-29
+
+### Fixed
+
+- **A `ruff format` nit in router.py's `send_message` call, caught by a clean re-stamp-and-verify of 2026.9.38 rather than trusting the incrementally-patched scratch copy its own edit cycle had used.** No behaviour change.
+
 ## [2026.9.38] - 2026-09-29
 
 ### Fixed
