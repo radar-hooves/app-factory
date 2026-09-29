@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
   cancel-in-progress: true
 
 permissions:
@@ -18,3 +18,5 @@ permissions:
 jobs:
   canonical-shape:
     uses: radar-hooves/master-project/.github/workflows/canonical-shape.yaml@main
+    with:
+      runner: '{{ runner_labels }}'

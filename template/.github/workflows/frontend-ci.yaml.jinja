@@ -23,7 +23,7 @@ on:
 # Prefixed with this workflow's own name: called from deploy.yaml,
 # `github.workflow` is the caller's.
 concurrency:
-  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  group: frontend-ci-{% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
   cancel-in-progress: true
 
 permissions:
@@ -34,4 +34,5 @@ jobs:
     uses: radar-hooves/master-project/.github/workflows/frontend-ci.yaml@main
     with:
       working-directory: frontend
+      runner: '{{ runner_labels }}'
       run-tests: true

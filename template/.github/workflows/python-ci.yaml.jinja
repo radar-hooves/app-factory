@@ -13,7 +13,7 @@ on:
 # called workflow that expression is the CALLER's name, so two workflows called
 # from one caller would share a group and cancel each other.
 concurrency:
-  group: python-ci-${{ github.workflow }}-${{ github.ref }}
+  group: python-ci-{% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
   cancel-in-progress: true
 
 permissions:
@@ -24,6 +24,7 @@ jobs:
     uses: radar-hooves/master-project/.github/workflows/python-ci.yaml@main
     with:
       working-directory: backend
+      runner: '{{ runner_labels }}'
       lint-paths: 'src tests'
       mypy-paths: 'src'
       # A fixed worker count, never `-n auto`: auto reads the core count of a

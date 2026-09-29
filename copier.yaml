@@ -192,7 +192,7 @@ runner_labels:
   type: str
   default: '["self-hosted", "atlas"]'
   help: >-
-    JSON array of runner labels the deploy job runs on. The default is atlas's, so an app that answers nothing renders unchanged.
+    JSON array of runner labels the app's CI and deploy jobs run on. The default is atlas's, which the reusables also default to, so an app that answers nothing runs where it did.
 
 
 postgres_user:

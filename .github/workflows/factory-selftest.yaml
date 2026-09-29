@@ -118,7 +118,7 @@ jobs:
 
       - name: Backend — install and test
         # Same sync-args as every real app's python-ci.yaml caller
-        # (template/.github/workflows/python-ci.yaml): base + dev only, so CI
+        # (template/.github/workflows/python-ci.yaml.jinja): base + dev only, so CI
         # resolves the same packages a real app's CI does, off the household
         # index rather than an editable sibling path.
         working-directory: ${{ env.SCRATCH }}/backend
