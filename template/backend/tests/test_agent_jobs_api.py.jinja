@@ -550,6 +550,35 @@ async def test_messaging_a_job_from_a_different_workspace_is_refused(
     assert refused.status_code == 404
 
 
+async def test_a_message_taken_as_its_cli_dies_is_put_back_and_answered_by_a_resume(
+    agent_settings: AgentSettings,
+    persona: persona_module.PersonaConfig,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The running process takes a message off the row and its CLI dies before reading it: the
+    write breaks, the message goes back on the row, and the run's end resumes the job with it."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+    await _wait_until_running(job_id)
+    write_frames = jobs_module._write_frames
+
+    async def _dies_first(process: Any, turns: Any, messages: list[str]) -> int:
+        if messages:
+            monkeypatch.setattr(jobs_module, "_write_frames", write_frames)
+            jobs_module._kill(process)
+            await process.wait()
+        return await write_frames(process, turns, messages)
+
+    monkeypatch.setattr(jobs_module, "_write_frames", _dies_first)
+    await _message(agent_settings, persona, job_id, workspace_id, "still wanted")
+    await _wait_until(lambda: any("question=still wanted" in a for a in _answers(job_id, workspace_id)))
+    job = await _wait_until_settled(job_id, workspace_id)
+
+    assert job.status == jobs_models.COMPLETED
+    assert _echo_field(_answers(job_id, workspace_id)[-1], "resumed") == "True"
+
+
 async def test_two_messages_at_once_to_a_finished_job_start_one_run_that_answers_both(
     agent_settings: AgentSettings,
     persona: persona_module.PersonaConfig,

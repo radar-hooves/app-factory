@@ -51,7 +51,6 @@ import os
 import re
 import shutil
 import signal
-import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -384,6 +383,52 @@ async def _write_frames(process: asyncio.subprocess.Process, turns: _Turns, mess
     return len(messages)
 
 
+async def _beat(db_session_factory: sessionmaker[Session], spec: RunSpec) -> None:
+    """Keep the run's heartbeat fresh for as long as this worker's event loop runs it.
+
+    Its own task rather than a step of `_control`: a heartbeat says the worker
+    is alive, and a control loop waiting on a slow write to stdin is not a dead
+    worker.
+    """
+    while True:
+        await asyncio.sleep(_HEARTBEAT_SECONDS)
+
+        def _write() -> None:
+            with db_session_factory() as db:
+                bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
+                jobs_models.beat(db, spec.job_id, spec.run_id)
+
+        try:
+            await run_in_threadpool(_write)
+        except Exception:
+            logger.exception("Refreshing agent job %s's heartbeat failed; retrying", spec.job_id)
+
+
+async def _put_back(db_session_factory: sessionmaker[Session], spec: RunSpec, messages: list[str]) -> None:
+    """Return messages this run took but could not write to its row, where its end resumes with them.
+
+    Retried through a database blip; a message still not put back after that is
+    logged as lost, by count, since nothing else holds it.
+    """
+
+    def _requeue() -> None:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
+            jobs_models.requeue(db, spec.job_id, spec.run_id, messages)
+
+    for attempt in range(3):
+        try:
+            await run_in_threadpool(_requeue)
+            return
+        except Exception:
+            if attempt == 2:
+                logger.exception(
+                    "Agent job %s lost %d message(s) its CLI exited before reading", spec.job_id, len(messages)
+                )
+                return
+            await asyncio.sleep(_POLL_SECONDS * 2**attempt)
+
+
 async def _control(
     db_session_factory: sessionmaker[Session],
     spec: RunSpec,
@@ -391,24 +436,28 @@ async def _control(
     process: asyncio.subprocess.Process,
     turns: _Turns,
 ) -> None:
-    """The running process's side of the job row: messages in, a stop, a heartbeat, and closing stdin.
+    """The running process's side of the job row: messages in, a stop, and closing stdin.
 
-    Runs beside `_run`'s stdout loop for the life of the CLI. Closing stdin is
-    decided here and only here, AFTER a poll that found no message to write,
-    so a message is either written before the close or still pending on the
-    row when the run ends — where `settle_or_continue` resumes with it.
+    Runs beside `_run`'s stdout loop and ends on its own the moment the CLI
+    exits, so a message it has taken off the row is always either written or
+    put back. Closing stdin is decided here and only here, AFTER a poll that
+    found no message to write, so a message is either written before the
+    close or still pending on the row when the run ends — where
+    `settle_or_continue` resumes with it.
     """
     assert process.stdin is not None
-    last_beat = time.monotonic()
-    while process.returncode is None:
-        await asyncio.sleep(_POLL_SECONDS)
-        beat = time.monotonic() - last_beat >= _HEARTBEAT_SECONDS
+    while True:
+        try:
+            await asyncio.wait_for(process.wait(), timeout=_POLL_SECONDS)
+            return
+        except TimeoutError:
+            pass
         stdin_open = not process.stdin.is_closing()
 
-        def _poll(take: bool = stdin_open, heartbeat: bool = beat) -> tuple[bool, list[str]] | None:
+        def _poll(take: bool = stdin_open) -> tuple[bool, list[str]] | None:
             with db_session_factory() as db:
                 bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
-                return jobs_models.poll_run(db, spec.job_id, spec.run_id, take_messages=take, beat=heartbeat)
+                return jobs_models.poll_run(db, spec.job_id, spec.run_id, take_messages=take)
 
         try:
             polled = await run_in_threadpool(_poll)
@@ -416,8 +465,6 @@ async def _control(
             # A database blip: the run carries on, and the next poll asks again.
             logger.exception("Polling agent job %s's row failed; retrying", spec.job_id)
             continue
-        if beat:
-            last_beat = time.monotonic()
         if polled is None or polled[0]:
             # A stop from any worker, or the row is no longer this run's.
             local.stopping = True
@@ -426,17 +473,10 @@ async def _control(
         messages = polled[1]
         written = await _write_frames(process, turns, messages)
         if written < len(messages):
-
-            def _requeue(unwritten: list[str] = messages[written:]) -> None:
-                with db_session_factory() as db:
-                    bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
-                    jobs_models.requeue(db, spec.job_id, spec.run_id, unwritten)
-
-            # The CLI's stdin broke: it is exiting, and the run ends with these
-            # pending on the row, where `settle_or_continue` resumes with them.
-            await run_in_threadpool(_requeue)
+            # The CLI's stdin broke: it is exiting.
+            await _put_back(db_session_factory, spec, messages[written:])
             return
-        elif not messages and turns.idle and stdin_open:
+        if not messages and turns.idle and stdin_open:
             process.stdin.close()
 
 
@@ -530,6 +570,7 @@ async def _run(
         delivered = await _write_frames(process, turns, messages)
         turns.written += len(messages) - delivered  # a frame it never got is a turn it never answered
         control_task = asyncio.create_task(_control(db_session_factory, spec, local, process, turns))
+        beat_task = asyncio.create_task(_beat(db_session_factory, spec))
         try:
             while True:
                 try:
@@ -558,16 +599,19 @@ async def _run(
                         status, error = jobs_models.COMPLETED, None
                         structured_output = (recorded or {}).get("structured_output")
         finally:
-            control_task.cancel()
-            try:
-                await control_task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                logger.exception("Agent job %s's control loop failed", spec.job_id)
             _kill(process)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), timeout=5)
+            # Left to end on its own, so a message it took is written or put back.
+            try:
+                await asyncio.wait_for(control_task, timeout=30)
+            except TimeoutError:
+                logger.warning("Agent job %s's control loop outlived its CLI by 30s; cancelled", spec.job_id)
+            except Exception:
+                logger.exception("Agent job %s's control loop failed", spec.job_id)
+            beat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await beat_task
             try:
                 stderr_tail = await asyncio.wait_for(stderr_task, timeout=5)
             except Exception:

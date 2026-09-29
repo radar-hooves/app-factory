@@ -330,31 +330,36 @@ def enqueue_or_reopen(
     return spec
 
 
-def poll_run(
-    db: Session, job_id: str, run_id: str, *, take_messages: bool, beat: bool
-) -> tuple[bool, list[str]] | None:
+def poll_run(db: Session, job_id: str, run_id: str, *, take_messages: bool) -> tuple[bool, list[str]] | None:
     """The running process's look at its own row: ``(stop_requested, messages to write)``.
 
     Takes the pending messages only when ``take_messages`` (its CLI's stdin is
-    still open), refreshes the heartbeat when ``beat``. `None` when the row is
-    no longer this run's — settled or reopened by another process — which is
-    the running process's signal to kill its CLI and write nothing further.
+    still open). `None` when the row is no longer this run's — settled or
+    reopened by another process — which is the running process's signal to
+    kill its CLI and write nothing further.
     """
     job = _locked(db, job_id, AgentJob.run_id == run_id, AgentJob.status == RUNNING)
     if job is None:
         db.rollback()
         return None
     messages = list(job.pending_messages) if take_messages else []
+    stop = job.stop_requested
     if messages:
         job.pending_messages = []
-    if beat:
-        job.heartbeat_at = func.now()
-    stop = job.stop_requested
-    if messages or beat:
         db.commit()
     else:
         db.rollback()
     return stop, messages
+
+
+def beat(db: Session, job_id: str, run_id: str) -> None:
+    """Refresh run ``run_id``'s heartbeat. Nothing to do once the row is no longer this run's."""
+    job = _locked(db, job_id, AgentJob.run_id == run_id, AgentJob.status == RUNNING)
+    if job is None:
+        db.rollback()
+        return
+    job.heartbeat_at = func.now()
+    db.commit()
 
 
 def requeue(db: Session, job_id: str, run_id: str, messages: list[str]) -> None:
