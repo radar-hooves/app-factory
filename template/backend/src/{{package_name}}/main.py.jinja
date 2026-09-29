@@ -125,13 +125,15 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     engine = get_engine()
     app.state.engine = engine
-    supervisor = asyncio.create_task(agent_jobs.supervise(get_session_factory()))
+    stopping = asyncio.Event()
+    supervisor = asyncio.create_task(agent_jobs.supervise(get_session_factory(), stopping))
     try:
         yield
     finally:
-        supervisor.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await supervisor
+        stopping.set()
+        # A sweep stuck on an unreachable database is not waited on for long.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(supervisor, timeout=10)
         await agent_jobs.shutdown()
         engine.dispose()
 

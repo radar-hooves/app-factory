@@ -861,20 +861,23 @@ async def reconcile_orphaned_jobs(db_session_factory: sessionmaker[Session]) -> 
     return len(outcomes)
 
 
-async def supervise(db_session_factory: sessionmaker[Session]) -> None:
-    """Sweep for dead runs at startup and every `_SWEEP_SECONDS` after, for the life of the worker.
+async def supervise(db_session_factory: sessionmaker[Session], stopping: asyncio.Event) -> None:
+    """Sweep for dead runs at startup and every `_SWEEP_SECONDS` after, until ``stopping`` is set.
 
     Every worker runs it (`main.py`'s lifespan): a run whose worker died
     becomes stale some time after the survivors booted, so one sweep at
     startup alone would leave it `running` until the next deploy. A failed
-    sweep is logged and retried at the next interval.
+    sweep is logged and retried at the next interval. Stopped by the event
+    rather than cancelled, so a sweep in flight finishes on its database
+    thread before the lifespan disposes the engine under it.
     """
-    while True:
+    while not stopping.is_set():
         try:
             await reconcile_orphaned_jobs(db_session_factory)
         except Exception:
             logger.exception("Sweeping for agent jobs left running failed; retrying in %.0fs", _SWEEP_SECONDS)
-        await asyncio.sleep(_SWEEP_SECONDS)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stopping.wait(), timeout=_SWEEP_SECONDS)
 
 
 async def shutdown() -> None:
