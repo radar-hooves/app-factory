@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.54] - 2026-09-30
+
 ### Added
 
 - **The agent-jobs slice gains a standard report of a job's cited lessons to core-memory.** A persona names the belief ids it followed under the reserved `lessons_used` answer key (its own `json_schema` must declare the property, or `additionalProperties: False` refuses it silently — `lessons.declare_lessons_used()`), snapshotted at filing time; once a person accepts or corrects a job's result, the app makes one call, `lessons.report_outcome(db, job_id, ..., result="confirm" | "contradict")` — a plain insert, atomic with the app's own commit, never a network call. `retry_unsettled`, run from `jobs.supervise()`'s existing sweep, is the only thing that ever calls core-memory, one lease per row so two callers never both tell it the same thing, and one fixed-key alert (`agent-lessons:failing`) so a refusal, an unrecognised fault or a misconfigured credential reaches the operator rather than a log line. `AgentSettings.core_memory_url`/`core_memory_credential`, both empty by default, opt a deployment in. Raised from godswood#840. Design: `docs/design/agent-lessons.md`.
