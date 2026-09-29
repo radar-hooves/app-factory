@@ -6,35 +6,11 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ### Added
 
-- **`ListShell`** (`@poodle64/ui/list-shell`): a module's working list, folded
-  away and brought back by the app that owns it, beside the content it
-  serves — the shape godswood's Fat Controller module needed for its review
-  queue (radar-hooves/godswood#839). AppShell carries no second-column slot
-  on purpose (`sidebar` was removed 2026.8.11, operator ruling 21/08/2026: no
-  app supports an additional sidebar; a section's own PAGES roll out beneath
-  it in the rail via `NavItem.children`). That ruling is about navigation. A
-  working list is data the module owns, not navigation, and
-  `20-sveltekit-frontend.md` already answers where that belongs: "a column
-  that is not NavItem-shaped … belongs in the page beside the content it
-  serves." `ListShell` is the page-level companion this makes possible —
-  exactly the shape `SettingsShell` and `ContextColumn` already are — so
-  every module reaches for the same foldable list instead of a hand-rolled
-  column per module, which is the actual thing the ruling exists to prevent.
-  Use it with `padded={false}` on AppShell, as `SettingsShell` requires, so
-  the list reaches the content area's edge flush against the rail; it paints
-  itself in the rail's own chrome tokens (`bg-shell`, `text-shell-foreground`)
-  so it reads as chrome rather than a page-built panel. Width is fixed at
-  25rem (400px), measured off the operator's approved mockup rather than
-  picked, and not exposed as a prop. `open` is the caller's own bindable
-  state — this component holds no storage of its own, matching how
-  AppShell's `collapsed` already works — and while closed it renders nothing
-  at all: no placeholder, no hidden rail. Reopening it is deliberately the
-  caller's own control, at whatever position the module chooses (the
-  "reopen" affordance is never this component's to place), driving the same
-  bound `open`; a landmark named after the list and a fold toggle carrying
-  `aria-expanded` are both built in. Hidden below `md` in every state — the
-  rail is already a drawer there, and 400px has nowhere to go beside it; a
-  module's phone view is its own route, same as godswood's.
+- **`ListShell`** (`@poodle64/ui/list-shell`): a module's working list,
+  folded away and brought back by the app that owns it, beside the content
+  it serves (radar-hooves/godswood#839) — a page-level companion, the same
+  shape as `SettingsShell`/`ContextColumn`, not an AppShell slot. `open` is
+  the caller's own bindable state; closed, it renders nothing.
 
 ## [2026.9.18] - 2026-09-28
 

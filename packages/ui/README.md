@@ -404,14 +404,6 @@ wrapper: the pane stacks them on the package's section rhythm itself.
 
 ### A working list beside a page's own content
 
-AppShell has no second-column slot, on purpose: a module's own **pages**
-belong in the rail (`NavItem.children`), never a hand-rolled column beside it.
-A module's **data** (a queue, an inbox, a working list of things waiting on
-the user) is a different situation, not navigation, so it belongs in the page
-beside the content it serves, exactly as the settings destination does.
-`ListShell` is that shape: a foldable list, in the rail's own chrome, that
-vanishes entirely when closed and hands the freed width back to the page.
-
 ```svelte
 <script lang="ts">
 	import AppShell from '@poodle64/ui/app-shell';
@@ -453,12 +445,6 @@ vanishes entirely when closed and hands the freed width back to the page.
 | `open`     | Bindable. Not persisted by this component; bind it to what already persists a preference for this module. |
 | `label`    | The landmark's accessible name. Defaults to `title`.                          |
 | `actions`  | Leading header actions beside the title: an "Add" button, a filter.           |
-
-Width is fixed at 25rem (400px) and not a prop, the same anti-drift discipline
-`SettingsShell` applies to its own 240px: one width, chosen once, rather than
-every module guessing its own. Below `md` this never renders, at either state,
-since a 400px column has nowhere to go beside a rail that is already a drawer
-there; a module's phone view is its own route.
 
 ### The content measure
 
