@@ -20,11 +20,6 @@ name: kits/rust
 # tauri + GTK combination today.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'kits/rust/**'
-      - '.github/workflows/kit-rust.yaml'
   pull_request:
     paths:
       - 'kits/rust/**'
