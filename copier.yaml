@@ -192,7 +192,7 @@ runner_labels:
   type: str
   default: '["self-hosted", "atlas"]'
   help: >-
-    JSON array of GitHub Actions runner labels deploy.yaml's `checked` job and its docker-image-simple.yaml deploy both run on. Defaults to what every existing app already gets (a hardcoded atlas), so answering nothing changes no app's rendered files; a fleet building on a different self-hosted runner (e.g. titan) answers that runner's own labels instead.
+    JSON array of runner labels the deploy job runs on. The default is atlas's, so an app that answers nothing renders unchanged.
 
 
 postgres_user:
