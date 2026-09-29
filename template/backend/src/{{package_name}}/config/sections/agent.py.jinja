@@ -68,7 +68,8 @@ class AgentSettings(BaseSettings):
     # a URL is set, so an app with no gateway never asks the broker for one.
     gateway_url: str = ""
     gateway_key: Annotated[
-        SecretStr, Vended("{{ project_name }}-gateway", "value", credential_field="gateway_key_credential")
+        SecretStr,
+        Vended("{{ project_name }}-gateway", "value", credential_field="gateway_key_credential"),
     ] = SecretStr("")
     # The broker credential holding the key, when the gateway named it rather
     # than this app (one that mints a key per consumer under its own scheme).

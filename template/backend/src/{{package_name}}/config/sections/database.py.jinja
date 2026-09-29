@@ -39,7 +39,10 @@ class DatabaseSettings(VendedSettings):
     # Empty means "read the boot-lane file, else vend it" (see `Vended` in
     # config/vend.py), not "no password". Only a deployment that supplies
     # POSTGRES_PASSWORD itself leaves this set.
-    postgres_password: Annotated[str, Vended("{{ project_name }}-db", "password", file_field="postgres_password_file")] = ""
+    postgres_password: Annotated[
+        str,
+        Vended("{{ project_name }}-db", "password", file_field="postgres_password_file"),
+    ] = ""
     # The answered fleet-host address, NOT localhost: there is no development
     # database, so every consumer of this default — the dev server, the debugger,
     # a script — points at the app's real Postgres. This lived only in `.envrc`
