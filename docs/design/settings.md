@@ -9,7 +9,7 @@ Status: **design, 29/09/2026.** The operator, verbatim: "this is all stuff that 
 ```text
 domain module (e.g. api/fat_controller/) ──declare_setting(...)──┐
                                                                   ▼
-                                            api/settings/registry.py (import list, like db/registry.py)
+                                            api/settings/registry.py (finds each api/<domain>/settings.py)
                                                                   │
                           GET /api/settings/ (schema + values) ▼   PATCH .../{key}  POST .../{key}/reset
                                                           setting_overrides (effective value)
@@ -20,7 +20,7 @@ domain code / a scheduled job / a script ──settings.get_value(session, "key"
 
 ## Shape
 
-- **Declared where the value is used**, exactly like `db/registry.py`'s per-model pattern: a domain module calls `declare_setting(...)` at import time; `api/settings/registry.py` imports every module that declares one, so the admin route can enumerate them all — the same "central IMPORT LIST, decentralised OWNERSHIP" shape the app already uses for models, never a single file that also holds the values or the domain logic.
+- **Declared where the value is used**, exactly like `db/registry.py`'s per-model pattern: a domain module calls `declare_setting(...)` at import time; `api/settings/registry.py` imports every domain's `api/<domain>/settings.py`, found by that name rather than listed, so the admin route can enumerate them all and adding or deleting a domain (the scaffold's `api/example/` included) never edits the registry — never a single file that also holds the values or the domain logic.
 - **`Setting`** (`api/settings/declare.py`): `key` (dotted, e.g. `fat_controller.stage_models.triage`), `type` (`boolean | integer | number | string | model_alias`), `default`, `title`, `description`, `minimum`/`maximum` (numeric types), `choices` (closed string set), and for `model_alias` only: `list_models` (a zero-arg callable the app wires to its own gateway's `GET /v1/models` — no field exists for a URL or a key, so a declaration cannot smuggle either) and `narrow` (an app-supplied `alias -> error message | None`, godswood's `refuse_tier1_alias` wrapped to return a message instead of raising). There is no `secret` or `identifier` `SettingType` — the closed enum is the first refusal, by construction.
 - **Refused at declaration, not by convention.** `declare_setting` checks `key`, `title` and `description` against a small denylist (`secret`, `token`, `password`, `credential`, `api_key`, `mailbox`, `recipient`, `private_key`, `email`, `phone`) and raises `ValueError` at import time — the app fails to start rather than shipping the field. The list is a backstop for the mechanically-detectable shapes, named as exactly that in its own docstring: a genuinely person-identifying setting with no such string in its name (a free-text "sender name") is still a review-time judgement call, the same one `db/registry.py`'s three-bucket classification already asks of every new table.
 - **One row per overridden key**, not one row per declared key: `setting_overrides(key PK, value jsonb, updated_at, updated_by_id)`. A key with no row is running its code default — the common case for most of an app's declared settings, so the table stays small and a declaration ships with nothing to seed.

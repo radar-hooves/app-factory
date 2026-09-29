@@ -1,15 +1,17 @@
-"""Import every module that declares a setting, so the admin route can see all of them.
+"""Import every domain's `settings` module, so the settings route sees every declaration.
 
-Exactly `db/registry.py`'s own shape: a declaration lives with the domain code
-it governs (`declare.py`'s `declare_setting`, called at import time), and this
-file's only job is knowing which modules to import — never declaring anything
-itself. Add one import per domain module that calls `declare_setting`, e.g.:
-
-    from {{ package_name }}.api.fat_controller.settings import stage_models  # noqa: F401
-
-The scaffold example domain declares two, for its own page and as a copyable
-shape for a real domain's first settings module; both are deleted along with
-the rest of ``api/example/`` once the app has a real domain.
+A declaration lives with the domain code it governs, in `api/<domain>/settings.py`
+(`declare.py`'s `declare_setting`, called at import time). This file finds those
+modules by that one convention instead of listing them, so adding a domain, or
+deleting the scaffold's `api/example/`, never edits it. A glob rather than
+`pkgutil`, because the domain folders are namespace packages it does not list.
 """
 
-from {{ package_name }}.api.example import settings as _example_settings  # noqa: F401
+import importlib
+from pathlib import Path
+
+from {{ package_name }} import api
+
+for _root in api.__path__:
+    for _module in sorted(Path(_root).glob("*/settings.py")):
+        importlib.import_module(f"{api.__name__}.{_module.parent.name}.settings")

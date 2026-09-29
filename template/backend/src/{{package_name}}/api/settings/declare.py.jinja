@@ -9,10 +9,10 @@ factory-owned tables (``setting_overrides``, ``setting_changes``) do.
 
 Call ``declare_setting`` at IMPORT time, in the domain module the setting
 governs (`docs/design/settings.md` §Shape) — not here, and not in a per-app
-settings.py that also holds unrelated ones. Then import that module from
-``api/settings/registry.py``, exactly as a new ORM model is imported into
-``db/registry.py``: the registry's job is knowing what exists, never
-declaring anything itself.
+settings.py that also holds unrelated ones. That module is the domain's
+``api/<domain>/settings.py``, which ``api/settings/registry.py`` discovers by
+that name: the registry's job is knowing what exists, never declaring
+anything itself.
 """
 
 from __future__ import annotations

@@ -1,8 +1,9 @@
 """The settings slice, driven through HTTP, plus the declare-time refusal it cannot skip.
 
-Exercises the two example settings the scaffold domain declares
-(`api/example/settings.py`) — a boolean and a bounds-checked integer — for the
-schema, the write, the reset, and the history trail. `model_alias`'s
+Every test runs against a registry of its own holding two settings of its own,
+a boolean and a bounds-checked integer, for the schema, the write, the reset,
+and the history trail, so the slice is proved whatever the app declares (an app
+that deleted the scaffold's `api/example/` declares none). `model_alias`'s
 gateway-reachability and `narrow` behaviour is proved directly against
 `declare.py`/`service.py`, with a fake gateway, since no live one exists in
 this suite.
@@ -18,7 +19,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from {{ package_name }}.api.settings import service
+from {{ package_name }}.api.settings import declare, service
 from {{ package_name }}.api.settings.declare import SettingType, declare_setting
 from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
 from {{ package_name }}.api.users.models import User
@@ -51,6 +52,20 @@ async def _sign_in(client: AsyncClient, uid: str) -> None:
     await client.get("/api/users/me", headers=_headers(uid))
 
 
+TOGGLE = "selftest.toggle"
+LIMIT = "selftest.limit"
+
+
+@pytest.fixture(autouse=True)
+def _own_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh registry per test, holding this module's two settings; a test's own declarations end with it."""
+    monkeypatch.setattr(declare, "_REGISTRY", {})
+    declare_setting(TOGGLE, type=SettingType.boolean, default=True, title="A toggle", description="")
+    declare_setting(
+        LIMIT, type=SettingType.integer, default=20, minimum=1, maximum=100, title="A limit", description=""
+    )
+
+
 # ── The gate ─────────────────────────────────────────────────────────────────
 
 
@@ -65,7 +80,7 @@ async def test_a_read_admin_can_look_but_not_write(client: AsyncClient) -> None:
     assert listed.status_code == 200
 
     refused = await client.patch(
-        "/api/settings/example.new_item_button_enabled",
+        f"/api/settings/{TOGGLE}",
         json={"value": False},
         headers=_headers("the-viewer", "admin"),
     )
@@ -79,21 +94,21 @@ async def test_a_read_admin_can_look_but_not_write(client: AsyncClient) -> None:
 async def test_the_document_carries_the_schema_and_the_defaults(client: AsyncClient) -> None:
     body = (await client.get("/api/settings/", headers=_headers("an-admin", "admin"))).json()
 
-    toggle = body["schema"]["properties"]["example.new_item_button_enabled"]
+    toggle = body["schema"]["properties"][TOGGLE]
     assert toggle["type"] == "boolean"
-    bounded = body["schema"]["properties"]["example.max_items_per_page"]
+    bounded = body["schema"]["properties"][LIMIT]
     assert bounded["type"] == "integer"
     assert bounded["minimum"] == 1
     assert bounded["maximum"] == 100
 
-    assert body["value"]["example.new_item_button_enabled"] is True
-    assert body["value"]["example.max_items_per_page"] == 20
-    assert body["defaults"]["example.new_item_button_enabled"] is True
-    assert body["defaults"]["example.max_items_per_page"] == 20
+    assert body["value"][TOGGLE] is True
+    assert body["value"][LIMIT] == 20
+    assert body["defaults"][TOGGLE] is True
+    assert body["defaults"][LIMIT] == 20
     # No `overridden` field on the wire: which keys differ is derivable from
     # `value`/`defaults` alone, and the frontend derives it (`+page.svelte`).
     assert "overridden" not in body
-    assert body["value"]["example.new_item_button_enabled"] == body["defaults"]["example.new_item_button_enabled"]
+    assert body["value"][TOGGLE] == body["defaults"][TOGGLE]
 
 
 # ── Writing, resetting, and the trail they leave ─────────────────────────────
@@ -103,29 +118,29 @@ async def test_a_write_then_a_reset_round_trips_through_the_override(client: Asy
     admin = _headers("the-writer", "admin:write")
     await _sign_in(client, "the-writer")
 
-    written = await client.patch("/api/settings/example.max_items_per_page", json={"value": 50}, headers=admin)
+    written = await client.patch(f"/api/settings/{LIMIT}", json={"value": 50}, headers=admin)
     assert written.status_code == 200
-    assert written.json() == {"key": "example.max_items_per_page", "value": 50, "default": 20, "overridden": True}
+    assert written.json() == {"key": LIMIT, "value": 50, "default": 20, "overridden": True}
 
     document = (await client.get("/api/settings/", headers=admin)).json()
-    assert document["value"]["example.max_items_per_page"] == 50
-    assert document["value"]["example.max_items_per_page"] != document["defaults"]["example.max_items_per_page"]
+    assert document["value"][LIMIT] == 50
+    assert document["value"][LIMIT] != document["defaults"][LIMIT]
 
-    reset = await client.post("/api/settings/example.max_items_per_page/reset", headers=admin)
+    reset = await client.post(f"/api/settings/{LIMIT}/reset", headers=admin)
     assert reset.status_code == 200
-    assert reset.json() == {"key": "example.max_items_per_page", "value": 20, "default": 20, "overridden": False}
+    assert reset.json() == {"key": LIMIT, "value": 20, "default": 20, "overridden": False}
 
     history = (await client.get("/api/settings/history", headers=admin)).json()
     keys_and_values = [(c["key"], c["old_value"], c["new_value"]) for c in history["changes"]]
-    assert ("example.max_items_per_page", 20, 50) in keys_and_values
-    assert ("example.max_items_per_page", 50, 20) in keys_and_values
+    assert (LIMIT, 20, 50) in keys_and_values
+    assert (LIMIT, 50, 20) in keys_and_values
     written_entry = next(c for c in history["changes"] if c["new_value"] == 50)
     assert written_entry["changed_by"] == "the-writer"
 
 
 async def test_a_value_outside_the_declared_bounds_is_refused(client: AsyncClient) -> None:
     admin = _headers("the-writer", "admin:write")
-    refused = await client.patch("/api/settings/example.max_items_per_page", json={"value": 500}, headers=admin)
+    refused = await client.patch(f"/api/settings/{LIMIT}", json={"value": 500}, headers=admin)
     assert refused.status_code == 422
 
 
@@ -149,7 +164,7 @@ async def test_fanned_out_first_writes_to_a_setting_all_succeed(app: FastAPI, mo
     Each request's read of the current value is held until every request has
     read, which is the interleaving where every one of them finds no override
     row and tries to write the first one. With a `session.get` then a
-    conditional INSERT, all but one of these used to crash with an uncaught
+    conditional INSERT, all but one of these would crash with an uncaught
     `IntegrityError` (500); the INSERT … ON CONFLICT idiom makes every request
     succeed and still leaves one `SettingChange` per write.
     """
