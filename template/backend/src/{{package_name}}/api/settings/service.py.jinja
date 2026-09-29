@@ -92,13 +92,7 @@ def set_value(
     """Validate and store `value` as `key`'s override; record the change.
 
     Returns the `(new_value, default)` pair the route needs to build a
-    `SettingRead`.
-
-    One INSERT … ON CONFLICT rather than a read then a conditional INSERT, so
-    two admins saving the same key's first override at once cannot both find
-    no row and both try to insert it — the loser used to crash with an
-    uncaught `IntegrityError` (500) instead of simply overwriting, exactly the
-    idiom `api/alerts/service.py`'s `raise_alert` already uses.
+    `SettingRead`. An upsert, so two first overrides of one key cannot collide.
 
     Raises:
         NotFoundError: nothing declared this key.
@@ -130,14 +124,8 @@ def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool
     """Delete `key`'s override, reverting it to its declared default. Records the change.
 
     A no-op that still logs the reset when `key` had no override: the operator
-    asked for the default and now has it, whether or not anything changed.
-
-    A Core `DELETE`, not `session.delete()` on a loaded row: the ORM checks
-    the deleted row count against its identity map and raises `StaleDataError`
-    when a concurrent reset already removed it, the same crash-on-race shape
-    `set_value` above no longer has. A `DELETE` matching zero rows is not an
-    error here — the operator asked for the default and a concurrent reset
-    already got them there.
+    asked for the default and now has it, whether or not anything changed. A
+    Core `DELETE`, so a concurrent reset that got there first is not an error.
 
     Raises:
         NotFoundError: nothing declared this key.

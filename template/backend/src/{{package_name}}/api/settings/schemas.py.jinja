@@ -13,10 +13,6 @@ class SettingsDocument(BaseModel):
     its own layout from the JSON Schema alone (`docs/design/settings.md`
     §The page), which is the only mode in which a declared setting cannot be
     missing from the rendered form.
-
-    Carries no `overridden` field: which keys differ from their default is
-    derivable from `value` and `defaults` alone, so the frontend derives it
-    rather than the two ever risking disagreement.
     """
 
     schema_: dict = Field(serialization_alias="schema")

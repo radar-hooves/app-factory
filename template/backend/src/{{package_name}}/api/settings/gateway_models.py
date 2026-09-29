@@ -19,16 +19,8 @@ import openai
 
 logger = logging.getLogger(__name__)
 
-# An app with three `model_alias` settings on the same gateway calls this once
-# per setting: three sequential 10-second timeouts turned one slow-gateway page
-# load into thirty seconds, and every write added a fourth. A short cache,
-# keyed on the (base_url, api_key) pair a `list_models` closure always calls
-# with the same two values, collapses that back to one real network call per
-# request — including the slow-or-down case, since a failure is cached too;
-# refusing to remember "unreachable" is exactly what re-pays the full timeout
-# on every one of the three calls a single page load makes. The window is kept
-# tight (`docs/design/settings.md` §Model alias's live-reachability contract)
-# so a model that just became reachable shows up within seconds, not minutes.
+# One request asks once per `model_alias` setting; the cache (failures too) makes
+# that one round trip, and stays short so a newly reachable model shows in seconds.
 _CACHE_TTL_SECONDS = 5.0
 _cache: dict[tuple[str, str], tuple[float, list[str]]] = {}
 _cache_lock = threading.Lock()
@@ -40,11 +32,6 @@ def list_gateway_models(base_url: str, api_key: str, *, timeout: float = 3.0) ->
     Never raises: a `model_alias` setting must degrade when its gateway is
     unreachable, not refuse a read or a write (`docs/design/settings.md`
     §Model alias). The caller decides what an empty list means.
-
-    Cached for `_CACHE_TTL_SECONDS`, success or failure, keyed on
-    `(base_url, api_key)` — the two values a given app's `list_models` closure
-    always passes — so the several calls one request makes (one per declared
-    `model_alias` setting) cost at most one real gateway round trip.
     """
     cache_key = (base_url, api_key)
     now = time.monotonic()
