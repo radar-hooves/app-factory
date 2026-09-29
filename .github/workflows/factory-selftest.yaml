@@ -61,7 +61,16 @@ jobs:
       # resolves and writes one, exactly as an app's own first setup does.
       # Measured 29/09/2026: UV_FROZEN=1 here fails every run before pytest
       # ever starts, "Unable to find lockfile at `uv.lock`".
-      SCRATCH: ${{ github.workspace }}-scratch
+      #
+      # A subdirectory of the checkout, not a sibling of it (as an earlier cut
+      # of this workflow had it) — pnpm/action-setup's package_json_file input
+      # resolves relative to GITHUB_WORKSPACE, exactly as frontend-ci.yaml's
+      # reusable passes it ('${{ inputs.working-directory }}/package.json');
+      # an absolute path outside the workspace measured 29/09/2026 as "No pnpm
+      # version is specified" despite the file existing with one, on this
+      # runner. Untracked and never staged, so it costs nothing to leave inside
+      # the checkout; "Clean up" below removes it regardless.
+      SCRATCH: scratch
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -134,10 +143,13 @@ jobs:
 
       - name: Frontend — install and test (unit)
         # `pnpm test -- --run`, the same command frontend-ci.yaml's reusable
-        # runs for `run-tests: true` — vitest once, not watch mode.
+        # runs for `run-tests: true` — vitest once, not watch mode. No
+        # --frozen-lockfile, for the same reason backend sync above carries no
+        # UV_FROZEN: template/ ships no pnpm-lock.yaml either, so a scratch
+        # render has nothing to freeze against — pnpm resolves and writes one.
         working-directory: ${{ env.SCRATCH }}/frontend
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install
           pnpm test -- --run
 
       - name: Clean up the scratch render
