@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.48] - 2026-09-29
+
+### Fixed
+
+- A job's stdio MCP server may be told where its identity key lives: a `_FILE`/`_PATH` env variable whose value is an absolute path is a location, not a credential, so `PORTCULLIS_KEY_FILE` no longer refuses the job. A literal value under such a name is still refused (godswood#839).
+
 ## [2026.9.47] - 2026-09-29
 
 ### Fixed

@@ -146,6 +146,15 @@ def _write_mcp_config(folder: Path, mcp_config: dict[str, object]) -> None:
 _CREDENTIAL_HEADER_NAMES = frozenset({"authorization", "x-api-key", "api-key", "x-auth-token", "cookie"})
 #: What a stdio server's environment variable carrying a credential is named with.
 _CREDENTIAL_ENV_NAME = re.compile(r"(?i)key|token|secret|passw|auth|credential|cookie")
+#: A `_FILE`/`_PATH` suffix names a filesystem location, not the value itself — the shape
+#: every app's own `PORTCULLIS_KEY_FILE` (`config/vend.py`) already takes to tell a stdio
+#: server where its identity key lives, so it can vend its own secrets from the broker.
+_ENV_NAME_IS_PATH = re.compile(r"(?i)_(file|path)$")
+
+
+def _names_a_path(name: str, value: object) -> bool:
+    """A `_FILE`/`_PATH` variable whose value is an absolute path: a location, never the secret."""
+    return bool(_ENV_NAME_IS_PATH.search(name)) and isinstance(value, str) and value.startswith("/")
 
 
 def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
@@ -156,8 +165,12 @@ def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
     for as long as the job exists. An HTTP server's credential is minted by a
     `headersHelper` command at spawn — a recipe, not a secret — the contract a
     persona's own `.mcp.json` is held to; a stdio server vends its own from
-    the broker, as every household process does. A credential in a server's
-    `args` cannot be told from any other argument, and is the caller's to keep out.
+    the broker, as every household process does — which means it must be told
+    where its own identity lives. A `_FILE`/`_PATH`-suffixed name is that
+    coordinate, not a secret (`PORTCULLIS_KEY_FILE` names a path, never a key),
+    and stays exempt even where the rest of its name is credential-shaped. A
+    credential in a server's `args` cannot be told from any other argument, and
+    is the caller's to keep out.
 
     Raises:
         BadRequestError: a server entry sets a credential-shaped header or
@@ -173,7 +186,11 @@ def _refuse_literal_mcp_credentials(mcp_config: dict[str, object]) -> None:
         env = server.get("env")
         literal = sorted(
             [key for key in headers if key.lower() in _CREDENTIAL_HEADER_NAMES] if isinstance(headers, dict) else []
-        ) + sorted([key for key in env if _CREDENTIAL_ENV_NAME.search(key)] if isinstance(env, dict) else [])
+        ) + sorted(
+            [key for key in env if _CREDENTIAL_ENV_NAME.search(key) and not _names_a_path(key, env[key])]
+            if isinstance(env, dict)
+            else []
+        )
         if literal:
             raise BadRequestError(
                 f"mcp_config server {name!r} sets {literal!r} as a literal value — mint a header with "

@@ -1284,3 +1284,29 @@ async def test_a_literal_credential_in_mcp_config_is_refused(
     _, workspace_id = identity
     with pytest.raises(BadRequestError):
         await _start(agent_settings, persona, workspace_id, prompt="hi", mcp_config={"mcpServers": {"app": server}})
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"PORTCULLIS_KEY_FILE": "/secrets/app.key"},
+        {"SOME_SERVER_API_TOKEN_FILE": "/secrets/some-server.token"},
+        {"SOME_SERVER_API_TOKEN_PATH": "/secrets/some-server.token"},
+    ],
+    ids=["portcullis-key-file", "token-file-suffix", "token-path-suffix"],
+)
+def test_a_key_file_path_in_mcp_config_env_is_not_refused(env: dict[str, str]) -> None:
+    """`PORTCULLIS_KEY_FILE` names WHERE a stdio server's own identity key lives, not the key
+    itself -- exactly what the refusal's own message asks a caller to do instead of a literal
+    header: have the server vend its own from the broker (radar-hooves/godswood#839)."""
+    jobs_module._refuse_literal_mcp_credentials(
+        {"mcpServers": {"app": {"type": "stdio", "command": "some-server", "env": env}}}
+    )
+
+
+def test_a_secret_under_a_file_shaped_name_is_still_refused() -> None:
+    """Only an absolute path passes as a location; a literal value under a `_FILE` name is refused."""
+    with pytest.raises(BadRequestError):
+        jobs_module._refuse_literal_mcp_credentials(
+            {"mcpServers": {"app": {"type": "stdio", "command": "s", "env": {"API_TOKEN_FILE": "sk-live-abc"}}}}
+        )
