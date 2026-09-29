@@ -21,6 +21,17 @@ socket exposes the race, because a real ASGI server can push response bytes to
 the wire the moment `send()` is called -- before a "request"-scoped
 dependency's exit code has even started. Hence a real second `uvicorn`
 process here, the same reason `test_agent_jobs_api.py` uses one.
+
+`POST /api/feedback/` is the write, not an identity or workspace route: those
+two resolve through services (`ensure_personal_workspace`,
+`create_workspace`...) that call `session.commit()` THEMSELVES for their own
+atomicity reasons, which already makes their rows durable before `get_session`
+ever gets a say -- exercising them would prove nothing about the dependency's
+own scope. `feedback/service.py`'s `create_report` only flushes, exactly the
+shape `db/session.py`'s docstring describes ("the session filters ... never
+mentions either") and the shape most of an app's own domain writes take, so it
+is the representative case, and unlike the scaffold `example` slice it is
+permanent factory furniture no app ever deletes.
 """
 
 import uuid
@@ -28,7 +39,7 @@ import uuid
 import httpx
 from sqlalchemy import select
 
-from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
 from tests.support import live_server
 
@@ -41,27 +52,29 @@ ITERATIONS = 20
 
 
 async def test_a_written_row_is_visible_to_a_second_session_immediately_after_the_response() -> None:
-    """`GET /api/workspaces/me` upserts the caller's user row on every call
-    (`get_identity`) -- the one write every authenticated request in every app
-    makes, so proving it proves the shared dependency chain rather than one
-    app's own domain route.
-    """
     async with live_server.run_server() as (base_url, _pid):
         async with httpx.AsyncClient(base_url=base_url, timeout=5) as client:
-            for _ in range(ITERATIONS):
+            for i in range(ITERATIONS):
                 uid = f"race-{uuid.uuid4()}"
-                response = await client.get(
-                    "/api/workspaces/me",
+                response = await client.post(
+                    "/api/feedback/",
+                    json={
+                        "message": f"race probe {i}",
+                        "route": "/race-probe",
+                        "user_agent": "pytest",
+                        "viewport": {"width": 1024, "height": 768},
+                        "session_id": str(uuid.uuid4()),
+                    },
                     headers={"x-authentik-uid": uid, "x-authentik-username": uid},
                 )
-                assert response.status_code == 200
+                assert response.status_code == 201
+                report_id = response.json()["id"]
 
                 with get_session_factory()() as second_session:
-                    row = second_session.execute(
-                        select(User).where(User.authentik_uid == uid)
-                    ).scalar_one_or_none()
+                    row = second_session.get(FeedbackReport, report_id)
 
                 assert row is not None, (
-                    f"user {uid!r} was in the response but a second session could not "
-                    "see it -- get_session's commit ran after the response was sent"
+                    f"feedback report {report_id} was in the response but a second "
+                    "session could not see it -- get_session's commit ran after the "
+                    "response was sent"
                 )
