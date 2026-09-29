@@ -15,19 +15,26 @@ Lifted from `library.api.agent.session` (radar-hooves/library) and generalised
 from one shipped home to N persona homes (`persona.py`). Two things the
 library's version needed that this one does not, both because a persona's
 `settings.json` decides them instead of a per-question prompt: there is no
-`--model` flag (Claude Code reads it from the seeded settings.json) and no
-`--append-system-prompt` (CLAUDE.md in the persona's home IS the system
-prompt — Claude Code loads it from CLAUDE_CONFIG_DIR the same way it loads a
-user's own `~/.claude/CLAUDE.md`). `--mcp-config` is new: pointed explicitly
-at the persona's own `.mcp.json` rather than left to cwd auto-discovery, so
-the servers a persona reaches do not depend on where the subprocess happens
-to run.
+`--model` flag (Claude Code reads it from the seeded settings.json) and
+`ask()` itself passes no `--append-system-prompt` (CLAUDE.md in the persona's
+home IS the system prompt for a CHAT turn — Claude Code loads it from
+CLAUDE_CONFIG_DIR the same way it loads a user's own `~/.claude/CLAUDE.md`).
+`--mcp-config` is new: pointed explicitly at the persona's own `.mcp.json`
+rather than left to cwd auto-discovery, so the servers a persona reaches do
+not depend on where the subprocess happens to run.
+
+`build_argv` carries a second, wider contract than `ask()` alone uses:
+`jobs.py`'s app-started session is a different kind of turn, with its own
+per-run system-prompt addendum, JSON schema and working directory
+(`docs/design/agent-jobs.md`), so the flags that carry those stay optional
+parameters here rather than a second copy of this function.
 """
 
 import asyncio
 import json
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from {{ package_name }}.api.agent.persona import PersonaConfig
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -106,8 +113,28 @@ def _environment(settings: AgentSettings, persona: PersonaConfig) -> dict[str, s
     return env
 
 
-def build_argv(settings: AgentSettings, persona: PersonaConfig, question: str, *, resume: str | None) -> list[str]:
-    """The exact command line. Split out so a test can assert it without a subprocess."""
+def build_argv(  # noqa: PLR0913
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    question: str,
+    *,
+    resume: str | None,
+    session_id: str | None = None,
+    mcp_config: Path | None = None,
+    append_system_prompt: str | None = None,
+    json_schema: dict[str, object] | None = None,
+    input_format: str | None = None,
+) -> list[str]:
+    """The exact command line. Split out so a test can assert it without a subprocess.
+
+    The five keyword args past `resume` are the app-started job's own, never
+    the per-question `ask()` flow's (`docs/design/agent-jobs.md`): a chat turn
+    supplies none of them, so their absence here leaves `ask()`'s own argv
+    byte-for-byte what it always built. `session_id` and `resume` are
+    mutually exclusive the way the CLI's own `--session-id`/`--resume` are —
+    the former MINTS a job's id before the CLI has run at all, the latter
+    continues one already minted.
+    """
     argv = [
         settings.executable,
         "-p",
@@ -131,13 +158,22 @@ def build_argv(settings: AgentSettings, persona: PersonaConfig, question: str, *
         "--permission-mode",
         "bypassPermissions",
     ]
-    if persona.mcp_config is not None:
+    config = mcp_config if mcp_config is not None else persona.mcp_config
+    if config is not None:
         # --strict-mcp-config stops the CLI walking cwd's ancestors for a
         # second .mcp.json: without it, a persona's own file merges with
         # whatever the household fleet happens to declare above the persona's
         # home. Measured: a developer's system/init listed ninety fleet
         # servers beside the persona's own two.
-        argv += ["--mcp-config", str(persona.mcp_config), "--strict-mcp-config"]
+        argv += ["--mcp-config", str(config), "--strict-mcp-config"]
+    if append_system_prompt:
+        argv += ["--append-system-prompt", append_system_prompt]
+    if json_schema is not None:
+        argv += ["--json-schema", json.dumps(json_schema)]
+    if input_format:
+        argv += ["--input-format", input_format]
+    if session_id:
+        argv += ["--session-id", session_id]
     if resume:
         argv += ["--resume", resume]
     return argv

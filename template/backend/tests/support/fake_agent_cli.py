@@ -42,12 +42,21 @@ persona's `.mcp.json` actually presents the bearer its own MCP server
 demands, without depending on the real `claude` binary's own headersHelper
 implementation (verified separately, out of this fake CLI's reach, against
 the pinned Dockerfile version's own bundled schema).
+
+Two more triggers stand in for what `jobs.py`'s tests need that none of the
+above does: a process whose stdin stays open. `__await_stdin__` blocks on
+ONE line of stream-json input before answering -- `jobs.send_message()`'s
+live-stdin path writes it -- and `__hang__` blocks forever, standing in for
+a turn still genuinely working when `jobs.stop()` kills it. Both, and the
+ordinary echo path below, emit `structured_output` on the result line
+whenever `--json-schema` rode on the argv, exactly as the real CLI would.
 """
 
 import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 
 import httpx
@@ -58,6 +67,8 @@ GIANT_TRIGGER = "__giant__"
 #: only survives the read loop when `ask()` passes its own `limit=`.
 GIANT_TEXT_SIZE = 200_000
 MCP_PROBE_TRIGGER = "__mcp_probe__"
+AWAIT_STDIN_TRIGGER = "__await_stdin__"
+HANG_TRIGGER = "__hang__"
 
 #: The telemetry variables `session.py`'s `_environment()` may pass through
 #: or compute, in the order the echo line reports them.
@@ -98,13 +109,21 @@ def _probe_mcp(argv: list[str]) -> dict[str, object]:
     return {"server": name, "status_code": response.status_code, "body": response.text}
 
 
+def _result(session_id: str, text: str, argv: list[str]) -> dict[str, object]:
+    """The terminal `result` line, carrying `structured_output` when `--json-schema` was on the argv."""
+    result: dict[str, object] = {"type": "result", "subtype": "success", "session_id": session_id, "result": text, "is_error": False}
+    if _flag(argv, "--json-schema") is not None:
+        result["structured_output"] = {"text": text}
+    return result
+
+
 def main() -> None:
     argv = sys.argv[1:]
     question = _flag(argv, "-p") or ""
     if question == CRASH_TRIGGER:
         sys.exit(3)
     resume = _flag(argv, "--resume")
-    session_id = resume or f"fake-{uuid.uuid4().hex[:12]}"
+    session_id = resume or _flag(argv, "--session-id") or f"fake-{uuid.uuid4().hex[:12]}"
 
     if question == GIANT_TRIGGER:
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
@@ -118,6 +137,24 @@ def main() -> None:
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
         _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
+        return
+
+    if question == HANG_TRIGGER:
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        # Killed by the test (`jobs.stop()`), never exits on its own -- stands
+        # in for a turn genuinely still working.
+        time.sleep(3600)
+        return
+
+    if question == AWAIT_STDIN_TRIGGER:
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        line = sys.stdin.readline()
+        frame = json.loads(line) if line.strip() else {}
+        content = (frame.get("message") or {}).get("content") or []
+        text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
+        echo = f"stdin: {text}"
+        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
+        _emit(_result(session_id, echo, argv))
         return
 
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")
@@ -138,6 +175,8 @@ def main() -> None:
             f"effort={_flag(argv, '--effort')}",
             f"permission_mode={_flag(argv, '--permission-mode')}",
             f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
+            f"append_system_prompt={_flag(argv, '--append-system-prompt')}",
+            f"input_format={_flag(argv, '--input-format')}",
             # Present only if session.py leaked the parent's own environment
             # through rather than building the child's from scratch.
             f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
@@ -147,7 +186,7 @@ def main() -> None:
 
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
     _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
-    _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
+    _emit(_result(session_id, echo, argv))
 
 
 if __name__ == "__main__":

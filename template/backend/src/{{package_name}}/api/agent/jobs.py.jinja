@@ -1,0 +1,442 @@
+"""An app-started persona session that outlives the request that started it.
+
+`session.ask()` is one HTTP request, one subprocess, one stream: the request
+handler owns the whole thing, and the process dies when the handler returns
+or the client disconnects. That is wrong for a session the APP starts —
+"a document arrives and the Fat Controller starts reading it" — because
+nothing asked a question and nobody is necessarily watching
+(`docs/design/agent-jobs.md`). This module is that other shape: an in-process
+`asyncio.Task`, independent of any request, whose every event is persisted as
+it lands (`jobs_models.py`) and fanned out live to whoever is watching
+(`_JobBus`) — so a caller can open the job at any time, from the start if it
+already finished or caught up and then live if it is still running, on the
+SAME verbatim event stream `session.ask()` already produces.
+
+No queue, no worker process, no new service: the task IS the job, held alive
+by nothing but this module's own `_tasks` dict (an unreferenced `asyncio.Task`
+is eligible for garbage collection mid-run — the classic "fire and forget"
+trap), and it keeps running for exactly as long as the process it wraps does,
+whether or not any request is in flight and whether or not anyone is watching
+(`start()`'s docstring; `docs/design/agent-jobs.md` §Constraints).
+
+`--bg`/`claude agents` was measured and is not this: it is the CLI's own
+interactive-session dispatcher, spawning a worktree and refusing `--print`
+outright ("--bg and --print conflict: --print never starts the interactive
+session that `claude agents` attaches to"). A job here answers a structured
+question or reads a document from a working folder, headless, exactly the
+`-p --output-format stream-json` shape `session.py` already drives — a
+different CLI feature for a different job.
+"""
+
+import asyncio
+import contextlib
+import json
+import logging
+import os
+import signal
+import uuid
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
+
+from {{ package_name }}.api.agent import jobs_models, session as agent_session
+from {{ package_name }}.api.agent.jobs_models import AgentJob
+from {{ package_name }}.api.agent.persona import PersonaConfig
+from {{ package_name }}.api.agent.session import ERROR_EVENT
+from {{ package_name }}.config.paths import data_dir
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.exceptions import BadRequestError, NotFoundError
+
+logger = logging.getLogger(__name__)
+
+#: Held so a running task is never garbage-collected mid-run (`asyncio`'s own
+#: warning: "Task was destroyed but it is pending"). Popped by `_run()`'s own
+#: finally block, never by whoever called `start()` — a job outlives the
+#: request that started it, so nothing about the request's lifetime may own
+#: this reference.
+_tasks: dict[str, asyncio.Task[None]] = {}
+#: The live subprocess behind a running job, so `send_message()` can write to
+#: its stdin and `stop()` can kill it. Absent for a job that has finished
+#: (whether or not `_tasks` has been swept yet).
+_processes: dict[str, asyncio.subprocess.Process] = {}
+#: Set by `stop()`, read by `_run()`'s own finally block: the one place that
+#: tells "the app called stop()" apart from "the process died on its own" — a
+#: killed process's returncode is indistinguishable from a crashed one's.
+_stop_requested: set[str] = set()
+
+
+class _JobBus:
+    """In-process pub/sub for one job's live events, keyed by job id.
+
+    A queue exists only while its job is open (`open()`..`close()`); a
+    `subscribe()` outside that window returns `None`, which is `watch()`'s
+    signal that there is nothing live left to wait for — the job already
+    finished, or never started, and a persisted replay is the whole answer.
+    Mirrors the shape of an SSE fan-out bus (`queue.Queue` in a thread-based
+    app); this one is `asyncio.Queue`, because the app it lives in is async.
+    """
+
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[asyncio.Queue[tuple[int, dict[str, object]] | None]]] = {}
+
+    def open(self, job_id: str) -> None:
+        self._subscribers.setdefault(job_id, [])
+
+    def subscribe(self, job_id: str) -> "asyncio.Queue[tuple[int, dict[str, object]] | None] | None":
+        if job_id not in self._subscribers:
+            return None
+        queue: asyncio.Queue[tuple[int, dict[str, object]] | None] = asyncio.Queue()
+        self._subscribers[job_id].append(queue)
+        return queue
+
+    def unsubscribe(self, job_id: str, queue: "asyncio.Queue[tuple[int, dict[str, object]] | None]") -> None:
+        subscribers = self._subscribers.get(job_id)
+        if subscribers is not None and queue in subscribers:
+            subscribers.remove(queue)
+
+    def publish(self, job_id: str, seq: int, event: dict[str, object]) -> None:
+        for queue in self._subscribers.get(job_id, []):
+            queue.put_nowait((seq, event))
+
+    def close(self, job_id: str) -> None:
+        for queue in self._subscribers.pop(job_id, []):
+            queue.put_nowait(None)
+
+
+_bus = _JobBus()
+
+
+def _job_dir(job_id: str) -> Path:
+    """This job's own working folder: the files it reads and its own `.mcp.json`, if it has one.
+
+    Under `data_dir()`, alongside `persona.py`'s seeded homes — an app's own
+    runtime state, never the repo (`platform/canonical-app-shape.md`
+    §Development launch). Left on disk after the job finishes: a watcher may
+    open it hours later, and there is nothing here that needs cleaning up
+    before then. An app that wants it gone once its own record of the job is
+    settled removes it itself.
+    """
+    return data_dir() / "agent-jobs" / job_id
+
+
+async def start(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    *,
+    prompt: str,
+    files: dict[str, bytes] | None = None,
+    json_schema: dict[str, object] | None = None,
+    append_system_prompt: str | None = None,
+) -> str:
+    """Start a persona session with no asker, and return its job id at once.
+
+    `files` seeds the job's own working folder before the CLI ever runs —
+    every key is a path relative to that folder, so `{"pages/1.png": ...}`
+    reads back at `pages/1.png` from the job's own `cwd`. A `.mcp.json`
+    among them becomes the job's own MCP config, `--strict-mcp-config`'d
+    exactly as a persona's own is (`session.build_argv`); omit it and the
+    job reaches the persona's own servers instead.
+
+    Returns immediately — the caller gets `job_id` back before the CLI has
+    even spawned, so it can hand that id to whoever asked for the read
+    without waiting on any of it (need 1: "a document arrives and the Fat
+    Controller starts reading it... a structured answer that the app code
+    which started it gets back" is `watch()` or a later read of the job row,
+    not this call).
+    """
+    job_id = str(uuid.uuid4())
+    job_dir = _job_dir(job_id)
+    await run_in_threadpool(_seed_files, job_dir, files or {})
+
+    def _create() -> None:
+        with db_session_factory() as db:
+            jobs_models.create_job(
+                db, job_id=job_id, persona=persona.name, json_schema=json_schema, append_system_prompt=append_system_prompt
+            )
+
+    await run_in_threadpool(_create)
+
+    _bus.open(job_id)
+    _spawn_run(
+        db_session_factory,
+        settings,
+        persona,
+        job_id,
+        job_dir,
+        prompt,
+        json_schema=json_schema,
+        append_system_prompt=append_system_prompt,
+        resume=None,
+    )
+    return job_id
+
+
+def _seed_files(job_dir: Path, files: dict[str, bytes]) -> None:
+    job_dir.mkdir(parents=True, exist_ok=True)
+    for relative, content in files.items():
+        path = job_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+
+def _spawn_run(  # noqa: PLR0913
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    job_id: str,
+    job_dir: Path,
+    prompt: str,
+    *,
+    json_schema: dict[str, object] | None,
+    append_system_prompt: str | None,
+    resume: str | None,
+) -> None:
+    """Create and hold the `_run()` task, so nothing about a caller's own lifetime bounds it."""
+    task = asyncio.create_task(
+        _run(
+            db_session_factory,
+            settings,
+            persona,
+            job_id,
+            job_dir,
+            prompt,
+            json_schema=json_schema,
+            append_system_prompt=append_system_prompt,
+            resume=resume,
+        )
+    )
+    _tasks[job_id] = task
+    task.add_done_callback(lambda _: _tasks.pop(job_id, None))
+
+
+async def _run(  # noqa: PLR0913
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    job_id: str,
+    job_dir: Path,
+    prompt: str,
+    *,
+    json_schema: dict[str, object] | None,
+    append_system_prompt: str | None,
+    resume: str | None,
+) -> None:
+    """Spawn the CLI, persist and publish every event as it lands, then settle the job row.
+
+    The per-line read timeout (`settings.timeout_seconds`, the same knob
+    `session.ask()` bounds a question's turn with) is deliberately an IDLE
+    timeout, not a total wall clock: it fires only when the child has gone
+    quiet, which is exactly as wrong to allow whether the child is thinking
+    or waiting on a `send_message()` that never comes. A human expected to
+    take longer than that replies after the job has finished instead (need 4's
+    second case) — a live stdin message is for interjecting on a turn still
+    actively running, not for an open-ended wait.
+    """
+    mcp_config = job_dir / ".mcp.json"
+    argv = agent_session.build_argv(
+        settings,
+        persona,
+        prompt,
+        resume=resume,
+        session_id=None if resume else job_id,
+        mcp_config=mcp_config if mcp_config.is_file() else None,
+        append_system_prompt=append_system_prompt,
+        json_schema=json_schema,
+        input_format="stream-json",
+    )
+
+    async def _record(event: dict[str, object]) -> None:
+        def _write() -> int:
+            with db_session_factory() as db:
+                return jobs_models.record_event(db, job_id, event)
+
+        seq = await run_in_threadpool(_write)
+        _bus.publish(job_id, seq, event)
+
+    async def _finish(*, status: str, structured_output: dict[str, object] | None = None, error: str | None = None) -> None:
+        def _write() -> None:
+            with db_session_factory() as db:
+                jobs_models.finish_job(db, job_id, status=status, structured_output=structured_output, error=error)
+
+        await run_in_threadpool(_write)
+        _bus.close(job_id)
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(job_dir),
+            env=agent_session._environment(settings, persona),  # noqa: SLF001 — same slice, `session.py`'s own build
+            # PIPE, not DEVNULL: unlike `ask()`'s one-shot question, a job's
+            # stdin stays open for `send_message()` to write a follow-up
+            # while it is still working (`--input-format stream-json`).
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            # Its own process group, like the cancel-safe pattern every
+            # long-running agent runner in this household uses: `stop()`
+            # kills the whole group, not just the CLI's own pid, so nothing
+            # it spawned survives it.
+            start_new_session=True,
+            limit=16 * 1024 * 1024,
+        )
+    except OSError as exc:
+        await _finish(status=jobs_models.FAILED, error=f"agent could not start: {exc}")
+        return
+
+    _processes[job_id] = process
+    assert process.stdout is not None
+    status, error, structured_output = jobs_models.COMPLETED, None, None
+    try:
+        while True:
+            try:
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=settings.timeout_seconds)
+            except TimeoutError:
+                await _record({"type": ERROR_EVENT, "error": "agent exceeded its wall clock"})
+                status, error = jobs_models.FAILED, "agent exceeded its wall clock"
+                break
+            if not line:
+                break
+            text = line.decode(errors="replace").strip()
+            if not text.startswith("{"):
+                continue
+            try:
+                event = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            await _record(event)
+            if event.get("type") == "result":
+                if event.get("is_error"):
+                    status, error = jobs_models.FAILED, str(event.get("result") or "agent reported an error")
+                else:
+                    structured_output = event.get("structured_output")
+    finally:
+        if process.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(process.wait(), timeout=5)
+        _processes.pop(job_id, None)
+
+    if job_id in _stop_requested:
+        _stop_requested.discard(job_id)
+        status, error, structured_output = jobs_models.CANCELLED, None, None
+    elif status == jobs_models.COMPLETED and process.returncode not in (0, None):
+        stderr = (await process.stderr.read()).decode(errors="replace") if process.stderr else ""
+        status, error = jobs_models.FAILED, f"agent exited {process.returncode}: {stderr[-2000:]}"
+        await _record({"type": ERROR_EVENT, "error": error})
+
+    await _finish(status=status, structured_output=structured_output, error=error)
+
+
+async def send_message(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    persona: PersonaConfig,
+    job_id: str,
+    text: str,
+) -> None:
+    """Send `text` to `job_id`: onto its open stdin while it is running, or a resumed run once it has finished.
+
+    The two cases need 4 names are exactly the two branches here. A stream-json
+    frame written to the live process's stdin needs no reply from this call —
+    the answer arrives as further events on the same `watch()` stream. A
+    resume starts a NEW `_run()` under the SAME job id, replaying the
+    `json_schema`/`append_system_prompt` the job started with so the answer
+    comes back under the same contract `start()`'s caller asked for, never one
+    `text`'s own sender has to know.
+
+    Raises:
+        NotFoundError: no such job.
+        BadRequestError: the job is between these two states — its process
+            has exited but its row has not yet settled. Retrying shortly
+            resolves it; there is nothing to reconcile by hand.
+    """
+    process = _processes.get(job_id)
+    if process is not None and process.returncode is None and process.stdin is not None:
+        frame = json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
+        process.stdin.write(frame.encode() + b"\n")
+        await process.stdin.drain()
+        return
+
+    def _load() -> AgentJob | None:
+        with db_session_factory() as db:
+            return jobs_models.get_job(db, job_id)
+
+    job = await run_in_threadpool(_load)
+    if job is None:
+        raise NotFoundError(f"no such job: {job_id}")
+    if job.status == jobs_models.RUNNING:
+        raise BadRequestError("this job's process has just stopped; try again")
+
+    def _reopen() -> None:
+        with db_session_factory() as db:
+            jobs_models.mark_running(db, job_id)
+
+    await run_in_threadpool(_reopen)
+    _bus.open(job_id)
+    _spawn_run(
+        db_session_factory,
+        settings,
+        persona,
+        job_id,
+        _job_dir(job_id),
+        text,
+        json_schema=job.json_schema,
+        append_system_prompt=job.append_system_prompt,
+        resume=job_id,
+    )
+
+
+async def stop(job_id: str) -> None:
+    """Stop `job_id`. A job already finished is a no-op — there is nothing left to stop."""
+    process = _processes.get(job_id)
+    if process is None or process.returncode is not None:
+        return
+    _stop_requested.add(job_id)
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+
+
+async def watch(db_session_factory: sessionmaker[Session], job_id: str) -> AsyncIterator[dict[str, object]]:
+    """Yield `job_id`'s events from the first, live if it is still running.
+
+    Subscribing BEFORE reading the persisted tail is what makes this
+    gap-free: anything published between the subscribe and the read below is
+    caught by the queue rather than lost in between, and the `seq <= last_seq`
+    check below drops it again if the persisted read had already caught it
+    too — the ordinary race a snapshot-then-tail read always has to name.
+
+    A `job_id` that has never existed yields nothing at all: `list_events`
+    returns empty and `_bus.subscribe` returns `None`, so the caller learns
+    "there is no such job" from an empty stream. The route this is mounted
+    behind checks the job exists before opening the stream at all, so this is
+    the FALLBACK, not the check.
+    """
+    queue = _bus.subscribe(job_id)
+
+    def _read() -> list[tuple[int, dict[str, object]]]:
+        with db_session_factory() as db:
+            return jobs_models.list_events(db, job_id)
+
+    events = await run_in_threadpool(_read)
+    last_seq = 0
+    for seq, event in events:
+        yield event
+        last_seq = seq
+
+    if queue is None:
+        return
+    try:
+        while True:
+            item = await queue.get()
+            if item is None:
+                return
+            seq, event = item
+            if seq <= last_seq:
+                continue
+            yield event
+    finally:
+        _bus.unsubscribe(job_id, queue)

@@ -17,3 +17,10 @@ class AskRequest(BaseModel):
     #: a session THIS asker was issued — `api/agent/ownership.py` carries the
     #: measurement of what an unbound one returned.
     resume: str | None = None
+
+
+class AgentJobMessageRequest(BaseModel):
+    """A message to an app-started job (`api/agent/jobs.py`), while it is
+    running or after it has finished — `jobs.send_message` decides which."""
+
+    text: str = Field(min_length=1, max_length=8000)
