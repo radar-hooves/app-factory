@@ -107,7 +107,12 @@ async def message_job(
     await jobs_module.authorize(db_session_factory, job_id, workspace.id)
     config = persona_module.load(settings.agent, persona)
     await jobs_module.send_message(
-        db_session_factory, settings.agent, config, job_id, request.text, workspace_id=workspace.id,
+        db_session_factory,
+        settings.agent,
+        config,
+        job_id,
+        request.text,
+        workspace_id=workspace.id,
         user_id=identity.user.id,
     )
 
