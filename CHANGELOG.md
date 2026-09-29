@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- **`make_user`, a conftest fixture that makes a real `users` row and returns its id, which an app can replace.** It goes through the users slice's own `upsert_from_identity`, and it is defined before conftest adopts `tests/app_fixtures.py`, so an app whose users differ from the factory's defines its own `make_user` there and that one wins. The settings tests take their users from it, and the fanned-out first-write test signs its user in first, so that race is the setting's alone. Need: godswood, whose users have not yet taken the factory's reshape, 30/09/2026.
+
 ## [2026.9.53] - 2026-09-30
 
 ### Changed

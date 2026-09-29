@@ -12,6 +12,7 @@ this suite.
 import asyncio
 import threading
 import uuid
+from collections.abc import Callable
 
 import pytest
 from fastapi import FastAPI
@@ -22,23 +23,8 @@ from sqlalchemy.orm import Session
 from {{ package_name }}.api.settings import declare, service
 from {{ package_name }}.api.settings.declare import SettingType, declare_setting
 from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
-from {{ package_name }}.api.users.models import User
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import NotFoundError, ValidationError
-
-
-def _make_user(session: Session) -> uuid.UUID:
-    """A real `users` row, for a direct service-layer test with no HTTP request to upsert one.
-
-    `SettingOverride.updated_by_id`/`SettingChange.changed_by_id` are real
-    foreign keys, so a synthetic `uuid4()` with no backing row would fail the
-    insert rather than exercise the behaviour under test.
-    """
-    uid = f"test-{uuid.uuid4().hex}"
-    user = User(authentik_uid=uid, username=uid)
-    session.add(user)
-    session.flush()
-    return user.id
 
 
 def _headers(uid: str, entitlements: str | None = None) -> dict[str, str]:
@@ -189,6 +175,8 @@ async def test_fanned_out_first_writes_to_a_setting_all_succeed(app: FastAPI, mo
         async with AsyncClient(
             transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
         ) as race_client:
+            # Signed in once first, so the race is the setting's first write, not the user's first sight.
+            await _sign_in(race_client, "the-racer")
             responses = await asyncio.gather(
                 *(race_client.patch(f"/api/settings/{key}", json={"value": n}, headers=admin) for n in range(FAN_OUT))
             )
@@ -258,7 +246,9 @@ def test_an_ordinary_key_naming_nothing_forbidden_is_accepted() -> None:
 # ── model_alias: reachability, narrowing, and degrading when the gateway is down ──
 
 
-def test_model_alias_offers_and_accepts_only_what_narrow_admits(session: Session) -> None:
+def test_model_alias_offers_and_accepts_only_what_narrow_admits(
+    session: Session, make_user: Callable[[], uuid.UUID]
+) -> None:
     key = f"test.{uuid.uuid4().hex}.model_alias"
     declare_setting(
         key,
@@ -272,13 +262,15 @@ def test_model_alias_offers_and_accepts_only_what_narrow_admits(session: Session
     schema = service.build_schema()
     assert schema["properties"][key]["enum"] == ["mimir/deep"]
 
-    admin_id = _make_user(session)
+    admin_id = make_user()
     with pytest.raises(ValidationError, match="not a Tier-3 alias"):
         service.set_value(session, key, "goku/fast", actor_user_id=admin_id)
     service.set_value(session, key, "mimir/deep", actor_user_id=admin_id)  # does not raise
 
 
-def test_model_alias_degrades_rather_than_refuses_when_the_gateway_is_unreachable(session: Session) -> None:
+def test_model_alias_degrades_rather_than_refuses_when_the_gateway_is_unreachable(
+    session: Session, make_user: Callable[[], uuid.UUID]
+) -> None:
     key = f"test.{uuid.uuid4().hex}.model_alias"
 
     def _broken() -> list[str]:
@@ -297,7 +289,7 @@ def test_model_alias_degrades_rather_than_refuses_when_the_gateway_is_unreachabl
     assert "could not confirm" in schema["properties"][key]["description"]
 
     # A write still succeeds — an unreachable gateway degrades, it never refuses.
-    service.set_value(session, key, "whatever/works", actor_user_id=_make_user(session))
+    service.set_value(session, key, "whatever/works", actor_user_id=make_user())
 
 
 def test_get_value_raises_not_found_for_an_undeclared_key(session: Session) -> None:

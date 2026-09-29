@@ -13,7 +13,8 @@ import secrets
 import subprocess
 import sys
 import tempfile
-from collections.abc import AsyncGenerator, Generator
+import uuid
+from collections.abc import AsyncGenerator, Callable, Generator
 from pathlib import Path
 
 import pytest
@@ -275,6 +276,23 @@ from tests import app_fixtures as _app_fixtures  # noqa: E402
 # no-op, and an app that deletes it breaks its own suite loudly rather than
 # silently skipping its setup.
 from tests.app_fixtures import app_session_start  # noqa: E402
+
+
+@pytest.fixture
+def make_user(session: Session) -> Callable[[], uuid.UUID]:
+    """Make a real `users` row in the test's session and return its id, through the users slice's own upsert.
+
+    Defined BEFORE `_adopt_app_fixtures()` below, so an app whose users differ
+    from the factory's defines its own `make_user` in `app_fixtures.py` and
+    that one replaces this.
+    """
+    from {{ package_name }}.api.users.service import upsert_from_identity
+
+    def _make() -> uuid.UUID:
+        uid = f"test-{uuid.uuid4().hex}"
+        return upsert_from_identity(session, authentik_uid=uid, username=uid).id
+
+    return _make
 
 
 def _adopt_app_fixtures() -> None:
