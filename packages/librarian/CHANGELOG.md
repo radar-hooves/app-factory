@@ -16,8 +16,11 @@ as an app-started job on the factory's agent slice (factory v2026.9.39).
 - **`Session`** in `./session`: folds a whole stream into `Turn[]`. A user
   frame the CLI replays (`--replay-user-messages`) opens a turn on the
   reader's side, the run after it folds in, its `result` settles it, and
-  `working` says the last run is open. Events are deduped by `uuid`, so
-  opening a watch again folds only what is new.
+  `working` says the last run is open. A run whose prompt was never echoed
+  still gets a turn of its own, and a watch that breaks between runs leaves
+  every settled answer as it was. Events are deduped by `uuid`, and a frame
+  the server adds without one by the event it follows, so opening a watch
+  again folds only what is new.
 - **`DescribeTool`**: a host's words for its persona's tools. `ToolWords`
   carries the row (`verb`, `object`, `detail`), the activity line's count
   (`tally`), how a run of identical calls is counted (`repeat`) and what the

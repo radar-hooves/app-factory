@@ -11,23 +11,22 @@
  *
  * Every Claude Code event carries a `uuid`, and one already folded is
  * skipped: a watch route replays from the first event, so opening it again
- * after the session moves on folds only what is new.
+ * after the session moves on folds only what is new. A frame the server adds
+ * itself (an error, the library's citations) carries none, and is known by
+ * the event it follows.
  */
 
 import type { AgentEvent } from './client';
 import { contentOf, fold, foldState, type FoldState, type Turn } from './transcript.svelte';
 
-/** The events that land on a turn; anything else (`system`, rate limits) is
- *  the CLI talking about itself. */
-const FOLDED = new Set([
-	'stream_event',
-	'assistant',
-	'user',
-	'result',
-	'library_error',
-	'citations',
-	'suggestions'
-]);
+/** The events a run is made of. One arriving after its turn settled is the
+ *  next run, whether or not its prompt was echoed. */
+const RUN = new Set(['stream_event', 'assistant', 'user', 'result']);
+
+/** Everything else that lands on a turn: the library's trailing frames, and
+ *  a stream that broke. Anything else (`system`, rate limits) is the CLI
+ *  talking about itself. */
+const FOLDED = new Set([...RUN, 'library_error', 'citations', 'suggestions']);
 
 export class Session {
 	/** One per run, in order: plain objects, so a host may spread one to add
@@ -39,6 +38,8 @@ export class Session {
 	// A plain Set, as `Transcript`'s fold map is: nothing renders it.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	#seen = new Set<string>();
+	/** The last `uuid` in stream order, folded or skipped. */
+	#after = '';
 
 	/** The last run has started and not settled. A run the reader stopped
 	 *  never settles, so a host ANDs this with its own "the stream is open". */
@@ -48,26 +49,46 @@ export class Session {
 	}
 
 	apply(event: AgentEvent): void {
-		if (event.uuid) {
-			if (this.#seen.has(event.uuid)) return;
-			this.#seen.add(event.uuid);
-		}
+		const key = event.uuid ?? `${this.#after}|${JSON.stringify(event)}`;
+		if (event.uuid) this.#after = event.uuid;
+		if (this.#seen.has(key)) return;
+		this.#seen.add(key);
 		if (event.type === 'user' && event.isReplay) {
 			this.#open(event.uuid ?? `turn-${this.turns.length}`, said(event), stamp(event));
 			this.version += 1;
 			return;
 		}
 		if (!FOLDED.has(event.type)) return;
-		// A stream that never echoed its prompt — started without the replay
-		// flag, or failed before it said anything — still has an answer to
-		// show; its question is simply not on the wire.
-		if (this.turns.length === 0) this.#open('turn-0', '', undefined);
+
+		// Settled by its own `result`. A stream that broke mid-run is not: the
+		// run goes on, and a watch opened again folds the rest onto it.
+		const last = this.turns.at(-1);
+		const settled = last?.outcome != null && !last.outcome.unreachable;
+		// The watch broke while nothing was running, and no run failed.
+		if (event.type === 'library_error' && settled) return;
+		// A run whose prompt was never echoed — a session started without the
+		// replay flag, or one that failed before it said anything — still has
+		// an answer to show; its question is simply not on the wire.
+		if (!last || (settled && RUN.has(event.type))) {
+			this.#open(`turn-${this.turns.length}`, '', undefined);
+		} else if (last.outcome?.unreachable && RUN.has(event.type)) {
+			// The stream came back and the run is still going.
+			last.outcome = null;
+		}
 		fold(this.turns[this.turns.length - 1], this.#folds[this.#folds.length - 1], event);
 		this.version += 1;
 	}
 
 	#open(id: string, question: string, at: number | undefined): void {
-		this.turns.push({ id, question, at, blocks: [], outcome: null, citations: [], suggestions: [] });
+		this.turns.push({
+			id,
+			question,
+			at,
+			blocks: [],
+			outcome: null,
+			citations: [],
+			suggestions: []
+		});
 		this.#folds.push(foldState());
 	}
 }

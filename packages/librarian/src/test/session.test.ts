@@ -70,11 +70,47 @@ describe('Session', () => {
 		expect(JSON.stringify(session.turns)).toBe(before);
 	});
 
-	it('still shows the answer of a stream that never echoed its prompt', () => {
+	it('still shows every answer of a stream that never echoed a prompt', () => {
 		const { turns } = folded(STREAM.filter((e) => !e.isReplay));
-		expect(turns).toHaveLength(1);
-		expect(turns[0].question).toBe('');
-		expect(turns[0].blocks.some((b) => b.kind === 'text')).toBe(true);
+		expect(turns.map((t) => t.question)).toEqual(['', '', '']);
+		expect(turns.every((t) => t.blocks.some((b) => b.kind === 'text'))).toBe(true);
+	});
+
+	it('leaves a settled answer alone when the watch breaks between runs', () => {
+		const firstResult = STREAM.findIndex((e) => e.type === 'result');
+		const session = folded(STREAM.slice(0, firstResult + 1));
+		const settled = JSON.stringify(session.turns[0].outcome);
+		session.apply({ type: 'library_error' });
+		expect(JSON.stringify(session.turns[0].outcome)).toBe(settled);
+		expect(session.turns).toHaveLength(1);
+	});
+
+	it('carries on a run whose watch broke and was opened again', () => {
+		const firstResult = STREAM.findIndex((e) => e.type === 'result');
+		const session = folded(STREAM.slice(0, firstResult - 2));
+		session.apply({ type: 'library_error' });
+		expect(session.turns[0].outcome).toMatchObject({ unreachable: true });
+
+		for (const event of STREAM) session.apply(event);
+		expect(session.turns).toHaveLength(3);
+		expect(session.turns[0].outcome).toMatchObject({ turns: 4, isError: false });
+	});
+
+	it('folds a frame the server added once, however often the watch replays it', () => {
+		// The factory records its own error frame with no uuid. A watch opened
+		// again while a later run is live replays it, and it must not land there.
+		const firstResult = STREAM.findIndex((e) => e.type === 'result');
+		const nextReplay = STREAM.findIndex((e, i) => i > firstResult && e.isReplay);
+		const log = [
+			...STREAM.slice(0, firstResult),
+			{ type: 'library_error', error: 'wall clock' },
+			...STREAM.slice(nextReplay, nextReplay + 3)
+		];
+		const session = folded(log);
+		for (const event of log) session.apply(event);
+		expect(session.turns[0].outcome).toMatchObject({ error: 'wall clock' });
+		expect(session.turns[1].outcome).toBeNull();
+		expect(session.working).toBe(true);
 	});
 
 	it('puts a stream that failed before it began on a turn of its own', () => {
