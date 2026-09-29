@@ -417,9 +417,9 @@ export interface paths {
          *
          *     Raises:
          *         NotFoundError: no such job, or it belongs to a different workspace
-         *             (`jobs.authorize`, one answer for both — checked before the
-         *             stream opens, so a bad or foreign id 404s rather than opening an
-         *             SSE response with nothing in it).
+         *             or persona (`jobs.authorize`, one answer for all three — checked
+         *             before the stream opens, so a bad, foreign or mismatched-persona
+         *             id 404s rather than opening an SSE response with nothing in it).
          */
         get: operations["watchAgentJob"];
         put?: never;
@@ -657,6 +657,10 @@ export interface components {
         /**
          * AlertRead
          * @description An alert as the bell shows it.
+         *
+         *     This and `AlertList` are `@poodle64/ui`'s `AlertBell` contract, not this
+         *     app's choice: renaming a field here without changing the package silently
+         *     empties every app's bell.
          */
         AlertRead: {
             /** Id */
