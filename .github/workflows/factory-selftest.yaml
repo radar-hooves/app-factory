@@ -54,7 +54,13 @@ jobs:
     runs-on: ['self-hosted', 'atlas']
     timeout-minutes: 30
     env:
-      UV_FROZEN: '1' # install from the rendered lockfile; never re-resolve in CI (ci-workflow-standard.md)
+      # Deliberately NOT UV_FROZEN=1. That pin is for a real app's CI, which
+      # syncs against a uv.lock a developer already committed; template/ ships
+      # no uv.lock at all (every app generates its own on first setup), so a
+      # fresh scratch render has nothing to freeze against — `uv sync` here
+      # resolves and writes one, exactly as an app's own first setup does.
+      # Measured 29/09/2026: UV_FROZEN=1 here fails every run before pytest
+      # ever starts, "Unable to find lockfile at `uv.lock`".
       SCRATCH: ${{ github.workspace }}-scratch
     steps:
       - name: Checkout
