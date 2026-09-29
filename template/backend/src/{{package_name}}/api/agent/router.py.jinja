@@ -6,7 +6,11 @@ app-started job (`docs/design/agent-jobs.md`).
 name is not known until the path parameter is: `require_module` is called
 directly as the plain function it already is, inside the route, instead of
 through `Depends()` (`entitlements.py`'s own factory shape covers both). The
-three job routes below take the same gate, for the same reason.
+three job routes below take the same gate, AND `CurrentWorkspace`: a job acts
+on behalf of a workspace as much as a persona entitlement, and
+`jobs.authorize()` is what actually enforces the second half — the
+entitlement alone would let anyone holding it read or steer another
+workspace's job (fresh-context review, CRITICAL 1).
 
 There is no `POST /{persona}/jobs` here — starting a job is need 1's own
 point ("started by the app itself, with no person asking"): `jobs.start()`
@@ -20,17 +24,14 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import ask as ask_module
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent.jobs_models import get_job
 from {{ package_name }}.api.agent.schemas import AgentJobMessageRequest, AskRequest
 from {{ package_name }}.db.session import get_session_factory
-from {{ package_name }}.deps import CurrentIdentity, SessionDep, SettingsDep
+from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, SessionDep, SettingsDep
 from {{ package_name }}.entitlements import has_module, require_module
-from {{ package_name }}.exceptions import NotFoundError
 
 router = APIRouter()
 
@@ -62,7 +63,9 @@ async def ask(
 
 
 @router.get("/{persona}/jobs/{job_id}/watch", operation_id="watchAgentJob")
-async def watch_job(persona: str, job_id: str, identity: CurrentIdentity, settings: SettingsDep) -> StreamingResponse:
+async def watch_job(
+    persona: str, job_id: str, identity: CurrentIdentity, workspace: CurrentWorkspace, settings: SettingsDep
+) -> StreamingResponse:
     """Watch `job_id`'s events from the first, live if it is still running (need 3).
 
     The SAME frame shape `ask`'s stream produces — one Claude Code event per
@@ -71,21 +74,17 @@ async def watch_job(persona: str, job_id: str, identity: CurrentIdentity, settin
     a job it opens instead of a chat turn.
 
     Raises:
-        NotFoundError: no such job — checked before the stream opens, so a
-            bad id 404s rather than opening an SSE response with nothing in it.
+        NotFoundError: no such job, or it belongs to a different workspace
+            (`jobs.authorize`, one answer for both — checked before the
+            stream opens, so a bad or foreign id 404s rather than opening an
+            SSE response with nothing in it).
     """
     require_module(f"agent-{persona}")(identity)
     db_session_factory = get_session_factory()
-
-    def _exists() -> bool:
-        with db_session_factory() as db:
-            return get_job(db, job_id) is not None
-
-    if not await run_in_threadpool(_exists):
-        raise NotFoundError(f"no such job: {job_id}")
+    await jobs_module.authorize(db_session_factory, job_id, workspace.id)
 
     async def frames() -> AsyncIterator[str]:
-        async for event in jobs_module.watch(db_session_factory, job_id):
+        async for event in jobs_module.watch(db_session_factory, job_id, workspace_id=workspace.id):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
@@ -95,16 +94,29 @@ async def watch_job(persona: str, job_id: str, identity: CurrentIdentity, settin
 
 @router.post("/{persona}/jobs/{job_id}/message", operation_id="messageAgentJob", status_code=204)
 async def message_job(
-    persona: str, job_id: str, identity: CurrentIdentity, settings: SettingsDep, request: AgentJobMessageRequest
+    persona: str,
+    job_id: str,
+    identity: CurrentIdentity,
+    workspace: CurrentWorkspace,
+    settings: SettingsDep,
+    request: AgentJobMessageRequest,
 ) -> None:
     """Send `request.text` to `job_id` (need 4): onto its stdin if it is still working, a resumed run if it has finished."""
     require_module(f"agent-{persona}")(identity)
+    db_session_factory = get_session_factory()
+    await jobs_module.authorize(db_session_factory, job_id, workspace.id)
     config = persona_module.load(settings.agent, persona)
-    await jobs_module.send_message(get_session_factory(), settings.agent, config, job_id, request.text)
+    await jobs_module.send_message(
+        db_session_factory, settings.agent, config, job_id, request.text, workspace_id=workspace.id,
+        user_id=identity.user.id,
+    )
 
 
 @router.post("/{persona}/jobs/{job_id}/stop", operation_id="stopAgentJob", status_code=204)
-async def stop_job(persona: str, job_id: str, identity: CurrentIdentity, settings: SettingsDep) -> None:
+async def stop_job(
+    persona: str, job_id: str, identity: CurrentIdentity, workspace: CurrentWorkspace, settings: SettingsDep
+) -> None:
     """Stop `job_id` (need 5). A no-op once it has already finished on its own."""
     require_module(f"agent-{persona}")(identity)
+    await jobs_module.authorize(get_session_factory(), job_id, workspace.id)
     await jobs_module.stop(job_id)

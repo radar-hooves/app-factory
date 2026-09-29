@@ -1,12 +1,17 @@
 """Persistence for an app-started persona job: the job row and its event log.
 
 `api/agent/ownership.py`'s ``AgentSession`` is a private CONVERSATION issued
-to one asker; a job is different in kind. It is started by the app itself
-with no asker (`docs/design/agent-jobs.md`), runs independent of the request
-that started it, and any caller entitled to the persona may watch, message or
-stop it — so it carries no owning user, and every event Claude Code emits is
-kept verbatim so a caller who opens the job after it started sees exactly
-what one who watched live would have.
+to one asker, personal-subject and exempt from workspace scoping; a job is
+different in kind. It is started by the app itself, usually on behalf of a
+workspace rather than an asker (`docs/design/agent-jobs.md`) — a document
+belongs to a workspace, so a job reading one does too. Both models are
+`WorkspaceScoped`: shared data any member of that workspace may watch,
+message or stop (subject to holding the persona's own entitlement as well),
+stamped and filtered by the session-bound hooks in `db/scoping.py` exactly
+like every other shared table. `jobs.py` is the one caller: every session it
+opens is bound with `bind_session()` before it touches either model, since a
+job's writes happen outside any one request's own `CurrentWorkspace`-bound
+session (`jobs.py`'s own module docstring has the fuller account of why).
 
 ``job_id`` IS Claude Code's own session id: minted here before the CLI ever
 runs (``--session-id`` on the first spawn, ``--resume`` on every one after),
@@ -23,7 +28,8 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func, sel
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from {{ package_name }}.db.base import Base, TimestampMixin
+from {{ package_name }}.db.base import Base, TimestampMixin, WorkspaceScoped
+from {{ package_name }}.db.scoping import unscoped
 
 #: A job's lifecycle. ``running`` covers a fresh turn and a resumed one alike
 #: — nothing here distinguishes them, because a watcher only ever needs to
@@ -31,7 +37,7 @@ from {{ package_name }}.db.base import Base, TimestampMixin
 RUNNING, COMPLETED, FAILED, CANCELLED = "running", "completed", "failed", "cancelled"
 
 
-class AgentJob(Base, TimestampMixin):
+class AgentJob(Base, TimestampMixin, WorkspaceScoped):
     """One app-started persona session: its persona, its status, and its
     structured answer once it has one."""
 
@@ -53,6 +59,11 @@ class AgentJob(Base, TimestampMixin):
     json_schema: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     #: `--append-system-prompt`, held for the same reason as `json_schema`.
     append_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: This job's own MCP config (a parsed `.mcp.json` object), held for the
+    #: same reason as `json_schema` — a resumed run reaches the SAME servers,
+    #: bound to the SAME identity, the job started with. `None` means the
+    #: job reaches the persona's own `.mcp.json` instead.
+    mcp_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     #: The final turn's structured answer, set once `status` leaves `running`
     #: and only when a `json_schema` was given.
     structured_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -60,11 +71,17 @@ class AgentJob(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class AgentJobEvent(Base):
+class AgentJobEvent(Base, WorkspaceScoped):
     """One Claude Code event, kept verbatim, in the order it landed.
 
     No `TimestampMixin`: `recorded_at` alone is what a replay needs, and
     `updated_at` would claim an event is ever revised, which it never is.
+
+    `WorkspaceScoped` too, denormalised down from its parent job rather than
+    reached only through it: a bare `select(AgentJobEvent)` is possible from
+    anywhere in this codebase, and `platform/tenancy.md` is explicit that a
+    child table is not a third kind — it takes the mixin exactly as its
+    parent does, or nothing stops that bare select from crossing a workspace.
     """
 
     __tablename__ = "agent_job_events"
@@ -85,8 +102,16 @@ def create_job(
     persona: str,
     json_schema: dict[str, Any] | None,
     append_system_prompt: str | None,
+    mcp_config: dict[str, Any] | None,
 ) -> None:
-    """Insert the job row and commit — the caller has the id back before the CLI has even started."""
+    """Insert the job row and commit — the caller has the id back before the CLI has even started.
+
+    `db` must already be bound to the owning workspace (`db.scoping.bind_session`)
+    — `before_flush` stamps `workspace_id`/`created_by_id` from that binding,
+    exactly as it would for any other `WorkspaceScoped` row created in a
+    request handler; a job has no handler, so `jobs.start()` binds a
+    throwaway session to do it instead.
+    """
     db.add(
         AgentJob(
             job_id=job_id,
@@ -94,13 +119,29 @@ def create_job(
             status=RUNNING,
             json_schema=json_schema,
             append_system_prompt=append_system_prompt,
+            mcp_config=mcp_config,
         )
     )
     db.commit()
 
 
 def get_job(db: Session, job_id: str) -> AgentJob | None:
+    """`db` must already be bound to the job's own workspace — use `get_job_unscoped` before that is known."""
     return db.get(AgentJob, job_id)
+
+
+def get_job_unscoped(db: Session, job_id: str) -> AgentJob | None:
+    """Read `job_id` with no workspace bound — the one place this slice looks a job up BEFORE
+    it knows which workspace to bind to, so it can find out.
+
+    `jobs.authorize()` is the only caller: it reads the job's own
+    `workspace_id` this way, then compares it to the caller's — the same
+    "confined to an explicit `unscoped()` block" carve-out
+    `platform/tenancy.md` gives any cross-workspace read, used here for
+    exactly the authorization check it exists to gate, never as a way around it.
+    """
+    with unscoped(db):
+        return db.get(AgentJob, job_id)
 
 
 def record_event(db: Session, job_id: str, event: dict[str, Any]) -> int:

@@ -14,7 +14,7 @@ what stops a new table quietly shipping with no access predicate
 (`rules-library/platform/tenancy.md`).
 """
 
-from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent
+from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent  # noqa: F401
 from {{ package_name }}.api.agent.ownership import AgentSession
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
 from {{ package_name }}.api.feedback.models import FeedbackReport
@@ -62,8 +62,6 @@ WORKSPACE_EXEMPT: dict[type, str] = {
     DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
     FeedbackReport: "personal-subject: the person who filed it — a report may carry a screenshot of their own screen",
     AgentSession: "personal-subject: the asker who issued it — a conversation belongs to whoever asked, not a workspace",
-    AgentJob: "app-level: started by the app itself with no asker, gated by persona entitlement rather than a workspace",
-    AgentJobEvent: "child of AgentJob, same reason — its events belong to the job, not to whoever is watching them",
 }
 
 __all__ = ["WORKSPACE_EXEMPT", "Base"]

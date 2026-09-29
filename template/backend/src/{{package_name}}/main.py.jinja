@@ -35,11 +35,12 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from {{ package_name }} import app_hooks
+from {{ package_name }}.api.agent import jobs as agent_jobs
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.paths import frontend_build_dir
-from {{ package_name }}.db.session import get_engine
+from {{ package_name }}.db.session import get_engine, get_session_factory
 from {{ package_name }}.exceptions import register_exception_handlers
 from {{ package_name }}.logging import app_version, configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
@@ -108,9 +109,19 @@ class _SPAStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Warm the database engine; dispose on shutdown."""
+    """Warm the database engine, reconcile agent jobs a previous process left
+    running, and dispose the engine on shutdown.
+
+    The reconcile call is factory-owned (never an `app_hooks.lifespan_tasks`
+    default) so every app that carries the agent-jobs slice gets it via
+    `copier update` picking up this file, not only a fresh stamp — an app's
+    own `app_hooks.py` is sanctioned-per-app and copier never overwrites it,
+    so a default living there would reach nobody who already has one
+    (`docs/design/agent-jobs.md`, fresh-context review, HIGH 5).
+    """
     engine = get_engine()
     app.state.engine = engine
+    await agent_jobs.reconcile_orphaned_jobs(get_session_factory())
     yield
     engine.dispose()
 

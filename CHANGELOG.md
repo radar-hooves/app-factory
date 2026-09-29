@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.38] - 2026-09-29
+
+### Fixed
+
+- **A fresh-context review of the agent-jobs slice (2026.9.37) found four critical gaps before godswood had adopted it, and they are closed here.** `AgentJob`/`AgentJobEvent` are now `WorkspaceScoped` rather than exempt: the three job routes previously gated on the persona entitlement alone, so any caller holding it could read or steer another workspace's job — `jobs.authorize()` now checks the job's own `workspace_id` against the caller's `CurrentWorkspace` first, one 404 for "no such job" and "not yours" alike. `jobs.send_message()`'s check-then-spawn now runs under a per-job `asyncio.Lock`, closing a race where two concurrent messages to a just-finished job could both spawn a `--resume` process for the same Claude Code session. `jobs.stop()` now sets a per-run `asyncio.Event` registered synchronously at spawn time, so a stop issued the instant a resume is scheduled is honoured once its process exists instead of no-opping silently. `app_hooks.agent_turn`'s redaction hook, previously wired only into the chat `ask()` flow, now runs on a job's own prompt and every `send_message()` text too, via a new shared `api/agent/redact.py`.
+- **Three related gaps, same review.** A process restart used to leave any `running` job permanently unresumable (`send_message` refuses a `running` row, and nothing ever moved it out of that state); `main.py`'s lifespan now calls `jobs.reconcile_orphaned_jobs()` once at startup. `agent_job_events` grew one row per token under `--include-partial-messages`; `_is_partial()` (keyed on the Anthropic Messages API's own `stop_reason` field, populated only once a message is complete) now skips persisting a still-growing chunk, broadcasting it live regardless. Stderr was read only after stdout closed, so a child writing enough to fill its pipe before anything drained it could deadlock the whole turn; it is now drained concurrently.
+- **Two more, from godswood's own adoption need.** A job's working folder was never cleaned up; `jobs.cleanup(job_id, workspace_id=...)` removes it once the job is no longer resumable (refusing while still `running`). A job's own `/mcp` calls need to act as the job's own user and workspace, which a persona's static `.mcp.json` cannot express — `start()` gains an explicit `mcp_config` parameter (a parsed `.mcp.json` object), persisted on the job row and rewritten to disk on every run including a resume, replacing the earlier undocumented "write a `.mcp.json` into `files`" convention.
+
 ## [2026.9.37] - 2026-09-29
 
 ### Added

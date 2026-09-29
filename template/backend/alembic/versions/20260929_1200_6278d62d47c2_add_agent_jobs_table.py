@@ -13,10 +13,17 @@ holds every event that session emitted, verbatim, in landing order, so a
 caller who opens the job after it started sees the same stream a caller
 watching live would have seen.
 
-Neither table carries a `user_id`: a job is started by the APP, not an
-asker, and any caller entitled to the persona may watch, message or stop
-it — `api/agent/ownership.py`'s per-asker ownership is a different slice's
-concern, for a different kind of session.
+Both tables are `WorkspaceScoped`, RESTRICT on `workspace_id` and SET NULL on
+`created_by_id` — the same shape `example_items` took in the tenancy
+migration, and for the same reason: a job acts on behalf of a workspace (a
+document belongs to one), so any caller entitled to the persona may watch,
+message or stop it ONLY within that workspace, never estate-wide. (This
+table shipped exempt from scoping in the first cut of this slice; a
+fresh-context review of that release caught it before anything had adopted
+it, so the columns are added here rather than in a second migration —
+nothing has moved a live database through the exempt shape yet.)
+`api/agent/ownership.py`'s `AgentSession` is unrelated: a private CHAT session
+issued to one asker, personal-subject and still exempt for that reason.
 
 An app taking this by `copier update` must repoint ``down_revision`` at its own
 current head, exactly as the previous revision's docstring says.
@@ -44,27 +51,64 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=16), nullable=False),
         sa.Column("json_schema", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("append_system_prompt", sa.Text(), nullable=True),
+        sa.Column("mcp_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("structured_output", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("workspace_id", sa.Integer(), nullable=False),
+        sa.Column("created_by_id", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("job_id"),
     )
     op.create_index(op.f("ix_agent_jobs_persona"), "agent_jobs", ["persona"])
+    op.create_index(op.f("ix_agent_jobs_workspace_id"), "agent_jobs", ["workspace_id"])
+    op.create_foreign_key(
+        "fk_agent_jobs_workspace_id_workspaces", "agent_jobs", "workspaces", ["workspace_id"], ["id"], ondelete="RESTRICT"
+    )
+    op.create_foreign_key(
+        "fk_agent_jobs_created_by_id_users", "agent_jobs", "users", ["created_by_id"], ["id"], ondelete="SET NULL"
+    )
+
     op.create_table(
         "agent_job_events",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("job_id", sa.String(length=128), nullable=False),
         sa.Column("event", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("workspace_id", sa.Integer(), nullable=False),
+        sa.Column("created_by_id", sa.Uuid(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["job_id"], ["agent_jobs.job_id"], ondelete="CASCADE"),
     )
     op.create_index(op.f("ix_agent_job_events_job_id"), "agent_job_events", ["job_id"])
+    op.create_index(op.f("ix_agent_job_events_workspace_id"), "agent_job_events", ["workspace_id"])
+    op.create_foreign_key(
+        "fk_agent_job_events_workspace_id_workspaces",
+        "agent_job_events",
+        "workspaces",
+        ["workspace_id"],
+        ["id"],
+        ondelete="RESTRICT",
+    )
+    op.create_foreign_key(
+        "fk_agent_job_events_created_by_id_users",
+        "agent_job_events",
+        "users",
+        ["created_by_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("fk_agent_job_events_created_by_id_users", "agent_job_events", type_="foreignkey")
+    op.drop_constraint("fk_agent_job_events_workspace_id_workspaces", "agent_job_events", type_="foreignkey")
+    op.drop_index(op.f("ix_agent_job_events_workspace_id"), table_name="agent_job_events")
     op.drop_index(op.f("ix_agent_job_events_job_id"), table_name="agent_job_events")
     op.drop_table("agent_job_events")
+
+    op.drop_constraint("fk_agent_jobs_created_by_id_users", "agent_jobs", type_="foreignkey")
+    op.drop_constraint("fk_agent_jobs_workspace_id_workspaces", "agent_jobs", type_="foreignkey")
+    op.drop_index(op.f("ix_agent_jobs_workspace_id"), table_name="agent_jobs")
     op.drop_index(op.f("ix_agent_jobs_persona"), table_name="agent_jobs")
     op.drop_table("agent_jobs")

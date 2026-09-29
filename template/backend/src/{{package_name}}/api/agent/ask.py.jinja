@@ -19,33 +19,13 @@ from starlette.concurrency import run_in_threadpool
 from {{ package_name }}.api.agent import ownership
 from {{ package_name }}.api.agent import session as agent_session
 from {{ package_name }}.api.agent.persona import PersonaConfig
+from {{ package_name }}.api.agent.redact import redact
 from {{ package_name }}.api.agent.schemas import AskRequest
 from {{ package_name }}.config.sections.agent import AgentSettings
 
 
 class AskRefused(Exception):
     """Carries the message an error frame shows the asker; never raised past `stream`."""
-
-
-def _redact(persona: str, user_id: uuid.UUID, question: str) -> str:
-    """Run the question through `app_hooks.agent_turn`, if this app defines one.
-
-    The one optional seam this slice carries (`docs/design/agent-console.md`
-    §Decision: "the redactor is an app hook"). Absent by default — most apps
-    send the question straight through — and run BEFORE the CLI is spawned
-    rather than on the streamed answer: the answer is forwarded token by
-    token as it arrives, and there is no "before it renders" moment left to
-    redact it at once it has already been sent.
-
-    Local import, not module-level: app_hooks is the app's own extension
-    point and may in principle import back from an api slice; looking it up
-    per call is also what lets a test drive the hook without reimporting this
-    module (`rate_limit.py` takes the same shape for its own optional hook).
-    """
-    from {{ package_name }} import app_hooks
-
-    hook = getattr(app_hooks, "agent_turn", None)
-    return str(hook(persona, str(user_id), question)) if hook is not None else question
 
 
 def stream(
@@ -72,7 +52,7 @@ def stream(
                 # already declines with once the stream has started.
                 raise AskRefused(ownership.DENIAL)
 
-            question = await run_in_threadpool(_redact, persona.name, user_id, request.question)
+            question = await run_in_threadpool(redact, persona.name, user_id, request.question)
 
             async for event in agent_session.ask(settings, persona, question, resume=request.resume):
                 # Claimed as the frame arrives, not at the end of the stream:

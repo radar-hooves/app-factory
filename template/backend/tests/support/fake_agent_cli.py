@@ -43,13 +43,23 @@ demands, without depending on the real `claude` binary's own headersHelper
 implementation (verified separately, out of this fake CLI's reach, against
 the pinned Dockerfile version's own bundled schema).
 
-Two more triggers stand in for what `jobs.py`'s tests need that none of the
-above does: a process whose stdin stays open. `__await_stdin__` blocks on
-ONE line of stream-json input before answering -- `jobs.send_message()`'s
-live-stdin path writes it -- and `__hang__` blocks forever, standing in for
-a turn still genuinely working when `jobs.stop()` kills it. Both, and the
-ordinary echo path below, emit `structured_output` on the result line
-whenever `--json-schema` rode on the argv, exactly as the real CLI would.
+Several more triggers stand in for what `jobs.py`'s tests need that none of
+the above does. `__await_stdin__` blocks on ONE line of stream-json input
+before answering -- `jobs.send_message()`'s live-stdin path writes it -- and
+`__hang__` blocks forever, standing in for a turn still genuinely working
+when `jobs.stop()` kills it. `__partial__` emits TWO `assistant` frames
+sharing one message id -- the first with `stop_reason: null`, still growing,
+the second `end_turn` and final -- standing in for `--include-partial-messages`'
+own token-level deltas, so a test can prove a still-growing chunk is
+broadcast live but never persisted. `__chatty_stderr__` writes well past a
+64 KiB pipe buffer to stderr WITHOUT anything reading stdout in between,
+proving stderr is drained concurrently rather than only after stdout closes.
+Every `assistant` frame below except `__partial__`'s first carries
+`stop_reason: "end_turn"` on its nested `message`, matching what a genuinely
+complete Anthropic message carries on the wire -- `jobs.py`'s own
+`_is_partial()` reads exactly that field. All of them, and the ordinary echo
+path below, emit `structured_output` on the result line whenever
+`--json-schema` rode on the argv, exactly as the real CLI would.
 """
 
 import json
@@ -69,6 +79,10 @@ GIANT_TEXT_SIZE = 200_000
 MCP_PROBE_TRIGGER = "__mcp_probe__"
 AWAIT_STDIN_TRIGGER = "__await_stdin__"
 HANG_TRIGGER = "__hang__"
+PARTIAL_TRIGGER = "__partial__"
+CHATTY_STDERR_TRIGGER = "__chatty_stderr__"
+#: Past the 64 KiB default pipe buffer a stderr write blocks on once full.
+CHATTY_STDERR_BYTES = 200_000
 
 #: The telemetry variables `session.py`'s `_environment()` may pass through
 #: or compute, in the order the echo line reports them.
@@ -133,7 +147,12 @@ def main() -> None:
 
     if question == GIANT_TRIGGER:
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "x" * GIANT_TEXT_SIZE}]}})
+        _emit(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "x" * GIANT_TEXT_SIZE}], "stop_reason": "end_turn"},
+            }
+        )
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": "", "is_error": False})
         return
 
@@ -141,7 +160,9 @@ def main() -> None:
         result = _probe_mcp(argv)
         echo = json.dumps(result)
         _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
-        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
+        _emit(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
+        )
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
         return
 
@@ -159,7 +180,46 @@ def main() -> None:
         content = (frame.get("message") or {}).get("content") or []
         text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
         echo = f"stdin: {text}"
-        _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
+        _emit(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
+        )
+        _emit(_result(session_id, echo, argv))
+        return
+
+    if question == PARTIAL_TRIGGER:
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        message_id = f"msg-{uuid.uuid4().hex[:8]}"
+        _emit(
+            {
+                "type": "assistant",
+                "message": {"id": message_id, "content": [{"type": "text", "text": "growing"}], "stop_reason": None},
+            }
+        )
+        _emit(
+            {
+                "type": "assistant",
+                "message": {
+                    "id": message_id,
+                    "content": [{"type": "text", "text": "growing, then settled"}],
+                    "stop_reason": "end_turn",
+                },
+            }
+        )
+        _emit(_result(session_id, "growing, then settled", argv))
+        return
+
+    if question == CHATTY_STDERR_TRIGGER:
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        # Written before the reply, and before this process's own stdout is
+        # read again -- if stderr is not drained concurrently, this write
+        # blocks once the pipe buffer fills, and the stdout line below never
+        # arrives until something reads stderr.
+        sys.stderr.write("x" * CHATTY_STDERR_BYTES)
+        sys.stderr.flush()
+        echo = "survived a chatty stderr"
+        _emit(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}}
+        )
         _emit(_result(session_id, echo, argv))
         return
 
@@ -191,7 +251,7 @@ def main() -> None:
     )
 
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
-    _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}]}})
+    _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": "end_turn"}})
     _emit(_result(session_id, echo, argv))
 
 

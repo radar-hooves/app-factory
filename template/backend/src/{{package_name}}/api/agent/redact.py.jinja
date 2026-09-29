@@ -1,0 +1,35 @@
+"""Run agent-bound text through `app_hooks.agent_turn`, if this app defines one.
+
+The one optional seam this slice carries (`docs/design/agent-console.md`
+§Decision: "the redactor is an app hook"). Absent by default — most apps send
+text straight through — and run BEFORE the CLI is spawned or the text reaches
+its stdin, rather than on the streamed answer: the answer is forwarded token
+by token as it arrives, and there is no "before it renders" moment left to
+redact it once it has already been sent.
+
+Shared by `ask.py` (a chat question) and `jobs.py` (a job's own prompt, and a
+message sent to it): one hook, one call site, so an app that defines
+`agent_turn` redacts everything this slice ever hands to a persona, not only
+the half that happened to be written first.
+"""
+
+import uuid
+
+
+def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
+    """Return `text` as `app_hooks.agent_turn` rewrites it, or unchanged if this app defines no hook.
+
+    `user_id` is `None` for a job started with no asker (need 1) — the hook
+    still runs, with an empty string standing in for "nobody", since a job's
+    own prompt may itself carry what needs redacting even when no person
+    supplied it.
+
+    Local import, not module-level: app_hooks is the app's own extension
+    point and may in principle import back from an api slice; looking it up
+    per call is also what lets a test drive the hook without reimporting this
+    module (`rate_limit.py` takes the same shape for its own optional hook).
+    """
+    from {{ package_name }} import app_hooks
+
+    hook = getattr(app_hooks, "agent_turn", None)
+    return str(hook(persona, str(user_id) if user_id is not None else "", text)) if hook is not None else text
