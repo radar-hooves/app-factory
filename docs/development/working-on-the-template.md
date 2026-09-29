@@ -28,6 +28,10 @@ Two consequences:
 
 An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for a dependency floor, in its `.canonical-exceptions`, dated, with a reason. The bar is `canonical-app-shape.md` §Sameness: a difference that is right is right for every app, so it belongs here, not there.
 
+## Silent failure 3: hand-editing an answer renders old and new the same
+
+`copier update` diffs the template's render at the *previous* commit against its render at the *new* one, both using the answers in `.copier-answers.yml` at the time it runs. Hand-edit an answer in that file first and both renders use the new value — there is no "old" value left to diff against — so a file whose only change is that one answer shows no delta and keeps its old text, while `.copier-answers.yml` itself now claims the new value. Casefile's first Deploy called a dead port this way: the answers file said the new port, the rendered file still said the old one. Pass the change as `copier update --data key=value` instead; that gives copier the old value to diff against and the file actually re-renders.
+
 ## Traps in the shape
 
 **The `/mcp` mount is order-sensitive.** `raw_mcp_app` carries the FastMCP lifespan — the streamable-HTTP session manager's task group lives there — while the *gated* wrapper is what mounts. Chain the lifespan from the raw app, mount the gated one. Backwards either leaves the session manager unstarted or leaves the surface open. The agent endpoint is `POST /mcp/`, trailing slash required.
