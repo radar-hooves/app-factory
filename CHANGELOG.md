@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.47] - 2026-09-29
+
+### Fixed
+
+- **The factory's own self-test workflow (`factory-selftest.yaml`, added in 2026.9.46) now runs green on GitHub Actions rather than only in local simulation.** Two bugs, both same-day and both confined to this repo's own CI — `template/` is unchanged, so nothing here reaches a stamped app. `UV_FROZEN=1` and `pnpm install --frozen-lockfile` both assumed a committed lockfile; `template/` ships neither (every app generates its own on first setup), so a fresh scratch render had nothing to freeze against and failed before a single test ran. Rendering into an absolute sibling path also broke `pnpm/action-setup`'s `package_json_file` resolution ("no pnpm version specified" against a file that had one); the scratch app now renders into a workspace-relative subdirectory, matching how `frontend-ci.yaml`'s reusable already passes that input. Verified on a real run (`gh run watch`, not assumed from a green checkmark): 225 backend tests and 8 frontend files / 76 tests, both passing.
+
 ## [2026.9.46] - 2026-09-29
 
 ### Added
