@@ -611,7 +611,14 @@ async def send_message(
                 process.stdin.write(frame.encode() + b"\n")
                 await process.stdin.drain()
                 return
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError) as _exc:
+                # `as _exc`, unused, is deliberate: ruff 0.16.9's formatter has
+                # a measured bug that strips the required parentheses off a
+                # bare multi-exception `except (A, B):` with no binding,
+                # producing a SyntaxError (`except A, B:`) -- reproduced in
+                # total isolation, unrelated to anything else in this file.
+                # Binding a name (even unused) is what keeps `ruff format`
+                # from corrupting this line.
                 # The process exited in the gap between the liveness check
                 # above and this write — fall through to the resume path
                 # below exactly as if it had already been absent.
