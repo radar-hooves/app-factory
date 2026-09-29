@@ -63,7 +63,12 @@ def upgrade() -> None:
     op.create_index(op.f("ix_agent_jobs_persona"), "agent_jobs", ["persona"])
     op.create_index(op.f("ix_agent_jobs_workspace_id"), "agent_jobs", ["workspace_id"])
     op.create_foreign_key(
-        "fk_agent_jobs_workspace_id_workspaces", "agent_jobs", "workspaces", ["workspace_id"], ["id"], ondelete="RESTRICT"
+        "fk_agent_jobs_workspace_id_workspaces",
+        "agent_jobs",
+        "workspaces",
+        ["workspace_id"],
+        ["id"],
+        ondelete="RESTRICT",
     )
     op.create_foreign_key(
         "fk_agent_jobs_created_by_id_users", "agent_jobs", "users", ["created_by_id"], ["id"], ondelete="SET NULL"
