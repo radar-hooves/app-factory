@@ -32,6 +32,18 @@ settled — successfully or refused — is a no-op, since a refusal is final
 asking again changes nothing) and reporting a success twice would double its
 evidence weight.
 
+A network fault is never the app's to carry. `report_outcome` records the
+intent (`ensure_lesson_report`) before it ever calls core-memory, so a
+transport error there is caught, logged, and leaves the report unsettled
+rather than raised — an app's own "the operator filed it" never fails on
+core-memory being unreachable, and no app builds its own retry sweep to cope.
+`retry_unsettled` is that retry, run from `jobs.supervise()`'s existing sweep
+(`docs/design/agent-jobs.md` §Any worker) alongside the orphaned-job sweep it
+already runs every 60s: it re-attempts every unsettled report the same way
+`report_outcome` would, resuming from `decision_id` exactly as a repeated
+direct call does, and abandons — settled, with a logged reason, never retried
+again — a report still unsettled after `_ABANDON_AFTER`.
+
 Whether the instructions a persona needs to use this loop (retrieve before
 working, propose what would have got it right first time, cite what was
 followed under `lessons_used`) belong in code here or in prose is settled by
@@ -46,20 +58,22 @@ mechanically here, only state it once for every app to copy.
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Any
 
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
 from fastmcp.exceptions import ToolError
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import jobs_models
-from {{ package_name }}.api.agent.jobs_models import AgentJob
+from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobLessonReport
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.config.vend import vend_envelope
-from {{ package_name }}.db.scoping import bind_session
+from {{ package_name }}.db.scoping import bind_session, unscoped
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +86,10 @@ CONTRADICT = "contradict"
 #: reused here because reporting a job's outcome is this same app speaking to
 #: the same gateway, never a second identity.
 _CORE_MEMORY_CREDENTIAL = "mcp-gateway-api"
+
+#: How long `retry_unsettled` keeps retrying a report core-memory has not settled
+#: (refused or recorded) before giving up on it as abandoned.
+_ABANDON_AFTER = datetime.timedelta(days=14)
 
 
 def cited(job: AgentJob) -> list[str]:
@@ -113,6 +131,13 @@ async def report_outcome(
     report has settled (`AgentJobLessonReport.recorded_at` set, success or a
     final refusal alike), and resumed rather than restarted when a prior call
     got as far as `decision_record` but not `outcome_record`.
+
+    Never raises for a network fault: it is caught, logged, and leaves the
+    report unsettled for `retry_unsettled` to pick up from `jobs.supervise()`'s
+    own sweep, so the caller — an app's own "the operator filed it" handler —
+    never fails on core-memory being unreachable. `ToolError` is the one
+    exception treated as final rather than transient: core-memory's own
+    refusal, never retried.
     """
     if not settings.core_memory_url:
         return
@@ -170,6 +195,13 @@ async def report_outcome(
         await run_in_threadpool(_save_refusal)
         logger.warning("core-memory refused the lesson report for job %s: %s", job_id, reason)
         return
+    except Exception:
+        # A transport fault, not a refusal: the report stays unsettled (its
+        # decision_id, if this got that far, is already saved) and
+        # `retry_unsettled` picks it up from the next sweep. Never the
+        # caller's to retry.
+        logger.warning("Reporting job %s's lesson outcome failed; will retry", job_id, exc_info=True)
+        return
 
     def _save_success() -> None:
         with db_session_factory() as db:
@@ -177,3 +209,65 @@ async def report_outcome(
             jobs_models.settle_lesson_report(db, job_id, refused=None)
 
     await run_in_threadpool(_save_success)
+
+
+async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: AgentSettings) -> int:
+    """Retry every lesson report a fault left unsettled, across every workspace. Returns how many
+    were acted on (recorded, refused, or abandoned).
+
+    Runs from `jobs.supervise()`'s own sweep. A report reaches here only once
+    `report_outcome` itself already tried and hit something other than
+    core-memory's own refusal (`ToolError` settles a report on the spot, and
+    never leaves it for this sweep to find) — a transport error, a timeout, or
+    the process dying mid-call. Each is retried the same way a repeated direct
+    call would be: resumed from `decision_id` when one is already saved, never
+    re-recorded from scratch. A report still unsettled after `_ABANDON_AFTER`
+    is abandoned — settled `refused` with a diagnostic reason — rather than
+    retried forever.
+    """
+    if not settings.core_memory_url:
+        return 0
+
+    def _pending() -> list[tuple[str, int, str, str, str, datetime.datetime]]:
+        with db_session_factory() as db, unscoped(db):
+            rows = db.execute(
+                select(
+                    AgentJobLessonReport.job_id,
+                    AgentJobLessonReport.workspace_id,
+                    AgentJobLessonReport.domain_name,
+                    AgentJobLessonReport.context_key,
+                    AgentJobLessonReport.result,
+                    AgentJobLessonReport.created_at,
+                ).where(AgentJobLessonReport.recorded_at.is_(None))
+            ).all()
+        return list(rows)
+
+    pending = await run_in_threadpool(_pending)
+    if not pending:
+        return 0
+
+    cutoff = datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER
+    acted = 0
+    for job_id, workspace_id, domain_name, context_key, result, created_at in pending:
+        if created_at < cutoff:
+            reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
+
+            def _abandon(job_id: str = job_id, workspace_id: int = workspace_id, reason: str = reason) -> None:
+                with db_session_factory() as db:
+                    bind_session(db, workspace_id=workspace_id)
+                    jobs_models.settle_lesson_report(db, job_id, refused=reason)
+
+            await run_in_threadpool(_abandon)
+            logger.warning("Abandoned job %s's lesson report: %s", job_id, reason)
+        else:
+            await report_outcome(
+                db_session_factory,
+                settings,
+                job_id,
+                workspace_id=workspace_id,
+                domain_name=domain_name,
+                context_key=context_key,
+                result=result,
+            )
+        acted += 1
+    return acted

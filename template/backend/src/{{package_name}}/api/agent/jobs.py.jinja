@@ -60,7 +60,7 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from {{ package_name }}.api.agent import jobs_models
+from {{ package_name }}.api.agent import jobs_models, lessons
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent import session as agent_session
 from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome, RunSpec
@@ -878,8 +878,11 @@ async def reconcile_orphaned_jobs(db_session_factory: sessionmaker[Session]) -> 
     return len(outcomes)
 
 
-async def supervise(db_session_factory: sessionmaker[Session], stopping: asyncio.Event) -> None:
-    """Sweep for dead runs at startup and every `_SWEEP_SECONDS` after, until ``stopping`` is set.
+async def supervise(
+    db_session_factory: sessionmaker[Session], settings: AgentSettings, stopping: asyncio.Event
+) -> None:
+    """Sweep for dead runs and unsettled lesson reports at startup and every `_SWEEP_SECONDS` after,
+    until ``stopping`` is set.
 
     Every worker runs it (`main.py`'s lifespan): a run whose worker died
     becomes stale some time after the survivors booted, so one sweep at
@@ -887,12 +890,20 @@ async def supervise(db_session_factory: sessionmaker[Session], stopping: asyncio
     sweep is logged and retried at the next interval. Stopped by the event
     rather than cancelled, so a sweep in flight finishes on its database
     thread before the lifespan disposes the engine under it.
+
+    `lessons.retry_unsettled` rides the same sweep rather than a poller of its
+    own: a lesson report a network fault left unsettled (`lessons.py`'s module
+    docstring) is retried here, never by the app that called `report_outcome`.
     """
     while not stopping.is_set():
         try:
             await reconcile_orphaned_jobs(db_session_factory)
         except Exception:
             logger.exception("Sweeping for agent jobs left running failed; retrying in %.0fs", _SWEEP_SECONDS)
+        try:
+            await lessons.retry_unsettled(db_session_factory, settings)
+        except Exception:
+            logger.exception("Retrying unsettled lesson reports failed; retrying in %.0fs", _SWEEP_SECONDS)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stopping.wait(), timeout=_SWEEP_SECONDS)
 

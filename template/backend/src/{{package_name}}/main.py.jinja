@@ -110,12 +110,13 @@ class _SPAStaticFiles(StaticFiles):
 
 
 @asynccontextmanager
-async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]:
     """Warm the database engine, supervise agent jobs for the life of the
     worker, end this worker's own runs on shutdown, then dispose the engine.
 
     The supervisor settles a job whose process has died, in whichever worker
-    sweeps first (`jobs.supervise`); `jobs.shutdown` ends the runs THIS
+    sweeps first (`jobs.supervise`, which also retries an unsettled lesson
+    report — `api/agent/lessons.py`); `jobs.shutdown` ends the runs THIS
     worker holds, while the engine they settle through is still open. Both
     are factory-owned (never an `app_hooks.lifespan_tasks` default) so every
     app that carries the agent-jobs slice gets them via `copier update`
@@ -126,7 +127,7 @@ async def _db_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     engine = get_engine()
     app.state.engine = engine
     stopping = asyncio.Event()
-    supervisor = asyncio.create_task(agent_jobs.supervise(get_session_factory(), stopping))
+    supervisor = asyncio.create_task(agent_jobs.supervise(get_session_factory(), settings.agent, stopping))
     try:
         yield
     finally:
@@ -197,7 +198,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # and /mcp is up before this app's own pollers start, and they are
             # torn down before either goes away.
             async with (
-                _db_lifespan(app),
+                _db_lifespan(app, settings),
                 raw_mcp_app.lifespan(raw_mcp_app),
                 lifespan_tasks(app),
             ):

@@ -2,9 +2,12 @@
 
 Status: **design, 29/09/2026.** Consumer: radar-hooves/godswood#840, on
 behalf of every app that runs a persona job (`docs/design/agent-jobs.md`) —
-Milton, Penny, cadmus's models, and a coming Taxpert. About 470 lines: 190 in
-`api/agent/lessons.py`, 60 added to `jobs_models.py`, 75 in the migration, 10
-in `config/sections/agent.py`, the rest this note and its test file.
+Milton, Penny, cadmus's models, and a coming Taxpert. About 650 lines: 270 in
+`api/agent/lessons.py` (190 the initial cut, 80 added for the
+godswood-ec review below — the retry sweep and its test), 60 added to
+`jobs_models.py`, 75 in the migration, 25 across `jobs.py`/`main.py` to wire
+the retry into the existing supervisor, 10 in `config/sections/agent.py`, the
+rest this note and its test file.
 
 ## The need
 
@@ -46,6 +49,17 @@ belongs beside `jobs.py`, not hand-written per app.
    since core-memory's refusal is all-or-nothing and asking again changes
    nothing.
 
+A network fault is never the caller's to carry (godswood-ec review, 29/09):
+`report_outcome` records the intent before it ever calls core-memory, so a
+transport error there — never a `ToolError` refusal, which is settled on the
+spot — is logged and leaves the report unsettled rather than raised. The
+retry is the factory's, not each app's: `lessons.retry_unsettled` rides
+`jobs.supervise()`'s own 60s sweep (the one that already reconciles orphaned
+jobs), re-attempting every unsettled report the same way a repeated direct
+call would — resumed from `decision_id`, never re-recorded — and abandoning
+one still unsettled after 14 days with a logged reason rather than retrying
+forever.
+
 Only ids ever leave the app: `cites` carries belief ids, `report_outcome`
 never sees a job's content. The bearer that reaches core-memory is vended
 fresh per call and held nowhere (`config/vend.vend_envelope`, the
@@ -60,11 +74,11 @@ factory assumes a household-wide service exists ("build nothing central").
 - **No comparator.** Whether a result counts as "unchanged" is a review-form
   and domain question; the factory takes a `result` the app has already
   decided, never a value pair to compare itself.
-- **No queue, no worker.** `report_outcome` runs the two calls directly, in
-  the request that reports them, exactly as `jobs.stop()` acts on a job row
-  directly rather than through a background sweep. A caller that wants it
-  off the request path puts it on its own existing job/queue machinery; this
-  slice adds none of its own.
+- **No new worker, no new poller.** `report_outcome` attempts the two calls
+  directly, in the request that reports them — a network fault aside, it
+  settles inline exactly as `jobs.stop()` acts on a job row directly. What
+  retries a fault rides the agent-jobs slice's OWN existing sweep
+  (`jobs.supervise()`); this slice adds no second background loop of its own.
 - **No new credential.** The bearer is the same `mcp-gateway-api` broker
   credential a job's MCP identity already vends from.
 
