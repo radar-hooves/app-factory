@@ -46,24 +46,27 @@ test.afterAll(async () => {
 
 /**
  * Retract the suite identity's seat in every non-personal workspace the
- * partner owns.
+ * partner owns and the suite identity still sits in.
  *
  * Self-healing, not merely tidy: there is no route to delete a workspace, so
- * every successful run leaves the partner owning one more, and this test's
- * own body never retracts the seat IT grants (only the reverse direction,
- * partner-in-e2e-uid's-own-workspace). Left uncleaned, the seat survives the
- * test and the suite identity holds two memberships for whatever spec runs
- * next in this worker — which, once anything renders `WorkspaceChooser` for
- * `needsWorkspaceChoice`, blocks that spec's page behind a chooser screen it
- * knows nothing about (radar-hooves/full-stack-app-template#39). Called from
- * both `beforeEach` (heals a run that aborted mid-way) and `afterEach` (heals
- * the suite for whatever runs after a clean pass), so neither a crash nor a
- * pass leaves the identity behind.
+ * every run leaves the partner owning one more. A seat left behind gives the
+ * suite identity two memberships for whatever spec runs next in this worker,
+ * whose page then sits behind a chooser it knows nothing about
+ * (radar-hooves/full-stack-app-template#39). The test body retracts its own
+ * seat on a clean pass, so only a seat still held is retracted here: the
+ * backend answers 404 for one already gone. Called from both `beforeEach`
+ * (heals a run that aborted mid-way) and `afterEach` (heals one that failed
+ * before its own retraction).
  */
 async function retractStraySeats(page: import('@playwright/test').Page): Promise<void> {
 	const me = await readJson<Person>(page.request.get('/api/users/me'));
+	const seated = new Set((await memberships(page.request)).map((m) => m.workspace.id));
 	for (const held of await memberships(partner)) {
-		if (held.role === 'owner' && !held.workspace.slug.startsWith('personal-')) {
+		if (
+			held.role === 'owner' &&
+			!held.workspace.slug.startsWith('personal-') &&
+			seated.has(held.workspace.id)
+		) {
 			await ok(partner.delete(`/api/workspaces/${held.workspace.id}/members/${me.id}`));
 		}
 	}

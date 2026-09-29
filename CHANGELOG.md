@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.42] - 2026-09-29
+
+### Fixed
+
+- **The nightly browser suite's workspace test passes on a clean run.** Its body retracts the seat it granted, and `retractStraySeats()` in `afterEach` then asked to retract the same seat again; the backend's 404, fatal since `ok()` began checking every response, failed the test in every app every night. The helper now retracts only a seat the suite identity still holds. Found by master-project's attended session from casefile's nightly run (handoff 230).
+
 ## [2026.9.41] - 2026-09-29
 
 ### Fixed
