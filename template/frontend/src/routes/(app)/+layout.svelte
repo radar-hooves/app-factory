@@ -12,6 +12,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import { Button } from '@poodle64/ui/button';
+	import { ErrorState } from '@poodle64/ui/error-state';
 	import { ReportWidget } from '@poodle64/ui/feedback';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
@@ -27,28 +29,34 @@
 	// It resolves which workspace every subsequent request acts in, so it runs
 	// here rather than per-route — and the page below is NOT rendered until it
 	// has settled: a page that fetched first would send no workspace header
-	// and, for anyone holding two memberships, be answered 409.
+	// and, for anyone holding two memberships, be answered 409. Once per page
+	// load, not per mount: a route outside (app)/ unmounts this layout, and
+	// coming back must not flash the loading state or ask again.
 	onMount(() => {
-		void auth.init();
+		if (auth.isLoading) void auth.init();
 	});
 
 	// The lapsed-session guard. Tier 1a has no login page: the forward-auth
-	// proxy authenticates before the SPA loads, so a caller who is not signed in
-	// here is one whose session lapsed, and they go back to the identity
-	// provider for the page they asked for. A lapsed session reaches the SPA as
-	// a failed request, never a 401: the proxy answers it with a redirect to the
-	// identity provider, which a fetch cannot follow. So this reads the outcome
-	// of init(), not a status code.
+	// proxy authenticates before the SPA loads, so a session that lapsed since
+	// goes back to the identity provider for the page it asked for. Only a
+	// lapsed one (auth.svelte.ts's `SignInFailure`): a backend that is down
+	// would answer the round trip with the same failure, and loop.
 	$effect(() => {
-		if (!auth.isLoading && !auth.isAuthenticated) {
+		if (auth.failure === 'lapsed') {
 			redirectToAuthentik(page.url.pathname + page.url.search);
 		}
 	});
 </script>
 
 <AppFrame>
-	{#if auth.isLoading || !auth.isAuthenticated}
+	{#if auth.isLoading || auth.failure === 'lapsed'}
 		<LoadingState />
+	{:else if !auth.isAuthenticated}
+		<ErrorState message="Could not load your account, so this page cannot open yet.">
+			{#snippet action()}
+				<Button variant="outline" onclick={() => void auth.init()}>Try again</Button>
+			{/snippet}
+		</ErrorState>
 	{:else if auth.needsWorkspaceChoice}
 		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
 		<WorkspaceChooser />
