@@ -156,10 +156,11 @@ def insert_lesson_report_if_absent(
     db: Session, job_id: str, *, workspace_id: int, domain_name: str, context_key: str, result: str
 ) -> None:
     """Insert `job_id`'s report intent, or do nothing if one exists. `INSERT ... ON CONFLICT DO
-    NOTHING` — atomic with the caller's own transaction, never raising into it. Explicit
+    NOTHING` covers a primary-key conflict without raising at all; a SAVEPOINT covers the other
+    way this can fail (the job vanished — a foreign-key violation), so that failure rolls back
+    only this insert, never the caller's own transaction, which this call shares. Explicit
     `workspace_id`: a Core-style statement bypasses this session's usual auto-stamping
-    (`db/scoping.py`'s documented hole 3). An FK violation (the job vanished) is swallowed the
-    same way a PK conflict is — there is nothing left to report.
+    (`db/scoping.py`'s documented hole 3).
     """
     stmt = (
         pg_insert(AgentJobLessonReport)
@@ -169,9 +170,10 @@ def insert_lesson_report_if_absent(
         .on_conflict_do_nothing(index_elements=["job_id"])
     )
     try:
-        db.execute(stmt)
+        with db.begin_nested():
+            db.execute(stmt)
     except IntegrityError:
-        db.rollback()
+        pass
 
 
 def claim_lesson_report(

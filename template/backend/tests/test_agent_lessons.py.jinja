@@ -191,6 +191,37 @@ def test_report_outcome_called_twice_leaves_one_row(workspace_id: int, with_core
     assert _report(job_id, workspace_id) is not None
 
 
+def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_on_an_fk_violation(
+    workspace_id: int,
+) -> None:
+    """A missing job_id is a foreign-key violation, not the primary-key conflict `ON CONFLICT DO
+    NOTHING` already covers; it must roll back only this insert (a SAVEPOINT), never the caller's
+    own transaction, which this call shares. Tested directly against
+    `insert_lesson_report_if_absent` rather than through `report_outcome`: `report_outcome` no-ops
+    before ever inserting when `get_job` finds nothing, so it cannot reach this path itself -- the
+    savepoint exists for the job vanishing between that check and the insert, not before it."""
+    unrelated_job_id = str(uuid.uuid4())
+    missing_job_id = str(uuid.uuid4())  # never seeded -- violates agent_job_lesson_reports' own FK
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        db.add(jobs_models.AgentJob(job_id=unrelated_job_id, persona="jobagent"))
+        db.flush()  # the unrelated write lands in the OUTER transaction, before any savepoint opens
+        jobs_models.insert_lesson_report_if_absent(
+            db,
+            missing_job_id,
+            workspace_id=workspace_id,
+            domain_name=DOMAIN,
+            context_key=CONTEXT,
+            result=lessons.CONFIRM,
+        )
+        db.commit()
+
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        assert jobs_models.get_job(db, unrelated_job_id) is not None
+    assert _report(missing_job_id, workspace_id) is None
+
+
 def test_cited_keeps_only_belief_shaped_ids() -> None:
     job = jobs_models.AgentJob(job_id="x", persona="p", status="completed", workspace_id=1)
     job.structured_output = {"lessons_used": [BELIEF_1, "not-a-belief-id", "", 123]}
