@@ -21,6 +21,14 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # What the Dockerfile copies in; a commit touching nothing else does not
+    # go live again.
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'config/**'
+      - 'Dockerfile'
+      - '.dockerignore'
   workflow_dispatch:
 
 # A deploy is never cancelled mid-swap; a newer merge queues behind it.

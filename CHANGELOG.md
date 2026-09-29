@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.36] - 2026-09-29
+
+### Changed
+
+- **A commit that ships nothing into the image no longer goes live.** `deploy.yaml` fires on a push to main only when it touches what the Dockerfile copies in (`backend/`, `frontend/`, `config/`, the Dockerfile, `.dockerignore`); a docs, handoff, workflow or copier-answers commit no longer rebuilds, re-tests and swaps the app. Consumer: master-project's attended session.
+
 ## [2026.9.35] - 2026-09-29
 
 ### Changed
