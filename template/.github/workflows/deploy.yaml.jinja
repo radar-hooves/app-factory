@@ -76,11 +76,11 @@ jobs:
     # Skipped checks are passed checks; a failed or cancelled one stops here.
     if: {% raw %}${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' }}{% endraw %}
     uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
-    # packages: the Dockerfile's uv base image is on ghcr.io, which refuses the
-    # runner an anonymous pull.
+    # packages: write because the golden workflow asks for it (its default
+    # registry is ghcr.io); a caller granting less fails to start.
     permissions:
       contents: read
-      packages: read
+      packages: write
     with:
       image-name: {{ project_name }}
       # The household registry, not the reusable's ghcr.io default; the push

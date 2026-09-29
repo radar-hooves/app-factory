@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.41] - 2026-09-29
+
+### Fixed
+
+- **Deploy started at all.** `docker-image-simple.yaml` asks for `packages: write`, and 2026.9.40's deploy job granted `packages: read`, so GitHub refused every Deploy run at startup (casefile's first, 29/09/2026). The job grants write, as library's and portcullis's callers already do.
+
 ## [2026.9.40] - 2026-09-29
 
 ### Changed
