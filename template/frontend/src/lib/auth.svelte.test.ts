@@ -119,6 +119,51 @@ describe('auth store — workspace resolution', () => {
 	});
 });
 
+describe('auth store — why nobody is signed in', () => {
+	function failWith(status: number, error: object) {
+		GET.mockResolvedValue({ data: undefined, error, response: { status } });
+	}
+
+	it('reads a 401 as a lapsed session', async () => {
+		failWith(401, { detail: 'Not authenticated' });
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.isAuthenticated).toBe(false);
+		expect(auth.failure).toBe('lapsed');
+	});
+
+	it("reads a request the proxy turned away as a lapsed session: the client's network_error", async () => {
+		// What client.ts's normaliser makes of the redirect to the identity
+		// provider, which a fetch cannot follow.
+		failWith(503, { error: 'network_error', message: 'Could not reach the API.' });
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.failure).toBe('lapsed');
+	});
+
+	it('reads a backend that answered with an error as a failure a sign-in cannot fix', async () => {
+		failWith(503, { error: 'service_unavailable', message: 'Database unavailable.' });
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.failure).toBe('failed');
+	});
+
+	it('clears the failure once a later init finds the caller', async () => {
+		failWith(500, { detail: 'boom' });
+		const auth = await freshAuth();
+		await auth.init();
+		expect(auth.failure).toBe('failed');
+
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1')]);
+		await auth.init();
+		expect(auth.failure).toBeNull();
+		expect(auth.isAuthenticated).toBe(true);
+	});
+});
+
 describe('auth store — a choice is asked for, never defaulted', () => {
 	it('needs a choice only while several are held and none is chosen', async () => {
 		respondWith({ ...USER, entitlements: [] }, [

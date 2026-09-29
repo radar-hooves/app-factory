@@ -48,6 +48,22 @@ let memberships = $state<Membership[]>([]);
 let activeWorkspace = $state<Workspace | null>(null);
 let isLoading = $state(true);
 
+/**
+ * Why the last init() found nobody. 'lapsed' is a session only the identity
+ * provider can renew: a 401, or a request the forward-auth proxy answered with
+ * a redirect to the provider, which a fetch cannot follow and the client
+ * reports as `network_error`. 'failed' is anything a sign-in would not fix (the
+ * backend down, a 403, a timeout), where sending the browser to sign in again
+ * would bring it straight back to the same failure, forever.
+ */
+export type SignInFailure = 'lapsed' | 'failed';
+let failure = $state<SignInFailure | null>(null);
+
+function signInFailure(result: { error?: unknown; response: Response }): SignInFailure {
+	const code = (result.error as { error?: unknown } | undefined)?.error;
+	return result.response.status === 401 || code === 'network_error' ? 'lapsed' : 'failed';
+}
+
 function restoreStoredWorkspaceId(): number | null {
 	// localStorage is unavailable during SSR and in a locked-down browser; a
 	// missing preference is not an error, it just means "resolve from the sole
@@ -113,6 +129,10 @@ export const auth = {
 	get isAuthenticated() {
 		return !!user;
 	},
+	/** Why nobody is signed in after init(), or null (see `SignInFailure`). */
+	get failure() {
+		return failure;
+	},
 	get entitlements() {
 		return entitlements;
 	},
@@ -148,6 +168,7 @@ export const auth = {
 	 */
 	async init() {
 		isLoading = true;
+		failure = null;
 		try {
 			const [me, mine] = await Promise.all([
 				api.GET('/api/users/me'),
@@ -156,6 +177,7 @@ export const auth = {
 
 			if (me.error || !me.data) {
 				user = null;
+				failure = signInFailure(me);
 				return;
 			}
 			user = me.data;
