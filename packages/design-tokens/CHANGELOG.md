@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.1] - 2026-09-29
+
+### Fixed
+
+- **`--ds-font-display` now resolves to the actual Fraunces face.** The token
+  named the bare `'Fraunces'`, but `@fontsource-variable/fraunces` — the only
+  Fraunces package any consuming app imports — registers its `@font-face` as
+  `'Fraunces Variable'`. The name the token carried matched no `@font-face` a
+  browser ever loaded, so every heading asking for the display font silently
+  fell through to `ui-serif, Georgia, serif` in every stamped app, not only
+  the consumer (radar-hooves/cadmus) that surfaced it — visible on cadmus's
+  Record page title. `--ds-font-body` and `--ds-font-code` were checked for
+  the same class of bug and already carry their package's `'... Variable'`
+  family alongside the plain name; only `display` was wrong.
+- A new `test/fonts.test.js` cross-checks all three `--ds-font-*` tokens
+  against the `@font-face` family each `@fontsource-variable` package actually
+  ships, so a future rename or a wrong token value fails the build instead of
+  degrading silently to a generic fallback face.
+
 ## [2026.9.0] - 2026-09-02
 
 ### Added

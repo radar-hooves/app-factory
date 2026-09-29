@@ -1,6 +1,6 @@
 {
   "name": "@poodle64/design-tokens",
-  "version": "2026.9.0",
+  "version": "2026.9.1",
   "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
   "type": "module",
   "license": "MIT",
@@ -42,6 +42,9 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@fontsource-variable/fraunces": "^5.1.0",
+    "@fontsource-variable/hanken-grotesk": "^5.1.0",
+    "@fontsource-variable/jetbrains-mono": "^5.1.0",
     "@tailwindcss/cli": "^4.3.2",
     "style-dictionary": "^4.4.0",
     "tailwindcss": "^4.3.2"

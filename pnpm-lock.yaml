@@ -90,6 +90,15 @@ importers:
 
   packages/design-tokens:
     devDependencies:
+      '@fontsource-variable/fraunces':
+        specifier: ^5.1.0
+        version: 5.3.0
+      '@fontsource-variable/hanken-grotesk':
+        specifier: ^5.1.0
+        version: 5.3.0
+      '@fontsource-variable/jetbrains-mono':
+        specifier: ^5.1.0
+        version: 5.3.0
       '@tailwindcss/cli':
         specifier: ^4.3.2
         version: 4.3.2

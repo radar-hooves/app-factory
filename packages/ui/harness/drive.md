@@ -640,7 +640,7 @@ class-name half only). Two panels, one per supported setting. Scripted in
 | Claim                                                       | Observed                                                                          |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | Default (`titleFace` omitted) resolves the mono/code family | `"JetBrains Mono", "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace` |
-| `titleFace="display"` resolves the display family           | `Fraunces, ui-serif, Georgia, serif`                                              |
+| `titleFace="display"` resolves the display family           | `Fraunces, "Fraunces Variable", ui-serif, Georgia, serif`                         |
 | The two settings resolve to different families              | asserted directly, not inferred from the two rows above                           |
 
 ## Console-dashboard primitives (`?surface=console`) — design-system#15

@@ -188,9 +188,9 @@
 		"font": {
 			"$description": "Three font families — binding. No per-app substitution.",
 			"display": {
-				"$value": "'Fraunces', ui-serif, Georgia, serif",
+				"$value": "'Fraunces', 'Fraunces Variable', ui-serif, Georgia, serif",
 				"$type": "fontFamily",
-				"$description": "Display/headings — Fraunces variable (optical-size axis). Page titles, wordmarks, empty-state headings."
+				"$description": "Display/headings — Fraunces variable (optical-size axis). Page titles, wordmarks, empty-state headings. Carries 'Fraunces Variable' because that is the @font-face family `@fontsource-variable/fraunces` actually registers; the bare 'Fraunces' name matches nothing it ships and fell through to the generic serif fallback in every consuming app (radar-hooves/cadmus, 29/09/2026)."
 			},
 			"body": {
 				"$value": "'Avenir Next', 'Hanken Grotesk', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, sans-serif",
