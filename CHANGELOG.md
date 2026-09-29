@@ -6,6 +6,25 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.49] - 2026-09-29
+
+### Added
+
+- **`runner_labels` (JSON array of GitHub Actions runner labels, default `["self-hosted", "atlas"]`) decides where the deploy job's build/push/smoke/watchtower step runs**, reaching `docker-image-simple.yaml`'s own `runner` input — previously unset, so every app built on atlas regardless. Default matches what every existing app already gets, so answering nothing changes no app's rendered `deploy.yaml` (pebblestone, which builds on titan's runner). The `python-ci`/`frontend-ci` check jobs are unaffected: they call master's own reusables, and `frontend-ci.yaml` there has no runner input to pass one to yet.
+- **An app that owns its root layout still gets the alert bell and the design system's display face, without hand-editing that layout.** `frontend/src/lib/alerts/admin-alert-bell.svelte` (the admin gate around `@poodle64/ui/alerts`' `AlertBell`) and `frontend/src/lib/fonts.ts` (the three `@fontsource-variable` faces `@poodle64/design-tokens` names) are new factory-owned files the stock `+layout.svelte` now imports instead of inlining; an app with its own root layout (cadmus, earworm, pebblestone) imports either with one line instead of reimplementing the gate or guessing which faces to load (`docs/design/alerts.md` §Adoption).
+
+### Fixed
+
+- `config/sections/agent.py`, `config/sections/database.py` and `config/vend.py` now ship ruff-format clean at the app's 120-character line for any project name, not only a short one — each carried one call that only fit on one line at some lengths; a magic trailing comma forces the same wrapping regardless. Cadmus's and earworm's re-stamp caught `agent.py`; the other two were latent until this change's own verification render (a longer throwaway name) caught them too.
+- Migration `6278d62d47c2` (agent jobs) is ruff-format clean at 120 characters (pebblestone).
+- `template/frontend/package.json.jinja` no longer declares `eslint-plugin-tailwindcss` (removed from `eslint.config.js` itself, master-project#309), `isomorphic-dompurify`, `marked` or `shiki` — no factory-owned file imports any of the four, so every app carried a dead dependency master's parity check would never flag (pebblestone). The three `@fontsource-variable` packages stay declared: they are genuinely imported, now via `fonts.ts`.
+- The re-stamp documentation now says what `copier update --data key=value` is for: hand-editing an answer in `.copier-answers.yml` first leaves both the old and new render on the same value, so a file whose only change is that answer keeps its old text while the answers file claims the new one (casefile's first Deploy called a dead port this way).
+
+### Changed
+
+- `deploy.yaml`'s `checked` dedup job (skip a check that already passed on identical content elsewhere) is dropped. `python-ci.yaml`/`frontend-ci.yaml` trigger on neither a push nor a PR — only `workflow_dispatch` or the deploy call itself — so "already passed on a branch" needs a deliberate manual run first and rarely holds; the job cost a composite action, a git fetch and a regex glob match on every single deploy for a saving that mostly never fires. `python-ci` and `frontend-ci` now always run.
+- Trimmed `deploy.yaml`'s header and `image-smoke.sh`'s header to what they do now; both carried a ruling citation and issue numbers restating why, which git history already holds.
+
 ## [2026.9.48] - 2026-09-29
 
 ### Fixed
