@@ -10,7 +10,11 @@ The agent-jobs slice's standard report of a job's cited lessons to core-memory
 set once the whole report is done — `outcome_record` succeeded, or
 core-memory refused the decision outright (`refused`). Between those two is
 exactly what a network fault between the two calls leaves behind, and what a
-repeated `report_outcome` resumes from.
+repeated `report_outcome` resumes from. `claimed_until` is the lease that
+keeps two callers — the direct call at filing time and every worker's own
+retry sweep — from both reaching core-memory for the same row at once; folded
+into this migration rather than a second one, since this table has not
+shipped yet (godswood-ec review, 29/09).
 
 `WorkspaceScoped` like its parent `agent_jobs` (`platform/tenancy.md`: a child
 table is not a third kind), `workspace_id`/`created_by_id` denormalised down
@@ -43,6 +47,7 @@ def upgrade() -> None:
         sa.Column("decision_id", sa.String(length=64), nullable=True),
         sa.Column("refused", sa.Text(), nullable=True),
         sa.Column("recorded_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("claimed_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("workspace_id", sa.Integer(), nullable=False),
         sa.Column("created_by_id", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),

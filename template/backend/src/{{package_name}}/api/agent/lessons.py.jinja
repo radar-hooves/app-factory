@@ -1,59 +1,38 @@
 """Tell core-memory how a persona job's cited lessons turned out (radar-hooves/godswood#840).
 
-core-memory already holds the learning loop — beliefs, confidence, decisions,
-outcomes, calibration, promotion. What it cannot know on its own is the one
-moment a human accepts a persona's result as-is or corrects it, because only
-the APP sees that moment. This module is the standard shape every persona job
-uses to close that loop, so no app hand-writes it twice:
+core-memory already holds the learning loop; what it cannot know on its own is
+the one moment a human accepts a persona's result as-is or corrects it, since
+only the app sees that. Two calls close the loop:
 
-1. A job cites the lessons it followed in its own structured answer, under the
-   reserved `lessons_used` key (a JSON array of belief ids from
-   `belief_retrieve` — `[]` when it followed none). This is a convention, not
-   an enforced schema: `json_schema` is the app's own contract with its
-   persona (`jobs.py`), and this module only ever reads the key back.
-2. Once a person accepts or corrects the job's result, the app makes ONE call
-   here: `report_outcome(..., result="confirm" | "contradict")`. Nothing else
-   in this slice knows that moment happened.
-3. This module tells core-memory: `decision_record` citing the ids from (1),
-   then `outcome_record` with the app's own `result`.
+1. A job cites the lessons it followed under the reserved `lessons_used` key
+   in its own structured answer (belief ids from `belief_retrieve`, `[]` when
+   it followed none) — a convention, not an enforced schema; `cited()` reads
+   it back.
+2. Once a person accepts or corrects the result, the app makes ONE call,
+   `report_outcome(..., result="confirm" | "contradict")`, which tells
+   core-memory `decision_record` (citing the ids from step 1) then
+   `outcome_record`.
 
-Only ids ever leave the app — never a job's content, which may carry a
-household document's own detail. The bearer that reaches core-memory is
-vended fresh for this call and held nowhere (`config/vend.vend_envelope`,
-the same `mcp-gateway-api` credential a job's own `.mcp.json` is built from),
-matching `platform/canonical-app-shape.md`'s broker contract.
+`AgentJobLessonReport` tracks each report through three states: UNSETTLED
+(just created, or `decision_id` set but `outcome_record` not yet called —
+what a network fault between the two calls, or a crash, leaves behind),
+SETTLED-RECORDED (`recorded_at` set, `refused` null), and SETTLED-REFUSED
+(`recorded_at` set, `refused` holding core-memory's reason — final, since a
+refused decision is refused whole and asking again changes nothing). A
+transport fault is never the caller's: `report_outcome` catches it, logs a
+warning, and leaves the report unsettled; `retry_unsettled` retries it from
+`jobs.supervise()`'s existing sweep, resuming from `decision_id`, and settles
+one still unsettled past `_ABANDON_AFTER` as refused.
 
-`AgentJobLessonReport` (`jobs_models.py`) is this call's own progress marker,
-because the two-call sequence must survive a network fault without recording
-the same outcome twice: a call repeated after a crash resumes from whichever
-half core-memory does not have yet, and a call repeated once the report has
-settled — successfully or refused — is a no-op, since a refusal is final
-(a cited belief unknown or no longer active refuses the WHOLE decision, and
-asking again changes nothing) and reporting a success twice would double its
-evidence weight.
-
-A network fault is never the app's to carry. `report_outcome` records the
-intent (`ensure_lesson_report`) before it ever calls core-memory, so a
-transport error there is caught, logged, and leaves the report unsettled
-rather than raised — an app's own "the operator filed it" never fails on
-core-memory being unreachable, and no app builds its own retry sweep to cope.
-`retry_unsettled` is that retry, run from `jobs.supervise()`'s existing sweep
-(`docs/design/agent-jobs.md` §Any worker) alongside the orphaned-job sweep it
-already runs every 60s: it re-attempts every unsettled report the same way
-`report_outcome` would, resuming from `decision_id` exactly as a repeated
-direct call does, and abandons — settled, with a logged reason, never retried
-again — a report still unsettled after `_ABANDON_AFTER`.
-
-Whether the instructions a persona needs to use this loop (retrieve before
-working, propose what would have got it right first time, cite what was
-followed under `lessons_used`) belong in code here or in prose is settled by
-what `config/personas/` is: an app-owned directory this slice reads fresh on
-every spawn (`persona.py`), never rendered by the template. There is nothing
-in the factory to inject them into. The canonical wording every persona's own
-`CLAUDE.md` carries verbatim lives in `docs/design/agent-lessons.md` instead —
-`platform/canonical-app-shape.md`'s "sameness extends to prose" applies to an
-app-owned file exactly as to a factory one; the factory just cannot enforce it
-mechanically here, only state it once for every app to copy.
+`claimed_until` (`jobs_models.claim_lesson_report`) is the lease that keeps
+exactly one caller acting on a given report at a time: the direct call at
+filing time and every worker's own retry sweep can all reach for the same row
+together, and only the one that wins the lease ever speaks to core-memory.
+Only ids ever leave the app; the bearer is vended fresh per call and held
+nowhere (`config/vend.vend_envelope`, the `mcp-gateway-api` credential a
+job's `.mcp.json` already vends from). The persona wording this loop needs
+(retrieve, propose, cite) lives in `docs/design/agent-lessons.md`, not here:
+`config/personas/` is app-owned and never rendered by this template.
 """
 
 from __future__ import annotations
@@ -86,6 +65,12 @@ CONTRADICT = "contradict"
 #: reused here because reporting a job's outcome is this same app speaking to
 #: the same gateway, never a second identity.
 _CORE_MEMORY_CREDENTIAL = "mcp-gateway-api"
+
+#: How long a claim on a report holds, and so how long a report that just lost
+#: a transport fault waits before the next retry can touch it — the lease
+#: doubles as backoff, so a persistently-failing report logs once per lease,
+#: not once a sweep per worker.
+_LEASE_SECONDS = 300.0
 
 #: How long `retry_unsettled` keeps retrying a report core-memory has not settled
 #: (refused or recorded) before giving up on it as abandoned.
@@ -122,22 +107,19 @@ async def report_outcome(
 
     The one call an app makes at the moment a person accepts (`result=CONFIRM`)
     or corrects (`result=CONTRADICT`) the job's result. A no-op when this
-    deployment names no `core_memory_url` (the learning loop is opt-in per
-    deployment, never a standing default), when `job_id` names no job in
-    `workspace_id`, or when its structured answer cited no lessons — there is
-    nothing for core-memory to confirm or contradict.
+    deployment names no `core_memory_url`, when `job_id` names no job in
+    `workspace_id`, or when its structured answer cited no lessons.
 
-    Safe to call more than once for the same `job_id`: idempotent once the
-    report has settled (`AgentJobLessonReport.recorded_at` set, success or a
-    final refusal alike), and resumed rather than restarted when a prior call
-    got as far as `decision_record` but not `outcome_record`.
+    Safe to call more than once, and safe to call CONCURRENTLY with itself or
+    with `retry_unsettled` for the same `job_id`: idempotent once the report
+    has settled, resumed from `decision_id` rather than restarted when a prior
+    attempt got as far as `decision_record` but not `outcome_record`, and
+    gated by `jobs_models.claim_lesson_report` so exactly one overlapping
+    caller ever reaches core-memory — every other returns at once.
 
-    Never raises for a network fault: it is caught, logged, and leaves the
-    report unsettled for `retry_unsettled` to pick up from `jobs.supervise()`'s
-    own sweep, so the caller — an app's own "the operator filed it" handler —
-    never fails on core-memory being unreachable. `ToolError` is the one
-    exception treated as final rather than transient: core-memory's own
-    refusal, never retried.
+    Never raises for a network fault: caught, logged, and left for
+    `retry_unsettled` to pick up from `jobs.supervise()`'s own sweep. A
+    `ToolError` (core-memory's own refusal) is final, not retried.
     """
     if not settings.core_memory_url:
         return
@@ -165,7 +147,16 @@ async def report_outcome(
     if report.recorded_at is not None:
         return
 
-    decision_id = report.decision_id
+    def _claim() -> tuple[bool, str | None]:
+        with db_session_factory() as db:
+            bind_session(db, workspace_id=workspace_id)
+            return jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
+
+    won, decision_id = await run_in_threadpool(_claim)
+    if not won:
+        # Already settled, or another caller holds the lease right now.
+        return
+
     try:
         if decision_id is None:
             decision = await _call(
@@ -197,9 +188,8 @@ async def report_outcome(
         return
     except Exception:
         # A transport fault, not a refusal: the report stays unsettled (its
-        # decision_id, if this got that far, is already saved) and
-        # `retry_unsettled` picks it up from the next sweep. Never the
-        # caller's to retry.
+        # decision_id, if this got that far, is already saved) and the lease
+        # just claimed is left to expire as this report's own retry backoff.
         logger.warning("Reporting job %s's lesson outcome failed; will retry", job_id, exc_info=True)
         return
 
@@ -217,13 +207,12 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
 
     Runs from `jobs.supervise()`'s own sweep. A report reaches here only once
     `report_outcome` itself already tried and hit something other than
-    core-memory's own refusal (`ToolError` settles a report on the spot, and
-    never leaves it for this sweep to find) — a transport error, a timeout, or
-    the process dying mid-call. Each is retried the same way a repeated direct
-    call would be: resumed from `decision_id` when one is already saved, never
-    re-recorded from scratch. A report still unsettled after `_ABANDON_AFTER`
-    is abandoned — settled `refused` with a diagnostic reason — rather than
-    retried forever.
+    core-memory's own refusal — a transport error, a timeout, or the process
+    dying mid-call. Each is retried through `report_outcome` itself, so the
+    SAME claim gates a direct call and a sweep against each other; an
+    abandon (past `_ABANDON_AFTER`) claims the row the same way before
+    settling it, so a report already claimed by a live retry is left alone
+    rather than abandoned out from under it.
     """
     if not settings.core_memory_url:
         return 0
@@ -252,13 +241,18 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
         if created_at < cutoff:
             reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
 
-            def _abandon(job_id: str = job_id, workspace_id: int = workspace_id, reason: str = reason) -> None:
+            def _abandon(job_id: str = job_id, workspace_id: int = workspace_id, reason: str = reason) -> bool:
                 with db_session_factory() as db:
                     bind_session(db, workspace_id=workspace_id)
+                    won, _ = jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
+                    if not won:
+                        return False
                     jobs_models.settle_lesson_report(db, job_id, refused=reason)
+                    return True
 
-            await run_in_threadpool(_abandon)
-            logger.warning("Abandoned job %s's lesson report: %s", job_id, reason)
+            if await run_in_threadpool(_abandon):
+                logger.warning("Abandoned job %s's lesson report: %s", job_id, reason)
+                acted += 1
         else:
             await report_outcome(
                 db_session_factory,
@@ -269,5 +263,5 @@ async def retry_unsettled(db_session_factory: sessionmaker[Session], settings: A
                 context_key=context_key,
                 result=result,
             )
-        acted += 1
+            acted += 1
     return acted

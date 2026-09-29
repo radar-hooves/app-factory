@@ -10,6 +10,7 @@ through a real persona spawn: what these tests exercise is what happens to a
 job's ALREADY-SETTLED `structured_output`, not how it got there.
 """
 
+import asyncio
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -249,6 +250,9 @@ async def test_a_transport_fault_leaves_the_report_unsettled_until_the_superviso
     """`report_outcome` never raises a network fault to its caller -- the report stays unsettled,
     and `jobs.supervise()`'s own sweep (`lessons.retry_unsettled`) is what retries it, resuming
     from `decision_id` exactly as a repeated direct call would, never re-recording the decision."""
+    # The lease a fault leaves behind is real backoff (5 minutes by default) -- shrink it to
+    # negative so it has already lapsed by the next line, rather than this test waiting one out.
+    monkeypatch.setattr(lessons, "_LEASE_SECONDS", -1.0)
 
     async def _unreachable(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         raise httpx.ConnectError("connection refused")
@@ -285,3 +289,44 @@ async def test_a_transport_fault_leaves_the_report_unsettled_until_the_superviso
     assert settled.decision_id == "decision-1"
     assert settled.recorded_at is not None
     assert settled.refused is None
+
+
+async def test_concurrent_report_outcome_calls_record_exactly_once(
+    workspace_id: int, calls: list[tuple[str, dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two `report_outcome` calls for the SAME job overlapping -- the direct call at filing time
+    can race the supervisor's own retry sweep exactly like this -- claim the row atomically, so
+    only one ever reaches core-memory; the loser sees the row already claimed or settled and
+    returns without calling it. Real Postgres row locking, not a mocked lock: each call opens its
+    own session, and a fake core-memory that yields control between its two calls widens the
+    window a missing claim would race in."""
+
+    async def _slow(settings: AgentSettings, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        await asyncio.sleep(0.05)
+        calls.append((tool, arguments))
+        return {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
+
+    monkeypatch.setattr(lessons, "_call", _slow)
+    job_id = _seed_job(workspace_id, lessons_used=["belief-1"])
+    settings = AgentSettings(core_memory_url="https://core-memory.example/mcp")
+
+    def _report_outcome() -> Any:
+        return lessons.report_outcome(
+            get_session_factory(),
+            settings,
+            job_id,
+            workspace_id=workspace_id,
+            domain_name=DOMAIN,
+            context_key=CONTEXT,
+            result=lessons.CONFIRM,
+        )
+
+    await asyncio.gather(_report_outcome(), _report_outcome())
+
+    assert [tool for tool, _ in calls].count("decision_record") == 1
+    assert [tool for tool, _ in calls].count("outcome_record") == 1
+    report = _report(job_id, workspace_id)
+    assert report is not None
+    assert report.decision_id == "decision-1"
+    assert report.recorded_at is not None
+    assert report.refused is None

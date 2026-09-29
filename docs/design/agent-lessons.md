@@ -2,12 +2,11 @@
 
 Status: **design, 29/09/2026.** Consumer: radar-hooves/godswood#840, on
 behalf of every app that runs a persona job (`docs/design/agent-jobs.md`) —
-Milton, Penny, cadmus's models, and a coming Taxpert. About 650 lines: 270 in
-`api/agent/lessons.py` (190 the initial cut, 80 added for the
-godswood-ec review below — the retry sweep and its test), 60 added to
-`jobs_models.py`, 75 in the migration, 25 across `jobs.py`/`main.py` to wire
-the retry into the existing supervisor, 10 in `config/sections/agent.py`, the
-rest this note and its test file.
+Milton, Penny, cadmus's models, and a coming Taxpert. About 630 lines:
+267 in `api/agent/lessons.py`, 112 added to `jobs_models.py` (the report row
+and its claim), 89 in the migration, 25 across `jobs.py`/`main.py` to wire the
+retry sweep into the existing supervisor, 10 in `config/sections/agent.py`,
+the rest this note and its test file (332 lines, two review rounds of fixes).
 
 ## The need
 
@@ -59,6 +58,23 @@ jobs), re-attempting every unsettled report the same way a repeated direct
 call would — resumed from `decision_id`, never re-recorded — and abandoning
 one still unsettled after 14 days with a logged reason rather than retrying
 forever.
+
+`jobs.supervise()` runs in every worker, and godswood runs five — so the
+sweep and the app's own direct call, or two workers' sweeps, can reach for the
+SAME unsettled report at once, and core-memory's `decision_record` takes no
+idempotency key of its own to fall back on (second godswood-ec review, 29/09).
+`claim_lesson_report` is the fix: a nullable `claimed_until` lease, claimed by
+one atomic `SELECT ... FOR UPDATE` under the same WHERE the claim itself
+states (unsettled, and not already leased) — the same "block, then re-check
+the committed row" pattern `jobs_models._locked` already uses for a job's own
+row. Only the winner ever calls core-memory; every loser returns at once, and
+`report_outcome`/`retry_unsettled`'s abandon path both claim through the
+identical function, so one lease gates every way of touching a report. Left
+to expire rather than cleared on a transport fault, the 5-minute lease is
+also that report's retry backoff. `ensure_lesson_report`'s own first insert
+is the same story in miniature — two first calls can race on the primary key
+— so it catches the loser's `IntegrityError` rather than letting it reach the
+app's filing handler.
 
 Only ids ever leave the app: `cites` carries belief ids, `report_outcome`
 never sees a job's content. The bearer that reaches core-memory is vended
