@@ -8,7 +8,10 @@ export default defineConfig({
 		globals: true,
 		environment: 'jsdom',
 		setupFiles: ['src/test/setup.ts'],
-		include: ['src/**/*.{test,spec}.{js,ts}']
+		include: ['src/**/*.{test,spec}.{js,ts}'],
+		// Many tests compile real Tailwind, seconds each on the shared atlas
+		// runner; vitest's 5s default failed 3 of 7 CI runs (measured 30/09/2026).
+		testTimeout: 30_000
 	},
 	resolve: {
 		conditions: ['browser'],
