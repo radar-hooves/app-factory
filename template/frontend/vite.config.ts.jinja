@@ -83,8 +83,15 @@ export default defineConfig(({ command, isPreview }) => {
 	// backend runs on its own port so it can never adopt the interactive one.
 	const backendTarget = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? `http://127.0.0.1:{{ backend_port }}`;
 
+	// This app's own backend prefixes (frontend/app-proxy.ts): the dev proxy's
+	// extra entries below, and the same keys handed to the SPA's catch-all route
+	// (src/params/spa.ts), so a link to one leaves for a full page load there
+	// rather than rendering "Page not found".
+	const appRoutes = appProxy(backendTarget);
+
 	return {
 		plugins: [...plugins, requireDevIdentity],
+		define: { __APP_BACKEND_PREFIXES__: JSON.stringify(Object.keys(appRoutes)) },
 		server: {
 			port: {{ frontend_port }},
 			...identity.serverOptions,
@@ -127,7 +134,7 @@ export default defineConfig(({ command, isPreview }) => {
 				// directly. Four apps carry one anyway, which is a question for the
 				// factory rather than a default to reinstate untested — until it is
 				// answered, `/mcp` is one line in app-proxy.ts.
-				...appProxy(backendTarget)
+				...appRoutes
 			}
 		}
 	};
