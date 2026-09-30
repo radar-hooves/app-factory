@@ -143,6 +143,17 @@ describe('the signed-in app layout', () => {
 		expect(init).toHaveBeenCalledOnce();
 	});
 
+	it('asks again when a lapsed page comes back from the back/forward cache', () => {
+		session.failure = 'lapsed';
+		render(Layout, { props: { children } });
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+		expect(init).toHaveBeenCalledOnce();
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+		expect(init).toHaveBeenCalledOnce();
+	});
+
 	it('loads the caller, and renders nothing of the page until it has', () => {
 		session.isLoading = true;
 		render(Layout, { props: { children } });

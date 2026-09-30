@@ -49,7 +49,16 @@
 			redirectToAuthentik(page.url.pathname + page.url.search);
 		}
 	});
+
+	// Back from the identity provider's page to this one, restored from the
+	// back/forward cache: the redirect above never finished, so ask again. A
+	// session still lapsed is sent again; one renewed meanwhile loads the page.
+	function recheck(event: PageTransitionEvent) {
+		if (event.persisted) void auth.init();
+	}
 </script>
+
+<svelte:window onpageshow={recheck} />
 
 <AppFrame>
 	{#if auth.isLoading || auth.failure === 'lapsed'}
