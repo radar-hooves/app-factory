@@ -9,7 +9,7 @@ copier.yaml                 one config; `skeleton` picks the tree (default web)
 template/                   the web skeleton, where master's parity, converge and fleet tools read it
 skeletons/desktop/          the desktop skeleton; a symlink into template/ where web and desktop share a file
 kits/rust/desktop-shell     traffic lights and the tray guard
-.github/workflows/desktop-ci.yaml   the desktop CI, called by each app at its stamp tag
+.github/workflows/desktop-ci.yaml   the desktop CI, called by each app @main
 ```
 
 Copier reads a git source's config from its root alone, so both skeletons answer one `copier.yaml`, and `_subdirectory` is rendered from the `skeleton` answer. A web app's answers file predates the question, takes the default, and renders byte-identical to before (proven against casefile's answers: 212 files identical, the answers file gains `skeleton: web`). `template/` becomes `skeletons/web/` in one move once master's canonical-app-migration tools read the path from `_subdirectory` instead of hard-coding `template/`.
@@ -18,7 +18,7 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 
 ## What lives where
 
-| | Kit (versioned, pinned by tag) | Skeleton-owned (stamped, converged) | App-owned (first stamp, then the app's) |
+| | Kit (versioned, pinned per app) | Skeleton-owned (stamped, converged) | App-owned (first stamp, then the app's) |
 | --- | --- | --- | --- |
 | Rust shell | `desktop-shell`: `traffic_lights::setup`, `guard_tray`; `telemetry` and `tauri-plugin-telemetry` | `src-tauri/src/main.rs` | `lib.rs` and every module; `Cargo.toml`; `build.rs` |
 | Tauri config | | | `tauri.conf.json` (windows, CSP, bundle, updater key), `capabilities/` |
