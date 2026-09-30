@@ -82,6 +82,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_mcp_auth.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_mcp_stateless.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_rate_limit.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_settings_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_storage.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_system_health.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_vend.py{% endif %}"

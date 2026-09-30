@@ -1,4 +1,4 @@
-# full-stack-app-template
+# app-factory
 
 The copier source for every household full-stack app: FastAPI backend, SvelteKit SPA and embedded MCP surface, shipped as one container.
 
@@ -15,7 +15,7 @@ One factory, and a gate that fails a repo which edits what the factory owns. `ru
 Prefer `/scaffold-project`, which also sets up the governance symlinks and `.claude/CLAUDE.md`. To stamp directly:
 
 ```bash
-copier copy gh:radar-hooves/full-stack-app-template <path>
+copier copy gh:radar-hooves/app-factory <path>
 ```
 
 Answers are prompted from `copier.yaml`; ports come from the operator's port registry, never invented.
@@ -34,12 +34,12 @@ Written for the next agent working here, not for onboarding.
 | [Adopting an existing app](docs/development/adopting-an-existing-app.md) | Stamping over a repo that already has an app: the reconcile after the stamp is the job, not the stamp. |
 | [Agent console](docs/design/agent-console.md) | Design: rooms, the one chat product every app gets for a local persona or Milton; the imported `agent-common` kit, the stamped slice, what `@poodle64/librarian` gains, what each app keeps, and the convergence order. |
 | [Agent jobs](docs/design/agent-jobs.md) | Design: the app-started persona session beside the chat one, its start/watch/message/stop API, and why `--bg` was rejected |
-| [Desktop skeleton](docs/design/desktop-skeleton.md) | Design: the Tauri + SvelteKit skeleton Thoth and Bragi stamp from (`copier copy --data skeleton=desktop`), what is a kit, what the skeleton owns and what each app keeps. |
 | [Alerts](docs/design/alerts.md) | Design: what a machine raises over `/mcp` and the operator reads in the top-bar bell; the producer contract, and why not ntfy |
+| [Desktop skeleton](docs/design/desktop-skeleton.md) | Design: the Tauri + SvelteKit skeleton Thoth and Bragi stamp from (`copier copy --data skeleton=desktop`), what is a kit, what the skeleton owns and what each app keeps. |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
 
 Deliberately not documented here: the file tree, the copier questions and the dependency list. All three are readable from the repo, and a transcription of them is wrong from the first commit that touches anything.
 
 ## Contributing
 
-Authored here, consumed as `gh:radar-hooves/full-stack-app-template`. Extracted from `radar-hooves/master-project` with history preserved so copier has a tagged VCS source (master-project#161). Changes follow `core/rules-approach.md` §"Changing a rule or strategy", the same as the rule they implement.
+Authored here, consumed as `gh:radar-hooves/app-factory`. Extracted from `radar-hooves/master-project` with history preserved so copier has a tagged VCS source (master-project#161). Changes follow `core/rules-approach.md` §"Changing a rule or strategy", the same as the rule they implement.

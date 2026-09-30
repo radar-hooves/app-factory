@@ -7,7 +7,7 @@
  * gives it one: a Group per domain, a Control per setting.
  */
 
-import type { JsonSchema, UISchemaElement } from '@poodle64/ui/schema-form';
+import type { JsonSchema, UISchemaElement } from '../ui/schema-form/index.js';
 
 interface SchemaNode {
 	type?: string;

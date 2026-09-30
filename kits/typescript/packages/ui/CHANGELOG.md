@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.0] - 2026-10-01
+
+### Added
+
+- **`@poodle64/ui/settings`: the runtime settings page, so an app mounts it
+  rather than carrying a stamped copy.** `SettingsPage` reads app-slices'
+  settings routes (`endpoint`, default `/api/settings`), renders every declared
+  setting through `SchemaForm` grouped by domain, saves each change as one
+  `PATCH`, and lists what differs from its default with a one-click reset. A
+  refused save puts the value back and toasts the server's `message`; a 401
+  calls the app's `onunauthorized`, since only the app knows its sign-in. The
+  dot-path helpers (`nestSchema`, `nestValues`, `settingsLayout`) move here
+  from the stamped `$lib/settings/nest`. Need: master-project (kits programme
+  step 1, app-factory#1), 01/10/2026.
+
 ## [2026.9.23] - 2026-09-30
 
 ### Fixed

@@ -3,23 +3,25 @@
 A ``Setting`` is a typed default plus operator-facing metadata — never a value.
 The value is the code default until an operator overrides it through
 ``PATCH /api/settings/{key}``, at which point ``service.get_value`` starts
-returning the override instead (``api/settings/models.py``). Declaring one
-does not touch the database and needs no migration of its own; only the two
-factory-owned tables (``setting_overrides``, ``setting_changes``) do.
+returning the override instead (``models.py``). Declaring one does not touch
+the database and needs no migration of its own; only the slice's two tables
+(``setting_overrides``, ``setting_changes``) do.
 
 Call ``declare_setting`` at IMPORT time, in the domain module the setting
-governs (`docs/design/settings.md` §Shape) — not here, and not in a per-app
-settings.py that also holds unrelated ones. That module is the domain's
-``api/<domain>/settings.py``, which ``api/settings/registry.py`` discovers by
-that name: the registry's job is knowing what exists, never declaring
-anything itself.
+governs (`docs/design/settings.md` §Shape), not in a per-app settings.py that
+also holds unrelated ones. That module is the domain's ``api/<domain>/settings.py``,
+which ``discover`` imports by that name: the slice's job is knowing what
+exists, never declaring anything itself.
 """
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
+from types import ModuleType
 
 # A denylist backstop, not the only defence: the closed SettingType enum below
 # already has no `secret` or `identifier` member, so those SHAPES cannot be
@@ -28,8 +30,8 @@ from enum import StrEnum
 # permitted type (a `string` called `notification_email`). A setting that
 # identifies a person by a name with no such telltale substring is not caught
 # here — that is a review-time judgement call on the declare_setting() call
-# site, the same one db/registry.py's three-bucket classification already
-# asks of every new table.
+# site, the same one an app's db/registry.py three-bucket classification
+# already asks of every new table.
 _FORBIDDEN_SUBSTRINGS = (
     "secret",
     "token",
@@ -81,7 +83,7 @@ class Setting:
     # from the gateway, live, never from a fixed list declared alongside it.
     choices: tuple[str, ...] | None = None
     # `model_alias` only: a zero-arg callable returning the alias IDs the
-    # app's OWN gateway key can currently reach (`api/settings/gateway_models.py`
+    # app's OWN gateway key can currently reach (`gateway_models.py`
     # wraps the HTTP call; the app closes over its own settings to supply the
     # URL and key). No field here holds a URL or a key directly, so a
     # declaration cannot smuggle either past the config/ boundary.
@@ -150,3 +152,15 @@ def all_settings() -> list[Setting]:
 def get_declared(key: str) -> Setting | None:
     """The declared ``Setting`` for ``key``, or ``None`` if nothing declared it."""
     return _REGISTRY.get(key)
+
+
+def discover(domains: ModuleType) -> None:
+    """Import every ``<domain>/settings.py`` under the package ``domains``.
+
+    Found by that one convention rather than listed, so adding a domain, or
+    deleting the scaffold's ``api/example/``, never edits a list. A glob rather
+    than ``pkgutil``, because the domain folders are namespace packages.
+    """
+    for root in domains.__path__:
+        for module in sorted(Path(root).glob("*/settings.py")):
+            importlib.import_module(f"{domains.__name__}.{module.parent.name}.settings")

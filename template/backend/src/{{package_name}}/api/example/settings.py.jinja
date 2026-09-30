@@ -5,7 +5,7 @@ copy this file's shape wholesale: one call per setting, at import time, beside
 the code that reads it.
 """
 
-from {{ package_name }}.api.settings.declare import SettingType, declare_setting
+from app_slices.settings import SettingType, declare_setting
 
 NEW_ITEM_BUTTON_ENABLED = declare_setting(
     "example.new_item_button_enabled",

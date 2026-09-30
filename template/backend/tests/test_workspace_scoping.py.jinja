@@ -20,6 +20,7 @@ has not finished adopting does not yet carry.
 from typing import cast
 
 import pytest
+from app_slices.db import KitBase
 from sqlalchemy import Integer, String, Table, inspect, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -121,7 +122,9 @@ def test_every_model_is_scoped_or_exempt_with_a_reason() -> None:
     never that some of them ended up scoped.
     """
     unaccounted = []
-    for mapper in Base.registry.mappers:
+    # A mounted kit's tables map through their own registry over the same MetaData
+    # (`app_slices.db`), and are this app's tables all the same.
+    for mapper in (*Base.registry.mappers, *KitBase.registry.mappers):
         model = mapper.class_
         if issubclass(model, WorkspaceScoped | SharedReference):
             continue

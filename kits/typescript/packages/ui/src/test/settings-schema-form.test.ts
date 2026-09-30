@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import SchemaForm from '@poodle64/ui/schema-form';
-import { nestSchema, nestValues, settingsLayout } from './nest';
+import SchemaForm from '$lib/components/ui/schema-form/schema-form.svelte';
+import { nestSchema, nestValues, settingsLayout } from '$lib/components/settings/nest';
 
 describe('SchemaForm over a nested settings document', () => {
 	it('shows every dotted setting with its value', () => {

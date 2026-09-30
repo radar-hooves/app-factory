@@ -10,6 +10,18 @@ The one wire vocabulary is Claude Code's own stream-json events, verbatim, plus 
 
 `room` is the proper name, taken from cadmus, where colleagues already hold `room-<id>` grants. It is a word for code, routes and entitlements only: the page says "Ask Milton about ADF Pay and Conditions" (`platform/canonical-app-shape.md` §Milton is a person, not a place).
 
+## What to reach for, and why
+
+Ruled by the operator, 01/10/2026 (godswood, with cadmus and pebblestone consulted); radar-hooves/godswood#846 is the first consumer. This is what keeps apps from spearing off in their own directions.
+
+- **One conversational persona per app.** A second persona is justified only by a different principal or trust boundary (pebblestone's customer, staff and owner), never by a different topic.
+- **Depth comes from skills and core-memory domains**, loaded on demand, not from more personas: godswood's Skippy and Taxpert fold into its one household expert.
+- **A pipeline worker is not a persona.** A worker that runs unattended over a queue (godswood's Fat Controller; pebblestone's Penny, Peggy and Sally) keeps its own home, model, schema and data tier. Rooms are for people talking to an agent.
+- **The harness is this slice**: a persona is a Claude Code home (the contract below), run with `--strict-mcp-config`, built-in tools denied, its environment built from nothing and `ownership.py` guarding `--resume`; the page is `@poodle64/librarian`; a question about documents goes to the library's one nameless reading engine through `reading_room` ask, never to a persona of its own.
+- **Identity is the signed-in Authentik user**; the library already grants per person through actor-linked callers.
+- **A household Max plan run from the server is acceptable** for a persona's turns.
+- **Hard limit, not a design choice**: a document that could carry a child's name never reaches a Tier-1 (Claude) persona. It is read by a tier-3 model or the Fat Controller through a typed schema, and only the fields come back (`core.md` §Guardrails).
+
 ## The structure
 
 ```d2
@@ -183,6 +195,12 @@ Estimates carry "about"; everything else is `wc -l` at 30/09/2026.
 
 **Two entries on the closed sanctioned-per-app list** in `platform/canonical-app-shape.md`: `config/rooms.yaml` (the rooms this app offers) and `frontend/src/lib/agent/app.ts` (the room page's extension point). A shared rule changes only at a sunset-review sitting, so step 4 cannot tag before one.
 
-## Open question
+## Open questions
 
-**Whose identity does a persona carry onto its own app's `/mcp`?** An actor row of its own reaches the app persona-wide, outside the asker's workspace; acting as the asker keeps tenancy intact but needs the machine door to accept a person's identity, which it does not. Recommended: the actor row, zero new machinery, because a persona holds the knowledge layer rather than workspace rows. Revisit when a persona first needs a workspace-scoped table.
+The first three follow from the rulings above and are answered here before an app builds a room on them.
+
+1. **How the signed-in user's token reaches each run**, per request behind forward-auth, from the process environment and never a file in the shared persona home.
+2. **The data-tier routing** that enforces the hard limit above, per room.
+3. **Write tools**: few, and gated server-side on the resolved actor, since a skill does not fence a tool.
+
+**Whose identity does a persona carry onto its own app's `/mcp`?** (Question 1 may settle it: the ruling makes the signed-in user the identity.) An actor row of its own reaches the app persona-wide, outside the asker's workspace; acting as the asker keeps tenancy intact but needs the machine door to accept a person's identity, which it does not. Recommended: the actor row, zero new machinery, because a persona holds the knowledge layer rather than workspace rows. Revisit when a persona first needs a workspace-scoped table.

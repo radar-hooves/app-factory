@@ -16,6 +16,10 @@ dev = [
     # respx: fakes the library client's HTTP at the transport, so a kit test
     # drives the real client over recorded bytes.
     "respx>=0.22.0",
+    # app-slices' tables are Postgres's (JSONB, ON CONFLICT), so its suite runs
+    # on a throwaway one, as a stamped app's does. Same floors as the stamp.
+    "testcontainers[postgres]>=4.15.0",
+    "psycopg[binary]>=3.3.4",
     # api-common and redactyl-core reach the kits only through the `library`
     # client, but under the explicit index below a pin reaches only a DECLARED
     # dependency: a transitive-only private name resolves against PyPI and is

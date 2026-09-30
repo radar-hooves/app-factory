@@ -14,12 +14,13 @@ what stops a new table quietly shipping with no access predicate
 (`rules-library/platform/tenancy.md`).
 """
 
+from app_slices.settings.models import SettingChange, SettingOverride
+
 from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent, AgentJobLessonReport  # noqa: F401
 from {{ package_name }}.api.agent.ownership import AgentSession
 from {{ package_name }}.api.alerts.models import Alert
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
 from {{ package_name }}.api.feedback.models import FeedbackReport
-from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
 from {{ package_name }}.db.base import Base

@@ -10,27 +10,54 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import column, delete, func, select, table
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from {{ package_name }}.api.settings.declare import Setting, SettingType, all_settings, get_declared
-from {{ package_name }}.api.settings.models import SettingChange, SettingOverride
-from {{ package_name }}.api.settings.schemas import SettingChangeRead
-from {{ package_name }}.api.users.models import User
-from {{ package_name }}.exceptions import NotFoundError, ValidationError
+from app_slices.settings.declare import Setting, SettingType, all_settings, get_declared
+from app_slices.settings.models import SettingChange, SettingOverride
+from app_slices.settings.schemas import SettingChangeRead
 
 logger = logging.getLogger(__name__)
+
+# The advisory-lock namespace a change to one key takes (`_lock`), so it cannot
+# collide with another use of the single-key form.
+_LOCK_CLASS = 0x5E77
+
+# The users slice's table, named for the one column the history shows. The
+# foreign keys in `models.py` already require it; this reads a name off it.
+_users = table("users", column("id"), column("username"))
+
+
+class SettingsError(Exception):
+    """A request this slice refuses, with the status and code the router answers it with."""
+
+    status_code = 500
+    error_code = "internal_error"
+
+
+class UndeclaredSetting(SettingsError, LookupError):
+    """Nothing declared the key."""
+
+    status_code = 404
+    error_code = "not_found"
+
+
+class RefusedValue(SettingsError, ValueError):
+    """The value fails the declared type, bounds, choices, or a model_alias's gateway or `narrow`."""
+
+    status_code = 422
+    error_code = "validation_error"
 
 
 def get_value(session: Session, key: str) -> bool | int | float | str:
     """The effective value of `key`: the override if one exists, else the code default.
 
     Raises:
-        NotFoundError: nothing declared this key.
+        UndeclaredSetting: nothing declared this key.
     """
     setting = _require_declared(key)
-    row = session.get(SettingOverride, key)
+    row = session.get(SettingOverride, key, populate_existing=True)
     return row.value if row is not None else setting.default
 
 
@@ -93,16 +120,18 @@ def set_value(
     """Validate and store `value` as `key`'s override; record the change.
 
     Returns the `(new_value, default)` pair the route needs to build a
-    `SettingRead`. An upsert, so two first overrides of one key cannot collide.
+    `SettingRead`. Writers of one key take turns (`_lock`), so each change
+    records the value it actually replaced.
 
     Raises:
-        NotFoundError: nothing declared this key.
-        ValidationError: `value` fails the declared type, bounds, choices, or
+        UndeclaredSetting: nothing declared this key.
+        RefusedValue: `value` fails the declared type, bounds, choices, or
             (for `model_alias`) reachability or the app's own `narrow` rule.
     """
     setting = _require_declared(key)
     _validate(setting, value)
 
+    _lock(session, key)
     old_value = get_value(session, key)
     statement = (
         insert(SettingOverride)
@@ -129,11 +158,11 @@ def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool
     Core `DELETE`, so a concurrent reset that got there first is not an error.
 
     Raises:
-        NotFoundError: nothing declared this key.
+        UndeclaredSetting: nothing declared this key.
     """
     setting = _require_declared(key)
-    row = session.get(SettingOverride, key)
-    old_value = row.value if row is not None else setting.default
+    _lock(session, key)
+    old_value = get_value(session, key)
     session.execute(delete(SettingOverride).where(SettingOverride.key == key))
     session.add(SettingChange(key=key, old_value=old_value, new_value=setting.default, changed_by_id=actor_user_id))
     session.flush()
@@ -144,8 +173,8 @@ def list_history(session: Session, *, limit: int, offset: int) -> tuple[list[Set
     """The most recent setting changes, newest first, with the total count."""
     total = session.execute(select(func.count()).select_from(SettingChange)).scalar_one()
     rows = session.execute(
-        select(SettingChange, User.username)
-        .outerjoin(User, User.id == SettingChange.changed_by_id)
+        select(SettingChange, _users.c.username)
+        .outerjoin(_users, _users.c.id == SettingChange.changed_by_id)
         .order_by(SettingChange.changed_at.desc(), SettingChange.id.desc())
         .limit(limit)
         .offset(offset)
@@ -164,37 +193,46 @@ def list_history(session: Session, *, limit: int, offset: int) -> tuple[list[Set
     return changes, total
 
 
+def _lock(session: Session, key: str) -> None:
+    """Hold `key` until this transaction ends, so a concurrent change to it waits its turn.
+
+    Without it two writers both read the same old value, and the append-only
+    trail records a change from a value that was already gone.
+    """
+    session.execute(select(func.pg_advisory_xact_lock(_LOCK_CLASS, func.hashtext(key))))
+
+
 def _require_declared(key: str) -> Setting:
     setting = get_declared(key)
     if setting is None:
-        raise NotFoundError(f"No setting {key!r} is declared")
+        raise UndeclaredSetting(f"No setting {key!r} is declared")
     return setting
 
 
 def _validate(setting: Setting, value: bool | int | float | str) -> None:
-    """Raise ValidationError unless `value` is a legal value for `setting`."""
+    """Raise RefusedValue unless `value` is a legal value for `setting`."""
     if setting.type is SettingType.boolean:
         if not isinstance(value, bool):
-            raise ValidationError(f"{setting.key!r} takes a boolean")
+            raise RefusedValue(f"{setting.key!r} takes a boolean")
         return
 
     if setting.type in (SettingType.integer, SettingType.number):
         # bool is an int subclass in Python; a boolean here is a type error, not 0/1.
         if isinstance(value, bool) or not isinstance(value, int | float):
-            raise ValidationError(f"{setting.key!r} takes a number")
+            raise RefusedValue(f"{setting.key!r} takes a number")
         if setting.type is SettingType.integer and not isinstance(value, int):
-            raise ValidationError(f"{setting.key!r} takes a whole number")
+            raise RefusedValue(f"{setting.key!r} takes a whole number")
         if setting.minimum is not None and value < setting.minimum:
-            raise ValidationError(f"{setting.key!r} must be at least {setting.minimum}")
+            raise RefusedValue(f"{setting.key!r} must be at least {setting.minimum}")
         if setting.maximum is not None and value > setting.maximum:
-            raise ValidationError(f"{setting.key!r} must be at most {setting.maximum}")
+            raise RefusedValue(f"{setting.key!r} must be at most {setting.maximum}")
         return
 
     # string and model_alias
     if not isinstance(value, str):
-        raise ValidationError(f"{setting.key!r} takes a string")
+        raise RefusedValue(f"{setting.key!r} takes a string")
     if setting.choices and value not in setting.choices:
-        raise ValidationError(f"{setting.key!r} must be one of {', '.join(setting.choices)}")
+        raise RefusedValue(f"{setting.key!r} must be one of {', '.join(setting.choices)}")
     if setting.type is SettingType.model_alias:
         if setting.list_models is not None:
             try:
@@ -213,8 +251,8 @@ def _validate(setting: Setting, value: bool | int | float | str) -> None:
             # does that. Refusing on empty would lock every model_alias
             # setting on every app for the length of a gateway restart.
             if reachable and value not in reachable:
-                raise ValidationError(f"{value!r} is not a model this app's gateway can currently reach")
+                raise RefusedValue(f"{value!r} is not a model this app's gateway can currently reach")
         if setting.narrow is not None:
             refusal = setting.narrow(value)
             if refusal is not None:
-                raise ValidationError(refusal)
+                raise RefusedValue(refusal)

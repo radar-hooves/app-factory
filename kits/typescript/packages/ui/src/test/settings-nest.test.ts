@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nestSchema, nestValues } from './nest';
+import { nestSchema, nestValues } from '$lib/components/settings/nest';
 
 describe('nestValues', () => {
 	it('nests dotted keys along their path and leaves an undotted key where it is', () => {

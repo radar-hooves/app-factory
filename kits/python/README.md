@@ -5,6 +5,7 @@ Shared Python app code, published to the household's private index and consumed 
 ## Packages
 
 - [`agent-common`](agent-common) — the household's Claude Code agent: `cli` (the driver: argv, environment, a spawn in its own process group, the idle-timeout read loop, the stderr tail, the kill, stream-json stdin turns), `persona` (load a persona directory and seed its writable home), `transcript` (read and forget a session as turns), `agent` (the `Agent` interface a chat asks through, and `LocalAgent`), `library_agent` (`LibraryAgent`: the library's Milton over a room's collections, through api-clients' `library` client, with a library room's answer mark and cited document) and `sse` (the frame). Design: [`docs/design/agent-console.md`](../../docs/design/agent-console.md). The stamped `api/agent/` slice binds it to the app's settings, data directory and exceptions.
+- [`app-slices`](app-slices) — the web app's shared slices, mounted rather than stamped. `db` owns the one MetaData a kit's tables and the app's share (the stamped `db/base.py` adopts it); `settings` is the runtime settings slice (declare, read, and a router factory the stamped `api/main.py` mounts with the app's own session, caller and gates). Its page is `@poodle64/ui/settings`. Design: [`docs/design/settings.md`](../../docs/design/settings.md).
 
 ## Depending on a kit
 
@@ -12,12 +13,16 @@ A stamped app already does, in `backend/pyproject.toml`:
 
 ```toml
 "agent-common>=2026.9.57",
+"app-slices>=2026.10.0",
 # …
 [tool.uv.sources]
 agent-common = { index = "<private index name>" }
+app-slices = { index = "<private index name>" }
 ```
 
 Each release tag publishes every package here at that tag's version (`.github/workflows/publish-kit-python.yaml`), so the floor to pin is the release the change you need landed in.
+
+A kit's tables live in the app's database and the app's Alembic history. After raising a kit's floor, run `alembic revision --autogenerate`; a kit release that changes a table says so in the changelog.
 
 ## Building and testing
 
@@ -30,4 +35,4 @@ $ uv run mypy src tests
 $ uv run pytest
 ```
 
-CI runs exactly that, and only there, in `.github/workflows/factory-selftest.yaml`, then renders a scratch app that resolves the kit from the same checkout, so kit and stamp are tested together. Ruff takes the root `ruff.toml`, the width a stamped app ships.
+`app-slices`' suite starts its own throwaway Postgres (testcontainers), so Docker must be running. CI runs exactly that, and only there, in `.github/workflows/factory-selftest.yaml`, then renders a scratch app that resolves the kit from the same checkout, so kit and stamp are tested together. Ruff takes the root `ruff.toml`, the width a stamped app ships.
