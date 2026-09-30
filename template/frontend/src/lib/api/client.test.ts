@@ -112,3 +112,33 @@ describe('the API client middleware stack', () => {
 		expect(error).toEqual({ error: 'timeout', message: 'The request timed out.' });
 	});
 });
+
+describe('the sign-in redirect', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.resetModules();
+	});
+
+	it('navigates once however many ask, and again after a back/forward-cache restore', async () => {
+		// jsdom navigates nowhere, so the navigation is read off a stand-in
+		// location. A fresh module, so its latch starts open.
+		const went: string[] = [];
+		vi.stubGlobal('location', {
+			set href(url: string) {
+				went.push(url);
+			}
+		});
+		vi.resetModules();
+		const { redirectToAuthentik } = await import('./client');
+
+		// init()'s two calls answered 401 and the guard asked too.
+		redirectToAuthentik('/settings');
+		redirectToAuthentik('/settings');
+		redirectToAuthentik('/workspace');
+		expect(went).toEqual(['/outpost.goauthentik.io/start?rd=%2Fsettings']);
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+		redirectToAuthentik('/settings');
+		expect(went).toHaveLength(2);
+	});
+});
