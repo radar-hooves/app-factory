@@ -177,3 +177,13 @@ jobs:
 
       - name: Drive the built package in a real browser
         run: pnpm --filter @poodle64/ui run test:browser
+
+      # app-factory#15: the shell's fixed report trigger and the librarian
+      # composer's own Send share the viewport's bottom-right corner on any
+      # page mounting both — proved here, in the one place both packages are
+      # actually composed together, the same reason this job exists at all.
+      - name: Install Chromium for @poodle64/console
+        run: pnpm --filter @poodle64/console exec playwright install --with-deps chromium
+
+      - name: Drive the shell/composer coexistence in a real browser
+        run: pnpm --filter @poodle64/console run test:e2e:ci

@@ -231,6 +231,25 @@
 		if (onopenartefact) return showing === turn.id;
 		return column?.kind === 'artefact' && column.turn.id === turn.id;
 	}
+
+	// The shell's fixed "report a problem" trigger and this composer's own
+	// Send control share the viewport's bottom-right corner (app-factory#15):
+	// at any width where the column runs flush to the container's edge, Send
+	// sits under the shell's button. `@poodle64/ui`'s ReportWidget reads
+	// `--ds-report-clearance` to lift above whatever claims it; this is the
+	// claim, made on the document because the trigger renders at the layout
+	// root, outside this component's own DOM subtree, so no ordinary
+	// inheritance would reach it otherwise.
+	//
+	// A constant, not a measurement: the controls row holding Send is always
+	// the composer's LAST row, so growth above it (attached files, a
+	// multi-line question) pushes the composer's own top up and never moves
+	// Send's distance from the viewport's bottom edge.
+	$effect(() => {
+		if (!composer || typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--ds-report-clearance', '4.5rem');
+		return () => document.documentElement.style.removeProperty('--ds-report-clearance');
+	});
 </script>
 
 <div class="ds-lib-surface">

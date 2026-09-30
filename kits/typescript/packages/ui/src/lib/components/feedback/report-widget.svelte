@@ -24,6 +24,14 @@
 	// components/ui — it is app machinery the layout mounts once (alongside
 	// initBrowserTelemetry), not page chrome a route composes from, so it does
 	// not sit in the situation→component registry either.
+	//
+	// It renders as a layout-level sibling, outside whatever the route puts on
+	// screen, so it cannot see a page's own bottom-right control (a chat
+	// composer's Send) to avoid it. `--ds-report-clearance` is the seam: a
+	// component that owns such a control claims it on the document while
+	// mounted (`@poodle64/librarian`'s Conversation does, for its composer —
+	// app-factory#15), and this trigger lifts clear of it. Absent, it defaults
+	// to 0 and the trigger sits exactly where it always has.
 
 	let {
 		/** Where the report POSTs. The app's own route, defaulting to the one every household app serves. */
@@ -105,7 +113,7 @@
 <button
 	type="button"
 	onclick={() => (open = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 grid size-11 flex-none place-items-center rounded-full border transition-colors"
+	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-50 grid size-11 flex-none place-items-center rounded-full border transition-colors"
 	aria-label="Report a problem"
 >
 	<MessageSquarePlus class="size-4.5" />
