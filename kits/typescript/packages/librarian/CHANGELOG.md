@@ -4,6 +4,8 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.27] - 2026-10-01
+
 Sharing an answer. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`.
 
 ### Added
