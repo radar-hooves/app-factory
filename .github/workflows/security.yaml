@@ -1,22 +1,23 @@
 name: Security
 
-# Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md):
-# secret scan (gitleaks), Python dependency audit (pip-audit), Trivy filesystem
-# scan, and a CycloneDX SBOM artefact. Weekly and on a dependency change: CVEs
-# arrive with time, not with commits, and pre-commit runs gitleaks per commit.
+# NOT a caller of the golden reusable (rules-library/core/ci-workflow-standard.md):
+# this repo is PUBLIC and a public repo cannot reach a reusable workflow in a
+# private one (radar-hooves/master-project) — the attempt dies at startup
+# validation with zero jobs. Mirrored from radar-hooves/thoth's own security.yaml,
+# which carries the same constraint and the same fix: gitleaks and trivy-fs
+# inlined here, both on a GitHub-hosted runner so fork code never reaches the
+# household runner. This repo's own first-party code is kits/rust only
+# (template/ is jinja source stamped into apps, not runnable code of this
+# repo's own — its own audit runs in the scaffolded app via
+# template/.github/workflows/security.yaml.jinja); trivy-fs covers
+# kits/rust/Cargo.lock (Trivy parses it natively), this repo's
+# cargo-audit-equivalent gate (rules-library/core/supply-chain.md).
+#
+# Weekly, and on a dependency change: CVEs arrive with time, not with commits,
+# and pre-commit already runs gitleaks on every commit.
 on:
   schedule:
     - cron: '0 18 * * 0' # Monday 04:00 AEST
-  pull_request:
-    paths:
-      - '**/pyproject.toml'
-      - '**/uv.lock'
-      - '**/package.json'
-      - '**/pnpm-lock.yaml'
-      - '**/Cargo.lock'
-      - '**/go.sum'
-      - '**/Dockerfile*'
-      - '.github/workflows/security.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -27,5 +28,47 @@ permissions:
   contents: read
 
 jobs:
-  security:
-    uses: radar-hooves/master-project/.github/workflows/security-checks.yaml@main
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets (gitleaks CLI)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          curl -fsSL "$url" -o "$tarball"
+          echo "${GITLEAKS_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          # --redact is not optional: a finding would otherwise print the secret
+          # into a PUBLIC run log.
+          ./gitleaks detect --source . --redact --no-banner --verbose
+
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          cache: true
+          cache-dir: ${{ format('{0}/.cache/trivy', github.workspace) }}
