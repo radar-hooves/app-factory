@@ -4,8 +4,8 @@ name: Publish kits/python
 # agent-common) and publishes it to the household's private index, through the
 # same shared reusable api-common publishes with (rules-library/platform/
 # common-libraries.md §Distribution). A thin caller: the index URL, the runner
-# and the stamp are all this file carries. It works while this repo is private,
-# as it is (30/09/2026): a public repo cannot call a private repo's reusable.
+# and the stamp are all this file carries. This repo is private (30/09/2026),
+# so it can call master-project's private reusable directly.
 #
 # On a release tag only, never a push to main. The reusable stamps a tag's own
 # version onto the wheel (`v2026.9.57` publishes `agent-common 2026.9.57`), so

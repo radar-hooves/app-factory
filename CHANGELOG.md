@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Changed
+
+- **This repo went private (13:45, 30/09/2026); its CI is back on the household standard.** `security.yaml` calls master-project's `security-checks.yaml` reusable instead of inlining gitleaks/Trivy on `ubuntu-latest`; `kit-rust.yaml` and `factory-selftest.yaml` run on the self-hosted runner unconditionally and both restore the `ntfy-failure` step; every now-false "this repo is public" / fork-PR rationale is removed.
+
 ## [2026.9.57] - 2026-09-30
 
 ### Added

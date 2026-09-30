@@ -6,17 +6,12 @@ name: kits/rust
 # scaffolded app, and nothing under kit/ reaches an app that way (a kit is a
 # versioned Cargo dependency, pinned to this repo's own release tag instead).
 #
-# The household CI rule's self-hosted default applies (rules-library/fleet/ci.md):
-# a push or a same-repo PR runs on atlas. This repo is PUBLIC and takes fork
-# PRs, so a fork's own code runs on a GitHub-hosted runner instead — the rust
-# job's own `runs-on` picks between the two per event, mirrored from
-# radar-hooves/thoth's frontend job. It also cannot
-# stay on dtolnay/rust-toolchain the way telemetry-rs's did: on Linux, tauri's
-# own Cargo.toml makes `gtk` an unconditional target dependency (not gated by
-# any Cargo feature), so tauri-plugin-telemetry needs GTK3/WebKitGTK headers to
-# even `cargo check`, which rustup alone cannot supply. `nix develop` against
-# `kits/rust/flake.nix` is the household's own Rust-on-atlas pattern for this —
-# mirrored from Bragi's own `rust-linux` CI job, which builds the same
+# The household CI rule's self-hosted default applies (rules-library/fleet/ci.md).
+# tauri's own Cargo.toml makes `gtk` an unconditional target dependency (not
+# gated by any Cargo feature), so tauri-plugin-telemetry needs GTK3/WebKitGTK
+# headers to even `cargo check`, which rustup alone cannot supply. `nix develop`
+# against `kits/rust/flake.nix` is the household's own Rust-on-atlas pattern for
+# this — mirrored from Bragi's own `rust-linux` CI job, which builds the same
 # tauri + GTK combination today.
 
 on:
@@ -30,30 +25,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# No ntfy-failure step: a public repo cannot call master-project's private
-# composite action, so failures show in the run and PR UI only.
-
 permissions:
   contents: read
 
 jobs:
   rust:
     name: Rust (Linux)
-    # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
+    runs-on: ['self-hosted', 'atlas']
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Install Nix (hosted runner only — atlas is NixOS and already has it)
-        if: runner.environment == 'github-hosted'
-        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            accept-flake-config = true
 
       - name: Rust checks (fmt, clippy, check, test) in flake devShell
         run: |
@@ -69,3 +52,9 @@ jobs:
             cargo clippy --all-targets -- -D warnings
             cargo test
           '
+
+      - name: Notify failure (ntfy infra)
+        if: failure()
+        uses: radar-hooves/master-project/.github/actions/ntfy-failure@main
+        with:
+          title: '${{ github.repository }}: kits/rust checks failed'

@@ -21,17 +21,10 @@ name: Factory self-test
 # exactly the drift this closes. This workflow lives at THIS repo's own root,
 # beside kit-rust.yaml and security.yaml, which is this repo's first-party CI.
 #
-# Household CI's self-hosted default applies (rules-library/fleet/ci.md), and
-# for a stronger reason than kit-rust.yaml's fork exception: a rendered app's
-# BACKEND resolves real dependencies off the household's PRIVATE package index
-# (redactyl-core, api-common, the nextcloud client), credentialled ambiently on
-# the runner's own file per fleet/ci.md, never a repository secret a fork PR
-# could read (the frontend's @poodle64/* is public on npmjs and carries no such
-# constraint on its own, per frontend-ci.yaml's reusable — the backend half is
-# what forces this job onto the trusted runner only). There is no safe
-# hosted-runner path for this job the way there is for kit-rust's pure Rust/Nix
-# build, so a fork PR skips it outright rather than running it credential-less
-# and red.
+# Household CI's self-hosted default applies (rules-library/fleet/ci.md): a
+# rendered app's BACKEND resolves real dependencies off the household's
+# PRIVATE package index (redactyl-core, api-common, the nextcloud client),
+# credentialled ambiently on the runner's own file per fleet/ci.md.
 
 on:
   pull_request:
@@ -49,16 +42,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# No ntfy-failure step: a public repo cannot call master-project's private
-# composite action, so failures show in the run and PR UI only (kit-rust.yaml).
-
 permissions:
   contents: read
 
 jobs:
   render-and-test:
     name: Render a scratch app and run its own suite
-    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ['self-hosted', 'atlas']
     timeout-minutes: 30
     env:
@@ -86,14 +75,6 @@ jobs:
           fetch-depth: 0 # copier reads the commit history to describe the template's own version
 
       - name: Set up uv
-        # astral-sh/setup-uv directly, not master-project's setup-uv wrapper
-        # (radar-hooves/master-project/.github/actions/setup-uv): this repo is
-        # PUBLIC and cannot reach a private-repo action, exactly the constraint
-        # security.yaml and kit-rust.yaml already record for ntfy-failure —
-        # by-exception (29/09/2026), same reason. Costs the wrapper's persisted
-        # tool-cache trick (a fresh uv download each run instead of a restored
-        # one); worth it for a job that runs only on template/copier.yaml/
-        # variants.yaml changes, not on every push.
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           version: '0.9.30' # the household pin (master-project's setup-uv action)
@@ -180,3 +161,9 @@ jobs:
       - name: Clean up the scratch render
         if: always()
         run: rm -rf "$SCRATCH"
+
+      - name: Notify failure (ntfy infra)
+        if: failure()
+        uses: radar-hooves/master-project/.github/actions/ntfy-failure@main
+        with:
+          title: '${{ github.repository }}: factory self-test failed'
