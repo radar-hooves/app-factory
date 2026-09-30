@@ -14,7 +14,7 @@ import asyncio
 import shutil
 import uuid
 from collections.abc import AsyncGenerator, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -63,10 +63,16 @@ class Agent(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class LocalAgent:
-    """A persona this app runs itself: `cli` for a turn, `transcript` for the rest."""
+    """A persona this app runs itself: `cli` for a turn, `transcript` for the rest.
+
+    `run_env` is what every turn this instance asks carries in its process
+    environment and nowhere else (`cli.environment`), such as the asker's
+    token: an app builds one instance per request, so it is that asker's.
+    """
 
     settings: cli.Settings
     persona: Persona
+    run_env: Mapping[str, str] = field(default_factory=dict, repr=False)
 
     async def ask(
         self,
@@ -98,7 +104,9 @@ class LocalAgent:
             session_id = None if resume else session
             paths = await asyncio.to_thread(_attach, self.persona.home / ATTACHMENTS / session, files)
             question = question + _ATTACHED + "\n".join(f"- {path}" for path in paths)
-        async for event in cli.ask(self.settings, self.persona, question, resume=resume, session_id=session_id):
+        async for event in cli.ask(
+            self.settings, self.persona, question, resume=resume, session_id=session_id, run_env=self.run_env
+        ):
             yield event
 
     async def read(self, session: str) -> list[Turn] | None:

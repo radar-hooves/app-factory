@@ -30,7 +30,7 @@ import json
 import os
 import re
 import signal
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -80,6 +80,24 @@ _TELEMETRY_INHERITED_IF_SET = (
     "OTEL_RESOURCE_ATTRIBUTES",
 )
 
+#: Every name `environment()` decides itself. A turn's own variables
+#: (`run_env`) may name none of them: a per-turn value never displaces the
+#: persona's home, the CLI's credential or the gateway confinement.
+_DECIDED = frozenset(
+    {
+        "HOME",
+        "CLAUDE_CONFIG_DIR",
+        "OTEL_SERVICE_NAME",
+        "MAX_THINKING_TOKENS",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        *_INHERITED_IF_SET,
+        *_TELEMETRY_INHERITED_IF_SET,
+    }
+)
+
 _BEARER = re.compile(r"(?i)\bbearer\s+\S+")
 _URL_QUERY = re.compile(r"(https?://[^\s?]+)\?\S*")
 
@@ -123,12 +141,21 @@ def scrub_credentials(text: str) -> str:
     return _URL_QUERY.sub(r"\1?[redacted]", _BEARER.sub("Bearer [redacted]", text))
 
 
-def environment(settings: Settings, persona: Persona) -> dict[str, str]:
+def environment(settings: Settings, persona: Persona, run_env: Mapping[str, str] | None = None) -> dict[str, str]:
     """The subprocess environment, built from scratch rather than inherited.
 
     `CLAUDE_CONFIG_DIR` and `HOME` are always the persona's own home, never an
     ambient login: a persona's whole point is its own isolated home.
+    `run_env` is this one run's own variables, such as the asker's token a
+    persona's `.mcp.json` expands into a bearer header: in this process's
+    environment only, never a file in the home every asker shares.
+
+    Raises:
+        ValueError: `run_env` names a variable this function decides itself.
     """
+    clash = sorted(_DECIDED & (run_env or {}).keys())
+    if clash:
+        raise ValueError(f"a run's own variables may not name {', '.join(clash)}")
     env: dict[str, str] = {
         "HOME": str(persona.home),
         "CLAUDE_CONFIG_DIR": str(persona.home),
@@ -154,7 +181,7 @@ def environment(settings: Settings, persona: Persona) -> dict[str, str]:
         # reaches past its gateway on start is one more thing to diagnose.
         env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
 
-    return env
+    return {**env, **(run_env or {})}
 
 
 def argv(
@@ -236,7 +263,13 @@ def argv(
 
 
 async def spawn(
-    settings: Settings, persona: Persona, command: list[str], *, cwd: Path, stdin: bool = False
+    settings: Settings,
+    persona: Persona,
+    command: list[str],
+    *,
+    cwd: Path,
+    stdin: bool = False,
+    run_env: Mapping[str, str] | None = None,
 ) -> asyncio.subprocess.Process:
     """Start `command` as `persona`, in its own process group, reading its stdout and stderr.
 
@@ -251,7 +284,7 @@ async def spawn(
     return await asyncio.create_subprocess_exec(
         *command,
         cwd=str(cwd),
-        env=environment(settings, persona),
+        env=environment(settings, persona, run_env),
         stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -335,12 +368,14 @@ async def ask(
     cwd: Path | None = None,
     append_system_prompt: str | None = None,
     model: str | None = None,
+    run_env: Mapping[str, str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Ask `persona` one question and yield each event the session emits, in order, unaltered.
 
     `cwd` defaults to the persona's home; `append_system_prompt` and `model`
     are for a caller whose question needs more than the persona's own files
-    say (a scoped reading room). One synthetic event is added, and it is
+    say (a scoped reading room); `run_env` is this run's own variables
+    (`environment`). One synthetic event is added, and it is
     clearly the transport's own: an `ERROR_EVENT` frame if the process cannot
     start, goes silent past the idle timeout, or dies badly. Claude Code's own
     `result` event terminates a healthy stream.
@@ -355,7 +390,7 @@ async def ask(
         model=model,
     )
     try:
-        process = await spawn(settings, persona, command, cwd=cwd or persona.home)
+        process = await spawn(settings, persona, command, cwd=cwd or persona.home, run_env=run_env)
     except OSError as exc:
         yield {"type": ERROR_EVENT, "error": f"agent could not start: {exc}"}
         return
