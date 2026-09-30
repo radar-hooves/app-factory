@@ -612,7 +612,6 @@
 		outline-offset: 2px;
 	}
 
-
 	.ds-lib-duration {
 		padding-inline-start: 0.25rem;
 		font-family: var(--ds-font-code);
