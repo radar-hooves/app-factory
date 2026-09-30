@@ -1,0 +1,257 @@
+import { expect, request, test, type Page } from '@playwright/test';
+import { ok, readJson } from './api';
+
+// Rooms, driven as a person drives them (docs/design/agent-console.md, step 4's
+// proof): a persona room answered by the suites' fake CLI and a library room
+// answered by the fake library, over the backend `tests/e2e/rooms/serve.sh`
+// starts. The browser's person holds both rooms:
+//
+//   {{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS='example|room-helper|room-manual' pnpm exec playwright test rooms
+//
+// The tests run in order and share one person's conversations and allowance.
+// With ROOMS_SCREENSHOTS set to a directory, the last one photographs the pages
+// at 1440 and 390 wide in both themes.
+
+const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? 'http://127.0.0.1:{{ backend_port }}';
+const SHOTS = process.env.ROOMS_SCREENSHOTS;
+/** What any signed-in person may reach; everything else needs a module (tests/test_route_walk.py). */
+const PERSON_FACING = [
+	'/api/users',
+	'/api/workspaces',
+	'/api/feedback',
+	'/api/system',
+	'/api/agent/rooms',
+	'/api/agent/conversations',
+	'/api/agent/quota'
+];
+
+type Conversation = {
+	id: string;
+	answering_since: string | null;
+	turns: { question: string; answer: string; at: string | null }[];
+};
+
+test.describe.configure({ mode: 'serial' });
+
+function composer(page: Page) {
+	return page.getByPlaceholder(/^Ask /);
+}
+
+async function ask(page: Page, question: string) {
+	await composer(page).fill(question);
+	await page.getByRole('button', { name: 'Send' }).click();
+}
+
+function conversationId(page: Page): string {
+	const id = new URL(page.url()).searchParams.get('c');
+	expect(id, 'the address names the conversation').toBeTruthy();
+	return id as string;
+}
+
+async function read(page: Page, id: string): Promise<Conversation> {
+	return readJson<Conversation>(page.request.get(`/api/agent/conversations/${id}`));
+}
+
+let helperConversation = '';
+let manualConversation = '';
+
+test('the rooms a person holds are the ones they can ask', async ({ page }) => {
+	await page.goto('/rooms');
+	// The first page a fresh dev server serves waits on its dependency optimisation.
+	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByRole('link', { name: /^Ask Milton about The Manual/ })).toBeVisible();
+});
+
+test('an ask streams its answer and names the conversation in the address and the list', async ({
+	page
+}) => {
+	await page.goto('/rooms');
+	await page.getByRole('link', { name: /^Ask The Helper/ }).click();
+	await ask(page, 'How is recreation leave accrued?');
+
+	await expect(page.getByText('You asked: How is recreation leave accrued?')).toBeVisible();
+	await expect(page).toHaveURL(/\?c=/);
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	const past = page.getByRole('region', { name: 'Past questions' });
+	await expect(past.getByText('How is recreation leave accrued?')).toBeVisible();
+	helperConversation = conversationId(page);
+});
+
+test('a refresh mid-answer shows it still being answered, then the answer', async ({ page }) => {
+	await page.goto('/rooms/helper');
+	await ask(page, 'And long service leave?');
+	await expect(page.getByText('You asked: And long service leave?')).toBeVisible();
+	await expect(page).toHaveURL(/\?c=/);
+	const id = conversationId(page);
+
+	await page.reload();
+	await expect(page.getByText(/still answering/).first()).toBeVisible();
+	expect((await read(page, id)).answering_since).not.toBeNull();
+
+	await expect(page.getByText(/written slowly enough to be refreshed/)).toBeVisible({
+		timeout: 20_000
+	});
+	expect((await read(page, id)).answering_since).toBeNull();
+});
+
+test('a link reopens a conversation on another device', async ({ browser }) => {
+	const device = await browser.newContext();
+	const page = await device.newPage();
+	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	await expect(page.getByText('How is recreation leave accrued?').first()).toBeVisible();
+	await expect(page.getByText('You asked: How is recreation leave accrued?')).toBeVisible();
+	await device.close();
+});
+
+test('rename, download and delete a conversation', async ({ page }) => {
+	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	const past = page.getByRole('region', { name: 'Past questions' });
+
+	await past.getByRole('button', { name: 'More: How is recreation leave accrued?' }).click();
+	await past.getByRole('button', { name: 'Rename' }).click();
+	await past.getByRole('textbox', { name: 'Rename' }).fill('Recreation leave');
+	await past.getByRole('button', { name: 'Save' }).click();
+	await expect(past.getByText('Recreation leave', { exact: true })).toBeVisible();
+
+	await past.getByRole('button', { name: 'More: Recreation leave' }).click();
+	const [download] = await Promise.all([
+		page.waitForEvent('download'),
+		past.getByRole('button', { name: 'Download' }).click()
+	]);
+	expect(download.suggestedFilename()).toBe('Recreation leave.md');
+	const saved = await download.path();
+	const { readFile } = await import('node:fs/promises');
+	const text = await readFile(saved, 'utf8');
+	expect(text).toContain('# Recreation leave');
+	expect(text).toContain('> How is recreation leave accrued?');
+
+	await past.getByRole('button', { name: 'More: Recreation leave' }).click();
+	await past.getByRole('button', { name: 'Delete' }).click();
+	await past.getByRole('group', { name: 'Delete' }).getByRole('button', { name: 'Delete' }).click();
+	await expect(past.getByText('Recreation leave', { exact: true })).toBeHidden();
+	await expect(page).not.toHaveURL(/\?c=/);
+	expect((await page.request.get(`/api/agent/conversations/${helperConversation}`)).status()).toBe(
+		404
+	);
+});
+
+test('stop ends an answer being written, and the question stays', async ({ page }) => {
+	await page.goto('/rooms/helper');
+	await ask(page, 'What about leave without pay?');
+	await expect(page.getByText('You asked: What about leave without pay?')).toBeVisible();
+	const id = conversationId(page);
+
+	await page.getByRole('button', { name: 'Stop' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+	await expect
+		.poll(async () => (await read(page, id)).answering_since, { timeout: 10_000 })
+		.toBeNull();
+	const stopped = await read(page, id);
+	expect(stopped.turns.map((t) => [t.question, t.answer])).toEqual([
+		['What about leave without pay?', '']
+	]);
+});
+
+test('a library room cites, opens the cited document and takes a mark', async ({ page }) => {
+	await page.goto('/rooms/manual');
+	await expect(page.getByText('Ask Milton about The Manual')).toBeVisible();
+	await ask(page, 'How much recreation leave does a member accrue?');
+
+	await expect(page.getByText(/four weeks of recreation leave/)).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	manualConversation = conversationId(page);
+
+	await page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first().click();
+	await expect(page.getByText('A member accrues four weeks a year.')).toBeVisible();
+
+	// A verdict recorded opens its note; a note recorded is thanked.
+	const helpful = page.getByRole('button', { name: 'Helpful', exact: true });
+	await helpful.click();
+	await expect(helpful).toHaveAttribute('aria-pressed', 'true');
+	const note = page.getByRole('textbox', { name: 'Anything to add? (optional)' });
+	await note.fill('Clear and quick.');
+	await note.locator('xpath=ancestor::form').getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByText('Thanks, noted.')).toBeVisible();
+});
+
+test('a spent allowance is shown, and the next question is refused', async ({ page }) => {
+	for (let asked = 0; asked < 12; asked += 1) {
+		const response = await page.request.post('/api/agent/rooms/manual/ask', {
+			data: { question: 'One more?', resume: manualConversation }
+		});
+		if (response.status() === 429) break;
+		expect(response.status()).toBe(200);
+	}
+	const quota = await readJson<{ reached: boolean; limit: number }>(
+		page.request.get('/api/agent/quota')
+	);
+	expect(quota.reached).toBe(true);
+
+	await page.goto('/rooms/helper');
+	await expect(page.getByText(/reached today's fair-use limit/)).toBeVisible();
+	await composer(page).fill('Just one more?');
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByText('You asked: Just one more?')).toBeHidden();
+	expect((await page.request.post('/api/agent/rooms/helper/ask', { data: { question: 'x' } })).status()).toBe(429);
+});
+
+test('a person granted one room is refused everything else', async () => {
+	const person = await request.newContext({
+		baseURL: BACKEND,
+		extraHTTPHeaders: {
+			'x-authentik-uid': 'e2e-rooms-only',
+			'x-authentik-username': 'e2e-rooms-only',
+			'x-authentik-entitlements': 'room-helper'
+		}
+	});
+	try {
+		const rooms = await readJson<{ id: string }[]>(person.get('/api/agent/rooms'));
+		expect(rooms.map((r) => r.id)).toEqual(['helper']);
+		await ok(person.get('/api/agent/rooms/helper/conversations'));
+		for (const path of ['/api/agent/rooms/manual/conversations', '/api/agent/rooms/manual/documents/1042']) {
+			expect((await person.get(path)).status(), path).toBe(403);
+		}
+		expect((await person.post('/api/agent/rooms/manual/ask', { data: { question: 'x' } })).status()).toBe(403);
+
+		const document = await readJson<{ paths: Record<string, Record<string, unknown>> }>(
+			person.get('/openapi.json')
+		);
+		const walked: string[] = [];
+		for (const [path, operations] of Object.entries(document.paths)) {
+			if (PERSON_FACING.some((prefix) => path.startsWith(prefix))) continue;
+			for (const method of Object.keys(operations)) {
+				const url = path.replace(/\{[^}]+\}/g, '1');
+				const response = await person.fetch(url, { method, data: method === 'get' ? undefined : {} });
+				walked.push(`${method.toUpperCase()} ${path} ${response.status()}`);
+			}
+		}
+		expect(walked.length).toBeGreaterThan(10);
+		expect(walked.filter((line) => !line.endsWith(' 403'))).toEqual([]);
+	} finally {
+		await person.dispose();
+	}
+});
+
+test('the pages, photographed', async ({ browser }) => {
+	test.skip(!SHOTS, 'set ROOMS_SCREENSHOTS to a directory to photograph the pages');
+	const views = [
+		['index', '/rooms'],
+		['library', `/rooms/manual?c=${manualConversation}`],
+		['allowance', '/rooms/helper']
+	];
+	for (const [width, height] of [
+		[1440, 900],
+		[390, 844]
+	]) {
+		for (const theme of ['light', 'dark'] as const) {
+			const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
+			const page = await context.newPage();
+			for (const [name, path] of views) {
+				await page.goto(path);
+				await page.waitForLoadState('networkidle');
+				await page.screenshot({ path: `${SHOTS}/${name}-${width}-${theme}.png` });
+			}
+			await context.close();
+		}
+	}
+});

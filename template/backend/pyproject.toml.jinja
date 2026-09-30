@@ -38,8 +38,9 @@ dependencies = [
     # app carries its own put/get/list/move/delete/share code.
     "nextcloud>=2026.6.0",
     # agent-common: the factory's own Claude Code kit (kits/python/agent-common) —
-    # the CLI driver, personas and transcripts the agent slice binds to this app.
-    "agent-common>=2026.9.57",
+    # the CLI driver, personas, transcripts and LibraryAgent the agent slice binds
+    # to this app.
+    "agent-common>=2026.9.58",
     # library: the household api-client of the library's caller door, which
     # agent-common's LibraryAgent asks through; transitive-only, so declared for
     # its index pin below to reach it.

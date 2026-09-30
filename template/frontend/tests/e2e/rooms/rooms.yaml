@@ -1,0 +1,18 @@
+# The rooms the rooms spec drives (rooms.spec.ts): one persona answered by the
+# suites' fake CLI, and one library room answered by the fake library.
+helper:
+  title: The Helper
+  blurb: Ask the helper about leave, slowly enough to refresh or stop it.
+  examples:
+    - How is recreation leave accrued?
+  persona: helper
+manual:
+  title: The Manual
+  blurb: Ask about pay, leave and conditions of service.
+  examples:
+    - How much recreation leave does a member accrue?
+  not_held: your own leave balance
+  library:
+    collections:
+      manual: the Manual
+    preamble: You are Milton, the librarian for the Manual.

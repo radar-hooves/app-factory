@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# The backend the rooms spec drives, with its two fake agents: the fake library
+# on :18766 and this app's backend on its own port, answering from the rooms
+# and persona beside this script through the suites' fake CLI. The database is
+# whatever the backend's settings name, migrated to head; a spent allowance is
+# counted per day, so give each run a fresh one. Stop with Ctrl-C.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+backend=$(cd "$here/../../../../backend" && pwd)
+export {{ project_name | upper | replace('-', '_') }}_VEND=off
+export {{ project_name | upper | replace('-', '_') }}_RATE_LIMIT_ENABLED=false
+export {{ project_name | upper | replace('-', '_') }}_AGENT_ROOMS_FILE="$here/rooms.yaml"
+export {{ project_name | upper | replace('-', '_') }}_AGENT_PERSONAS_DIR="$here/personas"
+export {{ project_name | upper | replace('-', '_') }}_AGENT_EXECUTABLE="$backend/tests/support/fake_agent_cli.py"
+export {{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL=http://127.0.0.1:18766
+export {{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_TOKEN=fake-library-bearer
+export {{ project_name | upper | replace('-', '_') }}_AGENT_DAILY_QUESTIONS=8
+chmod +x "$backend/tests/support/fake_agent_cli.py"
+cd "$backend"
+uv run python tests/support/fake_library.py --port 18766 --pace 0.05 &
+trap 'kill 0' EXIT
+uv run alembic upgrade head
+uv run uvicorn {{ package_name }}.server:app --host 127.0.0.1 --port {{ backend_port }}

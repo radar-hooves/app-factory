@@ -8,8 +8,9 @@ agent and the real client rather than a mock standing in for either.
 
 - `POST /ask`, JSON or multipart: `queued` frames first when the question
   holds `__queued__`, then Claude Code's own `system`/`init`, the answer as
-  `stream_event` deltas a word at a time (`pace` seconds apart), its
-  `citations` frame, the whole `assistant` event and `result`. The question
+  `stream_event` deltas a word at a time (`pace` seconds apart), the whole
+  `assistant` event, `result`, and then the library's `citations` frame, as
+  the library sends them. The question
   arrives with the room's preamble and is kept as it arrived. `__hang__`
   names the session and then answers nothing until the asker hangs up, a
   question a stop ends; only an answered question is kept, as the library's
@@ -198,9 +199,17 @@ class _Handler(BaseHTTPRequestHandler):
                 "anchor": "5-1",
                 "snippet": "A member accrues four weeks a year.",
             }
-            self._frame({"type": "citations", "citations": [citation]})
             self._frame({"type": "assistant", "message": {"content": [{"type": "text", "text": answer}]}})
-            self._frame({"type": "result", "subtype": "success", "session_id": session_id, "result": answer})
+            self._frame(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "session_id": session_id,
+                    "result": answer,
+                    "duration_ms": 1200,
+                }
+            )
+            self._frame({"type": "citations", "items": [citation]})
             with self.fake.lock:
                 self.fake.conversations.setdefault(session_id, []).append(
                     {
