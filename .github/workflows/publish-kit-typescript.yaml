@@ -1,10 +1,12 @@
 name: Publish kits/typescript
 
-# Publishes one package of kits/typescript to public npm (the @poodle64 scope) on
-# a package-scoped tag: design-tokens-v<version> for @poodle64/design-tokens,
-# ui-v<version> for @poodle64/ui, librarian-v<version> for @poodle64/librarian.
-# Each package releases on its own cadence, apart from this repo's vYYYY.M.x
-# factory releases, which trigger nothing here.
+# Publishes each public package of kits/typescript (@poodle64/design-tokens,
+# @poodle64/ui, @poodle64/librarian) to public npm when main carries a
+# package.json `version` npm does not have yet. A release is that bump, merged.
+# There is no package tag: copier records `git describe --tags` as an app's
+# `_commit`, so a package tag here would stamp apps with it in place of this
+# repo's vYYYY.M.x factory release. npm records the commit a version came from:
+# `npm view @poodle64/<package>@<version> gitHead`.
 #
 # Authenticates by OIDC trusted publishing: there is NO npm token and no
 # NPM_TOKEN secret. npm matches this repository and this workflow's FILENAME
@@ -17,24 +19,21 @@ name: Publish kits/typescript
 #
 # by-exception: a GitHub-hosted runner, because npm trusted publishing does not
 # support self-hosted runners (docs.npmjs.com/trusted-publishers); an OIDC
-# publish from atlas fails ENEEDAUTH. Never pull_request: a tag push or a
-# dispatch only.
+# publish from atlas fails ENEEDAUTH. Never pull_request. A dispatch on main
+# re-runs a publish that failed; a dispatch on any other ref is a dry run of the
+# same steps.
 
 on:
   push:
-    tags: ['design-tokens-v*', 'ui-v*', 'librarian-v*']
+    branches: [main]
+    paths: ['kits/typescript/packages/*/package.json']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing release tag to publish (e.g. ui-v2026.9.22)'
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -50,21 +49,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ inputs.tag || github.ref_name }}
-
-      - name: Resolve package from tag
-        id: pkg
-        env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -e
-          case "$RELEASE_TAG" in
-            design-tokens-v*|ui-v*|librarian-v*) ;;
-            *) echo "unrecognised tag: $RELEASE_TAG" >&2; exit 1 ;;
-          esac
-          echo "dir=packages/${RELEASE_TAG%-v*}" >> "$GITHUB_OUTPUT"
-          echo "version=${RELEASE_TAG##*-v}" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -83,25 +67,50 @@ jobs:
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@^11.5.1
 
+      # Only a 404 means unpublished; any other failure stops the run rather
+      # than reading as "nothing to release".
+      - name: Find versions npm does not have
+        id: pending
+        run: |
+          set -euo pipefail
+          dirs=""
+          for manifest in packages/*/package.json; do
+            spec=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$spec" ] || continue
+            if out=$(npm view "$spec" version 2>&1); then
+              echo "$spec is on npm"
+            elif grep -q E404 <<<"$out"; then
+              echo "$spec is new"
+              dirs="$dirs ${manifest%/package.json}"
+            else
+              printf '%s\n' "$out" >&2
+              exit 1
+            fi
+          done
+          echo "dirs=${dirs# }" >> "$GITHUB_OUTPUT"
+
       - name: Install
+        if: steps.pending.outputs.dirs != ''
         run: pnpm install --frozen-lockfile
 
-      # A tag can be cut from a commit that never went through kit-typescript.yaml,
-      # so the package's own build and test run here too. The trailing "..."
-      # selects the package AND its workspace dependencies in dependency order:
-      # @poodle64/ui's tests compile against design-tokens' generated dist/.
-      - name: Build and test package
-        run: pnpm --filter "{./${{ steps.pkg.outputs.dir }}}..." run test
-
-      - name: Verify tag matches package version
+      # The commit never necessarily went through kit-typescript.yaml, so each
+      # package's own build and test run here too. The trailing "..." selects the
+      # package AND its workspace dependencies in dependency order: @poodle64/ui's
+      # tests compile against design-tokens' generated dist/.
+      - name: Build and test
+        if: steps.pending.outputs.dirs != ''
+        env:
+          DIRS: ${{ steps.pending.outputs.dirs }}
         run: |
-          set -e
-          PKG_VERSION=$(node -p "require('./${{ steps.pkg.outputs.dir }}/package.json').version")
-          if [ "$PKG_VERSION" != "${{ steps.pkg.outputs.version }}" ]; then
-            echo "Tag version ${{ steps.pkg.outputs.version }} does not match ${{ steps.pkg.outputs.dir }}/package.json version $PKG_VERSION" >&2
-            exit 1
-          fi
+          filters=()
+          for dir in $DIRS; do filters+=(--filter "{./$dir}..."); done
+          pnpm "${filters[@]}" run test
 
+      # Glob order is publish order: design-tokens, which librarian takes off the
+      # registry, sorts first. A new package must sort after what it depends on.
       - name: Publish
-        working-directory: kits/typescript/${{ steps.pkg.outputs.dir }}
-        run: npm publish
+        if: steps.pending.outputs.dirs != ''
+        env:
+          DIRS: ${{ steps.pending.outputs.dirs }}
+          npm_config_dry_run: ${{ github.ref != 'refs/heads/main' }} # npm's --dry-run
+        run: for dir in $DIRS; do (cd "$dir" && npm publish); done

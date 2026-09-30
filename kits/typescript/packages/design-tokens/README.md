@@ -246,7 +246,7 @@ reintroduce the collision unnoticed.
 1. Edit `tokens/tokens.tokens.json` only.
 2. `pnpm test` (builds, then checks the emitted contract against real Tailwind) and check `dist/`.
 3. Bump `version` in `package.json` and `meta.version` in the token file (CalVer), update `CHANGELOG.md`.
-4. Commit, tag `design-tokens-v<version>`, push the tag — CI publishes to public npm.
+4. Merge to main; the new version publishes to public npm (`publish-kit-typescript.yaml`). No tag.
 5. Renovate raises the bump PR in each consuming app.
 
 Never edit `dist/` by hand; it is generated and gitignored.
