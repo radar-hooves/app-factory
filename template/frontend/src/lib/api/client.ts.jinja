@@ -135,7 +135,18 @@ const errorNormaliserMiddleware: Middleware = {
 //
 // Once per page: init()'s two parallel calls each answer a 401 and the session
 // guard asks as well, and the first navigation is the one that should happen.
+// A page restored from the back/forward cache is the one case where that
+// navigation never completed, so the latch opens again there; the layout
+// re-checks the session on the same event.
 let redirecting = false;
+
+// Guarded because SvelteKit's build reads a universal load module in Node, and
+// an app's +page.ts may import this client.
+if (typeof window !== 'undefined') {
+	window.addEventListener('pageshow', (event) => {
+		if (event.persisted) redirecting = false;
+	});
+}
 
 export function redirectToAuthentik(returnPath: string = '/') {
 	if (redirecting) return;

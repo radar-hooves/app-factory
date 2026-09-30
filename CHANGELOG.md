@@ -49,7 +49,7 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 
 ### Fixed
 
-- **The session guard sends only a lapsed session to sign in.** `init()` asks for `/api/users/me` with `redirect: 'manual'`. The proxy's redirect to sign in arrives as an `opaqueredirect` and reads as lapsed, as a 401 does. A request that failed (reset, unreachable, 5xx, 403, timeout) offers a retry instead. The guard godswood and cadmus ran bounced every failure: with the API's connection reset, it made 21 sign-in round trips in 8 seconds. `redirectToAuthentik()` also navigates once per page; a 401 used to navigate three times.
+- **The session guard sends only a lapsed session to sign in.** `init()` asks for `/api/users/me` with `redirect: 'manual'`. The proxy's redirect to sign in arrives as an `opaqueredirect` and reads as lapsed, as a 401 does. A request that failed (reset, unreachable, 5xx, 403, timeout) offers a retry instead. The guard godswood and cadmus ran bounced every failure: with the API's connection reset, it made 21 sign-in round trips in 8 seconds. `redirectToAuthentik()` also navigates once per page; a 401 used to navigate three times. A page restored from the back/forward cache checks the session again.
 - **The feedback widget posts to the route the factory serves.** Its default, `/api/feedback`, meets the SPA's static mount before the slash redirect, and a deployed app answered every report with a 405. The layout passes `/api/feedback/`, which is what cadmus did alone.
 
 ### Converging onto it
