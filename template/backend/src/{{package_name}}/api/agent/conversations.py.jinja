@@ -14,7 +14,8 @@ theirs at different moments, and the library only once the question leaves
 its queue, which is why the two are not the same column.
 
 `turns` is this slice's record of every question asked: when, its words as
-the agent was sent them, and whether the agent holds an answer to it. The
+the agent was sent them, whether the agent holds an answer to it, and what
+the page asked for when it was not a plain question (a briefing). The
 agent's transcript lists only answered questions, and the library keys an
 answer mark by that list's position; the page counts every question it
 asked. `merged` reconciles the two, so a question stopped before the agent
@@ -72,6 +73,8 @@ class Turn:
     citations: list[dict[str, Any]] = field(default_factory=list)
     #: Where the agent lists this answer; None when it holds none.
     agent_index: int | None = None
+    #: What the page asked for (`briefing`); None for a question.
+    kind: str | None = None
 
 
 def now() -> datetime.datetime:
@@ -93,7 +96,13 @@ def answering(conversation: AgentConversation) -> datetime.datetime | None:
 
 
 def begin(
-    db: Session, *, user_id: uuid.UUID, room: str, question: str, conversation: AgentConversation | None
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    room: str,
+    question: str,
+    conversation: AgentConversation | None,
+    kind: str | None = None,
 ) -> AgentConversation | None:
     """Stamp a turn as being answered and record its question; a new conversation when `conversation` is None.
 
@@ -102,7 +111,9 @@ def begin(
     conditional UPDATE, so two asks racing on two workers cannot both win.
     """
     at = now()
-    record = {"at": at.isoformat(), "question": question, "answered": False}
+    record: dict[str, Any] = {"at": at.isoformat(), "question": question, "answered": False}
+    if kind:
+        record["kind"] = kind
     if conversation is None:
         conversation = AgentConversation(
             id=str(uuid.uuid4()),
@@ -218,10 +229,10 @@ def merged(conversation: AgentConversation, agent_turns: list[Any]) -> list[Turn
         at = datetime.datetime.fromisoformat(record["at"])
         if record.get("answered") and index < len(agent_turns):
             answer = agent_turns[index]
-            turns.append(Turn(record["question"], answer.answer, at, list(answer.citations), index))
+            turns.append(Turn(record["question"], answer.answer, at, list(answer.citations), index, record.get("kind")))
             index += 1
         else:
-            turns.append(Turn(record["question"], "", at))
+            turns.append(Turn(record["question"], "", at, kind=record.get("kind")))
     return turns
 
 

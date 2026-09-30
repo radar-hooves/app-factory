@@ -19,28 +19,11 @@ from pathlib import Path
 from typing import Annotated, Self
 
 from agent_common import cli
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from {{ package_name }}.config.paths import project_root
+from {{ package_name }}.config.paths import config_dir
 from {{ package_name }}.config.vend import Vended, resolve_vended_fields
-
-
-def _default_personas_dir() -> Path:
-    """Return the default persona directory: `/app/config/personas` in the
-    container, `config/personas` at the repo root in a source checkout.
-
-    `project_root()` alone lands nowhere in a container — the package installs
-    into site-packages, several directories above where the image actually
-    unpacks `config/` — so the shipped persona directory would never be found.
-    `Path.cwd()` is the container's WORKDIR (`/app`) and a source checkout's
-    invocation directory alike, the same two-step resolution `paths.py`'s
-    `frontend_build_dir()`/`data_dir()` already use for the identical reason.
-    """
-    for candidate in (Path.cwd() / "config" / "personas", project_root() / "config" / "personas"):
-        if candidate.is_dir():
-            return candidate
-    return project_root() / "config" / "personas"
 
 
 class AgentSettings(BaseSettings):
@@ -52,8 +35,9 @@ class AgentSettings(BaseSettings):
     # .mcp.json — app-owned, like config/actors.yaml. Read at every spawn, so
     # an override lets a deployment point at an edited copy with no rebuild
     # and no restart (`agent_common.persona`'s whole reason for reading fresh
-    # rather than caching).
-    personas_dir: Path = _default_personas_dir()
+    # rather than caching). Under `config_dir()`, found in the container as in
+    # a source checkout.
+    personas_dir: Path = Field(default_factory=lambda: config_dir() / "personas")
 
     # The gateway Claude Code is pointed at, and the key it presents. Set,
     # they become ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN on the child
@@ -112,8 +96,8 @@ class AgentSettings(BaseSettings):
     timeout_seconds: float = 600.0
 
     # `config/rooms.yaml`: the rooms this app offers (`api/agent/rooms.py`).
-    # App-owned like the persona directory; absent, the app offers none.
-    rooms_file: Path = _default_personas_dir().parent / "rooms.yaml"
+    # App-owned like the persona directory, beside it; absent, the app offers none.
+    rooms_file: Path = Field(default_factory=lambda: config_dir() / "rooms.yaml")
 
     # Questions one person may ask a day across every room, admins exempt;
     # 0 turns the allowance off. The day is local to `quota_timezone`.

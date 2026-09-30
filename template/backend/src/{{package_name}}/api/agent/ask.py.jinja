@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import functools
 import logging
+import math
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -77,6 +78,7 @@ async def ask(
     question: str,
     resume: str | None,
     files: dict[str, bytes],
+    kind: str | None = None,
 ) -> StreamingResponse:
     """Stamp the conversation answering, start its turn, and stream it.
 
@@ -94,10 +96,14 @@ async def ask(
                 raise NotFoundError(DENIAL)
             if conversation is not None and conversations.answering(conversation) is not None:
                 raise ConflictError("That conversation is still being answered")
-            if quota.allowance(db, settings, user_id, exempt=exempt).reached:
-                raise AllowanceSpentError("Today's questions are used up; there are more tomorrow")
+            allowance = quota.allowance(db, settings, user_id, exempt=exempt)
+            if allowance.reached:
+                raise AllowanceSpentError(
+                    "Today's questions are used up; there are more tomorrow",
+                    retry_after=max(1, math.ceil((allowance.resets_at - conversations.now()).total_seconds())),
+                )
             started = conversations.begin(
-                db, user_id=user_id, room=room.id, question=question, conversation=conversation
+                db, user_id=user_id, room=room.id, question=question, conversation=conversation, kind=kind
             )
             if started is None:
                 raise ConflictError("That conversation is still being answered")

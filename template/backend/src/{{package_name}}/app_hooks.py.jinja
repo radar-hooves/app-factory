@@ -19,6 +19,11 @@ none of them behaves exactly as it does today.
   - `API_PREFIX: str` — where `main.py` mounts every vertical slice, "/api"
     otherwise. For an app whose consumer contract predates the factory and
     cannot be relocated.
+  - `OPEN_ROUTES: dict[str, str]` — this app's own routes that declare no
+    module gate by design, each path (under `API_PREFIX`, matched whole, every
+    method) with what guards it instead: the caller's own record, a signature
+    over a webhook's body. `tests/test_route_walk.py` passes them and fails
+    one that names no route.
   - `mcp_auth(app)` — `main.py` gates /mcp with this instead of the factory's
     Authentik bearer check. For an app that is itself an authority for machine
     identity, in front of which a second gate closes the surface.

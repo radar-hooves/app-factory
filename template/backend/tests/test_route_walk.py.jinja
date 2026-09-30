@@ -8,16 +8,23 @@ persona), marked by `entitlements.gate`. A route this app adds without one
 fails here rather than opening its data to every account the identity
 provider lets in. The people list is not person-facing: it answers only an
 account admitted to the app itself (`entitlements.require_app_module`).
+
+A route this app holds open by design (the caller's own settings, a webhook
+a signature over its body guards) is declared in `app_hooks.OPEN_ROUTES`,
+with what guards it instead, and matched whole: a route added beside it
+still needs a gate.
 """
 
 from collections.abc import Iterator
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from httpx import AsyncClient
 
+from {{ package_name }} import app_hooks
+from {{ package_name }}.entitlements import require_module
 from {{ package_name }}.main import _API_PREFIX
 
 #: Routes any signed-in person may reach, each gated by something other than a module.
@@ -30,6 +37,9 @@ PERSON_FACING = {
     "/agent/conversations": "the caller's own conversations, each gated on its room",
     "/agent/quota": "the caller's own allowance",
 }
+
+#: This app's own routes held open by design, each with what guards it (`app_hooks.OPEN_ROUTES`).
+OPEN_ROUTES: dict[str, str] = getattr(app_hooks, "OPEN_ROUTES", {})
 
 
 def _routes(app: FastAPI) -> Iterator[tuple[str, str, Dependant]]:
@@ -51,16 +61,44 @@ def _gates(dependant: Dependant) -> Iterator[str]:
         yield from _gates(dependency)
 
 
-def test_every_route_outside_the_person_facing_set_declares_a_module_gate(app: FastAPI) -> None:
-    open_to_everyone = tuple(f"{_API_PREFIX.rstrip('/')}{path}" for path in PERSON_FACING)
-    walked = list(_routes(app))
-    ungated = [
+def _ungated(app: FastAPI, open_routes: dict[str, str]) -> list[str]:
+    """Every API route outside the person-facing set and `open_routes` that declares no module gate."""
+    prefix = _API_PREFIX.rstrip("/")
+    person_facing = tuple(f"{prefix}{path}" for path in PERSON_FACING)
+    declared = {f"{prefix}{path}" for path in open_routes}
+    return [
         f"{methods} {path}"
-        for methods, path, dependant in walked
-        if path.startswith(_API_PREFIX) and not path.startswith(open_to_everyone) and not any(_gates(dependant))
+        for methods, path, dependant in _routes(app)
+        if path.startswith(_API_PREFIX)
+        and not path.startswith(person_facing)
+        and path not in declared
+        and not any(_gates(dependant))
     ]
-    assert walked
-    assert ungated == []
+
+
+def test_every_route_outside_the_person_facing_set_declares_a_module_gate(app: FastAPI) -> None:
+    assert list(_routes(app))
+    assert _ungated(app, OPEN_ROUTES) == []
+
+
+def test_every_route_this_app_holds_open_is_one_it_serves(app: FastAPI) -> None:
+    """A declaration naming no route is stale, and would open whatever next took its path."""
+    served = {path for _, path, _ in _routes(app)}
+    prefix = _API_PREFIX.rstrip("/")
+    assert [path for path in OPEN_ROUTES if f"{prefix}{path}" not in served] == []
+    assert all(why.strip() for why in OPEN_ROUTES.values())
+
+
+def test_a_route_held_open_is_passed_whole_and_nothing_beside_it() -> None:
+    router = APIRouter()
+    router.add_api_route("/support/webhook", lambda: None, methods=["POST"])
+    router.add_api_route("/support/webhook/replay", lambda: None, methods=["POST"])
+    router.add_api_route("/support/refunds", lambda: None, dependencies=[Depends(require_module("support"))])
+    walked = FastAPI()
+    walked.include_router(router, prefix=_API_PREFIX.rstrip("/"))
+    assert _ungated(walked, {"/support/webhook": "a signature over the raw body"}) == [
+        f"POST {_API_PREFIX.rstrip('/')}/support/webhook/replay"
+    ]
 
 
 def test_a_rooms_routes_gate_on_the_room_they_name(app: FastAPI) -> None:

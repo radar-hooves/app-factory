@@ -5,10 +5,13 @@ a local persona, or Milton over named collections. The file is committed and
 released like code and has no admin surface, so a wrong room is refused at
 start rather than met by a colleague: `load` raises on a room naming no
 agent or both, an unknown persona, or a collection without a reader's name.
-An app with no file offers no rooms.
+An app with no file offers no rooms. A library room in a deployment with no
+library configured is not a wrong room: the app starts, logs which room waits
+on which setting, and that room answers 503 until it is set.
 """
 
 import functools
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -22,10 +25,14 @@ from agent_common.library_agent import LibraryAgent
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.entitlements import ROOM_PREFIX
-from {{ package_name }}.exceptions import NotFoundError
+from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
+
+logger = logging.getLogger(__name__)
 
 #: A room's id is a path segment and half an entitlement name.
 _ID = re.compile(r"\A[a-z0-9][a-z0-9-]{0,62}\Z")
+#: What a library room waits on.
+_LIBRARY_URL = "{{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL"
 
 
 class RoomsInvalid(ValueError):
@@ -85,8 +92,16 @@ def get(settings: AgentSettings, room_id: str) -> Room:
 
 
 def agent(settings: AgentSettings, room: Room) -> Agent:
-    """The agent that answers in `room`: its persona, or Milton over its collections."""
+    """The agent that answers in `room`: its persona, or Milton over its collections.
+
+    Raises:
+        ServiceUnavailableError: a library room, and this deployment names no library.
+    """
     if room.library is not None:
+        if not settings.library_url:
+            raise ServiceUnavailableError(
+                "Milton is not available here yet", context={"room": room.id, "unset": _LIBRARY_URL}
+            )
         token = settings.library_token.get_secret_value()
 
         async def bearer() -> str:
@@ -109,10 +124,14 @@ def _load(path: Path, _version: int, personas_dir: Path, library: bool) -> dict[
     if not isinstance(raw, dict):
         raise RoomsInvalid(f"{path}: expected a mapping of room id to room")
     personas = set(agent_persona.names(personas_dir))
-    return {str(room_id): _room(str(room_id), body, personas, library) for room_id, body in raw.items()}
+    loaded = {str(room_id): _room(str(room_id), body, personas) for room_id, body in raw.items()}
+    for room in loaded.values():
+        if room.library is not None and not library:
+            logger.warning("Room %r answers 503 until %s is set", room.id, _LIBRARY_URL, extra={"room": room.id})
+    return loaded
 
 
-def _room(room_id: str, body: object, personas: set[str], library: bool) -> Room:
+def _room(room_id: str, body: object, personas: set[str]) -> Room:
     def refuse(why: str) -> RoomsInvalid:
         return RoomsInvalid(f"room {room_id!r}: {why}")
 
@@ -132,8 +151,6 @@ def _room(room_id: str, body: object, personas: set[str], library: bool) -> Room
             raise refuse("a library room names its collections")
         if not all(isinstance(name, str) and name.strip() for name in collections.values()):
             raise refuse("every collection needs a reader's name")
-        if not library:
-            raise refuse("a library room needs {{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL")
         room_library = Library(collections=dict(collections), preamble=str(shelf.get("preamble") or "").strip())
     return Room(
         id=room_id,
