@@ -33,6 +33,9 @@
 	let missing = $state(false);
 	let listOpen = $state(false);
 
+	// Derived, so each follows its own value: `page.params` is a new object on
+	// every navigation, a conversation named in the address included.
+	const roomId = $derived(page.params.room);
 	const wanted = $derived(page.url.searchParams.get('c'));
 	const handed = $derived(page.url.searchParams.get('q')?.trim() || null);
 	const briefing = $derived(room ? extensions.briefing?.(room) : undefined);
@@ -49,7 +52,7 @@
 	// the address whenever it changes, never once: a link to another room
 	// leaves this one's conversation and starts that room's.
 	$effect(() => {
-		const id = page.params.room;
+		const id = roomId;
 		untrack(() => void enter(id));
 	});
 
@@ -60,7 +63,7 @@
 		missing = false;
 		listOpen = false;
 		const { data } = await api.GET('/api/agent/rooms');
-		if (page.params.room !== id) return;
+		if (roomId !== id) return;
 		const found = data?.find((r) => r.id === id) ?? null;
 		missing = found === null;
 		if (!found) return;
