@@ -995,7 +995,7 @@ an unverifiable claim as shipped. So the procedure is now `additivity.mjs`:
 
 ```sh
 node harness/additivity.mjs                # against the previous commit
-node harness/additivity.mjs ui-v2026.8.3   # against a released tag
+node harness/additivity.mjs "$(npm view @poodle64/ui@2026.9.22 gitHead)"   # against a release
 ```
 
 It builds the package at the base ref in a throwaway git worktree (a full
@@ -1011,11 +1011,11 @@ its full attribute set, the content box's attribute set, `<main>`'s computed
 computed `max-width`, margins and padding, eight geometry numbers, and the
 rendered screenshot. It exits non-zero on any difference and names the field.
 
-**Against `ui-v2026.8.3`: 15 pairs, 105 compared fields, identical on every field
+**Against ui 2026.8.3 (`ee0db12`): 15 pairs, 105 compared fields, identical on every field
 and every pixel.** Not "no visible difference": the same bytes.
 
 Driven red before being kept, the way every other gate here is: against
-`ui-v2026.8.0` — two features back — it reports **19 differences**, exits 1, and
+ui 2026.8.0 (`e7f54c2`), two features back, it reports **19 differences**, exits 1, and
 attributes them to `nested` and `measure`, which is exactly what those two
 releases changed.
 
