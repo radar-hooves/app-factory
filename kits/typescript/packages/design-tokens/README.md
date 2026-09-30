@@ -1,4 +1,4 @@
-# design-system — `@poodle64/design-tokens`
+# `@poodle64/design-tokens`
 
 The household web design-language factory. One DTCG token source, built by Style Dictionary v4, published to public npm, consumed by every SvelteKit app.
 

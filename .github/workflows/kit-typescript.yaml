@@ -1,29 +1,49 @@
-name: CI
+name: kits/typescript
 
-# Verifies both workspace packages on every push/PR so Renovate PRs and
-# token/component edits carry a real signal.
+# The gate for kits/typescript, the pnpm workspace publishing @poodle64/design-tokens,
+# @poodle64/ui and @poodle64/librarian: build and test every package, type-check
+# ui and librarian, assert each package's emitted contract, then drive the built
+# ui package in a real browser. The kit is self-contained, so every step runs
+# from kits/typescript.
 #
-# Runner: the repo is public, so a fork's pull request runs on a GitHub-hosted
-# runner and never reaches the self-hosted atlas runner; everything else runs
-# on atlas. security.yaml's jobs choose the same way.
+# The household CI rule's self-hosted default applies (rules-library/fleet/ci.md):
+# a push or a same-repo PR runs on atlas. This repo is PUBLIC and takes fork
+# PRs, so a fork's own code runs on a GitHub-hosted runner instead, as in
+# kit-rust.yaml. No ntfy-failure step: a public repo cannot call master-project's
+# private composite action, so failures show in the run and PR UI only.
 
 on:
   pull_request:
+    paths:
+      - 'kits/typescript/**'
+      - '.github/workflows/kit-typescript.yaml'
+  workflow_dispatch:
 
-# This workflow only reads the repo (checkout, install, build, test) — no
-# write scope is needed. publish.yaml declares its own id-token scope for OIDC.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+defaults:
+  run:
+    working-directory: kits/typescript
+
 jobs:
   build:
+    name: Build, test and type-check
+    # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: kits/typescript/package.json
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -73,10 +93,10 @@ jobs:
           fi
           grep -q 'DS_COLOR_STATUS_SUCCESS' "$DIST/tokens.js"
 
-          # The palette catalogue (design-system#25). test/palettes.test.js holds
-          # the real contract; these three lines only assert the artefacts exist
-          # and carry the shape a consumer imports, so a build that silently
-          # stopped emitting them fails here rather than at an adopting app.
+          # The palette catalogue. test/palettes.test.js holds the real
+          # contract; these lines only assert the artefacts exist and carry the
+          # shape a consumer imports, so a build that silently stopped emitting
+          # them fails here rather than at an adopting app.
           test -f "$DIST/palettes.css" || { echo "missing palettes.css" >&2; exit 1; }
           grep -q "DS_PALETTE_NAMES" "$DIST/palettes.js"
           # Every palette block must be :root-anchored, or it ties with
@@ -123,19 +143,21 @@ jobs:
   # A separate job because it needs a browser binary, and because the two
   # failure modes are worth telling apart at a glance: `build` failing means
   # the package is wrong on paper, this one failing means it is wrong in an
-  # engine. Every defect this gate covers — dead overlay transitions, a shell
-  # region scrolling sideways under a passing document-level check, an avatar
-  # fallback that only a real 404 reaches, an overlay whose `overflow-y-auto`
-  # had no height to act on — was invisible to `build` and to jsdom alike, and
-  # each was found by a person looking rather than by CI.
+  # engine. Dead overlay transitions, a shell region scrolling sideways under a
+  # passing document-level check, an avatar fallback only a real 404 reaches:
+  # each is invisible to `build` and to jsdom alike.
   browser:
+    name: Drive @poodle64/ui in a real browser
     runs-on: ubuntu-latest # by-exception (2026-09-07): Playwright --with-deps needs apt and sudo, which the NixOS runner has neither of
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: kits/typescript/package.json
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -146,8 +168,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The harness imports from dist, and the design-tokens stylesheets are
-      # generated, so the whole workspace has to be built in dependency order
-      # before the harness can be compiled against it.
+      # generated, so the whole workspace is built in dependency order first.
       - name: Build every package
         run: pnpm -r run build
 

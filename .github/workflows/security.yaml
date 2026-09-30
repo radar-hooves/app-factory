@@ -6,12 +6,12 @@ name: Security
 # validation with zero jobs. Mirrored from radar-hooves/thoth's own security.yaml,
 # which carries the same constraint and the same fix: gitleaks and trivy-fs
 # inlined here, both on a GitHub-hosted runner so fork code never reaches the
-# household runner. This repo's own first-party code is kits/rust only
-# (template/ is jinja source stamped into apps, not runnable code of this
-# repo's own — its own audit runs in the scaffolded app via
-# template/.github/workflows/security.yaml.jinja); trivy-fs covers
-# kits/rust/Cargo.lock (Trivy parses it natively), this repo's
-# cargo-audit-equivalent gate (rules-library/core/supply-chain.md).
+# household runner. This repo's own first-party code is its kits (template/ is
+# jinja source stamped into apps, not runnable code of this repo's own — its
+# own audit runs in the scaffolded app via
+# template/.github/workflows/security.yaml.jinja); trivy-fs reads every kit's
+# lock natively (kits/rust/Cargo.lock, uv.lock, kits/typescript/pnpm-lock.yaml),
+# this repo's dependency-audit gate (rules-library/core/supply-chain.md).
 #
 # Weekly, and on a dependency change: CVEs arrive with time, not with commits,
 # and pre-commit already runs gitleaks on every commit.

@@ -1,0 +1,107 @@
+name: Publish kits/typescript
+
+# Publishes one package of kits/typescript to public npm (the @poodle64 scope) on
+# a package-scoped tag: design-tokens-v<version> for @poodle64/design-tokens,
+# ui-v<version> for @poodle64/ui, librarian-v<version> for @poodle64/librarian.
+# Each package releases on its own cadence, apart from this repo's vYYYY.M.x
+# factory releases, which trigger nothing here.
+#
+# Authenticates by OIDC trusted publishing: there is NO npm token and no
+# NPM_TOKEN secret. npm matches this repository and this workflow's FILENAME
+# against the trusted publisher configured on each package, and signs a
+# provenance attestation, which it checks against each package.json's
+# `repository.url`. Renaming this file, or moving the publish step into a
+# reusable workflow, breaks publishing until every package's trusted publisher
+# is re-made on npmjs (docs/master/reference/guide-package-distribution.md in
+# master-project).
+#
+# by-exception: a GitHub-hosted runner, because npm trusted publishing does not
+# support self-hosted runners (docs.npmjs.com/trusted-publishers); an OIDC
+# publish from atlas fails ENEEDAUTH. Never pull_request: a tag push or a
+# dispatch only.
+
+on:
+  push:
+    tags: ['design-tokens-v*', 'ui-v*', 'librarian-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish (e.g. ui-v2026.9.22)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm exchanges for publish rights
+    defaults:
+      run:
+        working-directory: kits/typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Resolve package from tag
+        id: pkg
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -e
+          case "$RELEASE_TAG" in
+            design-tokens-v*|ui-v*|librarian-v*) ;;
+            *) echo "unrecognised tag: $RELEASE_TAG" >&2; exit 1 ;;
+          esac
+          echo "dir=packages/${RELEASE_TAG%-v*}" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG##*-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: kits/typescript/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@poodle64'
+
+      # Node 22 bundles npm 10.x, and OIDC publishing needs npm >= 11.5.1.
+      # Lifting npm alone keeps the toolchain identical to kit-typescript.yaml.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # A tag can be cut from a commit that never went through kit-typescript.yaml,
+      # so the package's own build and test run here too. The trailing "..."
+      # selects the package AND its workspace dependencies in dependency order:
+      # @poodle64/ui's tests compile against design-tokens' generated dist/.
+      - name: Build and test package
+        run: pnpm --filter "{./${{ steps.pkg.outputs.dir }}}..." run test
+
+      - name: Verify tag matches package version
+        run: |
+          set -e
+          PKG_VERSION=$(node -p "require('./${{ steps.pkg.outputs.dir }}/package.json').version")
+          if [ "$PKG_VERSION" != "${{ steps.pkg.outputs.version }}" ]; then
+            echo "Tag version ${{ steps.pkg.outputs.version }} does not match ${{ steps.pkg.outputs.dir }}/package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Publish
+        working-directory: kits/typescript/${{ steps.pkg.outputs.dir }}
+        run: npm publish

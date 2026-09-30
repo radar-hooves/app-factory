@@ -93,7 +93,7 @@ typography:
 > question, the prose does. Do not style screens ad hoc.
 >
 > Shared baseline: `docs/master/design/shared-design-language.md`.
-> Token source: `@poodle64/design-tokens` (radar-hooves/design-system, DTCG 2025.10).
+> Token source: `@poodle64/design-tokens` (radar-hooves/app-factory `kits/typescript`, DTCG 2025.10).
 > Generated artefacts: the package's `dist/` (CSS, JS constants, Tailwind @theme).
 
 Australian English throughout.

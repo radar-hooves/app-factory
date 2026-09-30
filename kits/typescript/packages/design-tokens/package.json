@@ -4,11 +4,15 @@
   "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
   "type": "module",
   "license": "MIT",
-  "repository": "github:radar-hooves/design-system",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/radar-hooves/app-factory.git",
+    "directory": "kits/typescript/packages/design-tokens"
+  },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
-    "provenance": false
+    "provenance": true
   },
   "files": [
     "bin",

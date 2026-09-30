@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- **`kits/typescript`, the TypeScript kit: radar-hooves/design-system folded in with its history.** `@poodle64/design-tokens`, `@poodle64/ui`, `@poodle64/librarian` and the private console, as their own pnpm workspace with its own lock. The npm names and the per-package tags (`design-tokens-v*`, `ui-v*`, `librarian-v*`) are unchanged, so every consumer's install still works. `kit-typescript.yaml` runs the kit's CI on a pull request touching it, and `publish-kit-typescript.yaml` publishes a package on its tag by npm trusted publishing, now with provenance; each package's `repository` names this repo. The per-repo tooling the old root carried (its `.claude/`, workflows, pre-commit, Renovate and direnv files) is gone, covered by this repo's own. Ruling: the operator, 28/09/2026 (master-project#233); need: master-project, app-factory#1.
+
+### Changed
+
+- **A stamped `DESIGN.md` names the token package's source as `kits/typescript` in this repo, on public npm,** not GitHub Packages and design-system.
+
 ## [2026.9.58] - 2026-09-30
 
 ### Added

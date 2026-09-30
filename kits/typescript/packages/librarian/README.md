@@ -568,6 +568,6 @@ Where Playwright's own Chromium will not start (NixOS), name one that does:
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint`.
 3. Commit, tag `librarian-v<version>`, push the tag.
-4. `.github/workflows/publish.yaml` runs on that push and publishes through
-   npm's trusted publisher. Watch it: `gh run list --workflow=publish.yaml`,
+4. `.github/workflows/publish-kit-typescript.yaml` (repo root) runs on that push and publishes through
+   npm's trusted publisher. Watch it: `gh run list -R radar-hooves/app-factory --workflow=publish-kit-typescript.yaml`,
    then `npm view @poodle64/librarian version`.

@@ -6,12 +6,13 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/radar-hooves/design-system.git"
+		"url": "git+https://github.com/radar-hooves/app-factory.git",
+		"directory": "kits/typescript/packages/ui"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org",
 		"access": "public",
-		"provenance": false
+		"provenance": true
 	},
 	"files": [
 		"bin",

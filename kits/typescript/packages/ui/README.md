@@ -1411,6 +1411,6 @@ non-zero and naming the field on any difference.
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint` (package.json/exports sanity).
 3. Commit, tag `ui-v<version>`, push the tag.
-4. `.github/workflows/publish.yaml` runs on that push and publishes via npm
-   OIDC trusted publishing: `gh run list --workflow=publish.yaml`.
+4. `.github/workflows/publish-kit-typescript.yaml` (repo root) runs on that push and publishes via npm
+   OIDC trusted publishing: `gh run list -R radar-hooves/app-factory --workflow=publish-kit-typescript.yaml`.
    Confirm with `npm view @poodle64/ui version`.

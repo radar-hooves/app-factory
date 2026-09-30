@@ -41,7 +41,13 @@ import { createHash } from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(here, '..');
-const repoRoot = join(packageRoot, '..', '..');
+const workspaceRoot = join(packageRoot, '..', '..');
+// The workspace's path inside the git repository (kits/typescript/), so the
+// base build runs from the same place in the worktree.
+const workspacePrefix = execFileSync('git', ['rev-parse', '--show-prefix'], {
+	cwd: workspaceRoot,
+	encoding: 'utf8'
+}).trim();
 const baseRef = process.argv[2] ?? 'HEAD~1';
 const PORT = 4186;
 
@@ -165,24 +171,28 @@ let browser;
 try {
 	worktree = mkdtempSync(join(tmpdir(), 'ds-additivity-'));
 	console.log(`building the base at ${baseRef} in ${worktree}`);
-	run('git', ['worktree', 'add', '--detach', worktree, baseRef], repoRoot);
+	run('git', ['worktree', 'add', '--detach', worktree, baseRef], workspaceRoot);
+	// A ref older than kits/typescript holds the workspace at the repository root.
+	const base = existsSync(join(worktree, workspacePrefix, 'pnpm-workspace.yaml'))
+		? join(worktree, workspacePrefix)
+		: worktree;
 	// A full install rather than borrowing this checkout's node_modules: the
 	// borrowed tree's workspace links resolve back into THIS checkout, so the
 	// "base" build would silently be built against current sources.
-	run('pnpm', ['install', '--frozen-lockfile'], worktree);
+	run('pnpm', ['install', '--frozen-lockfile'], base);
 	// The WHOLE workspace, not just `ui`: the harness compiles the consumer's
 	// real import chain, which starts at @poodle64/design-tokens' own emitted
 	// `tokens.tw.css`. Filtering to `ui` leaves that unbuilt and the base build
 	// dies on an unresolvable export rather than on anything meaningful.
-	run('pnpm', ['run', 'build'], worktree);
-	run('pnpm', ['--filter', '@poodle64/ui', 'run', 'harness:build'], worktree);
+	run('pnpm', ['run', 'build'], base);
+	run('pnpm', ['--filter', '@poodle64/ui', 'run', 'harness:build'], base);
 
 	console.log('building the working tree');
-	run('pnpm', ['run', 'build'], repoRoot);
-	run('pnpm', ['--filter', '@poodle64/ui', 'run', 'harness:build'], repoRoot);
+	run('pnpm', ['run', 'build'], workspaceRoot);
+	run('pnpm', ['--filter', '@poodle64/ui', 'run', 'harness:build'], workspaceRoot);
 
 	browser = await chromium.launch();
-	const before = await capture(join(worktree, 'packages/ui/harness/dist'), browser);
+	const before = await capture(join(base, 'packages/ui/harness/dist'), browser);
 	const after = await capture(join(packageRoot, 'harness/dist'), browser);
 
 	let fields = 0;
@@ -213,7 +223,7 @@ try {
 } finally {
 	await browser?.close();
 	if (worktree) {
-		run('git', ['worktree', 'remove', '--force', worktree], repoRoot);
+		run('git', ['worktree', 'remove', '--force', worktree], workspaceRoot);
 		rmSync(worktree, { recursive: true, force: true });
 	}
 }
