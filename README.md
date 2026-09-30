@@ -32,7 +32,7 @@ Written for the next agent working here, not for onboarding.
 | --- | --- |
 | [Working on this template](docs/development/working-on-the-template.md) | **Read before editing `template/`.** The two disciplines that fail silently (untagged changes reach nothing, stale parity manifests measure against an old factory), plus the traps in the shape itself. |
 | [Adopting an existing app](docs/development/adopting-an-existing-app.md) | Stamping over a repo that already has an app: the reconcile after the stamp is the job, not the stamp. |
-| [Agent console](docs/design/agent-console.md) | Design: the persona chat slice the factory carries, what stays the library's, the persona contract, and the sequence by which the library and Pebblestone take it. |
+| [Agent console](docs/design/agent-console.md) | Design: rooms, the one chat product every app gets for a local persona or Milton; the imported `agent-common` kit, the stamped slice, what `@poodle64/librarian` gains, what each app keeps, and the convergence order. |
 | [Agent jobs](docs/design/agent-jobs.md) | Design: the app-started persona session beside the chat one, its start/watch/message/stop API, and why `--bg` was rejected |
 | [Alerts](docs/design/alerts.md) | Design: what a machine raises over `/mcp` and the operator reads in the top-bar bell; the producer contract, and why not ntfy |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
