@@ -13,7 +13,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 ### Changed
 
 - **This repo went private (13:45, 30/09/2026); its CI is back on the household standard.** `security.yaml` calls master-project's `security-checks.yaml` reusable instead of inlining gitleaks/Trivy on `ubuntu-latest`; `kit-rust.yaml` and `factory-selftest.yaml` run on the self-hosted runner unconditionally and both restore the `ntfy-failure` step; every now-false "this repo is public" / fork-PR rationale is removed.
-- **A stamped backend declares `library>=2026.9.62` and pins it to the household index,** because `agent-common` now depends on it and under the explicit index a transitive-only private name resolves nowhere. The root uv workspace gains the same explicit index and pins for the kit's own lock. Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
+- **A stamped backend declares `library>=2026.9.62` and pins it to the household index,** because `agent-common` now depends on it and under the explicit index a transitive-only private name resolves nowhere. The root uv workspace gains the same explicit index and pins for the kit's own lock. Proven by the self-test's scratch render: a stamp resolves `agent-common` and `library` off the household index, and with the kit repointed at the checkout its suites pass. Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
+- **`Agent.ask` is typed as the async generator both agents already are,** so a worker stops a turn by closing it: the local CLI is killed, the library's stream closed. Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
 
 ## [2026.9.57] - 2026-09-30
 
