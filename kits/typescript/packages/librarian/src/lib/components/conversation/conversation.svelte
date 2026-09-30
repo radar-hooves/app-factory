@@ -231,6 +231,16 @@
 		if (onopenartefact) return showing === turn.id;
 		return column?.kind === 'artefact' && column.turn.id === turn.id;
 	}
+
+	// Lifts the shell's report button (`@poodle64/ui` ReportWidget) clear of
+	// Send, which shares its corner. Set on the document because the button
+	// renders outside this subtree; a constant because Send is always the
+	// composer's last row.
+	$effect(() => {
+		if (!composer || typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--ds-report-clearance', '4.5rem');
+		return () => document.documentElement.style.removeProperty('--ds-report-clearance');
+	});
 </script>
 
 <div class="ds-lib-surface">
