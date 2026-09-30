@@ -29,6 +29,7 @@ src/lib/
     conversation/          the whole reading surface: scroll, pill, pane, composer slot
     conversation-list/     past conversations, newest first: reopen, rename, download, delete
     answer-mark/           helpful or not, with a note, on the last answer
+    answer-share/          share an answer read-only, and stop sharing it
     fair-use-notice/       today's allowance, beside the composer
     scope-statement/       what this room answers from, and what it does not hold
     agent-transcript/      one question and everything Milton did answering it
@@ -340,7 +341,7 @@ the job may go on by itself; `sendWhileRunning` is true.
 | Concern                  | How                                                                                                                                              |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | The answer mark          | `onmark(turn, verdict)` on `Conversation`: resolve true once recorded. Offered on the last settled answer only; without it no mark renders       |
-| Sharing an answer        | `onshare(turn, share)` on `Conversation`, over `chat.share`: every settled answer offers Share, which copies the link `StoredTurn.shared` names; a shared one offers Copy link and Stop sharing. Nothing is shared unless the reader asks |
+| Sharing an answer        | `onshare(turn, share)` on `Conversation`, over `chat.share`: every settled answer offers Share, which copies the link `StoredTurn.shared` names; a shared one offers Copy link and Stop sharing. Nothing is shared unless the reader asks. A host's own `turn` places `AnswerShare` (`./answer-share`) with the `onshare` and `shared` it is handed |
 | A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the room |
 | Waiting, still answering | `waiting` and `answering` on `Conversation`, from the controller                                                                                 |
 | The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |

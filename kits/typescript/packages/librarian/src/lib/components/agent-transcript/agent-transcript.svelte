@@ -13,12 +13,9 @@
   2302px-wide transcript.
 -->
 <script lang="ts">
-	import { tick } from 'svelte';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import CopyIcon from '@lucide/svelte/icons/copy';
-	import LinkIcon from '@lucide/svelte/icons/link';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-	import Share2Icon from '@lucide/svelte/icons/share-2';
 	import {
 		outcomeLine,
 		readerQuestion,
@@ -40,6 +37,7 @@
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import type { Verdict } from '../../chat.svelte';
 	import AnswerMark from '../answer-mark/answer-mark.svelte';
+	import AnswerShare from '../answer-share/answer-share.svelte';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
@@ -258,50 +256,16 @@
 	const followUps = $derived(!used && onsuggest ? suggestions : []);
 
 	let copied = $state(false);
-	let linked = $state(false);
-	let sharing = $state(false);
-	let shareFailed = $state(false);
-
 	// Not `copy`: the prop of that name is the package's own words, and a
 	// function shadowing it here would be a redeclaration, not a shadow.
 	async function copyToClipboard() {
-		if (await clip(answer)) {
+		try {
+			await navigator.clipboard.writeText(answer);
 			copied = true;
 			setTimeout(() => (copied = false), 1600);
-		}
-	}
-
-	async function copyLink() {
-		if (shared && (await clip(new URL(shared, location.href).href))) {
-			linked = true;
-			setTimeout(() => (linked = false), 1600);
-		}
-	}
-
-	/** Shares or stops sharing; a new share copies its link at once. */
-	async function toggleShare(share: boolean) {
-		if (!onshare || sharing) return;
-		sharing = true;
-		shareFailed = false;
-		try {
-			shareFailed = !(await onshare(share));
-		} finally {
-			sharing = false;
-		}
-		if (share && !shareFailed) {
-			await tick();
-			await copyLink();
-		}
-	}
-
-	async function clip(text: string): Promise<boolean> {
-		try {
-			await navigator.clipboard.writeText(text);
-			return true;
 		} catch {
-			// Refused (a denied permission, or Safari after a round trip): the
-			// reader can still select the answer, or tap "Copy link" again.
-			return false;
+			// A denied clipboard permission is not worth an error state on an
+			// answer the reader can still select by hand.
 		}
 	}
 </script>
@@ -420,30 +384,7 @@
 					</button>
 				{/if}
 				{#if onshare && hasAnswer && !failure}
-					{#if shared}
-						<button type="button" class="ds-lib-action" onclick={copyLink} disabled={sharing}>
-							{#if linked}<CheckIcon size={14} />{:else}<LinkIcon size={14} />{/if}
-							<span>{linked ? words.linkCopied : words.copyLink}</span>
-						</button>
-						<button
-							type="button"
-							class="ds-lib-action"
-							onclick={() => toggleShare(false)}
-							disabled={sharing}
-						>
-							<span>{words.stopSharing}</span>
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="ds-lib-action"
-							onclick={() => toggleShare(true)}
-							disabled={sharing}
-						>
-							<Share2Icon size={14} />
-							<span>{words.share}</span>
-						</button>
-					{/if}
+					<AnswerShare {onshare} {shared} copy={words} />
 				{/if}
 				{#if onmark && hasAnswer && !failure}
 					<AnswerMark {onmark} copy={words} />
@@ -465,12 +406,6 @@
 				     second one, once the host offers either. -->
 				{#if outcome && !failure}
 					<span class="ds-lib-duration">{outcomeLine(outcome, depth, words, formatCost)}</span>
-				{/if}
-				<!-- Its own line under the row, as the mark's note is. -->
-				{#if onshare && (shared || shareFailed)}
-					<p class="ds-lib-share-line" class:is-failed={shareFailed} role="status">
-						{shareFailed ? words.shareFailed : words.sharedWith}
-					</p>
 				{/if}
 			</div>
 		{/if}
@@ -677,21 +612,6 @@
 		outline-offset: 2px;
 	}
 
-	.ds-lib-action:disabled {
-		cursor: default;
-		opacity: 0.6;
-	}
-
-	.ds-lib-share-line {
-		order: 1;
-		flex-basis: 100%;
-		margin: 0 0 0 0.375rem;
-		font-size: var(--ds-text-2xs);
-	}
-
-	.ds-lib-share-line.is-failed {
-		color: var(--ds-color-status-error);
-	}
 
 	.ds-lib-duration {
 		padding-inline-start: 0.25rem;
