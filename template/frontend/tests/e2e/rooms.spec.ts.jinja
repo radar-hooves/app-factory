@@ -29,7 +29,7 @@ const PERSON_FACING = [
 type Conversation = {
 	id: string;
 	answering_since: string | null;
-	turns: { question: string; answer: string; at: string | null }[];
+	turns: { question: string; answer: string; at: string | null; depth?: string | null }[];
 };
 
 test.describe.configure({ mode: 'serial' });
@@ -184,6 +184,23 @@ test('a library room cites, opens the cited document and takes a mark', async ({
 	await note.fill('Clear and quick.');
 	await note.locator('xpath=ancestor::form').getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByText('Thanks, noted.')).toBeVisible();
+});
+
+test('a library room offers Quick or Thorough; a persona room offers neither', async ({ page }) => {
+	await page.goto('/rooms/manual');
+	const group = page.getByRole('group', { name: /How hard Milton works/ });
+	await expect(group).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Quick' })).toHaveAttribute('aria-pressed', 'true');
+
+	await page.getByRole('button', { name: 'Thorough' }).click();
+	await ask(page, 'What about long service leave, in detail?');
+	await expect(page.getByText(/long service leave after ten years/)).toBeVisible();
+	await expect(page.getByText(/^Thorough · /)).toBeVisible();
+	expect((await read(page, conversationId(page))).turns.at(-1)?.depth).toBe('thorough');
+
+	await page.goto('/rooms/helper');
+	await expect(page.getByRole('group', { name: /How hard/ })).toHaveCount(0);
+	await expect(page.getByText('Quick', { exact: true })).toHaveCount(0);
 });
 
 test('a link to another room shows that room, not the last one', async ({ page }) => {

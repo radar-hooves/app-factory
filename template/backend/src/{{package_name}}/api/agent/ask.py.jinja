@@ -26,7 +26,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from agent_common import cli, sse
 from agent_common.agent import Agent
@@ -65,6 +65,8 @@ class _Turn:
     files: dict[str, bytes]
     user_id: uuid.UUID
     charged: bool
+    #: How hard the agent was asked to work; a Thorough question is charged twice.
+    depth: Literal["quick", "thorough"] | None
 
 
 async def ask(
@@ -79,6 +81,7 @@ async def ask(
     resume: str | None,
     files: dict[str, bytes],
     kind: str | None = None,
+    depth: Literal["quick", "thorough"] | None = None,
 ) -> StreamingResponse:
     """Stamp the conversation answering, start its turn, and stream it.
 
@@ -103,7 +106,13 @@ async def ask(
                     retry_after=max(1, math.ceil((allowance.resets_at - conversations.now()).total_seconds())),
                 )
             started = conversations.begin(
-                db, user_id=user_id, room=room.id, question=question, conversation=conversation, kind=kind
+                db,
+                user_id=user_id,
+                room=room.id,
+                question=question,
+                conversation=conversation,
+                kind=kind,
+                depth=depth,
             )
             if started is None:
                 raise ConflictError("That conversation is still being answered")
@@ -120,6 +129,7 @@ async def ask(
         files=files,
         user_id=user_id,
         charged=not exempt,
+        depth=depth,
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -210,7 +220,7 @@ async def _answer(
     accepted = held = False
     try:
         async with contextlib.aclosing(
-            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None)
+            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None, depth=turn.depth)
         ) as events:
             async for event in events:
                 if event.get("type") == "system" and event.get("subtype") == "init":
@@ -230,10 +240,14 @@ async def _answer(
 
 
 def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> None:
-    """The agent took the question: the conversation is its session's now, and the question is charged."""
+    """The agent took the question: the conversation is its session's now, and the question is charged.
+
+    A Thorough question reads more and costs more, so it counts double
+    against the daily allowance.
+    """
     conversations.claim(db, turn.conversation_id, session_id)
     if turn.charged:
-        quota.charge(db, settings, turn.user_id)
+        quota.charge(db, settings, turn.user_id, weight=2 if turn.depth == "thorough" else 1)
 
 
 def _speaks(event: dict[str, Any]) -> bool:

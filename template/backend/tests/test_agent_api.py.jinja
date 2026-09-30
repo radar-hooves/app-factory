@@ -278,6 +278,20 @@ async def test_what_the_page_asked_for_is_read_back_with_its_question(client: As
     assert (await client.post("/api/agent/rooms/helper/ask", json=unworded, headers=who)).status_code == 422
 
 
+async def test_a_depth_is_read_back_with_its_question_and_a_bad_one_is_refused(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    thorough = await client.post(
+        "/api/agent/rooms/helper/ask", json={"question": "read closely", "depth": "thorough"}, headers=who
+    )
+    assert thorough.status_code == 200
+    conversation = _events(thorough.text)[0]["session_id"]
+
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["turns"][0]["depth"] == "thorough"
+    misspelled = {"question": "x", "depth": "thoroughly"}
+    assert (await client.post("/api/agent/rooms/helper/ask", json=misspelled, headers=who)).status_code == 422
+
+
 async def test_a_resume_carries_on_the_agents_own_session(client: AsyncClient) -> None:
     who = _person("room-helper")
     first = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
@@ -434,6 +448,20 @@ async def test_an_admin_is_not_counted(client: AsyncClient) -> None:
     assert (await client.get("/api/agent/quota", headers=admin)).json()["exempt"] is True
 
 
+async def test_a_thorough_question_costs_two_of_the_allowance(client: AsyncClient) -> None:
+    """`daily_questions=3`: one Thorough (2) plus one Quick (1) spends it all."""
+    who = _person("room-helper")
+    thorough = await client.post(
+        "/api/agent/rooms/helper/ask", json={"question": "read closely", "depth": "thorough"}, headers=who
+    )
+    assert thorough.status_code == 200
+    assert (await client.get("/api/agent/quota", headers=who)).json()["remaining"] == 1
+
+    assert (await _ask(client, "helper", "one more", who)).status_code == 200
+    quota = (await client.get("/api/agent/quota", headers=who)).json()
+    assert (quota["remaining"], quota["reached"]) == (0, True)
+
+
 # ── A library room ───────────────────────────────────────────────────────
 
 
@@ -447,10 +475,20 @@ async def test_a_library_room_asks_milton_with_its_preamble_and_reads_back_witho
     assert any(e.get("type") == "citations" for e in events)
     assert library.asked[-1]["question"] == "You are Milton, the librarian for the Manual.\n\nHow much leave?"
     assert library.asked[-1]["collections"] == ["manual"]
+    assert "depth" not in library.asked[-1]
 
     read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
     assert read["turns"][0]["question"] == "How much leave?"
     assert read["turns"][0]["citations"][0]["document_id"] == fake_library.DOCUMENT_ID
+
+
+async def test_a_librarys_depth_reaches_milton(client: AsyncClient, library: fake_library.FakeLibrary) -> None:
+    who = _person("room-manual")
+    asked = await client.post(
+        "/api/agent/rooms/manual/ask", json={"question": "How much leave?", "depth": "thorough"}, headers=who
+    )
+    assert asked.status_code == 200
+    assert library.asked[-1]["depth"] == "thorough"
 
 
 async def test_a_cited_document_opens_only_inside_the_room(client: AsyncClient) -> None:

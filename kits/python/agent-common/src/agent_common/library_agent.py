@@ -25,7 +25,7 @@ import contextlib
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from library import CallerAnswerFeedbackRequest, CallerApi, Configuration
 from library.exceptions import NotFoundException
@@ -71,7 +71,12 @@ class LibraryAgent:
     timeout_seconds: float = 600.0
 
     async def ask(
-        self, question: str, *, resume: str | None = None, files: Mapping[str, bytes] | None = None
+        self,
+        question: str,
+        *,
+        resume: str | None = None,
+        files: Mapping[str, bytes] | None = None,
+        depth: Literal["quick", "thorough"] | None = None,
     ) -> AsyncGenerator[dict[str, Any]]:
         """Ask Milton, yielding every frame the library sends, unaltered, as it arrives.
 
@@ -93,7 +98,13 @@ class LibraryAgent:
                 # explicitly below so the connection goes with it.
                 frames = cast(
                     AsyncGenerator[dict[str, Any]],
-                    client.ask(self._asked(question), list(self.collections), resume=resume, files=attachments or None),
+                    client.ask(
+                        self._asked(question),
+                        list(self.collections),
+                        resume=resume,
+                        depth=depth,
+                        files=attachments or None,
+                    ),
                 )
                 try:
                     while True:

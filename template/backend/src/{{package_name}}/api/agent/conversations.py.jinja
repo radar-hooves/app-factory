@@ -26,7 +26,7 @@ every answer after it.
 import datetime
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, false, func, or_, select, update
 from sqlalchemy.orm import Mapped, Session, mapped_column
@@ -75,6 +75,8 @@ class Turn:
     agent_index: int | None = None
     #: What the page asked for (`briefing`); None for a question.
     kind: str | None = None
+    #: How hard the agent was asked to work; None for a room that offers no choice.
+    depth: Literal["quick", "thorough"] | None = None
 
 
 def now() -> datetime.datetime:
@@ -103,6 +105,7 @@ def begin(
     question: str,
     conversation: AgentConversation | None,
     kind: str | None = None,
+    depth: Literal["quick", "thorough"] | None = None,
 ) -> AgentConversation | None:
     """Stamp a turn as being answered and record its question; a new conversation when `conversation` is None.
 
@@ -114,6 +117,8 @@ def begin(
     record: dict[str, Any] = {"at": at.isoformat(), "question": question, "answered": False}
     if kind:
         record["kind"] = kind
+    if depth:
+        record["depth"] = depth
     if conversation is None:
         conversation = AgentConversation(
             id=str(uuid.uuid4()),
@@ -229,10 +234,20 @@ def merged(conversation: AgentConversation, agent_turns: list[Any]) -> list[Turn
         at = datetime.datetime.fromisoformat(record["at"])
         if record.get("answered") and index < len(agent_turns):
             answer = agent_turns[index]
-            turns.append(Turn(record["question"], answer.answer, at, list(answer.citations), index, record.get("kind")))
+            turns.append(
+                Turn(
+                    record["question"],
+                    answer.answer,
+                    at,
+                    list(answer.citations),
+                    index,
+                    record.get("kind"),
+                    record.get("depth"),
+                )
+            )
             index += 1
         else:
-            turns.append(Turn(record["question"], "", at, kind=record.get("kind")))
+            turns.append(Turn(record["question"], "", at, kind=record.get("kind"), depth=record.get("depth")))
     return turns
 
 

@@ -363,7 +363,7 @@ wheels = [
 
 [[package]]
 name = "library"
-version = "2026.9.372"
+version = "2026.9.373"
 source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "api-common" },
@@ -374,7 +374,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "http://172.21.0.2:3141/poodle64/prod/+f/e70/3b9eeafb668fd/library-2026.9.372-py3-none-any.whl", hash = "sha256:e703b9eeafb668fd122597343716e87f1c22822ab87024ef75473179823eb8ca" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/7bb/e5e640a9eebc3/library-2026.9.373-py3-none-any.whl", hash = "sha256:7bbe5e640a9eebc3de027b673bef8afb6d25a1f82104c13c1d85b1202d8596b2" },
 ]
 
 [[package]]
