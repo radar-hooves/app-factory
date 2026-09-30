@@ -1,38 +1,112 @@
 name: Publish kits/python
 
 # Builds every package of the root uv workspace (kits/python/*, today
-# agent-common) and publishes it to the household's private index, through the
-# same shared reusable api-common publishes with (rules-library/platform/
-# common-libraries.md §Distribution). A thin caller: the index URL, the runner
-# and the stamp are all this file carries. It works while this repo is private,
-# as it is (30/09/2026): a public repo cannot call a private repo's reusable.
+# agent-common) and publishes it to the household's private index, stamped with
+# the release tag's own version (`v2026.9.59` publishes `agent-common
+# 2026.9.59`), so a kit's version IS the factory release that shipped it, as a
+# Rust kit's `tag =` pin is (kits/rust/README.md).
 #
-# On a release tag only, never a push to main. The reusable stamps a tag's own
-# version onto the wheel (`v2026.9.57` publishes `agent-common 2026.9.57`), so
-# a kit's version IS the factory release that shipped it, as a Rust kit's
-# `tag =` pin already is (kits/rust/README.md), and a stamp at that tag pins
-# `agent-common>=` the kit it was tested with (factory-selftest.yaml resolves
-# it from the checkout). A dispatch from a branch stamps `YYYY.M.<run>` instead,
-# which sorts below every tag's wheel and so is never resolved: dispatch it on
-# a tag.
+# INLINED, not a caller of master-project's publish-wheels.yaml: this repo is
+# public (Thoth pulls kits/rust by URL) and master-project is private, and
+# GitHub refuses a public repo's call into a private repo's reusable workflow or
+# action at startup. The same shape as supacrawl's publish-wheels.yaml, the
+# other public repo that publishes to the index; keep the two aligned with the
+# reusable. The upload password is read from the atlas runner host
+# (/var/lib/devpi-ci/upload_password), never a GitHub secret (fleet/ci.md).
+#
+# On a release tag, or a dispatch ON a tag. Never pull_request: a public repo's
+# pull request must not reach the self-hosted runner.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
-# Serialised, never cancelled: killing an upload part-way publishes a partial set.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
-
 jobs:
   publish:
-    uses: radar-hooves/master-project/.github/workflows/publish-wheels.yaml@main
-    with:
-      index-url: http://172.21.0.2:3141/poodle64/prod/
-      runner: '["self-hosted","atlas"]'
-      stamp-version: true
+    if: github.ref_type == 'tag'
+    runs-on: [self-hosted, atlas]
+    env:
+      INDEX_URL: http://172.21.0.2:3141/poodle64/prod/
+      UPLOAD_PASSWORD_FILE: /var/lib/devpi-ci/upload_password
+      DEVPI_USER: poodle64
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up uv (and Python 3.14)
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: '3.14'
+
+      - name: Stamp the tag's version onto every kit
+        run: |
+          set -euo pipefail
+          STAMP="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "${STAMP}" | grep -qE '^[0-9]{4}\.([1-9]|1[0-2])\.[0-9]+$'; then
+            echo "::error::tag '${GITHUB_REF_NAME}' is not a household CalVer release (vYYYY.M.x); refusing to publish."
+            exit 1
+          fi
+          echo "STAMP=${STAMP}" >> "${GITHUB_ENV}"
+          for f in kits/python/*/pyproject.toml; do
+            sed -i -E "s/^version = \".*\"/version = \"${STAMP}\"/" "${f}"
+            echo "stamped ${f} -> ${STAMP}"
+          done
+
+      - name: Build wheels
+        run: |
+          rm -rf dist
+          uv build --wheel --all-packages --out-dir dist
+          ls -1 dist
+
+      - name: Refuse a wheel that does not carry the stamp
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          [ "${#wheels[@]}" -gt 0 ] || { echo "::error::no wheels were built"; exit 1; }
+          for w in "${wheels[@]}"; do
+            v="$(basename "${w}" | cut -d- -f2)"
+            [ "${v}" = "${STAMP}" ] || { echo "::error::${w##*/} carries '${v}', not '${STAMP}'"; exit 1; }
+          done
+
+      - name: Publish to devpi (a version already present is skipped)
+        run: |
+          if [ ! -r "${UPLOAD_PASSWORD_FILE}" ]; then
+            echo "::error::${UPLOAD_PASSWORD_FILE} is missing or unreadable; it is minted by the devpi-credentials unit on atlas."
+            exit 1
+          fi
+          export TWINE_USERNAME="${DEVPI_USER}"
+          export TWINE_PASSWORD
+          TWINE_PASSWORD="$(cat "${UPLOAD_PASSWORD_FILE}")"
+          rc=0
+          for f in dist/*; do
+            if out="$(uvx --from 'twine>=6.2' twine upload --repository-url "${INDEX_URL}" --non-interactive "${f}" 2>&1)"; then
+              printf '%s\n' "${out}"
+            elif printf '%s' "${out}" | grep -qiE '409|conflict|already (exists|been uploaded|uploaded)'; then
+              echo "skip existing: ${f}"
+            else
+              printf '%s\n' "${out}"
+              rc=1
+            fi
+          done
+          exit "${rc}"
+
+      - name: Verify the index serves our wheel, not the PyPI mirror
+        run: |
+          set -euo pipefail
+          for pkg in kits/python/*/; do
+            name="$(basename "${pkg}")"
+            if curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}"; then
+              echo "verified: ${name} ${STAMP} served from poodle64/prod"
+            else
+              echo "::error::${name} ${STAMP} is not on poodle64/prod"
+              exit 1
+            fi
+          done
