@@ -114,6 +114,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/tests/e2e/rooms{% endif %}"
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
 
 # Which skeleton this app is stamped from, asked first because `_subdirectory`
 # and every question below read it. `web` is the FastAPI + SvelteKit container
