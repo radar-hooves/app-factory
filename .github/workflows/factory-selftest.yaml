@@ -183,15 +183,15 @@ jobs:
         #
         # @poodle64/ui comes from THIS checkout, packed as a publish would ship
         # it, since the stamp may pin a version npm does not have until this
-        # merges. `pnpm add` resolves the whole tree around it; the install
-        # after it runs the app's `prepare` (svelte-kit sync), which `add` skips.
+        # merges. `pnpm add` resolves the whole tree around it but does not
+        # always run the app's `prepare`, so svelte-kit sync is run by name.
         working-directory: ${{ env.SCRATCH }}/frontend
         run: |
           set -euo pipefail
           (cd "${GITHUB_WORKSPACE}/kits/typescript" && pnpm install --frozen-lockfile && pnpm --filter @poodle64/ui run build)
           pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/ui pack --pack-destination "${RUNNER_TEMP}"
           pnpm add "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)"
-          pnpm install
+          pnpm exec svelte-kit sync
           pnpm test -- --run
           pnpm check
 
