@@ -13,7 +13,7 @@
 	"packageManager": "pnpm@10.28.0",
 	"pnpm": {
 		"overrides": {
-			"fast-uri": "3.1.6",
+			"fast-uri": "3.1.8",
 			"nanoid": "3.3.18"
 		},
 		"//overrides": "fast-uri (transitive via ajv): CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172. nanoid (transitive via postcss): CVE-2026-67213."
