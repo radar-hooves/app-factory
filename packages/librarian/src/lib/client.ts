@@ -37,6 +37,12 @@ export interface AgentEvent {
 	/** What a run returned under `--json-schema`, on its `result`. */
 	structured_output?: unknown;
 	error?: string;
+	/** On a `library_error` this layer raised: the HTTP status of a route that
+	 *  answered and would not stream. 429 is a spent allowance. */
+	status?: number;
+	/** On a `library_error` this layer raised: a stream that opened and died
+	 *  before its terminal frame. The turn may well go on without the page. */
+	dropped?: boolean;
 	detail?: string;
 	tools?: string[];
 	model?: string;
@@ -193,7 +199,11 @@ async function* read(
 	// layer breaking a working consumer over a header — the terminal-frame
 	// check at the end of this function catches it if it really says nothing.
 	const kind = (response.headers.get('content-type') ?? '').toLowerCase();
-	if (!response.ok || !response.body || (kind && !kind.includes('text/event-stream'))) {
+	if (!response.ok) {
+		yield { type: 'library_error', status: response.status };
+		return;
+	}
+	if (!response.body || (kind && !kind.includes('text/event-stream'))) {
 		yield { type: 'library_error' };
 		return;
 	}
@@ -231,7 +241,7 @@ async function* read(
 			chunk = await reader.read();
 		} catch {
 			if (signal?.aborted) return;
-			yield { type: 'library_error' };
+			yield { type: 'library_error', dropped: true };
 			return;
 		}
 		if (chunk.done) break;
@@ -258,5 +268,5 @@ async function* read(
 		yield last;
 	}
 
-	if (terminal && !ended && !signal?.aborted) yield { type: 'library_error' };
+	if (terminal && !ended && !signal?.aborted) yield { type: 'library_error', dropped: true };
 }

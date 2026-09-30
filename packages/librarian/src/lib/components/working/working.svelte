@@ -17,20 +17,25 @@
 	interface Props {
 		/** Shown instead of the cycling word once real work is identifiable. */
 		label?: string;
+		/** When the answer began, epoch ms, for one this page did not see start:
+		 *  the clock counts from it rather than from the moment it appeared. */
+		since?: number;
 		/** The persona's words. Resolved from `name` upstream. */
 		copy?: Partial<LibrarianCopy>;
 	}
 
-	let { label, copy }: Props = $props();
+	let { label, since, copy }: Props = $props();
 
 	const words = $derived(resolveCopy(copy));
 
+	const mounted = Date.now();
 	let tick = $state(0);
-	let elapsed = $state(0);
+	let now = $state(mounted);
+	const elapsed = $derived(Math.max(0, Math.floor((now - (since ?? mounted)) / 1000)));
 
 	$effect(() => {
 		const word = setInterval(() => (tick += 1), 2600);
-		const clock = setInterval(() => (elapsed += 1), 1000);
+		const clock = setInterval(() => (now = Date.now()), 1000);
 		return () => {
 			clearInterval(word);
 			clearInterval(clock);

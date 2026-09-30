@@ -57,6 +57,41 @@ export interface LibrarianCopy {
 	/** An artefact card's action, and the same action while it is open. */
 	openArtefact: string;
 	showingArtefact: string;
+	/** Beside the clock while the question waits behind someone else's. */
+	waiting: string;
+	/** Beside the clock on an answer this page did not start. */
+	stillAnswering: string;
+	/** The answer mark: the two verdicts, the optional note, and after. */
+	markHelpful: string;
+	markNotHelpful: string;
+	markNote: string;
+	markSend: string;
+	markNoted: string;
+	markFailed: string;
+	/** The fair-use notice, while there are questions left and once there are
+	 *  none, filled by `fill()`: `{resets}` is a time already, "midnight" or
+	 *  "2:00 pm". */
+	questionsLeft: string;
+	limitReached: string;
+	/** `{resets}` when the allowance comes back at the turn of the day. */
+	midnight: string;
+	support: string;
+	/** The conversation list. */
+	pastQuestions: string;
+	newQuestion: string;
+	readingPastQuestions: string;
+	noPastQuestions: string;
+	pastQuestionsFailed: string;
+	conversationActions: string;
+	rename: string;
+	download: string;
+	delete: string;
+	save: string;
+	cancel: string;
+	deletePrompt: string;
+	renameFailed: string;
+	downloadFailed: string;
+	deleteFailed: string;
 }
 
 /**
@@ -112,8 +147,45 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		closeSource: 'Close source',
 		documentUnavailable: "That document can't be opened right now.",
 		openArtefact: 'Open',
-		showingArtefact: 'Showing'
+		showingArtefact: 'Showing',
+		waiting: `${who} is answering another question first`,
+		stillAnswering: `${who} is still answering`,
+		markHelpful: 'Helpful',
+		markNotHelpful: 'Not helpful',
+		markNote: 'Anything to add? (optional)',
+		markSend: 'Send',
+		markNoted: 'Thanks, noted.',
+		markFailed: "That couldn't be sent. Nothing was recorded.",
+		// The industry wording, whole: the number, that it is a fair-use limit
+		// rather than a fault, and when it comes back. No apology.
+		questionsLeft: '{remaining} of {limit} questions left today. Resets at {resets}.',
+		limitReached: "You've reached today's fair-use limit of {limit} questions. It resets at {resets}.",
+		midnight: 'midnight',
+		support: 'Support',
+		pastQuestions: 'Past questions',
+		newQuestion: 'New question',
+		readingPastQuestions: 'Reading your past questions…',
+		noPastQuestions: 'No past questions yet.',
+		pastQuestionsFailed: "Your past questions couldn't be read just now.",
+		conversationActions: 'More',
+		rename: 'Rename',
+		download: 'Download',
+		delete: 'Delete',
+		save: 'Save',
+		cancel: 'Cancel',
+		deletePrompt: 'Delete this conversation? It goes from every device.',
+		renameFailed: "That conversation couldn't be renamed.",
+		downloadFailed: "That conversation couldn't be downloaded.",
+		deleteFailed: "That conversation couldn't be deleted."
 	};
+}
+
+/** A sentence with `{name}` places, filled. A place with no value stays as
+ *  written, so a host's override that drops one loses nothing else. */
+export function fill(template: string, values: Record<string, string | number>): string {
+	return template.replace(/\{(\w+)\}/g, (place, key: string) =>
+		key in values ? String(values[key]) : place
+	);
 }
 
 /** The library's own words, for a host that names no persona. */

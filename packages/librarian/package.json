@@ -30,6 +30,10 @@
 			"types": "./dist/session.svelte.d.ts",
 			"svelte": "./dist/session.svelte.js"
 		},
+		"./chat": {
+			"types": "./dist/chat.svelte.d.ts",
+			"svelte": "./dist/chat.svelte.js"
+		},
 		"./history": {
 			"types": "./dist/history.svelte.d.ts",
 			"svelte": "./dist/history.svelte.js"

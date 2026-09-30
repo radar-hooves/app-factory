@@ -128,6 +128,18 @@ describe('ask()', () => {
 		expect(await collect(ask({ question: 'q', fetch }))).toEqual([{ type: 'library_error' }]);
 	});
 
+	it('says which status a route refused with, so a host can read a spent allowance', async () => {
+		const fakeFetch = vi.fn(async () => ({
+			ok: false,
+			status: 429,
+			body: null,
+			headers: new Headers({ 'content-type': 'application/json' })
+		})) as unknown as typeof globalThis.fetch;
+		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+			{ type: 'library_error', status: 429 }
+		]);
+	});
+
 	it('reports a fetch that throws rather than throwing itself', async () => {
 		// What an expired session looks like from here: the POST is redirected
 		// cross-origin and the browser blocks it, so `fetch` rejects. A thrown
@@ -156,7 +168,7 @@ describe('ask()', () => {
 			streaming([JSON.stringify({ type: 'assistant' })], { truncate: true })
 		) as unknown as typeof globalThis.fetch;
 		const events = await collect(ask({ question: 'q', fetch: fakeFetch }));
-		expect(events.at(-1)).toEqual({ type: 'library_error' });
+		expect(events.at(-1)).toEqual({ type: 'library_error', dropped: true });
 	});
 
 	it('ends a stream that simply stops the same way', async () => {
@@ -167,7 +179,7 @@ describe('ask()', () => {
 		) as unknown as typeof globalThis.fetch;
 		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
 			{ type: 'assistant' },
-			{ type: 'library_error' }
+			{ type: 'library_error', dropped: true }
 		]);
 	});
 
@@ -245,6 +257,6 @@ describe('watch()', () => {
 			streaming([JSON.stringify({ type: 'assistant' })], { truncate: true })
 		) as unknown as typeof globalThis.fetch;
 		const events = await collect(watch({ endpoint: '/w', fetch: fakeFetch }));
-		expect(events.at(-1)).toEqual({ type: 'library_error' });
+		expect(events.at(-1)).toEqual({ type: 'library_error', dropped: true });
 	});
 });

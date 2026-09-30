@@ -33,6 +33,8 @@
 		type Citation
 	} from '../../citations';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
+	import type { Verdict } from '../../chat.svelte';
+	import AnswerMark from '../answer-mark/answer-mark.svelte';
 	import Working from '../working/working.svelte';
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
@@ -76,6 +78,14 @@
 		onopenartefact?: () => void;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
+		/** The question waits behind somebody else's. */
+		waiting?: boolean;
+		/** When an answer this page did not start began, epoch ms: it is still
+		 *  being written, and the clock counts from then. */
+		answering?: number;
+		/** Records a verdict on this answer. Omit and no mark renders: a
+		 *  control that records nothing is worse than none. */
+		onmark?: (verdict: Verdict) => Promise<boolean>;
 	}
 
 	let {
@@ -95,7 +105,10 @@
 		artefact,
 		artefactOpen = false,
 		onopenartefact,
-		describeTool
+		describeTool,
+		waiting = false,
+		answering,
+		onmark
 	}: Props = $props();
 
 	// The prose IS the artefact: it reads in the column, and the transcript
@@ -252,7 +265,15 @@
 		</header>
 
 		{#if running && segments.length === 0}
-			<Working copy={words} />
+			<Working
+				copy={words}
+				label={waiting
+					? words.waiting
+					: answering !== undefined
+						? words.stillAnswering
+						: undefined}
+				since={answering}
+			/>
 		{/if}
 
 		{#each segments as seg (seg.index)}
@@ -328,6 +349,9 @@
 						{#if copied}<CheckIcon size={14} />{:else}<CopyIcon size={14} />{/if}
 						<span>{copied ? words.copiedAnswer : words.copyAnswer}</span>
 					</button>
+				{/if}
+				{#if onmark && hasAnswer && !failure}
+					<AnswerMark {onmark} copy={words} />
 				{/if}
 				{#if onregenerate}
 					<button
@@ -515,6 +539,7 @@
 
 	.ds-lib-actions {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.25rem;
 		margin-inline-start: -0.375rem;

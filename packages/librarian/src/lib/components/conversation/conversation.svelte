@@ -12,6 +12,7 @@
 	import type { Snippet } from 'svelte';
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
 	import type { DescribeTool, Turn } from '../../transcript.svelte';
+	import type { Verdict } from '../../chat.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
@@ -51,6 +52,14 @@
 		/** Asks a follow-up the librarian suggested. Offered on the last answer
 		 *  only; without it the suggestion chips do not render. */
 		onsuggest?: (question: string) => void;
+		/** Records a verdict on an answer. Offered on the last answer only, as
+		 *  asking again is; without it no mark renders. */
+		onmark?: (turn: Turn, verdict: Verdict) => Promise<boolean>;
+		/** The last question waits behind somebody else's (`Chat.waiting`). */
+		waiting?: boolean;
+		/** When the last answer began, epoch ms, where this page did not see it
+		 *  start (`Chat.answering`): it reads as still being written. */
+		answering?: number | null;
 		/** Overrides for the package's own words. */
 		copy?: Partial<LibrarianCopy>;
 		/** Enables the source pane. Without it, chips render but do not open. */
@@ -85,6 +94,9 @@
 		scope,
 		onregenerate,
 		onsuggest,
+		onmark,
+		waiting = false,
+		answering = null,
 		copy,
 		loadDocument,
 		oncite,
@@ -256,11 +268,14 @@
 					{/if}
 
 					{#each turns as turn, index (turn.id)}
+						{@const last = index === turns.length - 1}
 						<AgentTranscript
 							question={turn.question}
 							blocks={turn.blocks}
 							outcome={turn.outcome}
-							running={running && index === turns.length - 1}
+							running={running && last}
+							waiting={waiting && last}
+							answering={last ? (answering ?? undefined) : undefined}
 							citations={turn.citations ?? []}
 							suggestions={turn.suggestions ?? []}
 							{collectionNames}
@@ -272,8 +287,11 @@
 							onopenartefact={opener(turn)}
 							{describeTool}
 							oncite={oncite || loadDocument ? cite : undefined}
-							onregenerate={index === turns.length - 1 && !running ? onregenerate : undefined}
-							onsuggest={index === turns.length - 1 && !running ? onsuggest : undefined}
+							onregenerate={last && !running ? onregenerate : undefined}
+							onsuggest={last && !running ? onsuggest : undefined}
+							onmark={last && !running && onmark
+								? (verdict) => onmark(turn, verdict)
+								: undefined}
 						/>
 					{/each}
 				</div>
