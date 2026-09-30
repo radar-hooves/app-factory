@@ -568,7 +568,7 @@ remembered, not what the house looks like.
 was before the feature existed — gated, not assumed:
 
 ```sh
-node harness/additivity.mjs ui-v2026.8.3
+node harness/additivity.mjs ee0db12   # ui 2026.8.3
 # 15 surface/viewport pairs, 105 compared fields (including the screenshot hash)
 # IDENTICAL on every field and every pixel against an explicit texture="none".
 ```
@@ -1379,7 +1379,7 @@ pnpm run check         # svelte-check
 pnpm run test:browser  # build the harness and drive it in a real browser
 
 # Before releasing a change that claims to be additive (minutes, not seconds):
-node harness/additivity.mjs ui-v2026.8.3
+node harness/additivity.mjs ee0db12   # ui 2026.8.3
 ```
 
 `pnpm test` includes the gates that compile the built package through the real
@@ -1410,7 +1410,7 @@ non-zero and naming the field on any difference.
 
 1. Change a component; bump `version` in `package.json` (CalVer).
 2. `pnpm build`, which runs `svelte-package` then `publint` (package.json/exports sanity).
-3. Commit, tag `ui-v<version>`, push the tag.
-4. `.github/workflows/publish-kit-typescript.yaml` (repo root) runs on that push and publishes via npm
-   OIDC trusted publishing: `gh run list -R radar-hooves/app-factory --workflow=publish-kit-typescript.yaml`.
+3. Merge to main. No tag.
+4. `.github/workflows/publish-kit-typescript.yaml` (repo root) runs on that push and publishes the new
+   version via npm OIDC trusted publishing: `gh run list -R radar-hooves/app-factory --workflow=publish-kit-typescript.yaml`.
    Confirm with `npm view @poodle64/ui version`.

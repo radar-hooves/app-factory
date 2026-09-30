@@ -19,7 +19,7 @@
  * rendered pixels.
  *
  *     node harness/additivity.mjs                # against the previous commit
- *     node harness/additivity.mjs ui-v2026.8.3   # against a released tag
+ *     node harness/additivity.mjs "$(npm view @poodle64/ui@2026.9.22 gitHead)"   # against a release
  *
  * Exits non-zero on any difference. It is deliberately NOT wired into
  * `pnpm test`: it builds a second copy of the package and installs into a
