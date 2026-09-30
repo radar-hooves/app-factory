@@ -5,8 +5,9 @@ Revises: f3a9c1d8e2b4
 Create Date: 2026-09-30 14:00:00.000000+00:00
 
 Rooms (`docs/design/agent-console.md`): a person's conversation in a room,
-its title, whether an answer is being written, and the slice's record of
-every question asked (`api/agent/conversations.py`); and one person's daily
+its title, whether an answer is being written, the slice's record of every
+question asked and which answers are shared read-only
+(`api/agent/conversations.py`); and one person's daily
 question count across every room (`api/agent/quota.py`). Both CASCADE on the
 user, personal-subject like the table they replace.
 
@@ -51,6 +52,7 @@ def upgrade() -> None:
         sa.Column("turns", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
         sa.Column("answering_since", sa.DateTime(timezone=True), nullable=True),
         sa.Column("stop_requested", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("shared", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
         *_timestamps(),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),

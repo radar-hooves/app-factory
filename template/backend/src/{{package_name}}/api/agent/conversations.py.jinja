@@ -21,6 +21,11 @@ answer mark by that list's position; the page counts every question it
 asked. `merged` reconciles the two, so a question stopped before the agent
 took it neither vanishes from a reopened conversation nor shifts the mark on
 every answer after it.
+
+`shared` lists the answers, by that same count, that the person has shared
+read-only with whoever may enter the room. Nothing is shared by default, and
+the words stay in the agent's transcript: a share is a place in this list,
+never a copy, so a deleted conversation takes its shares with it.
 """
 
 import datetime
@@ -61,6 +66,8 @@ class AgentConversation(Base, TimestampMixin):
     turns: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     answering_since: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     stop_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    #: The answers shared read-only, by the page's count.
+    shared: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +208,13 @@ def settle(db: Session, conversation_id: str) -> None:
         .where(AgentConversation.id == conversation_id)
         .values(answering_since=None, stop_requested=False, last_activity_at=now())
     )
+    db.commit()
+
+
+def share(db: Session, conversation: AgentConversation, position: int, *, shared: bool) -> None:
+    """Share answer `position` read-only with whoever may enter the room, or stop sharing it."""
+    rest = [p for p in conversation.shared if p != position]
+    conversation.shared = sorted([*rest, position]) if shared else rest
     db.commit()
 
 

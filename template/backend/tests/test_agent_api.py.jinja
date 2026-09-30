@@ -528,6 +528,61 @@ async def test_a_mark_lands_on_the_answer_the_page_meant_past_a_question_stopped
     assert unanswered.status_code == 404
 
 
+# ── Sharing an answer ────────────────────────────────────────────────────
+
+
+async def test_an_answer_is_shared_only_when_its_asker_shares_it_and_read_only_by_the_room(
+    client: AsyncClient,
+) -> None:
+    asker, colleague = _person("room-manual"), _person("room-manual")
+    conversation = _events((await _ask(client, "manual", "leave?", asker)).text)[0]["session_id"]
+    link = f"/api/agent/rooms/manual/answers/{conversation}/0"
+    assert (await client.get(link, headers=colleague)).status_code == 404
+
+    shared = await client.put(f"/api/agent/conversations/{conversation}/turns/0/share", headers=asker)
+    assert shared.json()["shared"] == f"/rooms/manual/answers/{conversation}/0"
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=asker)).json()
+    assert read["turns"][0]["shared"] == shared.json()["shared"]
+
+    opened = (await client.get(link, headers=colleague)).json()
+    assert (opened["question"], opened["citations"][0]["document_id"]) == ("leave?", fake_library.DOCUMENT_ID)
+    assert (await client.get(link, headers=_person("room-helper"))).status_code == 403
+    assert (await client.get(link, headers=_person())).status_code == 403
+    # The room in the address is the answer's own, and only its asker shares or withdraws it.
+    elsewhere = f"/api/agent/rooms/helper/answers/{conversation}/0"
+    assert (await client.get(elsewhere, headers=_person("room-manual", "room-helper"))).status_code == 404
+    withdraw = f"/api/agent/conversations/{conversation}/turns/0/share"
+    assert (await client.delete(withdraw, headers=colleague)).status_code == 404
+
+    assert (await client.delete(withdraw, headers=asker)).status_code == 204
+    assert (await client.get(link, headers=colleague)).status_code == 404
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=asker)).json()
+    assert read["turns"][0]["shared"] is None
+
+
+async def test_only_a_settled_answer_is_shared_and_a_deleted_conversation_takes_its_shares(
+    client: AsyncClient,
+) -> None:
+    who = _person("room-helper")
+    conversation = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+
+    def share(turn: int) -> str:
+        return f"/api/agent/conversations/{conversation}/turns/{turn}/share"
+
+    asking, _ = await _asking(client, "helper", fake_agent_cli.HANG_TRIGGER, who, resume=conversation)
+    assert (await client.put(share(1), headers=who)).status_code == 404
+    await client.post(f"/api/agent/conversations/{conversation}/stop", headers=who)
+    await asyncio.wait_for(asking, timeout=10)
+    assert (await client.put(share(1), headers=who)).status_code == 404
+    assert (await client.put(share(2), headers=who)).status_code == 404
+
+    assert (await client.put(share(0), headers=who)).status_code == 200
+    assert _row(conversation).shared == [0]
+    await client.delete(f"/api/agent/conversations/{conversation}", headers=who)
+    colleague = _person("room-helper")
+    assert (await client.get(f"/api/agent/rooms/helper/answers/{conversation}/0", headers=colleague)).status_code == 404
+
+
 async def test_deleting_a_library_conversation_forgets_it_at_the_library(
     client: AsyncClient, library: fake_library.FakeLibrary
 ) -> None:

@@ -16,7 +16,8 @@ import type {
 	ConversationRead,
 	ConversationSummary,
 	Quota,
-	RoomTransport
+	RoomTransport,
+	StoredTurn
 } from '@poodle64/librarian/chat';
 import type { Citation, LoadDocument } from '@poodle64/librarian/citations';
 import type { LibrarianCopy } from '@poodle64/librarian/copy';
@@ -34,6 +35,9 @@ export interface Room {
 	sources: string[];
 	/** Milton over collections: citations open, and an answer takes a mark. */
 	library: boolean;
+	/** The date of the newest document a library room holds; null until the
+	 *  library says. */
+	documents_to?: string | null;
 }
 
 /** A briefing on a room: what the composer's own control asks, and the card it reads as. */
@@ -110,6 +114,19 @@ export function roomTransport(room: Room): RoomTransport {
 		rename: (id, title) =>
 			data(api.PATCH('/api/agent/conversations/{conversation_id}', { ...at(id), body: { title } })),
 		remove: (id) => data(api.DELETE('/api/agent/conversations/{conversation_id}', at(id))),
+		share: async (id, turn, share) => {
+			const answer = { params: { path: { conversation_id: id, turn } } };
+			if (!share) {
+				await data(
+					api.DELETE('/api/agent/conversations/{conversation_id}/turns/{turn}/share', answer)
+				);
+				return null;
+			}
+			const shared = await data<StoredTurn>(
+				api.PUT('/api/agent/conversations/{conversation_id}/turns/{turn}/share', answer)
+			);
+			return shared.shared ?? null;
+		},
 		download: async (id) => {
 			const { data: body, response } = await api.GET(
 				'/api/agent/conversations/{conversation_id}/export',
@@ -130,6 +147,29 @@ export function roomTransport(room: Room): RoomTransport {
 			);
 	}
 	return transport;
+}
+
+/** "Documents to 30 September 2026.", in the reader's own words for a date. */
+export function documentsTo(date: string): string {
+	const day = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric'
+	});
+	return `Documents to ${day}.`;
+}
+
+/** An answer shared from `room`, read-only; rejects for one not shared or a room not entered. */
+export function sharedAnswer(
+	room: string,
+	conversation: string,
+	turn: number
+): Promise<StoredTurn> {
+	return data<StoredTurn>(
+		api.GET('/api/agent/rooms/{room_id}/answers/{conversation_id}/{turn}', {
+			params: { path: { room_id: room, conversation_id: conversation, turn } }
+		})
+	);
 }
 
 /** A library room's reading pane: the cited document, from the room's own route. */

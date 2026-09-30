@@ -2,12 +2,14 @@
 	A test app's own turn (`RoomExtensions.Turn`): the package's own while an
 	answer is written; once it settles, the question, the answer as unboxed
 	prose with its [n] marks taken out, a pill per source named by its title
-	and section, and the package's answer mark. Built from the package's parts,
-	as an app that presents an answer its own way builds it.
+	and section, and the package's share control and answer mark. Built from
+	the package's parts, as an app that presents an answer its own way builds
+	it.
 -->
 <script lang="ts">
 	import AgentTranscript, { type AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 	import AnswerMark from '@poodle64/librarian/answer-mark';
+	import AnswerShare from '@poodle64/librarian/answer-share';
 	import Markdown from '@poodle64/librarian/markdown';
 	import type { TextBlock } from '@poodle64/librarian/transcript';
 	import type { Room } from '$lib/agent/rooms';
@@ -45,9 +47,14 @@
 				{/each}
 			</ul>
 		{/if}
-		{#if turn.onmark}
-			<div class="text-muted-foreground flex items-center gap-1">
-				<AnswerMark onmark={turn.onmark} copy={turn.copy} />
+		{#if turn.onmark || turn.onshare}
+			<div class="text-muted-foreground flex flex-wrap items-center gap-1">
+				{#if turn.onshare}
+					<AnswerShare onshare={turn.onshare} shared={turn.shared} copy={turn.copy} />
+				{/if}
+				{#if turn.onmark}
+					<AnswerMark onmark={turn.onmark} copy={turn.copy} />
+				{/if}
 			</div>
 		{/if}
 	</article>

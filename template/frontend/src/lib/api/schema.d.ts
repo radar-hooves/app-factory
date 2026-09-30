@@ -20,6 +20,8 @@ export interface paths {
          *     the projection is the three fields a picker needs. It exists because a
          *     grant names a user id (``POST /api/workspaces/{id}/members``), and an
          *     owner has to be able to find that id somewhere other than the database.
+         *     An account admitted only to a room has nobody to grant a seat to, and is
+         *     refused (`entitlements.require_app_module`).
          */
         get: operations["listUsers"];
         put?: never;
@@ -611,6 +613,53 @@ export interface paths {
          *     agent took it does not shift the mark onto a neighbour.
          */
         put: operations["markAnswer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}/turns/{turn}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Share
+         * @description Share answer `turn` read-only with whoever may enter this room; nothing is shared until asked.
+         *
+         *     A settled answer only: one the agent holds, and not the one still being
+         *     written. Its `shared` is the page that reads it.
+         */
+        put: operations["shareAnswer"];
+        post?: never;
+        /**
+         * Unshare
+         * @description Stop sharing answer `turn`: its link answers as one never shared.
+         */
+        delete: operations["unshareAnswer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/rooms/{room_id}/answers/{conversation_id}/{turn}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shared
+         * @description A shared answer, read-only: the question, the answer and its sources.
+         */
+        get: operations["readSharedAnswer"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1228,6 +1277,8 @@ export interface components {
             sources: string[];
             /** Library */
             library: boolean;
+            /** Documents To */
+            documents_to?: string | null;
         };
         /**
          * SettingChangeRead
@@ -1324,6 +1375,12 @@ export interface components {
             citations: {
                 [key: string]: unknown;
             }[];
+            /** Kind */
+            kind?: string | null;
+            /** Depth */
+            depth?: ("quick" | "thorough") | null;
+            /** Shared */
+            shared?: string | null;
         };
         /**
          * UserSummary
@@ -2310,6 +2367,101 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shareAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn: number;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredTurn"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshareAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn: number;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readSharedAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn: number;
+                conversation_id: string;
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredTurn"];
+                };
             };
             /** @description Validation Error */
             422: {

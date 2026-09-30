@@ -40,6 +40,10 @@ class RoomRead(BaseModel):
     sources: list[str]
     #: A library room cites documents and takes an answer mark.
     library: bool
+    #: The date of the newest document a library room holds, for "Documents
+    #: to …" on its home. None until the library says (`docs/design/agent-console.md`
+    #: §Needs this design files).
+    documents_to: datetime.date | None = None
 
 
 class ConversationSummary(BaseModel):
@@ -56,6 +60,8 @@ class StoredTurn(BaseModel):
     citations: list[dict[str, Any]] = []
     kind: str | None = None
     depth: Literal["quick", "thorough"] | None = None
+    #: Where the answer is read while it is shared: the page's own address.
+    shared: str | None = None
 
 
 class ConversationRead(ConversationSummary):

@@ -65,7 +65,10 @@ WORKSPACE_EXEMPT: dict[type, str] = {
     WorkspaceMembership: "the grant that resolution reads; scoping it by workspace would be circular",
     DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
     FeedbackReport: "personal-subject: the person who filed it — a report may carry a screenshot of their own screen",
-    AgentConversation: "personal-subject: the asker — a conversation belongs to whoever asked, not a workspace",
+    AgentConversation: (
+        "personal-subject: the asker — a conversation belongs to whoever asked, not a workspace;"
+        " an answer the asker shares is read by whoever may enter its room, one answer at a time"
+    ),
     AgentQuestionCount: "personal-subject: the asker — one person's daily allowance, counted across every room",
     Alert: "no per-workspace division: what a machine told this deployment's operator, raised naming no workspace and read under the reserved admin entitlement",
     SettingOverride: "app-level settings row: a runtime setting is deployment-wide, read and written under the reserved admin entitlement (docs/design/settings.md)",

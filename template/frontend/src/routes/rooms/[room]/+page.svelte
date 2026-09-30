@@ -22,7 +22,13 @@
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
 	import * as app from '$lib/agent/app';
-	import { roomDocuments, roomTransport, type Room, type RoomExtensions } from '$lib/agent/rooms';
+	import {
+		documentsTo,
+		roomDocuments,
+		roomTransport,
+		type Room,
+		type RoomExtensions
+	} from '$lib/agent/rooms';
 
 	const extensions: RoomExtensions = app;
 	/** The kind a briefing is asked as, and read back by. */
@@ -55,8 +61,11 @@
 	const words = $derived(resolveCopy(copy, who));
 	const scope = $derived.by(() => {
 		if (!room?.library) return undefined;
+		// How current, beside what: a miss on yesterday's news then reads as
+		// dated rather than broken.
 		const from = `Milton answers from ${room.sources.join(', ')}.`;
-		return room.not_held ? `${from} He does not hold ${room.not_held}.` : from;
+		const held = room.not_held ? `${from} He does not hold ${room.not_held}.` : from;
+		return room.documents_to ? `${held} ${documentsTo(room.documents_to)}` : held;
 	});
 
 	// SvelteKit keeps this page across `/rooms/<id>`, so the room is read from
@@ -198,6 +207,7 @@
 				onregenerate={() => void c.again()}
 				onsuggest={(question) => void c.ask(question, undefined, depth)}
 				onmark={r.library ? (turn, verdict) => c.mark(turn, verdict) : undefined}
+				onshare={(turn, share) => c.share(turn, share)}
 				loadDocument={r.library && !extensions.oncite ? roomDocuments(r) : undefined}
 				oncite={extensions.oncite ? (citation) => extensions.oncite!(r, citation) : undefined}
 				describeTool={extensions.describeTool}
