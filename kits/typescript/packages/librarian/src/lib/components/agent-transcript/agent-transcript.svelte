@@ -393,7 +393,7 @@
 
 	.ds-lib-ask {
 		display: flex;
-		max-width: 100%;
+		width: 100%;
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 0.25rem;
