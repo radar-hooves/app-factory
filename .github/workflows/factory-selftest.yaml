@@ -10,10 +10,10 @@ name: Factory self-test
 # real app would run it — never against template/ source directly, which is
 # Jinja, not Python or TypeScript.
 #
-# The agent-common kit (kits/python/agent-common) is tested here too, beside
-# the stamp that imports it: its own lint, types and suite first, then the
-# render resolves it from THIS checkout rather than the index, so a change to
-# kit and slice is proven together before either is released.
+# The kits a stamp imports are tested here too, beside it: each Python kit's
+# own lint, types and suite first, then the render resolves every Python kit
+# and @poodle64/ui from THIS checkout rather than the index or npm, so a change
+# to kit and stamp is proven together before either is released.
 #
 # Never on the golden reusable callers (python-ci.yaml/frontend-ci.yaml under
 # template/.github): those are what copier stamps INTO an app, and inlining
@@ -40,6 +40,7 @@ on:
       - 'copier.yaml'
       - 'variants.yaml'
       - 'kits/python/**'
+      - 'kits/typescript/packages/ui/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/factory-selftest.yaml'
@@ -98,19 +99,25 @@ jobs:
         with:
           version: '0.9.30' # the household pin (master-project's setup-uv action)
 
-      - name: Kit — lint, types and test
+      - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike
         # the scratch app below. One layer only for each gate: nothing in
         # pre-commit runs them (kits/python/README.md).
         env:
           UV_FROZEN: '1'
-        working-directory: kits/python/agent-common
+        working-directory: kits/python
         run: |
-          uv sync
-          uv run ruff format --check src tests
-          uv run ruff check src tests
-          uv run mypy src tests
-          uv run pytest -q
+          set -euo pipefail
+          for kit in */; do
+            (
+              cd "$kit"
+              uv sync
+              uv run ruff format --check src tests
+              uv run ruff check src tests
+              uv run mypy src tests
+              uv run pytest -q
+            )
+          done
 
       - name: Render a scratch app (factory_selftest=true)
         # Fixed, throwaway answers: nothing here is deployed or reached over the
@@ -141,12 +148,14 @@ jobs:
         # Same sync-args as every real app's python-ci.yaml caller
         # (template/.github/workflows/python-ci.yaml.jinja): base + dev only, so CI
         # resolves the same packages a real app's CI does, off the household
-        # index rather than an editable sibling path — all but agent-common,
-        # which `uv add --frozen` repoints at this checkout's kit first, in the
-        # scratch app's pyproject.toml alone.
+        # index rather than an editable sibling path — all but the kits, which
+        # `uv add --frozen` repoints at this checkout first, in the scratch
+        # app's pyproject.toml alone.
         working-directory: ${{ env.SCRATCH }}/backend
         run: |
-          uv add --frozen --editable "${GITHUB_WORKSPACE}/kits/python/agent-common"
+          for kit in "${GITHUB_WORKSPACE}"/kits/python/*/; do
+            uv add --frozen --editable "$kit"
+          done
           uv sync --no-default-groups --group dev
           uv run pytest -q -n 8 --dist loadfile
 
@@ -171,10 +180,20 @@ jobs:
         # --frozen-lockfile, for the same reason backend sync above carries no
         # UV_FROZEN: template/ ships no pnpm-lock.yaml either, so a scratch
         # render has nothing to freeze against — pnpm resolves and writes one.
+        #
+        # @poodle64/ui comes from THIS checkout, packed as a publish would ship
+        # it, since the stamp may pin a version npm does not have until this
+        # merges. `pnpm add` resolves the whole tree around it; the install
+        # after it runs the app's `prepare` (svelte-kit sync), which `add` skips.
         working-directory: ${{ env.SCRATCH }}/frontend
         run: |
+          set -euo pipefail
+          (cd "${GITHUB_WORKSPACE}/kits/typescript" && pnpm install --frozen-lockfile && pnpm --filter @poodle64/ui run build)
+          pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/ui pack --pack-destination "${RUNNER_TEMP}"
+          pnpm add "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)"
           pnpm install
           pnpm test -- --run
+          pnpm check
 
       - name: Clean up the scratch render
         if: always()
