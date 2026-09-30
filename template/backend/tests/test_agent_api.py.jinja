@@ -438,8 +438,10 @@ async def test_a_cited_document_opens_only_inside_the_room(client: AsyncClient) 
 
 
 async def test_a_mark_lands_on_the_answer_the_page_meant_past_a_question_stopped_before_it(
-    client: AsyncClient, library: fake_library.FakeLibrary
+    client: AsyncClient, library: fake_library.FakeLibrary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    settled: list[tuple[str, str, int]] = []
+    monkeypatch.setattr(app_hooks, "agent_turn_settled", lambda *args: settled.append(args), raising=False)
     who = _person("room-manual")
     conversation = _events((await _ask(client, "manual", "first?", who)).text)[0]["session_id"]
     asking, _ = await _asking(client, "manual", fake_library.HANG_TRIGGER, who, resume=conversation)
@@ -449,6 +451,9 @@ async def test_a_mark_lands_on_the_answer_the_page_meant_past_a_question_stopped
 
     read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
     assert [bool(t["answer"]) for t in read["turns"]] == [True, False, True]
+    await _settled()
+    # The settled hook counts as the page does: the number a mark takes.
+    assert [turn for _, _, turn in settled] == [0, 1, 2]
 
     marked = await client.put(
         f"/api/agent/conversations/{conversation}/turns/2/mark", json={"helpful": False, "note": "dated"}, headers=who

@@ -17,6 +17,7 @@
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
+	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
 	import * as app from '$lib/agent/app';
 	import { roomDocuments, roomTransport, type Room, type RoomExtensions } from '$lib/agent/rooms';
@@ -56,7 +57,7 @@
 		if (!current) return;
 		untrack(() => {
 			if (!want) current.new();
-			else if (want !== current.conversationId) void current.open(want);
+			else if (want !== current.conversationId) void reopen(current, want);
 		});
 	});
 
@@ -68,6 +69,15 @@
 			void goto(`?c=${named}`, { replaceState: true, keepFocus: true, noScroll: true });
 		}
 	});
+
+	/** A link to a conversation that cannot be read (deleted, or not this
+	 *  person's) says so and leaves the address, rather than sitting on it. */
+	async function reopen(current: Chat, id: string) {
+		if (await current.open(id)) return;
+		if (page.url.searchParams.get('c') !== id) return;
+		toast.info("That conversation can't be opened. It may have been deleted.");
+		await goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
+	}
 
 	function fresh() {
 		listOpen = false;

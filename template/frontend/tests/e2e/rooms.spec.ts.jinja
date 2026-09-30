@@ -58,7 +58,9 @@ let manualConversation = '';
 test('the rooms a person holds are the ones they can ask', async ({ page }) => {
 	await page.goto('/rooms');
 	// The first page a fresh dev server serves waits on its dependency optimisation.
-	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible({
+		timeout: 60_000
+	});
 	await expect(page.getByRole('link', { name: /^Ask Milton about The Manual/ })).toBeVisible();
 });
 
@@ -133,6 +135,11 @@ test('rename, download and delete a conversation', async ({ page }) => {
 	expect((await page.request.get(`/api/agent/conversations/${helperConversation}`)).status()).toBe(
 		404
 	);
+
+	// A link to it now says so, and leaves the address.
+	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	await expect(page.getByText(/That conversation can't be opened/)).toBeVisible();
+	await expect(page).not.toHaveURL(/\?c=/);
 });
 
 test('stop ends an answer being written, and the question stays', async ({ page }) => {
@@ -161,7 +168,10 @@ test('a library room cites, opens the cited document and takes a mark', async ({
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
 	manualConversation = conversationId(page);
 
-	await page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first().click();
+	await page
+		.getByRole('button', { name: /The Manual, Part 5: Leave/ })
+		.first()
+		.click();
 	await expect(page.getByText('A member accrues four weeks a year.')).toBeVisible();
 
 	// A verdict recorded opens its note; a note recorded is thanked.
@@ -192,7 +202,9 @@ test('a spent allowance is shown, and the next question is refused', async ({ pa
 	await composer(page).fill('Just one more?');
 	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByText('You asked: Just one more?')).toBeHidden();
-	expect((await page.request.post('/api/agent/rooms/helper/ask', { data: { question: 'x' } })).status()).toBe(429);
+	expect(
+		(await page.request.post('/api/agent/rooms/helper/ask', { data: { question: 'x' } })).status()
+	).toBe(429);
 });
 
 test('a person granted one room is refused everything else', async () => {
@@ -208,10 +220,15 @@ test('a person granted one room is refused everything else', async () => {
 		const rooms = await readJson<{ id: string }[]>(person.get('/api/agent/rooms'));
 		expect(rooms.map((r) => r.id)).toEqual(['helper']);
 		await ok(person.get('/api/agent/rooms/helper/conversations'));
-		for (const path of ['/api/agent/rooms/manual/conversations', '/api/agent/rooms/manual/documents/1042']) {
+		for (const path of [
+			'/api/agent/rooms/manual/conversations',
+			'/api/agent/rooms/manual/documents/1042'
+		]) {
 			expect((await person.get(path)).status(), path).toBe(403);
 		}
-		expect((await person.post('/api/agent/rooms/manual/ask', { data: { question: 'x' } })).status()).toBe(403);
+		expect(
+			(await person.post('/api/agent/rooms/manual/ask', { data: { question: 'x' } })).status()
+		).toBe(403);
 
 		const document = await readJson<{ paths: Record<string, Record<string, unknown>> }>(
 			person.get('/openapi.json')
@@ -221,7 +238,10 @@ test('a person granted one room is refused everything else', async () => {
 			if (PERSON_FACING.some((prefix) => path.startsWith(prefix))) continue;
 			for (const method of Object.keys(operations)) {
 				const url = path.replace(/\{[^}]+\}/g, '1');
-				const response = await person.fetch(url, { method, data: method === 'get' ? undefined : {} });
+				const response = await person.fetch(url, {
+					method,
+					data: method === 'get' ? undefined : {}
+				});
 				walked.push(`${method.toUpperCase()} ${path} ${response.status()}`);
 			}
 		}
@@ -234,15 +254,17 @@ test('a person granted one room is refused everything else', async () => {
 
 test('the pages, photographed', async ({ browser }) => {
 	test.skip(!SHOTS, 'set ROOMS_SCREENSHOTS to a directory to photograph the pages');
-	const views = [
+	test.setTimeout(120_000);
+	const views: [string, string][] = [
 		['index', '/rooms'],
 		['library', `/rooms/manual?c=${manualConversation}`],
 		['allowance', '/rooms/helper']
 	];
-	for (const [width, height] of [
+	const sizes: [number, number][] = [
 		[1440, 900],
 		[390, 844]
-	]) {
+	];
+	for (const [width, height] of sizes) {
 		for (const theme of ['light', 'dark'] as const) {
 			const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
 			const page = await context.newPage();
