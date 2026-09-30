@@ -75,6 +75,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/api/error.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/test/rooms{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/rooms.spec.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/rooms{% endif %}"
 
