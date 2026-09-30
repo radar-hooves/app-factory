@@ -33,6 +33,8 @@ export interface LibrarianCopy {
 	answerFailed: string;
 	/** Shown when the stream never opened, or died mid-answer. */
 	unreachable: string;
+	/** Shown on a question stopped before a word of its answer came. */
+	noAnswer: string;
 	/** Heading over the list of what an answer cited. */
 	sources: string;
 	/** Heading over the follow-up questions the persona offered. */
@@ -132,6 +134,7 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		// simply stops is the one thing a reader must not have to guess about.
 		answerFailed: `${who} stopped before finishing this one.`,
 		unreachable: `${who} can't be reached right now.`,
+		noAnswer: 'Stopped before an answer came.',
 		sources: 'Sources',
 		suggestions: 'Ask next',
 		scope: `What ${who} answers from`,

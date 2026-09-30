@@ -49,6 +49,9 @@ Generalised from cadmus's room page, `PastQuestions`, `AnswerFeedback` and
 
 - **`library_error` says what it knows.** A route that refused carries its
   `status`; a stream that opened and died carries `dropped: true`.
+- **A question stopped before a word came** says "Stopped before an answer
+  came." and offers "Ask again", where it showed a blank card with nothing
+  to do (`copy.noAnswer`).
 
 ## [2026.9.21] - 2026-09-29
 

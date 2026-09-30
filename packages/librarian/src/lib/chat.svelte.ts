@@ -435,7 +435,11 @@ export class Chat {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
 			if (stream.stopWanted) {
 				if (!named) continue;
-				if (current()) this.conversationId = named;
+				// The agent took the question as it named the conversation.
+				if (current()) {
+					this.conversationId = named;
+					this.#held.add(live.id);
+				}
 				stream.controller.abort();
 				await room.stop(named).catch(() => undefined);
 				break;

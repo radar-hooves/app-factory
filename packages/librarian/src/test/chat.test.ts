@@ -253,6 +253,16 @@ describe('Chat stopping', () => {
 		expect(transport.stop).toHaveBeenCalledWith(SESSION);
 		expect(c.conversationId).toBe(SESSION);
 		expect(prose(c)).toBe('');
+
+		// The agent took that question as it named the conversation, so the
+		// next answer is the second one it holds.
+		const next = c.ask('What is the total?');
+		expect(asks[1].request.resume).toBe(SESSION);
+		asks[1].pipe.push(...CHAT);
+		asks[1].pipe.end();
+		await next;
+		expect(await c.mark(c.turns[1], { helpful: true })).toBe(true);
+		expect(transport.mark).toHaveBeenCalledWith(SESSION, 1, { helpful: true });
 	});
 
 	it('stops an answer being written out of sight, and reads it once it has', async () => {

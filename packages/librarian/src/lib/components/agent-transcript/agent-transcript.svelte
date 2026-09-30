@@ -199,11 +199,16 @@
 			: (outcome?.error ?? (outcome?.isError ? words.answerFailed : null))
 	);
 
+	// A turn nothing is answering any more that said nothing and ended with
+	// nothing: stopped before a word came, often while it waited its turn.
+	const unanswered = $derived(!running && !hasAnswer && outcome === null && !artefact);
+
 	// A run that ended has settled, whatever it said: a failed one, where "Ask
 	// again" is the one thing a reader wants, and one that handed in its answer
 	// under a schema and said nothing at all, whose artefact is the answer. A
-	// turn read back from history has no outcome and settles on its prose.
-	const settled = $derived(!running && (hasAnswer || outcome !== null));
+	// turn read back from history has no outcome and settles on its prose, and
+	// an unanswered one settles on nothing, offering "Ask again".
+	const settled = $derived(!running && (hasAnswer || outcome !== null || unanswered));
 
 	/**
 	 * The persona answered and cited nothing, and we WATCHED it happen.
@@ -305,6 +310,10 @@
 
 		<!-- An empty `notHeld` is a host whose persona answers from no shelf,
 		     where "without a source" would be a claim about nothing. -->
+		{#if unanswered && asked}
+			<p class="ds-lib-not-held">{words.noAnswer}</p>
+		{/if}
+
 		{#if !isArtefact && notHeld && words.notHeld}
 			<p class="ds-lib-not-held">{words.notHeld}</p>
 		{/if}
@@ -337,7 +346,7 @@
 			<p class="ds-lib-failure" role="alert">{failure}</p>
 		{/if}
 
-		{#if !isArtefact && settled}
+		{#if !isArtefact && settled && (hasAnswer || onregenerate || (outcome && !failure))}
 			<div class="ds-lib-actions">
 				{#if hasAnswer}
 					<button

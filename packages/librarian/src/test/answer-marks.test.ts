@@ -56,6 +56,21 @@ describe('the trust mark on a source', () => {
 	});
 });
 
+describe('a question stopped before a word came', () => {
+	it('says so, and offers asking again, rather than a blank card', () => {
+		const onregenerate = vi.fn();
+		answer({ blocks: [], outcome: null, onregenerate });
+		expect(screen.getByText('Stopped before an answer came.')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Ask again' })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+	});
+
+	it('says nothing while it is still being answered', () => {
+		answer({ blocks: [], outcome: null, running: true });
+		expect(screen.queryByText('Stopped before an answer came.')).not.toBeInTheDocument();
+	});
+});
+
 describe('an answer with nothing behind it', () => {
 	it('says so once the turn has settled', () => {
 		answer({ citations: [] });
