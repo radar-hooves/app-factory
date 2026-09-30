@@ -166,16 +166,12 @@ def settled_calls(monkeypatch: pytest.MonkeyPatch) -> list[JobOutcome]:
     return calls
 
 
-async def _start(
-    agent_settings: AgentSettings, persona: Persona, workspace_id: int, **kwargs: Any
-) -> str:
+async def _start(agent_settings: AgentSettings, persona: Persona, workspace_id: int, **kwargs: Any) -> str:
     kwargs.setdefault("created_by_id", None)
     return await jobs_module.start(get_session_factory(), agent_settings, persona, workspace_id=workspace_id, **kwargs)
 
 
-async def _message(
-    agent_settings: AgentSettings, persona: Persona, job_id: str, workspace_id: int, text: str
-) -> None:
+async def _message(agent_settings: AgentSettings, persona: Persona, job_id: str, workspace_id: int, text: str) -> None:
     await jobs_module.send_message(
         get_session_factory(), agent_settings, persona, job_id, text, workspace_id=workspace_id, user_id=None
     )
@@ -806,7 +802,7 @@ async def test_a_stderr_read_error_does_not_strand_the_job(
     async def _broken_drain(stream: object) -> bytes:
         raise RuntimeError("a genuine stderr read error, not a timeout")
 
-    monkeypatch.setattr(jobs_module, "_drain_stderr", _broken_drain)
+    monkeypatch.setattr(cli, "drain", _broken_drain)
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     job = await _wait_until_settled(job_id, workspace_id)
