@@ -54,20 +54,22 @@ let isLoading = $state(true);
  * - 'lapsed': a session only the identity provider can renew. A 401, or the
  *   forward-auth proxy's redirect to the provider, which init() asks the
  *   browser not to follow so it arrives as an `opaqueredirect`.
- * - 'refused': the app knows who this is and will not let them in (a 403: the
- *   account is not active). Signing in again would change nothing.
+ * - 'refused': the app knows who this is and will not let them in: a 403
+ *   whose body says `account_inactive`. Signing in again would change nothing.
  * - 'failed': anything else a sign-in would not fix: the backend down or
- *   unreachable, a reset connection, a timeout. Sending the browser to sign in
+ *   unreachable, a reset connection, a timeout, any other 403 (a proxy's, a
+ *   route's own), or init() itself throwing. Sending the browser to sign in
  *   there would bring it straight back to the same failure, as fast as the
  *   round trip allows.
  */
 export type SignInFailure = 'lapsed' | 'refused' | 'failed';
 let failure = $state<SignInFailure | null>(null);
 
-function signInFailure(result: { response: Response }): SignInFailure {
+function signInFailure(result: { error?: unknown; response: Response }): SignInFailure {
 	const { status, type } = result.response;
 	if (status === 401 || type === 'opaqueredirect') return 'lapsed';
-	return status === 403 ? 'refused' : 'failed';
+	const code = (result.error as { error?: unknown } | undefined)?.error;
+	return status === 403 && code === 'account_inactive' ? 'refused' : 'failed';
 }
 
 function restoreStoredWorkspaceId(): number | null {
@@ -194,6 +196,13 @@ export const auth = {
 			memberships = (mine.data as Membership[]) ?? [];
 
 			reconcileActiveWorkspace(restoreStoredWorkspaceId());
+		} catch (error) {
+			// Whatever threw, nobody is signed in and nothing says why: offer the
+			// retry rather than a spinner that never ends, and let the error go on
+			// to the browser's telemetry.
+			user = null;
+			failure = 'failed';
+			throw error;
 		} finally {
 			isLoading = false;
 		}
