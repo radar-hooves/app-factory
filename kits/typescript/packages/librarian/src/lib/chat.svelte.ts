@@ -192,6 +192,8 @@ export class Chat {
 	#watch: AbortController | null = null;
 	#woken = false;
 	#wake: (() => void) | null = null;
+	// The turns the server recorded, which its routes count by place; a mark
+	// or a share on one still being written is the server's to refuse.
 	// Plain, as `Session`'s seen-set: nothing renders it.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	#held = new Set<string>();
