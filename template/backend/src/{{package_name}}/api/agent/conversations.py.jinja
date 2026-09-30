@@ -213,6 +213,7 @@ def settle(db: Session, conversation_id: str) -> None:
 
 def share(db: Session, conversation: AgentConversation, position: int, *, shared: bool) -> None:
     """Share answer `position` read-only with whoever may enter the room, or stop sharing it."""
+    db.refresh(conversation, with_for_update=True)  # two taps racing cannot lose one
     rest = [p for p in conversation.shared if p != position]
     conversation.shared = sorted([*rest, position]) if shared else rest
     db.commit()
