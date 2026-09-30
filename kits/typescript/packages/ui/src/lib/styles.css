@@ -1,0 +1,1419 @@
+/**
+ * @poodle64/ui — component stylesheet.
+ *
+ * The composed components (PageHeader, StatusBadge, Panel, …) need three things
+ * the shadcn variable layer does not supply: a small type/tracking scale, a card
+ * "milled edge" treatment, and the status chip/dot classes. Every app that
+ * hand-built its own page chrome also hand-built these, which is exactly the
+ * drift this package exists to end — so they ship here, with the components that
+ * depend on them, rather than being re-typed into each app's own app.css.
+ *
+ * Import ONCE in the consuming app's app.css, after the token imports:
+ *
+ *     @import '@poodle64/design-tokens/tokens.tw.css';
+ *     @import '@poodle64/design-tokens/tokens.css';
+ *     @import '@poodle64/ui/styles.css';
+ *
+ * Everything here resolves through either a --ds-* token (owned by
+ * @poodle64/design-tokens) or a shadcn semantic variable (--border, --primary,
+ * --muted-foreground, …) supplied by the app's own alias layer. There is no
+ * palette in this file: change the app's palette and every class below follows.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The enter/exit animation utilities.
+
+   Every overlay this package ships is written against `animate-in`,
+   `animate-out`, `fade-in-0`, `zoom-in-95` and `slide-in-from-*`. None of those
+   are Tailwind utilities — they come from tw-animate-css — so in an app that
+   does not import it they compile to NOTHING, and the transition is dead for a
+   second, independent reason on top of the variant question below. Same
+   silence: the class is in the DOM, no rule exists, nothing fails.
+
+   It is a dependency rather than a peer, and imported here rather than
+   documented as a setup step, for the same reason the variants are declared
+   here: the package writes the utilities, so the package owns what makes them
+   real. An app that imports tw-animate-css itself as well loses nothing — the
+   definitions are identical.
+
+   It must stay the FIRST statement in this file: CSS requires @import before
+   any other at-rule, and the @custom-variant declarations below are at-rules.
+   ───────────────────────────────────────────────────────────────────────────── */
+@import 'tw-animate-css';
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The dark variant.
+
+   Tailwind v4 resolves a bare `dark:` against `prefers-color-scheme`, not
+   against a class. Every component in this package — the shell's theme-toggle
+   icons, the input surfaces, the destructive ring refinements, ~50 utilities in
+   all — is written against the CLASS strategy, so without this line every one
+   of them is dead in a consuming app and the app's theme switch moves the
+   palette while leaving the components' dark refinements behind. Nothing fails:
+   the class is in the DOM, the rule simply never matches.
+
+   It was unowned until now. All four adopting apps had independently typed the
+   identical declaration into their own app.css, which is precisely the drift
+   this package exists to end — and it meant the FIFTH app to adopt would get a
+   silently half-dark component set. It ships here, with the utilities that
+   depend on it. The selector is byte-identical to what those apps already
+   declare, so an app that keeps its own copy re-declares the same thing and
+   nothing changes; an app that deletes its copy loses nothing.
+   ───────────────────────────────────────────────────────────────────────────── */
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The bits-ui `data-state` variants.
+
+   Same defect as `dark` above, one attribute along. This package writes ~47
+   `data-open:` / `data-closed:` utilities across the dialogue, alert-dialogue,
+   dropdown-menu, popover, tooltip, select and command surfaces — the whole
+   enter/exit animation of every overlay it ships. Tailwind v4 compiles a bare
+   `data-open:` to `&[data-open]`, and bits-ui does not emit `data-open`: it
+   emits `data-state="open"` / `data-state="closed"`. So the utilities exist in
+   the stylesheet, match nothing, and every overlay opens and closes with no
+   transition. Nothing fails — the class is in the DOM, the rule simply never
+   matches — which is why four of the five adopting apps shipped with dead
+   overlay transitions and none of them noticed.
+
+   `data-state` is ONE attribute carrying a dozen-odd values, and declaring two
+   of them left every other value as the same trap one value along.
+   `data-checked:` and `data-active:` compile to `&[data-checked]` /
+   `&[data-active]`, and bits-ui emits `data-state="checked"` and
+   `data-state="active"` — so a checked checkbox painted no fill and a selected
+   tab was indistinguishable from its neighbours, in exactly the silence
+   described above. Both were found in a consuming app, in a browser, months
+   after they shipped.
+
+   So the whole value set is declared, not the two that had already been
+   caught: `open`/`closed` (dialogue, menu, popover, tooltip, select),
+   `checked`/`unchecked`/`indeterminate` (checkbox, switch, menu checkbox item)
+   and `active`/`inactive` (tabs). That is a table with one rule — one
+   declaration per value bits-ui can put in `data-state` on a component this
+   package ships — rather than a growing list of exceptions, and it is the
+   whole point of fixing this at the mapping: the NEXT component to reach for
+   `data-checked:` gets a rule that matches instead of rediscovering this.
+
+   `data-active` is the one union, and it is not defensiveness. bits-ui emits
+   BOTH forms under that name: `data-state="active"` on a tabs trigger, and a
+   bare `data-active` on a navigation-menu link, a slider thumb and a pin-input
+   cell — and this package's own AppNav writes `data-active="true"` on every
+   nav row. A single-selector declaration would therefore have fixed tabs by
+   breaking the four surfaces that were already working. The other values have
+   no bare form in bits-ui 2.18.x, so they get one selector each.
+
+   `data-state="delayed-open"` (tooltip) and `data-state="selected"` (this
+   package's own table rows) keep the bracketed long form at their call sites
+   and get NO shorthand. `delayed-open` has no plausible shorthand spelling,
+   and `data-selected` is ALREADY a bare bits-ui attribute on menu and calendar
+   items — pointing that name at `[data-state='selected']` would take those
+   with it. Where a name means two things, the long form is what says which.
+
+   The remaining five shorthand data-variants this package writes —
+   `data-selected`, `data-highlighted`, `data-disabled`, `data-placeholder`
+   (bits-ui, all emitted as empty-string-or-undefined) and `data-inset` (set by
+   this package's own menu items) — are BARE attributes, so Tailwind's default
+   `&[data-x]` already matches them and a declaration here would only restate
+   it. `src/test/data-state-variants.test.ts` is what keeps that distinction
+   honest: it enumerates every shorthand data-variant the built package ships
+   and fails on any one whose compiled selector is not the attribute the DOM
+   actually carries, so a new unowned variant cannot ship. It also mounts a
+   real checkbox, switch and tab strip and reads the attributes back, so the
+   table above is pinned to bits-ui rather than to this paragraph.
+   ───────────────────────────────────────────────────────────────────────────── */
+@custom-variant data-open (&[data-state='open']);
+@custom-variant data-closed (&[data-state='closed']);
+@custom-variant data-checked (&[data-state='checked']);
+@custom-variant data-unchecked (&[data-state='unchecked']);
+@custom-variant data-indeterminate (&[data-state='indeterminate']);
+@custom-variant data-active (&[data-state='active'], &[data-active]);
+@custom-variant data-inactive (&[data-state='inactive']);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The shadcn semantic surface.
+
+   Every component in this package is written against the shadcn colour names
+   (bg-card, bg-popover, bg-muted, bg-accent, border-input, bg-secondary and
+   their -foreground pairs). Declaring those names as plain custom properties
+   makes the VARIABLE exist but never tells Tailwind they are theme colours, so
+   the utilities compile to nothing at all: no build error, no lint hit, no
+   failing test — just a class in the DOM with no CSS behind it. Registration
+   is therefore two steps, and both are needed.
+
+   Step one, below: the mapping itself, declared once. Each shadcn name aliases
+   a --ds-* token from @poodle64/design-tokens, so a consuming app that picks a
+   palette by overriding --ds-color-* moves this whole surface with it, and
+   .dark flows through untouched.
+
+   The values are not a fresh design: they are what every app in the estate had
+   already converged on independently, hoisted here verbatim. There was no
+   disagreement to arbitrate — the surface ladder mapping (card/accent on
+   surface-2, popover on surface-3, muted/secondary on surface-1, input on
+   border) is identical in every app that had one.
+
+   The override point is --ds-color-*, and it reaches everything below. The
+   bare names are the contract components and app CSS read directly (the chip
+   colour, the selected-row rule, the card edge); redeclaring one after this
+   import is a deliberate per-app deviation rather than the setup tax it is
+   today.
+
+   card/card-foreground/popover/popover-foreground/secondary/
+   secondary-foreground/muted/accent/accent-foreground/input carry NO default
+   here (design-system#8). A bare name declared unconditionally at :root
+   freezes there: its own var(--ds-color-*) reference resolves once, at
+   :root, and every descendant inherits that fixed result regardless of a
+   later --ds-color-* override or a scoped .dark wrapper below it. These ten
+   names are consumed ONLY through the @theme inline fallback chain below
+   (var(--card, var(--ds-color-surface-2)), …), so leaving them undeclared by
+   default means that fallback — not a frozen alias — is what every consumer
+   resolves against, and both a scoped --ds-color-* override and a scoped
+   .dark wrapper reach it. An app that still sets one of these by name (the
+   existing, undocumented but working escape hatch) is unaffected: var()'s
+   fallback triggers only when the name is undeclared anywhere in the chain.
+
+   background/foreground/primary/primary-foreground/destructive/
+   destructive-foreground/border/border-strong/ring/muted-foreground/radius
+   keep their default here because this package's OWN hand-written CSS below
+   (.ds-nav-indicator, .ds-card-edge, .ds-dialog-section, .ds-skip-link:focus,
+   .ds-ink-neutral, .ds-chip-neutral, …) reads them as
+   plain, unconditional var() — not through a fallback — and because the
+   Tailwind utilities for these are generated by @poodle64/design-tokens'
+   OWN @theme inline registration off --ds-color-* directly, never through
+   these bare names at all (they were never in that utility's chain to begin
+   with, so removing their default would only cost the internal CSS above,
+   for no scoping gain). */
+:root {
+	--background: var(--ds-color-background);
+	--foreground: var(--ds-color-foreground);
+	--primary: var(--ds-color-primary);
+	--primary-foreground: var(--ds-color-primary-foreground);
+	--destructive: var(--ds-color-destructive);
+	--destructive-foreground: var(--ds-color-destructive-foreground);
+	--border: var(--ds-color-border);
+	--border-strong: var(--ds-color-border-strong);
+	--ring: var(--ds-color-ring);
+	--muted-foreground: var(--ds-color-muted-foreground);
+
+	/* Consumed by the input-group size ramp as calc(var(--radius) - n). The
+	   button ramp uses --radius-md from @poodle64/design-tokens instead. */
+	--radius: var(--ds-radius-lg);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Step two: register those names with Tailwind so the utilities generate.
+
+   `inline` is what makes the override story work — Tailwind substitutes the
+   value into the utility, so .bg-card lands on var(--card) and follows any
+   redefinition of --card, at any scope, including .dark. Without it the
+   utility would freeze against whatever --card meant in :root.
+
+   Only the names @poodle64/design-tokens does NOT already register appear
+   here, and that exclusivity is load-bearing rather than tidiness. Registering
+   a key both packages claim makes the winner depend on which stylesheet was
+   imported last, so an app overriding it would get different results from the
+   same CSS depending on its import order, silently. One owner per key removes
+   the question; `background`, `foreground`, `primary`, `border`, `ring`,
+   `destructive` and their pairs stay the token package's, which is why they
+   are absent below despite being part of the same surface.
+
+   Sidebar and chart colours are deliberately NOT registered here either. This
+   package ships no sidebar or chart component, so nothing it exports could
+   reference them, and they are the one part of the shadcn surface the estate
+   genuinely disagrees on (chrome hue is an app's own decision, not a shared
+   default). An app using them registers them itself, as it does today.
+
+   Each value is a fallback chain, `var(--bare-name, var(--ds-color-x))`, not
+   a single reference (design-system#8). --card etc. carry no default (see
+   the :root block above), so by default every one of these resolves through
+   the --ds-color-* fallback — evaluated live at the consuming element, so a
+   scoped subtree override or a scoped .dark wrapper both reach it. An app
+   that still sets --card (etc.) by name keeps working unchanged: var()'s
+   fallback is used only when the name is undeclared anywhere in the chain.
+   ───────────────────────────────────────────────────────────────────────────── */
+@theme inline {
+	--color-card: var(--card, var(--ds-color-surface-2));
+	--color-card-foreground: var(--card-foreground, var(--ds-color-foreground));
+	--color-popover: var(--popover, var(--ds-color-surface-3));
+	--color-popover-foreground: var(--popover-foreground, var(--ds-color-foreground));
+	--color-secondary: var(--secondary, var(--ds-color-surface-1));
+	--color-secondary-foreground: var(--secondary-foreground, var(--ds-color-foreground));
+	--color-muted: var(--muted, var(--ds-color-surface-1));
+	/* A SELECTION tint, not a surface rung (design-system#24). It was
+	   --ds-color-surface-2 — the same rung --color-card resolves to — which made
+	   `hover:bg-accent/50` on a card a no-op BY CONSTRUCTION: mixing a colour at
+	   any opacity over a ground it is identical to cannot change a pixel. It also
+	   left the menu/select/command highlight, the only thing this package's own
+	   components use `bg-accent` for, at 1.03:1 against the popover it sits on in
+	   light mode. A translucent tint of the accent composites over whatever
+	   ground it lands on, so one value serves both, and it is the idiom this
+	   package already ships for the SearchResults match highlight. */
+	--color-accent: var(--accent, color-mix(in oklch, var(--ds-color-primary) 12%, transparent));
+	--color-accent-foreground: var(--accent-foreground, var(--ds-color-foreground));
+	--color-input: var(--input, var(--ds-color-border));
+
+	/* The shell's chrome surface — the nav rail and the top bar.
+	   Deliberately NOT `sidebar`. `20-sveltekit-frontend.md` makes the
+	   `sidebar-*` set the app's own to define, and this package registers
+	   neither `sidebar-*` nor `chart-*`; painting the shell off a `sidebar`
+	   colour utility would have meant claiming a key the estate has not agreed
+	   on and that no app can then override without a stylesheet-order coin
+	   toss. (Naming the class literally here would itself trip the dead-utility
+	   gate, which reads every string this package ships.) `shell` is a
+	   name neither package claimed, so the one-owner-per-key rule holds, and it
+	   defaults to a token this package already resolves. An app that already
+	   has a chrome hue points its own token at it in one line:
+
+	       :root { --ds-shell-chrome: var(--sidebar); }
+
+	   The two foreground keys are the chrome's INK, and they are consumed —
+	   by the rail, the bar, every chrome control and every nav rule below.
+	   `--color-shell-foreground` was registered and read by nothing until now,
+	   which made it a trap rather than an affordance: an app pointing
+	   `--ds-shell-chrome-foreground` at a contrasting value got no effect and
+	   had to override a package style to get chrome ink that inverts against
+	   the palette. Both default to the same tokens the chrome used to hard-code
+	   (`--foreground` / `--muted-foreground`), so nothing moves until an app
+	   asks it to; two declarations then invert the whole chrome:
+
+	       :root {
+	         --ds-shell-chrome: var(--ds-color-primary);
+	         --ds-shell-chrome-foreground: var(--ds-color-primary-foreground);
+	         --ds-shell-chrome-muted-foreground: color-mix(
+	           in oklch, var(--ds-color-primary-foreground) 70%, transparent);
+	       }
+	 */
+	--color-shell: var(--ds-shell-chrome);
+	--color-shell-foreground: var(--ds-shell-chrome-foreground);
+	--color-shell-muted-foreground: var(--ds-shell-chrome-muted-foreground);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Theme registration — the scale keys the composed components reference as
+   Tailwind utilities (text-display, text-body, text-stat, tracking-eyebrow).
+   An app may override any of these by re-declaring the key after this import.
+   ───────────────────────────────────────────────────────────────────────────── */
+@theme {
+	/* Eyebrow / column-head tracking — pairs with text-2xs + uppercase. */
+	--tracking-eyebrow: 0.06em;
+
+	/* Page-title and large-readout size (PageHeader, StatCard). */
+	--text-display: 1.75rem;
+	--text-display--line-height: 2.125rem;
+	--text-display--letter-spacing: -0.02em;
+
+	/* Panel/card heading size — one step above the sm body default. */
+	--text-body: 0.9375rem;
+
+	/* StatList readout value size. */
+	--text-stat: 1.0625rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Atmosphere variables consumed by .ds-edge. Derived from the app's own
+   semantic --foreground so the edge highlight inverts correctly between light
+   and dark with no per-mode override. The drop shadow is a neutral translucent
+   black in both modes (a shadow is an absence of light, not a palette colour);
+   an app wanting a tinted shadow overrides --ds-shadow-sm.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root {
+	--ds-card-edge: color-mix(in oklch, var(--foreground) 6%, transparent);
+	--ds-shadow-sm:
+		0 1px 2px oklch(0 0 0 / 0.1),
+		0 1px 1px oklch(0 0 0 / 0.06);
+
+	/* ── Shell geometry ──────────────────────────────────────────────────────
+	   Named custom properties rather than Tailwind theme keys, deliberately:
+	   a `--spacing-*` or `--container-*` entry with a name like `rail` would
+	   sit inside a namespace Tailwind resolves the sizing utilities against
+	   (`22-file-extensions`-adjacent trap documented in
+	   tailwind-namespace.test.ts). Outside those namespaces there is nothing
+	   to shadow, and an app still retunes the rail in one declaration.
+	   ──────────────────────────────────────────────────────────────────────── */
+	--ds-shell-chrome: var(--ds-color-surface-1);
+	--ds-shell-chrome-foreground: var(--ds-color-foreground);
+	--ds-shell-chrome-muted-foreground: var(--ds-color-muted-foreground);
+	--ds-shell-rail-width: 15.5rem;
+	--ds-shell-rail-width-collapsed: 3.5rem;
+
+	/* ── Content measure ──────────────────────────────────────────────────────
+	   The scale AppShell's `measure` prop selects between, as custom properties
+	   for the same reason the rail width is one: an app retunes a tier in one
+	   declaration instead of waiting on a release of this package.
+
+	   `prose` is in `ch` deliberately, where the other two are in `rem`. A
+	   reading measure is a count of CHARACTERS, not a length — the whole claim
+	   is "a line the eye can track back from", and that is a function of the
+	   face and size the app actually set, not of a number someone typed once.
+	   `page` and `wide` are page frames rather than reading measures, so they
+	   are lengths and stay in rem.
+	   ──────────────────────────────────────────────────────────────────────── */
+	--ds-shell-measure-prose: 72ch;
+	--ds-shell-measure-page: 80rem;
+	--ds-shell-measure-wide: 120rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Control geometry — the density option.
+
+   Button's height and inline padding, as tokens rather than the hard-coded
+   `h-10` / `px-4` they were. No token could reach those classes, so an app
+   wanting a denser control scale had exactly one move available: fork the
+   component. One did, and it cost six directories — `button`, `dialog`,
+   `alert-dialog`, `command`, `input-group` and `form` all stayed vendored
+   there, five of them byte-identical to this package's but for which Button
+   they import. That is the whole defect: a geometry decision with no knob
+   turns into a fork of everything downstream of it.
+
+   The values below reproduce the previous hard-coded classes EXACTLY (2.5rem
+   is h-10, 1rem is px-4, and so on down the ramp), so a consumer that names
+   nothing renders to the same pixel. `harness/additivity.mjs` is what proves
+   that rather than this sentence.
+
+   An app does not set these by hand. It names a density on any ancestor —
+   ordinarily `<html>` — and the preset moves the whole ramp:
+
+       <html data-ds-density="compact">
+
+   Two named values, `comfortable` (the default) and `compact`, and the
+   attribute is honoured wherever it appears, so a single dense toolbar can
+   carry it without the page doing so. Hand-tuning a rung stays possible for
+   the app that must, but it is a deviation rather than the affordance: the
+   sanctioned move is choosing a named density, exactly as choosing a palette
+   rather than a hex value is the sanctioned move for colour.
+
+   `compact` is not a picked number. This package's Input already renders at
+   `h-8` and its Select trigger at `h-8`/`h-7`, so a default-size Button next
+   to an Input has been 8px taller than it for as long as both have shipped.
+   The compact ramp lands `md` on 2rem and `sm` on 1.75rem — the input and the
+   select trigger exactly — so the density an app was hand-pinning on 75 call
+   sites is the one that makes a form row line up.
+
+   `comfortable` shares the `:root` selector rather than restating the ramp;
+   it is there so a subtree can opt back OUT of a compact page. Both density
+   rules carry the same specificity as `:root` and are declared after it, so a
+   page-level attribute wins, and they declare on the element that carries the
+   attribute rather than at `:root`, so a scoped one reaches only its subtree.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-ds-density='comfortable'] {
+	--ds-control-height-xs: 1.75rem;
+	--ds-control-height-sm: 2.25rem;
+	--ds-control-height-md: 2.5rem;
+	--ds-control-height-lg: 2.75rem;
+
+	--ds-control-pad-xs: 0.625rem;
+	--ds-control-pad-sm: 0.875rem;
+	--ds-control-pad-md: 1rem;
+	--ds-control-pad-lg: 1.25rem;
+
+	/* The inline padding on an edge an icon sits against: an icon is already
+	   optical whitespace, so it needs less room beside it than a glyph does. A
+	   separate rung rather than a subtraction from the pad above, because the
+	   trim is not one ratio — sm gives back 0.375rem where md gives back
+	   0.25rem — and folding it into a calc would have changed sm for every
+	   consumer to buy a shorter table. */
+	--ds-control-pad-icon-xs: 0.375rem;
+	--ds-control-pad-icon-sm: 0.5rem;
+	--ds-control-pad-icon-md: 0.75rem;
+	--ds-control-pad-icon-lg: 0.75rem;
+}
+
+[data-ds-density='compact'] {
+	--ds-control-height-xs: 1.5rem;
+	--ds-control-height-sm: 1.75rem;
+	--ds-control-height-md: 2rem;
+	--ds-control-height-lg: 2.25rem;
+	--ds-control-pad-xs: 0.5rem;
+	--ds-control-pad-sm: 0.625rem;
+	--ds-control-pad-md: 0.75rem;
+	--ds-control-pad-lg: 1rem;
+	--ds-control-pad-icon-xs: 0.25rem;
+	--ds-control-pad-icon-sm: 0.375rem;
+	--ds-control-pad-icon-md: 0.5rem;
+	--ds-control-pad-icon-lg: 0.625rem;
+}
+
+@layer base {
+	/**
+	 * The milled edge. Cards read as having depth from a hairline border plus a
+	 * 1px inner highlight, not from a heavy drop shadow (shared-design-language
+	 * §2 and §6). Applied by DetailPanel, AppDialog, Panel, StatCard, StatList,
+	 * EmptyState, ErrorState and DataTableTanstack.
+	 */
+	.ds-edge {
+		box-shadow:
+			inset 0 1px 0 0 var(--ds-card-edge),
+			var(--ds-shadow-sm);
+	}
+
+	/** Tabular figures, so a column of numbers aligns. */
+	.ds-tabular {
+		font-variant-numeric: tabular-nums;
+		font-feature-settings: 'tnum';
+	}
+
+	/**
+	 * Dialogue sections: a divider with even spacing is drawn between adjacent
+	 * DialogSections, so every dialogue separates its information the same way.
+	 * The first section in a body carries no divider. This adjacent-sibling rule
+	 * is the whole behaviour of DialogSection — the component is inert without it.
+	 */
+	.ds-dialog-section + .ds-dialog-section {
+		margin-top: 1.25rem;
+		border-top: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+		padding-top: 1.25rem;
+	}
+
+	/**
+	 * Status chips and dots: one source for every state pill in every app.
+	 * Vocabulary: success | warning | error | info | neutral (see the Status type
+	 * exported from @poodle64/ui/status). Consumed by StatusBadge, StatCard,
+	 * StatList and DataTableToolbar.
+	 *
+	 * `-primary` below is the one exception: a StatusBadge-only extension for
+	 * brand-emphasis chips (not a health state), keyed off --ds-color-primary
+	 * rather than a --ds-color-status-* token. It is NOT part of the shared
+	 * five-state vocabulary above — StatCard, StatList and DataTableToolbar
+	 * never see it, and the Status type itself stays closed at five states.
+	 */
+	.ds-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		border-radius: var(--ds-radius-sm);
+		padding: 0.1rem 0.5rem 0.1rem 0.4rem;
+		font-size: 0.75rem;
+		line-height: 1rem;
+		font-weight: 500;
+		white-space: nowrap;
+	}
+
+	.ds-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 9999px;
+		flex: none;
+	}
+
+	.ds-chip-success {
+		color: var(--ds-color-status-success);
+		background: color-mix(in oklch, var(--ds-color-status-success) 14%, transparent);
+	}
+	.ds-dot-success {
+		background: var(--ds-color-status-success);
+	}
+
+	.ds-chip-warning {
+		color: var(--ds-color-status-warning);
+		background: color-mix(in oklch, var(--ds-color-status-warning) 16%, transparent);
+	}
+	.ds-dot-warning {
+		background: var(--ds-color-status-warning);
+	}
+
+	.ds-chip-error {
+		color: var(--ds-color-status-error);
+		background: color-mix(in oklch, var(--ds-color-status-error) 15%, transparent);
+	}
+	.ds-dot-error {
+		background: var(--ds-color-status-error);
+	}
+
+	.ds-chip-info {
+		color: var(--ds-color-status-info);
+		background: color-mix(in oklch, var(--ds-color-status-info) 16%, transparent);
+	}
+	.ds-dot-info {
+		background: var(--ds-color-status-info);
+	}
+
+	.ds-chip-neutral {
+		color: var(--muted-foreground);
+		background: color-mix(in oklch, var(--ds-color-status-neutral) 14%, transparent);
+	}
+	.ds-dot-neutral {
+		background: var(--ds-color-status-neutral);
+	}
+
+	.ds-chip-primary {
+		color: var(--ds-color-primary);
+		background: color-mix(in oklch, var(--ds-color-primary) 14%, transparent);
+	}
+	.ds-dot-primary {
+		background: var(--ds-color-primary);
+	}
+
+	/**
+	 * Ink in the status vocabulary, for text that IS the state rather than text
+	 * that sits beside a chip. StatCard's `valueTone` is the first consumer: a
+	 * negative figure should read as negative on the figure itself, not on a dot
+	 * two lines above it.
+	 *
+	 * Same five names and the same tokens as the chips, so a palette change moves
+	 * both together and an app cannot end up with a red chip beside an orange
+	 * number.
+	 */
+	.ds-ink-success {
+		color: var(--ds-color-status-success);
+	}
+	.ds-ink-warning {
+		color: var(--ds-color-status-warning);
+	}
+	.ds-ink-error {
+		color: var(--ds-color-status-error);
+	}
+	.ds-ink-info {
+		color: var(--ds-color-status-info);
+	}
+	.ds-ink-neutral {
+		color: var(--muted-foreground);
+	}
+
+	/**
+	 * A dot for a state that is still moving (StatusBadge's `pulse`). Opacity
+	 * only — no scale — so the pulse cannot shift the row it sits in, and the dot
+	 * never fades below the contrast at which it is still legible as a colour.
+	 */
+	.ds-dot-pulse {
+		animation: ds-dot-pulse 1.6s ease-in-out infinite;
+	}
+
+	@keyframes ds-dot-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.35;
+		}
+	}
+
+	/* ─────────────────────────────────────────────────────────────────────────
+	   The application shell (AppShell, AppNav, CommandPalette).
+
+	   These are real CSS rather than utilities on the elements because the shell
+	   renders the SAME nav link in two places — desktop rail, mobile drawer —
+	   and every surveyed app that had two nav call sites had let the two drift
+	   apart. One rule set, two call sites, no drift. The tints are color-mix over the app's own --primary and
+	   --foreground, so a palette change moves them and this file holds no colour.
+	   ───────────────────────────────────────────────────────────────────────── */
+	/* Nav ink is a pair of locals rather than the page's --foreground directly,
+	   because AppNav is rendered in two different kinds of surface: inside the
+	   shell's chrome (rail, drawer), and — exported in its own
+	   right — as a route-scoped secondary column sitting on the ordinary page
+	   background. The default is the page's own ink, and only the chrome
+	   surfaces below re-point it, so an app that inverts its chrome moves the
+	   rail's text without dragging a secondary nav on `bg-background` with it.
+
+	   The indirection through --ds-nav-chrome-ink is what makes that actually
+	   work, and it is not decoration. A custom property declared on an element
+	   beats one inherited into it, and `.ds-nav` is a DESCENDANT of every chrome
+	   surface below — so re-pointing --ds-nav-ink on the rail was overridden by
+	   `.ds-nav`'s own declaration a moment later, on the very element that
+	   consumes it. Both declarations were correct in isolation and the winner
+	   was decided by which element carried it, which is why no compiled-CSS gate
+	   could see it: it is a cascade fact, and it needs an engine. It was
+	   invisible in use too, because both sides default to the same token, so the
+	   only symptom was an app inverting its chrome and getting nothing —
+	   precisely the dead affordance `theme-coverage.test.ts` calls "worse than a
+	   missing key". `harness/drive.mjs` now drives an inverted chrome and reads
+	   the resolved ink back.
+
+	   The chrome sets a variable `.ds-nav` READS rather than one it re-declares,
+	   so the fallback chain resolves in the right order at the point of use. */
+	.ds-nav {
+		--ds-nav-ink: var(--ds-nav-chrome-ink, var(--foreground));
+		--ds-nav-ink-muted: var(--ds-nav-chrome-ink-muted, var(--muted-foreground));
+		/* Specified rather than left `visible` (the default): `overflow-y: auto`
+		   otherwise forces the computed value of an unspecified overflow-x to
+		   `auto` too (CSSOM's "if one axis is visible and the other is not, the
+		   visible one becomes auto" rule), so a row wider than the nav — a long
+		   label, a wide badge — got its own sideways scrollbar inside the drawer.
+		   The drawer scrolls vertically only; a row that doesn't fit truncates
+		   (`.ds-nav-item`'s label already carries `.truncate`) rather than
+		   growing a second scroll axis on top of the menu's own (design-system#111). */
+		overflow-x: hidden;
+	}
+
+	.ds-shell-rail,
+	.ds-shell-bar {
+		--ds-nav-chrome-ink: var(--ds-shell-chrome-foreground);
+		--ds-nav-chrome-ink-muted: var(--ds-shell-chrome-muted-foreground);
+	}
+
+	.ds-nav-item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		border-radius: var(--ds-radius-md);
+		padding: 0.5rem 0.625rem;
+		font-size: 0.875rem;
+		line-height: 1.25rem;
+		color: var(--ds-nav-ink-muted);
+		white-space: nowrap;
+		transition:
+			color 150ms,
+			background-color 150ms;
+	}
+
+	.ds-nav-item:hover {
+		color: var(--ds-nav-ink);
+		background: color-mix(in oklch, var(--ds-nav-ink) 5%, transparent);
+	}
+
+	/* The active row's INK is the chrome's own foreground, never --primary.
+	   (#11.)
+
+	   --ds-color-primary is the one token the package invites every app to
+	   override, and the constraint stated where an app picks it is that it clear
+	   AA against its own -foreground pair — the FILL case, primary as a button
+	   background. Consuming it as ink on the chrome is a second, stricter and
+	   entirely undocumented requirement, and an app can satisfy the stated one by
+	   a mile and fail this one badly: a warm amber that is 7.69:1 as a fill
+	   measured 1.90:1 here, and a saturated blue that is 5:1 as a fill measured
+	   2.87:1. Two real app palettes, both sanctioned, both illegible. The package
+	   default only ever cleared it by 0.05.
+
+	   So the shell stops asking a colour it does not control to be legible text.
+	   The ink is the chrome's foreground, which the app's palette is ALREADY
+	   obliged to keep AA against the chrome, and the guarantee is inherited from
+	   that existing contract rather than invented as a new one — 15.09:1 on the
+	   package default, and no app is told to repaint its brand.
+
+	   Two alternatives were measured and lost. Deriving an accessible ink by
+	   clamping lightness (`oklch(from var(--primary) min(l, X) c h)`) is not
+	   sound across the gamut — a saturated green clamped to L 0.55 still lands at
+	   3.44:1 — so it trades a visible failure for a subtler one. Mixing primary
+	   into the chrome ink IS provable (35% clears 4.5:1 for every in-gamut
+	   primary in both modes) but at that ratio the hue is so diluted it reads as
+	   warm or cool grey, which degrades every palette that was already fine to
+	   buy safety for palettes no app has.
+
+	   The brand is not lost, it moves to where it is not text: the 12% tint
+	   below, the edge bar, the underline. An app that wants its brand back ON the
+	   label sets --ds-nav-ink-active and owns the contrast knowingly:
+
+	       :root { --ds-nav-ink-active: var(--ds-color-primary); }
+
+	   It is read through a var() fallback rather than declared with a default,
+	   deliberately: declaring `--ds-nav-ink-active: var(--ds-nav-ink)` at :root
+	   would resolve where --ds-nav-ink does not exist and poison the property. */
+	.ds-nav-item[data-active='true'] {
+		color: var(--ds-nav-ink-active, var(--ds-nav-ink));
+		background: color-mix(in oklch, var(--primary) 12%, transparent);
+		font-weight: 500;
+	}
+
+	/* Colour alone never carries the active state (WCAG 1.4.1): the rail marks it
+	   with a flush edge bar.
+
+	   The bar keeps --primary at full strength, and that is a decision rather
+	   than an oversight. WCAG 1.4.11 holds a state indicator to 3:1 only when the
+	   state is not conveyed some other way; here it is conveyed three other ways
+	   — the ink lifts from muted to full, the weight goes to 500, and the row
+	   carries aria-current="page" — so the bar is free to be the one place the
+	   app's brand survives undiluted. `harness/drive.mjs` asserts that redundancy
+	   on every palette rather than trusting this paragraph, and prints the bar's
+	   own ratio beside it. */
+	.ds-nav-indicator {
+		position: absolute;
+		left: 0;
+		top: 0.375rem;
+		bottom: 0.375rem;
+		width: 0.125rem;
+		border-radius: 9999px;
+		background: var(--primary);
+	}
+
+	.ds-nav-heading {
+		padding: 0 0.625rem 0.25rem;
+		font-size: var(--ds-text-2xs);
+		font-weight: 500;
+		text-transform: uppercase;
+		/* Fallback is load-bearing, not belt-and-braces: Tailwind tree-shakes an
+		   @theme key whose utility nothing generates, so reading --tracking-eyebrow
+		   from plain CSS works only while some component still uses the utility
+		   form. The literal keeps this rule correct on its own; the var keeps an
+		   app's override flowing through. */
+		letter-spacing: var(--tracking-eyebrow, 0.06em);
+		color: color-mix(in oklch, var(--ds-nav-ink-muted) 70%, transparent);
+	}
+
+	/* A count badge is small text on a tint, so it carries the 4.5:1 text floor
+	   with the least margin of anything in the nav — and it was the worst of the
+	   three (#11): 1.73:1 under a warm amber, and 3.72:1 even on the package
+	   default, because it sits on the active row's tint AND its own. Same fix,
+	   same reason: the ink is the chrome's, the brand stays in the chip. */
+	.ds-nav-badge {
+		margin-left: auto;
+		border-radius: 9999px;
+		padding: 0 0.375rem;
+		font-size: var(--ds-text-2xs);
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+		color: var(--ds-nav-ink);
+		background: color-mix(in oklch, var(--primary) 15%, transparent);
+	}
+
+	/* A parent whose SECTION you are in, but whose own href does not match. Flat
+	   prefix matching already covers the ordinary case — children under the
+	   parent's own path light it up — so this only fires where the children live
+	   at their own top-level routes and the parent would otherwise go dark while
+	   you are inside it.
+
+	   It lifts the ink and nothing else, on purpose. The tint, the weight and the
+	   edge bar are what "this row IS the page" means in this rail, and spending
+	   any of them on "the page is somewhere below this row" would leave two rows
+	   claiming to be the current one. */
+	.ds-nav-item[data-within='true'] {
+		color: var(--ds-nav-ink);
+	}
+
+	/* The disclosed rows carry no guide rule. Indentation and the children's own
+	   icons already read as one group, and a line down the side is a second
+	   signal for a grouping that was never ambiguous. 8f39b02 removed the rule
+	   but not the 1px it was contributing to the indent (design-system#38): the
+	   border sat between this margin and this padding, so the child label
+	   landed 1px further right than the padding alone now gives it. Restored
+	   here instead, so the geometry — not a rule nobody can see — still carries
+	   it: `.ds-nav-item` pads 0.625rem and the icon is 1.125rem, so 1.1875rem
+	   (margin) + 0.625rem plus the former border's 1px (this padding) +
+	   0.625rem (the child's own padding) lands its label at 2.5rem, exactly
+	   under the parent's. */
+	.ds-nav-children {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		margin-top: 0.125rem;
+		margin-left: 1.1875rem;
+		padding-left: calc(0.625rem + 1px);
+	}
+
+	/* The rail's foot: where you configure the app, and which build you are on.
+	   Separated from the scrolling section list by a rule in the chrome's OWN
+	   ink rather than `--border`, for the reason the group guide takes the same
+	   treatment — a page-surface token cannot follow chrome an app has branded. */
+	/* `padding-inline` matches `.ds-nav`'s own `px-3`, because the foot sits
+	   OUTSIDE that wrapper: without it the Settings row's icon lands 0.75rem
+	   left of every icon above it and the rail reads as two lists. */
+	.ds-shell-rail-foot {
+		display: flex;
+		flex-direction: column;
+		padding-block: 0.375rem 0.5rem;
+		padding-inline: 0.75rem;
+		border-top: 1px solid color-mix(in oklch, var(--ds-nav-ink) 22%, transparent);
+	}
+
+	/* Metadata, not a row. No icon, no tile, no hover: it answers "what am I
+	   running" when someone reports a bug and otherwise stays out of the way.
+	   `tabular-nums` so a version does not re-flow as the digits change. */
+
+	/* `hidden` is an attribute the UA stylesheet honours at the weakest possible
+	   specificity, so the `display: flex` above beats it and a closed group would
+	   render wide open. This is not belt-and-braces; without it the attribute is
+	   inert for layout while still hiding the rows from assistive technology,
+	   which is the worst of both. */
+	.ds-nav-children[hidden] {
+		display: none;
+	}
+
+	/* A child sits on the chrome like any other row, one step quieter at rest.
+	   The active child keeps the full active treatment from .ds-nav-item — it is
+	   the current page, and depth does not make it less so. */
+	.ds-nav-item[data-child='true'] {
+		font-size: 0.8125rem;
+	}
+
+	.ds-nav-row {
+		display: flex;
+		align-items: center;
+		gap: 0.125rem;
+	}
+
+	/* The link takes the room and the chevron takes what is left, so a long label
+	   truncates instead of pushing the control out of the rail. min-width: 0 is
+	   what actually permits the shrink — a flex item's automatic minimum size is
+	   its content, and .ds-nav-item is nowrap. */
+	.ds-nav-row > .ds-nav-item {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.ds-nav-disclosure {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: var(--ds-radius-md);
+		color: var(--ds-nav-ink-muted);
+		transition:
+			color 150ms,
+			background-color 150ms;
+	}
+
+	.ds-nav-disclosure:hover {
+		color: var(--ds-nav-ink);
+		background: color-mix(in oklch, var(--ds-nav-ink) 5%, transparent);
+	}
+
+	/* The rotation IS the open/closed state for a sighted user, paired with the
+	   aria-expanded that carries it for everyone else. Transform on the icon
+	   rather than a swapped glyph, so the two states are the same object moving
+	   rather than two pictures. */
+	.ds-nav-disclosure > svg {
+		transition: transform 150ms ease;
+	}
+
+	.ds-nav-disclosure[aria-expanded='true'] > svg {
+		transform: rotate(90deg);
+	}
+
+	.ds-nav[data-collapsed='true'] {
+		padding-inline: 0.375rem;
+	}
+	.ds-nav[data-collapsed='true'] .ds-nav-item {
+		justify-content: center;
+		padding-inline: 0;
+	}
+
+	/* The settings destination's two panes (SettingsShell).
+
+	   Only the SHAPE is here; the list's width, tint and rule are utilities on the
+	   AppNav element itself, because AppNav declares `flex-1` there and a
+	   base-layer `flex: none` would lose to it by layer order rather than by
+	   position — the cascade trap recorded against `.ds-nav`'s ink. What is left is
+	   the axis swap and the scroll bounding, which nothing else declares.
+
+	   48rem is Tailwind's own --breakpoint-md, written literally for the reason
+	   `.ds-shell-rail` writes it literally: a media query cannot read a custom
+	   property, so an app that retunes md retunes this with it. */
+	.ds-settings {
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+	}
+
+	/* `min-height: 0` is what buys the two independent scrollers, and it is
+	   deliberately NOT set below md. A flex item is floored at its content height
+	   unless it is allowed to shrink past it, so without this neither pane ever
+	   scrolls and the whole content area does instead. Below md that floor is
+	   exactly what is wanted: the list stacks above the content and the page
+	   scrolls as one, which is the only sane arrangement on a phone — two nested
+	   scrollers at 375px is the sideways-scroll hazard this package already carries
+	   a gate for. */
+	@media (min-width: 48rem) {
+		.ds-settings {
+			flex-direction: row;
+			min-height: 0;
+		}
+	}
+
+	.ds-settings-pane {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	/* The pane stacks its sections itself, so a settings page writes a run of
+	   Panels and no wrapper — the framing markup this surface exists to stop a
+	   consumer writing. 1.25rem is the package's existing section rhythm, the same
+	   gap `.ds-dialog-section` puts between adjacent sections.
+
+	   A margin rule rather than `display: flex; gap`, because at md and up this box
+	   is a height-bounded scroller: as a flex column its children carry
+	   `flex-shrink: 1` and get squashed toward min-content before the scrollbar is
+	   ever reached, so a tall section would compress instead of scrolling. Block
+	   flow overflows, which is what a scroller wants. */
+	.ds-settings-pane > * + * {
+		margin-top: 1.25rem;
+	}
+
+	@media (min-width: 48rem) {
+		.ds-settings-pane {
+			min-height: 0;
+			overflow-y: auto;
+		}
+	}
+
+	/* A hard ceiling on the whole shell, in the one unit that names the actual
+	   drawn surface rather than a percentage of an ancestor. `.ds-shell` is
+	   already `flex` with `overflow-hidden` in the component markup, which
+	   clips an ordinary descendant that outgrows it — but a `position: fixed`
+	   descendant (the open drawer, below) is excused from an ancestor's
+	   `overflow: hidden` by definition, fixed positioning escapes every
+	   clipping ancestor that is not itself a containing block for fixed
+	   elements, and `.ds-shell` is not one. This is the backstop for that
+	   whole class of leak: whatever grows past the shell's own box, on
+	   whichever descendant, the SHELL still cannot be asked to draw wider than
+	   the viewport it is actually in (design-system#111). */
+	.ds-shell {
+		max-width: 100dvw;
+	}
+
+	/* The rail is ONE element in two states, not two elements (see the comment in
+	   app-shell.svelte): below md it is hidden until `data-drawer` turns it into
+	   an overlay; at md and up it is the permanent column and `data-drawer` means
+	   nothing. Expressing the swap here rather than as competing utility classes
+	   is what makes it deterministic — `fixed` and `sticky` set the same property,
+	   so which won would otherwise depend on Tailwind's emission order, not on the
+	   order they appear in the class attribute.
+
+	   48rem is Tailwind's own --breakpoint-md. It is written literally because a
+	   media query cannot read a custom property; an app that retunes the md
+	   breakpoint must retune this rule with it. */
+	.ds-shell-rail {
+		display: none;
+		position: sticky;
+		top: 0;
+		height: 100dvh;
+		width: var(--ds-shell-rail-width);
+		transition: width 200ms ease;
+	}
+
+	/* Full viewport height (`inset-block: 0`), so the brand row at its top and
+	   the last nav row at its bottom sit exactly where a notch or a home
+	   indicator gesture bar would cover them. The rail's own sticky state
+	   never needs this — it starts below the page's own top edge in normal
+	   flow, not against the physical screen edge.
+
+	   The width is a `min()` against the true viewport (`100dvw`, less the
+	   left inset a landscape notch carves out of it) rather than the old
+	   `max-width: 82vw` — `vw` is the LAYOUT viewport, which on a phone stays
+	   the largest size the page could ever occupy whether or not the browser
+	   chrome is actually showing, while `dvw` is the viewport the page is
+	   ACTUALLY drawn into right now. The two rarely disagree on width the way
+	   `vh`/`dvh` disagree on height, but disagreeing on principle was already
+	   enough to make this the one place on the drawer that named the wrong
+	   viewport (design-system#111): every other rule the drawer carries reads
+	   `dvh`/`env(safe-area-inset-*)`, so `82vw` was the one dimension still
+	   trusting a unit this component elsewhere treats as untrustworthy on a
+	   phone. `min()` over `--ds-shell-rail-width` keeps the drawer at its
+	   ordinary width on anything bigger than a narrow phone, and only the
+	   viewport term binds below that — so the drawer can never be asked to be
+	   wider than the screen it is drawn on, at any width, by construction
+	   rather than by testing every content shape that could have pushed it
+	   there. */
+	.ds-shell-rail[data-drawer='true'] {
+		display: flex;
+		position: fixed;
+		inset-block: 0;
+		left: 0;
+		z-index: 50;
+		width: min(var(--ds-shell-rail-width), 82dvw, 100dvw - env(safe-area-inset-left, 0px));
+		padding-top: env(safe-area-inset-top);
+		padding-bottom: env(safe-area-inset-bottom);
+		padding-left: env(safe-area-inset-left);
+		box-shadow:
+			0 10px 15px -3px oklch(0 0 0 / 0.1),
+			0 4px 6px -4px oklch(0 0 0 / 0.1);
+		animation: ds-drawer-in 200ms ease-out;
+	}
+
+	@media (min-width: 48rem) {
+		.ds-shell-rail {
+			display: flex;
+		}
+		/* At md the drawer state is inert: the rail is already on screen, so an
+		   overlay opened on a phone and then widened must not stay an overlay. */
+		.ds-shell-rail[data-drawer='true'] {
+			position: sticky;
+			z-index: auto;
+			width: var(--ds-shell-rail-width);
+			padding-top: 0;
+			padding-bottom: 0;
+			padding-left: 0;
+			box-shadow: none;
+			animation: none;
+		}
+	}
+
+	.ds-shell-rail[data-collapsed='true'] {
+		width: var(--ds-shell-rail-width-collapsed);
+	}
+
+	/* Width follows the pointer during a drag; the transition is for the
+	   collapse, not for every pixel of a resize. */
+	.ds-shell-rail[data-resizing='true'] {
+		transition: none;
+	}
+
+	/* The resize handle: a 6px grab strip astride the rail's right edge, md+
+	   only, showing the border colour under the pointer and keyboard focus. */
+	.ds-shell-rail-handle {
+		display: none;
+	}
+	@media (min-width: 48rem) {
+		.ds-shell-rail-handle {
+			display: block;
+			position: absolute;
+			inset-block: 0;
+			right: -3px;
+			width: 6px;
+			cursor: col-resize;
+			z-index: 1;
+			touch-action: none;
+		}
+		.ds-shell-rail-handle:hover,
+		.ds-shell-rail-handle:focus-visible {
+			background: var(--ds-color-primary);
+			opacity: 0.4;
+			outline: none;
+		}
+	}
+
+	/* The content measure: the shell's content box is ONE element in four
+	   states, the same shape as the rail above it.
+
+	   Real declarations here rather than a `max-w-[var(--ds-shell-measure-page)]`
+	   utility on the component, for the reason the rail's width is here too: an
+	   arbitrary utility only exists if the CONSUMER's Tailwind build happened to
+	   scan the file that spells it, whereas this stylesheet is imported by every
+	   consumer as a condition of using the package at all. Whoever writes the
+	   utility owns whatever makes it real.
+
+	   `full` writes no attribute and matches nothing here, so a shell that never
+	   asked for a measure carries no class, no attribute and no declaration —
+	   which is what makes the prop additive rather than a default anyone has to
+	   opt out of.
+
+	   The cap is the BORDER box, so `padded` spends its inline padding inside
+	   the measure rather than outside it. That is the same arithmetic as the
+	   `mx-auto max-w-4xl px-6` idiom this replaces, and keeping it means one
+	   element rather than a second wrapper nobody asked for. */
+	/* Two classes, because the MEASURE and the CENTRING are two decisions and
+	   only the shell's content box wants both (design-system#22).
+
+	   `.ds-measure` caps the width and nothing else. It is for a block INSIDE a
+	   page — the paragraph of explanatory prose on a route legitimately set to
+	   `wide`, which would otherwise inherit a 120rem measure and run to ~123
+	   characters a line. `.ds-shell-measure` is that plus `margin-inline: auto`,
+	   which is right for the content box and wrong for a block within a page:
+	   applied to a set of left-anchored paragraphs it indented them ~207px away
+	   from their own label, measured in a consumer and reverted.
+
+	   Same attribute, same custom properties, so a block retunes with the shell
+	   rather than drifting from it. That is the whole point: the alternative an
+	   app reaches for is a local `max-w-prose` or `max-w-[72ch]`, which is a
+	   number typed once that never hears about a retune — four apps had written
+	   ten of them between them, and not one matched this package's own 72ch. */
+	.ds-measure[data-measure='prose'],
+	.ds-shell-measure[data-measure='prose'] {
+		max-width: var(--ds-shell-measure-prose);
+	}
+
+	.ds-measure[data-measure='page'],
+	.ds-shell-measure[data-measure='page'] {
+		max-width: var(--ds-shell-measure-page);
+	}
+
+	.ds-measure[data-measure='wide'],
+	.ds-shell-measure[data-measure='wide'] {
+		max-width: var(--ds-shell-measure-wide);
+	}
+
+	.ds-shell-measure {
+		margin-inline: auto;
+	}
+
+	/* ── The prose face (design-system#32) ────────────────────────────────────
+	   Styling for HTML the app did NOT author — rendered markdown, an extracted
+	   document body, a description field that arrives as rich text.
+
+	   Three consumers had built one of these, by three different mechanisms: a
+	   hand-written token-based block, the Tailwind typography plugin, and a
+	   second hand-written block that one of them had already duplicated inside
+	   itself. Every consumer that renders a document body would otherwise derive
+	   it a fourth time, and typography degrades worse than most things when it
+	   is re-derived per app.
+
+	   The package styles it and does NOT render it: sanitising untrusted HTML is
+	   a security boundary, and a package cannot see the inputs the boundary is
+	   protecting. The app owns the markdown-to-HTML seam and hands the result in.
+
+	   It carries no measure. A reading measure and a reading face are two
+	   decisions, and an app composes them:
+
+	       <div class="ds-prose ds-measure" data-measure="prose">…</div>
+
+	   Nothing here reaches for a colour or a length that is not a --ds-* token,
+	   so a palette or a retune moves the whole face with it. */
+	.ds-prose {
+		color: var(--ds-color-foreground);
+		line-height: 1.7;
+	}
+
+	.ds-prose h1,
+	.ds-prose h2,
+	.ds-prose h3,
+	.ds-prose h4 {
+		font-family: var(--ds-font-display);
+		font-weight: 600;
+		line-height: 1.25;
+		margin-block: var(--ds-spacing-lg) var(--ds-spacing-sm);
+	}
+
+	/* `em` rather than the type scale: these headings sit INSIDE a document, so
+	   they are relative to the body copy around them, not to the page's own
+	   heading ramp. An <h1> in rendered content is not the page's <h1>. */
+	.ds-prose h1 {
+		font-size: 1.5em;
+	}
+
+	.ds-prose h2 {
+		font-size: 1.25em;
+	}
+
+	.ds-prose h3,
+	.ds-prose h4 {
+		font-size: 1.1em;
+	}
+
+	.ds-prose p,
+	.ds-prose ul,
+	.ds-prose ol,
+	.ds-prose blockquote {
+		margin-block: var(--ds-spacing-sm);
+	}
+
+	.ds-prose ul,
+	.ds-prose ol {
+		padding-inline-start: var(--ds-spacing-lg);
+	}
+
+	/* Restored explicitly: the preflight reset strips list markers, and rendered
+	   content is the one place a bullet carries meaning. */
+	.ds-prose ul {
+		list-style: disc;
+	}
+
+	.ds-prose ol {
+		list-style: decimal;
+	}
+
+	.ds-prose a {
+		color: var(--ds-color-primary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.ds-prose strong {
+		font-weight: 600;
+	}
+
+	.ds-prose code {
+		font-family: var(--ds-font-code);
+		font-size: 0.9em;
+	}
+
+	.ds-prose pre {
+		background: var(--ds-color-surface-1);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-sm);
+		overflow-x: auto;
+		padding: var(--ds-spacing-sm);
+	}
+
+	.ds-prose blockquote {
+		border-inline-start: 2px solid var(--ds-color-border-strong);
+		color: var(--ds-color-muted-foreground);
+		padding-inline-start: var(--ds-spacing-sm);
+	}
+
+	.ds-prose hr {
+		border: 0;
+		border-block-start: 1px solid var(--ds-color-border);
+		margin-block: var(--ds-spacing-lg);
+	}
+
+	/* A table in an extracted document is routinely wider than the measure around
+	   it. It scrolls in its OWN box rather than pushing the page sideways — the
+	   same rule the library surfaces learned at 390px. */
+	.ds-prose table {
+		border-collapse: collapse;
+		display: block;
+		font-size: 0.9em;
+		margin-block: var(--ds-spacing-md);
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	.ds-prose th,
+	.ds-prose td {
+		border: 1px solid var(--ds-color-border);
+		padding: var(--ds-spacing-xs) var(--ds-spacing-sm);
+		text-align: start;
+	}
+
+	.ds-prose th {
+		color: var(--ds-color-muted-foreground);
+		font-weight: 600;
+	}
+
+	/* A figure in a document is evidence, so it gets the surface and border a
+	   plate deserves, and never exceeds its column. */
+	.ds-prose img {
+		background: var(--ds-color-surface-2);
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-sm);
+		display: block;
+		height: auto;
+		margin-block: var(--ds-spacing-md);
+		max-width: 100%;
+	}
+
+	/* The content texture: the house atmosphere, painted once by the shell on its
+	   own scrolling content region.
+
+	   Two apps had built this picture separately — a faint dot-grid floor plus a
+	   soft accent vignette in the top-right — under two names, in two app.css
+	   files, and one applied it as a helper class per route so it reached four
+	   routes out of about fifteen. It is the same drift the nav rules above were
+	   hoisted to end, one layer down.
+
+	   A BACKGROUND, not a layer, and that is the design. Both apps first reached
+	   for an absolutely positioned `::before` inside the scroller, which is wrong
+	   three ways at once: at `z-index: auto` a positioned box paints above
+	   non-positioned content, so the atmosphere tints the page rather than sitting
+	   under it (invisible only because it is faint); `z-index: -1` trades that for
+	   sinking behind an ancestor's background, since neither `<main>` nor
+	   `.ds-shell` opens a stacking context; and it has to be excused from
+	   hit-testing by hand. A background layer cannot be hit-tested, always paints
+	   beneath every descendant, adds no box to the flex column, and opens no
+	   stacking context — every one of those properties for free.
+
+	   `background-attachment: local` is what makes it the page's FLOOR rather than
+	   a backdrop behind a moving page. A scroll container's background defaults to
+	   `scroll`, which pins it to the border box: the dots would hang motionless
+	   while the content slid over them. `local` resolves the painting and
+	   positioning areas against the scrollable area instead, so the texture
+	   travels with the content that sits on it. The vignette's height is therefore
+	   a length rather than a percentage — under `local` a percentage would resolve
+	   against the whole scroll height and stretch one corner glow down a 5000px
+	   page.
+
+	   That length defaults to `calc(100dvh - 3.5rem)` rather than `100dvh`, and
+	   the 3.5rem is the top bar's own `h-14`: `.ds-shell` is `h-dvh` with the bar
+	   above `<main>` in the same column, so the region this paints is one bar
+	   shorter than the viewport and a plain `100dvh` overshoots it by about 6%.
+	   The literal is written out for the same reason `48rem` is in the rail's
+	   media query below — nothing here can read the bar's Tailwind utility — so
+	   an app that retunes the bar height retunes this alongside it, in the knob
+	   already provided.
+
+	   The five knobs are read through var() fallbacks at the point of use rather
+	   than declared at :root, for the reason the @theme inline block above states
+	   (design-system#8): a :root alias holding a var() reference resolves once, at
+	   :root, and a scoped override or a scoped .dark wrapper below it can never
+	   reach the result. Read here, they resolve live on the element that paints
+	   them. It also means this feature adds nothing at all to a consumer's :root —
+	   a shell that never asks for a texture receives one rule set whose selector
+	   matches nothing.
+
+	   An app retunes any of them in one declaration:
+
+	       :root {
+	         --ds-shell-texture-grid-ink: oklch(0.68 0.02 250 / 0.5);
+	         --ds-shell-texture-vignette-ink: color-mix(in oklch, var(--primary) 8%, transparent);
+	         --ds-shell-texture-grid-pitch: 24px;
+	         --ds-shell-texture-vignette-at: 15% -10%;
+	       }
+
+	   The corner is a knob rather than a fixed 85% because it is the one value an
+	   app cannot otherwise reach without redeclaring this whole rule, and because
+	   a radial-gradient position is PHYSICAL — there is no logical form of `at
+	   85%`, so an RTL app wanting the glow at the reading-start corner has to be
+	   able to say so. Driven at `dir=rtl` alongside a 24px root size and
+	   `forced-colors: active`, none of which move the texture on their own.
+
+	   A plain wash rather than a grid is that same declaration with the grid ink
+	   set to `transparent`, which is why `grid` is the only named texture: the
+	   apps differed on values, not on pictures. */
+	.ds-shell-texture[data-texture='grid'] {
+		background-image:
+			radial-gradient(
+				120% 70% at var(--ds-shell-texture-vignette-at, 85% -10%),
+				var(--ds-shell-texture-vignette-ink, color-mix(in oklch, var(--primary) 6%, transparent)),
+				transparent 60%
+			),
+			radial-gradient(
+				circle at 1px 1px,
+				var(--ds-shell-texture-grid-ink, color-mix(in oklch, var(--foreground) 14%, transparent))
+					1px,
+				transparent 0
+			);
+		background-repeat: no-repeat, repeat;
+		background-position: 0 0;
+		background-size:
+			100% var(--ds-shell-texture-vignette-height, calc(100dvh - 3.5rem)),
+			var(--ds-shell-texture-grid-pitch, 30px) var(--ds-shell-texture-grid-pitch, 30px);
+		background-attachment: local, local;
+	}
+
+	/* Not on paper. A 30px dot grid prints as banding on any real printer, and a
+	   vignette prints as a smudge in one corner — both apps that built this had
+	   independently learned that and written the same suppression into their own
+	   print rules, which is the copy this package is here to take over.
+
+	   Later in the file than the rule above and in the same layer, so it wins
+	   without `!important`; an app's own print rules are unlayered and still beat
+	   it, which is the right way round. The white is the content region's, not the
+	   document's — `html`/`body` stay the app's to decide.
+
+	   `#fff` is the one literal colour in an otherwise entirely token-driven
+	   feature, on the same grounds `--ds-shadow-sm` gives for its neutral black:
+	   paper is white, which is a fact about the medium rather than a palette
+	   choice, and a brand-tinted "white" here would only spend the reader's
+	   toner. An app that genuinely wants the region printed in a colour paints it
+	   from its own unlayered print rules and wins. */
+	@media print {
+		.ds-shell-texture[data-texture='grid'] {
+			background-image: none;
+			background-color: #fff;
+		}
+	}
+
+	/* The bypass link (WCAG 2.4.1): off-screen until focused, then a real target
+	   above the sticky bar. */
+	.ds-skip-link {
+		position: absolute;
+		left: 0.5rem;
+		top: -3rem;
+		z-index: 60;
+		border-radius: var(--ds-radius-md);
+		background: var(--popover, var(--ds-color-surface-3));
+		color: var(--popover-foreground, var(--ds-color-foreground));
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		box-shadow: var(--ds-shadow-sm);
+		transition: top 150ms ease;
+	}
+	.ds-skip-link:focus {
+		top: 0.5rem;
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+
+	@keyframes ds-drawer-in {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(0);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ds-shell-rail[data-drawer='true'],
+		.ds-dot-pulse {
+			animation: none;
+		}
+		.ds-shell-rail {
+			transition: none;
+		}
+		.ds-nav-disclosure > svg {
+			transition: none;
+		}
+	}
+}

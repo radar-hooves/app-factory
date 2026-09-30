@@ -1,0 +1,53 @@
+{
+  "name": "@poodle64/design-tokens",
+  "version": "2026.9.1",
+  "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:radar-hooves/design-system",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public",
+    "provenance": false
+  },
+  "files": [
+    "bin",
+    "dist",
+    "lib",
+    "tokens",
+    "templates",
+    "sd.config.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/tokens.d.ts",
+      "default": "./dist/tokens.js"
+    },
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens.tw.css": "./dist/tokens.tw.css",
+    "./tokens.json": "./tokens/tokens.tokens.json",
+    "./palettes.css": "./dist/palettes.css",
+    "./palettes.json": "./tokens/palettes.json",
+    "./palettes": {
+      "types": "./dist/palettes.d.ts",
+      "default": "./dist/palettes.js"
+    }
+  },
+  "bin": {
+    "ds-check-arbitrary-values": "./bin/check-arbitrary-values.mjs"
+  },
+  "scripts": {
+    "build": "style-dictionary build --config sd.config.js",
+    "test": "pnpm build && node --test test/*.test.js",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@fontsource-variable/fraunces": "^5.1.0",
+    "@fontsource-variable/hanken-grotesk": "^5.1.0",
+    "@fontsource-variable/jetbrains-mono": "^5.1.0",
+    "@tailwindcss/cli": "^4.3.2",
+    "style-dictionary": "^4.4.0",
+    "tailwindcss": "^4.3.2"
+  },
+  "packageManager": "pnpm@10.28.0"
+}

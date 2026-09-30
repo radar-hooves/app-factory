@@ -1,0 +1,342 @@
+---
+# Per-app DESIGN.md — North Star format.
+# YAML front matter: normative token overrides and palette choices.
+# Markdown prose: intent the tokens cannot encode.
+# Agents and contributors read this file before generating or reviewing any UI.
+# When this file and shared-design-language.md diverge, the shared language wins
+# on structure; this file wins on per-app brand colour and prose direction.
+#
+# Fill in every REQUIRED field. Delete or comment out OPTIONAL fields that do
+# not apply. Keep this file under 20 KB; move long component contracts to docs/.
+#
+# Binding invariants (no per-app exception):
+#   corner radius base: 0.625rem (--ds-radius-lg)
+#   fonts: Fraunces (display), Avenir Next -> Hanken Grotesk Variable (body), JetBrains Mono (code)
+#   status vocabulary: success / warning / error / info / neutral
+#   colour space: oklch
+#   CSS namespace: --ds-*
+#   token format: DTCG 2025.10, consumed by Style Dictionary v4
+
+name: YOUR_APP_NAME                          # REQUIRED — kebab-case preferred
+description: >-                             # REQUIRED — one sentence
+  One-sentence aesthetic direction.
+  E.g. "Calm, dense control plane on warm-paper surfaces with a eucalyptus-green
+  accent and a fixed vivid status palette. Light-first, dark available."
+
+version: 2026.7.3                           # CalVer; bump when tokens change
+mode: light-first                           # light-first | dark-first | equal
+
+# ---------------------------------------------------------------------------
+# Brand primary — the ONE action accent. Override --ds-color-primary in :root.
+# Everything else in the shared token sheet is used as-is.
+#
+# The constraint is a FILL constraint, and that is the whole constraint:
+# --ds-color-primary must meet WCAG AA (>=4.5:1) against its OWN -foreground
+# pair, in both modes — primary as a background with text on top. No shared
+# component paints it as ink on chrome, so a light or high-lightness brand hue
+# costs you nothing in legibility. Pick the hue your brand wants.
+# ---------------------------------------------------------------------------
+primary:
+  light: oklch(0.50 0.155 XXX)              # REQUIRED — pick a hue (XXX = 0-360)
+  dark: oklch(0.70 0.140 XXX)               # REQUIRED — lighter for dark mode
+  foreground-light: oklch(0.99 0.005 XXX)   # text on primary button (light)
+  foreground-dark: oklch(0.20 0.030 XXX)    # text on primary button (dark)
+
+# ---------------------------------------------------------------------------
+# Colour overrides (OPTIONAL).
+# Only list tokens that differ from the shared design-system defaults.
+# The shared defaults live in tokens/tokens.tokens.json.
+# Do NOT redefine the status palette; it is binding and fixed.
+# ---------------------------------------------------------------------------
+# colours:
+#   light:
+#     background: oklch(...)       # override shared default
+#   dark:
+#     background: oklch(...)
+
+# ---------------------------------------------------------------------------
+# Typography (OPTIONAL override notes only — families are binding).
+# Families: Fraunces (display), Avenir Next -> Hanken Grotesk Variable (body),
+# JetBrains Mono (code). These cannot be changed per app. Notes here are for
+# scale or usage intent.
+# ---------------------------------------------------------------------------
+typography:
+  notes: >-
+    Page titles use Fraunces display-l (1.75rem/600/-0.02em).
+    Body defaults to the body face at 0.9375rem/1.4: Avenir Next on Apple
+    devices, Hanken Grotesk Variable everywhere else.
+    Any machine-produced value (ID, timestamp, amount) uses JetBrains Mono.
+
+# ---------------------------------------------------------------------------
+# Radius (OPTIONAL — shared defaults apply; document if you use a tighter scale)
+# Binding base: --ds-radius-lg = 0.625rem. Derived: sm (chips), xl (dialogues).
+# ---------------------------------------------------------------------------
+# rounded:
+#   note: "tighter than default — security UI reads as more precise"
+#   lg: 0.5rem    # override base radius only if you have a documented reason
+
+# ---------------------------------------------------------------------------
+# Spacing (OPTIONAL — notes only)
+# The named scale ships as --ds-spacing-* CSS variables for hand-written CSS.
+# It is NOT in the Tailwind @theme block: a named --spacing-* entry captures
+# w-*/max-w-*/min-w-*/basis-* off the container scale. In markup use the
+# numeric scale — p-1 / p-2 / p-4 / p-6 / p-8 / p-12 are xs…2xl.
+# ---------------------------------------------------------------------------
+# spacing:
+#   notes: "cards use p-4; page gutters px-8"
+---
+
+# APP_NAME Design System
+
+> The single source of truth for how APP_NAME looks. Every screen is composed
+> from the tokens and component contracts below. If a token does not answer the
+> question, the prose does. Do not style screens ad hoc.
+>
+> Shared baseline: `docs/master/design/shared-design-language.md`.
+> Token source: `@poodle64/design-tokens` (radar-hooves/design-system, DTCG 2025.10).
+> Generated artefacts: the package's `dist/` (CSS, JS constants, Tailwind @theme).
+
+Australian English throughout.
+
+---
+
+## 1. The idea in one line
+
+REPLACE with one sentence describing the aesthetic direction, the density, and
+the primary emotional register. E.g.: "APP_NAME is an instrument, not a
+website: calm, dense, [light/dark]-first, where [the one thing] earns the
+primary accent colour."
+
+---
+
+## 2. Colour
+
+OKLCH, [light/dark]-first. Shared surface ladder and status vocabulary apply
+unchanged (see shared-design-language.md §2 and §3). The only brand choice here
+is the primary accent.
+
+### Primary accent
+
+The primary is the ONE brand accent. It appears on:
+- The primary action in any context (one per `PageHeader`)
+- The active nav item's tint, edge bar and underline — as a FILL, never as the
+  label's ink (see below)
+- Focus rings (`--ds-color-ring` aliases `--ds-color-primary`)
+- OPTIONALLY: [list any other deliberate use; keep it short]
+
+Nowhere decorative. No second accent.
+
+**Primary is a fill, not an ink.** `AppShell` marks the active nav row with a
+12% primary tint plus a primary edge bar or underline, and paints the LABEL in
+the chrome's own foreground. That is deliberate: contrast against the chrome
+depends entirely on your brand hue, and a hue that is unimpeachable as a button
+fill can be illegible as text on a near-white bar. Because the shell never asks
+your brand to be ink, you never have to trade brand for legibility.
+
+If your primary genuinely is legible as text on your chrome and you want it back
+on the active label, say so explicitly and own the contrast:
+
+```css
+:root { --ds-nav-ink-active: var(--ds-color-primary); }
+```
+
+Check it at >=4.5:1 against `--ds-color-surface-1` (the chrome), not against
+`--ds-color-background` — they are different surfaces, and the chrome is the
+darker of the two.
+
+### Status palette (binding — do not redefine)
+
+| Token | Meaning |
+| --- | --- |
+| `--ds-color-status-success` | done, healthy, confirmed |
+| `--ds-color-status-warning` | needs attention, awaiting input, expiring |
+| `--ds-color-status-error` | failed, expired, revoked, destructive |
+| `--ds-color-status-info` | in-flight, processing, informational |
+| `--ds-color-status-neutral` | idle, queued, skipped, inactive |
+
+Applied as: a coloured dot or icon **plus a label** (WCAG 1.4.1 — never colour
+alone). Badge text at full chroma on a `~14%` same-hue tint. Never flood-fill a
+row. The single component for this is `StatusBadge`.
+
+---
+
+## 3. Typography
+
+Three faces, each with one job. Families are binding; do not substitute.
+
+| Role | Family | Used for |
+| --- | --- | --- |
+| **Display** | Fraunces | Page titles, wordmarks, empty-state headings, large readouts |
+| **Body / UI** | Avenir Next, else Hanken Grotesk Variable | Everything textual: labels, descriptions, table cells, buttons, nav |
+| **Data / Mono** | JetBrains Mono | Machine-produced values only: IDs, hashes, ISO dates, amounts, counts |
+
+Scale (fill in the values the app actually uses; delete roles that do not apply):
+
+| Name | Size | Weight | Line-height | Use |
+| --- | --- | --- | --- | --- |
+| `display-l` | 1.75rem | 600 | 2.125rem | Page title |
+| `heading` | 1.125rem | 600 | 1.625rem | Card / section title |
+| `body` | 0.9375rem | 400 | 1.4 | Default UI text |
+| `small` | 0.8125rem | 400 | 1.25 | Secondary text, table cells |
+| `label` | 0.6875rem | 600 | 1 | Uppercase eyebrow, column heads |
+| `mono-data` | 0.875rem | 400 | 1.25 | IDs, timestamps, values (tabular) |
+
+Rules: any value a machine produced = `font-code` + tabular figures (`tnum`).
+Body copy caps at ~70ch. Never mono for prose.
+
+---
+
+## 4. Radius
+
+Binding scale from `--ds-*` tokens. Base is `--ds-radius-lg` (0.625rem).
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--ds-radius-sm` | 0.225rem | Chips, badges, inputs |
+| `--ds-radius-md` | 0.425rem | — |
+| `--ds-radius-lg` | 0.625rem | Cards, panels (base `--radius`) |
+| `--ds-radius-xl` | 0.825rem | Dialogues, modals |
+| `--ds-radius-full` | 9999px | Pills |
+
+---
+
+## 5. Layout and spacing
+
+REPLACE with the app's shell description:
+
+- **Shell:** [one sentence — e.g. "left nav rail + fluid content on a shared dot-grid floor"]
+- **Inner width discipline:** [e.g. "tables fluid; forms capped at max-w-2xl; reading copy capped at 70ch"]
+- **Right context column:** [present/absent and purpose]
+- **Content padding:** [e.g. `px-8 py-7`]
+
+Spacing in markup uses Tailwind's numeric scale (`p-4`, `gap-6`). The named
+`--ds-spacing-*` variables are for hand-written CSS only — they are kept out of
+the `@theme` block so `max-w-*` keeps meaning the container scale.
+
+---
+
+## 6. Components
+
+Built on shadcn-svelte primitives (mandatory). Shared primitives from
+`src/lib/components/` — see shared-design-language.md §4 for the full contract.
+Document APP_NAME-specific additions or deviations below.
+
+REPLACE or extend this list with the components actually used:
+
+- **`Button`** — shadcn `ui/button` only. One primary (`default`) per `PageHeader`. Never hand-roll.
+- **`StatusBadge`** — dot + label on a ~14% same-hue tint. The only state chip.
+- **`PageHeader`** — `{ title, subtitle?, eyebrow?, breadcrumbs?, actions? }`. One primary action.
+- **`DataTable`** — shadcn table primitives; `label` column heads; mono data cells.
+- **`StatList`** — route metrics as a vertical label→value list. Zero-aware.
+- **`DetailPanel`** — entity detail (header + scrollable body + sticky footer).
+- **`EmptyState`** — Fraunces heading, muted line, primary CTA.
+
+Icons: `@lucide/svelte`, deep imports, `size-4` inline / `size-5` standalone /
+`size-6` empty states. Every status glyph pairs with a label and a colour.
+
+---
+
+## 7. Do / Don't
+
+**Do:**
+- Compose from shared primitives; add to the shared library when a new one is needed
+- Use `StatusBadge` for every state chip (dot + label, never colour alone)
+- Use `--ds-color-primary` for the one action accent, and as a FILL — a
+  background, a tint, a bar — rather than as ink on chrome
+- Use mono + tabular figures for any machine-produced value
+- Let tables run full width; cap forms at `max-w-2xl`
+- Apply `--ds-radius-lg` to cards; `--ds-radius-xl` to dialogues
+- Use `--ds-font-display` (Fraunces) for page titles and empty-state headings
+
+**Don't:**
+- Centre a narrow column on a wide screen
+- Add a second accent colour
+- Flood-fill table rows with a status colour
+- Use colour as the only state signal (WCAG 1.4.1)
+- Use mono for prose or body copy
+- Hand-roll a `<button>` where a shadcn `Button` variant applies
+- Put two primary actions in one `PageHeader`
+- Write raw oklch / hex values in a component — every colour is a `--ds-*` var
+
+---
+
+## 8. Token consumption
+
+```css
+/* app.css — import order for a Tailwind v4 project */
+@import "tailwindcss";
+@import "@poodle64/design-tokens/tokens.tw.css"; /* @theme block */
+@import "@poodle64/design-tokens/tokens.css";    /* :root + .dark */
+@import "@poodle64/ui/styles.css";               /* shadcn surface + its registration */
+
+/* @poodle64/ui ships in node_modules, outside Tailwind's default src/ scan. */
+@source "../node_modules/@poodle64/ui/dist";
+
+/* Root font-size: 100% keeps the browser/OS default (nominally 16px) while
+   still scaling with a reader's own changed browser text-size preference.
+   Never a fixed px value here -- that would silently override that
+   preference instead of honouring it. */
+html {
+  font-size: var(--ds-font-size-base);
+}
+
+/* Per-app primary override — one of the only two changes from shared
+   defaults. Skip this block entirely if you adopt a catalogued palette
+   below: a palette already sets primary, its foreground and ring. */
+:root {
+  --ds-color-primary: oklch(0.50 0.155 XXX);
+  --ds-color-primary-foreground: oklch(0.99 0.005 XXX);
+  --ds-color-ring: oklch(0.50 0.155 XXX);
+}
+.dark {
+  --ds-color-primary: oklch(0.70 0.140 XXX);
+  --ds-color-primary-foreground: oklch(0.20 0.030 XXX);
+  --ds-color-ring: oklch(0.70 0.140 XXX);
+}
+```
+
+**Or adopt a catalogued palette instead**, which is the other sanctioned
+change and the easier one: it carries an accent AND a surface tone, and every
+palette in the catalogue is gated for WCAG AA contrast in both modes, which a
+hand-picked accent is not until someone checks it.
+
+Pick one or the other, and mean it. A palette block is
+`:root[data-ds-palette='…']`, which outranks a plain `:root { --ds-color-primary: … }`
+on specificity — so an app that adopts a palette and ALSO leaves an old primary
+override in `app.css` keeps a block that now does nothing, with no error, no
+lint and no failing test to say so. Delete the override when you adopt a
+palette; a dead declaration someone later "fixes" by changing its value is
+worse than no declaration at all.
+
+```css
+@import "@poodle64/design-tokens/palettes.css"; /* after tokens.css */
+```
+
+```html
+<html data-ds-palette="parchment"></html>
+```
+
+The twenty palettes and what each is for are in
+`@poodle64/design-tokens`'s README. Pick one by eye at
+`?surface=palette` in `packages/ui/harness`, which renders the whole component
+set under it. Nothing else in the app changes, and no component knows.
+
+**Do not hand-write a shadcn alias layer.** Every app used to declare
+`--card` / `--popover` / `--muted` / `--accent` / `--secondary` / `--input` /
+`--radius` and the `-foreground` pairs itself. That half-works in a way nothing
+catches: declaring them as plain custom properties makes the variable exist but
+never tells Tailwind v4 they are theme colours, so `bg-card`, `bg-muted`,
+`bg-accent` and `border-input` compile to no CSS rule at all — no build error,
+no lint hit, no failing test, just classes in the DOM with nothing behind them
+(design-system#3). Since `@poodle64/ui@2026.7.2` the import above ships that
+whole surface, mapping and registration together, and each name aliases a
+`--ds-*` token, so the primary override reaches all of it.
+
+The one part still owned per app is sidebar and chart colours: this package
+ships no sidebar or chart component, and chrome hue is genuinely an app's own
+decision, so an app that needs them declares and registers them itself.
+
+TypeScript:
+```ts
+import { DS_COLOR_PRIMARY_LIGHT } from "@poodle64/design-tokens";
+```

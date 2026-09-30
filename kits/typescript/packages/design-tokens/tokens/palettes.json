@@ -1,0 +1,410 @@
+{
+  "$description": "Palette catalogue \u2014 the named personalities a household app may adopt. Absorbed from the master project's standalone shadcn showcase (design-system#25), which had carried them since 2026-03-11 in the pre---ds-* namespace with every semantic surface declared outright.\n\nA palette is exactly TWO knobs, and cannot express a third:\n  accent  the primary action colour per mode, and ONLY that. Its -foreground pair is derived by the build (sd.config.js accentForeground: near-ink or near-white at the accent hue, whichever measures better against it), so there is no field an illegible pair could be written into.\n  tone    a hue plus a per-mode chroma SCALE, applied to the neutral ladder in tokens.tokens.json. The ladder's LIGHTNESS steps are package-owned and unreachable from here \u2014 they carry every contrast guarantee this package makes.\n\nThere is deliberately no field for a lightness, and none for a status colour: the status vocabulary (success/warning/error/info/neutral) is invariant across palettes, because a warning must read as a warning in every app.\n\nSee docs/development/decision-palette-catalogue-and-the-tone-axis.md for why this is two knobs rather than the showcase's full semantic override.",
+  "meta": {
+    "updated": "2026-08-07",
+    "source": "design-system#25",
+    "colourSpace": "oklch"
+  },
+  "palettes": {
+    "zinc": {
+      "title": "Zinc",
+      "strategy": "Neutral baseline",
+      "useCase": "shadcn-svelte default; no personality at all",
+      "tone": {
+        "hue": 265,
+        "chromaScale": {
+          "light": 0.15,
+          "dark": 0.08
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.205 0.000 0.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.985 0.000 0.0)"
+        }
+      }
+    },
+    "slate": {
+      "title": "Slate",
+      "strategy": "Cool blue-grey",
+      "useCase": "Corporate, conservative",
+      "tone": {
+        "hue": 261,
+        "chromaScale": {
+          "light": 1.26,
+          "dark": 0.92
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.510 0.075 243.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.633 0.063 247.4)"
+        }
+      }
+    },
+    "burnt-sienna": {
+      "title": "Burnt Sienna",
+      "strategy": "Warm earth tones",
+      "useCase": "Warm, approachable",
+      "tone": {
+        "hue": 67,
+        "chromaScale": {
+          "light": 0.87,
+          "dark": 0.45
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.565 0.107 48.3)"
+        },
+        "dark": {
+          "primary": "oklch(0.650 0.108 48.5)"
+        }
+      }
+    },
+    "violet": {
+      "title": "Violet",
+      "strategy": "Saturated cool purple",
+      "useCase": "Distinctive, modern",
+      "tone": {
+        "hue": 302,
+        "chromaScale": {
+          "light": 1.54,
+          "dark": 0.78
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.524 0.092 311.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.622 0.083 312.5)"
+        }
+      }
+    },
+    "eucalyptus": {
+      "title": "Eucalyptus",
+      "strategy": "Cool green",
+      "useCase": "Australian identity",
+      "tone": {
+        "hue": 155,
+        "chromaScale": {
+          "light": 0.96,
+          "dark": 0.56
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.543 0.080 151.8)"
+        },
+        "dark": {
+          "primary": "oklch(0.653 0.077 153.2)"
+        }
+      }
+    },
+    "teal": {
+      "title": "Teal",
+      "strategy": "Cool cyan-green",
+      "useCase": "Fresh, modern",
+      "tone": {
+        "hue": 95,
+        "chromaScale": {
+          "light": 1.2,
+          "dark": 0.36
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.544 0.086 186.7)"
+        },
+        "dark": {
+          "primary": "oklch(0.670 0.100 186.6)"
+        }
+      }
+    },
+    "parchment": {
+      "title": "Parchment",
+      "strategy": "Warm beige (Flexoki-inspired)",
+      "useCase": "Reading comfort",
+      "tone": {
+        "hue": 77,
+        "chromaScale": {
+          "light": 2.76,
+          "dark": 1.35
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.618 0.078 65.5)"
+        },
+        "dark": {
+          "primary": "oklch(0.726 0.058 66.7)"
+        }
+      }
+    },
+    "sage": {
+      "title": "Sage",
+      "strategy": "Cool muted green",
+      "useCase": "Softer alternative",
+      "tone": {
+        "hue": 93,
+        "chromaScale": {
+          "light": 0.8,
+          "dark": 0.4
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.534 0.086 185.6)"
+        },
+        "dark": {
+          "primary": "oklch(0.668 0.098 186.4)"
+        }
+      }
+    },
+    "rosewood": {
+      "title": "Rosewood",
+      "strategy": "Warm muted pink",
+      "useCase": "Approachable, rare",
+      "tone": {
+        "hue": 349,
+        "chromaScale": {
+          "light": 0.7,
+          "dark": 0.51
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.565 0.085 4.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.692 0.070 3.8)"
+        }
+      }
+    },
+    "army": {
+      "title": "Army",
+      "strategy": "Warm olive-drab",
+      "useCase": "Australian Army identity",
+      "tone": {
+        "hue": 110,
+        "chromaScale": {
+          "light": 1.65,
+          "dark": 0.99
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.423 0.074 117.1)"
+        },
+        "dark": {
+          "primary": "oklch(0.550 0.070 117.1)"
+        }
+      }
+    },
+    "airforce": {
+      "title": "Air Force",
+      "strategy": "Cool RAAF blue",
+      "useCase": "Service identity",
+      "tone": {
+        "hue": 254,
+        "chromaScale": {
+          "light": 1.67,
+          "dark": 1.12
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.400 0.103 253.9)"
+        },
+        "dark": {
+          "primary": "oklch(0.626 0.074 236.6)"
+        }
+      }
+    },
+    "navy": {
+      "title": "Navy",
+      "strategy": "Deep navy with gold accent",
+      "useCase": "RAN identity",
+      "tone": {
+        "hue": 251,
+        "chromaScale": {
+          "light": 1.91,
+          "dark": 1.79
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.320 0.065 251.3)"
+        },
+        "dark": {
+          "primary": "oklch(0.550 0.060 251.3)"
+        }
+      }
+    },
+    "supabase": {
+      "title": "Supabase",
+      "strategy": "Jungle green",
+      "useCase": "Data platform identity",
+      "tone": {
+        "hue": 250,
+        "chromaScale": {
+          "light": 1.11,
+          "dark": 1.17
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.635 0.130 160.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.635 0.130 160.0)"
+        }
+      }
+    },
+    "scribes-amber": {
+      "title": "Scribe's Amber",
+      "strategy": "Warm amber",
+      "useCase": "Thoth identity",
+      "tone": {
+        "hue": 36,
+        "chromaScale": {
+          "light": 1.89,
+          "dark": 1.44
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.693 0.127 36.1)"
+        },
+        "dark": {
+          "primary": "oklch(0.693 0.127 36.1)"
+        }
+      }
+    },
+    "papyrus-gold": {
+      "title": "Papyrus Gold",
+      "strategy": "Gold leaf on dark papyrus",
+      "useCase": "Egyptian heritage",
+      "tone": {
+        "hue": 36,
+        "chromaScale": {
+          "light": 1.48,
+          "dark": 1.08
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.747 0.114 43.5)"
+        },
+        "dark": {
+          "primary": "oklch(0.747 0.114 43.5)"
+        }
+      }
+    },
+    "nile-teal": {
+      "title": "Nile Teal",
+      "strategy": "Deep teal",
+      "useCase": "Egyptian faience",
+      "tone": {
+        "hue": 170,
+        "chromaScale": {
+          "light": 0.63,
+          "dark": 0.54
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.681 0.067 175.7)"
+        },
+        "dark": {
+          "primary": "oklch(0.681 0.067 175.7)"
+        }
+      }
+    },
+    "midnight-lapis": {
+      "title": "Midnight Lapis",
+      "strategy": "Deep saturated blue",
+      "useCase": "Lapis lazuli",
+      "tone": {
+        "hue": 247,
+        "chromaScale": {
+          "light": 0.83,
+          "dark": 0.58
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.577 0.160 223.9)"
+        },
+        "dark": {
+          "primary": "oklch(0.577 0.160 223.9)"
+        }
+      }
+    },
+    "ithildin": {
+      "title": "Ithildin",
+      "strategy": "Cool violet on a silver ground",
+      "useCase": "Moon-letter silver",
+      "tone": {
+        "hue": 260,
+        "chromaScale": {
+          "light": 2.41,
+          "dark": 2.18
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.530 0.140 280.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.560 0.130 280.0)"
+        }
+      }
+    },
+    "mithril": {
+      "title": "Mithril",
+      "strategy": "Cool blue-silver",
+      "useCase": "Restrained, metallic",
+      "tone": {
+        "hue": 260,
+        "chromaScale": {
+          "light": 2.41,
+          "dark": 2.18
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.550 0.085 230.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.620 0.080 230.0)"
+        }
+      }
+    },
+    "silmaril-teal": {
+      "title": "Silmaril Teal",
+      "strategy": "Bright teal on a silver ground",
+      "useCase": "Luminous, cool",
+      "tone": {
+        "hue": 260,
+        "chromaScale": {
+          "light": 2.41,
+          "dark": 2.18
+        }
+      },
+      "accent": {
+        "light": {
+          "primary": "oklch(0.530 0.120 190.0)"
+        },
+        "dark": {
+          "primary": "oklch(0.640 0.110 190.0)"
+        }
+      }
+    }
+  }
+}

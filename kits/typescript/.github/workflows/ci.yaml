@@ -1,0 +1,158 @@
+name: CI
+
+# Verifies both workspace packages on every push/PR so Renovate PRs and
+# token/component edits carry a real signal.
+#
+# Runner: the repo is public, so a fork's pull request runs on a GitHub-hosted
+# runner and never reaches the self-hosted atlas runner; everything else runs
+# on atlas. security.yaml's jobs choose the same way.
+
+on:
+  pull_request:
+
+# This workflow only reads the repo (checkout, install, build, test) — no
+# write scope is needed. publish.yaml declares its own id-token scope for OIDC.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and test every package
+        run: pnpm -r run test
+
+      - name: Type-check @poodle64/ui
+        run: pnpm --filter @poodle64/ui run check
+
+      - name: Type-check @poodle64/librarian
+        run: pnpm --filter @poodle64/librarian run check
+
+      - name: Assert @poodle64/design-tokens emitted contract
+        run: |
+          set -e
+          DIST=packages/design-tokens/dist
+          for prop in \
+            --ds-radius-lg --ds-font-display --ds-font-body --ds-font-code \
+            --ds-spacing-md --ds-text-2xs \
+            --ds-color-status-success --ds-color-status-warning \
+            --ds-color-status-error --ds-color-status-info --ds-color-status-neutral; do
+            grep -q -- "$prop:" "$DIST/tokens.css" || { echo "missing $prop in tokens.css" >&2; exit 1; }
+          done
+          # Every custom property in tokens.css must carry the --ds- namespace
+          if grep -Eo '^\s*--[a-z0-9-]+:' "$DIST/tokens.css" | grep -v -- '--ds-'; then
+            echo "non --ds- prefixed property found in tokens.css" >&2
+            exit 1
+          fi
+          # tokens.tw.css deliberately emits un-prefixed Tailwind namespaces;
+          # every property must sit in one of them and alias a --ds- var.
+          # spacing is absent by design — a named --spacing-* entry captures the
+          # sizing utilities off the container scale (see sd.config.js).
+          grep -q '@theme' "$DIST/tokens.tw.css"
+          if grep -Eo '^\s*--[a-z0-9-]+:' "$DIST/tokens.tw.css" | grep -Ev -- '--(color|radius|text|font)-'; then
+            echo "unexpected @theme namespace in tokens.tw.css" >&2
+            exit 1
+          fi
+          if grep -E '^\s*--' "$DIST/tokens.tw.css" | grep -v 'var(--ds-'; then
+            echo "tokens.tw.css property not aliasing a --ds- var" >&2
+            exit 1
+          fi
+          grep -q 'DS_COLOR_STATUS_SUCCESS' "$DIST/tokens.js"
+
+          # The palette catalogue (design-system#25). test/palettes.test.js holds
+          # the real contract; these three lines only assert the artefacts exist
+          # and carry the shape a consumer imports, so a build that silently
+          # stopped emitting them fails here rather than at an adopting app.
+          test -f "$DIST/palettes.css" || { echo "missing palettes.css" >&2; exit 1; }
+          grep -q "DS_PALETTE_NAMES" "$DIST/palettes.js"
+          # Every palette block must be :root-anchored, or it ties with
+          # tokens.css's own :root on specificity and applies or does not
+          # depending purely on which stylesheet an app imported first.
+          if grep -E '^\s*\[data-ds-palette' "$DIST/palettes.css"; then
+            echo "palette selector not anchored at :root" >&2
+            exit 1
+          fi
+
+      - name: Assert @poodle64/ui subpath exports resolve
+        run: |
+          set -e
+          for c in alert alert-dialog app-shell badge button card checkbox command \
+            command-palette data-table dialog dropdown-menu input input-group label \
+            password-input popover progress schema-form select separator skeleton sonner \
+            switch table tabs textarea tooltip; do
+            f="packages/ui/dist/components/ui/$c/index.js"
+            test -f "$f" || { echo "missing built component: $f" >&2; exit 1; }
+          done
+          test -f packages/ui/dist/utils.js || { echo "missing dist/utils.js" >&2; exit 1; }
+
+      - name: Assert the situation→component map generated and shipped
+        run: |
+          set -e
+          # The map is the registry an agent retrieves from (master-project#250).
+          # `pnpm -r run test` already ran the ui build, which regenerates it and
+          # fails outright on an unclassified component; this asserts the shipped
+          # artefacts exist and that every situation carries a component, so a
+          # build that silently stopped emitting them fails here, not at a
+          # consuming app.
+          MAP=packages/ui/registry/component-map
+          test -f "$MAP.md" || { echo "missing registry/component-map.md" >&2; exit 1; }
+          test -f "$MAP.json" || { echo "missing registry/component-map.json" >&2; exit 1; }
+          node -e '
+            const m = require("./packages/ui/registry/component-map.json");
+            if (!m.situations?.length) { console.error("no situations in map"); process.exit(1); }
+            for (const s of m.situations)
+              if (!s.components?.every((c) => c.import && c.props))
+                { console.error("situation " + s.key + " has an under-specified component"); process.exit(1); }
+            console.log(m.situations.length + " situations, " + m.meta.componentCount + " components — map OK");
+          '
+
+  # A separate job because it needs a browser binary, and because the two
+  # failure modes are worth telling apart at a glance: `build` failing means
+  # the package is wrong on paper, this one failing means it is wrong in an
+  # engine. Every defect this gate covers — dead overlay transitions, a shell
+  # region scrolling sideways under a passing document-level check, an avatar
+  # fallback that only a real 404 reaches, an overlay whose `overflow-y-auto`
+  # had no height to act on — was invisible to `build` and to jsdom alike, and
+  # each was found by a person looking rather than by CI.
+  browser:
+    runs-on: ubuntu-latest # by-exception (2026-09-07): Playwright --with-deps needs apt and sudo, which the NixOS runner has neither of
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The harness imports from dist, and the design-tokens stylesheets are
+      # generated, so the whole workspace has to be built in dependency order
+      # before the harness can be compiled against it.
+      - name: Build every package
+        run: pnpm -r run build
+
+      - name: Install Chromium
+        run: pnpm --filter @poodle64/ui exec playwright install --with-deps chromium
+
+      - name: Drive the built package in a real browser
+        run: pnpm --filter @poodle64/ui run test:browser

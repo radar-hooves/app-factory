@@ -1,0 +1,328 @@
+{
+	"$schema": "https://design-tokens.github.io/community-group/format/",
+	"$description": "Household canonical design tokens — W3C DTCG 2025.10 format. Base OKLCH palette, then semantic --ds-* tokens for surface ladder, status intents, action/primary, radius, spacing, and typography. Style Dictionary v4 consumes this file and emits CSS custom properties, JavaScript constants, and a Tailwind v4 @theme block. Binding: no per-app overrides on named semantics — an app never invents a value for one. The two things an app chooses are its accent (--ds-color-primary and its pair) and a palette from tokens/palettes.json, which is a hue plus a chroma scale PROJECTED THROUGH the neutral ladder below. A palette declares no lightness, so the ladder's lightness steps — which carry every contrast guarantee this package makes — are unreachable from one. Reasoning: docs/development/decision-palette-catalogue-and-the-tone-axis.md.",
+	"meta": {
+		"$value": "metadata",
+		"version": { "$value": "2026.7.2" },
+		"updated": { "$value": "2026-07-16" },
+		"colourSpace": { "$value": "oklch" },
+		"namespace": { "$value": "--ds-" },
+		"format": { "$value": "DTCG 2025.10" }
+	},
+
+	"palette": {
+		"$description": "Raw OKLCH scale — primitives only, not for direct use in components. Consume via semantic tokens below.",
+
+		"neutral": {
+			"0": { "$value": "oklch(1.000 0.000 0)", "$type": "color", "$description": "absolute white; surface-3 light" },
+			"25": {
+				"$value": "oklch(0.990 0.002 85)",
+				"$type": "color",
+				"$description": "card light; surface-2"
+			},
+			"50": {
+				"$value": "oklch(0.905 0.005 85)",
+				"$type": "color",
+				"$description": "warm ground light — the page the cards sit ON, so it is a light grey rather than near-white (design-system#17)"
+			},
+			"100": {
+				"$value": "oklch(0.878 0.007 85)",
+				"$type": "color",
+				"$description": "recessed fill light; surface-1"
+			},
+			"150": {
+				"$value": "oklch(0.950 0.007 85)",
+				"$type": "color",
+				"$description": "spare rung"
+			},
+			"200": { "$value": "oklch(0.920 0.009 85)", "$type": "color" },
+			"300": {
+				"$value": "oklch(0.770 0.011 85)",
+				"$type": "color",
+				"$description": "border light — separates content, 1.5:1 floor against every surface it bounds (design-system#17)"
+			},
+			"400": {
+				"$value": "oklch(0.588 0.015 85)",
+				"$type": "color",
+				"$description": "border-strong light — bounds a CONTROL, 3:1 floor per WCAG 1.4.11 (design-system#17)"
+			},
+			"500": {
+				"$value": "oklch(0.475 0.013 85)",
+				"$type": "color",
+				"$description": "muted text light — 4.5:1 AA floor against every light surface (design-system#13); 0.600 -> 0.520 for #13, then 0.475 when #17 deepened the recessed rung"
+			},
+			"600": { "$value": "oklch(0.450 0.015 85)", "$type": "color" },
+			"700": { "$value": "oklch(0.320 0.018 85)", "$type": "color" },
+			"800": {
+				"$value": "oklch(0.240 0.016 85)",
+				"$type": "color",
+				"$description": "ink light; foreground"
+			},
+			"850": {
+				"$value": "oklch(0.205 0.015 260)",
+				"$type": "color",
+				"$description": "app ground dark"
+			},
+			"900": {
+				"$value": "oklch(0.168 0.017 260)",
+				"$type": "color",
+				"$description": "recessed fill dark; surface-1"
+			},
+			"920": {
+				"$value": "oklch(0.278 0.020 260)",
+				"$type": "color",
+				"$description": "card dark; surface-2 — lifted off the canvas so a card reads as elevated (design-system#17)"
+			},
+			"940": {
+				"$value": "oklch(0.332 0.022 260)",
+				"$type": "color",
+				"$description": "elevated dark; surface-3 — popover/dialogue, a further step above the card"
+			},
+			"950": {
+				"$value": "oklch(0.455 0.024 260)",
+				"$type": "color",
+				"$description": "border dark"
+			},
+			"960": {
+				"$value": "oklch(0.605 0.026 260)",
+				"$type": "color",
+				"$description": "border-strong dark"
+			},
+			"970": {
+				"$value": "oklch(0.712 0.015 250)",
+				"$type": "color",
+				"$description": "muted foreground dark"
+			},
+			"990": {
+				"$value": "oklch(0.930 0.010 240)",
+				"$type": "color",
+				"$description": "foreground dark"
+			}
+		},
+
+		"primary": {
+			"$description": "Action / brand. Concrete values are set per project by overriding --ds-color-primary in :root. These defaults use a neutral slate to force a deliberate brand choice.",
+			"light": {
+				"$value": "oklch(0.50 0.155 250)",
+				"$type": "color",
+				"$description": "Default primary (slate-blue) — override per project"
+			},
+			"dark": {
+				"$value": "oklch(0.70 0.140 250)",
+				"$type": "color",
+				"$description": "Default primary dark"
+			},
+			"foreground-light": { "$value": "oklch(0.99 0.005 250)", "$type": "color" },
+			"foreground-dark": { "$value": "oklch(0.20 0.030 250)", "$type": "color" }
+		},
+
+		"status": {
+			"$description": "Five semantic status hues, each with light and dark values. Tuned so the base value reads as text in its mode against its ~14% tint surface.",
+			"success": {
+				"light": { "$value": "oklch(0.50 0.155 150)", "$type": "color" },
+				"dark": { "$value": "oklch(0.76 0.150 150)", "$type": "color" }
+			},
+			"warning": {
+				"light": { "$value": "oklch(0.52 0.130 68)", "$type": "color" },
+				"dark": { "$value": "oklch(0.82 0.140 75)", "$type": "color" }
+			},
+			"error": {
+				"light": { "$value": "oklch(0.53 0.200 27)", "$type": "color" },
+				"dark": { "$value": "oklch(0.70 0.180 25)", "$type": "color" }
+			},
+			"info": {
+				"light": { "$value": "oklch(0.49 0.140 222)", "$type": "color" },
+				"dark": { "$value": "oklch(0.74 0.120 218)", "$type": "color" }
+			},
+			"neutral": {
+				"light": { "$value": "oklch(0.50 0.012 250)", "$type": "color" },
+				"dark": { "$value": "oklch(0.66 0.012 250)", "$type": "color" }
+			}
+		}
+	},
+
+	"semantic": {
+		"$description": "Semantic --ds-* tokens consumed directly by components and @theme blocks. Two groups: base (mode-independent) and colour (mode-sensitive, produced as :root + .dark blocks).",
+
+		"radius": {
+			"$description": "Corner radius scale — binding across all household apps. Base is 0.625rem.",
+			"none": { "$value": "0rem", "$type": "dimension" },
+			"sm": {
+				"$value": "0.225rem",
+				"$type": "dimension",
+				"$description": "chips, badges, inputs: calc(var(--ds-radius-lg) - 4px)"
+			},
+			"md": {
+				"$value": "0.425rem",
+				"$type": "dimension",
+				"$description": "calc(var(--ds-radius-lg) - 2px)"
+			},
+			"lg": {
+				"$value": "0.625rem",
+				"$type": "dimension",
+				"$description": "base --radius; cards, panels"
+			},
+			"xl": { "$value": "0.825rem", "$type": "dimension", "$description": "dialogues, modals" },
+			"full": { "$value": "9999px", "$type": "dimension", "$description": "pill / fully-rounded" }
+		},
+
+		"spacing": {
+			"$description": "Named spacing scale for layout rhythm, consumed as --ds-spacing-* from hand-written CSS. Deliberately absent from the Tailwind @theme block: Tailwind resolves w-*/max-w-*/min-w-*/basis-* against --spacing-* ahead of --container-*, so registering these keys silently collapses the container scale. In Tailwind markup use the numeric scale instead — md is p-4.",
+			"xs": { "$value": "0.25rem", "$type": "dimension" },
+			"sm": { "$value": "0.5rem", "$type": "dimension" },
+			"md": { "$value": "1rem", "$type": "dimension" },
+			"lg": { "$value": "1.5rem", "$type": "dimension" },
+			"xl": { "$value": "2rem", "$type": "dimension" },
+			"2xl": { "$value": "3rem", "$type": "dimension" }
+		},
+
+		"text": {
+			"$description": "Supplementary type sizes that Tailwind's default scale lacks. 2xs is the uppercase eyebrow / column-head size — use text-2xs, never text-[11px].",
+			"2xs": {
+				"$value": "0.6875rem",
+				"$type": "dimension",
+				"$description": "eyebrow / column head: uppercase, tracked, muted"
+			}
+		},
+
+		"font": {
+			"$description": "Three font families — binding. No per-app substitution.",
+			"display": {
+				"$value": "'Fraunces', 'Fraunces Variable', ui-serif, Georgia, serif",
+				"$type": "fontFamily",
+				"$description": "Display/headings — Fraunces variable (optical-size axis). Page titles, wordmarks, empty-state headings. Carries 'Fraunces Variable' because that is the @font-face family `@fontsource-variable/fraunces` actually registers; the bare 'Fraunces' name matches nothing it ships and fell through to the generic serif fallback in every consuming app (radar-hooves/cadmus, 29/09/2026)."
+			},
+			"body": {
+				"$value": "'Avenir Next', 'Hanken Grotesk', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, sans-serif",
+				"$type": "fontFamily",
+				"$description": "UI / body copy. Local-font-first: Avenir Next leads and renders on any machine where it is INSTALLED, which is not only Apple's — the operator has ported it to non-Apple household machines, so do not describe this token as macOS-only (corrected 23/08/2026, on his own statement). It is still never bundled or vendored here: it is not licensable for web embedding, which is a licensing limit on serving the file, not a limit on where it renders. Hanken Grotesk Variable (`@fontsource-variable/hanken-grotesk`) is the self-hosted fallback for machines without it — in practice the Android devices, where a font cannot be installed. Everything textual: labels, buttons, descriptions, table cells, nav."
+			},
+			"code": {
+				"$value": "'JetBrains Mono', 'JetBrains Mono Variable', ui-monospace, 'SF Mono', monospace",
+				"$type": "fontFamily",
+				"$description": "Monospaced data — JetBrains Mono. Machine-produced values only: IDs, hashes, ISO dates, amounts, counts, code."
+			}
+		},
+
+		"font-size": {
+			"$description": "The root element's font-size override point. A consuming app sets the html element's font-size to var(--ds-font-size-base). Never registered as a Tailwind theme key — see THEME_EXCLUDED_NAMESPACES in sd.config.js.",
+			"base": {
+				"$value": "100%",
+				"$type": "dimension",
+				"$description": "Ratified 31/07/2026. 100% equals the browser default (nominally 16px) while still scaling with a reader's own changed browser text-size preference — a fixed px value would silently override that preference instead."
+			}
+		},
+
+		"colour": {
+			"$description": "Mode-sensitive semantic tokens. Each token has a light and dark sub-value; Style Dictionary emits them as :root (light) and .dark overrides.",
+
+			"background": {
+				"light": {
+					"$value": "{palette.neutral.50}",
+					"$type": "color",
+					"$description": "App ground. Carries the dot-grid in dark."
+				},
+				"dark": { "$value": "{palette.neutral.850}", "$type": "color" }
+			},
+			"foreground": {
+				"light": { "$value": "{palette.neutral.800}", "$type": "color" },
+				"dark": { "$value": "{palette.neutral.990}", "$type": "color" }
+			},
+			"surface-1": {
+				"light": {
+					"$value": "{palette.neutral.100}",
+					"$type": "color",
+					"$description": "Sunken: nav rail, wells, table headers."
+				},
+				"dark": { "$value": "{palette.neutral.900}", "$type": "color" }
+			},
+			"surface-2": {
+				"light": {
+					"$value": "{palette.neutral.25}",
+					"$type": "color",
+					"$description": "Default card surface (raised)."
+				},
+				"dark": { "$value": "{palette.neutral.920}", "$type": "color" }
+			},
+			"surface-3": {
+				"light": {
+					"$value": "{palette.neutral.0}",
+					"$type": "color",
+					"$description": "Elevated: popover, dialogue, row hover."
+				},
+				"dark": { "$value": "{palette.neutral.940}", "$type": "color" }
+			},
+			"muted-foreground": {
+				"light": { "$value": "{palette.neutral.500}", "$type": "color" },
+				"dark": { "$value": "{palette.neutral.970}", "$type": "color" }
+			},
+			"border": {
+				"light": { "$value": "{palette.neutral.300}", "$type": "color" },
+				"dark": { "$value": "{palette.neutral.950}", "$type": "color" }
+			},
+			"border-strong": {
+				"light": { "$value": "{palette.neutral.400}", "$type": "color" },
+				"dark": { "$value": "{palette.neutral.960}", "$type": "color" }
+			},
+
+			"primary": {
+				"light": {
+					"$value": "{palette.primary.light}",
+					"$type": "color",
+					"$description": "The ONE action accent — override per project in :root."
+				},
+				"dark": { "$value": "{palette.primary.dark}", "$type": "color" }
+			},
+			"primary-foreground": {
+				"light": { "$value": "{palette.primary.foreground-light}", "$type": "color" },
+				"dark": { "$value": "{palette.primary.foreground-dark}", "$type": "color" }
+			},
+			"ring": {
+				"light": {
+					"$value": "{palette.primary.light}",
+					"$type": "color",
+					"$description": "Focus ring; follows primary."
+				},
+				"dark": { "$value": "{palette.primary.dark}", "$type": "color" }
+			},
+
+			"status-success": {
+				"light": { "$value": "{palette.status.success.light}", "$type": "color" },
+				"dark": { "$value": "{palette.status.success.dark}", "$type": "color" }
+			},
+			"status-warning": {
+				"light": { "$value": "{palette.status.warning.light}", "$type": "color" },
+				"dark": { "$value": "{palette.status.warning.dark}", "$type": "color" }
+			},
+			"status-error": {
+				"light": { "$value": "{palette.status.error.light}", "$type": "color" },
+				"dark": { "$value": "{palette.status.error.dark}", "$type": "color" }
+			},
+			"status-info": {
+				"light": { "$value": "{palette.status.info.light}", "$type": "color" },
+				"dark": { "$value": "{palette.status.info.dark}", "$type": "color" }
+			},
+			"status-neutral": {
+				"light": { "$value": "{palette.status.neutral.light}", "$type": "color" },
+				"dark": { "$value": "{palette.status.neutral.dark}", "$type": "color" }
+			},
+
+			"destructive": {
+				"light": {
+					"$value": "{palette.status.error.light}",
+					"$type": "color",
+					"$description": "Alias of status-error; shadcn-svelte destructive variant."
+				},
+				"dark": { "$value": "{palette.status.error.dark}", "$type": "color" }
+			},
+			"destructive-foreground": {
+				"light": {
+					"$value": "oklch(0.985 0.005 27)",
+					"$type": "color",
+					"$description": "Text on a solid destructive control; near-white in both modes."
+				},
+				"dark": { "$value": "oklch(0.970 0.012 25)", "$type": "color" }
+			}
+		}
+	}
+}
