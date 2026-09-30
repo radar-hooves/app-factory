@@ -37,6 +37,9 @@ _skip_if_exists:
   # with its real home or a redirect, and an update must never put it back.
   - frontend/src/routes/(protected)/+page.svelte
   - frontend/src/routes/(protected)/+page.ts
+  # THE extension point for frontend/src/routes/(protected)/settings/+layout.svelte:
+  # this app's own settings groups, listed before the factory's.
+  - frontend/src/lib/settings/app.ts
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
@@ -81,6 +84,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
 
 project_name:
   type: str

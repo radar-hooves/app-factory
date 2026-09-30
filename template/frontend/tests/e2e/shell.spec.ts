@@ -50,3 +50,14 @@ test('an address no route serves renders inside the shell', async ({ page }) => 
 		page.locator('#ds-main').getByRole('heading', { name: 'Page not found' })
 	).toBeVisible();
 });
+
+// The rail's own Settings row goes to /settings, which must be a page: the
+// first settings page this caller can open, or the destination saying there is
+// none. Which one depends on the app and the caller; a 404 is never right.
+test("the rail's Settings row lands on a page", async ({ page }) => {
+	await page.goto('/settings');
+
+	const heading = page.locator('#ds-main').getByRole('heading').first();
+	await expect(heading).toBeVisible();
+	await expect(heading).not.toHaveText('Page not found');
+});
