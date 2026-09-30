@@ -41,7 +41,7 @@ Every app:
    - move your nav, brand, `homeHref`, `measure`, top-bar actions and palette groups;
    - set `workspaceLabel`, and keep `padded` reading `page.data.padded`;
    - drop the guard, chooser, `{#key}`, `auth.init()` and feedback widget, which the layout now does.
-3. Put every signed-in route under `routes/(protected)/`.
+3. Put every signed-in route of your own under `routes/(protected)/`. One left outside renders with no shell and no session guard, and neither converge nor the parity gate notices it. Only a page that must render without a session (a public page, a sign-in hand-off) stays outside, for the reason named below.
 4. Delete your copies of the factory's routes at any other path, and put your landing page at `(protected)/+page.svelte`. Redirect from `+page.ts` if `/` goes elsewhere.
 5. List your settings groups in `src/lib/settings/app.ts`, and delete your own `/settings` redirect.
 6. Drop the exception lines this retires, regenerate the manifest, and run your E2E.
@@ -50,40 +50,45 @@ Per app, from its tree on 30/09/2026:
 
 - **godswood** (`(protected)` already). Its `(protected)/+layout.svelte` sits at the factory's path, so converge reports it.
   - **Frame:** move in its nav, `measure`, `padded`, brand mark, `homeHref="/home"`, collapsible rail, `searchLabel` and bell. Set `workspaceLabel = 'Household'`. Move the casefile embed `<script>` into the frame's `<svelte:head>`. `$lib/fonts` covers its two font imports.
+  - **Routes:** none of its own outside `(protected)/`; nothing moves. Its root `+error.svelte` stays, as the error page for anything that fails outside the group.
   - **Landing:** root `+page.svelte` and `+page.ts` duplicate `/`. Delete them, and redirect to `/home` from `(protected)/+page.ts`.
   - **Settings:** Profile and Integrations become a "Your account" group in `settings/app.ts`. Take the factory's `(protected)/settings/+layout.svelte`, `+page.svelte` and `+page.ts`, and its members page, agent console and settings/application.
   - **Exceptions:** retires all 9.
 - **cadmus** (`(protected)` already), as godswood.
   - **Frame:** its overlay sidebars, past questions, lessons palette group, section-visibility effects, brand star, and `/records/id26` rendered bare.
+  - **Routes:** none of its own outside `(protected)/`; nothing moves.
   - **Landing:** `(protected)/+page.svelte` is its dashboard already.
   - **Settings:** Account goes to `settings/app.ts`. The factory's `/settings` page replaces its redirect. The factory's layout now passes the feedback endpoint it passed.
   - **Exceptions:** retires all 10.
 - **casefile** (flat).
   - **Frame:** nav, `homeHref="/matters"`, `measure="page"`, and `AdminAlertBell` for its hand-gated bell.
-  - **Routes:** move `matters/` and `access/` under `(protected)/`. Delete root `+page.*`, `agent/` and `workspace/`, and redirect `/` to `/matters` from `(protected)/+page.ts`.
+  - **Routes:** move `matters/` and `access/` under `(protected)/`, its only routes of its own. Delete root `+page.svelte`, `+page.ts`, `agent/` and `workspace/`, and redirect `/` to `/matters` from `(protected)/+page.ts`.
   - **Exceptions:** retires its 3.
 - **earworm** (flat).
   - **Frame:** navigation, brand mark, `measure` and its identity menu.
-  - **Routes:** move `album/`, `api-docs/`, `artist/`, `history/`, `track/` and `year/` under `(protected)/`. Its dashboard moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Routes:** move `album/`, `api-docs/`, `artist/`, `history/`, `track/` and `year/` under `(protected)/`. Its dashboard, root `+page.svelte` and `+page.ts`, moves to `(protected)/`. Delete root `agent/` and `workspace/`. Its root `settings/` moves as below.
   - **Settings:** its own `settings/+page.svelte` (API keys, devices, dashboard) is at the factory's `/settings`. Move it to a page of its own under `(protected)/settings/`, and list that page in `settings/app.ts`.
   - **Exceptions:** retires its 2.
 - **eight** (flat).
   - **Frame:** nav and the kill switch (its dialogue and badge).
-  - **Routes:** move `attention/`, `cost/`, `council/`, `crew/`, `performance/`, `runs/`, `study/` and `trades/` under `(protected)/`. The dashboard moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Routes:** move `attention/`, `cost/`, `council/`, `crew/`, `performance/`, `runs/`, `study/` and `trades/` under `(protected)/`. The dashboard, root `+page.svelte` and `+page.ts`, moves to `(protected)/`. Delete root `agent/` and `workspace/`.
   - **Exceptions:** retires its 3.
 - **library** (flat).
   - **Frame:** nav and the rosette mark.
-  - **Routes:** move `collections/`, `currency/`, `library/`, `metrics/`, `operations/`, `projects/`, `reading-room/`, `review/` and `search/` under `(protected)/`. The landing moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Routes:** move `collections/`, `currency/`, `library/`, `metrics/`, `operations/`, `projects/`, `reading-room/`, `review/` and `search/` under `(protected)/`. The landing, root `+page.svelte` and `+page.ts`, moves to `(protected)/`. Delete root `agent/` and `workspace/`.
   - **Exceptions:** retires its 3. This is one step of a longer converge, since it is stamped at 2026.9.4.
 - **mission-command** (flat).
   - **Frame:** nav groups, the bell and the Claude account gauges.
-  - **Routes:** move `claude/`, `clients/`, `economics/`, `fleet/`, `governance/`, `hosts/`, `projects/` and `work/` under `(protected)/`. The overview moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Routes:** move `claude/`, `clients/`, `economics/`, `fleet/`, `governance/`, `hosts/`, `projects/` and `work/` under `(protected)/`. The overview, root `+page.svelte` and `+page.ts`, moves to `(protected)/`. Delete root `agent/` and `workspace/`.
   - **Exceptions:** retires its 3.
-- **pebblestone** (`(app)`). Rename `(app)` to `(protected)`. `(public)/no-access` stays outside it.
+- **pebblestone** (`(app)`). Rename `(app)` to `(protected)`; every route of its own is in that group already.
+  - **Stays outside:** `(public)/no-access`. Its backend sends a caller the portal has not provisioned there, and under the guard that caller would get the guard's error instead of the page that says why.
   - **Frame:** its user-store gate, nav badges, brand artwork, dev identity switcher, sign-out, and the full-bleed agent console.
   - **Settings:** About, breaker events, delegation limits, overhead suppliers and users go to `settings/app.ts`. Its settings layout and `/settings` page go. `settings/application` arrives with the settings slice it has not yet taken.
   - **Exceptions:** keeps two with no seam, its own bug-report widget beside the factory's (pebblestone's #799) and `installClientTelemetry()` at the root. Retires the rest.
-- **portcullis** (`(app)`, stamped at 2026.8.6). Not a candidate yet: it signs in at its own `/login`, and the factory's guard sends a lapsed session to the proxy.
+- **portcullis** (`(app)`, stamped at 2026.8.6). Not a candidate yet: it signs in at its own `/login`, and the factory's guard sends a lapsed session to the proxy. When it converges:
+  - **Routes:** rename `(app)` to `(protected)`. Its root `+page.svelte`, a redirect to `/overview`, becomes `(protected)/+page.ts`. Its root `+error.svelte` stays.
+  - **Stays outside:** `login/`. It is the sign-in hand-off a signed-out visitor must reach, so it cannot sit behind the guard.
 
 ## [2026.9.56] - 2026-09-30
 
