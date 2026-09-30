@@ -1,27 +1,25 @@
 """Ask a persona, and stream Claude Code's own events verbatim.
 
 For a chatbot the leak is not only in the citation: everything past ownership
-is one straight line — spawn the CLI, forward its events, claim the session as
+is one straight line — ask the agent, forward its events, claim the session as
 soon as its id is known — because there is nothing here to branch on. The
+agent is `agent_common`'s `LocalAgent`, the persona this app runs itself; the
 library's own version of this module additionally resolves a scoped view and
-composes a per-question system prompt; a persona has neither (`persona.py`),
-so this is the orchestration with both removed rather than a parallel one.
+composes a per-question system prompt, and a persona has neither.
 """
 
-import json
 import uuid
 from collections.abc import AsyncIterator
 
+from agent_common import cli, sse
+from agent_common.agent import LocalAgent
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import ownership
-from {{ package_name }}.api.agent import session as agent_session
-from {{ package_name }}.api.agent.persona import PersonaConfig
 from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.api.agent.schemas import AskRequest
-from {{ package_name }}.config.sections.agent import AgentSettings
 
 
 class AskRefused(Exception):
@@ -30,18 +28,18 @@ class AskRefused(Exception):
 
 def stream(
     db: Session,
-    settings: AgentSettings,
-    persona: PersonaConfig,
+    agent: LocalAgent,
     request: AskRequest,
     *,
     user_id: uuid.UUID,
 ) -> StreamingResponse:
-    """Ask `persona`, attributing the issued session to `user_id`.
+    """Ask `agent`, attributing the issued session to `user_id`.
 
     A required keyword because the caller — the route — is the only thing
     that knows whose identity resolved the request; this function stays
     ignorant of how that identity was established.
     """
+    persona = agent.persona.name
 
     async def frames() -> AsyncIterator[str]:
         try:
@@ -52,26 +50,19 @@ def stream(
                 # already declines with once the stream has started.
                 raise AskRefused(ownership.DENIAL)
 
-            question = await run_in_threadpool(redact, persona.name, user_id, request.question)
+            question = await run_in_threadpool(redact, persona, user_id, request.question)
 
-            async for event in agent_session.ask(settings, persona, question, resume=request.resume):
+            async for event in agent.ask(question, resume=request.resume):
                 # Claimed as the frame arrives, not at the end of the stream:
                 # the client is handed the id in this very frame, so a claim
                 # that waited would leave it unowned in between.
                 if event.get("subtype") == "init" and isinstance(event.get("session_id"), str):
                     await run_in_threadpool(ownership.claim, db, str(event["session_id"]), user_id)
-                # Through the app's own output hook before it leaves, then one
-                # event per frame, with no `event:` name — the type is inside
-                # the payload where Claude Code puts it, and inventing a second
-                # place for it is the translation this slice refuses.
-                rewritten = redact_event(persona.name, event)
+                # Through the app's own output hook before it leaves.
+                rewritten = redact_event(persona, event)
                 if rewritten is not None:
-                    yield f"data: {json.dumps(rewritten)}\n\n"
+                    yield sse.frame(rewritten)
         except AskRefused as refused:
-            yield f"data: {json.dumps({'type': agent_session.ERROR_EVENT, 'error': str(refused)})}\n\n"
+            yield sse.frame({"type": cli.ERROR_EVENT, "error": str(refused)})
 
-    return StreamingResponse(
-        frames(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    return StreamingResponse(frames(), media_type=sse.MEDIA_TYPE, headers=sse.HEADERS)

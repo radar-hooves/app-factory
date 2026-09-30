@@ -1,0 +1,37 @@
+name: Publish kits/python
+
+# Builds every package of the root uv workspace (kits/python/*, today
+# agent-common) and publishes it to the household's private index, through the
+# same shared reusable api-common publishes with (rules-library/platform/
+# common-libraries.md §Distribution). A thin caller: the index URL, the runner
+# and the stamp are all this file carries.
+#
+# On a release tag only, never a push to main. The reusable stamps a tag's own
+# version onto the wheel (`v2026.9.57` publishes `agent-common 2026.9.57`), so
+# a kit's version IS the factory release that shipped it, as a Rust kit's
+# `tag =` pin already is (kits/rust/README.md), and a stamp at that tag pins
+# `agent-common>=` the kit it was tested with (factory-selftest.yaml resolves
+# it from the checkout). A dispatch from a branch stamps `YYYY.M.<run>` instead,
+# which sorts below every tag's wheel and so is never resolved: dispatch it on
+# a tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Serialised, never cancelled: killing an upload part-way publishes a partial set.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    uses: radar-hooves/master-project/.github/workflows/publish-wheels.yaml@main
+    with:
+      index-url: http://172.21.0.2:3141/poodle64/prod/
+      runner: '["self-hosted","atlas"]'
+      stamp-version: true

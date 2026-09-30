@@ -125,7 +125,7 @@ RUN rm -rf \
 RUN useradd -m -u 1000 -s /bin/bash appuser
 USER 1000:1000
 
-# Claude Code, the engine the agent slice drives (api/agent/session.py spawns
+# Claude Code, the engine the agent slice drives (the agent-common kit's driver spawns
 # `claude -p` per persona per question). Installed with the vendor's native
 # installer under the runtime user's own home, because uid 1000 owns ~/.local.
 # The signed apt repo would be better supply chain, but adding an apt source

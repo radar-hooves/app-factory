@@ -20,9 +20,11 @@ is a plain function app code calls from wherever a job's own trigger lives
 IS a person's is watching, messaging and stopping one already running.
 """
 
-import json
 from collections.abc import AsyncIterator
 
+from agent_common import persona as agent_persona
+from agent_common import sse
+from agent_common.agent import LocalAgent
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
@@ -45,7 +47,7 @@ async def personas(identity: CurrentIdentity, settings: SettingsDep) -> list[str
     what tells the Console to render nothing rather than a chat that fails on
     the first question.
     """
-    names = persona_module.list_personas(settings.agent)
+    names = agent_persona.names(settings.agent.personas_dir)
     return [name for name in names if has_module(identity.entitlements, f"agent-{name}")]
 
 
@@ -59,8 +61,8 @@ async def ask(
         NotFoundError: `persona` names no directory under `config/personas/`.
     """
     require_module(f"agent-{persona}")(identity)
-    config = persona_module.load(settings.agent, persona)
-    return ask_module.stream(db, settings.agent, config, request, user_id=identity.user.id)
+    agent = LocalAgent(settings.agent.driver(), persona_module.load(settings.agent, persona))
+    return ask_module.stream(db, agent, request, user_id=identity.user.id)
 
 
 @router.get("/{persona}/jobs/{job_id}/watch", operation_id="watchAgentJob")
@@ -86,11 +88,9 @@ async def watch_job(
 
     async def frames() -> AsyncIterator[str]:
         async for event in jobs_module.watch(db_session_factory, job_id, workspace_id=workspace.id):
-            yield f"data: {json.dumps(event)}\n\n"
+            yield sse.frame(event)
 
-    return StreamingResponse(
-        frames(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
-    )
+    return StreamingResponse(frames(), media_type=sse.MEDIA_TYPE, headers=sse.HEADERS)
 
 
 @router.post("/{persona}/jobs/{job_id}/message", operation_id="messageAgentJob", status_code=204)

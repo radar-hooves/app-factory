@@ -1,7 +1,7 @@
 """An app-started persona session that outlives the request that started it.
 
-`session.ask()` is one HTTP request, one subprocess, one stream: the request
-handler owns the whole thing, and the process dies when the handler returns
+A chat turn (`agent_common.cli.ask`) is one HTTP request, one subprocess, one
+stream: the request handler owns the whole thing, and the process dies when the handler returns
 or the client disconnects. That is wrong for a session the APP starts — a
 document arrives and a persona starts reading it — because nothing asked a
 question and nobody is necessarily watching (`docs/design/agent-jobs.md`).
@@ -47,26 +47,23 @@ import contextlib
 import glob
 import json
 import logging
-import os
 import re
 import shutil
-import signal
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agent_common import cli
+from agent_common.persona import Persona
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import jobs_models, lessons
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent import session as agent_session
 from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome, RunSpec
-from {{ package_name }}.api.agent.persona import PersonaConfig
-from {{ package_name }}.api.agent.redact import redact, redact_event, scrub_credentials
-from {{ package_name }}.api.agent.session import ERROR_EVENT
+from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
@@ -86,8 +83,6 @@ _HEARTBEAT_SECONDS = 10.0
 _STALE_SECONDS = 90.0
 #: How often every worker sweeps for dead runs (`supervise`).
 _SWEEP_SECONDS = 60.0
-#: Kept only for the failure diagnostic — matches `session.ask()`'s own budget.
-_STDERR_TAIL_BYTES = 4096
 
 _ORPHANED = "orphaned: the process running this job stopped before it finished"
 _SHUT_DOWN = "stopped: the worker process running this job shut down"
@@ -129,7 +124,7 @@ def job_dir(job_id: str) -> Path:
     exists: mint the id with `new_job_id()`, build the prompt from this
     folder, then pass both to `start()`.
 
-    Under `data_dir()`, alongside `persona.py`'s seeded homes — an app's own
+    Under `data_dir()`, alongside the personas' seeded homes — an app's own
     runtime state, never the repo (`platform/canonical-app-shape.md`
     §Development launch). Left on disk after the job finishes: a watcher may
     open it hours later and a message may resume it. `cleanup()` is how an app
@@ -228,23 +223,10 @@ def _without_bytes(value: Any) -> Any:
     return value
 
 
-def _frame(text: str) -> bytes:
-    """One user turn, as `--input-format stream-json` reads it."""
-    message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
-    return json.dumps(message).encode() + b"\n"
-
-
-def _kill(process: asyncio.subprocess.Process) -> None:
-    """Kill the CLI's whole process group, so nothing it spawned outlives it."""
-    if process.returncode is None:
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-
-
 async def start(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
-    persona: PersonaConfig,
+    persona: Persona,
     *,
     workspace_id: int,
     created_by_id: uuid.UUID | None,
@@ -273,7 +255,7 @@ async def start(
     seeds that folder before the CLI ever runs — every key is a path relative
     to it. `mcp_config`, if given, becomes the job's own `.mcp.json`
     (`--strict-mcp-config`'d exactly as a persona's own is,
-    `session.build_argv`) — how a caller binds the job's own identity into the
+    `agent_common.cli.argv`) — how a caller binds the job's own identity into the
     MCP servers it reaches, with any credential minted by a `headersHelper`
     command, never a literal header (`_refuse_literal_mcp_credentials`).
     `model` is `--model` for this job, on every run
@@ -331,7 +313,7 @@ async def start(
 def _spawn(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
-    persona: PersonaConfig,
+    persona: Persona,
     spec: RunSpec,
     messages: list[str],
     *,
@@ -358,23 +340,6 @@ def _log_failure(task: asyncio.Task[None]) -> None:
         logger.error("Agent job run %s failed", task.get_name(), exc_info=exc)
 
 
-async def _drain_stderr(stream: asyncio.StreamReader) -> bytes:
-    """Read stderr to EOF concurrently with the stdout loop, and keep only its tail.
-
-    A child that writes enough to its stderr pipe to fill the OS buffer
-    (64 KiB on Linux) blocks on that write until something drains it; without
-    this running alongside the stdout `readline()` loop, that block is a
-    deadlock — the child never reaches the next stdout line either, and the
-    idle timeout eventually kills a process that was never actually stuck.
-    """
-    tail = b""
-    while True:
-        chunk = await stream.read(65536)
-        if not chunk:
-            return tail
-        tail = (tail + chunk)[-_STDERR_TAIL_BYTES:]
-
-
 @dataclass(slots=True)
 class _Turns:
     """What `_run`'s stdout loop and `_control` share about the frames on stdin."""
@@ -391,7 +356,7 @@ async def _write_frames(process: asyncio.subprocess.Process, turns: _Turns, mess
     assert process.stdin is not None
     for written, message in enumerate(messages):
         try:
-            process.stdin.write(_frame(message))
+            process.stdin.write(cli.user_frame(message))
             await process.stdin.drain()
         except BrokenPipeError, ConnectionResetError:
             return written
@@ -485,7 +450,7 @@ async def _control(
         if polled is None or polled[0]:
             # A stop from any worker, or the row is no longer this run's.
             local.stopping = True
-            _kill(process)
+            cli.kill(process)
             return
         messages = polled[1]
         written = await _write_frames(process, turns, messages)
@@ -500,7 +465,7 @@ async def _control(
 async def _run(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
-    persona: PersonaConfig,
+    persona: Persona,
     spec: RunSpec,
     local: _LocalRun,
     messages: list[str],
@@ -510,12 +475,12 @@ async def _run(
     """Spawn the CLI with ``messages`` as its first turns, record every event, then end the run.
 
     The per-line read timeout (`settings.timeout_seconds`, the same knob
-    `session.ask()` bounds a question's turn with) is an IDLE timeout, not a
+    a chat turn is bounded by) is an IDLE timeout, not a
     total wall clock: it fires only when the child has gone quiet while it
     still owes an answer. A child with nothing left to answer is never quiet
     for long, because `_control` closes its stdin and it exits.
 
-    Every event, the slice's own synthetic `ERROR_EVENT` included, goes
+    Every event, the driver's own synthetic `ERROR_EVENT` included, goes
     through `_record`: the app's `agent_event` hook first, then `_without_bytes`,
     then the log. The run's outcome is read off what the hook returned, so
     `job.error` and `job.structured_output` carry nothing the log does not.
@@ -524,8 +489,9 @@ async def _run(
     if spec.mcp_config is not None:
         await run_in_threadpool(_write_mcp_config, folder, spec.mcp_config)
     mcp_config_path = folder / ".mcp.json"
-    argv = agent_session.build_argv(
-        settings,
+    driver = settings.driver()
+    argv = cli.argv(
+        driver,
         persona,
         None,
         resume=spec.job_id if resume else None,
@@ -554,56 +520,30 @@ async def _run(
 
     async def _failure(error: str) -> str:
         """Record the slice's own error event; `job.error` is whatever of it the app's hook kept."""
-        recorded = await _record({"type": ERROR_EVENT, "error": error})
+        recorded = await _record({"type": cli.ERROR_EVENT, "error": error})
         return str(recorded.get("error") or "agent failed") if recorded is not None else "agent failed"
 
     status, error, structured_output = jobs_models.COMPLETED, None, None
     try:
-        process = await asyncio.create_subprocess_exec(
-            *argv,
-            cwd=str(folder),
-            env=agent_session._environment(settings, persona),
-            # PIPE, not DEVNULL: every turn is a frame on stdin, the prompt
-            # included (`--input-format stream-json` ignores one on the
-            # command line), and a message sent while it works is another.
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            # Its own process group: `_kill` ends the whole group, not just
-            # the CLI's own pid, so nothing it spawned survives it.
-            start_new_session=True,
-            limit=16 * 1024 * 1024,
-        )
+        # A stdin pipe: every turn is a frame on stdin, the prompt included
+        # (`--input-format stream-json` ignores one on the command line), and
+        # a message sent while it works is another.
+        process = await cli.spawn(driver, persona, argv, cwd=folder, stdin=True)
     except OSError as exc:
         status, error = jobs_models.FAILED, await _failure(f"agent could not start: {exc}")
     else:
         local.process = process
         if local.stopping or local.shutting_down:
-            _kill(process)
-        assert process.stdout is not None
+            cli.kill(process)
         assert process.stderr is not None
         turns = _Turns()
-        stderr_task = asyncio.create_task(_drain_stderr(process.stderr))
+        stderr_task = asyncio.create_task(cli.drain(process.stderr))
         delivered = await _write_frames(process, turns, messages)
         turns.written += len(messages) - delivered  # a frame it never got is a turn it never answered
         control_task = asyncio.create_task(_control(db_session_factory, spec, local, process, turns))
         beat_task = asyncio.create_task(_beat(db_session_factory, spec))
         try:
-            while True:
-                try:
-                    line = await asyncio.wait_for(process.stdout.readline(), timeout=settings.timeout_seconds)
-                except TimeoutError:
-                    status, error = jobs_models.FAILED, await _failure("agent exceeded its wall clock")
-                    break
-                if not line:
-                    break
-                text = line.decode(errors="replace").strip()
-                if not text.startswith("{"):
-                    continue
-                try:
-                    event = json.loads(text)
-                except json.JSONDecodeError:
-                    continue
+            async for event in cli.events(process, driver.timeout_seconds):
                 recorded = await _record(event)
                 if event.get("type") == "user" and event.get("isReplay"):
                     turns.echoed += 1
@@ -615,8 +555,10 @@ async def _run(
                     else:
                         status, error = jobs_models.COMPLETED, None
                         structured_output = (recorded or {}).get("structured_output")
+        except cli.IdleTimeout:
+            status, error = jobs_models.FAILED, await _failure("agent exceeded its wall clock")
         finally:
-            _kill(process)
+            cli.kill(process)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), timeout=5)
             # Left to end on its own, so a message it took is written or put back.
@@ -639,7 +581,7 @@ async def _run(
                 stderr_tail = b""
         killed = local.stopping or local.shutting_down
         if status == jobs_models.COMPLETED and process.returncode not in (0, None) and not killed:
-            tail = scrub_credentials(stderr_tail.decode(errors="replace"))
+            tail = cli.scrub_credentials(stderr_tail.decode(errors="replace"))
             status, error = jobs_models.FAILED, await _failure(f"agent exited {process.returncode}: {tail}")
         elif status == jobs_models.COMPLETED and turns.echoed < turns.written and not killed:
             # Its stdin broke before it read them, or it exited without
@@ -695,7 +637,7 @@ async def _settled(outcome: JobOutcome) -> None:
 async def send_message(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
-    persona: PersonaConfig,
+    persona: Persona,
     job_id: str,
     text: str,
     *,
@@ -754,7 +696,7 @@ async def stop(db_session_factory: sessionmaker[Session], job_id: str, *, worksp
     if local is not None:
         local.stopping = True
         if local.process is not None:
-            _kill(local.process)
+            cli.kill(local.process)
 
 
 async def watch(
@@ -843,7 +785,7 @@ async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, wor
     job = await authorize(db_session_factory, job_id, workspace_id, persona)
     if job.status == jobs_models.RUNNING:
         raise BadRequestError("this job is still running; stop it before cleaning up its files")
-    await run_in_threadpool(_remove_job_files, job_id, persona_module.home(job.persona))
+    await run_in_threadpool(_remove_job_files, job_id, persona_module.homes() / job.persona)
 
 
 def _remove_job_files(job_id: str, persona_home: Path) -> None:
@@ -918,7 +860,7 @@ async def shutdown() -> None:
     for local in list(_runs.values()):
         local.shutting_down = True
         if local.process is not None:
-            _kill(local.process)
+            cli.kill(local.process)
     loop = asyncio.get_running_loop()
     ours = {task for task in _tasks if task.get_loop() is loop}
     if ours:

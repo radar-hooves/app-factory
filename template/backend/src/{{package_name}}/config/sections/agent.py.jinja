@@ -2,9 +2,10 @@
 
 Everything a PERSONA decides — its identity, its model, its permitted tools —
 lives in `config/personas/<name>/` and is read fresh on every spawn
-(`api/agent/persona.py`); nothing here duplicates it. What is left is the
+(`agent_common.persona`); nothing here duplicates it. What is left is the
 handful of facts every persona on this deployment shares: where the persona
-directory lives, the optional gateway, and the CLI's own operating knobs.
+directory lives, the optional gateway, and the CLI's own operating knobs,
+which reach the kit's driver as `driver()`.
 
 Lifted from the library's `api/agent/config.py` (radar-hooves/library), which
 carries the fuller version this slice split from: a `corpus_root` and a
@@ -17,6 +18,7 @@ not this one's.
 from pathlib import Path
 from typing import Annotated, Self
 
+from agent_common import cli
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -49,7 +51,7 @@ class AgentSettings(BaseSettings):
     # `config/personas/<name>/` holds a persona's CLAUDE.md, settings.json and
     # .mcp.json — app-owned, like config/actors.yaml. Read at every spawn, so
     # an override lets a deployment point at an edited copy with no rebuild
-    # and no restart (`api/agent/persona.py`'s whole reason for reading fresh
+    # and no restart (`agent_common.persona`'s whole reason for reading fresh
     # rather than caching).
     personas_dir: Path = _default_personas_dir()
 
@@ -108,6 +110,19 @@ class AgentSettings(BaseSettings):
     # One question's wall clock. The loop is bounded by the model deciding it
     # is finished; this is the backstop for one that does not.
     timeout_seconds: float = 600.0
+
+    def driver(self) -> cli.Settings:
+        """These settings as the kit's driver takes them; each session reports as `{{ project_name }}-agent-<persona>`."""
+        return cli.Settings(
+            service="{{ project_name }}-agent",
+            executable=self.executable,
+            effort=self.effort,
+            thinking=self.thinking,
+            timeout_seconds=self.timeout_seconds,
+            gateway_url=self.gateway_url,
+            gateway_key=self.gateway_key.get_secret_value(),
+            haiku_model=self.haiku_model,
+        )
 
     @model_validator(mode="after")
     def _resolve_gateway_key_when_configured(self) -> Self:

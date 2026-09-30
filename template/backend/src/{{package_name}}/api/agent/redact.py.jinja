@@ -1,4 +1,4 @@
-"""The two redaction seams this slice carries, and the one scrub it applies itself.
+"""The two redaction seams this slice carries.
 
 Both seams are optional app hooks (`docs/design/agent-console.md` §Decision:
 "the redactor is an app hook"), absent by default, looked up per call:
@@ -10,21 +10,15 @@ Both seams are optional app hooks (`docs/design/agent-console.md` §Decision:
   agent read off a document and repeated, in a tool result or its own
   answer — before a job persists it or a chat forwards it (`redact_event`).
 
-Shared by `ask.py`/`session.py` (a chat) and `jobs.py` (a job): one hook per
-direction, so an app that defines one covers everything this slice hands to
-a persona or takes back from it, not only the half written first.
-
-`scrub_credentials` is the factory's own, applied to the one text this slice
-writes that neither the persona nor the app chose: the CLI's stderr tail,
-where a gateway or MCP error line can echo a bearer token or a signed URL.
+Shared by `ask.py` (a chat) and `jobs.py` (a job): one hook per direction, so
+an app that defines one covers everything this slice hands to a persona or
+takes back from it, not only the half written first. The one text neither the
+persona nor the app chose, the CLI's stderr tail, the kit's driver scrubs
+itself (`agent_common.cli.scrub_credentials`).
 """
 
-import re
 import uuid
 from typing import Any
-
-_BEARER = re.compile(r"(?i)\bbearer\s+\S+")
-_URL_QUERY = re.compile(r"(https?://[^\s?]+)\?\S*")
 
 
 def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
@@ -64,8 +58,3 @@ def redact_event(persona: str, event: dict[str, Any]) -> dict[str, Any] | None:
         return event
     rewritten: dict[str, Any] | None = hook(persona, event)
     return rewritten
-
-
-def scrub_credentials(text: str) -> str:
-    """Strip anything shaped like a bearer token or a URL query string."""
-    return _URL_QUERY.sub(r"\1?[redacted]", _BEARER.sub("Bearer [redacted]", text))

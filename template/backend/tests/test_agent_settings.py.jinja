@@ -1,17 +1,17 @@
 """The agent slice's settings: where personas live, and the gateway a persona is confined to.
 
 `gateway_key` crosses into the child process at exactly one call site
-(`session.py`'s `_environment()`); everywhere else it must read back as a
-redacted placeholder, never the value itself. It resolves from the broker
+(`AgentSettings.driver()`, into the kit's `cli.environment()`); everywhere
+else it must read back as a redacted placeholder, never the value itself. It resolves from the broker
 like every other secret, and only for a deployment that names a gateway.
 """
 
 from pathlib import Path
 
 import pytest
+from agent_common import cli
+from agent_common.persona import Persona
 
-from {{ package_name }}.api.agent import session as agent_session
-from {{ package_name }}.api.agent.persona import PersonaConfig
 from {{ package_name }}.config import vend as vend_module
 from {{ package_name }}.config.paths import project_root
 from {{ package_name }}.config.sections.agent import AgentSettings, _default_personas_dir
@@ -88,13 +88,13 @@ def test_a_named_gateway_confines_the_child_to_it(monkeypatch: pytest.MonkeyPatc
     process carries for the direct path is withheld, even while the key is empty (CI's
     `<APP>_VEND=off`), so a missing key fails at the gateway rather than falling through."""
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "direct-path-token")
-    persona = PersonaConfig(name="p", home=tmp_path, allowed_tools="", disallowed_tools="")
+    persona = Persona(name="p", home=tmp_path, allowed_tools="", disallowed_tools="")
 
-    env = agent_session._environment(AgentSettings(gateway_url="https://gateway.example"), persona)
+    env = cli.environment(AgentSettings(gateway_url="https://gateway.example").driver(), persona)
     assert env["ANTHROPIC_BASE_URL"] == "https://gateway.example"
     assert env["ANTHROPIC_AUTH_TOKEN"] == ""
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
 
-    direct = agent_session._environment(AgentSettings(), persona)
+    direct = cli.environment(AgentSettings().driver(), persona)
     assert direct["CLAUDE_CODE_OAUTH_TOKEN"] == "direct-path-token"
     assert "ANTHROPIC_BASE_URL" not in direct

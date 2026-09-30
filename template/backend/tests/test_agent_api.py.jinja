@@ -3,12 +3,13 @@
 Every other slice test in this suite monkeypatches past the boundary it is
 proving; this one deliberately does not. `AgentSettings.executable` is
 pointed at `tests/support/fake_agent_cli.py`, a standalone script with its
-own shebang, so `session.py` spawns a genuine child process exactly as it
-would spawn `claude` — which is what lets this suite assert on the actual
-argv and environment session.py builds (persona.py's derived
-`--allowedTools`/`--disallowedTools`, `--mcp-config`, `MAX_THINKING_TOKENS`,
-the model read off the seeded `CLAUDE_CONFIG_DIR/settings.json`) rather than
-on a mock standing in for the claim that those are what get passed.
+own shebang, so the `agent_common` kit's driver spawns a genuine child process
+exactly as it would spawn `claude` — which is what lets this suite assert on
+the actual argv and environment the kit builds for this app (the persona's
+derived `--allowedTools`/`--disallowedTools`, `--mcp-config`,
+`MAX_THINKING_TOKENS`, the model read off the seeded
+`CLAUDE_CONFIG_DIR/settings.json`) rather than on a mock standing in for the
+claim that those are what get passed.
 
 `docs/design/agent-console.md` names this the chunk-1 proof: "one test
 driving a fake CLI through argv, env, ownership and SSE framing."
@@ -242,7 +243,7 @@ async def test_the_apps_otel_settings_are_absent_from_the_child_when_unset(
 
 
 async def test_a_crashing_cli_becomes_one_library_error_frame(client: AsyncClient) -> None:
-    """session.py's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
+    """The driver's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
     response = await client.post("/api/agent/milton/ask", json={"question": "__crash__"}, headers=ASKER)
     events = _events(response.text)
     assert len(events) == 1

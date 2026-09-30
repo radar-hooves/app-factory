@@ -35,6 +35,9 @@ dependencies = [
     # API, bound in files/storage.py — the files slice's whole WebDAV layer, so no
     # app carries its own put/get/list/move/delete/share code.
     "nextcloud>=2026.6.0",
+    # agent-common: the factory's own Claude Code kit (kits/python/agent-common) —
+    # the CLI driver, personas and transcripts the agent slice binds to this app.
+    "agent-common>=2026.9.57",
 ]
 
 [dependency-groups]
@@ -89,6 +92,7 @@ explicit = true
 api-common = { index = "{{ private_index_name }}" }
 redactyl-core = { index = "{{ private_index_name }}" }
 nextcloud = { index = "{{ private_index_name }}" }
+agent-common = { index = "{{ private_index_name }}" }
 
 [tool.ruff]
 line-length = 120

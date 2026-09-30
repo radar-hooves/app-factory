@@ -2,8 +2,8 @@
 """Stand-in for `claude -p ... --output-format stream-json`.
 
 Run as a REAL subprocess by test_agent_api.py (via `AgentSettings.executable`
-pointed at this file), so that test exercises session.py's actual argv and
-environment construction rather than a mock standing in for it — the "drives
+pointed at this file), so that test exercises the `agent_common` driver's
+actual argv and environment construction rather than a mock standing in for it — the "drives
 a fake CLI through argv, env, ownership and SSE framing" proof
 `docs/design/agent-console.md` asks chunk 1 for.
 
@@ -11,8 +11,8 @@ Speaks just enough of the wire format: one `system`/`init` event carrying a
 session id, one `assistant` event whose text ECHOES what this process was
 actually invoked with (the question, the tool flags, the MCP config path and
 whether `--strict-mcp-config` rode beside it, the model read off
-`CLAUDE_CONFIG_DIR/settings.json`, and every telemetry variable `session.py`'s
-`_environment()` may have set) so the test can assert on argv and env by
+`CLAUDE_CONFIG_DIR/settings.json`, and every telemetry variable the driver's
+`environment()` may have set) so the test can assert on argv and env by
 reading the stream rather than a side channel, and one `result` event.
 
 `--resume <id>` re-emits that SAME id — the real CLI's own behaviour
@@ -20,7 +20,7 @@ reading the stream rather than a side channel, and one `result` event.
 claims no new row.
 
 A question of exactly `__crash__` exits 3 having printed nothing, so the
-suite can also drive session.py's OWN synthetic error frame (a CLI that dies
+suite can also drive the driver's OWN synthetic error frame (a CLI that dies
 badly) rather than only the happy path.
 
 A question of exactly `__giant__` emits one `assistant` frame whose text is
@@ -96,7 +96,7 @@ AWAIT_MESSAGE_SECONDS = 5.0
 #: Past the 64 KiB default pipe buffer a stderr write blocks on once full.
 CHATTY_STDERR_BYTES = 200_000
 
-#: The telemetry variables `session.py`'s `_environment()` may pass through
+#: The telemetry variables the driver's `environment()` may pass through
 #: or compute, in the order the echo line reports them.
 TELEMETRY_VARS = (
     "CLAUDE_CODE_ENABLE_TELEMETRY",
@@ -175,7 +175,7 @@ def _echo(question: str, argv: list[str]) -> str:
             f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
             f"append_system_prompt={_flag(argv, '--append-system-prompt')}",
             f"input_format={_flag(argv, '--input-format')}",
-            # Present only if session.py leaked the parent's own environment
+            # Present only if the driver leaked the parent's own environment
             # through rather than building the child's from scratch.
             f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
             "telemetry=" + ",".join(f"{name}={os.environ.get(name, 'absent')}" for name in TELEMETRY_VARS),

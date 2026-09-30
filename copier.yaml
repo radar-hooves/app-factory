@@ -50,7 +50,6 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_admin_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_jobs_api.py{% endif %}"
-  - "{% if not factory_selftest %}backend/tests/test_agent_persona.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_app_posture.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
