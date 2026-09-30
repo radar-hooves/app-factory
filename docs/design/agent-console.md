@@ -1,6 +1,6 @@
 # Agent console
 
-Status: **design, 30/09/2026.** Need: radar-hooves/cadmus (Nightjar), 30/09/2026. Colleagues chat with Milton about a collection (PACMAN, DASR, any collection) and keep their conversations, in a chat that behaves as people now expect; every app that lets a person chat with an agent gets that same product from the factory.
+Status: **design, 30/09/2026; the asker, the tier and the writes answered 01/10/2026.** Need: radar-hooves/cadmus (Nightjar), 30/09/2026; radar-hooves/godswood#846 via Nightjar, 01/10/2026. Colleagues chat with Milton about a collection (PACMAN, DASR, any collection) and keep their conversations, in a chat that behaves as people now expect; every app that lets a person chat with an agent gets that same product from the factory.
 
 ## Decision
 
@@ -181,6 +181,9 @@ Estimates carry "about"; everything else is `wc -l` at 30/09/2026.
 
 - **api-clients:** a client for the library's caller door: the streamed ask, conversation read and forget, the answer mark, a document, and collection summaries for a room's scope line.
 - **library:** say when an ask waits behind another, and keep saying it at least every 30 s while it waits; take a room's preamble as its own field, so a reopened conversation shows the question the colleague asked.
+- **library** (§2): a collection's `child_names`, defaulting to likely and forcing `outside_models_allowed` off; at `/mcp` and `/api/caller`, a likely collection's documents and figures refused, and the reading engine's answer and `query`'s chunks from one withheld with a typed frame, then released through the Redactyl pass once the sitting rules.
+- **redactyl** (§2): the store the library's pass reads the fleet's name redact-list from.
+- **Authentik and yggdrasil** (§1): per app with a persona room, the persona provider and its application, and `X-authentik-jwt` on the ask route's nginx location.
 
 ## Convergence, each step proven before the next
 
@@ -195,12 +198,79 @@ Estimates carry "about"; everything else is `wc -l` at 30/09/2026.
 
 **Two entries on the closed sanctioned-per-app list** in `platform/canonical-app-shape.md`: `config/rooms.yaml` (the rooms this app offers) and `frontend/src/lib/agent/app.ts` (the room page's extension point). A shared rule changes only at a sunset-review sitting, so step 4 cannot tag before one.
 
+**The relaxed hard limit** (§2): `core.md` §Guardrails amended so that a likely collection's free text may reach a Claude session once Redactyl has redacted it and its verify pass has released it. Ruled by the operator 01/10/2026; a shared rule changes only at a sitting, so until then the library withholds that text from every machine caller.
+
+## The asker, the tier and the writes
+
+Answered 01/10/2026 for radar-hooves/godswood#846. Proven means read from source at the deployed version, read from live config, or measured; a conclusion says so and what would validate it.
+
+### 1. The asker's token reaches each run
+
+**Every persona turn carries the asker's own Authentik identity: a short-lived token the ask request trades for the one the outpost already holds, placed in the run's environment and nowhere else.**
+
+```d2
+vars: {d2-config: {layout-engine: elk}}
+direction: right
+
+outpost: "Embedded outpost\nX-authentik-jwt: the proxy provider's\naccess token, up to 1 h left"
+nginx: "nginx\nthe ask route only"
+ask: "ask request\ntrades it, once per turn"
+ak: "Authentik token endpoint\n<app>-persona provider"
+run: "claude -p\nASKER_TOKEN in its environment"
+mcp: "app /mcp · library /mcp\nuserinfo → sub → actors.yaml"
+
+outpost -> nginx -> ask
+ask -> ak: "client_assertion: the proxy token"
+ak -> ask: "same person, own lifetime"
+ask -> run: "run_env"
+run -> mcp: 'Authorization: Bearer ${ASKER_TOKEN}'
+```
+
+1. **The outpost holds it.** On every forward-auth answer the embedded outpost (Authentik 2026.2.2, live) sends `X-authentik-jwt`: the app's proxy provider's own access token for the signed-in person (outpost source at `version/2026.2.2`: `internal/outpost/proxyv2/application/mode_common.go:43`, `oauth_callback.go:56-73`). It lives an hour (`access_token_validity: hours=1` on Godswood Proxy, live), and the outpost sets its session cookie to exactly the token's remaining life, with no refresh (`oauth_callback.go:32`), so a request carries a token with anywhere from a second to an hour left. nginx drops it today: the shared snippet forwards eight identity headers, not this one (yggdrasil `hosts/poodle64/atlas/stacks/front-door/nginx/config/nginx/authentik-location.conf:12-29`). Proven from source and live config; not seen on the wire, which needs a signed-in session.
+2. **nginx forwards it to the ask route only**: `auth_request_set $authentik_jwt $upstream_http_x_authentik_jwt;` and `proxy_set_header X-authentik-jwt $authentik_jwt;` in the vhost's location for `POST /api/agent/rooms/{room}/ask`, never the shared snippet, so no other route of any app receives a bearer. Naming it in `proxy_set_header` discards a client's own copy, as it does for the eight.
+3. **The ask request trades it rather than handing it on.** The proxy token is also a key to the person's whole website: the outpost accepts it as `Authorization: Bearer` (`intercept_header_auth: true` on Godswood Proxy, live) and introspects it against its own provider (`auth_bearer.go`). So before its stream opens, the ask request reads it once, logs it nowhere, and exchanges it at Authentik's token endpoint for a token from the app's persona provider: `grant_type=client_credentials`, that provider's `client_id` and scopes, `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`, `client_assertion` the proxy token. Authentik issues it for the same user (`authentik/providers/oauth2/views/token.py:414-435`), refuses an expired assertion (`:466-471`), runs the persona application's policy bindings for that person, and gives the token the persona provider's own lifetime. The outpost refuses it, since introspection matches only the issuing provider (`introspection.py:50`): the persona reaches the `/mcp` surfaces that admit the person, never the website. A refused exchange is a 401, and the page reloads through the outpost. Proven from source at the deployed tag; not driven, because driving it mints a token on a real person's account.
+4. **Into the run's environment, nowhere else.** `rooms.agent` already builds a `LocalAgent` per request; it passes `run_env={"ASKER_TOKEN": token}`, which `agent_common.cli.environment` adds to the child's scratch-built environment and nothing of the app's, refusing a name that would displace the home, the CLI's credential, the gateway or `PATH`; `LocalAgent`'s repr leaves it out. The persona's home, which every asker shares, holds no token. Proven by the kit's suite through a real subprocess (the rooms slice, which passes no `run_env` yet).
+5. **The persona presents it** from its `.mcp.json`: `"headers": {"Authorization": "Bearer ${ASKER_TOKEN}"}`. Measured with Claude Code 2.1.283 under `claude -p --strict-mcp-config`, a fresh, never-trusted `CLAUDE_CONFIG_DIR` and an environment built from nothing: the server received exactly `Bearer <value>`. A `headersHelper` printing the same header also ran there (the folder-trust gate that stops one in an interactive session did not apply under `-p`), but it is a shell per connection for what expansion does in place.
+6. **Each `/mcp` admits the asker by `sub`.** A userinfo-gated `/mcp` keys its caller on a configured claim, falling back to `sub` (library `backend/src/library/mcp/http_auth.py:184-226`, the stamped `mcp/http_auth.py` its twin). The library's and casefile's deployments set that claim to `mcp_actor`, and a persona app's `/mcp` sets it the same way (`<APP>_OIDC_IDENTITY_CLAIM=mcp_actor`; the stamped default, `preferred_username`, would key a person on a username they may have chosen). The persona provider carries no `mcp_actor` mapping, so its token resolves to the person's `sub`, which is `users.authentik_uid` in every stamped app. One `config/actors.yaml` row per person admits them, and the server's own grants authorise: casefile joins `actor_id` onto `users.authentik_uid` and its workspace memberships (`backend/src/casefile/mcp/context.py`); the library links a caller to the actor (`admin caller_link_actor`) and reads that caller's project grants. Live, the library's callers carry two actor links, `claude-code` and `cadmus`, both machines: the library grants per person by this mechanism, and to no person yet.
+
+**Machinery:** per app, one Authentik OAuth2 provider and application (federating the app's proxy provider, `sub_mode` the hashed user id, no `mcp_actor` mapping, bound to the app's own groups) one nginx location, and its `/mcp`'s identity claim; about 40 lines in the slice (read the header, one POST, `run_env`); per person per server, one `actors.yaml` row, and at the library a caller link with its grants. The kit's `run_env` is built. No new service.
+
+**This settles whose identity a persona carries onto its own app's `/mcp`: the asker's.** The earlier recommendation, an actor row of the persona's own, is withdrawn for a room turn: acting as the asker keeps tenancy whole, and the door does accept a person, by `sub`, as casefile's already does. The app's `/mcp` resolves the asker as casefile's does, one per-call door that binds the session to the asker's workspace (§3). A persona's own actor row stays for a job, which has no asker's request to take a token from. A library room is unchanged: `LibraryAgent` presents the app's own caller credential, and the room is the grant.
+
+**Open:** the persona provider's lifetime, concluded at 30 minutes (the slowest measured turn is 260 s; a local persona's tools add more), to be validated against the longest real turn.
+
+### 2. The hard limit, per room
+
+**Ruled by the operator, 01/10/2026, relayed by master-orchestrator through Nightjar; AWAITING the next sitting's ruling, because `core.md` §Guardrails still reads "never into a Claude session" and binds until the sitting amends it. Until then the release below is off, and a likely collection's text is withheld from every machine caller.** His words: "balance consequence and likelihood with risk ... let's not degrade why we want to use AI."
+
+The exposure is the reading engine's free text. `outside_models_allowed=false` decides which model reads (library `backend/src/library/api/registry/service.py:1447-1463`), not who receives what it wrote. Nothing an app holds sees that text first: a persona's tool results reach its CLI straight from the library, before the slice's `agent_event` hook sees an event. The library is the one process that sees the text before a persona does, so the limit lives there.
+
+- **The likelihood is one attribute on the collection's profile, beside `outside_models_allowed`:** `child_names`, `unlikely` or `likely`. Policies and manuals are unlikely; household admin, school and medical are likely. A new collection defaults to likely, and each existing one is classified once by its owner. Likely forces `outside_models_allowed=false`, so the reading itself stays on the household model. A misconfigured room cannot bypass it: the room names collections, and the attribute is read where the collection lives, for every caller.
+- **At the library's machine doors (`/mcp`, `/api/caller`), the reading engine's answer and `query`'s chunks drawn from a likely collection pass through Redactyl** with the fleet's persistent name redact-list (live: 12 name terms), and leave only when Redactyl's fail-closed verify releases them. **A verify failure withholds the text:** the caller gets a typed withheld frame saying why, never the text. A likely collection's whole documents and figures (`management` `document_content`, `document_figure`) are refused at a machine door outright. The human Console's door is exempt: a person reading is not a Claude session.
+- **Every machine caller meets it, not only a persona.** The library has no caller tier to key on (`Caller` carries none), and a persona is indistinguishable from a service there. That includes the operator's own Claude sessions, which reach the library as the admin caller `claude-code` (live), and it is what the guardrail says. A service that shows a likely collection to a person and needs it unredacted is when a caller flag is argued, not before.
+- **Typed fields stay the stricter path:** the Fat Controller reads the documents themselves on the household box through its schema and never needs the library's free-text door.
+
+Chosen over the room's own collection list, which is app config and the thing a misconfiguration breaks, and over the grant, which decides reach, not tier, and serves a person on the Console as much as a persona.
+
+**Machinery:** in the library, one profile field with its default and one validation, the pass at two doors with its withheld frame, and the refusal on two document reads; Redactyl, as its other consumers use it. No new service.
+
+**Open:** which term store the library's pass reads is Redactyl's to say (the fleet list is its MCP container's `/data/terms.yaml`; its REST surface reads per-consumer stores under `REDACTYL_API_TERMS_DIR`); the classification of the existing collections, by their owners; the sitting's ruling.
+
+### 3. Write tools
+
+**The gate is the app's `/mcp`, server-side, on every call, on the asker §1 resolved. A skill or a `settings.json` allow-list steers a persona; neither fences it.**
+
+- **One door per call.** The stamped `/mcp` takes casefile's `mcp/context.py`: the bearer gate admits the caller, and `run_scoped` looks the asker up by `users.authentik_uid` and binds the session to their workspace, refusing a caller with no user row. A tool writes through that door or not at all.
+- **The entitlement, per call.** A write tool refuses unless the asker holds the module it writes to, by the check the HTTP routes make (`entitlements.has_module`). The entitlements come from the userinfo claims the bearer gate already fetches, evaluated live on each call (`authentik/providers/oauth2/views/userinfo.py:67-92`), which the persona provider fills with the app's own application's entitlements, as the proxy's mapping fills `X-authentik-entitlements`; the gate passes them on in a header only it writes, stripping a caller's own copy first, as it does for `x-client-id`.
+- **Few:** a write tool exists only where a person would otherwise make that write by hand in the app, one tool per such write, each logged with the asker and the room.
+- **Never handed to a persona:** the app's own credentials (the database, the OIDC secret, its library caller credential, anything vended), which the kit's scratch-built environment already keeps out (`agent_common/cli.py`, `_INHERITED_IF_SET`); the proxy token, a key to the website (§1); a tool that grants or revokes, admits or removes a person or a workspace, changes an entitlement or a role, or deletes in bulk; a tool that mints, reads or rotates a credential; a tool that sends in a person's name (mail, a payment, a publication), since the persona drafts and the person sends; Claude Code's built-in shell, file-write and web tools, denied by the ruling above; and a likely collection's text beyond §2's pass.
+
+**Machinery:** casefile's `mcp/context.py` into the stamped `/mcp` (moved, not written; casefile drops its copy at its next converge), about 10 lines in the bearer gate for the entitlements header, one scope mapping on each persona provider, and a module check in each write tool.
+
+**Open:** which writes godswood's household expert holds is godswood's list, under these rules.
+
 ## Open questions
 
-The first three follow from the rulings above and are answered here before an app builds a room on them.
-
-1. **How the signed-in user's token reaches each run**, per request behind forward-auth, from the process environment and never a file in the shared persona home.
-2. **The data-tier routing** that enforces the hard limit above, per room.
-3. **Write tools**: few, and gated server-side on the resolved actor, since a skill does not fence a tool.
-
-**Whose identity does a persona carry onto its own app's `/mcp`?** (Question 1 may settle it: the ruling makes the signed-in user the identity.) An actor row of its own reaches the app persona-wide, outside the asker's workspace; acting as the asker keeps tenancy intact but needs the machine door to accept a person's identity, which it does not. Recommended: the actor row, zero new machinery, because a persona holds the knowledge layer rather than workspace rows. Revisit when a persona first needs a workspace-scoped table.
+- The persona provider's lifetime (§1), concluded at 30 minutes.
+- The term store the library's Redactyl pass reads (§2), Redactyl's to say.
+- The sitting's ruling on the relaxed limit (§2); until it rules, a likely collection's text is withheld from every machine caller.
