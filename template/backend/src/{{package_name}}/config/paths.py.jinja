@@ -59,6 +59,22 @@ def frontend_build_dir() -> Path:
     return project_root() / "frontend" / "build"
 
 
+def config_dir() -> Path:
+    """Return the app's committed `config/` directory, in the container or the source tree.
+
+    The image copies it to `<cwd>/config` (`/app/config`); a source checkout
+    keeps it at the repository root. Deployment first, as `frontend_build_dir()`
+    resolves, because `project_root()` lands in site-packages in a container.
+    Every file under it defaults from here, so one an app has not written yet
+    (`rooms.yaml` in an app with no `personas/`) is still looked for in the
+    right place.
+    """
+    for candidate in (Path.cwd() / "config", project_root() / "config"):
+        if candidate.is_dir():
+            return candidate
+    return project_root() / "config"
+
+
 def data_dir() -> Path:
     """Return the app's runtime-state directory, creating it if absent.
 

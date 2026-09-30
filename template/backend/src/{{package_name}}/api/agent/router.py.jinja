@@ -123,6 +123,7 @@ async def ask(
         exempt=has_module(identity.entitlements, "admin"),
         question=body.question,
         resume=body.resume,
+        kind=body.kind,
         files=files,
     )
 
@@ -149,7 +150,9 @@ async def read(owned: OwnedConversation, settings: SettingsDep) -> ConversationR
     turns = await _turns(owned, settings)
     return ConversationRead(
         **_summary(owned.conversation).model_dump(),
-        turns=[StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations) for t in turns],
+        turns=[
+            StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations, kind=t.kind) for t in turns
+        ],
     )
 
 
@@ -302,7 +305,11 @@ async def _asked(request: Request) -> tuple[AskRequest, dict[str, bytes]]:
     try:
         if request.headers.get("content-type", "").startswith("multipart/form-data"):
             form = await request.form()
-            body = AskRequest(question=str(form.get("question") or ""), resume=str(form.get("resume") or "") or None)
+            body = AskRequest(
+                question=str(form.get("question") or ""),
+                resume=str(form.get("resume") or "") or None,
+                kind=str(form.get("kind") or "") or None,
+            )
             files = {
                 upload.filename or "attachment": await upload.read()
                 for upload in form.getlist("files[]")

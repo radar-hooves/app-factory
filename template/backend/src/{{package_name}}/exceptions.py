@@ -87,10 +87,18 @@ class ConflictError(BackendBaseException):
 
 
 class AllowanceSpentError(BackendBaseException):
-    """The caller has used today's fair-use allowance (429); tomorrow they have more."""
+    """The caller has used today's fair-use allowance (429); more in `retry_after` seconds.
+
+    Answered with `Retry-After` and logged with it, as every 429 is
+    (`security-standards.md`).
+    """
 
     status_code = 429
     error_code = "allowance_spent"
+
+    def __init__(self, message: str, *, retry_after: int, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message, context={**(context or {}), "retry_after": retry_after})
+        self.retry_after = retry_after
 
 
 class UpstreamServiceError(BackendBaseException):
@@ -241,7 +249,7 @@ async def conflict_error_handler(request: Request, exc: ConflictError) -> JSONRe
 
 async def allowance_spent_error_handler(request: Request, exc: AllowanceSpentError) -> JSONResponse:
     _log_exception(request, exc)
-    return _build_error_response(exc)
+    return _build_error_response(exc, headers={"Retry-After": str(exc.retry_after)})
 
 
 async def upstream_service_error_handler(request: Request, exc: UpstreamServiceError) -> JSONResponse:

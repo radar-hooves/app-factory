@@ -22,6 +22,9 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=8000)
     #: A conversation of this person's in this room, to carry on.
     resume: str | None = None
+    #: What the page asked for (`briefing`), in its own word: kept with the
+    #: question and read back with it, never sent to the agent.
+    kind: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,31}$")
 
 
 class RoomRead(BaseModel):
@@ -48,6 +51,7 @@ class StoredTurn(BaseModel):
     answer: str
     at: datetime.datetime | None
     citations: list[dict[str, Any]] = []
+    kind: str | None = None
 
 
 class ConversationRead(ConversationSummary):
