@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   desktop:
-    uses: radar-hooves/app-factory/.github/workflows/desktop-ci.yaml@{{ _copier_answers._commit }}
+    uses: radar-hooves/app-factory/.github/workflows/desktop-ci.yaml@{{ _copier_conf.vcs_ref_hash }} # {{ _copier_answers._commit }}
 {%- if linux_cargo_args %}
     with:
       linux-cargo-args: '{{ linux_cargo_args }}'
