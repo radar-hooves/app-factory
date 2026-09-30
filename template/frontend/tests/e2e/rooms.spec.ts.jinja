@@ -14,9 +14,10 @@ import { ok, readJson } from './api';
 
 const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? 'http://127.0.0.1:{{ backend_port }}';
 const SHOTS = process.env.ROOMS_SCREENSHOTS;
-/** What any signed-in person may reach; everything else needs a module (tests/test_route_walk.py). */
+/** What any signed-in person may reach; everything else, the people list included, needs a module
+ *  (tests/test_route_walk.py). */
 const PERSON_FACING = [
-	'/api/users',
+	'/api/users/me',
 	'/api/workspaces',
 	'/api/feedback',
 	'/api/system',
@@ -56,8 +57,9 @@ let helperConversation = '';
 let manualConversation = '';
 
 test('the rooms a person holds are the ones they can ask', async ({ page }) => {
-	await page.goto('/rooms');
 	// The first page a fresh dev server serves waits on its dependency optimisation.
+	test.setTimeout(120_000);
+	await page.goto('/rooms');
 	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible({
 		timeout: 60_000
 	});

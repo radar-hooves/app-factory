@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 
 WRITE_SUFFIX = ":write"
 
+#: What a room's entitlement starts with (`api/agent/rooms.py`): `room-<id>`.
+ROOM_PREFIX = "room-"
+
 
 def has_module(entitlements: tuple[str, ...], module: str, *, write: bool = False) -> bool:
     """True when these entitlements admit ``module`` at the requested grade.
@@ -115,3 +118,19 @@ def module_dependency(module: str, *, write: bool = False) -> params.Depends:
     ``dependencies=[…]`` list is typed for the class.
     """
     return params.Depends(require_module(module, write=write))
+
+
+def require_app_module(identity: CurrentIdentity) -> Identity:
+    """An account admitted to this app itself: any entitlement but a room's, ``admin`` included.
+
+    A colleague invited to a room holds ``room-<id>`` and nothing else, and is
+    refused what the app keeps for its own people, the list of everyone it has
+    seen first. Workspace ownership cannot draw that line: every account is made
+    owner of a personal workspace the first time it signs in.
+    """
+    if any(not grant.startswith(ROOM_PREFIX) for grant in identity.entitlements):
+        return identity
+    raise ForbiddenError("You do not have access to the people in this app")
+
+
+gate(require_app_module, "any module but a room")

@@ -1,16 +1,17 @@
 """HTTP routes for the local user record."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from {{ package_name }}.api.users import service
 from {{ package_name }}.api.users.schemas import CurrentUserRead, UserRead, UserSummary
 from {{ package_name }}.deps import CurrentIdentity, SessionDep
+from {{ package_name }}.entitlements import require_app_module
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[UserSummary], operation_id="listUsers")
-def list_users(session: SessionDep, _identity: CurrentIdentity) -> list[UserSummary]:
+@router.get("/", response_model=list[UserSummary], operation_id="listUsers", dependencies=[Depends(require_app_module)])
+def list_users(session: SessionDep) -> list[UserSummary]:
     """List the people this app has seen, for choosing who to grant membership to.
 
     The app is not a directory — the identity provider is one — and this is
@@ -18,6 +19,8 @@ def list_users(session: SessionDep, _identity: CurrentIdentity) -> list[UserSumm
     the projection is the three fields a picker needs. It exists because a
     grant names a user id (``POST /api/workspaces/{id}/members``), and an
     owner has to be able to find that id somewhere other than the database.
+    An account admitted only to a room has nobody to grant a seat to, and is
+    refused (`entitlements.require_app_module`).
     """
     return [UserSummary.model_validate(user) for user in service.list_active(session)]
 
