@@ -9,8 +9,9 @@ requires-python = ">=3.14"
 dependencies = [
     # library: the api-clients client of the library's caller door, which
     # `LibraryAgent` asks, reads and forgets through. Resolved off the private
-    # index (the workspace root's [tool.uv.sources]).
-    "library>=2026.9.62",
+    # index (the workspace root's [tool.uv.sources]). 2026.9.373 is the first
+    # whose `AskStreamClient.ask` takes `depth`.
+    "library>=2026.9.373",
 ]
 
 [build-system]

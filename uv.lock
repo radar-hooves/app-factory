@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "library", specifier = ">=2026.9.62", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" }]
+requires-dist = [{ name = "library", specifier = ">=2026.9.373", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" }]
 
 [[package]]
 name = "annotated-types"
