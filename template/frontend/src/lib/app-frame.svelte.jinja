@@ -13,9 +13,8 @@
 	`children` is the factory's guarded page: render it inside the shell, once.
 	The frame renders from the first paint, before the session is confirmed:
 	around the loading state, the workspace chooser and the retry as well as
-	the page. godswood and cadmus drew theirs only once signed in. So nothing
-	here may assume `auth.user`, and what needs a signed-in caller waits for
-	it, as `identity` below does.
+	the page. So nothing here may assume `auth.user`, and what needs a
+	signed-in caller waits for it, as `identity` below does.
 -->
 <script module lang="ts">
 	/**
