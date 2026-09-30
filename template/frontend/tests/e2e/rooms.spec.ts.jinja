@@ -207,7 +207,7 @@ test('a link to another room shows that room, not the last one', async ({ page }
 test('a question handed over by a link waits in the box, unsent', async ({ page }) => {
 	await page.goto('/rooms/helper?q=What%20about%20long%20service%20leave%3F');
 	await expect(composer(page)).toHaveValue('What about long service leave?');
-	await expect(page).not.toHaveURL(/\?c=/);
+	await expect(page).toHaveURL(/\/rooms\/helper$/);
 });
 
 test('a spent allowance is shown, and the next question is refused', async ({ page }) => {
@@ -228,7 +228,9 @@ test('a spent allowance is shown, and the next question is refused', async ({ pa
 	await composer(page).fill('Just one more?');
 	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByText('You asked: Just one more?')).toBeHidden();
-	const refused = await page.request.post('/api/agent/rooms/helper/ask', { data: { question: 'x' } });
+	const refused = await page.request.post('/api/agent/rooms/helper/ask', {
+		data: { question: 'x' }
+	});
 	expect(refused.status()).toBe(429);
 	expect(Number(refused.headers()['retry-after'])).toBeGreaterThan(0);
 });

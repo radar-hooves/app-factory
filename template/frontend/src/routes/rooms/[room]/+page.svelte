@@ -80,7 +80,8 @@
 
 	// The address names the conversation: a link, the back button or the list
 	// opens one, and no address is a new one, with a handed-over question in
-	// its box, unsent. Only the address is followed here.
+	// its box, unsent, and then out of the address, so nothing puts it back
+	// over what the person types next. Only the address is followed here.
 	$effect(() => {
 		const want = wanted;
 		const question = handed;
@@ -89,7 +90,9 @@
 		untrack(() => {
 			if (!want) {
 				current.new();
-				if (question) current.draft = question;
+				if (!question) return;
+				current.draft = question;
+				void goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
 			} else if (want !== current.conversationId) void reopen(current, want);
 		});
 	});
