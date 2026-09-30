@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.2] - 2026-09-30
+
+### Changed
+
+- **Published from `kits/typescript` in radar-hooves/app-factory, with
+  provenance.** The package's `repository` names app-factory and its
+  directory, npm's trusted publisher is that repo's
+  `publish-kit-typescript.yaml`, and each release carries a signed provenance
+  attestation. `templates/DESIGN.md.template` names the new source. No token
+  changed.
+
 ## [2026.9.1] - 2026-09-29
 
 ### Fixed
