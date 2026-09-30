@@ -29,6 +29,9 @@ const HOST_HEADLESS_SHELL = hostHeadlessShell();
 // session already running, or writing under the identity that session uses.
 const E2E_PORT = {{ frontend_e2e_port }}; // not {{ frontend_port }}: this app's own row in the registry's Frontend E2E band, so it collides with no interactive dev server and nothing else can be allocated over it. Derived offsets landed outside every band.
 const E2E_UID = 'e2e-uid';
+// What the suite's person holds: the scaffold's own module, unless the run names
+// others (a run of the rooms spec names its rooms).
+const E2E_ENTITLEMENTS = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS ?? 'example';
 const APP_WEB_SERVER = appWebServer(E2E_PORT);
 
 export default defineConfig({
@@ -88,12 +91,9 @@ export default defineConfig({
 		command: APP_WEB_SERVER.command ?? `vite dev --port ${E2E_PORT}`,
 		// Read by vite.config.ts's dev-identity header; keeps this suite's
 		// writes off whatever the interactive `dev-uid` identity owns.
-		// The entitlements the suite's person holds: the scaffold's own module
-		// unless the run names others (a run of the rooms spec names its rooms).
 		env: {
 			{{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID,
-			{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS:
-				process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS ?? 'example',
+			{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS: E2E_ENTITLEMENTS,
 			...APP_WEB_SERVER.env
 		},
 		port: E2E_PORT,

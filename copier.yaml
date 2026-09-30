@@ -50,6 +50,10 @@ _skip_if_exists:
   - src-tauri/capabilities/default.json
   - src-tauri/src/lib.rs
   - src-tauri/icons/icon.png
+  # THE extension point for the room page (routes/rooms/[room]), which the
+  # factory owns: what a citation opens, how an answer reads, what sits on a
+  # room's home. App-owned by definition (docs/design/agent-console.md).
+  - frontend/src/lib/agent/app.ts
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
