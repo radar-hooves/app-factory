@@ -6,7 +6,12 @@ name = "agent-common"
 version = "2026.9.57"
 description = "The household's Claude Code agent: the CLI driver, personas, transcripts, and the Agent interface"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    # library: the api-clients client of the library's caller door, which
+    # `LibraryAgent` asks, reads and forgets through. Resolved off the private
+    # index (the workspace root's [tool.uv.sources]).
+    "library>=2026.9.62",
+]
 
 [build-system]
 requires = ["hatchling"]

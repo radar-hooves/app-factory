@@ -38,6 +38,10 @@ dependencies = [
     # agent-common: the factory's own Claude Code kit (kits/python/agent-common) —
     # the CLI driver, personas and transcripts the agent slice binds to this app.
     "agent-common>=2026.9.57",
+    # library: the household api-client of the library's caller door, which
+    # agent-common's LibraryAgent asks through; transitive-only, so declared for
+    # its index pin below to reach it.
+    "library>=2026.9.62",
 ]
 
 [dependency-groups]
@@ -93,6 +97,7 @@ api-common = { index = "{{ private_index_name }}" }
 redactyl-core = { index = "{{ private_index_name }}" }
 nextcloud = { index = "{{ private_index_name }}" }
 agent-common = { index = "{{ private_index_name }}" }
+library = { index = "{{ private_index_name }}" }
 
 [tool.ruff]
 line-length = 120

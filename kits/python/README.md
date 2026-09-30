@@ -4,7 +4,7 @@ Shared Python app code, published to the household's private index and consumed 
 
 ## Packages
 
-- [`agent-common`](agent-common) — the household's Claude Code agent: `cli` (the driver: argv, environment, a spawn in its own process group, the idle-timeout read loop, the stderr tail, the kill, stream-json stdin turns), `persona` (load a persona directory and seed its writable home), `transcript` (read and forget a session as turns), `agent` (the `Agent` interface a chat asks through, and `LocalAgent`) and `sse` (the frame). Design: [`docs/design/agent-console.md`](../../docs/design/agent-console.md). The stamped `api/agent/` slice binds it to the app's settings, data directory and exceptions.
+- [`agent-common`](agent-common) — the household's Claude Code agent: `cli` (the driver: argv, environment, a spawn in its own process group, the idle-timeout read loop, the stderr tail, the kill, stream-json stdin turns), `persona` (load a persona directory and seed its writable home), `transcript` (read and forget a session as turns), `agent` (the `Agent` interface a chat asks through, and `LocalAgent`), `library_agent` (`LibraryAgent`: the library's Milton over a room's collections, through api-clients' `library` client, with a library room's answer mark and cited document) and `sse` (the frame). Design: [`docs/design/agent-console.md`](../../docs/design/agent-console.md). The stamped `api/agent/` slice binds it to the app's settings, data directory and exceptions.
 
 ## Depending on a kit
 

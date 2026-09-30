@@ -6,15 +6,14 @@ verbatim, plus `cli.ERROR_EVENT` (and, from the library, its citation and
 suggestion frames), so one page renders any of them and nothing translates.
 
 `LocalAgent` is a persona this app runs itself, through `cli`. The library's
-Milton is the other implementation, `LibraryAgent`, over the api-clients
-`library` client of the library's caller door; it is not in this kit yet and
-nothing here imports it (`docs/design/agent-console.md` §Convergence, step 2).
+Milton is the other implementation, `library_agent.LibraryAgent`, over the
+api-clients `library` client of the library's caller door.
 """
 
 import asyncio
 import shutil
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -37,8 +36,12 @@ class Agent(Protocol):
 
     def ask(
         self, question: str, *, resume: str | None = None, files: Mapping[str, bytes] | None = None
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Yield the turn's events as they arrive; `resume` continues a conversation, `files` come with the question."""
+    ) -> AsyncGenerator[dict[str, Any]]:
+        """Yield the turn's events as they arrive; `resume` continues a conversation, `files` come with the question.
+
+        Closing the generator stops the turn: the local CLI is killed, the
+        library's stream closed.
+        """
         ...
 
     async def read(self, session: str) -> list[Turn] | None:
@@ -59,7 +62,7 @@ class LocalAgent:
 
     async def ask(
         self, question: str, *, resume: str | None = None, files: Mapping[str, bytes] | None = None
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any]]:
         """Ask the persona, streaming Claude Code's events verbatim.
 
         Attached files are written under the persona's home and named in the

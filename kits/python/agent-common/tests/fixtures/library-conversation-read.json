@@ -1,0 +1,26 @@
+{
+  "session_id": "e533e3de-0528-4ab7-8133-53a7cb3e6ab8",
+  "turns": [
+    {
+      "question": "What is the disclosure deadline?",
+      "answer": "Looking.\n\nTen working days [1].",
+      "at": "2026-09-10T01:00:00Z",
+      "citations": [
+        {
+          "n": 1,
+          "document_id": 1,
+          "title": "The held manual",
+          "section": "Requirement 0050",
+          "anchor": "page-004--requirement-0050",
+          "snippet": "within ten working days"
+        }
+      ]
+    },
+    {
+      "question": "And for a late one?",
+      "answer": "A late one is treated the same.",
+      "at": "2026-09-10T01:00:06Z",
+      "citations": []
+    }
+  ]
+}

@@ -13,4 +13,28 @@ dev = [
     "mypy>=2.1.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
+    # respx: fakes the library client's HTTP at the transport, so a kit test
+    # drives the real client over recorded bytes.
+    "respx>=0.22.0",
+    # api-common and redactyl-core reach the kits only through the `library`
+    # client, but under the explicit index below a pin reaches only a DECLARED
+    # dependency: a transitive-only private name resolves against PyPI and is
+    # not found. Declared here, not in a kit's own metadata, which names what
+    # the kit imports. Same floors as the stamped backend.
+    "api-common>=2026.9.4",
+    "redactyl-core>=2026.7.0",
 ]
+
+# The household's private index (devpi), explicit: ONLY the packages pinned to
+# it below resolve there, so a private name is never satisfied by a public
+# package of the same name (core/supply-chain.md). Auth is ambient: the atlas
+# runner's netrc, a dev machine's own (NETRC).
+[[tool.uv.index]]
+name = "godswood"
+url = "https://pypi.godswood.au/poodle64/prod/+simple/"
+explicit = true
+
+[tool.uv.sources]
+library = { index = "godswood" }
+api-common = { index = "godswood" }
+redactyl-core = { index = "godswood" }
