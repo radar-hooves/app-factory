@@ -17,14 +17,10 @@ name: Deploy
 on:
   push:
     branches: [main]
-    # What the Dockerfile copies in; a commit touching nothing else does not
-    # go live again.
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'config/**'
-      - 'Dockerfile'
-      - '.dockerignore'
+    # No path filter: an app's Dockerfile tail copies in paths the factory
+    # cannot enumerate (cadmus's docs/modules), so any list here silently
+    # misses one (app-factory#16). Queues behind the concurrency group below
+    # rather than racing, so the cost is an extra build, never a missed one.
   workflow_dispatch:
 
 # A deploy is never cancelled mid-push; a newer merge queues behind it.
