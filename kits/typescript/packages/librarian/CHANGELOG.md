@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.23] - 2026-09-30
+
+### Fixed
+
+- **A short question sits on one line.** The asker's row (`.ds-lib-ask`) took its width from its bubble, so the bubble's `max-width: 85%` resolved against its own text and even "One more?" wrapped. The row now spans the transcript, and a question wraps only past 85% of it. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`.
+
 ## [2026.9.22] - 2026-09-30
 
 The generic chat product every app's room page is built from. Need:
