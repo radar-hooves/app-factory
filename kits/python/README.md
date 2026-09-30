@@ -22,6 +22,8 @@ app-slices = { index = "<private index name>" }
 
 Each release tag publishes every package here at that tag's version (`.github/workflows/publish-kit-python.yaml`), so the floor to pin is the release the change you need landed in.
 
+A kit's tables live in the app's database and the app's Alembic history. After raising a kit's floor, run `alembic revision --autogenerate`; a kit release that changes a table says so in the changelog.
+
 ## Building and testing
 
 The uv workspace is rooted at the repo root (`pyproject.toml`, `uv.lock`), because the shared publish workflow builds the workspace from the checkout's root. From a package directory:
