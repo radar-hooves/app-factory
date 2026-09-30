@@ -4,6 +4,15 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.25] - 2026-09-30
+
+### Fixed
+
+- **Send is never under the shell's report button.** `Conversation` sets
+  `--ds-report-clearance` while a composer is mounted; needs `@poodle64/ui`
+  2026.9.23 for the button to honour it (app-factory#15). Need:
+  `radar-hooves/cadmus (Nightjar), 30/09/2026`.
+
 ## [2026.9.24] - 2026-09-30
 
 What a stamped room page needs to present an answer and a room's home in an
