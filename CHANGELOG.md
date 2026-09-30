@@ -6,6 +6,29 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/cadmus (Nightjar), 30/09/2026. Its two new sanctioned per-app files, `config/rooms.yaml` and `frontend/src/lib/agent/app.ts`, wait on a sunset-review sitting (master-project#233) before the tag.
+
+### Added
+
+- **Rooms.** `config/rooms.yaml` names what a person may ask: one persona, or Milton over named collections, entered with `room-<id>` (`api/agent/rooms.py`). The app refuses to start on a room naming no agent or both, an unknown persona, a collection without a reader's name, or a library room with no `<APP>_AGENT_LIBRARY_URL`; the library bearer is vended (`<APP>_AGENT_LIBRARY_TOKEN`, credential `<app>-library`) only while that URL is set. No file, no rooms.
+- **A person's conversations** (`agent_conversations`, replacing `agent_sessions`). The slice mints the conversation's id before the agent starts, so a stop has an address from the first second, and claims the agent's own session id from its `init`. It records every question asked, so a read returns each with its time (`at`), a question stopped before the agent took it included, and an answer mark addressed by the page's count lands on the agent's own answer. Routes: `GET rooms`, `POST rooms/{room}/ask` (JSON or multipart), `GET rooms/{room}/conversations`, `GET`/`PATCH`/`DELETE conversations/{id}`, its Markdown export and stop, and in a library room `PUT conversations/{id}/turns/{n}/mark` and `GET rooms/{room}/documents/{id}`, each body `@poodle64/librarian`'s own type.
+- **The turn is a task in the worker, not the request.** A refresh or a closed tab leaves the answer being written; a stop is a row flag any worker sets and the holder reads every second; the holder's heartbeat keeps a live stamp fresh, and one unrefreshed for 90 s reads as not answering. A second ask on a conversation being answered is refused 409.
+- **A daily allowance** (`agent_question_counts`): questions per person per local day across every room, charged when the agent accepts one, admins exempt, 429 once spent. `<APP>_AGENT_DAILY_QUESTIONS` (40; 0 is off), `<APP>_AGENT_QUOTA_TIMEZONE`, `<APP>_AGENT_SUPPORT_URL`.
+- **The rooms pages**, from `@poodle64/librarian` 2026.9.22's `Chat`: `routes/rooms` (who this person may ask) and `routes/rooms/[room]`, whose address names the conversation, so a link reopens it mid-answer on any device. `$lib/agent/app.ts` is the page's app-owned extension point (`RoomExtensions`: `oncite`, `describeTool`, `copy`, `Home`), exporting nothing by default.
+- **`app_hooks.agent_turn_settled(room, conversation, turn)`**, for an app that files something against an answer.
+- **`tests/test_route_walk.py`, stamped into every app:** every route outside the person-facing set declares a module gate (`entitlements.gate` marks one that reads its module off the path), so a colleague granted a room reaches nothing else.
+- **The rooms E2E** (`tests/e2e/rooms.spec.ts`, self-test only): a persona room on the fake CLI and a library room on `tests/support/fake_library.py`, driven through an ask, a refresh mid-answer, a reopen by link on another device, rename, download and delete, stop, a citation and a mark, a spent allowance, and a rooms-only account refused on every other route; `tests/e2e/rooms/serve.sh` starts its backend.
+
+### Changed
+
+- **The example slice gates on its own module** (`example`), as every domain slice now must; the E2E person holds it unless a run names its own entitlements.
+- **`agent_turn` and `agent_event` take the room's id** for a room's turn, a job's persona for a job.
+- **A stamped backend pins `agent-common>=2026.9.58`**, the release that carries `LibraryAgent`, and declares `python-multipart` for an ask with attachments.
+
+### Removed
+
+- **The persona chat:** `api/agent/ownership.py`, `GET /agent/personas`, `POST /agent/{persona}/ask` and `routes/agent/[persona]`. Every `agent_sessions` row moves to `agent_conversations` owned as before, in no room, since that slice never recorded which persona a session was with.
+
 ## [2026.10.3] - 2026-10-05
 
 ### Removed

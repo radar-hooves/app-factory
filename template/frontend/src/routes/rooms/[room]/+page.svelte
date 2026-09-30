@@ -10,6 +10,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Chat } from '@poodle64/librarian/chat';
+	import { resolveCopy } from '@poodle64/librarian/copy';
 	import Composer from '@poodle64/librarian/composer';
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
@@ -30,6 +31,7 @@
 	const wanted = $derived(page.url.searchParams.get('c'));
 	const who = $derived(room?.library ? 'Milton' : (room?.title ?? ''));
 	const copy = $derived(room ? extensions.copy?.(room) : undefined);
+	const words = $derived(resolveCopy(copy, who));
 	const scope = $derived.by(() => {
 		if (!room?.library) return undefined;
 		const from = `Milton answers from ${room.sources.join(', ')}.`;
@@ -89,7 +91,9 @@
 {:else}
 	{@const c = chat}
 	{@const r = room}
-	<div class="relative flex h-full min-h-0 flex-1">
+	<!-- On a phone the composer sits above the shell's fixed report button
+	     (size-11 at bottom-4), never under it. -->
+	<div class="relative flex h-full min-h-0 flex-1 max-md:pb-14">
 		<aside
 			class="border-border bg-background absolute inset-y-0 left-0 z-10 w-72 overflow-y-auto border-r shadow-lg md:static md:shadow-none {listOpen
 				? ''
@@ -117,7 +121,7 @@
 					aria-expanded={listOpen}
 					onclick={() => (listOpen = !listOpen)}
 				>
-					{listOpen ? 'Hide conversations' : 'Your conversations'}
+					{words.pastQuestions}
 				</button>
 			</div>
 			{#if extensions.Home && !c.conversationId}
