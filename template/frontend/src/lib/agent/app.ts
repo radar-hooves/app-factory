@@ -5,8 +5,10 @@
  *
  * Export any of `RoomExtensions`' members (`$lib/agent/rooms`) by name:
  * `oncite` (what a citation opens), `describeTool` (how a tool call in an
- * answer reads), `copy` (the words, per room) and `Home` (a component above a
- * new conversation). The factory's copy exports none, and the page is the
- * package's own.
+ * answer reads), `copy` (the words, per room), `Home` (a component on a new
+ * conversation, inside its scroll), `Turn` (a component presenting a question
+ * and its answer in place of the package's own) and `briefing` (what the
+ * composer's briefing control asks, and the card it reads as). The factory's
+ * copy exports none, and the page is the package's own.
  */
 export {};

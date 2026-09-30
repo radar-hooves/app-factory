@@ -1,14 +1,16 @@
 <!--
 	One room: a person's conversations with its agent, a persona or Milton,
 	built from @poodle64/librarian's own `Chat` and components
-	(docs/design/agent-console.md). The address names the conversation
-	(`?c=<id>`), so a link reopens it on any device, mid-answer included.
+	(docs/design/agent-console.md). The address names the room and the
+	conversation (`?c=<id>`), so a link reopens it on any device, mid-answer
+	included, and a question another page hands over (`?q=`) waits in the box.
 	What differs per app arrives through `$lib/agent/app`, never an edit here.
 -->
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 	import { Chat } from '@poodle64/librarian/chat';
 	import { resolveCopy } from '@poodle64/librarian/copy';
 	import Composer from '@poodle64/librarian/composer';
@@ -23,6 +25,8 @@
 	import { roomDocuments, roomTransport, type Room, type RoomExtensions } from '$lib/agent/rooms';
 
 	const extensions: RoomExtensions = app;
+	/** The kind a briefing is asked as, and read back by. */
+	const BRIEFING = 'briefing';
 
 	let room = $state<Room | null>(null);
 	let chat = $state<Chat | null>(null);
@@ -30,6 +34,8 @@
 	let listOpen = $state(false);
 
 	const wanted = $derived(page.url.searchParams.get('c'));
+	const handed = $derived(page.url.searchParams.get('q')?.trim() || null);
+	const briefing = $derived(room ? extensions.briefing?.(room) : undefined);
 	const who = $derived(room?.library ? 'Milton' : (room?.title ?? ''));
 	const copy = $derived(room ? extensions.copy?.(room) : undefined);
 	const words = $derived(resolveCopy(copy, who));
@@ -39,25 +45,49 @@
 		return room.not_held ? `${from} He does not hold ${room.not_held}.` : from;
 	});
 
-	onMount(async () => {
-		const { data } = await api.GET('/api/agent/rooms');
-		room = data?.find((r) => r.id === page.params.room) ?? null;
-		missing = room === null;
-		if (room) {
-			chat = new Chat(roomTransport(room));
-			void chat.list();
-		}
+	// SvelteKit keeps this page across `/rooms/<id>`, so the room is read from
+	// the address whenever it changes, never once: a link to another room
+	// leaves this one's conversation and starts that room's.
+	$effect(() => {
+		const id = page.params.room;
+		untrack(() => void enter(id));
 	});
 
+	async function enter(id: string | undefined) {
+		chat?.new();
+		chat = null;
+		room = null;
+		missing = false;
+		listOpen = false;
+		const { data } = await api.GET('/api/agent/rooms');
+		if (page.params.room !== id) return;
+		const found = data?.find((r) => r.id === id) ?? null;
+		missing = found === null;
+		if (!found) return;
+		const card = extensions.briefing?.(found);
+		chat = new Chat(roomTransport(found), {
+			artefact: (kind) =>
+				kind === BRIEFING && card
+					? { title: card.title, summary: card.summary, isAnswer: true }
+					: undefined
+		});
+		room = found;
+		void chat.list();
+	}
+
 	// The address names the conversation: a link, the back button or the list
-	// opens one, and no address is a new one. Only the address is followed here.
+	// opens one, and no address is a new one, with a handed-over question in
+	// its box, unsent. Only the address is followed here.
 	$effect(() => {
 		const want = wanted;
+		const question = handed;
 		const current = chat;
 		if (!current) return;
 		untrack(() => {
-			if (!want) current.new();
-			else if (want !== current.conversationId) void reopen(current, want);
+			if (!want) {
+				current.new();
+				if (question) current.draft = question;
+			} else if (want !== current.conversationId) void reopen(current, want);
 		});
 	});
 
@@ -134,9 +164,6 @@
 					{words.pastQuestions}
 				</button>
 			</div>
-			{#if extensions.Home && !c.conversationId}
-				<extensions.Home room={r} />
-			{/if}
 			<Conversation
 				turns={c.turns}
 				running={c.busy}
@@ -154,6 +181,8 @@
 				loadDocument={r.library && !extensions.oncite ? roomDocuments(r) : undefined}
 				oncite={extensions.oncite ? (citation) => extensions.oncite!(r, citation) : undefined}
 				describeTool={extensions.describeTool}
+				turn={extensions.Turn ? presented : undefined}
+				lead={extensions.Home && !c.conversationId ? home : undefined}
 				{copy}
 			>
 				{#snippet composer()}
@@ -167,9 +196,22 @@
 						{copy}
 						onsubmit={() => void c.ask()}
 						onstop={() => void c.stop()}
+						onbriefing={briefing ? () => void c.ask(briefing.question, BRIEFING) : undefined}
 					/>
 				{/snippet}
 			</Conversation>
 		</div>
 	</div>
 {/if}
+
+{#snippet presented(props: AgentTranscriptProps)}
+	{#if extensions.Turn && room}
+		<extensions.Turn {...props} {room} />
+	{/if}
+{/snippet}
+
+{#snippet home()}
+	{#if extensions.Home && room}
+		<extensions.Home {room} />
+	{/if}
+{/snippet}

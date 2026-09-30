@@ -10,6 +10,7 @@
  */
 
 import type { Component } from 'svelte';
+import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 import { ask } from '@poodle64/librarian/client';
 import type {
 	ConversationRead,
@@ -35,6 +36,15 @@ export interface Room {
 	library: boolean;
 }
 
+/** A briefing on a room: what the composer's own control asks, and the card it reads as. */
+export interface Briefing {
+	/** The words sent, the app's own fixed instruction. */
+	question: string;
+	/** The card's title; the briefing's prose opens in the column. */
+	title: string;
+	summary?: string;
+}
+
 /**
  * What `src/lib/agent/app.ts` may export to shape this app's room pages. Each
  * is optional, and the factory's copy exports none.
@@ -46,8 +56,16 @@ export interface RoomExtensions {
 	describeTool?: DescribeTool;
 	/** Words in place of the package's own, per room. */
 	copy?: (room: Room) => Partial<LibrarianCopy>;
-	/** What sits on a room's home, above a new conversation. */
+	/** What sits on a room's home, inside the conversation's scroll under its
+	 *  opening, before a question. */
 	Home?: Component<{ room: Room }>;
+	/** How a question and its answer read, in place of the package's own:
+	 *  given every prop `AgentTranscript` takes, to render the app's own
+	 *  presentation, or `AgentTranscript` inside it to add to it. */
+	Turn?: Component<AgentTranscriptProps & { room: Room }>;
+	/** A briefing on the room, from the composer's own control; absent, the
+	 *  composer offers none. */
+	briefing?: (room: Room) => Briefing;
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -69,8 +87,15 @@ export function fileName(disposition: string | null, fallback: string): string {
 export function roomTransport(room: Room): RoomTransport {
 	const at = (id: string) => ({ params: { path: { conversation_id: id } } });
 	const transport: RoomTransport = {
-		ask: ({ question, files, resume, signal }) =>
-			ask({ question, files, resume, signal, endpoint: `${BASE}/api/agent/rooms/${room.id}/ask` }),
+		ask: ({ question, files, resume, signal, kind }) =>
+			ask({
+				question,
+				files,
+				resume,
+				signal,
+				kind,
+				endpoint: `${BASE}/api/agent/rooms/${room.id}/ask`
+			}),
 		read: (id) =>
 			data<ConversationRead>(api.GET('/api/agent/conversations/{conversation_id}', at(id))),
 		stop: (id) => data(api.POST('/api/agent/conversations/{conversation_id}/stop', at(id))),
