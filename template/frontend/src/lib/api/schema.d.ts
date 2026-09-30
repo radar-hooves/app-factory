@@ -444,7 +444,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/personas": {
+    "/api/agent/rooms": {
         parameters: {
             query?: never;
             header?: never;
@@ -452,14 +452,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Personas
-         * @description Personas this deployment carries AND this caller is entitled to ask.
-         *
-         *     An app with no persona directory returns an empty list here, which is
-         *     what tells the Console to render nothing rather than a chat that fails on
-         *     the first question.
+         * List Rooms
+         * @description The rooms this app offers that this caller is granted; none when the app offers none.
          */
-        get: operations["listAgentPersonas"];
+        get: operations["listRooms"];
         put?: never;
         post?: never;
         delete?: never;
@@ -468,7 +464,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/{persona}/ask": {
+    "/api/agent/rooms/{room_id}/ask": {
         parameters: {
             query?: never;
             header?: never;
@@ -479,12 +475,163 @@ export interface paths {
         put?: never;
         /**
          * Ask
-         * @description Ask `persona`, bounded by the caller's own entitlement for it.
+         * @description Ask the room's agent, streaming its events; JSON, or multipart with `files[]`.
          *
-         *     Raises:
-         *         NotFoundError: `persona` names no directory under `config/personas/`.
+         *     The stream opens by naming the conversation. Refused before it opens:
+         *     404 for a `resume` that is not this person's conversation in this room,
+         *     409 while that conversation is being answered, 429 once today's
+         *     allowance is spent.
          */
-        post: operations["askAgent"];
+        post: operations["askRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/rooms/{room_id}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Conversations
+         * @description This person's conversations in the room, most recently active first.
+         */
+        get: operations["listRoomConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/rooms/{room_id}/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document
+         * @description A document a library room cited, section by section; absent outside the room's collections.
+         */
+        get: operations["getRoomDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read
+         * @description The conversation, every question asked, each with the answer the agent holds.
+         */
+        get: operations["getConversation"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete
+         * @description Forget the conversation: the agent's transcript first, then the row, so a failure leaves it listed.
+         */
+        delete: operations["deleteConversation"];
+        options?: never;
+        head?: never;
+        /** Rename */
+        patch: operations["renameConversation"];
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export
+         * @description The conversation as Markdown, as a file to keep.
+         */
+        get: operations["exportConversation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop
+         * @description End the answer being written, from whichever worker holds it. Nothing when none is.
+         */
+        post: operations["stopConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}/turns/{turn}/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark
+         * @description Mark answer `turn` (its place in the conversation as read) helpful or not, in a library room.
+         *
+         *     The page counts every question asked; the library counts the answers it
+         *     holds. This maps one onto the other, so a question stopped before the
+         *     agent took it does not shift the mark onto a neighbour.
+         */
+        put: operations["markAnswer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quota
+         * @description Today's allowance across every room.
+         */
+        get: operations["getAgentQuota"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -502,16 +649,13 @@ export interface paths {
          * Watch Job
          * @description Watch `job_id`'s events from the first, then follow them until its run settles, from any worker.
          *
-         *     The SAME frame shape `ask`'s stream produces — one Claude Code event per
-         *     frame, no `event:` name, `library_error` the one synthetic addition — so
-         *     `@poodle64/librarian`'s transcript renderer needs no second code path for
-         *     a job it opens instead of a chat turn.
+         *     The same frames a room's ask streams, so `@poodle64/librarian` renders
+         *     either with one code path.
          *
          *     Raises:
          *         NotFoundError: no such job, or it belongs to a different workspace
-         *             or persona (`jobs.authorize`, one answer for all three — checked
-         *             before the stream opens, so a bad, foreign or mismatched-persona
-         *             id 404s rather than opening an SSE response with nothing in it).
+         *             or persona (`jobs.authorize`, one answer for all three, checked
+         *             before the stream opens).
          */
         get: operations["watchAgentJob"];
         put?: never;
@@ -533,7 +677,7 @@ export interface paths {
         put?: never;
         /**
          * Message Job
-         * @description Send `request.text` to `job_id` (need 4): onto its stdin if it is still working, a resumed run if it has finished.
+         * @description Send `request.text` to `job_id`: onto its stdin while it works, a resumed run once it has finished.
          */
         post: operations["messageAgentJob"];
         delete?: never;
@@ -553,7 +697,7 @@ export interface paths {
         put?: never;
         /**
          * Stop Job
-         * @description Stop `job_id` (need 5). A no-op once it has already finished on its own.
+         * @description Stop `job_id`. A no-op once it has already finished on its own.
          */
         post: operations["stopAgentJob"];
         delete?: never;
@@ -773,12 +917,35 @@ export interface components {
             /** Read At */
             read_at: string | null;
         };
-        /** AskRequest */
-        AskRequest: {
-            /** Question */
-            question: string;
-            /** Resume */
-            resume?: string | null;
+        /** ConversationRead */
+        ConversationRead: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Last Activity At
+             * Format: date-time
+             */
+            last_activity_at: string;
+            /** Answering Since */
+            answering_since?: string | null;
+            /** Turns */
+            turns: components["schemas"]["StoredTurn"][];
+        };
+        /** ConversationSummary */
+        ConversationSummary: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Last Activity At
+             * Format: date-time
+             */
+            last_activity_at: string;
+            /** Answering Since */
+            answering_since?: string | null;
         };
         /**
          * CurrentUserRead
@@ -813,6 +980,22 @@ export interface components {
         DatabaseEnvironmentResponse: {
             /** Environment */
             environment: string;
+        };
+        /** DocumentRead */
+        DocumentRead: {
+            /** Title */
+            title: string;
+            /** Sections */
+            sections: components["schemas"]["DocumentSection"][];
+        };
+        /** DocumentSection */
+        DocumentSection: {
+            /** Anchor */
+            anchor: string;
+            /** Heading */
+            heading: string;
+            /** Text */
+            text: string;
         };
         /**
          * ExampleItemCreate
@@ -939,6 +1122,13 @@ export interface components {
              */
             timestamp: string;
         };
+        /** MarkRequest */
+        MarkRequest: {
+            /** Helpful */
+            helpful: boolean;
+            /** Note */
+            note?: string | null;
+        };
         /**
          * MemberAdd
          * @description Request body for granting someone membership of a workspace.
@@ -998,6 +1188,46 @@ export interface components {
         MembershipRead: {
             workspace: components["schemas"]["WorkspaceRead"];
             role: components["schemas"]["WorkspaceRole"];
+        };
+        /** QuotaRead */
+        QuotaRead: {
+            /** Limit */
+            limit: number;
+            /** Remaining */
+            remaining: number;
+            /** Exempt */
+            exempt: boolean;
+            /** Reached */
+            reached: boolean;
+            /**
+             * Resets At
+             * Format: date-time
+             */
+            resets_at: string;
+            /** Support Url */
+            support_url?: string | null;
+        };
+        /** RenameRequest */
+        RenameRequest: {
+            /** Title */
+            title: string;
+        };
+        /** RoomRead */
+        RoomRead: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Blurb */
+            blurb: string;
+            /** Examples */
+            examples: string[];
+            /** Not Held */
+            not_held: string;
+            /** Sources */
+            sources: string[];
+            /** Library */
+            library: boolean;
         };
         /**
          * SettingChangeRead
@@ -1064,10 +1294,6 @@ export interface components {
          *     its own layout from the JSON Schema alone (`docs/design/settings.md`
          *     §The page), which is the only mode in which a declared setting cannot be
          *     missing from the rendered form.
-         *
-         *     Carries no `overridden` field: which keys differ from their default is
-         *     derivable from `value` and `defaults` alone, so the frontend derives it
-         *     rather than the two ever risking disagreement.
          */
         SettingsDocument: {
             /** Schema */
@@ -1082,6 +1308,22 @@ export interface components {
             defaults: {
                 [key: string]: boolean | number | string;
             };
+        };
+        /** StoredTurn */
+        StoredTurn: {
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+            /** At */
+            at: string | null;
+            /**
+             * Citations
+             * @default []
+             */
+            citations: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * UserSummary
@@ -1777,7 +2019,7 @@ export interface operations {
             };
         };
     };
-    listAgentPersonas: {
+    listRooms: {
         parameters: {
             query?: never;
             header?: never;
@@ -1792,25 +2034,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["RoomRead"][];
                 };
             };
         };
     };
-    askAgent: {
+    askRoom: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                persona: string;
+                room_id: string;
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AskRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -1828,6 +2066,278 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listRoomConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getRoomDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renameConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exportConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stopConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    markAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn: number;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getAgentQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaRead"];
                 };
             };
         };

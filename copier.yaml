@@ -29,6 +29,10 @@ _skip_if_exists:
   # and re-exports this file from. App-owned by definition: what it exports IS
   # this app's domain surface, so an update must never overwrite it.
   - frontend/src/lib/api/app.ts
+  # THE extension point for the room page (routes/rooms/[room]), which the
+  # factory owns: what a citation opens, how an answer reads, what sits on a
+  # room's home. App-owned by definition (docs/design/agent-console.md).
+  - frontend/src/lib/agent/app.ts
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
