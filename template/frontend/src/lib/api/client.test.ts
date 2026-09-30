@@ -57,6 +57,25 @@ describe('the API client middleware stack', () => {
 		expect(vi.getTimerCount()).toBe(0);
 	});
 
+	it('keeps a request that asked not to follow a redirect, and hands the redirect back as itself', async () => {
+		// auth.init() tells a lapsed session from an unreachable API by exactly
+		// this: the proxy's redirect to sign in arrives as an opaqueredirect, not
+		// as the network failure following it would have produced. jsdom cannot
+		// construct one, so a status-0 Response is given the type instead.
+		const opaque = Object.defineProperty(Response.error(), 'type', { value: 'opaqueredirect' });
+		const fetch = vi.fn().mockResolvedValue(opaque);
+
+		const { data, response } = await api.GET('/api/users/me', {
+			baseUrl: BASE_URL,
+			fetch,
+			redirect: 'manual'
+		});
+
+		expect((fetch.mock.calls[0]?.[0] as Request).redirect).toBe('manual');
+		expect(data).toBeUndefined();
+		expect(response.type).toBe('opaqueredirect');
+	});
+
 	it('leaves no pending timer on the ordinary success path', async () => {
 		const ok = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ id: 1 }), {

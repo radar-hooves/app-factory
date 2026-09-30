@@ -50,18 +50,19 @@ let isLoading = $state(true);
 
 /**
  * Why the last init() found nobody. 'lapsed' is a session only the identity
- * provider can renew: a 401, or a request the forward-auth proxy answered with
- * a redirect to the provider, which a fetch cannot follow and the client
- * reports as `network_error`. 'failed' is anything a sign-in would not fix (the
- * backend down, a 403, a timeout), where sending the browser to sign in again
- * would bring it straight back to the same failure, forever.
+ * provider can renew: a 401, or the forward-auth proxy's redirect to the
+ * provider, which init() asks the browser not to follow so it arrives as an
+ * `opaqueredirect`. 'failed' is anything a sign-in would not fix: the backend
+ * down or unreachable, a reset connection, a 403, a timeout. Sending the
+ * browser to sign in there would bring it straight back to the same failure,
+ * as fast as the round trip allows.
  */
 export type SignInFailure = 'lapsed' | 'failed';
 let failure = $state<SignInFailure | null>(null);
 
-function signInFailure(result: { error?: unknown; response: Response }): SignInFailure {
-	const code = (result.error as { error?: unknown } | undefined)?.error;
-	return result.response.status === 401 || code === 'network_error' ? 'lapsed' : 'failed';
+function signInFailure(result: { response: Response }): SignInFailure {
+	const { status, type } = result.response;
+	return status === 401 || type === 'opaqueredirect' ? 'lapsed' : 'failed';
 }
 
 function restoreStoredWorkspaceId(): number | null {
@@ -171,7 +172,10 @@ export const auth = {
 		failure = null;
 		try {
 			const [me, mine] = await Promise.all([
-				api.GET('/api/users/me'),
+				// Not followed: a redirect here is the proxy sending a lapsed
+				// session to sign in, and followed it would fail as a network
+				// error, indistinguishable from an unreachable backend.
+				api.GET('/api/users/me', { redirect: 'manual' }),
 				api.GET('/api/workspaces/me')
 			]);
 

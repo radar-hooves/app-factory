@@ -120,12 +120,20 @@ describe('auth store — workspace resolution', () => {
 });
 
 describe('auth store — why nobody is signed in', () => {
-	function failWith(status: number, error: object) {
-		GET.mockResolvedValue({ data: undefined, error, response: { status } });
+	function failWith(response: { status: number; type: ResponseType }, error: unknown = '') {
+		GET.mockResolvedValue({ data: undefined, error, response });
 	}
 
-	it('reads a 401 as a lapsed session', async () => {
-		failWith(401, { detail: 'Not authenticated' });
+	it("asks for the caller without following a redirect, so the proxy's answer arrives as itself", async () => {
+		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(GET).toHaveBeenCalledWith('/api/users/me', { redirect: 'manual' });
+	});
+
+	it('reads the proxy redirecting to the identity provider as a lapsed session', async () => {
+		failWith({ status: 0, type: 'opaqueredirect' });
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -133,18 +141,33 @@ describe('auth store — why nobody is signed in', () => {
 		expect(auth.failure).toBe('lapsed');
 	});
 
-	it("reads a request the proxy turned away as a lapsed session: the client's network_error", async () => {
-		// What client.ts's normaliser makes of the redirect to the identity
-		// provider, which a fetch cannot follow.
-		failWith(503, { error: 'network_error', message: 'Could not reach the API.' });
+	it('reads a 401 as a lapsed session', async () => {
+		failWith({ status: 401, type: 'basic' }, { detail: 'Not authenticated' });
 		const auth = await freshAuth();
 		await auth.init();
 
 		expect(auth.failure).toBe('lapsed');
 	});
 
+	it('reads a request that never got an answer as a failure a sign-in cannot fix', async () => {
+		// A reset connection: client.ts's normaliser turns the rejection into a
+		// 503 network_error. Read as lapsed, it sent a browser with a valid
+		// identity-provider session round the sign-in loop 21 times in 8 seconds.
+		failWith(
+			{ status: 503, type: 'default' },
+			{ error: 'network_error', message: 'Could not reach the API.' }
+		);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.failure).toBe('failed');
+	});
+
 	it('reads a backend that answered with an error as a failure a sign-in cannot fix', async () => {
-		failWith(503, { error: 'service_unavailable', message: 'Database unavailable.' });
+		failWith(
+			{ status: 503, type: 'basic' },
+			{ error: 'service_unavailable', message: 'Database unavailable.' }
+		);
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -152,7 +175,7 @@ describe('auth store — why nobody is signed in', () => {
 	});
 
 	it('clears the failure once a later init finds the caller', async () => {
-		failWith(500, { detail: 'boom' });
+		failWith({ status: 500, type: 'basic' }, { detail: 'boom' });
 		const auth = await freshAuth();
 		await auth.init();
 		expect(auth.failure).toBe('failed');

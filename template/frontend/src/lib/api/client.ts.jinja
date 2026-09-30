@@ -132,7 +132,14 @@ const errorNormaliserMiddleware: Middleware = {
 // browser to the outpost start URL. The forward-auth proxy intercepts it in prod and
 // round-trips back to `rd`; in dev the proxy is absent (Vite injects identity headers)
 // so this path is not exercised. There is no refresh endpoint.
+//
+// Once per page: init()'s two parallel calls each answer a 401 and the session
+// guard asks as well, and the first navigation is the one that should happen.
+let redirecting = false;
+
 export function redirectToAuthentik(returnPath: string = '/') {
+	if (redirecting) return;
+	redirecting = true;
 	window.location.href = `/outpost.goauthentik.io/start?rd=${encodeURIComponent(returnPath)}`;
 }
 
