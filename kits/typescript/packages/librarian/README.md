@@ -308,6 +308,7 @@ the transport passes them through:
 | `remove`        | `DELETE conversations/{id}`                           |
 | `download`      | `GET conversations/{id}/export`, as `{ name, body }`  |
 | `mark`          | its answer mark, where the agent takes one (optional) |
+| `share`         | share an answer read-only, or stop (optional)         |
 
 What the controller relies on the routes to say:
 
@@ -339,6 +340,8 @@ the job may go on by itself; `sendWhileRunning` is true.
 | Concern                  | How                                                                                                                                              |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | The answer mark          | `onmark(turn, verdict)` on `Conversation`: resolve true once recorded. Offered on the last settled answer only; without it no mark renders       |
+| Sharing an answer        | `onshare(turn, share)` on `Conversation`, over `chat.share`: every settled answer offers Share, which copies the link `StoredTurn.shared` names; a shared one offers Copy link and Stop sharing. Nothing is shared unless the reader asks |
+| A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the room |
 | Waiting, still answering | `waiting` and `answering` on `Conversation`, from the controller                                                                                 |
 | The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |
 | Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first        |

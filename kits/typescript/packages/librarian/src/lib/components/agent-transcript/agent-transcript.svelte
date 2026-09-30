@@ -13,9 +13,12 @@
   2302px-wide transcript.
 -->
 <script lang="ts">
+	import { tick } from 'svelte';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import CopyIcon from '@lucide/svelte/icons/copy';
+	import LinkIcon from '@lucide/svelte/icons/link';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import Share2Icon from '@lucide/svelte/icons/share-2';
 	import {
 		outcomeLine,
 		readerQuestion,
@@ -90,6 +93,13 @@
 		/** Records a verdict on this answer. Omit and no mark renders: a
 		 *  control that records nothing is worse than none. */
 		onmark?: (verdict: Verdict) => Promise<boolean>;
+		/** Where this answer's read-only view lives while it is shared, as the
+		 *  host's own address. */
+		shared?: string;
+		/** Shares this answer (true) or stops sharing it (false), resolving
+		 *  true once recorded. Omit and nothing about sharing renders: nothing
+		 *  is shared unless the reader asks. */
+		onshare?: (share: boolean) => Promise<boolean>;
 		/** How hard the persona worked on this one, for the footer's cost line
 		 *  (`Quick · 56 s · about A$0.34`). Absent renders the footer exactly
 		 *  as it always has: the duration alone. */
@@ -121,6 +131,8 @@
 		waiting = false,
 		answering,
 		onmark,
+		shared,
+		onshare,
 		depth,
 		formatCost
 	}: AgentTranscriptProps = $props();
@@ -246,16 +258,50 @@
 	const followUps = $derived(!used && onsuggest ? suggestions : []);
 
 	let copied = $state(false);
+	let linked = $state(false);
+	let sharing = $state(false);
+	let shareFailed = $state(false);
+
 	// Not `copy`: the prop of that name is the package's own words, and a
 	// function shadowing it here would be a redeclaration, not a shadow.
 	async function copyToClipboard() {
-		try {
-			await navigator.clipboard.writeText(answer);
+		if (await clip(answer)) {
 			copied = true;
 			setTimeout(() => (copied = false), 1600);
+		}
+	}
+
+	async function copyLink() {
+		if (shared && (await clip(new URL(shared, location.href).href))) {
+			linked = true;
+			setTimeout(() => (linked = false), 1600);
+		}
+	}
+
+	/** Shares or stops sharing; a new share copies its link at once. */
+	async function toggleShare(share: boolean) {
+		if (!onshare || sharing) return;
+		sharing = true;
+		shareFailed = false;
+		try {
+			shareFailed = !(await onshare(share));
+		} finally {
+			sharing = false;
+		}
+		if (share && !shareFailed) {
+			await tick();
+			await copyLink();
+		}
+	}
+
+	async function clip(text: string): Promise<boolean> {
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
 		} catch {
-			// A denied clipboard permission is not worth an error state on an
-			// answer the reader can still select by hand.
+			// Refused (a denied permission, or Safari after a round trip): the
+			// reader can still select the answer, or tap "Copy link" again.
+			return false;
 		}
 	}
 </script>
@@ -373,6 +419,32 @@
 						<span>{copied ? words.copiedAnswer : words.copyAnswer}</span>
 					</button>
 				{/if}
+				{#if onshare && hasAnswer && !failure}
+					{#if shared}
+						<button type="button" class="ds-lib-action" onclick={copyLink} disabled={sharing}>
+							{#if linked}<CheckIcon size={14} />{:else}<LinkIcon size={14} />{/if}
+							<span>{linked ? words.linkCopied : words.copyLink}</span>
+						</button>
+						<button
+							type="button"
+							class="ds-lib-action"
+							onclick={() => toggleShare(false)}
+							disabled={sharing}
+						>
+							<span>{words.stopSharing}</span>
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="ds-lib-action"
+							onclick={() => toggleShare(true)}
+							disabled={sharing}
+						>
+							<Share2Icon size={14} />
+							<span>{words.share}</span>
+						</button>
+					{/if}
+				{/if}
 				{#if onmark && hasAnswer && !failure}
 					<AnswerMark {onmark} copy={words} />
 				{/if}
@@ -393,6 +465,12 @@
 				     second one, once the host offers either. -->
 				{#if outcome && !failure}
 					<span class="ds-lib-duration">{outcomeLine(outcome, depth, words, formatCost)}</span>
+				{/if}
+				<!-- Its own line under the row, as the mark's note is. -->
+				{#if onshare && (shared || shareFailed)}
+					<p class="ds-lib-share-line" class:is-failed={shareFailed} role="status">
+						{shareFailed ? words.shareFailed : words.sharedWith}
+					</p>
 				{/if}
 			</div>
 		{/if}
@@ -570,8 +648,10 @@
 		color: var(--ds-color-muted-foreground);
 	}
 
+	/* 44px tall: each is a thumb's target on a phone. */
 	.ds-lib-action {
 		display: flex;
+		min-height: 2.75rem;
 		align-items: center;
 		gap: 0.375rem;
 		border: 0;
@@ -595,6 +675,22 @@
 	.ds-lib-action:focus-visible {
 		outline: 2px solid var(--ds-color-ring);
 		outline-offset: 2px;
+	}
+
+	.ds-lib-action:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+
+	.ds-lib-share-line {
+		order: 1;
+		flex-basis: 100%;
+		margin: 0 0 0 0.375rem;
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-share-line.is-failed {
+		color: var(--ds-color-status-error);
 	}
 
 	.ds-lib-duration {

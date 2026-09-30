@@ -631,6 +631,51 @@ describe('Chat marks', () => {
 	});
 });
 
+describe('Chat shares', () => {
+	it('shares an answer by its place, keeps where it is read, and stops sharing it', async () => {
+		const share = vi.fn(async (_id: string, turn: number, on: boolean) =>
+			on ? `/rooms/r/answers/${SESSION}/${turn}` : null
+		);
+		const { transport, asks } = room({ share });
+		const c = chat(transport);
+		await c.open(SESSION);
+		const asked = c.ask('And the tax?');
+		asks[0].pipe.push(...CHAT);
+		asks[0].pipe.end();
+		await asked;
+
+		const last = c.turns.at(-1)!;
+		expect(await c.share(last, true)).toBe(true);
+		expect(share).toHaveBeenLastCalledWith(SESSION, 1, true);
+		expect(last.shared).toBe(`/rooms/r/answers/${SESSION}/1`);
+		expect(await c.share(last, false)).toBe(true);
+		expect(last.shared).toBeUndefined();
+	});
+
+	it('reads back which answers are shared', async () => {
+		const read = vi.fn(async () =>
+			conversation({
+				turns: [{ question: 'Total?', answer: ANSWER, shared: `/rooms/r/answers/${SESSION}/0` }]
+			})
+		);
+		const c = chat(room({ read }).transport);
+		await c.open(SESSION);
+		expect(c.turns[0].shared).toBe(`/rooms/r/answers/${SESSION}/0`);
+	});
+
+	it('says so when a share is refused, and shares nothing where the room takes none', async () => {
+		const refusing = room({ share: vi.fn(async () => Promise.reject(new Error('HTTP 404'))) });
+		const c = chat(refusing.transport);
+		await c.open(SESSION);
+		expect(await c.share(c.turns[0], true)).toBe(false);
+		expect(c.turns[0].shared).toBeUndefined();
+
+		const none = chat(room().transport);
+		await none.open(SESSION);
+		expect(await none.share(none.turns[0], true)).toBe(false);
+	});
+});
+
 describe('Chat over a job', () => {
 	function job(streams: AgentEvent[][], carriesOn?: () => boolean) {
 		const watched: string[] = [];

@@ -57,6 +57,9 @@
 		/** Records a verdict on an answer. Offered on the last answer only, as
 		 *  asking again is; without it no mark renders. */
 		onmark?: (turn: Turn, verdict: Verdict) => Promise<boolean>;
+		/** Shares an answer read-only, or stops sharing it (`Chat.share`).
+		 *  Offered on every settled answer; without it nothing is shareable. */
+		onshare?: (turn: Turn, share: boolean) => Promise<boolean>;
 		/** The last question waits behind somebody else's (`Chat.waiting`). */
 		waiting?: boolean;
 		/** When the last answer began, epoch ms, where this page did not see it
@@ -111,6 +114,7 @@
 		onregenerate,
 		onsuggest,
 		onmark,
+		onshare,
 		waiting = false,
 		answering = null,
 		copy,
@@ -323,7 +327,10 @@
 							onregenerate: last && !running ? onregenerate : undefined,
 							onsuggest: last && !running ? onsuggest : undefined,
 							onmark:
-								last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined
+								last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined,
+							shared: turn.shared,
+							onshare:
+								onshare && !(last && running) ? (share: boolean) => onshare(turn, share) : undefined
 						} satisfies AgentTranscriptProps}
 						{#if presentTurn}
 							{@render presentTurn(props)}

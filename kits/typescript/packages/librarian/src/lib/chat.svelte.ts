@@ -50,6 +50,8 @@ export interface StoredTurn {
 	kind?: string | null;
 	/** How hard the persona worked on this one. */
 	depth?: Depth | null;
+	/** Where this answer's read-only view lives while it is shared. */
+	shared?: string | null;
 }
 
 /** A conversation reopened. */
@@ -114,6 +116,10 @@ export interface RoomTransport {
 	/** The answer mark, where the agent takes one. `turn` is the answer's
 	 *  zero-based position in the conversation. */
 	mark?(id: string, turn: number, verdict: Verdict): Promise<void>;
+	/** Shares answer `turn` read-only with whoever may enter the room, or
+	 *  stops sharing it. Resolves to where it is read while shared, null once
+	 *  it is not. */
+	share?(id: string, turn: number, share: boolean): Promise<string | null>;
 }
 
 /** A job's routes. */
@@ -397,13 +403,31 @@ export class Chat {
 	async mark(turn: Turn, verdict: Verdict): Promise<boolean> {
 		const id = this.conversationId;
 		if (!id || !this.#room?.mark || !this.#held.has(turn.id)) return false;
-		const position = this.turns.filter((t) => this.#held.has(t.id)).findIndex((t) => t.id === turn.id);
 		try {
-			await this.#room.mark(id, position, verdict);
+			await this.#room.mark(id, this.#position(turn), verdict);
 			return true;
 		} catch {
 			return false;
 		}
+	}
+
+	/** Share an answer the agent holds, or stop sharing it. False when that
+	 *  was not recorded. */
+	async share(turn: Turn, share: boolean): Promise<boolean> {
+		const id = this.conversationId;
+		if (!id || !this.#room?.share || !this.#held.has(turn.id)) return false;
+		try {
+			turn.shared = (await this.#room.share(id, this.#position(turn), share)) ?? undefined;
+			this.#version += 1;
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** A turn's place among the questions the agent was asked: the server's count. */
+	#position(turn: Turn): number {
+		return this.turns.filter((t) => this.#held.has(t.id)).findIndex((t) => t.id === turn.id);
 	}
 
 	#leave(): void {
@@ -657,7 +681,9 @@ export class Chat {
 	}
 }
 
-function storedTurn(conversation: string, index: number, stored: StoredTurn): Turn {
+/** A turn as read back, ready for `Conversation`: given one and no handlers,
+ *  that is the read-only view of a shared answer. */
+export function storedTurn(conversation: string, index: number, stored: StoredTurn): Turn {
 	return {
 		id: `${conversation}:${index}`,
 		question: stored.question,
@@ -666,7 +692,8 @@ function storedTurn(conversation: string, index: number, stored: StoredTurn): Tu
 		outcome: null,
 		citations: stored.citations ?? [],
 		kind: stored.kind ?? undefined,
-		depth: stored.depth ?? undefined
+		depth: stored.depth ?? undefined,
+		shared: stored.shared ?? undefined
 	};
 }
 
