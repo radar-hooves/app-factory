@@ -1,0 +1,27 @@
+[project]
+name = "agent-common"
+# The floor a stamped app pins `>=` (template/backend/pyproject.toml.jinja). A
+# published wheel carries the release tag it was built from instead
+# (`.github/workflows/publish-kit-python.yaml`).
+version = "2026.9.57"
+description = "The household's Claude Code agent: the CLI driver, personas, transcripts, and the Agent interface"
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_common"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--import-mode=importlib --strict-markers"
+testpaths = ["tests"]

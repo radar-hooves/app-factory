@@ -1,0 +1,16 @@
+# This repo's Python kits, one uv workspace. Rooted here rather than at
+# kits/python beside kits/rust's own Cargo workspace because the household's
+# shared publish workflow (master-project `publish-wheels.yaml`) builds every
+# package of the workspace at the checkout's root. Nothing here reaches a
+# stamped app: copier renders template/ alone (`_subdirectory`), and an app
+# takes a kit as a versioned dependency off the household index.
+[tool.uv.workspace]
+members = ["kits/python/*"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.16",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+]

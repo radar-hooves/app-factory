@@ -1,4 +1,8 @@
-# This repo's own build artefacts — kits/rust's Cargo workspace. The template's
+# This repo's own build artefacts — kits/rust's Cargo workspace and the root uv
+# workspace over kits/python (pyproject.toml). The template's
 # own ignores (what a scaffolded app's own gitignore carries) live at
 # template/.gitignore instead.
 target/
+.venv/
+dist/
+__pycache__/
