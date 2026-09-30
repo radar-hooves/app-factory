@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.58] - 2026-09-30
+
 ### Added
 
 - **`LibraryAgent` in `agent-common`: the library's Milton behind the one `Agent` interface.** `library_agent.LibraryAgent(url, collections, token, preamble, timeout_seconds)` goes through api-clients' typed `library` client, `AskStreamClient` for the stream and `CallerApi` for the rest, never raw HTTP. `ask` yields every frame the library sends as it arrives, unaltered: Claude Code's stream-json events plus `citations`, `suggestions`, `library_error` and `queued`. A refused request, a lost connection or silence past the idle timeout ends the turn with one `library_error` frame, as a local persona's failed spawn does, and closing the iterator closes the stream, which is how a turn stops. `read` returns turns with their citations and `forget` deletes at the library, idempotently. A room's preamble rides in the question as `{preamble}\n\n{question}`, and `read` takes it back off by exact prefix. A library room's answer mark (`mark`) and cited document (`document`, absent outside the room's collections) sit on `LibraryAgent` alone; their routes are the slice's, in step 4. The kit takes a token provider, awaited per call, and never vends or reads a credential. Tested over recorded bytes: the real CLI's stream between the library's own frames, and a conversation body captured from the library's route. Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
