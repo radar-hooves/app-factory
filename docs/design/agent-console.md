@@ -20,7 +20,7 @@ A persona is a directory shaped as a Claude Code home: `CLAUDE.md` (who it is), 
 ```d2
 direction: right
 factory: "Factory (byte-identical)" {
-  console: "routes/(app)/agent/[persona]"
+  console: "routes/(protected)/agent/[persona]"
   door: "POST /api/agent/{persona}/ask\nCurrentUser + entitlement"
   stream: "SSE frames, verbatim\nclaim on init, deny a foreign resume"
   session: "session.py\nargv, env, spawn"

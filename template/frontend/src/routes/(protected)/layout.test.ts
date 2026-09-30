@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Layout from './+layout.svelte';
 
 // The signed-in app's layout, rendered with the factory's own stamped frame:
-// what every route under (app)/ gets, which is the reason a route the factory
+// what every route under (protected)/ gets, which is the reason a route the factory
 // stamps there needs no move to reach the shell or the guard (app-factory#6).
 // The auth store is stubbed at its getters — how it reaches each state is
 // auth.svelte.test.ts's subject, what the layout renders in each is this one's.
@@ -108,12 +108,12 @@ describe('the signed-in app layout', () => {
 		expect(screen.getByTestId('ds-shell-search')).toBeInTheDocument();
 		expect(screen.getByTestId('the-page').parentElement).toHaveClass('pt-5');
 		expect(redirectToAuthentik).not.toHaveBeenCalled();
-		// Already loaded this page load (a route outside (app)/ and back): no second ask.
+		// Already loaded this page load (a route outside (protected)/ and back): no second ask.
 		expect(init).not.toHaveBeenCalled();
 	});
 
 	it('drops the shell padding for a route whose data says it pads its own panes', () => {
-		// What (app)/settings/+layout.ts returns, for SettingsShell.
+		// What (protected)/settings/+layout.ts returns, for SettingsShell.
 		signIn();
 		route.data = { padded: false };
 		render(Layout, { props: { children } });
