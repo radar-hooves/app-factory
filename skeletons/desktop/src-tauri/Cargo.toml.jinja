@@ -17,9 +17,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["image-png"] }
 tracing = "0.1"
-# The factory's kits, at the release this app was stamped from.
-desktop-shell = { git = "https://github.com/radar-hooves/app-factory", tag = "{{ _copier_answers._commit }}" }
-tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "{{ _copier_answers._commit }}" }
+# The factory's kits, at the commit this app was stamped from ({{ _copier_answers._commit }}).
+desktop-shell = { git = "https://github.com/radar-hooves/app-factory", rev = "{{ _copier_conf.vcs_ref_hash }}" }
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", rev = "{{ _copier_conf.vcs_ref_hash }}" }
 
 [profile.release]
 codegen-units = 1
