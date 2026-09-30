@@ -19,7 +19,7 @@ stay optional parameters of `argv` rather than a second copy of it. Both
 spawn through `spawn`, read through `events` and end through `kill`.
 
 Lifted from the stamped `api/agent/session.py` and the driver inside
-`api/agent/jobs.py` (radar-hooves/full-stack-app-template), which both began as
+`api/agent/jobs.py` (radar-hooves/app-factory), which both began as
 the library's `api/agent/session.py`. Need: radar-hooves/cadmus (Nightjar),
 30/09/2026.
 """
@@ -67,7 +67,7 @@ _INHERITED_IF_SET = ("PATH", "LANG", "LC_ALL", "TERM", "CLAUDE_CODE_OAUTH_TOKEN"
 
 #: Claude Code's own OpenTelemetry configuration, passed through only when the
 #: deployment set it on the app process, so a persona's session reports to the
-#: same OTLP collector the app itself does (full-stack-app-template#40).
+#: same OTLP collector the app itself does (app-factory#40).
 #: `OTEL_SERVICE_NAME` is deliberately not here — the child gets its own,
 #: computed in `environment()`, so its telemetry is never folded into the app's.
 _TELEMETRY_INHERITED_IF_SET = (
