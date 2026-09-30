@@ -22,7 +22,7 @@ from {{ package_name }}.api.workspaces import service as workspaces_service
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.identity import IdentitySettings
 from {{ package_name }}.db.session import get_session
-from {{ package_name }}.exceptions import AuthenticationError, ForbiddenError
+from {{ package_name }}.exceptions import AccountInactiveError, AuthenticationError
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +94,7 @@ def get_identity(
     Raises:
         AuthenticationError: 401 when the stable identity header is absent (the
             request did not come through the proxy).
-        ForbiddenError: 403 when the account is inactive. The provider has just
+        AccountInactiveError: 403 when the account is inactive. The provider has just
             vouched for this person, so a 401 would send them to sign in again,
             straight back here, and round again for as long as the flag stays off.
     """
@@ -130,7 +130,7 @@ def get_identity(
     )
 
     if not user.is_active:
-        raise ForbiddenError("This account is not active")
+        raise AccountInactiveError("This account is not active")
 
     # Same transaction as the upsert, so every authenticated user always holds at
     # least one membership and workspace resolution has no zero-membership branch

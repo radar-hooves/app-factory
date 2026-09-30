@@ -149,15 +149,35 @@ describe('auth store — why nobody is signed in', () => {
 		expect(auth.failure).toBe('lapsed');
 	});
 
-	it('reads a 403 as an account the app refuses, which a sign-in would not change', async () => {
+	it('reads an inactive account as one the app refuses, which a sign-in would not change', async () => {
 		failWith(
 			{ status: 403, type: 'basic' },
-			{ error: 'forbidden', message: 'This account is not active' }
+			{ error: 'account_inactive', message: 'This account is not active' }
 		);
 		const auth = await freshAuth();
 		await auth.init();
 
 		expect(auth.failure).toBe('refused');
+	});
+
+	it("reads any other 403 (a proxy's, a route's own) as a failure to retry", async () => {
+		failWith({ status: 403, type: 'basic' }, '<html>403 Forbidden</html>');
+		const auth = await freshAuth();
+		await auth.init();
+		expect(auth.failure).toBe('failed');
+
+		failWith({ status: 403, type: 'basic' }, { error: 'forbidden', message: 'Not allowed' });
+		await auth.init();
+		expect(auth.failure).toBe('failed');
+	});
+
+	it('reads init() throwing as a failure to retry, and lets the error go on', async () => {
+		GET.mockRejectedValue(new Error('the store could not read the answer'));
+		const auth = await freshAuth();
+
+		await expect(auth.init()).rejects.toThrow('the store could not read the answer');
+		expect(auth.failure).toBe('failed');
+		expect(auth.isLoading).toBe(false);
 	});
 
 	it('reads a request that never got an answer as a failure a sign-in cannot fix', async () => {

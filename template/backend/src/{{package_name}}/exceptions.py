@@ -79,6 +79,18 @@ class ForbiddenError(BackendBaseException):
     error_code = "forbidden"
 
 
+
+class AccountInactiveError(ForbiddenError):
+    """The caller's account here is deactivated (403, ``account_inactive``).
+
+    Its own code because the SPA must tell it from any other 403, a proxy's or a
+    route's own: only this one means signing in again would change nothing, so
+    only this one is shown as a refusal with no retry. Handled as a
+    ForbiddenError, whose handler Starlette finds by the class hierarchy.
+    """
+
+    error_code = "account_inactive"
+
 class ConflictError(BackendBaseException):
     """The request conflicts with the resource's current state (409)."""
 
