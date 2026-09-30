@@ -4,6 +4,8 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.24] - 2026-09-30
+
 What a stamped room page needs to present an answer and a room's home in an
 app's own way. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`,
 app-factory#12.
