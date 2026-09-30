@@ -4,6 +4,25 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+Sharing an answer. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`.
+
+### Added
+
+- **Share, in the answer footer**: `Conversation`'s `onshare(turn, share)`,
+  over `Chat.share(turn, share)` and an optional `RoomTransport.share(id,
+  turn, share)` that resolves to where the answer is read while shared.
+  Every settled answer offers Share, which copies the link; a shared one
+  offers Copy link and Stop sharing, and says who can open it. Without
+  `onshare` nothing about sharing renders. `StoredTurn.shared` and
+  `Turn.shared` carry the address back on a reopened conversation.
+- **`storedTurn` is exported from `./chat`**: `Conversation` given one, with
+  no handlers and no composer, is the read-only view of a shared answer.
+
+### Changed
+
+- **The answer footer's actions are 44 px tall**, a thumb's target on a
+  phone.
+
 ## [2026.9.26] - 2026-09-30
 
 Quick or Thorough, and what it cost. Need: `radar-hooves/cadmus (Nightjar),

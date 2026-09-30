@@ -502,6 +502,9 @@ export interface Turn {
 	/** How hard the persona worked on this one, as `client.ask()` sent it.
 	 *  Absent, a host that never offers the choice. */
 	depth?: Depth;
+	/** Where this answer's read-only view lives while it is shared, as the
+	 *  host's own address. Absent while it is not. */
+	shared?: string;
 }
 
 /** A turn's artefact, in the host's own words. */

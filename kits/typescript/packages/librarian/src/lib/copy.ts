@@ -82,6 +82,14 @@ export interface LibrarianCopy {
 	markSend: string;
 	markNoted: string;
 	markFailed: string;
+	/** Sharing an answer: the action, once shared, who can open it, and a
+	 *  share or a stop that did not go through. */
+	share: string;
+	copyLink: string;
+	linkCopied: string;
+	stopSharing: string;
+	sharedWith: string;
+	shareFailed: string;
 	/** The fair-use notice, while there are questions left and once there are
 	 *  none, filled by `fill()`: `{resets}` is a time already, "midnight" or
 	 *  "2:00 pm". */
@@ -177,6 +185,12 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		markSend: 'Send',
 		markNoted: 'Thanks, noted.',
 		markFailed: "That couldn't be sent. Nothing was recorded.",
+		share: 'Share',
+		copyLink: 'Copy link',
+		linkCopied: 'Link copied',
+		stopSharing: 'Stop sharing',
+		sharedWith: `Shared: anyone who can ask ${who} here can open the link.`,
+		shareFailed: "That didn't go through. Try again.",
 		// The industry wording, whole: the number, that it is a fair-use limit
 		// rather than a fault, and when it comes back. No apology.
 		questionsLeft: '{remaining} of {limit} questions left today. Resets at {resets}.',
