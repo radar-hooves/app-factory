@@ -5,7 +5,9 @@ path is, so it is a dependency reading the path (`entered`), marked as the
 module gate it is for the route walk. A conversation route reaches the room
 through the conversation: one answer for another person's and for none,
 then the room's own gate, so a revoked grant closes a person's old
-conversations too.
+conversations too. A shared answer is read through the room it was asked in,
+behind that room's own gate, so whoever may not enter the room is refused as
+they would be at the room itself.
 
 The job routes take `agent-<persona>` the same way, AND `CurrentWorkspace`:
 a job belongs to a workspace and a persona, and `jobs.authorize()` checks
@@ -84,6 +86,17 @@ EnteredRoom = Annotated[Room, Depends(entered)]
 OwnedConversation = Annotated[Owned, Depends(owned)]
 
 
+def shared(room: EnteredRoom, conversation_id: str, turn: int, db: SessionDep) -> Owned:
+    """A conversation in this room whose answer `turn` its asker shared; one answer for any other."""
+    conversation = db.get(AgentConversation, conversation_id)
+    if conversation is None or conversation.room != room.id or turn not in conversation.shared:
+        raise NotFoundError("That answer is not shared")
+    return Owned(conversation, room)
+
+
+SharedAnswer = Annotated[Owned, Depends(shared)]
+
+
 @router.get("/rooms", operation_id="listRooms")
 def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRead]:
     """The rooms this app offers that this caller is granted; none when the app offers none."""
@@ -151,10 +164,7 @@ async def read(owned: OwnedConversation, settings: SettingsDep) -> ConversationR
     turns = await _turns(owned, settings)
     return ConversationRead(
         **_summary(owned.conversation).model_dump(),
-        turns=[
-            StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations, kind=t.kind, depth=t.depth)
-            for t in turns
-        ],
+        turns=[_stored(owned.conversation, turns, position) for position in range(len(turns))],
     )
 
 
@@ -217,6 +227,36 @@ async def mark(owned: OwnedConversation, turn: int, body: MarkRequest, settings:
         raise NotFoundError("No such answer")
     if not await agent.mark(session, index, helpful=body.helpful, note=(body.note or "").strip() or None):
         raise NotFoundError("No such answer")
+
+
+@router.put("/conversations/{conversation_id}/turns/{turn}/share", operation_id="shareAnswer")
+async def share(owned: OwnedConversation, turn: int, settings: SettingsDep, db: SessionDep) -> StoredTurn:
+    """Share answer `turn` read-only with whoever may enter this room; nothing is shared until asked.
+
+    A settled answer only: one the agent holds, and not the one still being
+    written. Its `shared` is the page that reads it.
+    """
+    turns = await _turns(owned, settings)
+    writing = turn == len(turns) - 1 and conversations.answering(owned.conversation) is not None
+    if not 0 <= turn < len(turns) or turns[turn].agent_index is None or writing:
+        raise NotFoundError("No such answer")
+    await run_in_threadpool(conversations.share, db, owned.conversation, turn, shared=True)
+    return _stored(owned.conversation, turns, turn)
+
+
+@router.delete("/conversations/{conversation_id}/turns/{turn}/share", operation_id="unshareAnswer", status_code=204)
+def unshare(owned: OwnedConversation, turn: int, db: SessionDep) -> None:
+    """Stop sharing answer `turn`: its link answers as one never shared."""
+    conversations.share(db, owned.conversation, turn, shared=False)
+
+
+@router.get("/rooms/{room_id}/answers/{conversation_id}/{turn}", operation_id="readSharedAnswer")
+async def read_shared(answer: SharedAnswer, turn: int, settings: SettingsDep) -> StoredTurn:
+    """A shared answer, read-only: the question, the answer and its sources."""
+    turns = await _turns(answer, settings)
+    if turn >= len(turns) or turns[turn].agent_index is None:
+        raise NotFoundError("That answer is not shared")
+    return _stored(answer.conversation, turns, turn)
 
 
 @router.get("/quota", operation_id="getAgentQuota")
@@ -293,6 +333,20 @@ def _summary(conversation: AgentConversation) -> ConversationSummary:
         title=conversation.title,
         last_activity_at=conversation.last_activity_at,
         answering_since=conversations.answering(conversation),
+    )
+
+
+def _stored(conversation: AgentConversation, turns: list[conversations.Turn], position: int) -> StoredTurn:
+    t = turns[position]
+    address = f"/rooms/{conversation.room}/answers/{conversation.id}/{position}"
+    return StoredTurn(
+        question=t.question,
+        answer=t.answer,
+        at=t.at,
+        citations=t.citations,
+        kind=t.kind,
+        depth=t.depth,
+        shared=address if position in conversation.shared else None,
     )
 
 

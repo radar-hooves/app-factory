@@ -29,7 +29,13 @@ const PERSON_FACING = [
 type Conversation = {
 	id: string;
 	answering_since: string | null;
-	turns: { question: string; answer: string; at: string | null; depth?: string | null }[];
+	turns: {
+		question: string;
+		answer: string;
+		at: string | null;
+		depth?: string | null;
+		shared?: string | null;
+	}[];
 };
 
 test.describe.configure({ mode: 'serial' });
@@ -186,6 +192,56 @@ test('a library room cites, opens the cited document and takes a mark', async ({
 	await expect(page.getByText('Thanks, noted.')).toBeVisible();
 });
 
+test('a shared answer opens read-only in the room it was asked in, until it is withdrawn', async ({
+	page
+}) => {
+	const person = (entitlements: string) =>
+		request.newContext({
+			baseURL: BACKEND,
+			extraHTTPHeaders: {
+				'x-authentik-uid': `e2e-${entitlements}`,
+				'x-authentik-username': `e2e-${entitlements}`,
+				'x-authentik-entitlements': entitlements
+			}
+		});
+	const colleague = await person('room-manual');
+	const outsider = await person('room-helper');
+	const api = `/api/agent/rooms/manual/answers/${manualConversation}/0`;
+	try {
+		expect((await colleague.get(api)).status(), 'nothing is shared by default').toBe(404);
+
+		await page.goto(`/rooms/manual?c=${manualConversation}`);
+		await page.getByRole('button', { name: 'Share' }).first().click();
+		await expect(page.getByText(/anyone who can ask Milton here can open the link/)).toBeVisible();
+		const link = (await read(page, manualConversation)).turns[0]?.shared;
+		expect(link).toBe(`/rooms/manual/answers/${manualConversation}/0`);
+
+		expect((await readJson<{ question: string }>(colleague.get(api))).question).toBe(
+			'How much recreation leave does a member accrue?'
+		);
+		expect((await outsider.get(api)).status(), 'as the room itself refuses them').toBe(403);
+
+		await page.goto(link as string);
+		await expect(page.getByText(/four weeks of recreation leave/)).toBeVisible();
+		await expect(page.getByRole('button', { name: /The Manual, Part 5: Leave/ })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Ask Milton about The Manual' })).toBeVisible();
+		await expect(composer(page)).toHaveCount(0);
+
+		await page.goto(`/rooms/manual?c=${manualConversation}`);
+		await page.getByRole('button', { name: 'Stop sharing' }).first().click();
+		await expect(page.getByRole('button', { name: 'Share' }).first()).toBeVisible();
+		expect((await colleague.get(api)).status()).toBe(404);
+		await page.goto(link as string);
+		await expect(page.getByText('This answer is not shared')).toBeVisible();
+
+		// Shared again, for the photographs.
+		await ok(page.request.put(`/api/agent/conversations/${manualConversation}/turns/0/share`));
+	} finally {
+		await colleague.dispose();
+		await outsider.dispose();
+	}
+});
+
 test('a library room offers Quick or Thorough; a persona room offers neither', async ({ page }) => {
 	await page.goto('/rooms/manual');
 	const group = page.getByRole('group', { name: /How hard Milton works/ });
@@ -303,6 +359,7 @@ test('the pages, photographed', async ({ browser }) => {
 	const views: [string, string][] = [
 		['index', '/rooms'],
 		['library', `/rooms/manual?c=${manualConversation}`],
+		['shared', `/rooms/manual/answers/${manualConversation}/0`],
 		['allowance', '/rooms/helper']
 	];
 	const sizes: [number, number][] = [
