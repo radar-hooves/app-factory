@@ -9,46 +9,14 @@ use tauri::{Runtime, WebviewWindow};
 pub fn position<R: Runtime>(window: &WebviewWindow<R>, x: f64, header_height: f64) {
     #[cfg(target_os = "macos")]
     {
+        use objc2::msg_send;
         use objc2::rc::Retained;
         use objc2::runtime::AnyObject;
-        use objc2::{Encode, Encoding, RefEncode, msg_send};
-        use objc2_foundation::NSPoint;
+        use objc2_foundation::{NSPoint, NSRect};
 
         // The buttons are about 14 points tall.
         const BUTTON_HEIGHT: f64 = 14.0;
         let y = (header_height - BUTTON_HEIGHT) / 2.0;
-
-        // NSRect and NSSize, declared here with the encodings msg_send needs.
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug)]
-        struct NSSize {
-            width: f64,
-            height: f64,
-        }
-
-        unsafe impl Encode for NSSize {
-            const ENCODING: Encoding = Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
-        }
-
-        unsafe impl RefEncode for NSSize {
-            const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
-        }
-
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug)]
-        struct NSRect {
-            origin: NSPoint,
-            size: NSSize,
-        }
-
-        unsafe impl Encode for NSRect {
-            const ENCODING: Encoding =
-                Encoding::Struct("CGRect", &[NSPoint::ENCODING, NSSize::ENCODING]);
-        }
-
-        unsafe impl RefEncode for NSRect {
-            const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
-        }
 
         let Ok(ns_window) = window.ns_window() else {
             return;
