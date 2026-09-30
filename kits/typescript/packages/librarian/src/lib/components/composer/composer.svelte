@@ -70,17 +70,10 @@
 		 *  sit, in the host's words: what sending does here ("It carries on
 		 *  from where it stopped."). */
 		note?: string;
-		/** Quick or Thorough for the NEXT question — a two-way switch beside a
-		 *  one-line hint saying what the picked side is for. Bind it (the
-		 *  host's own state, `'quick'` to start) and hand the value to `ask()`
-		 *  on submit; omit the prop entirely and nothing renders, exactly as
-		 *  today's composer.
-		 *
-		 *  Once a host DOES offer the choice, the operator's ruling is
-		 *  absolute (30/09/2026): it is never disabled, hidden or greyed out,
-		 *  and never explained by naming a model — Thorough always means
-		 *  something, a bigger reading budget on the strongest model the room
-		 *  allows, even where that model is a local one. */
+		/** Quick or Thorough for the next question, as a two-way switch with a
+		 *  one-line hint. Bind it and pass it to `ask()`; omit it and nothing
+		 *  renders. Once shown it is never disabled or hidden, and never names
+		 *  the model behind it. */
 		depth?: Depth;
 		/** How many turns are in the conversation so far. Past `turnLimit`
 		 *  (8 by default), a quiet banner appears above the box offering to

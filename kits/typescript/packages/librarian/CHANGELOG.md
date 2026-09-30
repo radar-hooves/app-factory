@@ -4,6 +4,8 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.26] - 2026-09-30
+
 Quick or Thorough, and what it cost. Need: `radar-hooves/cadmus (Nightjar),
 30/09/2026`.
 
@@ -11,7 +13,7 @@ Quick or Thorough, and what it cost. Need: `radar-hooves/cadmus (Nightjar),
 
 - **A turn's `depth`**: `Composer`'s optional, bindable `depth` (`'quick' |
   'thorough'`) renders the two-way switch, always enabled once a host binds
-  it, never disabled or hidden (operator ruling, 30/09/2026). `Chat.ask(question,
+  it, never disabled or hidden. `Chat.ask(question,
   kind, depth)` sends it as `client.ask()`'s `depth`, `StoredTurn.depth` reads
   it back, and `again()` keeps it, the same shape as `kind`.
 - **The answer footer's cost line**: `AgentTranscript`/`Conversation` take a
