@@ -24,9 +24,9 @@ name: Factory self-test
 # Household CI's self-hosted default applies (rules-library/fleet/ci.md), and
 # for a stronger reason than kit-rust.yaml's fork exception: a rendered app's
 # BACKEND resolves real dependencies off the household's PRIVATE package index
-# (redactyl-core, api-common, the nextcloud client), credentialled ambiently on
-# the runner's own file per fleet/ci.md, never a repository secret a fork PR
-# could read (the frontend's @poodle64/* is public on npmjs and carries no such
+# (redactyl-core, api-common, the nextcloud client), reachable only from atlas
+# by its LAN address, never through a repository secret a fork PR could read
+# (the frontend's @poodle64/* is public on npmjs and carries no such
 # constraint on its own, per frontend-ci.yaml's reusable — the backend half is
 # what forces this job onto the trusted runner only). There is no safe
 # hosted-runner path for this job the way there is for kit-rust's pure Rust/Nix
@@ -128,15 +128,14 @@ jobs:
             --data backend_port=8398 --data frontend_port=5198 --data frontend_e2e_port=5228 \
             --data postgres_host=127.0.0.1 --data postgres_port=5432 \
             --data portcullis_url=http://127.0.0.1:1 \
-            --data private_index_name=godswood --data private_index_url=https://pypi.godswood.au/poodle64/prod/+simple/ \
+            --data private_index_name=godswood --data private_index_url=http://172.21.0.2:3141/poodle64/prod/+simple/ \
             --data registry_host=registry.invalid --data registry_credential_file=/dev/null \
             --data watchtower_url=http://127.0.0.1:1 \
             . "$SCRATCH"
-        # private_index_name/url are the SAME values every real app's own
-        # .copier-answers.yml carries (one shared devpi instance) — not a
-        # credential, and read access is the runner's own ambient netrc
-        # (fleet/ci.md), the same mechanism every stamped app's own CI already
-        # relies on to resolve these same packages.
+        # private_index_url is the one household devpi every real app resolves
+        # from, by the LAN address the root pyproject.toml gives, read
+        # anonymously from atlas: this public tree names no household host. A
+        # real app answers it from its fleet's own declaration.
 
       - name: Backend — install and test
         # Same sync-args as every real app's python-ci.yaml caller
