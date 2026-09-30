@@ -52,7 +52,7 @@ from {{ package_name }} import app_hooks
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import jobs_models
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome
+from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome, RunSpec
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.workspaces import service as workspaces_service
 from {{ package_name }}.config import Settings, get_settings
@@ -978,6 +978,65 @@ async def test_a_stop_issued_the_instant_a_resume_is_scheduled_is_still_honoured
     assert job.status == jobs_models.CANCELLED
 
 
+@pytest.mark.parametrize(
+    ("status", "error"),
+    [(jobs_models.FAILED, "agent exceeded its wall clock"), (jobs_models.COMPLETED, None)],
+    ids=["failed", "completed"],
+)
+async def test_a_stop_that_loses_the_row_lock_race_to_the_runs_own_settle_is_a_no_op(
+    client: AsyncClient, identity: tuple[uuid.UUID, int], status: str, error: str | None
+) -> None:
+    """`_run()`'s own settle -- a natural completion, or its wall-clock timeout -- and another
+    worker's `/stop` both take the job row's lock (`SELECT ... FOR UPDATE`), so whichever's
+    transaction commits first decides the outcome. Forced here directly, the same interleaving
+    `test_a_second_worker_process_watches_messages_stops_and_resumes_a_job` hit under CI load
+    (radar-hooves/cadmus run 36655467242, 30/09/2026): the owning worker's own settle_or_continue()
+    won the row lock and committed `failed` before the stopping worker's request arrived. The run had
+    already settled on its own account by then -- by finishing its work, or by timing out on its
+    own, with nobody having stopped it -- so a stop that lands too late to have flagged it in time is
+    a no-op, exactly as it already is for a job the caller knows has finished
+    (`test_stopping_an_already_finished_job_is_a_no_op`): `failed` stays `failed`, not `cancelled`."""
+    _, workspace_id = identity
+    spec = RunSpec(
+        job_id=str(uuid.uuid4()),
+        persona="jobagent",
+        workspace_id=workspace_id,
+        created_by_id=None,
+        run_id=str(uuid.uuid4()),
+        json_schema=None,
+        append_system_prompt=None,
+        mcp_config=None,
+        model=None,
+    )
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        jobs_models.create_job(db, spec)
+
+    # The owning worker's own settle wins the row lock first.
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        outcome = jobs_models.settle_or_continue(
+            db,
+            spec.job_id,
+            spec.run_id,
+            status=status,
+            structured_output=None,
+            error=error,
+            next_run_id=str(uuid.uuid4()),
+        )
+    assert isinstance(outcome, JobOutcome)
+    assert outcome.status == status
+
+    # The stopping worker's request lands a beat too late to have flagged it in time -- the route
+    # answers exactly as it does for any job that has already finished.
+    response = await client.post(f"/api/agent/jobagent/jobs/{spec.job_id}/stop", headers=ENTITLED)
+    assert response.status_code == 204
+
+    job = _job(spec.job_id, workspace_id)
+    assert job.status == status
+    assert job.error == error
+
+
 # -- Any worker ------------------------------------------------------------------
 
 
@@ -1034,13 +1093,24 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
     a child of just one. Here this test process is the worker running the jobs and a real uvicorn
     process is another: it boots beside a live job and leaves it alone, stops one, follows another
     live while messaging it -- answered by this process's CLI, not a resume -- then resumes it
-    itself once it has settled."""
+    itself once it has settled.
+
+    `hanging`'s own idle timeout is widened well past any plausible boot time for the second
+    worker's real `uvicorn` subprocess below (`_second_worker` itself allows up to 60s and only
+    THEN starts the stop that ends the hang) -- CI hit exactly this race under load
+    (radar-hooves/cadmus run 36655467242, 30/09/2026): the shared fixture's 10s default left too
+    little headroom, and the hang's own wall-clock timeout fired first, settling it `failed` before
+    the stop below ever reached the row. `test_a_stop_that_loses_the_row_lock_race_to_the_runs_own
+    _settle_is_a_no_op` covers that race on its own terms, forced deterministically; widening the
+    timeout here removes it from THIS test so this test is only ever exercising the any-worker
+    stop/message/resume behaviour it names."""
     _, workspace_id = identity
-    hanging = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
+    patient = agent_settings.model_copy(update={"timeout_seconds": 120.0})
+    hanging = await _start(patient, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until_running(hanging)
 
     async with (
-        _second_worker(agent_settings) as (base_url, other_pid),
+        _second_worker(patient) as (base_url, other_pid),
         httpx.AsyncClient(base_url=base_url, headers=ENTITLED, timeout=_POLL_TIMEOUT_SECONDS) as other,
     ):
         # Booted, and swept for dead runs, beside a live one.
@@ -1049,7 +1119,7 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
         assert (await other.post(f"/api/agent/jobagent/jobs/{hanging}/stop")).status_code == 204
         assert (await _wait_until_settled(hanging, workspace_id)).status == jobs_models.CANCELLED
 
-        job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
+        job_id = await _start(patient, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
         await _wait_until_running(job_id)
         watched: list[dict[str, Any]] = []
         async with other.stream("GET", f"/api/agent/jobagent/jobs/{job_id}/watch") as response:

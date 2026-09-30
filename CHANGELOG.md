@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **`test_a_second_worker_process_watches_messages_stops_and_resumes_a_job` no longer races its own hanging job's idle timeout.** It starts a hanging job under the shared fixture's 10s wall-clock timeout, then boots a real second `uvicorn` subprocess (`_second_worker` allows up to 60s) before posting the stop that's meant to end the hang; on a loaded runner the boot alone can eat past 10s, so the hang's own timeout fires first and settles it `failed` before the stop ever reaches the row -- `request_stop`'s `status == RUNNING` filter correctly finds nothing to flag at that point, since the run genuinely ended on its own account, not by being stopped. The hanging job's own timeout is now widened to 120s for this one test, well past any plausible boot time, so the test only ever exercises the any-worker stop/message/resume behaviour it names. A new, deterministic test forces the same row-lock ordering directly (no CLI, subprocess or timing involved) and pins the correct behaviour either side of it: a stop that loses that race to the run's own settle -- completion or timeout alike -- is a no-op, exactly as it already is for a job the caller knows has finished (`test_a_stop_that_loses_the_row_lock_race_to_the_runs_own_settle_is_a_no_op`). Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
+
 ## [2026.9.56] - 2026-09-30
 
 ### Fixed
