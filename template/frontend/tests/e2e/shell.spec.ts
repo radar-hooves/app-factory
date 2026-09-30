@@ -21,7 +21,7 @@ test('the top bar search affordance opens the command palette', async ({ page })
 	await expect(page.getByPlaceholder('Search…')).toBeFocused();
 });
 
-// Every route the factory stamps sits under routes/(app)/, so it renders inside
+// Every route the factory stamps sits under routes/(protected)/, so it renders inside
 // this app's own frame and behind the session guard with no move, whatever the
 // app has put in the frame (app-factory#6). Each case waits for the page's own
 // heading INSIDE the shell's main landmark: the frame also renders around the
@@ -40,3 +40,13 @@ for (const { path, heading } of STAMPED_ROUTES) {
 		await expect(page.getByTestId('ds-shell-search')).toBeVisible();
 	});
 }
+
+// A URL nothing serves is still a signed-in page: the shell stays, so the rail
+// is there to leave by, and the session guard still ran.
+test('an address no route serves renders inside the shell', async ({ page }) => {
+	await page.goto('/no-route-serves-this');
+
+	await expect(
+		page.locator('#ds-main').getByRole('heading', { name: 'Page not found' })
+	).toBeVisible();
+});

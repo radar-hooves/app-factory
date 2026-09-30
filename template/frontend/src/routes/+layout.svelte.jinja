@@ -6,8 +6,8 @@
 	import { page } from '$app/state';
 
 	// What every route needs, signed in or not. The signed-in app — the shell,
-	// the session guard, the workspace — is (app)/+layout.svelte, so a route that
-	// must render without a session (a no-access page) sits outside (app)/ and
+	// the session guard, the workspace — is (protected)/+layout.svelte, so a route that
+	// must render without a session (a no-access page) sits outside (protected)/ and
 	// still gets the styles, the mode and the toasts from here.
 	let { children } = $props();
 

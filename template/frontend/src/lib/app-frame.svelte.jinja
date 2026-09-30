@@ -2,7 +2,7 @@
 	This app's frame: the shared shell composed with this app's own nav, brand
 	and top bar.
 
-	THE extension point for routes/(app)/+layout.svelte, which is owed
+	THE extension point for routes/(protected)/+layout.svelte, which is owed
 	byte-identical and renders this around every signed-in route: the factory's
 	layout owns the session, the workspace and the guard, and this file owns what
 	the app looks like around them. Stamped once and never overwritten, so this
@@ -11,7 +11,21 @@
 	palette groups — never by editing the factory's layout.
 
 	`children` is the factory's guarded page: render it inside the shell, once.
+	The frame renders from the first paint, before the session is confirmed:
+	around the loading state, the workspace chooser and the retry as well as
+	the page. godswood and cadmus drew theirs only once signed in. So nothing
+	here may assume `auth.user`, and what needs a signed-in caller waits for
+	it, as `identity` below does.
 -->
+<script module lang="ts">
+	/**
+	 * What THIS app calls a workspace ("Household"), declared once and read by
+	 * the menu below, the factory's members page and its workspace chooser
+	 * (rules-library/platform/tenancy.md).
+	 */
+	export const workspaceLabel = 'Workspace';
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
@@ -64,12 +78,10 @@
 >
 	<!-- The workspace switch, for whoever has more than one to switch between —
 	     renders nothing for an org-of-one (see workspace-menu.svelte). The
-	     factory owns the component; this is where the app mounts it, and the
-	     one place to say what THIS app calls a workspace — pass
-	     label="Household" here and on the members route
-	     (rules-library/platform/tenancy.md). -->
+	     factory owns the component; this is where the app mounts it, named by
+	     `workspaceLabel` above. -->
 	{#snippet context()}
-		<WorkspaceMenu {membersHref} />
+		<WorkspaceMenu {membersHref} label={workspaceLabel} />
 	{/snippet}
 
 	<!-- The bell (docs/design/alerts.md), admin-gated by the component itself. -->

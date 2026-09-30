@@ -1,9 +1,12 @@
 <!--
-	The signed-in app. Every route under (app)/ renders inside this app's own
-	frame ($lib/app-frame.svelte: the rail, the top bar, the palette) and behind
-	the session guard below, so a route the factory stamps here needs no move to
-	reach either (app-factory#6). A route that must render without a session
-	lives outside (app)/.
+	The signed-in app: the protected layout of strategy-authentication.md
+	§Protected Layout. Every route under (protected)/ renders inside this app's
+	own frame ($lib/app-frame.svelte: the rail, the top bar, the palette) and
+	behind the session guard below, so a route the factory stamps here needs no
+	move to reach either (app-factory#6). A URL no route serves lands here too,
+	through the catch-all and +error.svelte beside this file. A route that must
+	render without a session, such as a no-access page, lives outside
+	(protected)/.
 
 	The frame is the app's; this file is the factory's, because what it does
 	must be the same in every app: who is signed in, which workspace a request
@@ -18,7 +21,7 @@
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
 	import { redirectToAuthentik } from '$lib/api';
-	import AppFrame from '$lib/app-frame.svelte';
+	import AppFrame, { workspaceLabel } from '$lib/app-frame.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
 
@@ -30,7 +33,7 @@
 	// here rather than per-route — and the page below is NOT rendered until it
 	// has settled: a page that fetched first would send no workspace header
 	// and, for anyone holding two memberships, be answered 409. Once per page
-	// load, not per mount: a route outside (app)/ unmounts this layout, and
+	// load, not per mount: a route outside (protected)/ unmounts this layout, and
 	// coming back must not flash the loading state or ask again.
 	onMount(() => {
 		if (auth.isLoading) void auth.init();
@@ -59,7 +62,7 @@
 		</ErrorState>
 	{:else if auth.needsWorkspaceChoice}
 		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
-		<WorkspaceChooser />
+		<WorkspaceChooser label={workspaceLabel} />
 	{:else}
 		<!-- Keyed on the workspace, so switching remounts the page and it fetches
 		     again. A page therefore never has to know a switch happened, and can

@@ -54,14 +54,14 @@ _skip_if_exists:
   # factory owns: what a citation opens, how an answer reads, what sits on a
   # room's home. App-owned by definition (docs/design/agent-console.md).
   - frontend/src/lib/agent/app.ts
-  # THE extension point for frontend/src/routes/(app)/+layout.svelte: this app's
+  # THE extension point for frontend/src/routes/(protected)/+layout.svelte: this app's
   # shell, nav and top bar. Stamped with the factory's composition, then the
   # app's — an update must never overwrite the nav it has declared.
   - frontend/src/lib/app-frame.svelte
   # The scaffold slice's landing page, like api/example/: the app replaces it
   # with its real home or a redirect, and an update must never put it back.
-  - frontend/src/routes/(app)/+page.svelte
-  - frontend/src/routes/(app)/+page.ts
+  - frontend/src/routes/(protected)/+page.svelte
+  - frontend/src/routes/(protected)/+page.ts
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
@@ -109,7 +109,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/test/rooms{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/rooms.spec.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/rooms{% endif %}"
-  - "{% if not factory_selftest %}frontend/src/routes/(app)/layout.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
 
 # Which skeleton this app is stamped from, asked first because `_subdirectory`
 # and every question below read it. `web` is the FastAPI + SvelteKit container
