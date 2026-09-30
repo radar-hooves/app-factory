@@ -305,9 +305,7 @@
 							onregenerate: last && !running ? onregenerate : undefined,
 							onsuggest: last && !running ? onsuggest : undefined,
 							onmark:
-								last && !running && onmark
-									? (verdict: Verdict) => onmark(turn, verdict)
-									: undefined
+								last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined
 						} satisfies AgentTranscriptProps}
 						{#if presentTurn}
 							{@render presentTurn(props)}
