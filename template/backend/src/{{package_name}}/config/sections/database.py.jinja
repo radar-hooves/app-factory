@@ -49,9 +49,9 @@ class DatabaseSettings(VendedSettings):
     # until 2026-08-20, which meant a shell had it and the VS Code debugger did
     # not, and `Run > Full Stack` dialled localhost and refused to start.
     postgres_host: str = "{{ postgres_host }}"
-    # The app's registry-allocated port, not PostgreSQL's own default: the host
-    # runs one server per app and the registry is what stops two of them
-    # colliding (registry-ports.md). This once hardcoded the default while still
+    # The app's own Dev-DB band port, not PostgreSQL's own default: the host
+    # runs one server per app, and majordomo's `port` tool flags two apps
+    # declaring one port. This once hardcoded the default while still
     # asking for the answer, so a stamped app reached whichever database happened
     # to own that port. No literal port number in this comment, deliberately: the
     # parity gate rewrites the app's answered port wherever it appears in the
