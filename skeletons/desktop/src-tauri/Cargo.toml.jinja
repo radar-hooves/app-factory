@@ -1,0 +1,28 @@
+[package]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ description }}"
+authors = ["poodle64"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.87"
+
+[lib]
+name = "{{ package_name }}_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png"] }
+tracing = "0.1"
+# The factory's kits, at the release this app was stamped from.
+desktop-shell = { git = "https://github.com/radar-hooves/app-factory", tag = "{{ _copier_answers._commit }}" }
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "{{ _copier_answers._commit }}" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

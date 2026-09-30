@@ -1,4 +1,8 @@
-_subdirectory: template
+# One copier.yaml for every skeleton, because copier reads a git source's
+# config from its root alone. The `skeleton` answer picks the tree: `template/`
+# for a web app, `skeletons/<skeleton>/` for the rest. A web app's answers file
+# predates the question, so it takes the default and renders exactly as before.
+_subdirectory: "{{ 'template' if skeleton == 'web' else 'skeletons/' ~ skeleton }}"
 
 # README.md and DESIGN.md are stamped once as skeletons, then owned by the
 # app: copier update must never clobber app-authored content in them. The
@@ -29,6 +33,23 @@ _skip_if_exists:
   # and re-exports this file from. App-owned by definition: what it exports IS
   # this app's domain surface, so an update must never overwrite it.
   - frontend/src/lib/api/app.ts
+  # The desktop skeleton's first stamp (skeletons/desktop/). Each is the app's
+  # own from then on: its dependencies, windows and bundle, its Rust entry
+  # point, its palette and pages, its flake, its design debt. A web app has
+  # none of these paths.
+  - package.json
+  - flake.nix
+  - .design-craft-baseline.json
+  - .ui-drift-baseline.json
+  - src/app.css
+  - src/routes/+layout.svelte
+  - src/routes/+page.svelte
+  - src-tauri/Cargo.toml
+  - src-tauri/build.rs
+  - src-tauri/tauri.conf.json
+  - src-tauri/capabilities/default.json
+  - src-tauri/src/lib.rs
+  - src-tauri/icons/icon.png
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has
@@ -71,6 +92,17 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/api/error.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
+
+# Which skeleton this app is stamped from, asked first because `_subdirectory`
+# and every question below read it. `web` is the FastAPI + SvelteKit container
+# app in template/; `desktop` the Tauri + SvelteKit app in skeletons/desktop/.
+skeleton:
+  type: str
+  default: web
+  choices:
+    - web
+    - desktop
+  help: 'Which skeleton: web (FastAPI + SvelteKit container) or desktop (Tauri + SvelteKit)'
 
 project_name:
   type: str
@@ -133,62 +165,85 @@ description:
 
 backend_port:
   type: int
+  when: "{{ skeleton == 'web' }}"
   help: 'Backend API dev port — allocate from the port registry (band 8300-8399); never a framework default'
 
 frontend_port:
   type: int
-  help: 'Frontend Vite dev port — allocate from the port registry (band 5170-5199); never a framework default'
+  help: 'Frontend Vite dev port — allocate from the port registry (web: band 5170-5199; desktop: the tauri band, with the next port its HMR socket); never a framework default'
+
+bundle_identifier:
+  type: str
+  when: "{{ skeleton == 'desktop' }}"
+  help: >-
+    The desktop app's reverse-DNS bundle identifier (e.g. `com.example.app`), which names its data directories and its macOS bundle. Asked, never derived: changing it later moves every user's data out from under the app.
+
+linux_cargo_args:
+  type: str
+  default: ''
+  when: "{{ skeleton == 'desktop' }}"
+  help: >-
+    Extra cargo arguments for the desktop app's Linux CI build and tests (e.g. `--no-default-features --features vulkan`), for an app whose default features only build on macOS. Empty for most apps.
 
 frontend_e2e_port:
   type: int
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Playwright's own Vite dev port — allocate from the port registry (band 5200-5229). Asked rather than derived: the E2E server used to be frontend_port + 1000, which lands outside every band the registry defines, so nothing could tell you it was free and no row recorded it.
 
 
 postgres_host:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Tailnet address of the fleet host running this app's Postgres. There is no development database (stacks/dev-environment.md) — dev points at the real one, and the tailnet makes one address correct on any network. Required: left optional, three of nine apps answered blank and their dev path fell through to a code default pointing at localhost, which is nowhere.
 
 
 portcullis_url:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Base URL of your secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py and the frontend's dev-identity.ts both resolve the database password and the operator's dev identity through it. PORTCULLIS_URL still overrides at runtime. No factory default — a fleet stamping its own apps supplies it from its own declaration (`--data-file`) rather than typing it per app; postgres_host below took the same lesson the hard way.
 
 
 private_index_name:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Alias for your private Python package index, used as `[[tool.uv.index]] name = ...` and in `[tool.uv.sources]` below (backend/pyproject.toml.jinja). No factory default: this app resolves sibling packages published outside PyPI (api-common, redactyl-core, nextcloud) from a private index only you can name.
 
 
 private_index_url:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Base URL of that index's simple API (e.g. `https://your-index.example/your-user/prod/+simple/`). No factory default, for the same reason as private_index_name — a fleet stamping its own apps supplies both from its own declaration rather than typing them per app.
 
 
 registry_host:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Container registry the image is pushed to and Watchtower pulls from (e.g. `registry.example.com`). No factory default, for the same reason as private_index_name.
 
 
 registry_credential_file:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Runner-host path to a `user:password` line that logs in to registry_host; the credential stays on the runner host, never a GitHub secret. No factory default.
 
 
 watchtower_url:
   type: str
+  when: "{{ skeleton == 'web' }}"
   help: >-
     Base URL of the deploying host's Watchtower HTTP API, asked to pull the image just pushed (e.g. `http://127.0.0.1:8080`). No factory default.
 
 
 runner_labels:
   type: str
+  when: "{{ skeleton == 'web' }}"
   default: '["self-hosted", "atlas"]'
   help: >-
     JSON array of runner labels the app's CI and deploy jobs run on. The default is atlas's, which the reusables also default to, so an app that answers nothing runs where it did.
@@ -196,6 +251,7 @@ runner_labels:
 
 postgres_user:
   type: str
+  when: "{{ skeleton == 'web' }}"
   default: "{{ project_name | replace('-', '_') }}"
   help: >-
     Role this app's database was CREATED with. Almost always the app's own name, but two of the fleet's databases were built with the superuser and answer to `postgres` — read it off the live server rather than assuming, because a wrong role fails as a password error and sends you hunting the wrong thing. It is an answer rather than a code default because development holds no env file: this value IS the configuration.
@@ -203,6 +259,7 @@ postgres_user:
 
 postgres_port:
   type: int
+  when: "{{ skeleton == 'web' }}"
   default: 5432
   help: >-
     Postgres port for THIS app on the fleet host — one database per app, so it is per-app like backend_port. 5432 is the shared dev instance; an app that publishes its own database for workstation access takes a unique port from the Atlas Dev-DB band and answers with that.

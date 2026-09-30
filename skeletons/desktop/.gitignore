@@ -1,0 +1,72 @@
+# The desktop skeleton's ignores. A path only this app needs ignored goes in a
+# .gitignore of its own inside that directory, never here: the skeleton owns
+# this file and a converge overwrites it.
+
+# OS and editors
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Claude Code: machine-local state and the master checkout's symlinked governance
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/.sessions/
+.claude/worktrees/
+.claude/agents/
+.claude/scheduled_tasks.lock
+.claude/rules/master
+.claude/commands/master
+.claude/hooks/master
+.claude/skills
+docs/master
+.mcp.json
+
+# Environment
+.env
+.env.*
+!.env.example
+.envrc.local
+.direnv/
+
+# Frontend
+node_modules/
+.pnpm-store/
+.svelte-kit/
+build/
+*.tsbuildinfo
+test-results/
+playwright-report/
+blob-report/
+coverage/
+.playwright-mcp/
+
+# Rust and Tauri
+target/
+src-tauri/gen/schemas/
+
+# Nix
+result
+result-*
+
+# Scripts' Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Logs and scratch
+logs/
+*.log
+*.tmp
+docs/diagrams/*.aux
+docs/diagrams/*.log
+docs/diagrams/*.pdf

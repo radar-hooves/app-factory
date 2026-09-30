@@ -1,0 +1,116 @@
+name: desktop CI
+
+# The desktop skeleton's CI, as versioned code: a stamped desktop app's
+# .github/workflows/ci.yaml calls this at the factory tag it was stamped from,
+# so a change here reaches every desktop app on its next converge. It never
+# runs on this repo's own events.
+#
+# Rust: fmt, clippy and the full suite on Linux (atlas) and macOS (huginn),
+# inside the app's own flake devShell, so a runner needs no ambient toolchain.
+# Frontend: the gates the app's package.json names, on atlas.
+#
+# A public app takes fork pull requests, and fork code never runs on the
+# household runner: a fork's jobs run on a GitHub-hosted runner instead, which
+# installs Nix first. No failure notification: CI runs on a PR, whose page is
+# where a failure is read, and this repo is public, so it can name no
+# household notification endpoint.
+on:
+  workflow_call:
+    inputs:
+      linux-cargo-args:
+        description: Extra cargo arguments for the Linux build and tests, for an app whose default features only build on macOS.
+        type: string
+        default: ''
+      macos-cargo-args:
+        description: Extra cargo arguments for the macOS build and tests.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: '["self-hosted", "atlas"]'
+            hosted: ubuntu-latest
+          - os: macos
+            runner: '["self-hosted", "huginn"]'
+            hosted: macos-latest
+    # by-exception (01/10/2026): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    runs-on: ${{ github.event.pull_request.head.repo.fork && matrix.hosted || fromJSON(matrix.runner) }}
+    # Bounds a hang once the job runs; an offline huginn leaves it queued instead.
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Nix (GitHub-hosted runner only)
+        if: runner.environment == 'github-hosted'
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: fmt, clippy, test (flake devShell)
+        env:
+          CARGO_ARGS: ${{ matrix.os == 'linux' && inputs.linux-cargo-args || inputs.macos-cargo-args }}
+        run: |
+          # A cargo home under the runner's own HOME, so cargo resolves to the
+          # devShell's toolchain and the crate cache stays warm across jobs.
+          export CARGO_HOME="$HOME/.cargo"
+          nix develop --command bash -c '
+            set -euo pipefail
+            cd src-tauri
+            cargo fmt --all --check
+            cargo clippy --all-targets $CARGO_ARGS -- -D warnings
+            cargo test $CARGO_ARGS
+          '
+
+  frontend:
+    name: Frontend
+    # by-exception (01/10/2026): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "atlas"]') }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: package.json
+
+      - name: Set up Node.js
+        # No cache: on the self-hosted runner its post-job save hangs until the
+        # job's timeout, which GitHub reports as a cancelled run.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check (svelte-check)
+        run: pnpm check
+
+      - name: CSS lint (stylelint)
+        run: pnpm lint:css
+
+      # Both gate on NEW findings only, against the app's checked-in baselines.
+      - name: Design-system drift
+        run: pnpm lint:drift
+
+      - name: Design craft
+        run: pnpm lint:design
+
+      - name: Unit tests (vitest)
+        run: pnpm test:run
+
+      - name: Production build
+        run: pnpm build

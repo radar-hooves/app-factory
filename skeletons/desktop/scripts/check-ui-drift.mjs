@@ -1,0 +1,1 @@
+../../../template/frontend/scripts/check-ui-drift.mjs

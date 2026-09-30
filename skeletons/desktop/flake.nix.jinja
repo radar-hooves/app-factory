@@ -1,0 +1,39 @@
+{
+  description = "{{ project_title }}: {{ description }}";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { nixpkgs, flake-utils, rust-overlay, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+          config.allowBroken = true; # webkitgtk on Linux
+        };
+        inherit (pkgs.stdenv.hostPlatform) isLinux isDarwin;
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
+          # A macOS release builds both architectures from Apple Silicon.
+          targets = pkgs.lib.optionals isDarwin [ "aarch64-apple-darwin" "x86_64-apple-darwin" ];
+        };
+      in {
+        # CI and the release build run inside this shell (`nix develop`).
+        devShells.default = pkgs.mkShell {
+          packages = with pkgs;
+            [ rustToolchain pkg-config openssl cmake nodejs_22 pnpm gh ]
+            ++ lib.optionals isLinux [ webkitgtk_4_1 libappindicator-gtk3 librsvg glib libsecret ]
+            ++ lib.optionals isDarwin [ libiconv ];
+          # WebKitGTK's DMABUF renderer crashes on NVIDIA under Wayland, and the
+          # tray library is loaded at runtime rather than linked.
+          WEBKIT_DISABLE_DMABUF_RENDERER = pkgs.lib.optionalString isLinux "1";
+          LD_LIBRARY_PATH = pkgs.lib.optionalString isLinux
+            (pkgs.lib.makeLibraryPath [ pkgs.libappindicator-gtk3 ] + ":/run/opengl-driver/lib");
+        };
+      });
+}

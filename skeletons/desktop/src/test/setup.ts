@@ -1,0 +1,1 @@
+../../../../template/frontend/src/test/setup.ts

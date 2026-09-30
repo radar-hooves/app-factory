@@ -1,0 +1,24 @@
+name: CI
+
+# The desktop skeleton's checks, run by the factory's reusable workflow at the
+# release this app was stamped from; a converge moves the pin. On a PR or by
+# hand, never per push: commit hooks run the same commands first. A check only
+# this app needs goes in a workflow file of its own beside this one.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-{% raw %}${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    uses: radar-hooves/app-factory/.github/workflows/desktop-ci.yaml@{{ _copier_answers._commit }}
+{%- if linux_cargo_args %}
+    with:
+      linux-cargo-args: '{{ linux_cargo_args }}'
+{%- endif %}

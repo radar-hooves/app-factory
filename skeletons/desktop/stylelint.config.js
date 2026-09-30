@@ -1,0 +1,1 @@
+../../template/frontend/stylelint.config.js
