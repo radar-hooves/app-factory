@@ -92,6 +92,10 @@ describe('A room page, through the app extension points', () => {
 		const box = await screen.findByRole('textbox');
 		await waitFor(() => expect(box).toHaveValue('How much leave?'));
 		expect(asked).not.toHaveBeenCalled();
+		expect(fake.goto).toHaveBeenCalledWith(
+			'/rooms/manual',
+			expect.objectContaining({ replaceState: true })
+		);
 	});
 
 	it("shows the room's home inside the conversation's scroll", async () => {
