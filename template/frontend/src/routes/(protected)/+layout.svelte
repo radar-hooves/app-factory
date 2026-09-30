@@ -74,7 +74,10 @@
 </AppFrame>
 
 <!-- The feedback widget, for whoever is actually signed in — there is nobody
-     to attribute a report to before then. -->
+     to attribute a report to before then. The endpoint is named because the
+     widget's own default, /api/feedback, is not the route: the router serves
+     /api/feedback/, and the SPA's static mount at / answers the slashless POST
+     with a 405 before any redirect could add the slash (master-project#335). -->
 {#if auth.user}
-	<ReportWidget />
+	<ReportWidget endpoint="/api/feedback/" />
 {/if}
