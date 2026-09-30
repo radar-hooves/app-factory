@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.9.57] - 2026-09-30
+
 ### Added
 
 - **`agent-common`, a Python kit at `kits/python/agent-common`: the household's Claude Code agent, imported rather than stamped.** `cli` is the one driver (argv, the scratch-built environment, a spawn in its own process group, the idle-timeout read loop, the concurrent stderr tail and its scrub, the process-group kill, stream-json stdin frames), `persona` loads a persona directory and seeds its writable home, `transcript` reads a session back as turns and forgets it (the library's `api/librarian/conversation.py`, less its citations and attachments), `agent` is the `Agent` interface a chat asks through (`ask`, `read`, `forget`) with `LocalAgent` its first implementation, and `sse` the frame. Standard library only, typed, with its own suite. A uv workspace at the repo root holds it; `.github/workflows/publish-kit-python.yaml` publishes it to the household index at each release tag's version through the shared `publish-wheels` reusable, and the factory self-test runs its lint, types and suite, then resolves it from the checkout for the scratch render. `LibraryAgent`, the library's Milton behind the same interface, is the next step and is not built (`docs/design/agent-console.md` §Convergence, step 2). Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
