@@ -188,6 +188,54 @@ describe('Chat asking', () => {
 	});
 });
 
+describe('Chat kinds of turn', () => {
+	const briefing = { title: 'Briefing', isAnswer: true };
+	const artefact = (kind: string) => (kind === 'briefing' ? briefing : undefined);
+
+	it('asks a kind of turn, cards it as the host says, and asks it again as the same kind', async () => {
+		const { transport, asks } = room();
+		const c = new Chat(transport, { pollMs: 5, artefact });
+		made.push(c);
+		const asked = c.ask('Write a briefing on the Manual.', 'briefing');
+		expect(asks[0].request.kind).toBe('briefing');
+		expect(c.turns[0]).toMatchObject({ kind: 'briefing', artefact: briefing });
+		asks[0].pipe.push(...CHAT);
+		asks[0].pipe.end();
+		await asked;
+
+		const again = c.again();
+		expect(asks[1].request.kind).toBe('briefing');
+		asks[1].pipe.end();
+		await again;
+
+		const plain = c.ask('And leave?');
+		expect(asks[2].request.kind).toBeUndefined();
+		expect(c.turns.at(-1)?.artefact).toBeUndefined();
+		asks[2].pipe.end();
+		await plain;
+	});
+
+	it('cards a turn read back by the kind the server kept', async () => {
+		const { transport } = room({
+			read: vi.fn(async () =>
+				conversation({
+					turns: [
+						{ question: 'What is the total?', answer: ANSWER, at: null },
+						{ question: 'Brief me.', answer: '# Briefing', at: null, kind: 'briefing' }
+					]
+				})
+			)
+		});
+		const c = new Chat(transport, { pollMs: 5, artefact });
+		made.push(c);
+		await c.open(SESSION);
+		expect(c.turns.map((t) => [t.kind, t.artefact])).toEqual([
+			[undefined, undefined],
+			['briefing', briefing]
+		]);
+	});
+});
+
 describe('Chat waiting', () => {
 	it('says the question waits while the stream says so, and stops once the agent starts', async () => {
 		const { transport, asks } = room();

@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+What a stamped room page needs to present an answer and a room's home in an
+app's own way. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`,
+app-factory#12.
+
+### Added
+
+- **`Conversation`'s `turn` snippet**, given each turn's `AgentTranscriptProps`
+  (now exported from `./agent-transcript`) in place of `AgentTranscript`: a
+  host presents an answer its own way (its prose, its citation marks, its
+  links), or renders `AgentTranscript` inside its own to add to it.
+- **`Conversation`'s `lead` snippet**, inside the scroll under the opening and
+  the scope, so what a host shows before a question scrolls with the
+  conversation instead of taking its height on a phone.
+- **A turn's `kind`**: `Chat.ask(question, kind)` sends it as `client.ask()`'s
+  `kind`, `StoredTurn.kind` reads it back, `again()` keeps it, and
+  `ChatOptions.artefact(kind)` names what such a turn opens, so a briefing is
+  carded and opens in the column on a live turn and a reopened one alike.
+
 ## [2026.9.23] - 2026-09-30
 
 ### Fixed

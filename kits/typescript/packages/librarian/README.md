@@ -179,6 +179,8 @@ on it fires once and never again.
 | The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
 | What this surface covers | `scope`: one statement per room, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
 | The words themselves     | `copy`: a partial of `LibrarianCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                           |
+| An answer its own way    | `turn`: a snippet given each turn's `AgentTranscriptProps` in place of `AgentTranscript`. Render your own from the parts, or `AgentTranscript` inside your own to add to it               |
+| What leads a conversation | `lead`: a snippet inside the scroll, under the opening and the scope, so a tall one scrolls with the conversation instead of taking its height                                            |
 
 Nothing here fetches on its own behalf. The library's document read is
 authenticated, and a package that called it directly would be reaching past
@@ -242,6 +244,13 @@ the room's routes, and the components bound to it:
 ```
 
 `chat.list()` reads the list once; after that it follows every answer.
+
+A turn the host asks as a `kind` (`chat.ask(question, 'briefing')`, from
+`Composer`'s `onbriefing`) goes to the route as `client.ask()`'s `kind`, comes
+back on `StoredTurn.kind`, and carries whatever `new Chat(transport, {
+artefact })` says that kind opens, on a live turn and a reopened one alike:
+`{ title: 'Briefing', isAnswer: true }` cards it and opens its prose in the
+column. `again()` asks it as the same kind.
 
 The transport is the app's own client over its routes, and the shapes are
 the routes' own bodies (`ConversationSummary`, `ConversationRead`,

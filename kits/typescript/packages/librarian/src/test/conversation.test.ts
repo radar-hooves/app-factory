@@ -11,7 +11,9 @@
  * which is the difference between a default and a hardcoding.
  */
 import { describe, it, expect } from 'vitest';
+import { createRawSnippet } from 'svelte';
 import { render, screen } from '@testing-library/svelte';
+import type { AgentTranscriptProps } from '$lib/components/agent-transcript';
 import Conversation from '$lib/components/conversation/conversation.svelte';
 import type { Turn } from '$lib/transcript.svelte';
 
@@ -103,5 +105,43 @@ describe('Conversation timestamps', () => {
 		conversation({ turns });
 		const stamped = document.querySelector('time');
 		expect(stamped?.getAttribute('datetime')).toBe(new Date(at).toISOString());
+	});
+});
+
+describe("Conversation in the host's own words", () => {
+	const ANSWERED: Turn[] = [
+		{
+			id: '1',
+			question: 'How much leave?',
+			blocks: [{ kind: 'text', index: 0, text: 'Four weeks [1].' }],
+			outcome: { turns: 1, durationMs: 1000 },
+			citations: [{ n: 1, document_id: '7', title: 'The Manual' }]
+		}
+	];
+
+	it("renders a host's own turn in place of the package's, handed every prop the package's took", () => {
+		const seen: AgentTranscriptProps[] = [];
+		const turn = createRawSnippet((props: () => AgentTranscriptProps) => {
+			seen.push(props());
+			return { render: () => `<p>Asked: ${props().question}</p>` };
+		});
+		conversation({ turns: ANSWERED, turn, name: 'penny', oncite: () => undefined });
+		expect(screen.getByText('Asked: How much leave?')).toBeInTheDocument();
+		// The package's card, signed with the persona, is gone.
+		expect(screen.queryByText('Penny')).toBeNull();
+		expect(seen[0]).toMatchObject({ question: 'How much leave?', name: 'Penny', running: false });
+		expect(seen[0].citations?.[0]?.title).toBe('The Manual');
+		expect(seen[0].oncite).toBeTypeOf('function');
+	});
+
+	it('shows what leads the conversation inside its scroll, under the opening', () => {
+		const lead = createRawSnippet(() => ({ render: () => '<section>Lately</section>' }));
+		conversation({ lead, examples: ['How much leave?'] });
+		const log = screen.getByRole('log');
+		expect(log).toContainElement(screen.getByText('Lately'));
+		expect(
+			screen.getByText('How much leave?').compareDocumentPosition(screen.getByText('Lately')) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
 	});
 });

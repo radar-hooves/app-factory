@@ -41,7 +41,9 @@
 	import Markdown from '../markdown/markdown.svelte';
 	import SourceList from '../source-list/source-list.svelte';
 
-	interface Props {
+	/** Everything one turn renders from: what `Conversation` hands a host's
+	 *  own `turn` snippet, so it can render this component or its own. */
+	export interface AgentTranscriptProps {
 		question: string;
 		blocks: Block[];
 		outcome: Outcome | null;
@@ -109,7 +111,7 @@
 		waiting = false,
 		answering,
 		onmark
-	}: Props = $props();
+	}: AgentTranscriptProps = $props();
 
 	// The prose IS the artefact: it reads in the column, and the transcript
 	// shows the card alone.
