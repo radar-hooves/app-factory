@@ -21,7 +21,7 @@
  */
 
 import { untrack } from 'svelte';
-import { isQueued, type AgentEvent } from './client';
+import { isQueued, type AgentEvent, type Depth } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
 import { fold, foldState, type Artefact, type Turn } from './transcript.svelte';
@@ -48,6 +48,8 @@ export interface StoredTurn {
 	citations?: Citation[];
 	/** What the host asked for, when it was not a plain question. */
 	kind?: string | null;
+	/** How hard the persona worked on this one. */
+	depth?: Depth | null;
 }
 
 /** A conversation reopened. */
@@ -82,6 +84,8 @@ export interface AskRequest {
 	signal: AbortSignal;
 	/** What the host asked for, when it is not a plain question: `client.ask()`'s `kind`. */
 	kind?: string;
+	/** How hard the persona should work on this one: `client.ask()`'s `depth`. */
+	depth?: Depth;
 }
 
 /**
@@ -269,11 +273,11 @@ export class Chat {
 
 	/**
 	 * Ask `question`, or what is in the box, as a `kind` of turn when it is not
-	 * a plain question. Resolves once the turn settles: true if it was asked,
-	 * false if it was refused, here or by the server, in which case typed words
-	 * go back into the box.
+	 * a plain question, at a `depth` when the host offers the choice. Resolves
+	 * once the turn settles: true if it was asked, false if it was refused,
+	 * here or by the server, in which case typed words go back into the box.
 	 */
-	async ask(question?: string, kind?: string): Promise<boolean> {
+	async ask(question?: string, kind?: string, depth?: Depth): Promise<boolean> {
 		const typed = question === undefined;
 		const text = (question ?? this.draft).trim();
 		if (!text) return false;
@@ -284,14 +288,16 @@ export class Chat {
 			this.draft = '';
 			this.files = [];
 		}
-		return this.#ask(text, files, typed, kind);
+		return this.#ask(text, files, typed, kind, depth);
 	}
 
 	/** The last question again, as a new turn: the conversation is append-only,
-	 *  because the agent's transcript is. */
+	 *  because the agent's transcript is. Same kind, same depth. */
 	again(): Promise<boolean> {
 		const last = this.turns.at(-1);
-		return last?.question ? this.ask(last.question, last.kind) : Promise.resolve(false);
+		return last?.question
+			? this.ask(last.question, last.kind, last.depth)
+			: Promise.resolve(false);
 	}
 
 	/** Stop the answer being written, wherever it is being written. */
@@ -415,7 +421,13 @@ export class Chat {
 		this.waiting = false;
 	}
 
-	async #ask(text: string, files: File[], typed: boolean, kind?: string): Promise<boolean> {
+	async #ask(
+		text: string,
+		files: File[],
+		typed: boolean,
+		kind?: string,
+		depth?: Depth
+	): Promise<boolean> {
 		const room = this.#room!;
 		const mine = this.#generation;
 		const stream = { controller: new AbortController(), stopWanted: false };
@@ -429,6 +441,7 @@ export class Chat {
 			citations: [],
 			suggestions: [],
 			kind,
+			depth,
 			artefact: this.#card(kind)
 		});
 		const live = this.#turns[this.#turns.length - 1];
@@ -444,7 +457,8 @@ export class Chat {
 			files,
 			resume: this.conversationId,
 			signal: stream.controller.signal,
-			kind
+			kind,
+			depth
 		})) {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
 			if (stream.stopWanted) {
@@ -651,7 +665,8 @@ function storedTurn(conversation: string, index: number, stored: StoredTurn): Tu
 		blocks: stored.answer ? [{ kind: 'text', index: 0, text: stored.answer }] : [],
 		outcome: null,
 		citations: stored.citations ?? [],
-		kind: stored.kind ?? undefined
+		kind: stored.kind ?? undefined,
+		depth: stored.depth ?? undefined
 	};
 }
 

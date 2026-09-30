@@ -10,6 +10,16 @@
 
 import type { Citation } from './citations';
 
+/**
+ * How hard the persona works on one question: a reading budget and a model,
+ * both the operator's to set per deployment, never the colleague's concern.
+ * `quick` is always the default; `thorough` always means something — a
+ * bigger budget on the strongest model the room allows, even where that
+ * model is a local one — so a host never has a state where the choice is
+ * greyed out or explained away.
+ */
+export type Depth = 'quick' | 'thorough';
+
 /** A Claude Code message, whole. `content` is a plain string only on a user frame. */
 export interface AgentMessage {
 	id?: string;
@@ -94,6 +104,10 @@ export interface AskOptions {
 	 *  (`'briefing'`) and interprets what comes back accordingly — the wire
 	 *  vocabulary is the host's own, never a fixed set here. */
 	kind?: string;
+	/** How hard the persona should work on this one. Absent asks for
+	 *  whatever the route does by default, so a host that never reads
+	 *  `Composer`'s `depth` sends exactly what it always has. */
+	depth?: Depth;
 	signal?: AbortSignal;
 	/** Where the ask lands. Each app mounts its own ask route. */
 	endpoint?: string;
@@ -124,7 +138,8 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 				resume: options.resume ?? null,
 				subtree: options.subtree ?? '',
 				collections: options.collections ?? [],
-				kind: options.kind
+				kind: options.kind,
+				depth: options.depth
 			}),
 			signal
 		};
@@ -136,6 +151,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	for (const collection of options.collections ?? []) form.append('collections[]', collection);
 	for (const file of options.files) form.append('files[]', file, file.name);
 	if (options.kind) form.append('kind', options.kind);
+	if (options.depth) form.append('depth', options.depth);
 	return { method: 'POST', credentials: 'include', body: form, signal };
 }
 

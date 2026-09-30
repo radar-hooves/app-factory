@@ -37,6 +37,8 @@ describe('copyFor', () => {
 		expect(words.askPlaceholder).toContain('Penny');
 		expect(words.answeringPlaceholder).toContain('Penny');
 		expect(words.conversationLabel).toContain('Penny');
+		expect(words.depthGroupLabel).toContain('Penny');
+		expect(words.longConversation).toContain('Penny');
 		for (const word of words.working) expect(word).toContain('Penny');
 	});
 

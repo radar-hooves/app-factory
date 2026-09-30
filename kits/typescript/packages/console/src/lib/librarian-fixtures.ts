@@ -247,7 +247,8 @@ export type LabState =
 	| 'fair-use'
 	| 'limit'
 	| 'past'
-	| 'room';
+	| 'room'
+	| 'depth';
 
 export interface LabScene {
 	turns: Turn[];
@@ -420,6 +421,29 @@ export function scene(state: LabState): LabScene {
 	if (state === 'empty') return base;
 
 	if (state === 'room') return { ...base, live: true };
+
+	// The depth switch and the answer footer's cost line, together: a Quick
+	// answer that actually cost something, and enough turns behind it that
+	// the long-conversation banner is up too.
+	if (state === 'depth') {
+		return {
+			...base,
+			turns: [
+				{
+					id: 'turn-1',
+					question: question(
+						'Can a reservist claim recreation leave, and does it accrue the same way as for a permanent member?'
+					),
+					blocks: [...ACTIVITY, text(3, SHORT)],
+					outcome: { turns: 3, durationMs: 56_000, costUsd: 0.23 },
+					citations: CITATIONS.slice(0, 2),
+					suggestions: SUGGESTIONS,
+					depth: 'quick',
+					at: minutes(0)
+				}
+			]
+		};
+	}
 
 	// Asked, and waiting behind somebody else's question on the one GPU.
 	if (state === 'waiting') {

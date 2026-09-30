@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+	import ClockIcon from '@lucide/svelte/icons/clock';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
 	import SquareIcon from '@lucide/svelte/icons/square';
@@ -25,7 +26,13 @@
 		MAX_FILES,
 		rejectionMessage
 	} from '../../attachments';
+	import type { Depth } from '../../client';
 	import { DEFAULT_PERSONA, resolveCopy, type LibrarianCopy } from '../../copy';
+
+	/** Past this many turns, the long-conversation banner offers to start
+	 *  over: a follow-up re-reads the whole conversation, so each one costs
+	 *  more than the last (measured — the longest ran 2.05M cached tokens). */
+	const DEFAULT_TURN_LIMIT = 8;
 
 	export type Scope = 'document' | 'collection' | 'library';
 
@@ -63,6 +70,28 @@
 		 *  sit, in the host's words: what sending does here ("It carries on
 		 *  from where it stopped."). */
 		note?: string;
+		/** Quick or Thorough for the NEXT question — a two-way switch beside a
+		 *  one-line hint saying what the picked side is for. Bind it (the
+		 *  host's own state, `'quick'` to start) and hand the value to `ask()`
+		 *  on submit; omit the prop entirely and nothing renders, exactly as
+		 *  today's composer.
+		 *
+		 *  Once a host DOES offer the choice, the operator's ruling is
+		 *  absolute (30/09/2026): it is never disabled, hidden or greyed out,
+		 *  and never explained by naming a model — Thorough always means
+		 *  something, a bigger reading budget on the strongest model the room
+		 *  allows, even where that model is a local one. */
+		depth?: Depth;
+		/** How many turns are in the conversation so far. Past `turnLimit`
+		 *  (8 by default), a quiet banner appears above the box offering to
+		 *  start over. Omit and no banner ever renders — a host that does not
+		 *  track turns keeps today's composer. */
+		turnCount?: number;
+		turnLimit?: number;
+		/** Starts a new conversation, from the banner's own button. Without it
+		 *  the banner never renders, past the limit or not — an offer with no
+		 *  action is worse than none. */
+		onnewquestion?: () => void;
 	}
 
 	let {
@@ -80,13 +109,23 @@
 		name = DEFAULT_PERSONA,
 		copy,
 		note,
-		sendWhileRunning = false
+		sendWhileRunning = false,
+		depth = $bindable(),
+		turnCount,
+		turnLimit = DEFAULT_TURN_LIMIT,
+		onnewquestion
 	}: Props = $props();
 
 	/** Nothing can be said right now: a chat whose answer is still coming. */
 	const waiting = $derived(running && !sendWhileRunning);
 
 	const words = $derived(resolveCopy(copy, name));
+
+	// The banner needs somewhere to send a reader AND a reason to show at
+	// all: a host that never counts turns gets today's composer, unchanged.
+	const longConversation = $derived(
+		turnCount !== undefined && turnCount > turnLimit && Boolean(onnewquestion)
+	);
 
 	// What Milton is being asked about — this document, this collection, or
 	// the whole library. Callers that have no narrower scope pass neither
@@ -212,6 +251,16 @@
 		? '0px'
 		: 'env(safe-area-inset-bottom, 0px)'}"
 >
+	{#if longConversation}
+		<div class="ds-lib-long" role="status">
+			<ClockIcon size={16} />
+			<span>{words.longConversation}</span>
+			<button type="button" class="ds-lib-long-new" onclick={onnewquestion}>
+				{words.newQuestion}
+			</button>
+		</div>
+	{/if}
+
 	<div class="ds-lib-box">
 		{#if files.length > 0}
 			<ul class="ds-lib-files">
@@ -279,6 +328,31 @@
 				</button>
 			{/if}
 
+			{#if depth !== undefined}
+				<div role="group" aria-label={words.depthGroupLabel} class="ds-lib-depth">
+					<button
+						type="button"
+						aria-pressed={depth === 'quick'}
+						class="ds-lib-depth-side"
+						class:is-chosen={depth === 'quick'}
+						onclick={() => (depth = 'quick')}
+					>
+						{words.depthQuick}
+					</button>
+					<button
+						type="button"
+						aria-pressed={depth === 'thorough'}
+						class="ds-lib-depth-side"
+						class:is-chosen={depth === 'thorough'}
+						onclick={() => (depth = 'thorough')}
+					>
+						{words.depthThorough}
+					</button>
+				</div>
+				<span class="ds-lib-note">
+					{depth === 'quick' ? words.depthQuickHint : words.depthThoroughHint}
+				</span>
+			{/if}
 			{#if hasChoice}
 				<div class="ds-lib-scopes">
 					{#each choices as choice (choice.id)}
@@ -415,8 +489,10 @@
 
 	.ds-lib-controls {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
+		row-gap: 0.375rem;
 		padding: 0 0.75rem 0.625rem;
 	}
 
@@ -536,6 +612,91 @@
 		padding: 0.375rem 0.25rem 0;
 		color: var(--ds-color-status-error);
 		font-size: var(--ds-text-2xs);
+	}
+
+	/* A labelled button group, never a select: two states a reader compares
+	   at a glance, not a list to open. 44px touch targets throughout — the
+	   one row here a colleague reaches for on every single question. */
+	.ds-lib-depth {
+		display: flex;
+		flex: none;
+		gap: 0.125rem;
+		border-radius: var(--ds-radius-lg);
+		background: var(--ds-color-surface-3);
+		padding: 0.1875rem;
+	}
+
+	.ds-lib-depth-side {
+		min-width: 2.75rem;
+		min-height: 2.75rem;
+		border: 0;
+		border-radius: var(--ds-radius-md);
+		background: none;
+		padding: 0 0.75rem;
+		color: var(--ds-color-muted-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		cursor: pointer;
+		transition:
+			color 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.ds-lib-depth-side:hover {
+		color: var(--ds-color-foreground);
+	}
+
+	.ds-lib-depth-side.is-chosen {
+		background: var(--ds-color-primary);
+		color: var(--ds-color-primary-foreground);
+		font-weight: 600;
+	}
+
+	.ds-lib-depth-side:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	/* Above the box, never inside it: it is about the conversation so far,
+	   not this one question. Warning-tinted, never error — nothing has gone
+	   wrong, a follow-up just costs more than the last one did. */
+	.ds-lib-long {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		border: 1px solid color-mix(in oklab, var(--ds-color-status-warning) 40%, transparent);
+		border-radius: var(--ds-radius-lg);
+		background: color-mix(in oklab, var(--ds-color-status-warning) 12%, transparent);
+		padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+		color: var(--ds-color-foreground);
+		font-size: 0.875rem;
+	}
+
+	.ds-lib-long span {
+		flex: 1;
+	}
+
+	.ds-lib-long-new {
+		min-height: 2.75rem;
+		flex: none;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-md);
+		background: transparent;
+		padding: 0 0.875rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+		cursor: pointer;
+		transition: background-color 150ms ease;
+	}
+
+	.ds-lib-long-new:hover {
+		background: var(--ds-color-surface-2);
+	}
+
+	.ds-lib-long-new:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

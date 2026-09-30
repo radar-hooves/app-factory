@@ -236,6 +236,46 @@ describe('Chat kinds of turn', () => {
 	});
 });
 
+describe('Chat depth of a question', () => {
+	it('asks at a depth, keeps it on the turn, and asks again at the same depth', async () => {
+		const { transport, asks } = room();
+		const c = chat(transport);
+		const asked = c.ask('Can a reservist claim recreation leave?', undefined, 'thorough');
+		expect(asks[0].request.depth).toBe('thorough');
+		expect(c.turns[0]).toMatchObject({ depth: 'thorough' });
+		asks[0].pipe.push(...CHAT);
+		asks[0].pipe.end();
+		await asked;
+
+		const again = c.again();
+		expect(asks[1].request.depth).toBe('thorough');
+		asks[1].pipe.end();
+		await again;
+
+		const plain = c.ask('And the tax?');
+		expect(asks[2].request.depth).toBeUndefined();
+		expect(c.turns.at(-1)?.depth).toBeUndefined();
+		asks[2].pipe.end();
+		await plain;
+	});
+
+	it('reads a stored depth back onto the turn', async () => {
+		const { transport } = room({
+			read: vi.fn(async () =>
+				conversation({
+					turns: [
+						{ question: 'What is the total?', answer: ANSWER, at: null, depth: 'quick' },
+						{ question: 'Interpret the clause.', answer: '# Answer', at: null, depth: 'thorough' }
+					]
+				})
+			)
+		});
+		const c = chat(transport);
+		await c.open(SESSION);
+		expect(c.turns.map((t) => t.depth)).toEqual(['quick', 'thorough']);
+	});
+});
+
 describe('Chat waiting', () => {
 	it('says the question waits while the stream says so, and stops once the agent starts', async () => {
 		const { transport, asks } = room();

@@ -78,6 +78,11 @@
 		showing?: string;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
+		/** Prices a turn's `outcome.costUsd` in the host's own currency and
+		 *  words ("about A$0.34"), for the footer's cost line beside a turn's
+		 *  `depth`. The package never converts currency itself; omitted, the
+		 *  line shows depth and duration only. */
+		formatCost?: (usd: number) => string;
 		collectionNames?: Set<string>;
 		/** The composer, rendered INSIDE the transcript column so the source
 		 *  pane narrows it too — a composer the host places outside slides
@@ -117,7 +122,8 @@
 		collectionNames = new Set(),
 		composer,
 		turn: presentTurn,
-		lead
+		lead,
+		formatCost
 	}: Props = $props();
 
 	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
@@ -311,6 +317,8 @@
 							artefactOpen: isShowing(turn),
 							onopenartefact: opener(turn),
 							describeTool,
+							depth: turn.depth,
+							formatCost,
 							oncite: oncite || loadDocument ? cite : undefined,
 							onregenerate: last && !running ? onregenerate : undefined,
 							onsuggest: last && !running ? onsuggest : undefined,

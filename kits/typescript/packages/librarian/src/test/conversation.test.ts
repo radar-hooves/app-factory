@@ -125,13 +125,50 @@ describe("Conversation in the host's own words", () => {
 			seen.push(props());
 			return { render: () => `<p>Asked: ${props().question}</p>` };
 		});
-		conversation({ turns: ANSWERED, turn, name: 'penny', oncite: () => undefined });
+		const formatCost = (usd: number) => `about A$${usd}`;
+		conversation({
+			turns: [{ ...ANSWERED[0], depth: 'quick' }],
+			turn,
+			name: 'penny',
+			oncite: () => undefined,
+			formatCost
+		});
 		expect(screen.getByText('Asked: How much leave?')).toBeInTheDocument();
 		// The package's card, signed with the persona, is gone.
 		expect(screen.queryByText('Penny')).toBeNull();
 		expect(seen[0]).toMatchObject({ question: 'How much leave?', name: 'Penny', running: false });
 		expect(seen[0].citations?.[0]?.title).toBe('The Manual');
 		expect(seen[0].oncite).toBeTypeOf('function');
+		expect(seen[0].depth).toBe('quick');
+		expect(seen[0].formatCost).toBe(formatCost);
+	});
+
+	it("folds a turn's depth and the host's own priced cost into the one footer line", () => {
+		const turns: Turn[] = [
+			{
+				id: '1',
+				question: 'Can a reservist claim recreation leave?',
+				blocks: [{ kind: 'text', index: 0, text: 'Yes, on continuous full-time service.' }],
+				outcome: { turns: 3, durationMs: 56_000, costUsd: 0.23 },
+				depth: 'thorough'
+			}
+		];
+		conversation({ turns, formatCost: (usd: number) => `about A$${(usd * 1.5).toFixed(2)}` });
+		expect(screen.getByText('Thorough · 56 s · about A$0.35')).toBeInTheDocument();
+	});
+
+	it('shows depth and duration alone when the run cost nothing', () => {
+		const turns: Turn[] = [
+			{
+				id: '1',
+				question: 'q',
+				blocks: [{ kind: 'text', index: 0, text: 'a' }],
+				outcome: { turns: 1, durationMs: 4_000, costUsd: 0 },
+				depth: 'quick'
+			}
+		];
+		conversation({ turns, formatCost: (usd: number) => `about A$${usd}` });
+		expect(screen.getByText('Quick · 4 s')).toBeInTheDocument();
 	});
 
 	it('shows what leads the conversation inside its scroll, under the opening', () => {

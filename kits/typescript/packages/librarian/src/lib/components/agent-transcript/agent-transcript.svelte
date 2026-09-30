@@ -17,12 +17,14 @@
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import {
+		outcomeLine,
 		readerQuestion,
 		readFrom,
 		segment,
 		type Artefact,
 		type Block,
 		type DescribeTool,
+		type Depth,
 		type Outcome,
 		type TextBlock
 	} from '../../transcript.svelte';
@@ -88,6 +90,14 @@
 		/** Records a verdict on this answer. Omit and no mark renders: a
 		 *  control that records nothing is worse than none. */
 		onmark?: (verdict: Verdict) => Promise<boolean>;
+		/** How hard the persona worked on this one, for the footer's cost line
+		 *  (`Quick · 56 s · about A$0.34`). Absent renders the footer exactly
+		 *  as it always has: the duration alone. */
+		depth?: Depth;
+		/** Prices `outcome.costUsd` in the host's own currency and words
+		 *  ("about A$0.34"). The package never converts currency itself,
+		 *  and a zero-cost run (a local model) shows no cost regardless. */
+		formatCost?: (usd: number) => string;
 	}
 
 	let {
@@ -110,7 +120,9 @@
 		describeTool,
 		waiting = false,
 		answering,
-		onmark
+		onmark,
+		depth,
+		formatCost
 	}: AgentTranscriptProps = $props();
 
 	// The prose IS the artefact: it reads in the column, and the transcript
@@ -375,11 +387,12 @@
 						<span>{words.askAgain}</span>
 					</button>
 				{/if}
-				<!-- How long it took, which is not the same fact as when it was
+				<!-- What it took, which is not the same fact as when it was
 				     asked; both are on the card and neither stands in for the
-				     other. -->
+				     other. Depth and cost fold into the SAME line, never a
+				     second one, once the host offers either. -->
 				{#if outcome && !failure}
-					<span class="ds-lib-duration">{((outcome.durationMs ?? 0) / 1000).toFixed(1)}s</span>
+					<span class="ds-lib-duration">{outcomeLine(outcome, depth, words, formatCost)}</span>
 				{/if}
 			</div>
 		{/if}
