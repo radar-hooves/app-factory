@@ -50,7 +50,7 @@
     "@fontsource-variable/hanken-grotesk": "^5.1.0",
     "@fontsource-variable/jetbrains-mono": "^5.1.0",
     "@tailwindcss/cli": "^4.3.2",
-    "style-dictionary": "^4.4.0",
+    "style-dictionary": "^5.0.0",
     "tailwindcss": "^4.3.2"
   },
   "packageManager": "pnpm@10.28.0"
