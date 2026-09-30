@@ -16,7 +16,7 @@ import uuid
 from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from agent_common import cli, transcript
 from agent_common.persona import Persona
@@ -35,9 +35,17 @@ class Agent(Protocol):
     """Ask, read back, forget: all a chat needs of whatever answers it."""
 
     def ask(
-        self, question: str, *, resume: str | None = None, files: Mapping[str, bytes] | None = None
+        self,
+        question: str,
+        *,
+        resume: str | None = None,
+        files: Mapping[str, bytes] | None = None,
+        depth: Literal["quick", "thorough"] | None = None,
     ) -> AsyncGenerator[dict[str, Any]]:
         """Yield the turn's events as they arrive; `resume` continues a conversation, `files` come with the question.
+
+        `depth` is Milton's alone: a local persona has no reading budget or
+        model to pick between, so `LocalAgent` takes and ignores it.
 
         Closing the generator stops the turn: the local CLI is killed, the
         library's stream closed.
@@ -61,9 +69,17 @@ class LocalAgent:
     persona: Persona
 
     async def ask(
-        self, question: str, *, resume: str | None = None, files: Mapping[str, bytes] | None = None
+        self,
+        question: str,
+        *,
+        resume: str | None = None,
+        files: Mapping[str, bytes] | None = None,
+        depth: Literal["quick", "thorough"] | None = None,
     ) -> AsyncGenerator[dict[str, Any]]:
         """Ask the persona, streaming Claude Code's events verbatim.
+
+        `depth` is ignored: a persona's model and behaviour are fixed in its
+        own `settings.json`, so there is nothing here for it to pick between.
 
         Attached files are written under the persona's home and named in the
         question by absolute path, the only way Claude Code's Read tool takes

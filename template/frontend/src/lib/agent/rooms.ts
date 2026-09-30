@@ -87,13 +87,14 @@ export function fileName(disposition: string | null, fallback: string): string {
 export function roomTransport(room: Room): RoomTransport {
 	const at = (id: string) => ({ params: { path: { conversation_id: id } } });
 	const transport: RoomTransport = {
-		ask: ({ question, files, resume, signal, kind }) =>
+		ask: ({ question, files, resume, signal, kind, depth }) =>
 			ask({
 				question,
 				files,
 				resume,
 				signal,
 				kind,
+				depth,
 				endpoint: `${BASE}/api/agent/rooms/${room.id}/ask`
 			}),
 		read: (id) =>

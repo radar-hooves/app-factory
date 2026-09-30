@@ -116,6 +116,16 @@ async def test_a_resume_the_library_refuses_comes_back_as_its_own_frame(library:
     assert json.loads(route.calls.last.request.content)["resume"] == "e533e3de-0528-4ab7-8133-53a7cb3e6ab8"
 
 
+async def test_depth_reaches_the_library_and_omits_by_default(library: respx.MockRouter) -> None:
+    route = library.post("/ask").respond(200, content=RECORDED)
+
+    await _ask(_agent(), "What was the total?", depth="thorough")
+    assert json.loads(route.calls.last.request.content)["depth"] == "thorough"
+
+    await _ask(_agent(), "What was the total?")
+    assert "depth" not in json.loads(route.calls.last.request.content)
+
+
 async def test_attachments_go_multipart_by_base_name(library: respx.MockRouter) -> None:
     route = library.post("/ask").respond(200, content=RECORDED)
 

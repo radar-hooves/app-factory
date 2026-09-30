@@ -140,4 +140,27 @@ describe('A room page, through the app extension points', () => {
 		// Its card, and its prose opened in the column beside it under the same title.
 		expect(await screen.findAllByText('Briefing: The Manual')).toHaveLength(2);
 	});
+
+	it('asks at the picked depth, Quick to start', async () => {
+		const stream = [
+			{ type: 'system', subtype: 'init', session_id: 'c3' },
+			{ type: 'result', result: 'Four weeks.', is_error: false }
+		];
+		const asked = vi.fn(
+			async () =>
+				new Response(stream.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+					headers: { 'content-type': 'text/event-stream' }
+				})
+		);
+		vi.stubGlobal('fetch', asked);
+		at('/rooms/manual');
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Thorough' }));
+		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+		await waitFor(() => expect(asked).toHaveBeenCalled());
+
+		const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+		expect(JSON.parse(String(init.body))).toMatchObject({ depth: 'thorough' });
+	});
 });

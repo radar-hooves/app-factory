@@ -34,6 +34,15 @@ async def test_a_conversation_is_asked_resumed_and_read_back(settings: cli.Setti
     assert [turn.question for turn in turns] == ["one", "two"]
 
 
+async def test_depth_is_accepted_and_ignored_a_persona_has_no_reading_budget_to_pick(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent: Agent = LocalAgent(settings, milton)
+    with_depth = _question_sent(await _ask(agent, "one", depth="thorough"))
+    without_depth = _question_sent(await _ask(agent, "one"))
+    assert with_depth == without_depth == "one"
+
+
 async def test_attached_files_are_filed_under_the_conversation_and_named_by_path(
     settings: cli.Settings, milton: Persona
 ) -> None:

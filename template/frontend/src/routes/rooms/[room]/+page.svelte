@@ -13,7 +13,7 @@
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 	import { Chat } from '@poodle64/librarian/chat';
 	import { resolveCopy } from '@poodle64/librarian/copy';
-	import Composer from '@poodle64/librarian/composer';
+	import Composer, { type Depth } from '@poodle64/librarian/composer';
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
@@ -28,10 +28,21 @@
 	/** The kind a briefing is asked as, and read back by. */
 	const BRIEFING = 'briefing';
 
+	// Currency and rate are this app's own setting, never the package's or
+	// the factory's to hardcode (@poodle64/librarian README §Depth): a build
+	// with neither set shows the plain USD figure, which is always correct,
+	// merely unconverted.
+	const COST_CURRENCY = import.meta.env.VITE_AGENT_COST_CURRENCY ?? '$';
+	const COST_RATE = Number(import.meta.env.VITE_AGENT_COST_RATE ?? 1);
+	const formatCost = (usd: number) => `about ${COST_CURRENCY}${(usd * COST_RATE).toFixed(2)}`;
+
 	let room = $state<Room | null>(null);
 	let chat = $state<Chat | null>(null);
 	let missing = $state(false);
 	let listOpen = $state(false);
+	// undefined for a persona room, which has no reading budget or model to
+	// pick between; Quick, to start, the moment a library room is entered.
+	let depth = $state<Depth | undefined>(undefined);
 
 	// Derived, so each follows its own value: `page.params` is a new object on
 	// every navigation, a conversation named in the address included.
@@ -62,6 +73,7 @@
 		room = null;
 		missing = false;
 		listOpen = false;
+		depth = undefined;
 		const { data } = await api.GET('/api/agent/rooms');
 		if (roomId !== id) return;
 		const found = data?.find((r) => r.id === id) ?? null;
@@ -75,6 +87,7 @@
 					: undefined
 		});
 		room = found;
+		depth = found.library ? 'quick' : undefined;
 		void chat.list();
 	}
 
@@ -90,6 +103,7 @@
 		untrack(() => {
 			if (!want) {
 				current.new();
+				depth = room?.library ? 'quick' : undefined;
 				if (!question) return;
 				current.draft = question;
 				void goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
@@ -182,13 +196,14 @@
 				onexample={(question) => (c.draft = question)}
 				{scope}
 				onregenerate={() => void c.again()}
-				onsuggest={(question) => void c.ask(question)}
+				onsuggest={(question) => void c.ask(question, undefined, depth)}
 				onmark={r.library ? (turn, verdict) => c.mark(turn, verdict) : undefined}
 				loadDocument={r.library && !extensions.oncite ? roomDocuments(r) : undefined}
 				oncite={extensions.oncite ? (citation) => extensions.oncite!(r, citation) : undefined}
 				describeTool={extensions.describeTool}
 				turn={extensions.Turn ? presented : undefined}
 				lead={extensions.Home && !c.conversationId ? home : undefined}
+				{formatCost}
 				{copy}
 			>
 				{#snippet composer()}
@@ -200,9 +215,12 @@
 						sendWhileRunning={c.sendWhileRunning}
 						name={who}
 						{copy}
-						onsubmit={() => void c.ask()}
+						bind:depth
+						turnCount={c.turns.length}
+						onnewquestion={fresh}
+						onsubmit={() => void c.ask(undefined, undefined, depth)}
 						onstop={() => void c.stop()}
-						onbriefing={briefing ? () => void c.ask(briefing.question, BRIEFING) : undefined}
+						onbriefing={briefing ? () => void c.ask(briefing.question, BRIEFING, depth) : undefined}
 					/>
 				{/snippet}
 			</Conversation>

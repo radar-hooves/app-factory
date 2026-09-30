@@ -124,6 +124,7 @@ async def ask(
         question=body.question,
         resume=body.resume,
         kind=body.kind,
+        depth=body.depth,
         files=files,
     )
 
@@ -151,7 +152,8 @@ async def read(owned: OwnedConversation, settings: SettingsDep) -> ConversationR
     return ConversationRead(
         **_summary(owned.conversation).model_dump(),
         turns=[
-            StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations, kind=t.kind) for t in turns
+            StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations, kind=t.kind, depth=t.depth)
+            for t in turns
         ],
     )
 
@@ -305,10 +307,13 @@ async def _asked(request: Request) -> tuple[AskRequest, dict[str, bytes]]:
     try:
         if request.headers.get("content-type", "").startswith("multipart/form-data"):
             form = await request.form()
-            body = AskRequest(
-                question=str(form.get("question") or ""),
-                resume=str(form.get("resume") or "") or None,
-                kind=str(form.get("kind") or "") or None,
+            body = AskRequest.model_validate(
+                {
+                    "question": str(form.get("question") or ""),
+                    "resume": str(form.get("resume") or "") or None,
+                    "kind": str(form.get("kind") or "") or None,
+                    "depth": str(form.get("depth") or "") or None,
+                }
             )
             files = {
                 upload.filename or "attachment": await upload.read()
