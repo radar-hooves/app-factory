@@ -16,10 +16,10 @@ problem.
 kit owns its routes, and this file hands them this app's session, caller and
 admin gate, the same dependencies the admin router uses.
 
-``agent`` is the factory's too: the persona chat slice
-(`docs/design/agent-console.md`). It renders nothing until this app has a
-persona directory under `config/personas/`, so taking it costs a fresh stamp
-nothing until the app actually uses it.
+``agent`` is the factory's too: rooms, a person's conversations with a
+persona or with Milton (`docs/design/agent-console.md`), and app-started
+jobs. It offers nothing until this app writes `config/rooms.yaml`, so taking
+it costs a fresh stamp nothing until the app actually uses it.
 
 There is deliberately NO ``api/auth`` slice, and an app must not add one.
 Authentication is the identity provider's (Tier 1a, proxy-delegated), so the

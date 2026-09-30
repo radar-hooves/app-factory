@@ -1,22 +1,86 @@
-"""Request shape for asking a persona.
+"""The agent slice's bodies: `@poodle64/librarian`'s own route shapes.
 
-There is deliberately no response model for the stream. An SSE frame here
-carries a Claude Code event, whose schema is Claude Code's own and changes
-when it changes. Declaring a Pydantic model for it would be this slice
-re-asserting ownership of a vocabulary it has none over, and would make every
-new event type a validation error rather than something the Console renders.
+`ConversationSummary`, `ConversationRead`, `StoredTurn` and `Quota` are the
+types `./chat`'s `RoomTransport` reads, so the page passes these bodies
+through untranslated.
+
+There is deliberately no response model for the ask stream. An SSE frame
+carries a Claude Code event, whose schema is Claude Code's own; declaring one
+here would make every new event type a validation error rather than
+something the page renders.
 """
+
+import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
 class AskRequest(BaseModel):
+    """`POST rooms/{room}/ask` as JSON; the same fields arrive as multipart with `files[]`."""
+
     question: str = Field(min_length=1, max_length=8000)
-    #: A prior session's id, from the `system`/`init` event. Continues that
-    #: conversation with its context intact rather than starting fresh. Must be
-    #: a session THIS asker was issued — `api/agent/ownership.py` carries the
-    #: measurement of what an unbound one returned.
+    #: A conversation of this person's in this room, to carry on.
     resume: str | None = None
+
+
+class RoomRead(BaseModel):
+    id: str
+    title: str
+    blurb: str
+    examples: list[str]
+    not_held: str
+    #: The collections' reader-facing names, for a library room's scope line.
+    sources: list[str]
+    #: A library room cites documents and takes an answer mark.
+    library: bool
+
+
+class ConversationSummary(BaseModel):
+    id: str
+    title: str
+    last_activity_at: datetime.datetime
+    answering_since: datetime.datetime | None = None
+
+
+class StoredTurn(BaseModel):
+    question: str
+    answer: str
+    at: datetime.datetime | None
+    citations: list[dict[str, Any]] = []
+
+
+class ConversationRead(ConversationSummary):
+    turns: list[StoredTurn]
+
+
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class MarkRequest(BaseModel):
+    helpful: bool
+    note: str | None = Field(default=None, max_length=500)
+
+
+class QuotaRead(BaseModel):
+    limit: int
+    remaining: int
+    exempt: bool
+    reached: bool
+    resets_at: datetime.datetime
+    support_url: str | None = None
+
+
+class DocumentSection(BaseModel):
+    anchor: str
+    heading: str
+    text: str
+
+
+class DocumentRead(BaseModel):
+    title: str
+    sections: list[DocumentSection]
 
 
 class AgentJobMessageRequest(BaseModel):

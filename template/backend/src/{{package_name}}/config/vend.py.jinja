@@ -33,6 +33,7 @@ import base64
 import logging
 import os
 import time
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -314,8 +315,8 @@ class Vended:
     credential_field: str | None = None
 
 
-def resolve_vended_fields(settings: BaseSettings) -> None:
-    """Fill every ``Vended``-annotated field ``settings`` left empty.
+def resolve_vended_fields(settings: BaseSettings, only: Collection[str] | None = None) -> None:
+    """Fill every ``Vended``-annotated field ``settings`` left empty, or those of them named in ``only``.
 
     The whole reason a field declares this instead of a hand-written
     validator: the resolution order -- the environment, then an optional
@@ -333,7 +334,7 @@ def resolve_vended_fields(settings: BaseSettings) -> None:
     """
     for name, info in type(settings).model_fields.items():
         spec = next((meta for meta in info.metadata if isinstance(meta, Vended)), None)
-        if spec is None:
+        if spec is None or (only is not None and name not in only):
             continue
         current = getattr(settings, name)
         is_secret = isinstance(current, SecretStr)

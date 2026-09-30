@@ -1,68 +1,269 @@
-"""Ask a persona, and stream Claude Code's own events verbatim.
+"""The turn: a question answered by a task in this worker, not by the request that asked it.
 
-For a chatbot the leak is not only in the citation: everything past ownership
-is one straight line — ask the agent, forward its events, claim the session as
-soon as its id is known — because there is nothing here to branch on. The
-agent is `agent_common`'s `LocalAgent`, the persona this app runs itself; the
-library's own version of this module additionally resolves a scoped view and
-composes a per-question system prompt, and a persona has neither.
+Milton takes 30 to 260 s on one GPU, so a refresh, a locked phone or a closed
+tab must not end an answer (`docs/design/agent-console.md` §The turn). The
+asking request streams the turn while it listens; the task goes on without
+it, and the answer lands in the agent's transcript either way.
+
+The stream opens with this slice's own `system`/`init` naming the
+conversation before the agent starts, so a stop has an address from the
+first second. The agent's own `init` follows with the same address: its
+session id is the agent's to keep (`conversations.claim`), never the
+page's. Everything else is the agent's event, verbatim, through the app's
+`agent_event` hook.
+
+A stop is a row flag, so it reaches the turn from any worker: the task reads
+it every second and closes the agent, which kills the local CLI or closes
+the library's stream (on which the library kills Milton's process).
 """
 
+import asyncio
+import contextlib
+import functools
+import logging
+import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
+from typing import Any
 
 from agent_common import cli, sse
-from agent_common.agent import LocalAgent
+from agent_common.agent import Agent
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from {{ package_name }}.api.agent import ownership
+from {{ package_name }}.api.agent import conversations, quota
 from {{ package_name }}.api.agent.redact import redact, redact_event
-from {{ package_name }}.api.agent.schemas import AskRequest
+from {{ package_name }}.api.agent.rooms import Room
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.exceptions import AllowanceSpentError, ConflictError, NotFoundError
+
+logger = logging.getLogger(__name__)
+
+#: How often the task holding a turn looks for a stop.
+STOP_POLL_SECONDS = 1.0
+
+#: One answer for a conversation that is another person's and one that never
+#: existed: telling them apart is itself a disclosure.
+DENIAL = "That conversation is not one you can continue; ask again without it to start a new one"
+
+_turns: set[asyncio.Task[None]] = set()
 
 
-class AskRefused(Exception):
-    """Carries the message an error frame shows the asker; never raised past `stream`."""
+@dataclass(frozen=True, slots=True)
+class _Turn:
+    room: Room
+    agent: Agent
+    conversation_id: str
+    #: The question's place in the conversation's record.
+    position: int
+    question: str
+    #: The agent's own session, to resume; None for the first question.
+    resume: str | None
+    files: dict[str, bytes]
+    user_id: uuid.UUID
+    charged: bool
 
 
-def stream(
-    db: Session,
-    agent: LocalAgent,
-    request: AskRequest,
+async def ask(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    room: Room,
+    agent: Agent,
     *,
     user_id: uuid.UUID,
+    exempt: bool,
+    question: str,
+    resume: str | None,
+    files: dict[str, bytes],
 ) -> StreamingResponse:
-    """Ask `agent`, attributing the issued session to `user_id`.
+    """Stamp the conversation answering, start its turn, and stream it.
 
-    A required keyword because the caller — the route — is the only thing
-    that knows whose identity resolved the request; this function stays
-    ignorant of how that identity was established.
+    Raises:
+        NotFoundError: `resume` is not one of this person's conversations in this room.
+        ConflictError: that conversation is already being answered.
+        AllowanceSpentError: today's allowance is spent.
     """
-    persona = agent.persona.name
+    question = await run_in_threadpool(redact, room.id, user_id, question)
+
+    def begin() -> conversations.AgentConversation:
+        with db_session_factory() as db:
+            conversation = conversations.owned(db, resume, user_id) if resume else None
+            if resume and (conversation is None or conversation.room != room.id):
+                raise NotFoundError(DENIAL)
+            if conversation is not None and conversations.answering(conversation) is not None:
+                raise ConflictError("That conversation is still being answered")
+            if quota.allowance(db, settings, user_id, exempt=exempt).reached:
+                raise AllowanceSpentError("Today's questions are used up; there are more tomorrow")
+            started = conversations.begin(
+                db, user_id=user_id, room=room.id, question=question, conversation=conversation
+            )
+            if started is None:
+                raise ConflictError("That conversation is still being answered")
+            return started
+
+    started = await run_in_threadpool(begin)
+    turn = _Turn(
+        room=room,
+        agent=agent,
+        conversation_id=started.id,
+        position=len(started.turns) - 1,
+        question=question,
+        resume=started.session_id,
+        files=files,
+        user_id=user_id,
+        charged=not exempt,
+    )
+    listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
+    task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
+    _turns.add(task)
+    task.add_done_callback(_turns.discard)
+    task.add_done_callback(_log_failure)
 
     async def frames() -> AsyncIterator[str]:
+        queue = listening[0]
+        yield sse.frame({"type": "system", "subtype": "init", "session_id": started.id})
         try:
-            if request.resume and not await run_in_threadpool(ownership.may_resume, db, request.resume, user_id):
-                # Here rather than in the route body: a status code that
-                # distinguishes a real session from an absent one is an
-                # enumeration oracle, and an error FRAME is what this surface
-                # already declines with once the stream has started.
-                raise AskRefused(ownership.DENIAL)
-
-            question = await run_in_threadpool(redact, persona, user_id, request.question)
-
-            async for event in agent.ask(question, resume=request.resume):
-                # Claimed as the frame arrives, not at the end of the stream:
-                # the client is handed the id in this very frame, so a claim
-                # that waited would leave it unowned in between.
-                if event.get("subtype") == "init" and isinstance(event.get("session_id"), str):
-                    await run_in_threadpool(ownership.claim, db, str(event["session_id"]), user_id)
-                # Through the app's own output hook before it leaves.
-                rewritten = redact_event(persona, event)
-                if rewritten is not None:
-                    yield sse.frame(rewritten)
-        except AskRefused as refused:
-            yield sse.frame({"type": cli.ERROR_EVENT, "error": str(refused)})
+            while (event := await queue.get()) is not None:
+                yield sse.frame(event)
+        finally:
+            # The asker left; the turn goes on without them.
+            listening.clear()
 
     return StreamingResponse(frames(), media_type=sse.MEDIA_TYPE, headers=sse.HEADERS)
+
+
+async def shutdown() -> None:
+    """End every turn this worker holds, settling each, before the worker exits."""
+    loop = asyncio.get_running_loop()
+    ours = {task for task in _turns if task.get_loop() is loop}
+    for task in ours:
+        task.cancel()
+    if ours:
+        await asyncio.wait(ours, timeout=10)
+
+
+async def _run(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    turn: _Turn,
+    listening: list[asyncio.Queue[dict[str, Any] | None]],
+) -> None:
+    def emit(event: dict[str, Any] | None) -> None:
+        for queue in listening:
+            queue.put_nowait(event)
+
+    async def db[T](work: Callable[[Session], T]) -> T:
+        return await _in_db(db_session_factory, work)
+
+    answering = asyncio.create_task(_answer(db_session_factory, settings, turn, emit))
+    try:
+        beat = time.monotonic()
+        while not answering.done():
+            await asyncio.wait({answering}, timeout=STOP_POLL_SECONDS)
+            if answering.done():
+                break
+            if time.monotonic() - beat >= conversations.HEARTBEAT_SECONDS:
+                beat = time.monotonic()
+                stop = await db(lambda s: conversations.beat(s, turn.conversation_id))
+            else:
+                stop = await db(lambda s: conversations.stop_wanted(s, turn.conversation_id))
+            if stop:
+                answering.cancel()
+                break
+    finally:
+        if not answering.done():
+            answering.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await answering
+        await db(lambda s: conversations.settle(s, turn.conversation_id))
+        emit(None)
+        await _settled(db_session_factory, turn)
+
+
+async def _in_db[T](db_session_factory: sessionmaker[Session], work: Callable[[Session], T]) -> T:
+    def run() -> T:
+        with db_session_factory() as db:
+            return work(db)
+
+    return await run_in_threadpool(run)
+
+
+async def _answer(
+    db_session_factory: sessionmaker[Session],
+    settings: AgentSettings,
+    turn: _Turn,
+    emit: Callable[[dict[str, Any] | None], None],
+) -> None:
+    """Ask the agent and pass on each event; claim, charge and record the answer as they happen."""
+
+    async def db(work: Callable[[Session], object]) -> None:
+        await _in_db(db_session_factory, work)
+
+    accepted = held = False
+    try:
+        async with contextlib.aclosing(
+            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None)
+        ) as events:
+            async for event in events:
+                if event.get("type") == "system" and event.get("subtype") == "init":
+                    if not accepted and isinstance(event.get("session_id"), str):
+                        accepted = True
+                        await db(functools.partial(_accept, settings, turn, str(event["session_id"])))
+                    event = {**event, "session_id": turn.conversation_id}
+                if not held and _speaks(event):
+                    held = True
+                    await db(lambda s: conversations.answered(s, turn.conversation_id, turn.position))
+                rewritten = redact_event(turn.room.id, event)
+                if rewritten is not None:
+                    emit(rewritten)
+    except Exception:
+        logger.exception("Agent turn failed in conversation %s", turn.conversation_id)
+        emit({"type": cli.ERROR_EVENT, "error": "the agent failed to answer"})
+
+
+def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> None:
+    """The agent took the question: the conversation is its session's now, and the question is charged."""
+    conversations.claim(db, turn.conversation_id, session_id)
+    if turn.charged:
+        quota.charge(db, settings, turn.user_id)
+
+
+def _speaks(event: dict[str, Any]) -> bool:
+    """The agent said something a reader reads: its transcript now holds an answer to the question."""
+    message = event.get("message") if event.get("type") == "assistant" else None
+    content = message.get("content") if isinstance(message, dict) else None
+    return isinstance(content, list) and any(
+        isinstance(block, dict) and block.get("type") == "text" and str(block.get("text") or "").strip()
+        for block in content
+    )
+
+
+async def _settled(db_session_factory: sessionmaker[Session], turn: _Turn) -> None:
+    """Call `app_hooks.agent_turn_settled(room, conversation, turn)`, if this app defines one.
+
+    `turn` is the question's place as the page counts it, the same number an
+    answer mark is addressed by. A hook that raises is logged, never
+    re-raised: the turn has settled regardless.
+    """
+    from {{ package_name }} import app_hooks
+
+    hook = getattr(app_hooks, "agent_turn_settled", None)
+    if hook is None:
+        return
+    try:
+        conversation = await _in_db(
+            db_session_factory, lambda s: s.get(conversations.AgentConversation, turn.conversation_id)
+        )
+        answers = await turn.agent.read(conversation.session_id) if conversation and conversation.session_id else None
+        held = sum(1 for record in conversation.turns if record.get("answered")) if conversation else 0
+        lead = max(len(answers or []) - held, 0)
+        await run_in_threadpool(hook, turn.room.id, turn.conversation_id, lead + turn.position)
+    except Exception:
+        logger.exception("app_hooks.agent_turn_settled failed for conversation %s", turn.conversation_id)
+
+
+def _log_failure(task: asyncio.Task[None]) -> None:
+    if not task.cancelled() and (exc := task.exception()) is not None:
+        logger.error("Agent turn %s failed", task.get_name(), exc_info=exc)

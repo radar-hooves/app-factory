@@ -1,0 +1,145 @@
+"""The rooms this app offers, from `config/rooms.yaml` (`docs/design/agent-console.md` §Rooms).
+
+A room is one agent a person is granted with one `room-<id>` entitlement:
+a local persona, or Milton over named collections. The file is committed and
+released like code and has no admin surface, so a wrong room is refused at
+start rather than met by a colleague: `load` raises on a room naming no
+agent or both, an unknown persona, or a collection without a reader's name.
+An app with no file offers no rooms.
+"""
+
+import functools
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+from agent_common import persona as agent_persona
+from agent_common.agent import Agent, LocalAgent
+from agent_common.library_agent import LibraryAgent
+
+from {{ package_name }}.api.agent import persona as persona_module
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.exceptions import NotFoundError
+
+#: A room's id is a path segment and half an entitlement name.
+_ID = re.compile(r"\A[a-z0-9][a-z0-9-]{0,62}\Z")
+
+
+class RoomsInvalid(ValueError):
+    """`config/rooms.yaml` names a room this app cannot open."""
+
+
+@dataclass(frozen=True, slots=True)
+class Library:
+    """Milton over `collections` (name → the words a reader knows it by), introduced by `preamble`."""
+
+    collections: Mapping[str, str]
+    preamble: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Room:
+    id: str
+    title: str
+    blurb: str = ""
+    examples: tuple[str, ...] = ()
+    not_held: str = ""
+    persona: str | None = None
+    library: Library | None = None
+
+    @property
+    def entitlement(self) -> str:
+        return f"room-{self.id}"
+
+
+def load(settings: AgentSettings) -> dict[str, Room]:
+    """Every room in `settings.rooms_file`, validated; none when there is no file.
+
+    Read once per file version: an edit reaches the next request, as a
+    persona's does.
+
+    Raises:
+        RoomsInvalid: the file names a room this app cannot open.
+    """
+    path = settings.rooms_file
+    try:
+        version = path.stat().st_mtime_ns
+    except FileNotFoundError:
+        return {}
+    return _load(path, version, settings.personas_dir, bool(settings.library_url))
+
+
+def get(settings: AgentSettings, room_id: str) -> Room:
+    """The room `room_id`.
+
+    Raises:
+        NotFoundError: this app offers no such room.
+    """
+    room = load(settings).get(room_id)
+    if room is None:
+        raise NotFoundError(f"No room named {room_id!r}")
+    return room
+
+
+def agent(settings: AgentSettings, room: Room) -> Agent:
+    """The agent that answers in `room`: its persona, or Milton over its collections."""
+    if room.library is not None:
+        token = settings.library_token.get_secret_value()
+
+        async def bearer() -> str:
+            return token
+
+        return LibraryAgent(
+            url=settings.library_url,
+            collections=list(room.library.collections),
+            token=bearer,
+            preamble=room.library.preamble,
+            timeout_seconds=settings.timeout_seconds,
+        )
+    assert room.persona is not None
+    return LocalAgent(settings.driver(), persona_module.load(settings, room.persona))
+
+
+@functools.lru_cache(maxsize=8)
+def _load(path: Path, _version: int, personas_dir: Path, library: bool) -> dict[str, Room]:
+    raw = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(raw, dict):
+        raise RoomsInvalid(f"{path}: expected a mapping of room id to room")
+    personas = set(agent_persona.names(personas_dir))
+    return {str(room_id): _room(str(room_id), body, personas, library) for room_id, body in raw.items()}
+
+
+def _room(room_id: str, body: object, personas: set[str], library: bool) -> Room:
+    def refuse(why: str) -> RoomsInvalid:
+        return RoomsInvalid(f"room {room_id!r}: {why}")
+
+    if not _ID.match(room_id):
+        raise refuse("an id is lowercase letters, digits and hyphens")
+    if not isinstance(body, dict) or not str(body.get("title") or "").strip():
+        raise refuse("needs a title")
+    persona, shelf = body.get("persona"), body.get("library")
+    if (persona is None) == (shelf is None):
+        raise refuse("names exactly one of persona or library")
+    if persona is not None and persona not in personas:
+        raise refuse(f"no persona {persona!r} under config/personas/")
+    room_library = None
+    if shelf is not None:
+        collections = shelf.get("collections") if isinstance(shelf, dict) else None
+        if not isinstance(collections, dict) or not collections:
+            raise refuse("a library room names its collections")
+        if not all(isinstance(name, str) and name.strip() for name in collections.values()):
+            raise refuse("every collection needs a reader's name")
+        if not library:
+            raise refuse("a library room needs {{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL")
+        room_library = Library(collections=dict(collections), preamble=str(shelf.get("preamble") or "").strip())
+    return Room(
+        id=room_id,
+        title=str(body["title"]).strip(),
+        blurb=str(body.get("blurb") or "").strip(),
+        examples=tuple(str(example) for example in body.get("examples") or ()),
+        not_held=str(body.get("not_held") or "").strip(),
+        persona=persona,
+        library=room_library,
+    )

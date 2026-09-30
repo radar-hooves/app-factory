@@ -6,6 +6,9 @@ Replace with tests for the first real domain when the example slice is removed.
 
 import pytest
 
+#: The example module's own grant, which its router requires.
+ENTITLED = {"x-authentik-entitlements": "example"}
+
 
 @pytest.mark.unit
 def test_example_schema_validation():
@@ -21,7 +24,7 @@ def test_example_schema_validation():
 @pytest.mark.integration
 async def test_list_items_empty(client):
     """GET /api/example/ returns an empty list on a fresh database."""
-    response = await client.get("/api/example/")
+    response = await client.get("/api/example/", headers=ENTITLED)
     assert response.status_code == 200
     assert response.json() == []
 
@@ -30,14 +33,14 @@ async def test_list_items_empty(client):
 async def test_create_and_get_item(client):
     """POST then GET round-trips correctly."""
     # Create
-    create_resp = await client.post("/api/example/", json={"title": "Hello", "body": "World"})
+    create_resp = await client.post("/api/example/", headers=ENTITLED, json={"title": "Hello", "body": "World"})
     assert create_resp.status_code == 201
     item = create_resp.json()
     assert item["title"] == "Hello"
     item_id = item["id"]
 
     # Get by id
-    get_resp = await client.get(f"/api/example/{item_id}")
+    get_resp = await client.get(f"/api/example/{item_id}", headers=ENTITLED)
     assert get_resp.status_code == 200
     assert get_resp.json()["title"] == "Hello"
 
@@ -45,7 +48,7 @@ async def test_create_and_get_item(client):
 @pytest.mark.integration
 async def test_get_item_not_found(client):
     """GET for a missing item returns 404."""
-    response = await client.get("/api/example/99999")
+    response = await client.get("/api/example/99999", headers=ENTITLED)
     assert response.status_code == 404
 
 

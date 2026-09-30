@@ -9,8 +9,12 @@ from fastapi import APIRouter
 from {{ package_name }}.api.example import service
 from {{ package_name }}.api.example.schemas import ExampleItemCreate, ExampleItemRead
 from {{ package_name }}.deps import CurrentWorkspace, SessionDep
+from {{ package_name }}.entitlements import module_dependency
 
-router = APIRouter()
+# Gated on the module's own entitlement, as every domain slice is: a person
+# admitted to this app for something else (a room, by invitation) reaches
+# none of it (tests/test_route_walk.py).
+router = APIRouter(dependencies=[module_dependency("example")])
 
 # Every route takes CurrentWorkspace, and that is what makes the service functions
 # below scope-free: the dependency binds the session, so `select(ExampleItem)` is

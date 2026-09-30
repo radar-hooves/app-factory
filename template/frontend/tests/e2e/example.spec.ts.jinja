@@ -22,7 +22,11 @@ import { ok, readJson } from './api';
 // sets it once and both consumers see it. Falls back to the copier-stamped
 // port so a freshly stamped app needs nothing set.
 const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? 'http://127.0.0.1:{{ backend_port }}';
-const PARTNER = { 'x-authentik-uid': 'e2e-partner', 'x-authentik-username': 'e2e-partner' };
+const PARTNER = {
+	'x-authentik-uid': 'e2e-partner',
+	'x-authentik-username': 'e2e-partner',
+	'x-authentik-entitlements': 'example'
+};
 
 type Membership = {
 	workspace: { id: number; slug: string; name: string };

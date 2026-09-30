@@ -1,0 +1,67 @@
+"""A person admitted to this app for one thing reaches nothing else.
+
+A colleague invited to a room holds `room-<id>` and no other entitlement,
+and signs in like anyone else (`docs/design/agent-console.md`). So every
+route outside the person-facing set below must declare a module gate:
+`require_module`, or a gate that reads its module off the path (a room, a
+persona), marked by `entitlements.gate`. A route this app adds without one
+fails here rather than opening its data to every account the identity
+provider lets in.
+"""
+
+from collections.abc import Iterator
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.dependencies.models import Dependant
+from fastapi.routing import APIRoute
+
+from {{ package_name }}.main import _API_PREFIX
+
+#: Routes any signed-in person may reach, each gated by something other than a module.
+PERSON_FACING = {
+    "/users": "identity: who is calling, and the people a workspace owner grants a seat to",
+    "/workspaces": "the caller's own workspaces, gated by membership",
+    "/feedback": "how a person reports a problem; reading reports is admin-gated",
+    "/system": "health and version, which name nobody",
+    "/agent/rooms": "the rooms the caller is granted; each room's routes gate on its own",
+    "/agent/conversations": "the caller's own conversations, each gated on its room",
+    "/agent/quota": "the caller's own allowance",
+}
+
+
+def _routes(app: FastAPI) -> Iterator[tuple[str, str, Dependant]]:
+    """Every API route as served: `app.routes` lists them flat, or (FastAPI 0.139) behind each included router."""
+    for route in app.routes:
+        contexts: Any = getattr(route, "effective_route_contexts", None)
+        if isinstance(route, APIRoute):
+            yield ",".join(sorted(route.methods or ())), route.path, route.dependant
+        elif callable(contexts):
+            for context in contexts():
+                if context.dependant is not None and context.methods:
+                    yield ",".join(sorted(context.methods)), context.path, context.dependant
+
+
+def _gates(dependant: Dependant) -> Iterator[str]:
+    for dependency in dependant.dependencies:
+        if module := getattr(dependency.call, "gates_module", None):
+            yield str(module)
+        yield from _gates(dependency)
+
+
+def test_every_route_outside_the_person_facing_set_declares_a_module_gate(app: FastAPI) -> None:
+    open_to_everyone = tuple(f"{_API_PREFIX.rstrip('/')}{path}" for path in PERSON_FACING)
+    walked = list(_routes(app))
+    ungated = [
+        f"{methods} {path}"
+        for methods, path, dependant in walked
+        if path.startswith(_API_PREFIX) and not path.startswith(open_to_everyone) and not any(_gates(dependant))
+    ]
+    assert walked
+    assert ungated == []
+
+
+def test_a_rooms_routes_gate_on_the_room_they_name(app: FastAPI) -> None:
+    rooms = [dependant for _, path, dependant in _routes(app) if "{room_id}" in path]
+    assert rooms
+    assert all("room-{room_id}" in _gates(dependant) for dependant in rooms)
