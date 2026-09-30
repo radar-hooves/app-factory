@@ -15,7 +15,9 @@ both (`docs/design/agent-jobs.md`). Starting a job is not a route; a person
 watches, messages and stops one the app started.
 """
 
+import asyncio
 import dataclasses
+import datetime
 import urllib.parse
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -47,10 +49,11 @@ from {{ package_name }}.api.agent.schemas import (
     RoomRead,
     StoredTurn,
 )
+from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, Identity, SessionDep, SettingsDep
 from {{ package_name }}.entitlements import gate, has_module, require_module
-from {{ package_name }}.exceptions import NotFoundError
+from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
 
 router = APIRouter()
 
@@ -97,9 +100,31 @@ def shared(room: EnteredRoom, conversation_id: str, turn: int, db: SessionDep) -
 SharedAnswer = Annotated[Owned, Depends(shared)]
 
 
+async def _documents_to(agent_settings: AgentSettings, room: Room) -> datetime.date | None:
+    """How current `room` is, or None for a persona room or a library room this deployment has not set up yet."""
+    if room.library is None:
+        return None
+    try:
+        agent = rooms.agent(agent_settings, room)
+    except ServiceUnavailableError:
+        return None
+    assert isinstance(agent, LibraryAgent)
+    return await agent.documents_to()
+
+
 @router.get("/rooms", operation_id="listRooms")
-def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRead]:
+async def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRead]:
     """The rooms this app offers that this caller is granted; none when the app offers none."""
+    granted = [
+        room for room in rooms.load(settings.agent).values() if has_module(identity.entitlements, room.entitlement)
+    ]
+    documents_to = dict(
+        zip(
+            (room.id for room in granted),
+            await asyncio.gather(*(_documents_to(settings.agent, room) for room in granted)),
+            strict=True,
+        )
+    )
     return [
         RoomRead(
             id=room.id,
@@ -109,9 +134,9 @@ def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRea
             not_held=room.not_held,
             sources=list(room.library.collections.values()) if room.library else [],
             library=room.library is not None,
+            documents_to=documents_to[room.id],
         )
-        for room in rooms.load(settings.agent).values()
-        if has_module(identity.entitlements, room.entitlement)
+        for room in granted
     ]
 
 

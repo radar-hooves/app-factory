@@ -170,6 +170,7 @@ test('stop ends an answer being written, and the question stays', async ({ page 
 test('a library room cites, opens the cited document and takes a mark', async ({ page }) => {
 	await page.goto('/rooms/manual');
 	await expect(page.getByText('Ask Milton about The Manual')).toBeVisible();
+	await expect(page.getByText(/Checked against the open record on .*2026\./)).toBeVisible();
 	await ask(page, 'How much recreation leave does a member accrue?');
 
 	await expect(page.getByText(/four weeks of recreation leave/)).toBeVisible();

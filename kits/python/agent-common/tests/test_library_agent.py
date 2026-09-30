@@ -14,7 +14,7 @@ library's own response body for a conversation read, captured from its route
 import asyncio
 import json
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -266,6 +266,43 @@ async def test_a_cited_document_opens_only_inside_the_room(library: respx.MockRo
 
     library.get("/documents/1042").respond(404, json={"error": "not_found", "message": "absent"})
     assert await _agent().document(1042) is None
+
+
+def _collection(name: str, documents_to: str | None) -> dict[str, Any]:
+    return {
+        "id": 1,
+        "name": name,
+        "pipeline": "text",
+        "status": "active",
+        "owner_project_id": 1,
+        "profile": None,
+        "document_count": 1,
+        "type_counts": {},
+        "documents_to": documents_to,
+    }
+
+
+async def test_documents_to_is_the_newest_across_the_rooms_own_collections(library: respx.MockRouter) -> None:
+    library.get("/collections").respond(
+        200,
+        json=[
+            _collection("receipts", "2026-09-20"),
+            _collection("groceries", "2026-09-29"),
+            # in the caller's wider grant, but not this room's -- must not count.
+            _collection("another-room", "2026-09-30"),
+        ],
+    )
+    agent = LibraryAgent(URL, ["receipts", "groceries"], _token)
+
+    assert await agent.documents_to() == date(2026, 9, 29)
+
+
+async def test_documents_to_is_none_when_none_of_the_rooms_collections_say(library: respx.MockRouter) -> None:
+    library.get("/collections").respond(
+        200, json=[_collection("receipts", None), _collection("another-room", "2026-09-30")]
+    )
+
+    assert await _agent().documents_to() is None
 
 
 async def test_the_bearer_is_asked_for_on_every_call(library: respx.MockRouter) -> None:
