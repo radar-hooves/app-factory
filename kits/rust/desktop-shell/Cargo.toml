@@ -1,0 +1,17 @@
+[package]
+name = "desktop-shell"
+version = "0.1.0"
+description = "The shell every household Tauri app has around its own domain code: centred macOS traffic lights and a tray that cannot take the app down"
+authors = ["poodle64"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+tracing = "0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }

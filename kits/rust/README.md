@@ -6,6 +6,7 @@ Shared Rust app code, versioned and consumed as a Cargo git dependency — never
 
 - [`telemetry`](telemetry) — the household's one Rust telemetry call (moved here from the standalone `telemetry-rs` repo, with its history).
 - [`tauri-plugin-telemetry`](tauri-plugin-telemetry) — the Tauri 2 plugin wiring it in with one `.plugin(...)` call.
+- [`desktop-shell`](desktop-shell): the shell around a desktop app's own code: `traffic_lights::setup` centres the macOS window buttons in the app's header, and `guard_tray` keeps a failed or panicking tray from taking the app down. Each app calls them from its own setup; the desktop skeleton (`skeletons/desktop/`) stamps the dependency.
 
 ## Depending on a kit
 
