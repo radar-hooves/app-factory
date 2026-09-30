@@ -139,7 +139,11 @@ async def test_deactivation_refuses_the_persons_next_request(client: AsyncClient
     assert deactivated.status_code == 200
     assert deactivated.json()["is_active"] is False
 
-    assert (await _sign_in(client, "the-refused")).status_code == 401
+    # 403, not 401: the provider vouches for this person on every request, so a
+    # 401 would send their browser to sign in and straight back, forever.
+    refused = await _sign_in(client, "the-refused")
+    assert refused.status_code == 403
+    assert refused.json()["message"] == "This account is not active"
 
     reinstated = await client.patch(
         f"/api/admin/users/{refused_user.id}",

@@ -49,20 +49,25 @@ let activeWorkspace = $state<Workspace | null>(null);
 let isLoading = $state(true);
 
 /**
- * Why the last init() found nobody. 'lapsed' is a session only the identity
- * provider can renew: a 401, or the forward-auth proxy's redirect to the
- * provider, which init() asks the browser not to follow so it arrives as an
- * `opaqueredirect`. 'failed' is anything a sign-in would not fix: the backend
- * down or unreachable, a reset connection, a 403, a timeout. Sending the
- * browser to sign in there would bring it straight back to the same failure,
- * as fast as the round trip allows.
+ * Why the last init() found nobody.
+ *
+ * - 'lapsed': a session only the identity provider can renew. A 401, or the
+ *   forward-auth proxy's redirect to the provider, which init() asks the
+ *   browser not to follow so it arrives as an `opaqueredirect`.
+ * - 'refused': the app knows who this is and will not let them in (a 403: the
+ *   account is not active). Signing in again would change nothing.
+ * - 'failed': anything else a sign-in would not fix: the backend down or
+ *   unreachable, a reset connection, a timeout. Sending the browser to sign in
+ *   there would bring it straight back to the same failure, as fast as the
+ *   round trip allows.
  */
-export type SignInFailure = 'lapsed' | 'failed';
+export type SignInFailure = 'lapsed' | 'refused' | 'failed';
 let failure = $state<SignInFailure | null>(null);
 
 function signInFailure(result: { response: Response }): SignInFailure {
 	const { status, type } = result.response;
-	return status === 401 || type === 'opaqueredirect' ? 'lapsed' : 'failed';
+	if (status === 401 || type === 'opaqueredirect') return 'lapsed';
+	return status === 403 ? 'refused' : 'failed';
 }
 
 function restoreStoredWorkspaceId(): number | null {

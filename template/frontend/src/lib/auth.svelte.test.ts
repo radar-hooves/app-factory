@@ -149,6 +149,17 @@ describe('auth store — why nobody is signed in', () => {
 		expect(auth.failure).toBe('lapsed');
 	});
 
+	it('reads a 403 as an account the app refuses, which a sign-in would not change', async () => {
+		failWith(
+			{ status: 403, type: 'basic' },
+			{ error: 'forbidden', message: 'This account is not active' }
+		);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.failure).toBe('refused');
+	});
+
 	it('reads a request that never got an answer as a failure a sign-in cannot fix', async () => {
 		// A reset connection: client.ts's normaliser turns the rejection into a
 		// 503 network_error. Read as lapsed, it sent a browser with a valid
