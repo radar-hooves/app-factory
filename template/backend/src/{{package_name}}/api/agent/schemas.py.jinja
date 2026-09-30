@@ -40,9 +40,10 @@ class RoomRead(BaseModel):
     sources: list[str]
     #: A library room cites documents and takes an answer mark.
     library: bool
-    #: The date of the newest document a library room holds, for "Documents
-    #: to …" on its home. None until the library says (`docs/design/agent-console.md`
-    #: §Needs this design files).
+    #: The newest date the library confirmed one of this room's own documents
+    #: current (a recheck, or a fetch), for "Checked against the open record
+    #: on …" on its home. When it was last checked, never a publication date;
+    #: None where the library genuinely does not know.
     documents_to: datetime.date | None = None
 
 

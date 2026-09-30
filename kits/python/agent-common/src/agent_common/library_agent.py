@@ -22,6 +22,7 @@ Need: radar-hooves/cadmus (Nightjar), 30/09/2026.
 
 import asyncio
 import contextlib
+import datetime
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -187,6 +188,25 @@ class LibraryAgent:
                 for section in detail.sections or []
             ],
         )
+
+    async def documents_to(self) -> datetime.date | None:
+        """How current this room is: the newest `documents_to` across its own collections; None once none say.
+
+        One call to the caller's collection listing, which the library already
+        narrows to the app's whole grant; this narrows further to `self.collections`,
+        the room's own subset. `documents_to` is when the library last confirmed a
+        collection's documents current (a recheck's `unchanged`, or a fetch), never
+        a publication date, so this is honest about being checked, not authored.
+        """
+        async with self._api() as api:
+            summaries = await api.list_caller_collections()
+        room_collections = set(self.collections)
+        dates = [
+            summary.documents_to
+            for summary in summaries
+            if summary.name in room_collections and summary.documents_to is not None
+        ]
+        return max(dates) if dates else None
 
     async def _configuration(self) -> Configuration:
         return Configuration(host=self.url.rstrip("/"), access_token=await self.token())

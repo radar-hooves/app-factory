@@ -17,7 +17,9 @@ agent and the real client rather than a mock standing in for either.
   own transcript read lists only answered turns.
 - `GET` and `DELETE /conversations/{id}`, `POST /ask/feedback` (recorded in
   `marks`), `GET /documents/{id}` (a document in `COLLECTION`, and one in
-  `ELSEWHERE`, which no room here draws on).
+  `ELSEWHERE`, which no room here draws on), `GET /collections` (`COLLECTION`
+  carries `DOCUMENTS_TO`, `ELSEWHERE` an earlier date, as the caller's whole
+  grant -- wider than any one room -- would).
 
 Every call needs a bearer, as the caller door does. Run by hand for the
 E2E: `python fake_library.py --port 18766 --pace 0.05`.
@@ -38,6 +40,8 @@ DOCUMENT_ID = 1042
 OUTSIDE_ID = 2048
 HANG_TRIGGER = "__hang__"
 QUEUED_TRIGGER = "__queued__"
+#: `COLLECTION`'s currency mark, the date `test_agent_api.py.jinja` expects the room's home to show.
+DOCUMENTS_TO = "2026-09-29"
 
 
 class FakeLibrary:
@@ -77,6 +81,20 @@ def _document(document_id: int, collection: str) -> dict[str, Any]:
         ],
         "created_at": "2026-09-29T02:11:00+00:00",
         "updated_at": "2026-09-29T02:11:00+00:00",
+    }
+
+
+def _collection(collection_id: int, name: str, documents_to: str | None) -> dict[str, Any]:
+    return {
+        "id": collection_id,
+        "name": name,
+        "pipeline": "text",
+        "status": "active",
+        "owner_project_id": 1,
+        "profile": None,
+        "document_count": 1,
+        "type_counts": {},
+        "documents_to": documents_to,
     }
 
 
@@ -131,6 +149,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(404, {"error": "not_found", "message": "no such document"})
             else:
                 self._send(200, _document(int(match[1]), found))
+        elif path == "/collections":
+            self._send(200, [_collection(1, COLLECTION, DOCUMENTS_TO), _collection(2, ELSEWHERE, "2026-09-20")])
         else:
             self._send(404, {"error": "not_found", "message": path})
 

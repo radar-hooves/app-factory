@@ -35,8 +35,9 @@ export interface Room {
 	sources: string[];
 	/** Milton over collections: citations open, and an answer takes a mark. */
 	library: boolean;
-	/** The date of the newest document a library room holds; null until the
-	 *  library says. */
+	/** The newest date the library confirmed one of this room's documents
+	 *  current (a recheck, or a fetch) -- when it was last checked, not the
+	 *  newest document's publication date. Null until the library says. */
 	documents_to?: string | null;
 }
 
@@ -149,14 +150,14 @@ export function roomTransport(room: Room): RoomTransport {
 	return transport;
 }
 
-/** "Documents to 30 September 2026.", in the reader's own words for a date. */
+/** "Checked against the open record on 30 September 2026.", in the reader's own words for a date. */
 export function documentsTo(date: string): string {
 	const day = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
 		day: 'numeric',
 		month: 'long',
 		year: 'numeric'
 	});
-	return `Documents to ${day}.`;
+	return `Checked against the open record on ${day}.`;
 }
 
 /** An answer shared from `room`, read-only; rejects for one not shared or a room not entered. */

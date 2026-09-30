@@ -185,8 +185,8 @@ async def _asking(
 
 async def test_the_rooms_listed_are_the_ones_the_caller_is_granted(client: AsyncClient) -> None:
     listed = await client.get("/api/agent/rooms", headers=_person("room-manual"))
-    assert [(room["id"], room["library"], room["sources"]) for room in listed.json()] == [
-        ("manual", True, ["the Manual"])
+    assert [(room["id"], room["library"], room["sources"], room["documents_to"]) for room in listed.json()] == [
+        ("manual", True, ["the Manual"], fake_library.DOCUMENTS_TO)
     ]
     assert (await client.get("/api/agent/rooms", headers=_person())).json() == []
 
@@ -222,6 +222,8 @@ async def test_a_library_room_with_no_library_starts_and_answers_503(
     assert "Room 'manual' answers 503 until {{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL is set" in caplog.text
 
     who = _person("room-helper", "room-manual")
+    listed = await client.get("/api/agent/rooms", headers=who)
+    assert [room["documents_to"] for room in listed.json()] == [None, None]
     refused = await _ask(client, "manual", "leave?", who)
     assert (refused.status_code, refused.json()["error"]) == (503, "service_unavailable")
     assert (await _ask(client, "helper", "hi", who)).status_code == 200
