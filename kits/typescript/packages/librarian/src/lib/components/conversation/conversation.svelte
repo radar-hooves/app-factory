@@ -16,7 +16,9 @@
 	import type { Citation, LoadDocument } from '../../citations';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
-	import AgentTranscript from '../agent-transcript/agent-transcript.svelte';
+	import AgentTranscript, {
+		type AgentTranscriptProps
+	} from '../agent-transcript/agent-transcript.svelte';
 	import ArtefactPane from '../artefact-pane/artefact-pane.svelte';
 	import DocumentPane from '../document-pane/document-pane.svelte';
 	import ScopeStatement from '../scope-statement/scope-statement.svelte';
@@ -81,6 +83,15 @@
 		 *  pane narrows it too — a composer the host places outside slides
 		 *  under the pane the moment one opens. */
 		composer?: Snippet;
+		/** Renders each turn in place of `AgentTranscript`, given the props it
+		 *  would have taken: a host that presents an answer its own way (its
+		 *  prose, its citation marks, its links) renders its own, and one that
+		 *  only adds to it renders `AgentTranscript` inside it. */
+		turn?: Snippet<[AgentTranscriptProps]>;
+		/** Before the first turn, inside the scroll and under the opening and
+		 *  the scope: what the host shows ahead of a question, which scrolls
+		 *  with the conversation rather than taking its height. */
+		lead?: Snippet;
 	}
 
 	let {
@@ -104,7 +115,9 @@
 		showing,
 		describeTool,
 		collectionNames = new Set(),
-		composer
+		composer,
+		turn: presentTurn,
+		lead
 	}: Props = $props();
 
 	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
@@ -267,32 +280,40 @@
 						<ScopeStatement statement={scope} expanded={turns.length === 0} copy={words} />
 					{/if}
 
+					{@render lead?.()}
+
 					{#each turns as turn, index (turn.id)}
 						{@const last = index === turns.length - 1}
-						<AgentTranscript
-							question={turn.question}
-							blocks={turn.blocks}
-							outcome={turn.outcome}
-							running={running && last}
-							waiting={waiting && last}
-							answering={last ? (answering ?? undefined) : undefined}
-							citations={turn.citations ?? []}
-							suggestions={turn.suggestions ?? []}
-							{collectionNames}
-							copy={words}
-							name={who}
-							at={turn.at ?? stamps[turn.id]}
-							artefact={turn.artefact}
-							artefactOpen={isShowing(turn)}
-							onopenartefact={opener(turn)}
-							{describeTool}
-							oncite={oncite || loadDocument ? cite : undefined}
-							onregenerate={last && !running ? onregenerate : undefined}
-							onsuggest={last && !running ? onsuggest : undefined}
-							onmark={last && !running && onmark
-								? (verdict) => onmark(turn, verdict)
-								: undefined}
-						/>
+						{@const props = {
+							question: turn.question,
+							blocks: turn.blocks,
+							outcome: turn.outcome,
+							running: running && last,
+							waiting: waiting && last,
+							answering: last ? (answering ?? undefined) : undefined,
+							citations: turn.citations ?? [],
+							suggestions: turn.suggestions ?? [],
+							collectionNames,
+							copy: words,
+							name: who,
+							at: turn.at ?? stamps[turn.id],
+							artefact: turn.artefact,
+							artefactOpen: isShowing(turn),
+							onopenartefact: opener(turn),
+							describeTool,
+							oncite: oncite || loadDocument ? cite : undefined,
+							onregenerate: last && !running ? onregenerate : undefined,
+							onsuggest: last && !running ? onsuggest : undefined,
+							onmark:
+								last && !running && onmark
+									? (verdict: Verdict) => onmark(turn, verdict)
+									: undefined
+						} satisfies AgentTranscriptProps}
+						{#if presentTurn}
+							{@render presentTurn(props)}
+						{:else}
+							<AgentTranscript {...props} />
+						{/if}
 					{/each}
 				</div>
 			</div>

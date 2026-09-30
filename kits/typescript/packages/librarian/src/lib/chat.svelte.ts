@@ -24,7 +24,7 @@ import { untrack } from 'svelte';
 import { isQueued, type AgentEvent } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
-import { fold, foldState, type Turn } from './transcript.svelte';
+import { fold, foldState, type Artefact, type Turn } from './transcript.svelte';
 
 /** One conversation in the list. */
 export interface ConversationSummary {
@@ -46,6 +46,8 @@ export interface StoredTurn {
 	/** ISO 8601, when it was asked. */
 	at?: string | null;
 	citations?: Citation[];
+	/** What the host asked for, when it was not a plain question. */
+	kind?: string | null;
 }
 
 /** A conversation reopened. */
@@ -78,6 +80,8 @@ export interface AskRequest {
 	/** The conversation this carries on; null starts one. */
 	resume: string | null;
 	signal: AbortSignal;
+	/** What the host asked for, when it is not a plain question: `client.ask()`'s `kind`. */
+	kind?: string;
 }
 
 /**
@@ -128,6 +132,10 @@ export interface ChatOptions {
 	pollMs?: number;
 	/** How often a closed job is asked whether it carries on. */
 	rewatchMs?: number;
+	/** What a turn asked as `kind` produces for the reader to open, in the
+	 *  host's words (a briefing: `{ title, isAnswer: true }`), on a turn asked
+	 *  here and on one read back alike. None for a plain question. */
+	artefact?: (kind: string) => Artefact | undefined;
 }
 
 /** The events of a run: the agent has the question. */
@@ -158,6 +166,7 @@ export class Chat {
 	#job: JobTransport | null = null;
 	#pollMs: number;
 	#rewatchMs: number;
+	#artefact: ChatOptions['artefact'];
 
 	#turns = $state<Turn[]>([]);
 	#version = $state(0);
@@ -182,6 +191,7 @@ export class Chat {
 		else this.#room = transport;
 		this.#pollMs = options.pollMs ?? 5000;
 		this.#rewatchMs = options.rewatchMs ?? 2000;
+		this.#artefact = options.artefact;
 	}
 
 	/** Every turn, in order. A live one grows in place; key on `version`. */
@@ -258,11 +268,12 @@ export class Chat {
 	}
 
 	/**
-	 * Ask `question`, or what is in the box. Resolves once the turn settles:
-	 * true if it was asked, false if it was refused, here or by the server, in
-	 * which case typed words go back into the box.
+	 * Ask `question`, or what is in the box, as a `kind` of turn when it is not
+	 * a plain question. Resolves once the turn settles: true if it was asked,
+	 * false if it was refused, here or by the server, in which case typed words
+	 * go back into the box.
 	 */
-	async ask(question?: string): Promise<boolean> {
+	async ask(question?: string, kind?: string): Promise<boolean> {
 		const typed = question === undefined;
 		const text = (question ?? this.draft).trim();
 		if (!text) return false;
@@ -273,14 +284,14 @@ export class Chat {
 			this.draft = '';
 			this.files = [];
 		}
-		return this.#ask(text, files, typed);
+		return this.#ask(text, files, typed, kind);
 	}
 
 	/** The last question again, as a new turn: the conversation is append-only,
 	 *  because the agent's transcript is. */
 	again(): Promise<boolean> {
-		const last = this.turns.at(-1)?.question;
-		return last ? this.ask(last) : Promise.resolve(false);
+		const last = this.turns.at(-1);
+		return last?.question ? this.ask(last.question, last.kind) : Promise.resolve(false);
 	}
 
 	/** Stop the answer being written, wherever it is being written. */
@@ -404,7 +415,7 @@ export class Chat {
 		this.waiting = false;
 	}
 
-	async #ask(text: string, files: File[], typed: boolean): Promise<boolean> {
+	async #ask(text: string, files: File[], typed: boolean, kind?: string): Promise<boolean> {
 		const room = this.#room!;
 		const mine = this.#generation;
 		const stream = { controller: new AbortController(), stopWanted: false };
@@ -416,7 +427,9 @@ export class Chat {
 			blocks: [],
 			outcome: null,
 			citations: [],
-			suggestions: []
+			suggestions: [],
+			kind,
+			artefact: this.#card(kind)
 		});
 		const live = this.#turns[this.#turns.length - 1];
 		const state = foldState();
@@ -430,7 +443,8 @@ export class Chat {
 			question: text,
 			files,
 			resume: this.conversationId,
-			signal: stream.controller.signal
+			signal: stream.controller.signal,
+			kind
 		})) {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
 			if (stream.stopWanted) {
@@ -498,6 +512,11 @@ export class Chat {
 		return true;
 	}
 
+	/** What a turn of `kind` opens, if the host says it opens anything. */
+	#card(kind: string | null | undefined): Artefact | undefined {
+		return kind ? this.#artefact?.(kind) : undefined;
+	}
+
 	/** A turn this page streamed has settled, one way or another. */
 	#finish(): void {
 		this.#stream = null;
@@ -513,7 +532,10 @@ export class Chat {
 	 *  read again until it settles. */
 	#show(read: ConversationRead, mine: number): void {
 		clearTimeout(this.#poll);
-		const turns = read.turns.map((stored, index) => storedTurn(read.id, index, stored));
+		const turns: Turn[] = read.turns.map((stored, index) => ({
+			...storedTurn(read.id, index, stored),
+			artefact: this.#card(stored.kind)
+		}));
 		this.#held = new Set(turns.map((t) => t.id));
 		const since = epoch(read.answering_since);
 		if (since !== null) {
@@ -628,7 +650,8 @@ function storedTurn(conversation: string, index: number, stored: StoredTurn): Tu
 		at: epoch(stored.at) ?? undefined,
 		blocks: stored.answer ? [{ kind: 'text', index: 0, text: stored.answer }] : [],
 		outcome: null,
-		citations: stored.citations ?? []
+		citations: stored.citations ?? [],
+		kind: stored.kind ?? undefined
 	};
 }
 

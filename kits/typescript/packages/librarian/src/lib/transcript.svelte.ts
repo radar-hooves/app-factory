@@ -493,6 +493,9 @@ export interface Turn {
 	/** Something this turn produced for the reader to open, carded under the
 	 *  answer once the turn settles. */
 	artefact?: Artefact;
+	/** What the host asked for when this was not a plain question
+	 *  (`'briefing'`), in its own word, as `client.ask()` sent it. */
+	kind?: string;
 }
 
 /** A turn's artefact, in the host's own words. */
