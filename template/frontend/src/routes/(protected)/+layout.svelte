@@ -50,6 +50,18 @@
 		}
 	});
 
+	// A sign-in redirect that never left: stopped (Esc), or refused by the
+	// browser. The page would spin on for good, so after a wait it says the
+	// session has ended and offers the way back, a reload the proxy challenges.
+	const SIGN_IN_PATIENCE_MS = 10_000;
+	let stalled = $state(false);
+	$effect(() => {
+		if (auth.failure !== 'lapsed') return;
+		stalled = false;
+		const timer = setTimeout(() => (stalled = true), SIGN_IN_PATIENCE_MS);
+		return () => clearTimeout(timer);
+	});
+
 	// Back from the identity provider's page to a lapsed one, restored from the
 	// back/forward cache: the redirect above never finished, so ask again. A
 	// session still lapsed is sent again; one renewed meanwhile loads the page.
@@ -66,6 +78,12 @@
 		<ErrorState message="Could not load your account, so this page cannot open yet.">
 			{#snippet action()}
 				<Button variant="outline" onclick={() => void auth.init()}>Try again</Button>
+			{/snippet}
+		</ErrorState>
+	{:else if auth.failure === 'lapsed' && stalled}
+		<ErrorState message="Your session has ended. Sign in again to carry on.">
+			{#snippet action()}
+				<Button variant="outline" onclick={() => window.location.reload()}>Sign in again</Button>
 			{/snippet}
 		</ErrorState>
 	{:else if auth.failure === 'refused'}
