@@ -86,6 +86,13 @@ class ConflictError(BackendBaseException):
     error_code = "conflict"
 
 
+class AllowanceSpentError(BackendBaseException):
+    """The caller has used today's fair-use allowance (429); tomorrow they have more."""
+
+    status_code = 429
+    error_code = "allowance_spent"
+
+
 class UpstreamServiceError(BackendBaseException):
     """A dependent external service failed or returned an unusable response (502)."""
 
@@ -232,6 +239,11 @@ async def conflict_error_handler(request: Request, exc: ConflictError) -> JSONRe
     return _build_error_response(exc)
 
 
+async def allowance_spent_error_handler(request: Request, exc: AllowanceSpentError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc)
+
+
 async def upstream_service_error_handler(request: Request, exc: UpstreamServiceError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
@@ -281,6 +293,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register(app, AuthenticationError, authentication_error_handler)
     _register(app, ForbiddenError, forbidden_error_handler)
     _register(app, ConflictError, conflict_error_handler)
+    _register(app, AllowanceSpentError, allowance_spent_error_handler)
     _register(app, UpstreamServiceError, upstream_service_error_handler)
     _register(app, ServiceUnavailableError, service_unavailable_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

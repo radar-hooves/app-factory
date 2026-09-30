@@ -37,7 +37,9 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from {{ package_name }} import app_hooks
+from {{ package_name }}.api.agent import ask as agent_turns
 from {{ package_name }}.api.agent import jobs as agent_jobs
+from {{ package_name }}.api.agent import rooms as agent_rooms
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
 from {{ package_name }}.config import Settings, get_settings
@@ -111,8 +113,9 @@ class _SPAStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]:
-    """Warm the database engine, supervise agent jobs for the life of the
-    worker, end this worker's own runs on shutdown, then dispose the engine.
+    """Refuse to start on a room this app cannot open, warm the database engine,
+    supervise agent jobs for the life of the worker, end this worker's own
+    runs and turns on shutdown, then dispose the engine.
 
     The supervisor settles a job whose process has died, in whichever worker
     sweeps first (`jobs.supervise`, which also retries an unsettled lesson
@@ -124,6 +127,7 @@ async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]
     `app_hooks.py` is sanctioned-per-app and copier never overwrites it, so a
     default living there would reach nobody who already has one.
     """
+    agent_rooms.load(settings.agent)
     engine = get_engine()
     app.state.engine = engine
     stopping = asyncio.Event()
@@ -136,6 +140,7 @@ async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(supervisor, timeout=10)
         await agent_jobs.shutdown()
+        await agent_turns.shutdown()
         engine.dispose()
 
 

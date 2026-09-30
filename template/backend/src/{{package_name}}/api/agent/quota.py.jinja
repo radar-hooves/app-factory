@@ -1,0 +1,72 @@
+"""The fair-use allowance: questions per person per local day, across every room.
+
+A question is charged when the agent accepts it (its `init` event), so a
+refused or dropped ask costs nothing it did not answer. One atomic upsert per
+question, so two workers charging one person at once both count. The check
+before an ask reads the count, so asks racing past it can overshoot by the
+number in flight; the allowance is fair use, not billing. Admins are exempt,
+and `<APP>_AGENT_DAILY_QUESTIONS=0` turns it off.
+"""
+
+import datetime
+import uuid
+from dataclasses import dataclass
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import Date, ForeignKey, Integer, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Mapped, Session, mapped_column
+
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.db.base import Base
+
+
+class AgentQuestionCount(Base):
+    """How many questions one person has asked on one local day."""
+
+    __tablename__ = "agent_question_counts"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    day: Mapped[datetime.date] = mapped_column(Date, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+@dataclass(frozen=True, slots=True)
+class Allowance:
+    limit: int
+    remaining: int
+    exempt: bool
+    reached: bool
+    resets_at: datetime.datetime
+
+
+def _today(settings: AgentSettings) -> tuple[datetime.date, datetime.datetime]:
+    """Today's local date, and the moment it ends."""
+    zone = ZoneInfo(settings.quota_timezone)
+    today = datetime.datetime.now(zone).date()
+    return today, datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(), zone)
+
+
+def allowance(db: Session, settings: AgentSettings, user_id: uuid.UUID, *, exempt: bool) -> Allowance:
+    today, resets_at = _today(settings)
+    limit = settings.daily_questions
+    if exempt or limit <= 0:
+        return Allowance(limit=max(limit, 0), remaining=0, exempt=exempt, reached=False, resets_at=resets_at)
+    asked = db.execute(
+        select(AgentQuestionCount.count).where(AgentQuestionCount.user_id == user_id, AgentQuestionCount.day == today)
+    ).scalar_one_or_none()
+    remaining = max(limit - (asked or 0), 0)
+    return Allowance(limit=limit, remaining=remaining, exempt=False, reached=remaining == 0, resets_at=resets_at)
+
+
+def charge(db: Session, settings: AgentSettings, user_id: uuid.UUID) -> None:
+    """Count one question against `user_id`'s day."""
+    today, _ = _today(settings)
+    statement = insert(AgentQuestionCount).values(user_id=user_id, day=today, count=1)
+    db.execute(
+        statement.on_conflict_do_update(
+            index_elements=[AgentQuestionCount.user_id, AgentQuestionCount.day],
+            set_={"count": AgentQuestionCount.count + 1},
+        )
+    )
+    db.commit()

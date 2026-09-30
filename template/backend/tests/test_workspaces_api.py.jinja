@@ -33,14 +33,14 @@ async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
     return await client.post(
         "/api/example/",
         json={"title": title},
-        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+        headers={"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "example"},
     )
 
 
 async def _list_items(client: AsyncClient, uid: str) -> Response:
     return await client.get(
         "/api/example/",
-        headers={"x-authentik-uid": uid, "x-authentik-username": uid},
+        headers={"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "example"},
     )
 
 
@@ -103,6 +103,7 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
         headers={
             "x-authentik-uid": "the-partner",
             "x-authentik-username": "the-partner",
+            "x-authentik-entitlements": "example",
             "x-workspace-id": str(household_id),
         },
     )
@@ -166,6 +167,7 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
         headers={
             "x-authentik-uid": "outsider",
             "x-authentik-username": "outsider",
+            "x-authentik-entitlements": "example",
             "x-workspace-id": str(insider_workspace),
         },
     )
@@ -263,7 +265,11 @@ async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(clien
     absence must never narrow the ordinary human path."""
     admitted = await client.get(
         "/api/example/",
-        headers={"x-authentik-uid": "an-ordinary-person", "x-authentik-username": "an-ordinary-person"},
+        headers={
+            "x-authentik-uid": "an-ordinary-person",
+            "x-authentik-username": "an-ordinary-person",
+            "x-authentik-entitlements": "example",
+        },
     )
     assert admitted.status_code == 200
 

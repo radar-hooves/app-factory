@@ -748,7 +748,7 @@ async def authorize(
     be circular; the read is confined to that one `unscoped()` block, per
     `platform/tenancy.md`, and never reused as a way around the check it
     exists to make. One answer covers every way to fail this check, the same
-    choice `ownership.DENIAL` makes for a private chat session: a status code
+    choice `ask.DENIAL` makes for a private conversation: a status code
     that told "no such job" apart from "not yours" or "wrong persona" would
     let an entitled caller enumerate the ids and personas of jobs it cannot reach.
 

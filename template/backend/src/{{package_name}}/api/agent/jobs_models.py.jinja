@@ -1,7 +1,7 @@
 """Persistence for an app-started persona job: the job row and its event log.
 
-`api/agent/ownership.py`'s ``AgentSession`` is a private CONVERSATION issued
-to one asker, personal-subject and exempt from workspace scoping; a job is
+`api/agent/conversations.py`'s ``AgentConversation`` is a private CONVERSATION
+of one asker, personal-subject and exempt from workspace scoping; a job is
 different in kind. It is started by the app itself, usually on behalf of a
 workspace rather than an asker (`docs/design/agent-jobs.md`) — a document
 belongs to a workspace, so a job reading one does too. Both models are
@@ -24,8 +24,8 @@ at once serialise on the row rather than on anything process-local.
 ``job_id`` IS Claude Code's own session id: minted before the CLI ever runs
 (``--session-id`` on the first spawn, ``--resume`` on every one after), so a
 caller has the id to watch from the moment ``jobs.start()`` returns rather
-than waiting on an `init` event to learn it — `ownership.py`'s claim-on-init
-dance is needed there because the CLI assigns the id; it is not needed here
+than waiting on an `init` event to learn it — a conversation claims its
+agent's id on `init` because a room's agent assigns it; it is not needed here
 because this slice assigns it.
 """
 
@@ -60,7 +60,7 @@ class AgentJob(Base, TimestampMixin, WorkspaceScoped):
 
     #: Claude Code's own session id, minted by `jobs.start()` (or its caller)
     #: before the CLI first runs. A str column, not a UUID one, for the same
-    #: reason `ownership.AgentSession.session_id` is: the format is the CLI's
+    #: reason `conversations.AgentConversation.session_id` is: the format is the CLI's
     #: to change, and a column that could reject a future one would refuse the
     #: job rather than record it.
     job_id: Mapped[str] = mapped_column(String(128), primary_key=True)

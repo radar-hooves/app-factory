@@ -66,6 +66,16 @@ Messages API block and as the CLI's own `tool_use_result`);
 to stderr. Every turn appends its frame to a transcript at
 `$CLAUDE_CONFIG_DIR/projects/<cwd>/<session>.jsonl`, where the real CLI
 keeps one.
+
+A one-shot turn (`-p`) keeps that transcript too, the question as it starts
+and the answer once given, as a room reads a conversation back from it.
+`__hang__` names the session and then never answers, standing in for a
+turn a stop ends. With `fakeAgentPace` in the persona's settings.json
+(seconds between words; the driver passes this process no environment of
+the test's own, so the persona's home is where it can be said), the answer
+is prose streamed a word at a time as `stream_event` deltas before
+the whole `assistant` event, as `--include-partial-messages` streams it: a
+turn slow enough for a page to be refreshed or stopped under it.
 """
 
 import base64
@@ -269,6 +279,47 @@ def _image_turn(session_id: str, relative: str) -> str:
     return f"read {relative}"
 
 
+def _transcript(session_id: str) -> str:
+    folder = os.path.join(
+        os.environ.get("CLAUDE_CONFIG_DIR", "."), "projects", re.sub(r"[^A-Za-z0-9]", "-", os.getcwd())
+    )
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"{session_id}.jsonl")
+
+
+def _settings() -> dict[str, object]:
+    path = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR", ""), "settings.json")
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as handle:
+        loaded: dict[str, object] = json.load(handle)
+    return loaded
+
+
+def _keep(session_id: str, event: dict[str, object]) -> None:
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+    with open(_transcript(session_id), "a") as handle:
+        handle.write(json.dumps({**event, "session_id": session_id, "timestamp": stamp}) + "\n")
+
+
+def _paced(session_id: str, question: str, pace: float) -> str:
+    """A prose answer, streamed a word at a time."""
+    answer = (
+        f"You asked: {question}\n\n"
+        "Here is a considered answer, written slowly enough to be refreshed, reopened or stopped "
+        "part-way through. Everything a person reads arrives first as a stream of small pieces, "
+        "then once more whole, as Claude Code itself sends it."
+    )
+    _emit({"type": "stream_event", "event": {"type": "message_start"}, "session_id": session_id})
+    start = {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
+    _emit({"type": "stream_event", "event": start, "session_id": session_id})
+    for word in re.findall(r"\S+\s*", answer):
+        time.sleep(pace)
+        delta = {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": word}}
+        _emit({"type": "stream_event", "event": delta, "session_id": session_id})
+    return answer
+
+
 def stream_json_session(argv: list[str]) -> None:
     """The CLI under `--input-format stream-json`: one turn per stdin frame, until stdin closes."""
     session_id = _flag(argv, "--resume") or _flag(argv, "--session-id") or f"fake-{uuid.uuid4().hex[:12]}"
@@ -353,11 +404,19 @@ def main() -> None:
         _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": echo, "is_error": False})
         return
 
+    _keep(session_id, {"type": "user", "message": {"role": "user", "content": question}})
+    if question == HANG_TRIGGER:
+        _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": ""})
+        time.sleep(3600)
     echo = _echo(question, argv)
     model = next(p.removeprefix("model=") for p in echo.split(" | ") if p.startswith("model="))
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
-    _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": echo}], "stop_reason": None}})
-    _emit(_result(session_id, echo, argv))
+    pace = float(str(_settings().get("fakeAgentPace") or 0))
+    answer = _paced(session_id, question, pace) if pace else echo
+    whole = _assistant(session_id, [{"type": "text", "text": answer}])
+    _emit(whole)
+    _keep(session_id, whole)
+    _emit(_result(session_id, answer, argv))
 
 
 if __name__ == "__main__":

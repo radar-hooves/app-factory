@@ -1,88 +1,238 @@
-"""The agent slice: list personas, ask one, and watch/message/stop an
-app-started job (`docs/design/agent-jobs.md`).
+"""The agent slice: rooms a person is granted, their conversations and allowance, and an app-started job's watch.
 
-`POST /{persona}/ask` is gated on a per-persona module entitlement
-(`agent-<persona>`) rather than a router-level dependency, because the module
-name is not known until the path parameter is: `require_module` is called
-directly as the plain function it already is, inside the route, instead of
-through `Depends()` (`entitlements.py`'s own factory shape covers both). The
-three job routes below take the same gate, AND `CurrentWorkspace`: a job
-belongs to a workspace and a persona, and `jobs.authorize()` checks both —
-the entitlement alone would let anyone holding it read or steer another
-workspace's job, and the workspace check alone would let a caller entitled to
-ONE persona reach a DIFFERENT persona's job in the same workspace by naming
-it in the URL (fresh-context review, CRITICAL 1, both halves).
+A room is entered with its own `room-<id>` entitlement, known only once the
+path is, so it is a dependency reading the path (`entered`), marked as the
+module gate it is for the route walk. A conversation route reaches the room
+through the conversation: one answer for another person's and for none,
+then the room's own gate, so a revoked grant closes a person's old
+conversations too.
 
-There is no `POST /{persona}/jobs` here — starting a job is need 1's own
-point ("started by the app itself, with no person asking"): `jobs.start()`
-is a plain function app code calls from wherever a job's own trigger lives
-(a document arriving, a scheduled sweep), never a route a person calls. What
-IS a person's is watching, messaging and stopping one already running.
+The job routes take `agent-<persona>` the same way, AND `CurrentWorkspace`:
+a job belongs to a workspace and a persona, and `jobs.authorize()` checks
+both (`docs/design/agent-jobs.md`). Starting a job is not a route; a person
+watches, messages and stops one the app started.
 """
 
+import dataclasses
+import urllib.parse
 from collections.abc import AsyncIterator
+from typing import Annotated
+from zoneinfo import ZoneInfo
 
-from agent_common import persona as agent_persona
+import pydantic
 from agent_common import sse
-from agent_common.agent import LocalAgent
-from fastapi import APIRouter
+from agent_common.library_agent import LibraryAgent
+from fastapi import APIRouter, Depends, Request, Response, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import ask as ask_module
+from {{ package_name }}.api.agent import conversations, quota, rooms
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent.schemas import AgentJobMessageRequest, AskRequest
+from {{ package_name }}.api.agent.conversations import AgentConversation
+from {{ package_name }}.api.agent.rooms import Room
+from {{ package_name }}.api.agent.schemas import (
+    AgentJobMessageRequest,
+    AskRequest,
+    ConversationRead,
+    ConversationSummary,
+    DocumentRead,
+    MarkRequest,
+    QuotaRead,
+    RenameRequest,
+    RoomRead,
+    StoredTurn,
+)
 from {{ package_name }}.db.session import get_session_factory
-from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, SessionDep, SettingsDep
-from {{ package_name }}.entitlements import has_module, require_module
+from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, Identity, SessionDep, SettingsDep
+from {{ package_name }}.entitlements import gate, has_module, require_module
+from {{ package_name }}.exceptions import NotFoundError
 
 router = APIRouter()
 
 
-@router.get("/personas", operation_id="listAgentPersonas")
-async def personas(identity: CurrentIdentity, settings: SettingsDep) -> list[str]:
-    """Personas this deployment carries AND this caller is entitled to ask.
-
-    An app with no persona directory returns an empty list here, which is
-    what tells the Console to render nothing rather than a chat that fails on
-    the first question.
-    """
-    names = agent_persona.names(settings.agent.personas_dir)
-    return [name for name in names if has_module(identity.entitlements, f"agent-{name}")]
+@dataclasses.dataclass(frozen=True, slots=True)
+class Owned:
+    conversation: AgentConversation
+    room: Room
 
 
-@router.post("/{persona}/ask", operation_id="askAgent")
+def entered(room_id: str, identity: CurrentIdentity, settings: SettingsDep) -> Room:
+    """The room `room_id`, for a caller granted `room-<id>`."""
+    require_module(f"room-{room_id}")(identity)
+    return rooms.get(settings.agent, room_id)
+
+
+def owned(conversation_id: str, identity: CurrentIdentity, settings: SettingsDep, db: SessionDep) -> Owned:
+    """This person's conversation, in a room they are still granted."""
+    conversation = conversations.owned(db, conversation_id, identity.user.id)
+    if conversation is None:
+        raise NotFoundError(ask_module.DENIAL)
+    return Owned(conversation, entered(conversation.room, identity, settings))
+
+
+def watching(persona: str, identity: CurrentIdentity) -> Identity:
+    return require_module(f"agent-{persona}")(identity)
+
+
+gate(entered, "room-{room_id}")
+gate(owned, "room-{conversation.room}")
+gate(watching, "agent-{persona}")
+EnteredRoom = Annotated[Room, Depends(entered)]
+OwnedConversation = Annotated[Owned, Depends(owned)]
+
+
+@router.get("/rooms", operation_id="listRooms")
+def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRead]:
+    """The rooms this app offers that this caller is granted; none when the app offers none."""
+    return [
+        RoomRead(
+            id=room.id,
+            title=room.title,
+            blurb=room.blurb,
+            examples=list(room.examples),
+            not_held=room.not_held,
+            sources=list(room.library.collections.values()) if room.library else [],
+            library=room.library is not None,
+        )
+        for room in rooms.load(settings.agent).values()
+        if has_module(identity.entitlements, room.entitlement)
+    ]
+
+
+@router.post("/rooms/{room_id}/ask", operation_id="askRoom")
 async def ask(
-    persona: str, db: SessionDep, identity: CurrentIdentity, settings: SettingsDep, request: AskRequest
+    room: EnteredRoom, request: Request, identity: CurrentIdentity, settings: SettingsDep
 ) -> StreamingResponse:
-    """Ask `persona`, bounded by the caller's own entitlement for it.
+    """Ask the room's agent, streaming its events; JSON, or multipart with `files[]`.
 
-    Raises:
-        NotFoundError: `persona` names no directory under `config/personas/`.
+    The stream opens by naming the conversation. Refused before it opens:
+    404 for a `resume` that is not this person's conversation in this room,
+    409 while that conversation is being answered, 429 once today's
+    allowance is spent.
     """
-    require_module(f"agent-{persona}")(identity)
-    agent = LocalAgent(settings.agent.driver(), persona_module.load(settings.agent, persona))
-    return ask_module.stream(db, agent, request, user_id=identity.user.id)
+    body, files = await _asked(request)
+    return await ask_module.ask(
+        get_session_factory(),
+        settings.agent,
+        room,
+        rooms.agent(settings.agent, room),
+        user_id=identity.user.id,
+        exempt=has_module(identity.entitlements, "admin"),
+        question=body.question,
+        resume=body.resume,
+        files=files,
+    )
 
 
-@router.get("/{persona}/jobs/{job_id}/watch", operation_id="watchAgentJob")
-async def watch_job(
-    persona: str, job_id: str, identity: CurrentIdentity, workspace: CurrentWorkspace, settings: SettingsDep
-) -> StreamingResponse:
+@router.get("/rooms/{room_id}/conversations", operation_id="listRoomConversations")
+def list_conversations(room: EnteredRoom, identity: CurrentIdentity, db: SessionDep) -> list[ConversationSummary]:
+    """This person's conversations in the room, most recently active first."""
+    return [_summary(conversation) for conversation in conversations.listed(db, identity.user.id, room.id)]
+
+
+@router.get("/rooms/{room_id}/documents/{document_id}", operation_id="getRoomDocument")
+async def document(room: EnteredRoom, document_id: int, settings: SettingsDep) -> DocumentRead:
+    """A document a library room cited, section by section; absent outside the room's collections."""
+    agent = rooms.agent(settings.agent, room)
+    found = await agent.document(document_id) if isinstance(agent, LibraryAgent) else None
+    if found is None:
+        raise NotFoundError("No such document")
+    return DocumentRead.model_validate(dataclasses.asdict(found))
+
+
+@router.get("/conversations/{conversation_id}", operation_id="getConversation")
+async def read(owned: OwnedConversation, settings: SettingsDep) -> ConversationRead:
+    """The conversation, every question asked, each with the answer the agent holds."""
+    turns = await _turns(owned, settings)
+    return ConversationRead(
+        **_summary(owned.conversation).model_dump(),
+        turns=[StoredTurn(question=t.question, answer=t.answer, at=t.at, citations=t.citations) for t in turns],
+    )
+
+
+@router.patch("/conversations/{conversation_id}", operation_id="renameConversation")
+def rename(owned: OwnedConversation, body: RenameRequest, db: SessionDep) -> ConversationSummary:
+    owned.conversation.title = body.title.strip()
+    db.commit()
+    return _summary(owned.conversation)
+
+
+@router.delete("/conversations/{conversation_id}", operation_id="deleteConversation", status_code=204)
+async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep) -> None:
+    """Forget the conversation: the agent's transcript first, then the row, so a failure leaves it listed."""
+    if owned.conversation.session_id:
+        await rooms.agent(settings.agent, owned.room).forget(owned.conversation.session_id)
+
+    def forget() -> None:
+        db.delete(owned.conversation)
+        db.commit()
+
+    await run_in_threadpool(forget)
+
+
+@router.get("/conversations/{conversation_id}/export", operation_id="exportConversation")
+async def export(owned: OwnedConversation, settings: SettingsDep) -> Response:
+    """The conversation as Markdown, as a file to keep."""
+    text = conversations.markdown(
+        owned.conversation.title,
+        owned.room.title,
+        await _turns(owned, settings),
+        ZoneInfo(settings.agent.quota_timezone),
+    )
+    name = urllib.parse.quote(f"{owned.conversation.title[:60].strip() or 'Conversation'}.md")
+    return Response(
+        text,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}"},
+    )
+
+
+@router.post("/conversations/{conversation_id}/stop", operation_id="stopConversation", status_code=204)
+def stop(owned: OwnedConversation, db: SessionDep) -> None:
+    """End the answer being written, from whichever worker holds it. Nothing when none is."""
+    conversations.request_stop(db, owned.conversation)
+
+
+@router.put("/conversations/{conversation_id}/turns/{turn}/mark", operation_id="markAnswer", status_code=204)
+async def mark(owned: OwnedConversation, turn: int, body: MarkRequest, settings: SettingsDep) -> None:
+    """Mark answer `turn` (its place in the conversation as read) helpful or not, in a library room.
+
+    The page counts every question asked; the library counts the answers it
+    holds. This maps one onto the other, so a question stopped before the
+    agent took it does not shift the mark onto a neighbour.
+    """
+    agent = rooms.agent(settings.agent, owned.room)
+    turns = await _turns(owned, settings)
+    index = turns[turn].agent_index if 0 <= turn < len(turns) else None
+    session = owned.conversation.session_id
+    if not isinstance(agent, LibraryAgent) or index is None or session is None:
+        raise NotFoundError("No such answer")
+    if not await agent.mark(session, index, helpful=body.helpful, note=(body.note or "").strip() or None):
+        raise NotFoundError("No such answer")
+
+
+@router.get("/quota", operation_id="getAgentQuota")
+def get_quota(identity: CurrentIdentity, settings: SettingsDep, db: SessionDep) -> QuotaRead:
+    """Today's allowance across every room."""
+    allowance = quota.allowance(db, settings.agent, identity.user.id, exempt=has_module(identity.entitlements, "admin"))
+    return QuotaRead(**dataclasses.asdict(allowance), support_url=settings.agent.support_url or None)
+
+
+@router.get("/{persona}/jobs/{job_id}/watch", operation_id="watchAgentJob", dependencies=[Depends(watching)])
+async def watch_job(persona: str, job_id: str, workspace: CurrentWorkspace) -> StreamingResponse:
     """Watch `job_id`'s events from the first, then follow them until its run settles, from any worker.
 
-    The SAME frame shape `ask`'s stream produces — one Claude Code event per
-    frame, no `event:` name, `library_error` the one synthetic addition — so
-    `@poodle64/librarian`'s transcript renderer needs no second code path for
-    a job it opens instead of a chat turn.
+    The same frames a room's ask streams, so `@poodle64/librarian` renders
+    either with one code path.
 
     Raises:
         NotFoundError: no such job, or it belongs to a different workspace
-            or persona (`jobs.authorize`, one answer for all three — checked
-            before the stream opens, so a bad, foreign or mismatched-persona
-            id 404s rather than opening an SSE response with nothing in it).
+            or persona (`jobs.authorize`, one answer for all three, checked
+            before the stream opens).
     """
-    require_module(f"agent-{persona}")(identity)
     db_session_factory = get_session_factory()
     await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
 
@@ -93,7 +243,12 @@ async def watch_job(
     return StreamingResponse(frames(), media_type=sse.MEDIA_TYPE, headers=sse.HEADERS)
 
 
-@router.post("/{persona}/jobs/{job_id}/message", operation_id="messageAgentJob", status_code=204)
+@router.post(
+    "/{persona}/jobs/{job_id}/message",
+    operation_id="messageAgentJob",
+    status_code=204,
+    dependencies=[Depends(watching)],
+)
 async def message_job(
     persona: str,
     job_id: str,
@@ -102,8 +257,7 @@ async def message_job(
     settings: SettingsDep,
     request: AgentJobMessageRequest,
 ) -> None:
-    """Send `request.text` to `job_id` (need 4): onto its stdin if it is still working, a resumed run if it has finished."""
-    require_module(f"agent-{persona}")(identity)
+    """Send `request.text` to `job_id`: onto its stdin while it works, a resumed run once it has finished."""
     db_session_factory = get_session_factory()
     await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
     config = persona_module.load(settings.agent, persona)
@@ -118,12 +272,45 @@ async def message_job(
     )
 
 
-@router.post("/{persona}/jobs/{job_id}/stop", operation_id="stopAgentJob", status_code=204)
-async def stop_job(
-    persona: str, job_id: str, identity: CurrentIdentity, workspace: CurrentWorkspace, settings: SettingsDep
-) -> None:
-    """Stop `job_id` (need 5). A no-op once it has already finished on its own."""
-    require_module(f"agent-{persona}")(identity)
+@router.post(
+    "/{persona}/jobs/{job_id}/stop", operation_id="stopAgentJob", status_code=204, dependencies=[Depends(watching)]
+)
+async def stop_job(persona: str, job_id: str, workspace: CurrentWorkspace) -> None:
+    """Stop `job_id`. A no-op once it has already finished on its own."""
     db_session_factory = get_session_factory()
     await jobs_module.authorize(db_session_factory, job_id, workspace.id, persona)
     await jobs_module.stop(db_session_factory, job_id, workspace_id=workspace.id)
+
+
+def _summary(conversation: AgentConversation) -> ConversationSummary:
+    return ConversationSummary(
+        id=conversation.id,
+        title=conversation.title,
+        last_activity_at=conversation.last_activity_at,
+        answering_since=conversations.answering(conversation),
+    )
+
+
+async def _turns(owned: Owned, settings: SettingsDep) -> list[conversations.Turn]:
+    session = owned.conversation.session_id
+    held = await rooms.agent(settings.agent, owned.room).read(session) if session else None
+    return conversations.merged(owned.conversation, held or [])
+
+
+async def _asked(request: Request) -> tuple[AskRequest, dict[str, bytes]]:
+    """The question, as JSON or as multipart with its attachments; the page's `collections[]` are never read."""
+    try:
+        if request.headers.get("content-type", "").startswith("multipart/form-data"):
+            form = await request.form()
+            body = AskRequest(question=str(form.get("question") or ""), resume=str(form.get("resume") or "") or None)
+            files = {
+                upload.filename or "attachment": await upload.read()
+                for upload in form.getlist("files[]")
+                if isinstance(upload, UploadFile)
+            }
+            return body, files
+        return AskRequest.model_validate(await request.json()), {}
+    except pydantic.ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+    except ValueError as exc:  # a body that is not JSON at all
+        raise RequestValidationError([{"type": "json_invalid", "loc": ("body",), "msg": str(exc)}]) from exc

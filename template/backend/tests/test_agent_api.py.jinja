@@ -1,57 +1,71 @@
-"""The agent slice, driven end to end through a REAL subprocess.
+"""Rooms, driven end to end: a persona room through a REAL subprocess, a library room through real HTTP.
 
-Every other slice test in this suite monkeypatches past the boundary it is
-proving; this one deliberately does not. `AgentSettings.executable` is
-pointed at `tests/support/fake_agent_cli.py`, a standalone script with its
-own shebang, so the `agent_common` kit's driver spawns a genuine child process
-exactly as it would spawn `claude` — which is what lets this suite assert on
-the actual argv and environment the kit builds for this app (the persona's
-derived `--allowedTools`/`--disallowedTools`, `--mcp-config`,
-`MAX_THINKING_TOKENS`, the model read off the seeded
-`CLAUDE_CONFIG_DIR/settings.json`) rather than on a mock standing in for the
-claim that those are what get passed.
+`AgentSettings.executable` points at `tests/support/fake_agent_cli.py`, so the
+kit's driver spawns a genuine child exactly as it would spawn `claude`, and
+this suite asserts on the argv and environment the kit builds for this app
+rather than on a mock. A library room's `LibraryAgent` asks
+`tests/support/fake_library.py` over the api-clients `library` client, the
+library's caller door faked at its routes.
 
-`docs/design/agent-console.md` names this the chunk-1 proof: "one test
-driving a fake CLI through argv, env, ownership and SSE framing."
+A turn is a task that outlives its request, writing on its own connection,
+so this suite commits for real: its `client` overrides nothing, and every
+test is a fresh person (`_person`), so no two share a row or an allowance.
+httpx's ASGI transport hands back a response only once it is whole, so an
+ask left running is a task (`_asking`), and cancelling it is the tab closing.
 """
 
+import asyncio
 import json
 import os
 import stat
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
+from sqlalchemy import select, update
 
 from {{ package_name }} import app_hooks
-from {{ package_name }}.api.agent import ownership
-from {{ package_name }}.api.agent.ownership import AgentSession
+from {{ package_name }}.api.agent import ask as ask_module
+from {{ package_name }}.api.agent import conversations, rooms
+from {{ package_name }}.api.agent.conversations import AgentConversation
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
-from tests.support import fake_agent_cli
+from {{ package_name }}.db.session import get_session_factory
+from tests.support import fake_agent_cli, fake_library
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
+ROOMS = """
+helper:
+  title: The Helper
+  blurb: Ask the helper anything.
+  examples:
+    - What is recreation leave?
+  persona: helper
+manual:
+  title: The Manual
+  not_held: your own leave balance
+  library:
+    collections:
+      manual: the Manual
+    preamble: You are Milton, the librarian for the Manual.
+"""
 
-ASKER = {"x-authentik-uid": "asker-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-milton"}
-OTHER = {"x-authentik-uid": "asker-2", "x-authentik-username": "other", "x-authentik-entitlements": "agent-milton"}
-UNENTITLED = {"x-authentik-uid": "asker-3", "x-authentik-username": "bystander"}
 
-
-def _write_persona(root: Path, name: str, *, model: str = "goku/sonnet") -> Path:
+def _write_persona(root: Path, name: str, **settings: object) -> Path:
     """A minimal persona directory: CLAUDE.md, settings.json, .mcp.json."""
     directory = root / name
-    directory.mkdir(parents=True)
+    directory.mkdir(parents=True, exist_ok=True)
     (directory / "CLAUDE.md").write_text(f"You are {name}.")
     (directory / "settings.json").write_text(
-        json.dumps({"model": model, "permissions": {"allow": ["Read", "Grep"], "deny": ["Bash"]}})
+        json.dumps({"model": "goku/sonnet", "permissions": {"allow": ["Read", "Grep"], "deny": ["Bash"]}, **settings})
     )
     (directory / ".mcp.json").write_text(json.dumps({"mcpServers": {}}))
     return directory
@@ -60,307 +74,487 @@ def _write_persona(root: Path, name: str, *, model: str = "goku/sonnet") -> Path
 @pytest.fixture
 def personas_dir(tmp_path: Path) -> Path:
     root = tmp_path / "personas"
-    _write_persona(root, "milton")
+    _write_persona(root, "helper")
     return root
 
 
-@pytest.fixture(autouse=True)
-def _agent_settings(app: FastAPI, personas_dir: Path) -> Iterator[None]:
-    """Point the agent slice at a throwaway persona directory and the fake CLI.
+@pytest.fixture
+def library() -> Iterator[fake_library.FakeLibrary]:
+    fake = fake_library.FakeLibrary(pace=0.01)
+    server = fake.serve()
+    yield fake
+    server.shutdown()
 
-    `os.chmod` runs even though the file is already committed executable:
-    a checkout step (copier, a zip export) is not guaranteed to carry the bit,
-    and a subprocess spawned from a non-executable path fails with `PermissionError`
-    rather than anything this suite could mistake for a real assertion failure.
-    """
-    os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-    configured: Settings = get_settings().model_copy(
-        update={"agent": AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)}
+@pytest.fixture
+def agent_settings(personas_dir: Path, tmp_path: Path, library: fake_library.FakeLibrary) -> AgentSettings:
+    rooms_file = tmp_path / "rooms.yaml"
+    rooms_file.write_text(ROOMS)
+    return AgentSettings(
+        personas_dir=personas_dir,
+        rooms_file=rooms_file,
+        executable=str(FAKE_CLI),
+        timeout_seconds=10.0,
+        daily_questions=3,
+        library_url=f"http://127.0.0.1:{library.port}",
+        library_token=SecretStr("caller-bearer"),
     )
+
+
+@pytest.fixture(autouse=True)
+def _configured(app: FastAPI, agent_settings: AgentSettings, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    monkeypatch.setattr(ask_module, "STOP_POLL_SECONDS", 0.05)
+    configured: Settings = get_settings().model_copy(update={"agent": agent_settings})
     app.dependency_overrides[get_settings] = lambda: configured
     yield
     app.dependency_overrides.pop(get_settings, None)
 
 
-def _events(body: str) -> list[dict[str, object]]:
-    """Parse an SSE response body back into its JSON frames."""
-    frames = []
-    for block in body.split("\n\n"):
-        for line in block.splitlines():
-            if line.startswith("data: "):
-                frames.append(json.loads(line.removeprefix("data: ")))
-    return frames
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """Real commits, and every turn this test started settled before the next test begins."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        yield http
+    await _settled()
 
 
-def _row(session: Session, session_id: str) -> AgentSession | None:
-    return session.execute(select(AgentSession).where(AgentSession.session_id == session_id)).scalar_one_or_none()
+async def _settled(timeout: float = 15.0) -> None:
+    """Wait for every turn in flight: the correct way to observe a background task from outside it."""
+    async with asyncio.timeout(timeout):
+        while ask_module._turns:
+            await asyncio.sleep(0.02)
 
 
-# ── The door ──────────────────────────────────────────────────────────────
+def _person(*grants: str) -> dict[str, str]:
+    uid = f"asker-{uuid.uuid4().hex[:12]}"
+    return {"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "|".join(grants)}
 
 
-async def test_an_unentitled_caller_cannot_ask(client: AsyncClient) -> None:
-    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=UNENTITLED)
-    assert response.status_code == 403
+def _events(body: str) -> list[dict[str, Any]]:
+    """An SSE response body as its JSON frames."""
+    return [json.loads(line[6:]) for line in body.splitlines() if line.startswith("data: ")]
 
 
-async def test_a_persona_with_no_directory_answers_not_found(client: AsyncClient) -> None:
-    headers = {**ASKER, "x-authentik-entitlements": "agent-nobody"}
-    response = await client.post("/api/agent/nobody/ask", json={"question": "hi"}, headers=headers)
-    assert response.status_code == 404
+def _said(events: list[dict[str, Any]]) -> str:
+    whole = next(e for e in events if e.get("type") == "assistant")
+    return str(whole["message"]["content"][0]["text"])
 
 
-async def test_the_persona_list_is_narrowed_to_the_callers_own_entitlements(client: AsyncClient) -> None:
-    entitled = await client.get("/api/agent/personas", headers=ASKER)
-    assert entitled.json() == ["milton"]
-
-    bystander = await client.get("/api/agent/personas", headers=UNENTITLED)
-    assert bystander.json() == []
-
-
-async def test_an_app_with_no_persona_directory_lists_none(client: AsyncClient, app: FastAPI, tmp_path: Path) -> None:
-    # Overrides the autouse fixture's own override for this one request; its
-    # teardown pops whichever override is current, so nothing needs undoing here.
-    empty: Settings = get_settings().model_copy(
-        update={"agent": AgentSettings(personas_dir=tmp_path / "no-such-dir", executable=str(FAKE_CLI))}
-    )
-    app.dependency_overrides[get_settings] = lambda: empty
-
-    response = await client.get("/api/agent/personas", headers=ASKER)
-    assert response.json() == []
+def _row(conversation_id: str) -> AgentConversation:
+    with get_session_factory()() as db:
+        found = db.get(AgentConversation, conversation_id)
+    assert found is not None
+    return found
 
 
-# ── argv, env, and the SSE frames ────────────────────────────────────────
+async def _ask(client: AsyncClient, room: str, question: str, who: dict[str, str], resume: str | None = None) -> Any:
+    return await client.post(f"/api/agent/rooms/{room}/ask", json={"question": question, "resume": resume}, headers=who)
 
 
-async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_model(
+async def _until(predicate: Callable[[], object], timeout: float = 10.0) -> None:
+    async with asyncio.timeout(timeout):
+        while not predicate():
+            await asyncio.sleep(0.02)
+
+
+def _latest(who: dict[str, str]) -> str | None:
+    with get_session_factory()() as db:
+        return db.execute(
+            select(AgentConversation.id)
+            .join(User, User.id == AgentConversation.user_id)
+            .where(User.authentik_uid == who["x-authentik-uid"])
+            .order_by(AgentConversation.created_at.desc())
+        ).scalar()
+
+
+async def _asking(
+    client: AsyncClient, room: str, question: str, who: dict[str, str], resume: str | None = None
+) -> tuple[asyncio.Task[Any], str]:
+    """An ask left running once the agent has taken it, and the conversation it named."""
+    asking = asyncio.create_task(_ask(client, room, question, who, resume))
+    await _until(lambda: resume or _latest(who))
+    conversation = resume or _latest(who)
+    assert conversation is not None
+    await _until(lambda: _row(conversation).answering_since is not None and _row(conversation).session_id)
+    return asking, conversation
+
+
+# ── Rooms from config/rooms.yaml ─────────────────────────────────────────
+
+
+async def test_the_rooms_listed_are_the_ones_the_caller_is_granted(client: AsyncClient) -> None:
+    listed = await client.get("/api/agent/rooms", headers=_person("room-manual"))
+    assert [(room["id"], room["library"], room["sources"]) for room in listed.json()] == [
+        ("manual", True, ["the Manual"])
+    ]
+    assert (await client.get("/api/agent/rooms", headers=_person())).json() == []
+
+
+async def test_an_app_with_no_rooms_file_offers_none(client: AsyncClient, agent_settings: AgentSettings) -> None:
+    agent_settings.rooms_file.unlink()
+    assert (await client.get("/api/agent/rooms", headers=_person("room-helper"))).json() == []
+
+
+@pytest.mark.parametrize(
+    ("body", "why"),
+    [
+        ("x:\n  title: X\n", "exactly one of persona or library"),
+        ("x:\n  title: X\n  persona: helper\n  library: {collections: {a: b}}\n", "exactly one of persona or library"),
+        ("x:\n  title: X\n  persona: nobody\n", "no persona 'nobody'"),
+        ("x:\n  title: X\n  library: {collections: {a: ''}}\n", "a reader's name"),
+        ("X_1:\n  title: X\n  persona: helper\n", "lowercase letters"),
+        ("x:\n  persona: helper\n", "needs a title"),
+    ],
+)
+def test_a_room_this_app_cannot_open_refuses_to_load(agent_settings: AgentSettings, body: str, why: str) -> None:
+    agent_settings.rooms_file.write_text(body)
+    with pytest.raises(rooms.RoomsInvalid, match=why):
+        rooms.load(agent_settings)
+
+
+def test_a_library_room_needs_the_library(agent_settings: AgentSettings) -> None:
+    unconfigured = agent_settings.model_copy(update={"library_url": ""})
+    with pytest.raises(rooms.RoomsInvalid, match="AGENT_LIBRARY_URL"):
+        rooms.load(unconfigured)
+
+
+async def test_a_room_is_entered_only_with_its_own_grant(client: AsyncClient) -> None:
+    assert (await _ask(client, "helper", "hi", _person("room-manual"))).status_code == 403
+    assert (await _ask(client, "nowhere", "hi", _person("room-nowhere"))).status_code == 404
+
+
+# ── The turn ──────────────────────────────────────────────────────────────
+
+
+async def test_an_ask_names_the_conversation_before_the_agent_starts_and_keeps_that_name(
     client: AsyncClient,
 ) -> None:
-    response = await client.post("/api/agent/milton/ask", json={"question": "what is recreation leave?"}, headers=ASKER)
-    assert response.status_code == 200
-
+    response = await _ask(client, "helper", "what is recreation leave?", _person("room-helper"))
     events = _events(response.text)
-    init = next(e for e in events if e.get("subtype") == "init")
-    assert isinstance(init["session_id"], str) and init["session_id"]
 
-    echoed = next(e for e in events if e.get("type") == "assistant")
-    text = echoed["message"]["content"][0]["text"]
-    assert "question=what is recreation leave?" in text
-    assert "model=goku/sonnet" in text
-    assert "allowed=Read,Grep" in text
-    assert "disallowed=Bash" in text
-    assert "mcp_config=" in text and ".mcp.json" in text
-    assert "strict_mcp_config=True" in text
-    assert "permission_mode=bypassPermissions" in text
-    assert "thinking_off=0" in text
+    first = events[0]
+    assert (first["type"], first["subtype"]) == ("system", "init")
+    inits = [e for e in events if e.get("subtype") == "init"]
+    assert len(inits) == 2 and {e["session_id"] for e in inits} == {first["session_id"]}
 
-    assert any(e.get("type") == "result" for e in events)
+    row = _row(first["session_id"])
+    assert row.session_id and row.session_id.startswith("fake-") and row.session_id != row.id
+    assert row.title == "what is recreation leave?"
+    assert row.answering_since is None and row.turns[0]["answered"] is True
+
+
+async def test_a_conversation_reads_back_every_turn_with_when_it_was_asked(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    first = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+    await _ask(client, "helper", "two", who, resume=first)
+
+    read = (await client.get(f"/api/agent/conversations/{first}", headers=who)).json()
+    assert [turn["question"] for turn in read["turns"]] == ["one", "two"]
+    assert all(turn["at"] for turn in read["turns"])
+    assert "question=two" in read["turns"][1]["answer"]
+    assert read["answering_since"] is None
+
+
+async def test_a_resume_carries_on_the_agents_own_session(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    first = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+    session = _row(first).session_id
+    second = _events((await _ask(client, "helper", "two", who, resume=first)).text)
+    assert "resumed=True" in _said(second)
+    assert _row(first).session_id == session
+
+
+async def test_a_foreign_and_an_unknown_conversation_get_one_answer(client: AsyncClient) -> None:
+    owner = _person("room-helper")
+    mine = _events((await _ask(client, "helper", "one", owner)).text)[0]["session_id"]
+    stranger = _person("room-helper")
+
+    foreign = await _ask(client, "helper", "let me in", stranger, resume=mine)
+    unknown = await _ask(client, "helper", "let me in", stranger, resume=str(uuid.uuid4()))
+    assert foreign.status_code == unknown.status_code == 404
+    assert foreign.json() == unknown.json()
+    assert (await client.get(f"/api/agent/conversations/{mine}", headers=stranger)).status_code == 404
+
+
+async def test_a_conversation_in_another_room_is_not_carried_on_here(client: AsyncClient) -> None:
+    who = _person("room-helper", "room-manual")
+    elsewhere = _events((await _ask(client, "manual", "leave?", who)).text)[0]["session_id"]
+    assert (await _ask(client, "helper", "hi", who, resume=elsewhere)).status_code == 404
+
+
+async def test_the_turn_outlives_the_request_and_its_answer_lands(client: AsyncClient, personas_dir: Path) -> None:
+    _write_persona(personas_dir, "helper", fakeAgentPace=0.05)
+    who = _person("room-helper")
+    asking, conversation = await _asking(client, "helper", "a slow one", who)
+    asking.cancel()  # the tab closes; the answer is still being written
+
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["answering_since"] is not None
+    assert read["turns"][-1]["question"] == "a slow one"
+    assert read["turns"][-1]["at"] >= read["answering_since"]
+    listed = (await client.get("/api/agent/rooms/helper/conversations", headers=who)).json()
+    assert listed[0]["answering_since"] == read["answering_since"]
+
+    await _settled()
+    settled = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert settled["answering_since"] is None
+    assert settled["turns"][-1]["answer"].startswith("You asked: a slow one")
+
+
+async def test_an_ask_on_a_conversation_already_answering_is_refused_409(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    asking, conversation = await _asking(client, "helper", fake_agent_cli.HANG_TRIGGER, who)
+
+    assert (await _ask(client, "helper", "and now?", who, resume=conversation)).status_code == 409
+
+    assert (await client.post(f"/api/agent/conversations/{conversation}/stop", headers=who)).status_code == 204
+    await asyncio.wait_for(asking, timeout=10)
+    assert _row(conversation).answering_since is None
+
+
+async def test_a_stop_ends_the_answer_from_another_request_and_the_question_stays(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    asking, conversation = await _asking(client, "helper", fake_agent_cli.HANG_TRIGGER, who)
+
+    await client.post(f"/api/agent/conversations/{conversation}/stop", headers=who)
+    body = (await asyncio.wait_for(asking, timeout=10)).text
+    assert not any(e.get("type") == "result" for e in _events(body))
+
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["answering_since"] is None
+    assert [(t["question"], t["answer"]) for t in read["turns"]] == [(fake_agent_cli.HANG_TRIGGER, "")]
+
+
+async def test_a_worker_that_died_mid_turn_leaves_a_conversation_that_can_be_asked_again(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    conversation = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+    with get_session_factory()() as db:
+        long_ago = conversations.now().replace(year=2020)
+        db.execute(
+            update(AgentConversation)
+            .where(AgentConversation.id == conversation)
+            .values(answering_since=long_ago, last_activity_at=long_ago)
+        )
+        db.commit()
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["answering_since"] is None
+    assert (await _ask(client, "helper", "two", who, resume=conversation)).status_code == 200
+
+
+# ── A person's conversations ─────────────────────────────────────────────
+
+
+async def test_the_list_is_this_persons_own_in_this_room_most_recent_first(client: AsyncClient) -> None:
+    who = _person("room-helper", "room-manual")
+    older = _events((await _ask(client, "helper", "older", who)).text)[0]["session_id"]
+    newer = _events((await _ask(client, "helper", "newer", who)).text)[0]["session_id"]
+    await _ask(client, "manual", "another room", who)
+    await _ask(client, "helper", "somebody else's", _person("room-helper"))
+
+    listed = (await client.get("/api/agent/rooms/helper/conversations", headers=who)).json()
+    assert [(c["id"], c["title"]) for c in listed] == [(newer, "newer"), (older, "older")]
+
+
+async def test_rename_download_and_delete(client: AsyncClient, agent_settings: AgentSettings) -> None:
+    who = _person("room-helper")
+    conversation = _events((await _ask(client, "helper", "what is leave?", who)).text)[0]["session_id"]
+    session = str(_row(conversation).session_id)
+    agent = rooms.agent(agent_settings, rooms.get(agent_settings, "helper"))
+
+    renamed = await client.patch(f"/api/agent/conversations/{conversation}", json={"title": "Leave"}, headers=who)
+    assert renamed.json()["title"] == "Leave"
+
+    exported = await client.get(f"/api/agent/conversations/{conversation}/export", headers=who)
+    assert exported.headers["content-disposition"] == "attachment; filename*=UTF-8''Leave.md"
+    assert exported.text.startswith("# Leave\n\n_The Helper_")
+    assert "> what is leave?" in exported.text and "question=what is leave?" in exported.text
+
+    assert await agent.read(session) is not None
+    assert (await client.delete(f"/api/agent/conversations/{conversation}", headers=who)).status_code == 204
+    assert (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).status_code == 404
+    assert await agent.read(session) is None
+
+
+async def test_a_revoked_grant_closes_the_persons_old_conversations(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    conversation = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+    revoked = {**who, "x-authentik-entitlements": ""}
+    assert (await client.get(f"/api/agent/conversations/{conversation}", headers=revoked)).status_code == 403
+
+
+# ── The allowance ────────────────────────────────────────────────────────
+
+
+async def test_a_spent_allowance_refuses_the_next_question_429(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    for question in ("one", "two", "three"):
+        assert (await _ask(client, "helper", question, who)).status_code == 200
+    quota = (await client.get("/api/agent/quota", headers=who)).json()
+    assert (quota["limit"], quota["remaining"], quota["reached"], quota["exempt"]) == (3, 0, True, False)
+
+    refused = await _ask(client, "helper", "four", who)
+    assert refused.status_code == 429
+
+
+async def test_a_question_the_agent_never_took_costs_nothing(client: AsyncClient) -> None:
+    who = _person("room-helper")
+    await _ask(client, "helper", fake_agent_cli.CRASH_TRIGGER, who)
+    assert (await client.get("/api/agent/quota", headers=who)).json()["remaining"] == 3
+
+
+async def test_an_admin_is_not_counted(client: AsyncClient) -> None:
+    admin = _person("room-helper", "admin")
+    for question in ("one", "two", "three", "four"):
+        assert (await _ask(client, "helper", question, admin)).status_code == 200
+    assert (await client.get("/api/agent/quota", headers=admin)).json()["exempt"] is True
+
+
+# ── A library room ───────────────────────────────────────────────────────
+
+
+async def test_a_library_room_asks_milton_with_its_preamble_and_reads_back_without_it(
+    client: AsyncClient, library: fake_library.FakeLibrary
+) -> None:
+    who = _person("room-manual")
+    events = _events((await _ask(client, "manual", "How much leave?", who)).text)
+    conversation = events[0]["session_id"]
+    assert all(e["session_id"] == conversation for e in events if e.get("subtype") == "init")
+    assert any(e.get("type") == "citations" for e in events)
+    assert library.asked[-1]["question"] == "You are Milton, the librarian for the Manual.\n\nHow much leave?"
+    assert library.asked[-1]["collections"] == ["manual"]
+
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["turns"][0]["question"] == "How much leave?"
+    assert read["turns"][0]["citations"][0]["document_id"] == fake_library.DOCUMENT_ID
+
+
+async def test_a_cited_document_opens_only_inside_the_room(client: AsyncClient) -> None:
+    who = _person("room-manual")
+    opened = await client.get(f"/api/agent/rooms/manual/documents/{fake_library.DOCUMENT_ID}", headers=who)
+    assert opened.json()["sections"][0]["heading"] == "5.1 Recreation leave"
+    outside = await client.get(f"/api/agent/rooms/manual/documents/{fake_library.OUTSIDE_ID}", headers=who)
+    assert outside.status_code == 404
+
+
+async def test_a_mark_lands_on_the_answer_the_page_meant_past_a_question_stopped_before_it(
+    client: AsyncClient, library: fake_library.FakeLibrary
+) -> None:
+    who = _person("room-manual")
+    conversation = _events((await _ask(client, "manual", "first?", who)).text)[0]["session_id"]
+    asking, _ = await _asking(client, "manual", fake_library.HANG_TRIGGER, who, resume=conversation)
+    await client.post(f"/api/agent/conversations/{conversation}/stop", headers=who)
+    await asyncio.wait_for(asking, timeout=10)
+    await _ask(client, "manual", "third?", who, resume=conversation)
+
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert [bool(t["answer"]) for t in read["turns"]] == [True, False, True]
+
+    marked = await client.put(
+        f"/api/agent/conversations/{conversation}/turns/2/mark", json={"helpful": False, "note": "dated"}, headers=who
+    )
+    assert marked.status_code == 204
+    assert (library.marks[-1]["turn_index"], library.marks[-1]["helpful"]) == (1, False)
+    unanswered = await client.put(
+        f"/api/agent/conversations/{conversation}/turns/1/mark", json={"helpful": True}, headers=who
+    )
+    assert unanswered.status_code == 404
+
+
+async def test_deleting_a_library_conversation_forgets_it_at_the_library(
+    client: AsyncClient, library: fake_library.FakeLibrary
+) -> None:
+    who = _person("room-manual")
+    conversation = _events((await _ask(client, "manual", "leave?", who)).text)[0]["session_id"]
+    session = _row(conversation).session_id
+    assert session in library.conversations
+    await client.delete(f"/api/agent/conversations/{conversation}", headers=who)
+    assert session not in library.conversations
+
+
+# ── argv, env, and the app's hooks ────────────────────────────────────────
+
+
+async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_model(client: AsyncClient) -> None:
+    said = _said(_events((await _ask(client, "helper", "what is recreation leave?", _person("room-helper"))).text))
+    for part in (
+        "question=what is recreation leave?",
+        "model=goku/sonnet",
+        "allowed=Read,Grep",
+        "disallowed=Bash",
+        "strict_mcp_config=True",
+        "permission_mode=bypassPermissions",
+        "thinking_off=0",
+    ):
+        assert part in said
 
 
 async def test_an_edit_to_settings_json_reaches_the_very_next_ask(client: AsyncClient, personas_dir: Path) -> None:
-    """`docs/design/agent-console.md`: read at every spawn, no restart needed."""
-    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
-    echoed = next(e for e in _events(first.text) if e.get("type") == "assistant")
-    assert "model=goku/sonnet" in echoed["message"]["content"][0]["text"]
-
-    (personas_dir / "milton" / "settings.json").write_text(
-        json.dumps({"model": "sonnet", "permissions": {"allow": ["Read", "Grep"], "deny": ["Bash"]}})
-    )
-
-    second = await client.post("/api/agent/milton/ask", json={"question": "two"}, headers=ASKER)
-    echoed = next(e for e in _events(second.text) if e.get("type") == "assistant")
-    assert "model=sonnet" in echoed["message"]["content"][0]["text"]
+    who = _person("room-helper")
+    assert "model=goku/sonnet" in _said(_events((await _ask(client, "helper", "one", who)).text))
+    _write_persona(personas_dir, "helper", model="sonnet")
+    assert "model=sonnet" in _said(_events((await _ask(client, "helper", "two", who)).text))
 
 
 async def test_a_frame_over_asyncios_default_stream_limit_still_arrives_intact(client: AsyncClient) -> None:
-    """Without `ask()`'s own `limit=`, this line raises `ValueError` mid-stream and the turn just stops."""
-    response = await client.post(
-        "/api/agent/milton/ask", json={"question": fake_agent_cli.GIANT_TRIGGER}, headers=ASKER
-    )
-    events = _events(response.text)
-
-    echoed = next(e for e in events if e.get("type") == "assistant")
-    assert len(echoed["message"]["content"][0]["text"]) == fake_agent_cli.GIANT_TEXT_SIZE
-    assert any(e.get("type") == "result" for e in events)
+    events = _events((await _ask(client, "helper", fake_agent_cli.GIANT_TRIGGER, _person("room-helper"))).text)
+    assert len(_said(events)) == fake_agent_cli.GIANT_TEXT_SIZE
     assert not any(e.get("type") == "library_error" for e in events)
 
 
 async def test_the_apps_own_environment_does_not_reach_the_childs(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A persona with no shell/network denial must not read this app's own secrets off its environment."""
     monkeypatch.setenv("AGENT_TEST_MARKER", "a-value-that-must-not-reach-the-child")
-    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
-    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
-    assert "marker=absent" in echoed["message"]["content"][0]["text"]
-
-
-async def test_the_apps_otel_settings_reach_the_child_under_its_own_service_name(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """#40: set on the app process, telemetry rides through -- except OTEL_SERVICE_NAME, which the child computes."""
-    monkeypatch.setenv("CLAUDE_CODE_ENABLE_TELEMETRY", "1")
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-otlp-header-value")
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
-    monkeypatch.setenv("OTEL_METRICS_EXPORTER", "otlp")
-    monkeypatch.setenv("OTEL_LOGS_EXPORTER", "otlp")
-    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=test")
-    # The app's own service name -- must NOT reach the child unchanged.
     monkeypatch.setenv("OTEL_SERVICE_NAME", "{{ project_name }}")
-
-    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
-    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")["message"]["content"][0]["text"]
-
-    assert "CLAUDE_CODE_ENABLE_TELEMETRY=1" in echoed
-    assert "OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318" in echoed
-    assert "OTEL_EXPORTER_OTLP_HEADERS=x-otlp-header-value" in echoed
-    assert "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf" in echoed
-    assert "OTEL_METRICS_EXPORTER=otlp" in echoed
-    assert "OTEL_LOGS_EXPORTER=otlp" in echoed
-    assert "OTEL_RESOURCE_ATTRIBUTES=deployment.environment=test" in echoed
-    assert "OTEL_SERVICE_NAME={{ project_name }}-agent-milton" in echoed
+    said = _said(_events((await _ask(client, "helper", "hi", _person("room-helper"))).text))
+    assert "marker=absent" in said
+    assert "OTEL_SERVICE_NAME={{ project_name }}-agent-helper" in said
 
 
-async def test_the_apps_otel_settings_are_absent_from_the_child_when_unset(
+async def test_a_crashing_cli_becomes_one_error_frame_after_the_conversations_name(client: AsyncClient) -> None:
+    events = _events((await _ask(client, "helper", fake_agent_cli.CRASH_TRIGGER, _person("room-helper"))).text)
+    assert [e["type"] for e in events] == ["system", "library_error"]
+    assert events[1]["error"] == "agent exited 3"
+
+
+async def test_the_hooks_see_the_question_the_events_and_the_settled_answer(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No telemetry set on the app process -- the child carries none, only its own computed service name.
+    turned: list[tuple[str, str]] = []
+    settled: list[tuple[str, str, int]] = []
 
-    Deletes rather than merely not setting: the developer or CI process running THIS suite may itself carry
-    `CLAUDE_CODE_ENABLE_TELEMETRY` (Claude Code's own), which would otherwise leak in as a false pass-through.
-    """
-    for name in fake_agent_cli.TELEMETRY_VARS[:-1]:  # every pass-through name but OTEL_SERVICE_NAME
-        monkeypatch.delenv(name, raising=False)
-
-    response = await client.post("/api/agent/milton/ask", json={"question": "hi"}, headers=ASKER)
-    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")["message"]["content"][0]["text"]
-
-    for name in fake_agent_cli.TELEMETRY_VARS[:-1]:
-        assert f"{name}=absent" in echoed
-    assert "OTEL_SERVICE_NAME={{ project_name }}-agent-milton" in echoed
-
-
-async def test_a_crashing_cli_becomes_one_library_error_frame(client: AsyncClient) -> None:
-    """The driver's OWN synthetic frame, not ownership's: the CLI died, not a refusal."""
-    response = await client.post("/api/agent/milton/ask", json={"question": "__crash__"}, headers=ASKER)
-    events = _events(response.text)
-    assert len(events) == 1
-    assert events[0]["type"] == "library_error"
-    assert events[0]["error"] == "agent exited 3"
-
-
-async def test_the_issued_session_is_claimed_for_the_asker(client: AsyncClient, session: Session) -> None:
-    response = await client.post("/api/agent/milton/ask", json={"question": "hello"}, headers=ASKER)
-    session_id = next(e for e in _events(response.text) if e.get("subtype") == "init")["session_id"]
-
-    # user_id is the local user's UUID primary key `get_identity` upserted for
-    # `asker-1`, not the raw Authentik uid — so it is read back off the same
-    # table rather than assumed.
-    asker = session.execute(select(User).where(User.authentik_uid == "asker-1")).scalar_one()
-    row = _row(session, str(session_id))
-    assert row is not None
-    assert row.user_id == asker.id
-
-
-async def test_the_owner_may_resume_their_own_session(client: AsyncClient) -> None:
-    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
-    session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
-
-    resumed = await client.post("/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=ASKER)
-    events = _events(resumed.text)
-    init = next(e for e in events if e.get("subtype") == "init")
-    # The real CLI re-emits the ORIGINAL id on resume (`ownership.py`'s own
-    # measurement); the fake CLI mirrors that so this assertion is genuine.
-    assert init["session_id"] == session_id
-    assert not any(e.get("type") == "library_error" for e in events)
-
-
-async def test_a_different_caller_cannot_resume_someone_elses_session(client: AsyncClient) -> None:
-    first = await client.post("/api/agent/milton/ask", json={"question": "one"}, headers=ASKER)
-    session_id = next(e for e in _events(first.text) if e.get("subtype") == "init")["session_id"]
-
-    refused = await client.post("/api/agent/milton/ask", json={"question": "two", "resume": session_id}, headers=OTHER)
-    events = _events(refused.text)
-    assert events == [{"type": "library_error", "error": ownership.DENIAL}]
-
-
-async def test_an_unknown_session_id_is_refused_the_same_way_as_a_foreign_one(client: AsyncClient) -> None:
-    refused = await client.post(
-        "/api/agent/milton/ask", json={"question": "hi", "resume": "never-issued"}, headers=ASKER
-    )
-    events = _events(refused.text)
-    assert events == [{"type": "library_error", "error": ownership.DENIAL}]
-
-
-# ── The optional redactor hook ───────────────────────────────────────────
-
-
-async def test_the_question_is_unredacted_when_the_app_defines_no_hook(client: AsyncClient) -> None:
-    assert not hasattr(app_hooks, "agent_turn")
-    response = await client.post("/api/agent/milton/ask", json={"question": "raw text"}, headers=ASKER)
-    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
-    assert "question=raw text" in echoed["message"]["content"][0]["text"]
-
-
-async def test_a_defined_hook_runs_on_the_question_before_the_cli_sees_it(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, session: Session
-) -> None:
-    calls: list[tuple[str, str, str]] = []
-
-    def _fake_hook(persona: str, user: str, text: str) -> str:
-        calls.append((persona, user, text))
+    def agent_turn(agent: str, user: str, text: str) -> str:
+        turned.append((agent, text))
         return text.replace("secret", "[redacted]")
 
-    monkeypatch.setattr(app_hooks, "agent_turn", _fake_hook, raising=False)
+    def agent_event(agent: str, event: dict[str, Any]) -> dict[str, Any] | None:
+        return None if event.get("type") == "result" else event
 
-    response = await client.post("/api/agent/milton/ask", json={"question": "my secret plan"}, headers=ASKER)
-    echoed = next(e for e in _events(response.text) if e.get("type") == "assistant")
+    monkeypatch.setattr(app_hooks, "agent_turn", agent_turn, raising=False)
+    monkeypatch.setattr(app_hooks, "agent_event", agent_event, raising=False)
+    monkeypatch.setattr(app_hooks, "agent_turn_settled", lambda *args: settled.append(args), raising=False)
 
-    asker = session.execute(select(User).where(User.authentik_uid == "asker-1")).scalar_one()
-    assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
-    assert calls == [("milton", str(asker.id), "my secret plan")]
-
-
-async def test_the_output_hook_rewrites_what_a_chat_streams_and_drops_what_it_returns_none_for(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`app_hooks.agent_event` sees every event before it leaves: what the agent repeated back is
-    rewritten on the way out, with nothing redacted on the way in."""
-
-    def _fake_hook(persona: str, event: dict[str, object]) -> dict[str, object] | None:
-        if event.get("type") == "result":
-            return None
-        return json.loads(json.dumps(event).replace("secret", "[redacted]"))
-
-    monkeypatch.setattr(app_hooks, "agent_event", _fake_hook, raising=False)
-
-    response = await client.post("/api/agent/milton/ask", json={"question": "my secret plan"}, headers=ASKER)
-    events = _events(response.text)
-    echoed = next(e for e in events if e.get("type") == "assistant")
-    assert "question=my [redacted] plan" in echoed["message"]["content"][0]["text"]
-    assert "secret" not in response.text
+    who = _person("room-helper")
+    events = _events((await _ask(client, "helper", "my secret plan", who)).text)
+    conversation = events[0]["session_id"]
+    await _settled()
+    assert "question=my [redacted] plan" in _said(events)
     assert not any(e.get("type") == "result" for e in events)
+    assert turned == [("helper", "my secret plan")]
+    assert settled == [("helper", conversation, 0)]
+    read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert read["turns"][0]["question"] == "my [redacted] plan"
 
 
 # ── The persona's headersHelper presents the bearer its .mcp.json names ────
-#
-# #34: a persona's `.mcp.json` exists to make the CLI's own `headersHelper`
-# present a bearer to its MCP server. The fake CLI's `__mcp_probe__` question
-# runs that exact shell-command shape against a real local HTTP server that
-# 401s without the bearer it names, so this proves the mechanism -- not the
-# real `claude` binary's own headersHelper support, which is out of this
-# suite's reach and verified separately against the pinned Dockerfile version.
 
 
-class _BearerRequiredHandler(BaseHTTPRequestHandler):
-    """A real HTTP server that 401s any request lacking `expected_bearer`."""
-
-    expected_bearer = ""
+class _BearerRequired(BaseHTTPRequestHandler):
+    expected = ""
 
     def do_GET(self) -> None:
-        body = b"ok" if self.headers.get("Authorization") == f"Bearer {self.expected_bearer}" else b"unauthorized"
+        body = b"ok" if self.headers.get("Authorization") == f"Bearer {self.expected}" else b"no"
         self.send_response(200 if body == b"ok" else 401)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -370,45 +564,25 @@ class _BearerRequiredHandler(BaseHTTPRequestHandler):
         """Silence: the default logs every request to stderr."""
 
 
-@pytest.fixture
-def fake_mcp_server() -> Iterator[tuple[str, str]]:
-    """A real loopback HTTP server requiring a freshly generated bearer."""
+async def test_the_headers_helper_presents_the_bearer_the_mcp_server_requires(
+    client: AsyncClient, personas_dir: Path
+) -> None:
     token = f"tok-{uuid.uuid4().hex}"
-    handler = type("_ExpectingHandler", (_BearerRequiredHandler,), {"expected_bearer": token})
-    server = HTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    server = HTTPServer(("127.0.0.1", 0), type("_Expecting", (_BearerRequired,), {"expected": token}))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        yield f"http://127.0.0.1:{server.server_port}/mcp/", token
+        token_path = personas_dir / "agent.bearer"
+        header_shape = '{"Authorization":"Bearer %s"}'
+        helper = f"printf '{header_shape}' \"$(cat {token_path})\""
+        url = f"http://127.0.0.1:{server.server_port}/mcp/"
+        (personas_dir / "helper" / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"app": {"type": "http", "url": url, "headersHelper": helper}}})
+        )
+        who = _person("room-helper")
+        token_path.write_text(token)
+        ok = _said(_events((await _ask(client, "helper", fake_agent_cli.MCP_PROBE_TRIGGER, who)).text))
+        token_path.write_text("stale")
+        refused = _said(_events((await _ask(client, "helper", fake_agent_cli.MCP_PROBE_TRIGGER, who)).text))
+        assert (json.loads(ok)["status_code"], json.loads(refused)["status_code"]) == (200, 401)
     finally:
         server.shutdown()
-        thread.join()
-
-
-def _probe_result(response_text: str) -> dict[str, object]:
-    echoed = next(e for e in _events(response_text) if e.get("type") == "assistant")
-    result: dict[str, object] = json.loads(echoed["message"]["content"][0]["text"])
-    return result
-
-
-async def test_the_headers_helper_presents_the_bearer_the_fake_mcp_server_requires(
-    client: AsyncClient, personas_dir: Path, fake_mcp_server: tuple[str, str]
-) -> None:
-    """The right token 200s, a stale one 401s -- proven against one live server, not a rubber stamp."""
-    url, token = fake_mcp_server
-    token_path = personas_dir / "agent.bearer"
-    header_shape = '{"Authorization":"Bearer %s"}'
-    helper = f"printf '{header_shape}' \"$(cat {token_path})\""
-    (personas_dir / "milton" / ".mcp.json").write_text(
-        json.dumps({"mcpServers": {"milton": {"type": "http", "url": url, "headersHelper": helper}}})
-    )
-
-    token_path.write_text(token)
-    ok = await client.post("/api/agent/milton/ask", json={"question": fake_agent_cli.MCP_PROBE_TRIGGER}, headers=ASKER)
-    assert _probe_result(ok.text)["status_code"] == 200
-
-    token_path.write_text("a-stale-or-wrong-token")
-    refused = await client.post(
-        "/api/agent/milton/ask", json={"question": fake_agent_cli.MCP_PROBE_TRIGGER}, headers=ASKER
-    )
-    assert _probe_result(refused.text)["status_code"] == 401

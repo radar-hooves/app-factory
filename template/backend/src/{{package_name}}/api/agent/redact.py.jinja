@@ -3,14 +3,15 @@
 Both seams are optional app hooks (`docs/design/agent-console.md` §Decision:
 "the redactor is an app hook"), absent by default, looked up per call:
 
-- `app_hooks.agent_turn` rewrites text going IN — a chat question, a job's
-  prompt, a message sent to a job — before the CLI is spawned or the text
+- `app_hooks.agent_turn` rewrites text going IN — a room's question, a job's
+  prompt, a message sent to a job — before the agent is asked or the text
   reaches its stdin (`redact`).
 - `app_hooks.agent_event` rewrites each event coming OUT — whatever the
   agent read off a document and repeated, in a tool result or its own
-  answer — before a job persists it or a chat forwards it (`redact_event`).
+  answer — before a job persists it or a room's turn forwards it (`redact_event`).
 
-Shared by `ask.py` (a chat) and `jobs.py` (a job): one hook per direction, so
+Each hook's first argument names the agent: a room's id, or a job's persona.
+Shared by `ask.py` (a room's turn) and `jobs.py` (a job): one hook per direction, so
 an app that defines one covers everything this slice hands to a persona or
 takes back from it, not only the half written first. The one text neither the
 persona nor the app chose, the CLI's stderr tail, the kit's driver scrubs
@@ -21,7 +22,7 @@ import uuid
 from typing import Any
 
 
-def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
+def redact(agent: str, user_id: uuid.UUID | None, text: str) -> str:
     """Return `text` as `app_hooks.agent_turn` rewrites it, or unchanged if this app defines no hook.
 
     `user_id` is `None` for a job started with no asker — the hook still
@@ -37,18 +38,18 @@ def redact(persona: str, user_id: uuid.UUID | None, text: str) -> str:
     from {{ package_name }} import app_hooks
 
     hook = getattr(app_hooks, "agent_turn", None)
-    return str(hook(persona, str(user_id) if user_id is not None else "", text)) if hook is not None else text
+    return str(hook(agent, str(user_id) if user_id is not None else "", text)) if hook is not None else text
 
 
-def redact_event(persona: str, event: dict[str, Any]) -> dict[str, Any] | None:
+def redact_event(agent: str, event: dict[str, Any]) -> dict[str, Any] | None:
     """Return `event` as `app_hooks.agent_event` rewrites it, `None` to drop it, or unchanged with no hook.
 
     Called once per event, in order, with no state carried between calls. A
     job's events are whole messages (`jobs.py` asks for no token deltas), so a
-    pattern never spans two of them. A chat forwards `stream_event` deltas
+    pattern never spans two of them. A room's turn forwards `stream_event` deltas
     too, each a fragment of the message that follows it whole: a hook that
     must never let a pattern through split across fragments drops the deltas
-    and lets the whole `assistant` event carry the text. A chat calls this on
+    and lets the whole `assistant` event carry the text. A turn calls this on
     its event loop, once per delta, so it must be quick.
     """
     from {{ package_name }} import app_hooks
@@ -56,5 +57,5 @@ def redact_event(persona: str, event: dict[str, Any]) -> dict[str, Any] | None:
     hook = getattr(app_hooks, "agent_event", None)
     if hook is None:
         return event
-    rewritten: dict[str, Any] | None = hook(persona, event)
+    rewritten: dict[str, Any] | None = hook(agent, event)
     return rewritten

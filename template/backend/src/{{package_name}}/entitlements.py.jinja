@@ -34,6 +34,7 @@ shape this file exists to avoid.
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import params
 
@@ -93,7 +94,17 @@ def require_module(module: str, *, write: bool = False) -> Callable[[Identity], 
             details={"module": module, "grade": grade},
         )
 
-    return _check
+    return gate(_check, module)
+
+
+def gate[F: Callable[..., Any]](check: F, module: str) -> F:
+    """Mark ``check`` as the module gate it is, for the route walk (``tests/test_route_walk.py``).
+
+    A dependency that gates on a module named by a path parameter (a room, a
+    persona) is marked the same way, with the pattern it gates on.
+    """
+    setattr(check, "gates_module", module)  # noqa: B010 -- a function attribute mypy would refuse as an assignment
+    return check
 
 
 def module_dependency(module: str, *, write: bool = False) -> params.Depends:

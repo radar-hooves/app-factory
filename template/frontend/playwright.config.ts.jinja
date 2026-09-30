@@ -66,7 +66,14 @@ export default defineConfig({
 		command: APP_WEB_SERVER.command ?? `vite dev --port ${E2E_PORT}`,
 		// Read by vite.config.ts's dev-identity header; keeps this suite's
 		// writes off whatever the interactive `dev-uid` identity owns.
-		env: { {{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID, ...APP_WEB_SERVER.env },
+		// The entitlements the suite's person holds: the scaffold's own module
+		// unless the run names others (a run of the rooms spec names its rooms).
+		env: {
+			{{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID,
+			{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS:
+				process.env.{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS ?? 'example',
+			...APP_WEB_SERVER.env
+		},
 		port: E2E_PORT,
 		// Never reuse — the whole point of the separate port and identity is
 		// that this suite controls the server it runs against.
