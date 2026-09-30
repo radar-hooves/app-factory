@@ -148,7 +148,7 @@ Estimates carry "about"; everything else is `wc -l` at 30/09/2026.
 | factory `template/` (stamped) | 884: `session.py` 266, `persona.py` 172, `ownership.py` 97, `ask.py` 77, the driver in `jobs.py` about 150, `routes/agent/[persona]` 122 | about 1,365: `conversations.py` 280, `ask.py` 220, `router.py` 170, `quota.py` 150, `schemas.py` 130, the migration 110, `rooms.py` 90, `config/sections/agent.py` 35, two pages 180 | +481, carried by each stamped app |
 | factory `kits/python/agent-common` | 0 | about 1,050: `cli` 400, `transcript` 250, `persona` 170, `Agent` 120, SSE framing 50, packaging 60 | +1,050 |
 | api-clients | 0 | a `library` client, in api-clients' own shape, about 300 | +300 |
-| design-system `packages/librarian` | 78: `history.svelte.ts`, once unread | about 690: `chat` 260, `conversation-list` 230, the answer mark 110, fair-use and waiting 90 | +612 |
+| factory `kits/typescript/packages/librarian` | 78: `history.svelte.ts`, once unread | about 690: `chat` 260, `conversation-list` 230, the answer mark 110, fair-use and waiting 90 | +612 |
 | cadmus | about 3,905: `api/rooms/` 2,055 of 2,165; `components/ask/`, `components/rooms/`, `lib/api/rooms.ts`, `lib/rooms/scope.ts` and the generic halves of `utils/ask.ts` and both room pages, 1,850 | about 230: `config/rooms.yaml` 90, a data migration 60, the extension module and hook 80 | −3,675 |
 | library | 512: `api/librarian/session.py` 217, `api/librarian/conversation.py` 295 | 0 | −512 |
 | godswood | about 140: `reader-watch.svelte.ts` 76 and `RunSession.svelte`'s watch, message and stop | 0 | −140 |
