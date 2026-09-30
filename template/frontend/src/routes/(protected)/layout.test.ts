@@ -143,6 +143,24 @@ describe('the signed-in app layout', () => {
 		expect(init).toHaveBeenCalledOnce();
 	});
 
+	it('offers to sign in again when the redirect to sign in never left the page', async () => {
+		vi.useFakeTimers();
+		const reload = vi.fn();
+		vi.stubGlobal('location', { reload });
+		try {
+			session.failure = 'lapsed';
+			render(Layout, { props: { children } });
+			expect(screen.getByRole('status')).toBeInTheDocument();
+
+			await vi.advanceTimersByTimeAsync(10_000);
+			await fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+			expect(reload).toHaveBeenCalledOnce();
+		} finally {
+			vi.unstubAllGlobals();
+			vi.useRealTimers();
+		}
+	});
+
 	it('asks again when a lapsed page comes back from the back/forward cache', () => {
 		session.failure = 'lapsed';
 		render(Layout, { props: { children } });
