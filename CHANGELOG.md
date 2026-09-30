@@ -6,14 +6,83 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+**Not releasable until `canonical-app-shape.md` sanctions four app-owned files:** `frontend/src/lib/app-frame.svelte`, `frontend/src/lib/settings/app.ts`, `frontend/src/routes/(protected)/+page.svelte` and `+page.ts` (lodged on master-project#233). Until then the gate grades all four as owed. A merge to main is the release, because converge renders main.
+
 ### Changed
 
-- **A route the factory stamps reaches the app's own shell and session guard with no move.** Before this, the root `+layout.svelte` was the whole shell, owed byte-identical. An app with a real nav therefore excepted it and kept its shell in a route group of its own, and every stamped route landed outside it. godswood carried nine exceptions for this, and cadmus hit two nightly E2E failures from one converge. Now the signed-in app lives in `routes/(app)/`. `(app)/+layout.svelte` belongs to the factory. It runs `auth.init()` once per page load, shows the workspace chooser, remounts the page per workspace and mounts the feedback widget. It also runs the session guard: a lapsed session goes back to the identity provider, and any other failure to load the caller gets a retry instead. The guard godswood and cadmus ran bounced every failure, so a backend outage looped every browser through sign-in. `auth.failure` says which case applies: a 401 or the client's `network_error` (the proxy's redirect, which a fetch cannot follow) is lapsed, and anything else has failed. It renders `src/lib/app-frame.svelte` around the page. That file is the extension point: stamped once with the factory's shell composition and never overwritten, it is where the app declares its nav, `homeHref`, `measure`, brand, top-bar actions and palette groups. Every route the factory stamps (settings, the agent console, members and the landing page) sits under `(app)/`. The root layout keeps what every route needs, so a route that must render without a session sits outside the group. The landing page, `(app)/+page.svelte` and `+page.ts`, belongs to the scaffold slice and the app replaces it. The settings destination returns `padded: false` from its `+layout.ts`, as `SettingsShell` asks, and the frame passes `page.data.padded` on. `shell.spec.ts` now drives each stamped route and fails on a frame that renders it bare. **Not releasable until `canonical-app-shape.md` sanctions `frontend/src/lib/app-frame.svelte`, `frontend/src/routes/(app)/+page.svelte` and `+page.ts`** (lodged on master-project#233). Until then the gate grades all three as owed. **To converge:** take the factory's files, move your shell composition into `app-frame.svelte` (keeping `padded`, and dropping the guard, chooser, `{#key}` and init that `(app)/+layout.svelte` now does), put every signed-in route under `routes/(app)/` (renaming a `(protected)` group is invisible in URLs), delete your old copies of the factory's routes (two copies of one URL fail the build), put your landing page at `(app)/+page.svelte`, and drop the exception lines this retires. Need: godswood and cadmus (app-factory#6, from full-stack-app-template#48).
+- **A route the factory stamps reaches the app's own shell and session guard with no move.** Before this, the root `+layout.svelte` was the whole shell and was owed byte-identical, so every app with a real nav excepted it and kept its shell in a group of its own. Every stamped route then landed outside that shell. Now:
+  - **The group.** The signed-in app lives in `routes/(protected)/`, the protected layout `strategy-authentication.md` names. Its `+layout.svelte` belongs to the factory. It runs `auth.init()` once per page load and the session guard, shows the workspace chooser, remounts the page per workspace, and mounts the feedback widget. It renders `src/lib/app-frame.svelte` around the page.
+  - **The frame.** `app-frame.svelte` is the app's extension point: nav, `homeHref`, `measure`, brand, top-bar actions, palette groups, and `workspaceLabel`, which the factory's members page and chooser read. It passes `padded={page.data.padded ?? true}`, so a route that pads itself (settings returns `padded: false`) is honoured. It renders from the first paint, before the session is confirmed.
+  - **Stamped routes and the root.** Every stamped route (settings, the agent console, members, the landing page) sits under `(protected)/`. The root layout keeps what every route needs, so a route that must render without a session sits outside the group.
+  - **Landing and errors.** The landing page, `(protected)/+page.svelte` and `+page.ts`, belongs to the scaffold slice and the app replaces it. A URL nothing serves, or a load that throws, renders `(protected)/+error.svelte` inside the frame.
+  - **Tests.** `shell.spec.ts` drives the stamped routes, a missing page and `/settings`, and fails on a frame that renders a page bare.
+
+  Need: godswood and cadmus (app-factory#6, from full-stack-app-template#48).
+- **An app adds its own settings sections in `src/lib/settings/app.ts`.** The owed settings layout reads `settingsSections()`, which lists the app's groups first and the factory's "This deployment" last. `/settings` now goes to the first page the caller can open, or says there is none; it had no page, so the rail's Settings row landed on a 404. Need: godswood and cadmus (app-factory#7).
 
 ### Fixed
 
+- **The session guard sends only a lapsed session to sign in.** `init()` asks for `/api/users/me` with `redirect: 'manual'`. The proxy's redirect to sign in arrives as an `opaqueredirect` and reads as lapsed, as a 401 does. A request that failed (reset, unreachable, 5xx, 403, timeout) offers a retry instead. The guard godswood and cadmus ran bounced every failure: with the API's connection reset, it made 21 sign-in round trips in 8 seconds. `redirectToAuthentik()` also navigates once per page; a 401 used to navigate three times.
+- **The feedback widget posts to the route the factory serves.** Its default, `/api/feedback`, meets the SPA's static mount before the slash redirect, and a deployed app answered every report with a 405. The layout passes `/api/feedback/`, which is what cadmus did alone.
 - **The example E2E spec reads the workspace count where the page shows it.** The scaffold landing page defaults to its Summary view, which shows "Connected" alone, but the tenancy proof waited for the Detail view's "Connected — N example items in …". A fresh stamp's E2E therefore failed on main. The spec now opens the Detail view first.
 
+### Converging onto it
+
+Do this after the release, never before it. The steps are per app for two reasons:
+
+- A route group does not change a URL. Any route an app still holds at the URL of one the factory now stamps under `(protected)/` fails `svelte-kit sync` as a duplicate.
+- A root layout kept under an exception still draws its own shell, so the app gets two shells.
+
+Every app:
+
+1. Take the factory's root `+layout.svelte` and `(protected)/+layout.svelte`.
+2. Move your shell composition into `src/lib/app-frame.svelte`:
+   - move your nav, brand, `homeHref`, `measure`, top-bar actions and palette groups;
+   - set `workspaceLabel`, and keep `padded` reading `page.data.padded`;
+   - drop the guard, chooser, `{#key}`, `auth.init()` and feedback widget, which the layout now does.
+3. Put every signed-in route under `routes/(protected)/`.
+4. Delete your copies of the factory's routes at any other path, and put your landing page at `(protected)/+page.svelte`. Redirect from `+page.ts` if `/` goes elsewhere.
+5. List your settings groups in `src/lib/settings/app.ts`, and delete your own `/settings` redirect.
+6. Drop the exception lines this retires, regenerate the manifest, and run your E2E.
+
+Per app, from its tree on 30/09/2026:
+
+- **godswood** (`(protected)` already). Its `(protected)/+layout.svelte` sits at the factory's path, so converge reports it.
+  - **Frame:** move in its nav, `measure`, `padded`, brand mark, `homeHref="/home"`, collapsible rail, `searchLabel` and bell. Set `workspaceLabel = 'Household'`. Move the casefile embed `<script>` into the frame's `<svelte:head>`. `$lib/fonts` covers its two font imports.
+  - **Landing:** root `+page.svelte` and `+page.ts` duplicate `/`. Delete them, and redirect to `/home` from `(protected)/+page.ts`.
+  - **Settings:** Profile and Integrations become a "Your account" group in `settings/app.ts`. Take the factory's `(protected)/settings/+layout.svelte`, `+page.svelte` and `+page.ts`, and its members page, agent console and settings/application.
+  - **Exceptions:** retires all 9.
+- **cadmus** (`(protected)` already), as godswood.
+  - **Frame:** its overlay sidebars, past questions, lessons palette group, section-visibility effects, brand star, and `/records/id26` rendered bare.
+  - **Landing:** `(protected)/+page.svelte` is its dashboard already.
+  - **Settings:** Account goes to `settings/app.ts`. The factory's `/settings` page replaces its redirect. The factory's layout now passes the feedback endpoint it passed.
+  - **Exceptions:** retires all 10.
+- **casefile** (flat).
+  - **Frame:** nav, `homeHref="/matters"`, `measure="page"`, and `AdminAlertBell` for its hand-gated bell.
+  - **Routes:** move `matters/` and `access/` under `(protected)/`. Delete root `+page.*`, `agent/` and `workspace/`, and redirect `/` to `/matters` from `(protected)/+page.ts`.
+  - **Exceptions:** retires its 3.
+- **earworm** (flat).
+  - **Frame:** navigation, brand mark, `measure` and its identity menu.
+  - **Routes:** move `album/`, `api-docs/`, `artist/`, `history/`, `track/` and `year/` under `(protected)/`. Its dashboard moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Settings:** its own `settings/+page.svelte` (API keys, devices, dashboard) is at the factory's `/settings`. Move it to a page of its own under `(protected)/settings/`, and list that page in `settings/app.ts`.
+  - **Exceptions:** retires its 2.
+- **eight** (flat).
+  - **Frame:** nav and the kill switch (its dialogue and badge).
+  - **Routes:** move `attention/`, `cost/`, `council/`, `crew/`, `performance/`, `runs/`, `study/` and `trades/` under `(protected)/`. The dashboard moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Exceptions:** retires its 3.
+- **library** (flat).
+  - **Frame:** nav and the rosette mark.
+  - **Routes:** move `collections/`, `currency/`, `library/`, `metrics/`, `operations/`, `projects/`, `reading-room/`, `review/` and `search/` under `(protected)/`. The landing moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Exceptions:** retires its 3. This is one step of a longer converge, since it is stamped at 2026.9.4.
+- **mission-command** (flat).
+  - **Frame:** nav groups, the bell and the Claude account gauges.
+  - **Routes:** move `claude/`, `clients/`, `economics/`, `fleet/`, `governance/`, `hosts/`, `projects/` and `work/` under `(protected)/`. The overview moves to `(protected)/+page.svelte`. Delete root `agent/` and `workspace/`.
+  - **Exceptions:** retires its 3.
+- **pebblestone** (`(app)`). Rename `(app)` to `(protected)`. `(public)/no-access` stays outside it.
+  - **Frame:** its user-store gate, nav badges, brand artwork, dev identity switcher, sign-out, and the full-bleed agent console.
+  - **Settings:** About, breaker events, delegation limits, overhead suppliers and users go to `settings/app.ts`. Its settings layout and `/settings` page go. `settings/application` arrives with the settings slice it has not yet taken.
+  - **Exceptions:** keeps two with no seam, its own bug-report widget beside the factory's (pebblestone's #799) and `installClientTelemetry()` at the root. Retires the rest.
+- **portcullis** (`(app)`, stamped at 2026.8.6). Not a candidate yet: it signs in at its own `/login`, and the factory's guard sends a lapsed session to the proxy.
 
 ## [2026.9.56] - 2026-09-30
 
@@ -21,7 +90,6 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **`api/agent/lessons.py` type-checks against the fleet's SQLAlchemy.** `_pending()`'s `list(rows)` failed `mypy` under SQLAlchemy 2.0.50: `Session.execute(...).all()` returns `Sequence[Row[tuple[...]]]`, and mypy does not accept a `Row[T]` where a plain `T` is expected. `.tuples().all()` asks SQLAlchemy's own `Result` for the untyped-`Row`-free view its stubs already model correctly, so the `list()` call now matches the declared return type with no `type: ignore` or `Any` cast. Both apps that hit this (godswood, converging onto 2026.9.54; cadmus, converging onto 2026.9.55) banked it in their own `mypy-baseline.txt` and can drop the entry once they converge past this release. Need: app-factory#8.
 
-||||||| parent of b862be5 (docs: the app frame, the (app) group and how an app converges onto them (for godswood and cadmus))
 ## [2026.9.55] - 2026-09-30
 
 ### Fixed
