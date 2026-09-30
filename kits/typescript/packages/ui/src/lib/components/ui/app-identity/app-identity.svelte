@@ -1,0 +1,235 @@
+<script lang="ts">
+	/**
+	 * The signed-in user surface for AppShell's `identity` slot.
+	 *
+	 * Graduated from the shell lab (`packages/console/src/routes/lab/+page.svelte`,
+	 * the `identity === 'avatar'` shape) — operator ruling 04/09/2026: avatar
+	 * only at rest, no name, no chevron, and no prop reintroduces a variant.
+	 * Opening it answers who is signed in, which workspace they act in, and the
+	 * ways out — identity first, because a menu that opens on a list of actions
+	 * makes you infer who you are from the avatar you just clicked.
+	 *
+	 * Prop names match the stamped template's auth store
+	 * (`frontend/src/lib/auth.svelte.ts` — `User`, `Membership`) exactly, so a
+	 * consumer wires this straight from `auth.user`, `auth.entitlements`,
+	 * `auth.activeWorkspace` and `auth.activeRole` with no reshaping. A guessed
+	 * shape needs rewriting the day it meets the real store, which is the whole
+	 * reason this one didn't. `display_name` and `email` are both nullable
+	 * there, and `activeWorkspace` is genuinely null until a caller with several
+	 * memberships chooses one — this component is built against that, not a
+	 * happy path.
+	 *
+	 * Sign-out and settings are the consuming app's concerns, never behaviour
+	 * baked in here: `onSignOut` and `onAccountSettings` are callbacks. Theme
+	 * follows AppShell's own `onToggleTheme` pattern — override it, or accept
+	 * mode-watcher's `toggleMode` by default.
+	 *
+	 * `onManageMembers` exists for the caller a workspace switcher has nothing
+	 * to show: `WorkspaceMenu` (the factory template) renders nothing in the
+	 * bar for a single-member workspace, and this is where Members lands
+	 * instead (operator ruling, 07/09/2026, master-project#291's org-of-one
+	 * case). Wire it whenever the app has a members route, whether or not it
+	 * also renders a switcher.
+	 *
+	 * `links` is the escape valve for everything the fixed entries have no room
+	 * for — an Admin route, a support link — as a LIST, so every app's extra
+	 * destinations render as the same row. Without it an app puts its own
+	 * destination in AppShell's `actions` slot as an icon button (cadmus did,
+	 * twice), and two apps do it two ways in the same bar.
+	 */
+	import type { Component } from 'svelte';
+	import { toggleMode } from 'mode-watcher';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import * as Avatar from '$lib/components/ui/avatar/index.js';
+
+	let {
+		user,
+		workspace = null,
+		role = null,
+		entitlements = [],
+		onSignOut,
+		onAccountSettings,
+		onManageMembers,
+		onSwitchTheme,
+		links = []
+	}: {
+		user: { username: string; display_name: string | null; email: string | null };
+		/** The active workspace's name. Omit while none is chosen yet — the block hides rather than rendering empty. */
+		workspace?: string | null;
+		/** The caller's standing in `workspace`. Ignored while `workspace` is unset. */
+		role?: 'owner' | 'member' | null;
+		entitlements?: string[];
+		/** Required — the whole reason this slot exists is a stamped app rendering no way to sign out. */
+		onSignOut: () => void;
+		/** Optional until the app has an account-settings destination to send it to. */
+		onAccountSettings?: () => void;
+		/**
+		 * Reach the workspace's members surface from here. Ignored while
+		 * `workspace` is unset.
+		 *
+		 * A workspace holding exactly one member has nothing to switch, so the
+		 * app's own workspace switcher renders nothing for it (operator ruling,
+		 * 07/09/2026) — and Members was that switcher's one non-switching act,
+		 * the route an org-of-one needs to make its first grant. This is where
+		 * that act lives once the switcher is gone; a switcher still showing for
+		 * several workspaces keeps its own Members entry too, so the two never
+		 * disagree about where it is.
+		 */
+		onManageMembers?: () => void;
+		/** Override the theme action. Defaults to mode-watcher's toggleMode, matching AppShell. */
+		onSwitchTheme?: () => void;
+		/**
+		 * App destinations the fixed entries have no room for, rendered in their
+		 * own group.
+		 *
+		 * A list of items, never a snippet: a snippet lets each app invent its own
+		 * row shape, and two apps inventing two shapes in the same top bar is the
+		 * drift this package exists to end. Cadmus is the measured case — its
+		 * Admin entry had nowhere to go and became an icon button in AppShell's
+		 * `actions` slot, and a second one (a quiet support link) was about to
+		 * follow it there.
+		 *
+		 * No `href`: the callback shape matches every other action on this
+		 * component, and a consumer routes with its own `goto`. The icon is
+		 * optional — a label-only row stays aligned with any iconed row beside it.
+		 */
+		links?: { label: string; icon?: Component<{ class?: string }>; onSelect: () => void }[];
+	} = $props();
+
+	const shown = $derived(user.display_name ?? user.username);
+	// Shown separately only when it says something the display name doesn't —
+	// an audit log and a support question use the username, and it is not
+	// always the display name.
+	const showUsername = $derived(!!user.display_name && user.display_name !== user.username);
+
+	function initialsOf(name: string): string {
+		const parts = name.trim().split(/\s+/).filter(Boolean);
+		if (parts.length === 0) return '';
+		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+	}
+
+	/**
+	 * Initials for a bare HANDLE — no display name to fall back on.
+	 *
+	 * A handle has no word boundaries a name has: `initialsOf` slicing the
+	 * first two characters of one unbroken token produces a pair that reads
+	 * as real initials while meaning nothing (operator ruling, 07/09/2026).
+	 * Where the handle itself encodes two parts — `firstname.lastname`,
+	 * `firstname-lastname` — one letter from each reads the same as a real
+	 * name's initials; where it does not, only the first letter is honest.
+	 */
+	function handleInitials(handle: string): string {
+		const parts = handle.trim().split(/[.-]+/).filter(Boolean);
+		if (parts.length === 0) return '';
+		if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+	}
+
+	// Never text in the bar (operator ruling, 07/09/2026): with no display
+	// name, the trigger below still renders only this avatar, initialled off
+	// the handle rather than off `shown`, which for this branch just IS the
+	// handle.
+	const initials = $derived(
+		user.display_name ? initialsOf(user.display_name) : handleInitials(user.username)
+	);
+
+	// Spacers only where the group actually has an icon to align to: a group of
+	// label-only rows sits flush with the fixed entries below it, exactly as it
+	// would if this prop had never existed.
+	const linksHaveIcons = $derived(links.some((l) => l.icon));
+
+	function switchTheme() {
+		if (onSwitchTheme) onSwitchTheme();
+		else toggleMode();
+	}
+</script>
+
+<DropdownMenu.Root>
+	<DropdownMenu.Trigger>
+		{#snippet child({ props })}
+			<button
+				{...props}
+				aria-label="Account"
+				class="hover:bg-surface-2 grid size-[34px] cursor-pointer place-items-center rounded-md"
+			>
+				<Avatar.Root class="size-6.5 flex-none">
+					<Avatar.Fallback class="bg-primary text-primary-foreground text-[11px] font-bold">
+						{initials}
+					</Avatar.Fallback>
+				</Avatar.Root>
+			</button>
+		{/snippet}
+	</DropdownMenu.Trigger>
+	<DropdownMenu.Content align="end" class="w-72">
+		<div class="flex items-start gap-3 px-2 py-1.5">
+			<Avatar.Root class="size-9 flex-none">
+				<Avatar.Fallback class="bg-primary text-primary-foreground text-[13px] font-bold">
+					{initials}
+				</Avatar.Fallback>
+			</Avatar.Root>
+			<div class="min-w-0">
+				<div class="truncate text-[13.5px] font-semibold">{shown}</div>
+				{#if showUsername}
+					<div class="text-muted-foreground truncate font-mono text-[11px]">{user.username}</div>
+				{/if}
+				{#if user.email}
+					<div class="text-muted-foreground truncate text-[12px]">{user.email}</div>
+				{/if}
+			</div>
+		</div>
+		{#if workspace}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Label class="text-muted-foreground text-[10px] tracking-[0.1em] uppercase">
+				Workspace
+			</DropdownMenu.Label>
+			<div class="flex items-center justify-between gap-2 px-2 pb-1.5">
+				<span class="truncate text-[13px]">{workspace}</span>
+				{#if role}
+					<span
+						class="border-border text-muted-foreground rounded-full border px-1.5 py-px text-[10px] capitalize"
+					>
+						{role}
+					</span>
+				{/if}
+			</div>
+			{#if entitlements.length}
+				<div class="flex flex-wrap gap-1 px-2 pb-2">
+					{#each entitlements as e (e)}
+						<span class="bg-surface-2 text-muted-foreground font-mono rounded px-1.5 py-px text-[10px]">
+							{e}
+						</span>
+					{/each}
+				</div>
+			{/if}
+			{#if onManageMembers}
+				<DropdownMenu.Item onSelect={onManageMembers}>Members</DropdownMenu.Item>
+			{/if}
+		{/if}
+		{#if links.length}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Group>
+				<!-- Keyed by position, not by label: nothing in the type makes a label
+				     unique, and two apps' configs colliding on one would be a
+				     duplicate-key crash rather than a duplicated row. This list is
+				     app configuration, not data that reorders. -->
+				{#each links as link, i (i)}
+					{@const Icon = link.icon}
+					<DropdownMenu.Item onSelect={link.onSelect}>
+						{#if Icon}
+							<Icon class="size-4" />
+						{:else if linksHaveIcons}
+							<span class="size-4 flex-none" aria-hidden="true"></span>
+						{/if}
+						{link.label}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Group>
+		{/if}
+		<DropdownMenu.Separator />
+		<DropdownMenu.Item onSelect={switchTheme}>Switch theme</DropdownMenu.Item>
+		<DropdownMenu.Item onSelect={onAccountSettings}>Account settings</DropdownMenu.Item>
+		<DropdownMenu.Separator />
+		<DropdownMenu.Item class="text-status-error" onSelect={onSignOut}>Sign out</DropdownMenu.Item>
+	</DropdownMenu.Content>
+</DropdownMenu.Root>

@@ -1,0 +1,22 @@
+/*
+ * The consumer's stylesheet, verbatim: the exact import chain
+ * `packages/design-tokens/templates/DESIGN.md.template` tells an app to write.
+ * The harness compiles THIS, over the BUILT package, so what the browser paints
+ * is what a consuming app gets — not what the source happens to mean.
+ */
+@import 'tailwindcss';
+@import '@poodle64/design-tokens/tokens.tw.css';
+@import '@poodle64/design-tokens/tokens.css';
+@import '@poodle64/ui/styles.css';
+/*
+ * Deliberately imported BEFORE `@poodle64/ui/styles.css` would be the obvious
+ * place for it, and it is here instead — after everything — precisely because
+ * the order must not matter. Each palette block is `:root[data-ds-palette=…]`,
+ * which outranks tokens.css's `:root` on specificity rather than on position;
+ * `test/palettes.test.js` pins that, and `?surface=palette` proves it applies.
+ */
+@import '@poodle64/design-tokens/palettes.css';
+
+/* A consuming app's own dark palette, as every household app declares it. */
+@source '../dist';
+@source './';

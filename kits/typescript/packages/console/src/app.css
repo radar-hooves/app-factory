@@ -1,0 +1,105 @@
+@import 'tailwindcss';
+@import '@poodle64/design-tokens/tokens.tw.css';
+@import '@poodle64/design-tokens/tokens.css';
+
+/* The component stylesheet. Carries the shadcn semantic surface (--card,
+   --popover, --muted, --accent, --input, --radius, and the -foreground pairs)
+   AND the Tailwind registration those names need, so bg-card / bg-muted /
+   bg-accent / border-input compile to real rules instead of nothing at all.
+   Must come after the token imports: every name in it aliases a --ds-* token. */
+@import '@poodle64/ui/styles.css';
+
+/* The stamped template scans '../node_modules/@poodle64/ui/dist'. Here the
+   package is a workspace sibling, so the direct path is used instead — the
+   node_modules entry is a pnpm symlink into exactly this directory, and naming
+   the real one removes any question of whether the scanner follows it. Without
+   a working @source the shared components render unstyled: no build error, no
+   lint hit, just missing classes in the compiled CSS. */
+@source '../../ui/dist';
+
+/* @poodle64/librarian is DELIBERATELY not scanned, and its absence is the
+   test. That package styles itself — component CSS against --ds-* tokens,
+   compiled by whatever bundler the consumer already runs — precisely because
+   a scan line is a thing an app can forget: Pebblestone did, and got a
+   2302px-wide transcript with no cards and no measure, with no build error
+   and nothing failing. If a shot from the /librarian lab ever comes back
+   unstyled, the package has grown a utility class it cannot pay for, and
+   adding a line here would hide it. */
+
+/*
+  The enter/exit animation keyframes and the `dark`, `data-open` and
+  `data-closed` variants all arrive with @poodle64/ui/styles.css above, so
+  nothing declares them here. Declaring any of them would fork what the package
+  gets right once for every consumer — and a locally-declared `data-open:`
+  variant compiles to `&[data-open]` while bits-ui emits `data-state="open"`,
+  which is dead CSS that reads as correct.
+*/
+
+/*
+  NO per-app primary override, and that absence is the point.
+
+  A stamped app pins --ds-color-primary to its own accent here. This console is
+  the place every app's accent is previewed, so pinning one would make it lie
+  about the others. It renders the package's own default, and the lab overrides
+  the hue at runtime when previewing a profile.
+*/
+
+/*
+  Sidebar and chart colours are the one surface the package leaves to each
+  consumer — it ships no sidebar or chart component, and chrome hue is a
+  per-app decision. Declared and registered here so the console can render a
+  shell like any other app.
+*/
+:root {
+	--sidebar: var(--ds-color-surface-1);
+	--sidebar-foreground: var(--ds-color-foreground);
+	--sidebar-primary: var(--ds-color-primary);
+	--sidebar-primary-foreground: var(--ds-color-primary-foreground);
+	--sidebar-accent: var(--ds-color-surface-2);
+	--sidebar-accent-foreground: var(--ds-color-foreground);
+	--sidebar-border: var(--ds-color-border);
+	--sidebar-ring: var(--ds-color-ring);
+}
+
+.dark {
+	--sidebar: var(--ds-color-surface-1);
+	--sidebar-foreground: var(--ds-color-foreground);
+	--sidebar-primary: var(--ds-color-primary);
+	--sidebar-primary-foreground: var(--ds-color-primary-foreground);
+	--sidebar-accent: var(--ds-color-surface-2);
+	--sidebar-accent-foreground: var(--ds-color-foreground);
+	--sidebar-border: var(--ds-color-border);
+	--sidebar-ring: var(--ds-color-ring);
+}
+
+@theme inline {
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+
+	html {
+		/* The house scale. Every shared dimension in @poodle64/ui is rem-based —
+		   `--ds-shell-rail-width: 15.5rem` among them — so this one line decides
+		   how wide the shell's rail renders, not just how large the text is.
+		   100%, not a px value: the package's own harness sets no root size, so
+		   every shipped component is designed and drive-verified at the browser
+		   default, and a px root overrides a reader's own preference. */
+		font-size: var(--base-font-size, 100%);
+		text-size-adjust: 100%;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+	}
+}

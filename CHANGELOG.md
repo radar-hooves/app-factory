@@ -18,6 +18,7 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 - **`app_hooks.agent_turn_settled(room, conversation, turn)`**, for an app that files something against an answer.
 - **`tests/test_route_walk.py`, stamped into every app:** every route outside the person-facing set declares a module gate (`entitlements.gate` marks one that reads its module off the path), so a colleague granted a room reaches nothing else.
 - **The rooms E2E** (`tests/e2e/rooms.spec.ts`, self-test only): a persona room on the fake CLI and a library room on `tests/support/fake_library.py`, driven through an ask, a refresh mid-answer, a reopen by link on another device, rename, download and delete, stop, a citation and a mark, a spent allowance, and a rooms-only account refused on every other route; `tests/e2e/rooms/serve.sh` starts its backend.
+- **`kits/typescript`, the TypeScript kit: radar-hooves/design-system folded in with its history.** `@poodle64/design-tokens`, `@poodle64/ui`, `@poodle64/librarian` and the private console, as their own pnpm workspace with its own lock. The npm names and the per-package tags (`design-tokens-v*`, `ui-v*`, `librarian-v*`) are unchanged, so every consumer's install still works. `kit-typescript.yaml` runs the kit's CI on a pull request touching it, and `publish-kit-typescript.yaml` publishes a package on its tag by npm trusted publishing, now with provenance; each package's `repository` names this repo. The per-repo tooling the old root carried (its `.claude/`, workflows, pre-commit, Renovate and direnv files) is gone, covered by this repo's own. Ruling: the operator, 28/09/2026 (master-project#233); need: master-project, app-factory#1.
 
 ### Changed
 
@@ -25,6 +26,7 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 - **The example slice gates on its own module** (`example`), as every domain slice now must; the E2E person holds it unless a run names its own entitlements.
 - **`agent_turn` and `agent_event` take the room's id** for a room's turn, a job's persona for a job.
 - **A stamped backend pins `agent-common>=2026.9.58`**, the release that carries `LibraryAgent`, and declares `python-multipart` for an ask with attachments.
+- **A stamped `DESIGN.md` names the token package's source as `kits/typescript` in this repo, on public npm,** not GitHub Packages and design-system.
 
 ### Removed
 
