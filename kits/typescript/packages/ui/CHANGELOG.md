@@ -11,7 +11,8 @@ All notable changes to this package are documented here. Format follows [Keep a 
   settings routes (`endpoint`, default `/api/settings`), renders every declared
   setting through `SchemaForm` grouped by domain, saves each change as one
   `PATCH`, and lists what differs from its default with a one-click reset. A
-  refused save puts the value back and toasts the server's `message`. The
+  refused save puts the value back and toasts the server's `message`; a 401
+  calls the app's `onunauthorized`, since only the app knows its sign-in. The
   dot-path helpers (`nestSchema`, `nestValues`, `settingsLayout`) move here
   from the stamped `$lib/settings/nest`. Need: master-project (kits programme
   step 1, app-factory#1), 01/10/2026.

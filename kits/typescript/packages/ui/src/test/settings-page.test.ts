@@ -32,7 +32,11 @@ function serve(acts: Reply[] = [], load: Reply = { status: 200, body: DOCUMENT }
 		return Promise.resolve({
 			ok: status < 400,
 			status,
-			json: () => Promise.resolve(structuredClone(body))
+			// An undefined body stands for a page that is not JSON (a sign-in page after a redirect).
+			json: () =>
+				body === undefined
+					? Promise.reject(new SyntaxError('Unexpected token <'))
+					: Promise.resolve(structuredClone(body))
 		});
 	});
 	vi.stubGlobal('fetch', fetchMock);
@@ -91,6 +95,22 @@ describe('SettingsPage', () => {
 			})
 		);
 		expect(toggle).toHaveAttribute('aria-checked', 'true');
+	});
+
+	it('hands a 401 to the app to re-authenticate', async () => {
+		serve([], { status: 401, body: { error: 'authentication_error', message: 'Sign in again' } });
+		const onunauthorized = vi.fn();
+		render(SettingsPage, { onunauthorized });
+
+		expect(await screen.findByText('Could not load settings')).toBeInTheDocument();
+		expect(onunauthorized).toHaveBeenCalledOnce();
+	});
+
+	it('does not take a page that is not JSON for settings', async () => {
+		serve([], { status: 200, body: undefined });
+		render(SettingsPage);
+
+		expect(await screen.findByText('The server did not answer with settings.')).toBeInTheDocument();
 	});
 
 	it('says why the settings could not be read', async () => {

@@ -33,8 +33,15 @@
 		/** The app's settings routes, defaulting to where the factory mounts them. */
 		endpoint = '/api/settings',
 		title = 'Application',
-		subtitle = "Runtime settings this deployment's operator can change without a code change or a deploy."
-	}: { endpoint?: string; title?: string; subtitle?: string } = $props();
+		subtitle = "Runtime settings this deployment's operator can change without a code change or a deploy.",
+		/** What a 401 does: the app's own re-authentication (its API client's redirect), since only the app knows its sign-in. */
+		onunauthorized
+	}: {
+		endpoint?: string;
+		title?: string;
+		subtitle?: string;
+		onunauthorized?: () => void;
+	} = $props();
 
 	const TIMEOUT_MS = 30_000;
 
@@ -58,13 +65,16 @@
 		try {
 			response = await fetch(`${endpoint}/${path}`, {
 				...init,
+				credentials: 'include',
 				signal: AbortSignal.timeout(TIMEOUT_MS)
 			});
 		} catch {
 			return { failure: 'The server could not be reached.' };
 		}
+		if (response.status === 401) onunauthorized?.();
 		const body = await response.json().catch(() => null);
-		if (response.ok) return { data: body as T };
+		if (response.ok && body !== null) return { data: body as T };
+		if (response.ok) return { failure: 'The server did not answer with settings.' };
 		return { failure: body?.message ?? `The server answered ${response.status}.` };
 	}
 

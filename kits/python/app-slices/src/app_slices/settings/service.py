@@ -20,6 +20,10 @@ from app_slices.settings.schemas import SettingChangeRead
 
 logger = logging.getLogger(__name__)
 
+# The advisory-lock namespace a change to one key takes (`_lock`), so it cannot
+# collide with another use of the single-key form.
+_LOCK_CLASS = 0x5E77
+
 # The users slice's table, named for the one column the history shows. The
 # foreign keys in `models.py` already require it; this reads a name off it.
 _users = table("users", column("id"), column("username"))
@@ -53,7 +57,7 @@ def get_value(session: Session, key: str) -> bool | int | float | str:
         UndeclaredSetting: nothing declared this key.
     """
     setting = _require_declared(key)
-    row = session.get(SettingOverride, key)
+    row = session.get(SettingOverride, key, populate_existing=True)
     return row.value if row is not None else setting.default
 
 
@@ -116,7 +120,8 @@ def set_value(
     """Validate and store `value` as `key`'s override; record the change.
 
     Returns the `(new_value, default)` pair the route needs to build a
-    `SettingRead`. An upsert, so two first overrides of one key cannot collide.
+    `SettingRead`. Writers of one key take turns (`_lock`), so each change
+    records the value it actually replaced.
 
     Raises:
         UndeclaredSetting: nothing declared this key.
@@ -126,6 +131,7 @@ def set_value(
     setting = _require_declared(key)
     _validate(setting, value)
 
+    _lock(session, key)
     old_value = get_value(session, key)
     statement = (
         insert(SettingOverride)
@@ -155,8 +161,8 @@ def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool
         UndeclaredSetting: nothing declared this key.
     """
     setting = _require_declared(key)
-    row = session.get(SettingOverride, key)
-    old_value = row.value if row is not None else setting.default
+    _lock(session, key)
+    old_value = get_value(session, key)
     session.execute(delete(SettingOverride).where(SettingOverride.key == key))
     session.add(SettingChange(key=key, old_value=old_value, new_value=setting.default, changed_by_id=actor_user_id))
     session.flush()
@@ -185,6 +191,15 @@ def list_history(session: Session, *, limit: int, offset: int) -> tuple[list[Set
         for change, username in rows
     ]
     return changes, total
+
+
+def _lock(session: Session, key: str) -> None:
+    """Hold `key` until this transaction ends, so a concurrent change to it waits its turn.
+
+    Without it two writers both read the same old value, and the append-only
+    trail records a change from a value that was already gone.
+    """
+    session.execute(select(func.pg_advisory_xact_lock(_LOCK_CLASS, func.hashtext(key))))
 
 
 def _require_declared(key: str) -> Setting:

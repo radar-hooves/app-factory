@@ -10,13 +10,12 @@ import importlib
 import threading
 import uuid
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from app_slices.settings import RefusedValue, SettingType, UndeclaredSetting, declare_setting, get_value, service
 from app_slices.settings.declare import discover, get_declared
-from app_slices.settings.models import SettingChange, SettingOverride
+from app_slices.settings.models import SettingChange
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -103,41 +102,53 @@ async def test_an_undeclared_key_answers_404_to_a_write_and_a_reset(client: Asyn
     assert (await client.post("/api/settings/no.such.setting/reset", headers=writer)).status_code == 404
 
 
-FAN_OUT = 5
-
-
-def test_fanned_out_first_writes_to_a_setting_all_succeed(
+def test_writers_of_one_key_take_turns_so_the_trail_records_what_each_replaced(
     sessions: sessionmaker[Session], make_user: Callable[[], uuid.UUID], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Several writers save the same never-overridden setting at once.
+    """Two first writes to one key, the first held just after reading the old value.
 
-    Each writer's read of the current value is held until every writer has
-    read, the interleaving where all of them find no override row and insert the
-    first one. With a read then a conditional INSERT all but one would raise
-    `IntegrityError`; the INSERT … ON CONFLICT upsert lets every one succeed and
-    still records one change per write.
+    The second must not read until the first has committed; without the lock
+    both read the default, and the trail records two changes from 20.
     """
     actor = make_user()
+    first_has_read = threading.Event()
+    release_first = threading.Event()
+    reads: list[str] = []
     real_get_value = service.get_value
-    everyone_has_read = threading.Barrier(FAN_OUT, timeout=10)
 
-    def read_then_wait_for_the_rest(session: Session, key: str) -> bool | int | float | str:
+    def held(session: Session, key: str) -> bool | int | float | str:
         value = real_get_value(session, key)
-        everyone_has_read.wait()
+        reads.append(threading.current_thread().name)
+        if threading.current_thread().name == "first":
+            first_has_read.set()
+            release_first.wait(10)
         return value
 
-    monkeypatch.setattr(service, "get_value", read_then_wait_for_the_rest)
+    monkeypatch.setattr(service, "get_value", held)
 
-    def write(n: int) -> None:
+    def write(value: int) -> None:
         with sessions.begin() as db:
-            service.set_value(db, LIMIT, n + 1, actor_user_id=actor)
+            service.set_value(db, LIMIT, value, actor_user_id=actor)
 
-    with ThreadPoolExecutor(FAN_OUT) as pool:
-        list(pool.map(write, range(FAN_OUT)))
+    first = threading.Thread(target=write, args=(50,), name="first")
+    second = threading.Thread(target=write, args=(60,), name="second")
+    first.start()
+    assert first_has_read.wait(10)
+    second.start()
+    second.join(0.5)
+    assert reads == ["first"], "the second writer read the old value before the first had committed"
+    release_first.set()
+    first.join(10)
+    second.join(10)
 
     with sessions() as db:
-        assert db.get(SettingOverride, LIMIT) is not None
-        assert len(db.scalars(select(SettingChange).where(SettingChange.key == LIMIT)).all()) == FAN_OUT
+        trail = db.execute(
+            select(SettingChange.old_value, SettingChange.new_value)
+            .where(SettingChange.key == LIMIT)
+            .order_by(SettingChange.id)
+        ).all()
+        assert [tuple(row) for row in trail] == [(20, 50), (50, 60)]
+        assert get_value(db, LIMIT) == 60
 
 
 # ── Declaring a setting ───────────────────────────────────────────────────────
