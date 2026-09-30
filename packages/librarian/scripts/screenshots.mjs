@@ -391,6 +391,8 @@ for (const theme of THEMES) {
 
 	await visit('past');
 	const past = page.getByRole('region', { name: 'Past questions' });
+	// `allInnerTexts` does not wait, so the list has to be there first.
+	await past.getByRole('listitem').first().waitFor();
 	const titles = await past.getByRole('listitem').allInnerTexts();
 	if (!titles[0]?.includes('Recreation leave each year') || titles.length !== 5) {
 		failures.push(`past: not five conversations newest first (${titles.map((t) => t.trim()).join(' | ')})`);

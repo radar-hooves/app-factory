@@ -193,14 +193,22 @@ describe('Chat waiting', () => {
 		const { transport, asks } = room();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
-		// The library's frame also carries its own words, which nothing here reads.
-		const queued = { type: 'queued' };
-
-		asks[0].pipe.push(queued);
+		// The library's own frames, as `api/librarian/session.py` sends them.
+		asks[0].pipe.push({
+			type: 'queued',
+			message: 'another question is being answered; waiting for it to finish'
+		});
 		await tick();
 		expect(c.waiting).toBe(true);
-		// The library repeats it at least every 30 s; none of it lands on the turn.
-		asks[0].pipe.push(queued);
+		// Repeated at least every 30 s; none of it lands on the turn, and a frame
+		// that is not the agent starting does not end the wait.
+		asks[0].pipe.push(
+			{
+				type: 'queued',
+				message: 'another question is being answered; still waiting for it to finish'
+			},
+			{ type: 'system', subtype: 'status' }
+		);
 		await tick();
 		expect(c.waiting).toBe(true);
 		expect(c.turns[0].blocks).toEqual([]);
@@ -240,6 +248,7 @@ describe('Chat stopping', () => {
 		const { transport, asks } = room();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
+		// Its type alone says it waits.
 		asks[0].pipe.push({ type: 'queued' });
 		await tick();
 

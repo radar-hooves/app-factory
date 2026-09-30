@@ -264,12 +264,16 @@ What the controller relies on the routes to say:
 
 | The route says                                                             | The page                                                                                                   |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| a `queued` frame, repeated while the ask waits                             | `waiting`: "Milton is answering another question first", beside the clock                                  |
+| a `queued` frame, repeated while the ask waits                             | `waiting`, by the frame's type alone, until the agent starts: "Milton is answering another question first", beside the clock |
 | `system/init` with `session_id`                                            | `conversationId`, which the host puts in the address                                                       |
 | 429 on the ask                                                             | drops the turn, puts the words and files back in the box, reads the allowance                              |
 | 409 on the ask: the conversation is already being answered                 | drops the turn, keeps the words, shows it still answering                                                  |
 | `answering_since` on a read                                                | `answering`: the question in flight with "still answering" and its clock, read again every 5 s till it clears |
 | a stream that dropped (`library_error` with `dropped`) on a named conversation | reads it rather than failing the turn: a locked phone loses the connection, not the answer              |
+
+The library's `queued` frame is `{ type: 'queued', message }`, `message` its
+own sentence; `isQueued(event)` from `./client` narrows an event to it
+(`QueuedEvent`) for a host that reads it.
 
 A turn belongs to the server. Leaving a conversation, or the page, leaves
 its answer being written; `stop()` asks the server to end it, and before the

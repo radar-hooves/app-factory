@@ -10,7 +10,15 @@
 
 import type { Citation } from './citations';
 
-/** One Claude Code stream event. Typed only where we branch on it. */
+/** A Claude Code message, whole. `content` is a plain string only on a user frame. */
+export interface AgentMessage {
+	id?: string;
+	content?: Array<Record<string, unknown>> | string;
+}
+
+/** One Claude Code stream event, or one of the library's own frames. Typed
+ *  only where we branch on it, and `type` stays open: a new event type needs
+ *  no change here. */
 export interface AgentEvent {
 	type: string;
 	subtype?: string;
@@ -20,8 +28,8 @@ export interface AgentEvent {
 		delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
 		content_block?: { type: string; name?: string; id?: string };
 	};
-	/** A whole message; `content` is a plain string only on a user frame. */
-	message?: { id?: string; content?: Array<Record<string, unknown>> | string };
+	/** A whole message; on the library's `queued` frame, its own sentence. */
+	message?: AgentMessage | string;
 	/** A user frame the CLI echoed back as the turn that consumes it starts
 	 *  (`--replay-user-messages`): the reader's side of a session. */
 	isReplay?: boolean;
@@ -54,6 +62,23 @@ export interface AgentEvent {
 	 */
 	items?: Citation[] | string[];
 	[key: string]: unknown;
+}
+
+/**
+ * The library's word that an ask waits behind somebody else's: repeated at
+ * least every 30 s until the agent starts, and what keeps an idle read
+ * timeout from firing meanwhile. `message` is the library's own sentence
+ * ("another question is being answered; waiting for it to finish"); a page
+ * says it in its persona's words (`copy.waiting`).
+ */
+export interface QueuedEvent extends AgentEvent {
+	type: 'queued';
+	message: string;
+}
+
+/** The frame is the library's `queued`, by its type alone. */
+export function isQueued(event: AgentEvent): event is QueuedEvent {
+	return event.type === 'queued';
 }
 
 export interface AskOptions {

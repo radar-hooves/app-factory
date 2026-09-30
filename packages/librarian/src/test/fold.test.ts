@@ -55,6 +55,6 @@ describe('Transcript over a real stream', () => {
 });
 
 function contentTypes(event: AgentEvent): unknown[] {
-	const content = event.message?.content;
+	const content = typeof event.message === 'object' ? event.message.content : undefined;
 	return Array.isArray(content) ? content.map((block) => block.type) : [];
 }

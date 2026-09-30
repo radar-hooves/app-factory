@@ -100,7 +100,7 @@ export class Session {
 
 /** The words of a replayed frame: a bare string, or its text blocks. */
 function said(event: AgentEvent): string {
-	const content = event.message?.content;
+	const content = typeof event.message === 'object' ? event.message.content : undefined;
 	if (typeof content === 'string') return content;
 	return contentOf(event)
 		.filter((block) => block.type === 'text' && typeof block.text === 'string')

@@ -406,7 +406,7 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 
 /** A message's content blocks; a user frame may carry a bare string instead. */
 export function contentOf(event: AgentEvent): Array<Record<string, unknown>> {
-	const content = event.message?.content;
+	const content = typeof event.message === 'object' ? event.message.content : undefined;
 	return Array.isArray(content) ? content : [];
 }
 

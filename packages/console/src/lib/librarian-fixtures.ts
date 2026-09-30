@@ -774,7 +774,10 @@ export function labRoom(): RoomTransport {
 			asked += 1;
 			if (asked === 1) {
 				for (let i = 0; i < 2; i += 1) {
-					yield { type: 'queued' };
+					yield {
+						type: 'queued',
+						message: 'another question is being answered; waiting for it to finish'
+					};
 					await pause(900, signal);
 				}
 			}

@@ -21,7 +21,7 @@
  */
 
 import { untrack } from 'svelte';
-import type { AgentEvent } from './client';
+import { isQueued, type AgentEvent } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
 import { fold, foldState, type Turn } from './transcript.svelte';
@@ -445,14 +445,16 @@ export class Chat {
 				break;
 			}
 			if (!current()) break;
+			if (isQueued(event)) {
+				this.waiting = true;
+				this.#version += 1;
+				continue;
+			}
+			// Waiting ends when the agent starts, and no other frame says so.
+			if (named || RUN.has(event.type)) this.waiting = false;
 			if (named) {
 				this.conversationId = named;
 				this.#held.add(live.id);
-				continue;
-			}
-			if (event.type === 'queued') {
-				this.waiting = true;
-				this.#version += 1;
 				continue;
 			}
 			if (event.type === 'library_error' && event.status === 429) ending = 'refused';
@@ -460,7 +462,6 @@ export class Chat {
 			else if (event.type === 'library_error' && event.dropped && this.conversationId)
 				ending = 'dropped';
 			if (ending) break;
-			this.waiting = false;
 			if (RUN.has(event.type)) this.#held.add(live.id);
 			fold(live, state, event);
 			this.#version += 1;
@@ -566,8 +567,12 @@ export class Chat {
 			this.#watching = true;
 			try {
 				for await (const event of job.watch(id, signal)) {
-					this.waiting = event.type === 'queued';
-					if (!this.waiting) session.apply(event);
+					if (isQueued(event)) {
+						this.waiting = true;
+						continue;
+					}
+					if (RUN.has(event.type)) this.waiting = false;
+					session.apply(event);
 				}
 			} catch {
 				// A transport that threw has closed its stream, as one that ended.

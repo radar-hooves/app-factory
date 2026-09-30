@@ -39,6 +39,11 @@ Generalised from cadmus's room page, `PastQuestions`, `AnswerFeedback` and
   answering another question first", on the library's `queued` frame) and
   `answering` ("Milton is still answering"), beside the working clock.
   `Working` takes `since`, so a clock counts from when an answer began.
+- **`QueuedEvent` and `isQueued()`** in `./client`: the library's `queued`
+  frame, `message` its own sentence as a plain string. `AgentEvent.message`
+  is Claude Code's message (`AgentMessage`) or that sentence. `waiting` is
+  set by the frame's type alone and ends when the agent starts, not on any
+  other frame.
 - `copy`: the words for all of the above, and `fill()` for the counted ones.
 - The lab gains `waiting`, `answering`, `mark`, `fair-use`, `limit` and
   `past`, and `room`, where `Chat` drives the components over a fake of the

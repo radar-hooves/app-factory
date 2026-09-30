@@ -9,7 +9,7 @@
  * and a finished iteration, because the host's loop is what re-enables Send.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ask, watch } from '$lib/client';
+import { ask, isQueued, watch, type AgentEvent } from '$lib/client';
 
 function capture() {
 	const calls: Array<[string, RequestInit]> = [];
@@ -258,5 +258,19 @@ describe('watch()', () => {
 		) as unknown as typeof globalThis.fetch;
 		const events = await collect(watch({ endpoint: '/w', fetch: fakeFetch }));
 		expect(events.at(-1)).toEqual({ type: 'library_error', dropped: true });
+	});
+});
+
+describe('isQueued()', () => {
+	it("hands a host the library's own sentence, by the frame's type alone", () => {
+		const frame: AgentEvent = {
+			type: 'queued',
+			message: 'another question is being answered; waiting for it to finish'
+		};
+		expect(isQueued(frame)).toBe(true);
+		// Narrowed: a plain string, no cast.
+		const said: string = isQueued(frame) ? frame.message : '';
+		expect(said).toMatch(/^another question/);
+		expect(isQueued({ type: 'assistant', message: { content: [] } })).toBe(false);
 	});
 });
