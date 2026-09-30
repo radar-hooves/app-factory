@@ -51,6 +51,26 @@ test('an address no route serves renders inside the shell', async ({ page }) => 
 	).toBeVisible();
 });
 
+// A link to what the backend serves (a download under /api, the API itself)
+// leaves the SPA for a full page load. The catch-all behind "Page not found"
+// must not claim it; the link sits inside the page, where the router listens.
+test('a link to the API leaves the app for the API', async ({ page }) => {
+	await page.goto('/workspace');
+	await expect(page.locator('#ds-main').getByRole('heading', { name: 'Members' })).toBeVisible();
+	await page.locator('#ds-main').evaluate((main) => {
+		const link = document.createElement('a');
+		link.href = '/api/system/health';
+		link.dataset.testid = 'api-link';
+		link.textContent = 'health';
+		main.append(link);
+	});
+
+	await page.getByTestId('api-link').click();
+
+	await expect(page).toHaveURL(/\/api\/system\/health$/);
+	await expect(page.locator('#ds-main')).toHaveCount(0);
+});
+
 // The rail's own Settings row goes to /settings, which must be a page: the
 // first settings page this caller can open, or the destination saying there is
 // none. Which one depends on the app and the caller; a 404 is never right.

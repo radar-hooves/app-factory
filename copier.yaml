@@ -85,6 +85,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
 
 project_name:
   type: str
