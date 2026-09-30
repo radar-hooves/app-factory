@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **`api/agent/lessons.py` type-checks against the fleet's SQLAlchemy.** `_pending()`'s `list(rows)` failed `mypy` under SQLAlchemy 2.0.50: `Session.execute(...).all()` returns `Sequence[Row[tuple[...]]]`, and mypy does not accept a `Row[T]` where a plain `T` is expected. `.tuples().all()` asks SQLAlchemy's own `Result` for the untyped-`Row`-free view its stubs already model correctly, so the `list()` call now matches the declared return type with no `type: ignore` or `Any` cast. Both apps that hit this (godswood, converging onto 2026.9.54; cadmus, converging onto 2026.9.55) banked it in their own `mypy-baseline.txt` and can drop the entry once they converge past this release. Need: app-factory#8.
+
 ## [2026.9.55] - 2026-09-30
 
 ### Fixed

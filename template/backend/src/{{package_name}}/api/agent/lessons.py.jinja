@@ -278,23 +278,30 @@ async def retry_unsettled(
 
     def _pending() -> list[tuple[str, int, str, str, str, list[str], datetime.datetime]]:
         with db_session_factory() as db, unscoped(db):
-            rows = db.execute(
-                select(
-                    AgentJobLessonReport.job_id,
-                    AgentJobLessonReport.workspace_id,
-                    AgentJobLessonReport.domain_name,
-                    AgentJobLessonReport.context_key,
-                    AgentJobLessonReport.result,
-                    AgentJobLessonReport.cites,
-                    AgentJobLessonReport.created_at,
+            rows = (
+                db.execute(
+                    select(
+                        AgentJobLessonReport.job_id,
+                        AgentJobLessonReport.workspace_id,
+                        AgentJobLessonReport.domain_name,
+                        AgentJobLessonReport.context_key,
+                        AgentJobLessonReport.result,
+                        AgentJobLessonReport.cites,
+                        AgentJobLessonReport.created_at,
+                    )
+                    .where(
+                        AgentJobLessonReport.recorded_at.is_(None),
+                        or_(
+                            AgentJobLessonReport.claimed_until.is_(None),
+                            AgentJobLessonReport.claimed_until < func.now(),
+                        ),
+                    )
+                    .order_by(AgentJobLessonReport.created_at)
+                    .limit(_MAX_PER_SWEEP)
                 )
-                .where(
-                    AgentJobLessonReport.recorded_at.is_(None),
-                    or_(AgentJobLessonReport.claimed_until.is_(None), AgentJobLessonReport.claimed_until < func.now()),
-                )
-                .order_by(AgentJobLessonReport.created_at)
-                .limit(_MAX_PER_SWEEP)
-            ).all()
+                .tuples()
+                .all()
+            )
         return list(rows)
 
     failed = False
