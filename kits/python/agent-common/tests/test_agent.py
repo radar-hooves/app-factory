@@ -77,3 +77,13 @@ async def test_forget_takes_the_transcript_and_the_attachments(settings: cli.Set
 async def test_files_refuse_a_resume_that_is_not_a_session_id(settings: cli.Settings, milton: Persona) -> None:
     with pytest.raises(ValueError, match="not a session id"):
         await _ask(LocalAgent(settings, milton), "hi", resume="../x", files={"a.txt": b"a"})
+
+
+async def test_a_run_carries_its_askers_variables_in_its_process_and_its_repr_does_not(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton, run_env={"ASKER_TOKEN": "one asker's"})
+    events = [event async for event in agent.ask("hi")]
+    assistant = next(event for event in events if event.get("type") == "assistant")
+    assert json.loads(assistant["message"]["content"][0]["text"])["env"]["ASKER_TOKEN"] == "one asker's"
+    assert "one asker's" not in repr(agent)

@@ -113,6 +113,24 @@ def test_a_named_gateway_confines_the_child_to_it_even_with_no_key(
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
 
 
+def test_a_runs_own_variables_reach_its_environment_and_nothing_else(
+    settings: cli.Settings, milton: Persona, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KIT_TEST_MARKER", "an app secret")
+    env = cli.environment(settings, milton, {"ASKER_TOKEN": "one asker's"})
+    assert env["ASKER_TOKEN"] == "one asker's"
+    assert "KIT_TEST_MARKER" not in env
+    assert "ASKER_TOKEN" not in cli.environment(settings, milton)
+
+
+@pytest.mark.parametrize("name", ["HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "PATH"])
+def test_a_runs_own_variables_may_not_displace_what_the_driver_decides(
+    settings: cli.Settings, milton: Persona, name: str
+) -> None:
+    with pytest.raises(ValueError, match=name):
+        cli.environment(settings, milton, {name: "x"})
+
+
 def test_the_gateway_key_never_appears_in_a_repr() -> None:
     assert "not-a-real-token" not in repr(cli.Settings(service="s", gateway_key="not-a-real-token"))
 
