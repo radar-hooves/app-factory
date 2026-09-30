@@ -20,7 +20,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ### Migrating Thoth to the desktop skeleton
 
-Proven on a scratch copy of Thoth's main, 01/10/2026; nothing pushed to Thoth.
+Proven on a scratch copy of Thoth's main, 01/10/2026, on Linux: the frontend's gates, vitest (4 files, 14 tests), the build, and with the kit Rust fmt, clippy `-D warnings` and the suite (676 passed) under `--no-default-features --features vulkan`. Nothing pushed to Thoth; its macOS build is unproven.
 
 - **Stamp at the release tag** with `skeleton=desktop`, `project_name=thoth`, `frontend_port=1422`, `bundle_identifier=com.poodle64.thoth`, `linux_cargo_args=--no-default-features --features vulkan`, `dark_first=true`. It takes 22 owned files, 690 lines out and 540 in; its 224-line CI becomes a 22-line caller, and its `security.yaml` is already the skeleton's.
 - **CI moves onto atlas and huginn, inside Thoth's flake,** from GitHub's `ubuntu-22.04` with apt and `macos-15`. `test-linux-build-scripts.sh` and `desktop-file-validate` move into a workflow file of Thoth's own; if huginn's whisper.cpp build wants `GGML_NATIVE=OFF` and `-march=armv8-a` as the hosted runner did, Thoth's darwin devShell sets them.
@@ -30,7 +30,7 @@ Proven on a scratch copy of Thoth's main, 01/10/2026; nothing pushed to Thoth.
 
 ### Migrating Bragi to the desktop skeleton
 
-Proven on a scratch copy of Bragi's main, 01/10/2026; nothing pushed to Bragi.
+Proven on a scratch copy of Bragi's main, 01/10/2026, on Linux: svelte-check, the drift and craft lints, vitest, the build, and with the kit Rust fmt, clippy `-D warnings` and the suite (384 passed). Nothing pushed to Bragi; its macOS build is unproven.
 
 - **Stamp at the release tag** with `skeleton=desktop`, `project_name=bragi`, `frontend_port=1420`, `bundle_identifier` its current identifier, `dark_first=true`. It takes 23 owned files, 552 lines out and 604 in; `security.yaml` becomes the inline gitleaks and Trivy scan, since a skeleton file cannot call master-project's private reusable.
 - **Delete `vite.config.js`:** Vite prefers it over the skeleton's `vite.config.ts`, which would otherwise never load. The E2E bridge import leaves `+layout.ts` for a new `src/hooks.client.ts` of Bragi's own.
