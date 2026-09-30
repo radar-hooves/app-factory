@@ -21,6 +21,7 @@ from agent_common.library_agent import LibraryAgent
 
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.entitlements import ROOM_PREFIX
 from {{ package_name }}.exceptions import NotFoundError
 
 #: A room's id is a path segment and half an entitlement name.
@@ -51,7 +52,7 @@ class Room:
 
     @property
     def entitlement(self) -> str:
-        return f"room-{self.id}"
+        return f"{ROOM_PREFIX}{self.id}"
 
 
 def load(settings: AgentSettings) -> dict[str, Room]:

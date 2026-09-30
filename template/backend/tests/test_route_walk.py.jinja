@@ -6,7 +6,8 @@ route outside the person-facing set below must declare a module gate:
 `require_module`, or a gate that reads its module off the path (a room, a
 persona), marked by `entitlements.gate`. A route this app adds without one
 fails here rather than opening its data to every account the identity
-provider lets in.
+provider lets in. The people list is not person-facing: it answers only an
+account admitted to the app itself (`entitlements.require_app_module`).
 """
 
 from collections.abc import Iterator
@@ -15,12 +16,13 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
+from httpx import AsyncClient
 
 from {{ package_name }}.main import _API_PREFIX
 
 #: Routes any signed-in person may reach, each gated by something other than a module.
 PERSON_FACING = {
-    "/users": "identity: who is calling, and the people a workspace owner grants a seat to",
+    "/users/me": "who is calling: the caller's own record, and nobody else's",
     "/workspaces": "the caller's own workspaces, gated by membership",
     "/feedback": "how a person reports a problem; reading reports is admin-gated",
     "/system": "health and version, which name nobody",
@@ -65,3 +67,18 @@ def test_a_rooms_routes_gate_on_the_room_they_name(app: FastAPI) -> None:
     rooms = [dependant for _, path, dependant in _routes(app) if "{room_id}" in path]
     assert rooms
     assert all("room-{room_id}" in _gates(dependant) for dependant in rooms)
+
+
+async def test_an_account_admitted_only_to_a_room_reaches_its_own_record_and_not_the_people(
+    client: AsyncClient,
+) -> None:
+    """The people list is for granting a seat; a colleague invited to a room has none to grant."""
+    rooms_only = {
+        "x-authentik-uid": "rooms-only",
+        "x-authentik-username": "rooms-only",
+        "x-authentik-entitlements": "room-x",
+    }
+    assert (await client.get("/api/users/me", headers=rooms_only)).status_code == 200
+    assert (await client.get("/api/users/", headers=rooms_only)).status_code == 403
+    admitted = {**rooms_only, "x-authentik-entitlements": "room-x|example"}
+    assert (await client.get("/api/users/", headers=admitted)).status_code == 200

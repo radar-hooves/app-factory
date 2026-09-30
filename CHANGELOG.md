@@ -21,6 +21,7 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 
 ### Changed
 
+- **The people list (`GET /api/users/`) answers only an account admitted to the app itself** (`entitlements.require_app_module`: any entitlement but a room's, `admin` included), so a colleague invited to a room cannot list who else uses the app; `/api/users/me` stays open to everyone. Workspace ownership could not draw the line, because every account owns the personal workspace it is given on first sight.
 - **The example slice gates on its own module** (`example`), as every domain slice now must; the E2E person holds it unless a run names its own entitlements.
 - **`agent_turn` and `agent_event` take the room's id** for a room's turn, a job's persona for a job.
 - **A stamped backend pins `agent-common>=2026.9.58`**, the release that carries `LibraryAgent`, and declares `python-multipart` for an ask with attachments.
