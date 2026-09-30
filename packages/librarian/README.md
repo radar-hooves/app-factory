@@ -19,6 +19,7 @@ src/lib/
   client.ts                ask() and watch(): Claude Code's OWN events, unaltered
   transcript.svelte.ts     Transcript state, the fold/segment/describe helpers
   session.svelte.ts        Session: a whole stream of runs, as turns
+  chat.svelte.ts           Chat: the page's controller, over a room's routes or a job's
   citations.ts             the Citation shape, `[n]` markers, the trust mark
   copy.ts                  every word this package says, and the host's overrides
   attachments.ts           what a reader may attach, and the limits
@@ -26,6 +27,9 @@ src/lib/
   history.svelte.ts        the browser-held conversation list, per caller
   components/
     conversation/          the whole reading surface: scroll, pill, pane, composer slot
+    conversation-list/     past conversations, newest first: reopen, rename, download, delete
+    answer-mark/           helpful or not, with a note, on the last answer
+    fair-use-notice/       today's allowance, beside the composer
     scope-statement/       what this room answers from, and what it does not hold
     agent-transcript/      one question and everything Milton did answering it
     document-pane/         the cited document, open at the cited passage
@@ -179,6 +183,112 @@ on it fires once and never again.
 Nothing here fetches on its own behalf. The library's document read is
 authenticated, and a package that called it directly would be reaching past
 the app's proxy with a session it has no business holding.
+
+### A room's page, whole: `Chat`
+
+The hand-wired page above is the parts. A stamped room page is `Chat` over
+the room's routes, and the components bound to it:
+
+```svelte
+<script lang="ts">
+	import { Chat } from '@poodle64/librarian/chat';
+	import Conversation from '@poodle64/librarian/conversation';
+	import ConversationList from '@poodle64/librarian/conversation-list';
+	import Composer from '@poodle64/librarian/composer';
+	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
+
+	const chat = new Chat(roomTransport(room)); // the app's own client, below
+	const wanted = $derived(page.url.searchParams.get('c'));
+
+	// The address names the conversation; `open` and `new` are safe here.
+	$effect(() => {
+		if (wanted && wanted !== chat.conversationId) void chat.open(wanted);
+		else if (!wanted) chat.new();
+	});
+</script>
+
+<ConversationList
+	conversations={chat.conversations}
+	failed={chat.listFailed}
+	current={chat.conversationId}
+	href={(id) => `?c=${id}`}
+	onnew={() => chat.new()}
+	onrename={(id, title) => chat.rename(id, title)}
+	ondownload={(id) => chat.download(id)}
+	ondelete={(id) => chat.remove(id)}
+/>
+<Conversation
+	turns={chat.turns}
+	running={chat.busy}
+	version={chat.version}
+	waiting={chat.waiting}
+	answering={chat.answering}
+	onregenerate={() => chat.again()}
+	onsuggest={(question) => chat.ask(question)}
+	onmark={(turn, verdict) => chat.mark(turn, verdict)}
+>
+	{#snippet composer()}
+		<FairUseNotice quota={chat.quota} />
+		<Composer
+			bind:value={chat.draft}
+			bind:files={chat.files}
+			running={chat.busy}
+			sendWhileRunning={chat.sendWhileRunning}
+			onsubmit={() => chat.ask()}
+			onstop={() => chat.stop()}
+		/>
+	{/snippet}
+</Conversation>
+```
+
+`chat.list()` reads the list once; after that it follows every answer.
+
+The transport is the app's own client over its routes, and the shapes are
+the routes' own bodies (`ConversationSummary`, `ConversationRead`,
+`StoredTurn`, `Quota`), so the stamped slice returns them as they are and
+the transport passes them through:
+
+| `RoomTransport` | Route                                                 |
+| --------------- | ----------------------------------------------------- |
+| `ask`           | `POST rooms/{room}/ask`, through `client.ask()`       |
+| `read`          | `GET conversations/{id}`                              |
+| `stop`          | `POST conversations/{id}/stop`                        |
+| `quota`         | `GET quota`                                           |
+| `list`          | this person's conversations in the room               |
+| `rename`        | `PATCH conversations/{id}`                            |
+| `remove`        | `DELETE conversations/{id}`                           |
+| `download`      | `GET conversations/{id}/export`, as `{ name, body }`  |
+| `mark`          | its answer mark, where the agent takes one (optional) |
+
+What the controller relies on the routes to say:
+
+| The route says                                                             | The page                                                                                                   |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| a `queued` frame, repeated while the ask waits                             | `waiting`: "Milton is answering another question first", beside the clock                                  |
+| `system/init` with `session_id`                                            | `conversationId`, which the host puts in the address                                                       |
+| 429 on the ask                                                             | drops the turn, puts the words and files back in the box, reads the allowance                              |
+| 409 on the ask: the conversation is already being answered                 | drops the turn, keeps the words, shows it still answering                                                  |
+| `answering_since` on a read                                                | `answering`: the question in flight with "still answering" and its clock, read again every 5 s till it clears |
+| a stream that dropped (`library_error` with `dropped`) on a named conversation | reads it rather than failing the turn: a locked phone loses the connection, not the answer              |
+
+A turn belongs to the server. Leaving a conversation, or the page, leaves
+its answer being written; `stop()` asks the server to end it, and before the
+agent has named a new conversation it holds the stream open, unseen, until
+it does. `again()` asks the last question as a new turn: the conversation is
+append-only because the agent's transcript is.
+
+A job is `new Chat(jobTransport)`, where `JobTransport` is its `watch`,
+`message` and `stop` (godswood's run view). The turns are `Session`'s; a
+message goes onto the run while it works and opens its stream again once it
+has settled; `carriesOn()` keeps a closed stream watched while the host says
+the job may go on by itself; `sendWhileRunning` is true.
+
+| Concern                  | How                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The answer mark          | `onmark(turn, verdict)` on `Conversation`: resolve true once recorded. Offered on the last settled answer only; without it no mark renders       |
+| Waiting, still answering | `waiting` and `answering` on `Conversation`, from the controller                                                                                 |
+| The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |
+| Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first        |
 
 ### Watching a session somebody else started
 
@@ -397,8 +507,10 @@ paragraphs addressed to the model before the question renders, so a
 colleague never sees it. Pass the question as it went on the wire; the
 transcript shows what they asked.
 
-`createHistory(namespace)` from `@poodle64/librarian/history` gives each app,
-or each room inside an app, its own `localStorage` key:
+`createHistory(namespace)` from `@poodle64/librarian/history` keeps a
+browser-only list for a page with no server-side one (a page on `Chat` reads
+the server's), under its own `localStorage` key for each app, or each room
+inside an app:
 
 ```ts
 import { createHistory, titleFrom } from '@poodle64/librarian/history';
@@ -416,7 +528,7 @@ pnpm run test         # build + vitest
 pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
-`docs/screenshots/` is seventeen states x three widths x both themes, taken by
+`docs/screenshots/` is twenty-three states x three widths x both themes, taken by
 `scripts/screenshots.mjs` against the console's `/librarian` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
@@ -427,9 +539,13 @@ its question and takes the rest of the row with it, that the persona's
 between-tool narration is nowhere in the answer prose before the activity
 line is opened, that a job's artefact and the pages it read open in the
 host's own columns and never in a pane of the package's, and that the reading
-column holds its 46rem measure and stays centred at every width. It exits
-non-zero on any of them. The job states fold a stream captured from the real
-CLI (`src/test/fixtures/`).
+column holds its 46rem measure and stays centred at every width. Its `room`
+scene is `Chat` itself over a fake of the room's routes, driven: a question
+waits behind another, streams, counts against the allowance and takes a mark;
+one asked again is stopped; a conversation reopened mid-answer says so and
+settles; one is renamed and the open one deleted. It exits non-zero on any of
+them. The job states fold a stream captured from the real CLI
+(`src/test/fixtures/`).
 
 The console's `app.css` deliberately does NOT scan this package's `dist`, so
 the grid is taken in a consumer that compiles none of its Tailwind classes —
@@ -439,6 +555,9 @@ which is the only way the measure claim above means anything.
 pnpm --filter @poodle64/console run build
 pnpm --filter @poodle64/librarian run screenshots
 ```
+
+Where Playwright's own Chromium will not start (NixOS), name one that does:
+`CHROMIUM=/nix/store/…-playwright-browsers/chromium-…/chrome-linux/chrome`.
 
 ## Releasing
 

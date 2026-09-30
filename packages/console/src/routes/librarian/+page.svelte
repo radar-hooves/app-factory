@@ -16,6 +16,9 @@
 	import { toggleMode } from 'mode-watcher';
 	import Conversation from '@poodle64/librarian/conversation';
 	import Composer, { type Scope } from '@poodle64/librarian/composer';
+	import ConversationList from '@poodle64/librarian/conversation-list';
+	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
+	import { Chat, type ConversationSummary, type Quota } from '@poodle64/librarian/chat';
 	import type { Turn } from '@poodle64/librarian/transcript';
 	import type { Citation } from '@poodle64/librarian/citations';
 	import {
@@ -24,6 +27,7 @@
 		JOB_NOTE,
 		JOB_READING,
 		JOB_WORDS,
+		labRoom,
 		loadDocument,
 		scene,
 		SCOPE,
@@ -47,7 +51,14 @@
 		'job',
 		'job-showing',
 		'job-live',
-		'job-schema'
+		'job-schema',
+		'waiting',
+		'answering',
+		'mark',
+		'fair-use',
+		'limit',
+		'past',
+		'room'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -69,6 +80,16 @@
 	let job = $state(false);
 	let showing = $state<string | undefined>(undefined);
 	let viewing = $state<Citation | null>(null);
+	let waiting = $state(false);
+	let answering = $state<number | null>(null);
+	let mark = $state(false);
+	let quota = $state<Quota | null>(null);
+	let past = $state<ConversationSummary[] | null>(null);
+	let current = $state<string | undefined>(undefined);
+	// `room` is the package's own controller over a fake of the rooms slice's
+	// routes, driven rather than seeded: every other scene is a picture.
+	let live = $state(false);
+	const chat = new Chat(labRoom(), { pollMs: 1500 });
 
 	// Re-seeding on the query parameter rather than on a click keeps the driver
 	// and the eye on exactly the same code path.
@@ -82,6 +103,17 @@
 		job = next.job ?? false;
 		showing = next.showing;
 		viewing = null;
+		waiting = next.waiting ?? false;
+		answering = next.answeringFor === undefined ? null : Date.now() - next.answeringFor;
+		mark = next.mark ?? false;
+		quota = next.quota ?? null;
+		past = next.past ?? null;
+		current = next.current;
+		live = next.live ?? false;
+		if (next.live) {
+			chat.new();
+			void chat.list();
+		}
 		version = ++bump;
 	});
 
@@ -124,7 +156,64 @@
 		</button>
 	</header>
 
-	<div class="flex min-h-0 flex-1">
+	<div class="relative flex min-h-0 flex-1">
+		{#if live || past}
+			<!-- The host's placement: a column from 768, over the conversation below it. -->
+			<aside
+				class="border-border bg-background absolute inset-y-0 left-0 z-10 w-72 overflow-y-auto border-r md:static {live
+					? 'max-md:hidden'
+					: ''}"
+			>
+				{#if live}
+					<ConversationList
+						conversations={chat.conversations}
+						failed={chat.listFailed}
+						current={chat.conversationId}
+						onopen={(id) => void chat.open(id)}
+						onnew={() => chat.new()}
+						onrename={(id, title) => chat.rename(id, title)}
+						ondownload={(id) => chat.download(id)}
+						ondelete={(id) => chat.remove(id)}
+					/>
+				{:else}
+					<ConversationList
+						conversations={past}
+						{current}
+						onopen={(id) => (current = id)}
+						onnew={() => (current = undefined)}
+						onrename={async () => true}
+						ondownload={async () => true}
+						ondelete={async () => true}
+					/>
+				{/if}
+			</aside>
+		{/if}
+		{#if live}
+			<Conversation
+				turns={chat.turns}
+				running={chat.busy}
+				version={chat.version}
+				waiting={chat.waiting}
+				answering={chat.answering}
+				examples={['What is the total on this receipt?']}
+				onexample={(question) => (chat.draft = question)}
+				onregenerate={() => void chat.again()}
+				onsuggest={(question) => void chat.ask(question)}
+				onmark={(turn, verdict) => chat.mark(turn, verdict)}
+				{loadDocument}
+			>
+				{#snippet composer()}
+					<FairUseNotice quota={chat.quota} />
+					<Composer
+						bind:value={chat.draft}
+						bind:files={chat.files}
+						running={chat.busy}
+						onsubmit={() => void chat.ask()}
+						onstop={() => void chat.stop()}
+					/>
+				{/snippet}
+			</Conversation>
+		{:else}
 		{#if job && showing}
 			<!-- The host's own column, not the package's pane: what the run handed
 			     in, beside the conversation that explains it. -->
@@ -149,6 +238,9 @@
 				? (turn) => (showing = showing === turn.id ? undefined : turn.id)
 				: undefined}
 			{showing}
+			{waiting}
+			{answering}
+			onmark={mark ? async () => true : undefined}
 			oncite={job ? (citation) => (viewing = citation) : undefined}
 			welcome={name === 'Milton'
 				? 'Ask Milton about ADF pay, allowances, leave and conditions of service.'
@@ -180,6 +272,7 @@
 						onstop={() => (running = false)}
 					/>
 				{:else}
+					<FairUseNotice {quota} />
 					<Composer
 						bind:value
 						bind:files
@@ -204,6 +297,7 @@
 					Close
 				</button>
 			</aside>
+		{/if}
 		{/if}
 	</div>
 </div>

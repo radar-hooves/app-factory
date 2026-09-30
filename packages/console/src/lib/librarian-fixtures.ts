@@ -14,10 +14,17 @@ import type { Citation, LoadedDocument } from '@poodle64/librarian/citations';
 import type { AgentEvent } from '@poodle64/librarian/client';
 import type { LibrarianCopy } from '@poodle64/librarian/copy';
 import { Session } from '@poodle64/librarian/session';
+import type {
+	ConversationRead,
+	ConversationSummary,
+	Quota,
+	RoomTransport
+} from '@poodle64/librarian/chat';
 // The package's own fixture, captured from the real CLI — see its
 // `captured.ts` for how, and what was sanitised.
 import jobStream from '../../../librarian/src/test/fixtures/job-stream.jsonl?raw';
 import schemaStream from '../../../librarian/src/test/fixtures/schema-session.jsonl?raw';
+import chatStream from '../../../librarian/src/test/fixtures/chat-stream.jsonl?raw';
 
 /** cadmus prepends this to every question before it reaches the library, and
  *  the transcript must never show it. */
@@ -233,7 +240,14 @@ export type LabState =
 	| 'job'
 	| 'job-showing'
 	| 'job-live'
-	| 'job-schema';
+	| 'job-schema'
+	| 'waiting'
+	| 'answering'
+	| 'mark'
+	| 'fair-use'
+	| 'limit'
+	| 'past'
+	| 'room';
 
 export interface LabScene {
 	turns: Turn[];
@@ -249,6 +263,18 @@ export interface LabScene {
 	job?: boolean;
 	/** The turn whose artefact the host's column is showing. */
 	showing?: string;
+	/** The question waits behind somebody else's. */
+	waiting?: boolean;
+	/** An answer this page did not see start, begun this long ago (ms). */
+	answeringFor?: number;
+	/** The host records a verdict on the last answer. */
+	mark?: boolean;
+	quota?: Quota;
+	/** The conversation list beside the conversation, and the one open. */
+	past?: ConversationSummary[];
+	current?: string;
+	/** Driven by the package's own `Chat` over `labRoom()`, not seeded. */
+	live?: boolean;
 }
 
 /**
@@ -355,10 +381,82 @@ function fakeFile(name: string, type: string, size: number): File {
 	return made;
 }
 
+/** One settled, cited answer: the short scene the room states sit on. */
+function settled(): Turn {
+	return {
+		id: 'turn-1',
+		question: question('How much recreation leave do I get each year?'),
+		blocks: [...ACTIVITY, text(3, SHORT)],
+		outcome: { turns: 3, durationMs: 8400 },
+		citations: CITATIONS.slice(0, 2),
+		suggestions: SUGGESTIONS,
+		at: minutes(0)
+	};
+}
+
+const QUOTA: Quota = {
+	limit: 40,
+	remaining: 12,
+	exempt: false,
+	reached: false,
+	resets_at: new Date(new Date().setHours(24, 0, 0, 0)).toISOString(),
+	support_url: '/support'
+};
+
+const at = (n: number) => new Date(minutes(n)).toISOString();
+
+/** A person's past conversations, as the rooms slice lists them. */
+export const PAST: ConversationSummary[] = [
+	{ id: 'past-1', title: 'Recreation leave each year', last_activity_at: at(0) },
+	{ id: 'past-2', title: 'Field allowance while deployed', last_activity_at: at(-90) },
+	{ id: 'past-3', title: 'Carrying leave over when I post', last_activity_at: at(-2000) },
+	{ id: 'past-4', title: 'Long service leave after fifteen years of continuous service', last_activity_at: at(-9000) },
+	{ id: 'past-5', title: 'Reunion travel for a member with dependants', last_activity_at: at(-20000) }
+];
+
 export function scene(state: LabState): LabScene {
 	const base: LabScene = { turns: [], running: false, value: '', files: [], name: 'Milton' };
 
 	if (state === 'empty') return base;
+
+	if (state === 'room') return { ...base, live: true };
+
+	// Asked, and waiting behind somebody else's question on the one GPU.
+	if (state === 'waiting') {
+		return {
+			...base,
+			running: true,
+			waiting: true,
+			turns: [
+				settled(),
+				{ id: 'turn-2', question: 'Does it accrue while I am on leave without pay?', blocks: [], outcome: null }
+			]
+		};
+	}
+
+	// Reopened from its link on another device while its answer is still
+	// being written: the question, and the clock since it was asked.
+	if (state === 'answering') {
+		return {
+			...base,
+			running: true,
+			answeringFor: 95_000,
+			turns: [
+				settled(),
+				{ id: 'turn-2', question: 'Does it accrue while I am on leave without pay?', blocks: [], outcome: null, at: minutes(4) }
+			]
+		};
+	}
+
+	if (state === 'mark') return { ...base, mark: true, turns: [settled()] };
+
+	if (state === 'fair-use') return { ...base, quota: QUOTA, turns: [settled()] };
+
+	if (state === 'limit') {
+		return { ...base, quota: { ...QUOTA, remaining: 0, reached: true }, turns: [settled()] };
+	}
+
+	if (state === 'past') return { ...base, past: PAST, current: 'past-1', turns: [settled()] };
 
 	// A session somebody else started, whole: three runs, the reading carded
 	// under the first answer, and what it read listed under that.
@@ -633,5 +731,74 @@ export function scene(state: LabState): LabScene {
 				suggestions: SUGGESTIONS
 			}
 		]
+	};
+}
+
+const CHAT = events(chatStream);
+
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const timer = setTimeout(resolve, ms);
+		signal.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+	});
+}
+
+/**
+ * The rooms slice's routes, faked in the browser for the `room` scene, which
+ * the package's own `Chat` drives: the first question waits behind another
+ * for two queued frames, every answer is the real CLI's captured stream, the
+ * allowance counts down, and "Field allowance while deployed" is still being
+ * answered for its first two reads.
+ */
+export function labRoom(): RoomTransport {
+	let asked = 0;
+	let reads = 0;
+	const listed = PAST.map((c) => ({ ...c }));
+	const first = {
+		question: 'Is the field allowance paid while deployed?',
+		answer: SHORT,
+		at: at(-91),
+		citations: CITATIONS.slice(0, 2)
+	};
+	const conversation = (id: string, answering = false): ConversationRead => {
+		const since = new Date(Date.now() - 40_000).toISOString();
+		const summary = listed.find((c) => c.id === id) ?? listed[0];
+		if (id !== 'past-2') return { ...summary, turns: [first] };
+		const later = { question: 'And while I am in transit?', at: since };
+		return answering
+			? { ...summary, answering_since: since, turns: [first, { ...later, answer: '' }] }
+			: { ...summary, turns: [first, { ...later, answer: UNCITED }] };
+	};
+	return {
+		async *ask({ signal }) {
+			asked += 1;
+			if (asked === 1) {
+				for (let i = 0; i < 2; i += 1) {
+					yield { type: 'queued' };
+					await pause(900, signal);
+				}
+			}
+			for (const event of CHAT) {
+				if (signal.aborted) return;
+				await pause(60, signal);
+				yield event;
+			}
+		},
+		read: async (id) => {
+			if (id === 'past-2') reads += 1;
+			return conversation(id, id === 'past-2' && reads <= 2);
+		},
+		stop: async () => undefined,
+		quota: async () => ({ ...QUOTA, remaining: 40 - asked, limit: 40 }),
+		list: async () => listed.map((c) => ({ ...c })),
+		rename: async (id, title) => {
+			const row = listed.find((c) => c.id === id);
+			if (row) row.title = title;
+		},
+		remove: async (id) => {
+			listed.splice(listed.findIndex((c) => c.id === id), 1);
+		},
+		download: async () => ({ name: 'conversation.md', body: new Blob(['# Conversation']) }),
+		mark: async () => undefined
 	};
 }

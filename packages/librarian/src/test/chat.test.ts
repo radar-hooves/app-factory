@@ -193,7 +193,8 @@ describe('Chat waiting', () => {
 		const { transport, asks } = room();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
-		const queued = { type: 'queued', message: 'another question is being answered' };
+		// The library's frame also carries its own words, which nothing here reads.
+		const queued = { type: 'queued' };
 
 		asks[0].pipe.push(queued);
 		await tick();

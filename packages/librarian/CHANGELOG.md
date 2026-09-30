@@ -2,6 +2,54 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.22] - 2026-09-30
+
+The generic chat product every app's room page is built from. Need:
+`radar-hooves/cadmus (Nightjar), 30/09/2026`, step 3 of the factory's rooms
+design (full-stack-app-template `docs/design/agent-console.md`, cadde625).
+Generalised from cadmus's room page, `PastQuestions`, `AnswerFeedback` and
+`FairUseNotice`, and godswood's `reader-watch.svelte.ts`.
+
+### Added
+
+- **`./chat`**: `Chat`, the page's controller. `open`, `ask`, `stop`,
+  `again`, `new`; `turns`, `running`, `answering`, `waiting`, `quota`,
+  `conversationId`, with `draft` and `files` for the composer and the
+  conversation list's `list`, `rename`, `remove`, `download` and `mark`.
+  It works over a `RoomTransport` (the stamped slice's routes, whose bodies
+  are its types) or a `JobTransport` (a job's watch, message and stop). A
+  turn outlives the page: a conversation reopened mid-answer shows its
+  question still being answered, clocked from `answering_since`, and is read
+  again until it settles; a stream that drops under a named conversation is
+  read rather than failed; stop is a request to the server, held until the
+  agent names a new conversation. A 429 puts the words back in the box, a
+  409 shows the conversation still answering. `open` and `new` are safe to
+  call from an effect that follows the address.
+- **`./conversation-list`**: past conversations newest first; reopen (a
+  link, with `href`), rename in place, download, delete after asking, new.
+  A conversation still being answered carries a live dot.
+- **`./answer-mark`**, rendered by `AgentTranscript` in the last answer's
+  action row only when the host passes `onmark`: helpful or not, then an
+  optional note. A verdict not recorded is taken back and says so; a note
+  not recorded keeps its box.
+- **`./fair-use-notice`**: a quiet count while questions are left, a notice
+  with `support_url` once there are none, nothing for `exempt` or a `limit`
+  of 0.
+- **Waiting and still answering**: `Conversation`'s `waiting` ("Milton is
+  answering another question first", on the library's `queued` frame) and
+  `answering` ("Milton is still answering"), beside the working clock.
+  `Working` takes `since`, so a clock counts from when an answer began.
+- `copy`: the words for all of the above, and `fill()` for the counted ones.
+- The lab gains `waiting`, `answering`, `mark`, `fair-use`, `limit` and
+  `past`, and `room`, where `Chat` drives the components over a fake of the
+  routes; the grid asserts each, and drives `room` through an ask that waits,
+  a mark, a stop, a reopen mid-answer, a rename and a delete.
+
+### Changed
+
+- **`library_error` says what it knows.** A route that refused carries its
+  `status`; a stream that opened and died carries `dropped: true`.
+
 ## [2026.9.21] - 2026-09-29
 
 A run that hands in its answer under a JSON schema. Found by godswood

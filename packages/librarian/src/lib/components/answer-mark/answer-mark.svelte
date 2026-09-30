@@ -38,6 +38,14 @@
 	let recorded = $state<string | null>(null);
 	let saving = $state(false);
 	let failed = $state(false);
+	let form = $state<HTMLFormElement | null>(null);
+
+	// The note opens under the last answer, which is where the fold is: it
+	// brings itself into view, and leaves the keyboard where it was, so a
+	// thumb's tap on a phone does not raise one.
+	$effect(() => {
+		form?.scrollIntoView({ block: 'nearest' });
+	});
 
 	async function send(verdict: Verdict): Promise<boolean> {
 		saving = true;
@@ -95,7 +103,7 @@
 {#if recorded !== null && !failed}
 	<p class="ds-lib-mark-line" role="status">{words.markNoted}</p>
 {:else if helpful !== null}
-	<form class="ds-lib-mark-line ds-lib-mark-form" onsubmit={submitNote}>
+	<form bind:this={form} class="ds-lib-mark-line ds-lib-mark-form" onsubmit={submitNote}>
 		<input
 			bind:value={note}
 			maxlength={500}
@@ -131,6 +139,10 @@
 
 	.ds-lib-mark:hover:not(:disabled) {
 		background: var(--ds-color-surface-1);
+	}
+
+	/* A verdict keeps its colour under the pointer that just gave it. */
+	.ds-lib-mark:hover:not(:disabled, [aria-pressed='true']) {
 		color: var(--ds-color-foreground);
 	}
 

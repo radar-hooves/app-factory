@@ -2,8 +2,8 @@
  * The screenshot grid: every state, three widths, both themes.
  *
  * Scripted rather than driven by hand because it is pre-known choreography —
- * seventeen states x three widths x two themes is 102 shots, and a person taking
- * them by hand takes 66 slightly different ones
+ * twenty-three states x three widths x two themes is 138 shots, and a person
+ * taking them by hand takes 138 slightly different ones
  * (`rules-library/core/verification.md` §"Scripts Drive, Models Judge"). The
  * model's time goes on looking at the batch afterwards.
  *
@@ -53,7 +53,13 @@ const STATES = [
 	'job',
 	'job-showing',
 	'job-live',
-	'job-schema'
+	'job-schema',
+	'waiting',
+	'answering',
+	'mark',
+	'fair-use',
+	'limit',
+	'past'
 ];
 
 /** The measure the package guarantees in its OWN stylesheet: `--ds-lib-measure`,
@@ -81,7 +87,9 @@ await new Promise((resolve) => server.listen(PORT, resolve));
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-const browser = await chromium.launch();
+// A host whose Playwright build cannot run its own download (NixOS) names a
+// Chromium it can: `CHROMIUM=/nix/store/…-playwright-browsers/chromium-…/chrome-linux/chrome`.
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 let taken = 0;
 const failures = [];
 
@@ -144,6 +152,12 @@ for (const theme of THEMES) {
 				await page.getByRole('button', { name: /documents read/ }).click();
 				await page.getByRole('button', { name: 'Thought' }).click();
 				await page.getByText(said, { exact: false }).waitFor();
+			}
+
+			// The mark is taken with a verdict given, so the note's own line shows.
+			if (state === 'mark') {
+				await page.getByRole('button', { name: 'Helpful', exact: true }).click();
+				await page.getByRole('textbox', { name: 'Anything to add? (optional)' }).waitFor();
 			}
 
 			// The live job is taken open: its rows are the host's words for tools
@@ -349,6 +363,101 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
+// The states a room adds, as words on screen: the question waiting its turn,
+// an answer begun elsewhere and clocked from then, the allowance both ways,
+// and the list newest first with the open one marked.
+{
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	const visit = (state) =>
+		page.goto(`http://localhost:${PORT}/librarian?state=${state}`, { waitUntil: 'domcontentloaded' });
+
+	await visit('waiting');
+	await page.getByText('Milton is answering another question first…').waitFor();
+
+	await visit('answering');
+	await page.getByText('Milton is still answering…').waitFor();
+	const clock = Number((await page.locator('article').last().getByText(/^\d+s$/).innerText()).slice(0, -1));
+	if (clock < 95) failures.push(`answering: the clock reads ${clock}s, not from when the answer began`);
+
+	await visit('fair-use');
+	await page.getByText('12 of 40 questions left today. Resets at midnight.').waitFor();
+	await visit('limit');
+	const notice = page.getByRole('status').filter({ hasText: "today's fair-use limit of 40 questions" });
+	await notice.waitFor();
+	if (!(await notice.getByRole('link', { name: 'Support' }).count())) {
+		failures.push('limit: the notice offers nowhere to ask about it');
+	}
+
+	await visit('past');
+	const past = page.getByRole('region', { name: 'Past questions' });
+	const titles = await past.getByRole('listitem').allInnerTexts();
+	if (!titles[0]?.includes('Recreation leave each year') || titles.length !== 5) {
+		failures.push(`past: not five conversations newest first (${titles.map((t) => t.trim()).join(' | ')})`);
+	}
+	const open = past.getByRole('button', { name: 'Recreation leave each year', exact: true });
+	if ((await open.getAttribute('aria-current')) !== 'true') failures.push('past: the open conversation is not marked');
+	await context.close();
+}
+
+// The package's own controller, driven over a fake of the rooms routes in a
+// real engine: a question that waits, streams, counts against the allowance
+// and takes a mark; one asked again and stopped; one reopened while its answer
+// is still being written, which then settles; and a rename and a delete.
+{
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	await page.goto(`http://localhost:${PORT}/librarian?state=room`, { waitUntil: 'domcontentloaded' });
+	const list = page.getByRole('region', { name: 'Past questions' });
+	await list.getByText('Recreation leave each year').waitFor();
+	await page.getByText('40 of 40 questions left today.', { exact: false }).waitFor();
+
+	await page.locator('textarea').fill('What is the total?');
+	await page.locator('textarea').press('Enter');
+	await page.getByText('Milton is answering another question first…').waitFor();
+	await page.getByText('The total is $4.95.').first().waitFor({ timeout: 15_000 });
+	await page.getByText('39 of 40 questions left today.', { exact: false }).waitFor();
+	if (await page.getByText('Milton is answering another question first…').count()) {
+		failures.push('room: still says it waits after the answer arrived');
+	}
+
+	await page.getByRole('button', { name: 'Helpful', exact: true }).click();
+	const note = page.getByRole('textbox', { name: 'Anything to add? (optional)' });
+	await note.fill('Exactly what I needed.');
+	await note.press('Enter');
+	await page.getByText('Thanks, noted.').waitFor();
+
+	await page.getByRole('button', { name: 'Ask again' }).click();
+	await page.getByRole('button', { name: 'Stop' }).click();
+	await page.getByRole('button', { name: 'Send' }).waitFor();
+	if ((await page.locator('article').count()) !== 2) failures.push('room: asking again made no second turn');
+	if (await page.getByRole('button', { name: 'Stop' }).count()) failures.push('room: Stop outlived the answer it stopped');
+
+	await list.getByRole('button', { name: 'Field allowance while deployed', exact: true }).click();
+	await page.getByText('Milton is still answering…').waitFor();
+	if (!(await page.getByText('And while I am in transit?').count())) {
+		failures.push('room: a reopened answer in flight lost its question');
+	}
+	await page.getByText('Leave is administered under the one manual').waitFor({ timeout: 10_000 });
+	if (await page.getByText('Milton is still answering…').count()) {
+		failures.push('room: still answering after the answer settled');
+	}
+
+	await list.getByRole('button', { name: 'More: Field allowance while deployed' }).click();
+	await list.getByRole('button', { name: 'Rename' }).click();
+	const title = list.getByRole('textbox', { name: 'Rename' });
+	await title.fill('Field allowance');
+	await title.press('Enter');
+	await list.getByRole('button', { name: /^Field allowance$/ }).waitFor();
+
+	await list.getByRole('button', { name: 'More: Field allowance' }).click();
+	await list.getByRole('button', { name: 'Delete' }).click();
+	await list.getByRole('group', { name: 'Delete' }).getByRole('button', { name: 'Delete' }).click();
+	await list.getByRole('button', { name: /^Field allowance$/ }).waitFor({ state: 'detached' });
+	if (await page.locator('article').count()) failures.push('room: deleting the open conversation left it on screen');
+	await context.close();
+}
+
 // The scope statement folds once there is a conversation over it, and the line
 // it folds to is still the way back in. A screenshot shows the folded line; only
 // this shows that it reopens — and it is checked at 390, where a statement that
@@ -402,5 +511,5 @@ if (failures.length) {
 	process.exit(1);
 }
 console.log(
-	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close; a job opens its artefact and pages in the host'
+	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close; a job opens its artefact and pages in the host; a room waits, streams, counts, takes a mark, stops, reopens mid-answer, renames and deletes'
 );

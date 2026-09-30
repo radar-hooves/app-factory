@@ -20,6 +20,7 @@
  * what its client returns straight through.
  */
 
+import { untrack } from 'svelte';
 import type { AgentEvent } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
@@ -211,8 +212,15 @@ export class Chat {
 	}
 
 	/** Reopen a conversation, or start watching a job. False when it could not
-	 *  be read, which leaves the page on a new conversation. */
-	async open(id: string): Promise<boolean> {
+	 *  be read, which leaves the page on a new conversation.
+	 *
+	 *  Safe to call from an effect that follows the page's address: nothing
+	 *  it reads of its own becomes that effect's to follow. */
+	open(id: string): Promise<boolean> {
+		return untrack(() => this.#open(id));
+	}
+
+	async #open(id: string): Promise<boolean> {
 		this.#leave();
 		this.conversationId = id;
 		if (this.#job) {
@@ -234,16 +242,19 @@ export class Chat {
 	}
 
 	/** Back to a new conversation. A turn still being answered goes on without
-	 *  the page, and is there when its conversation is reopened. */
+	 *  the page, and is there when its conversation is reopened. Safe to call
+	 *  from an effect, as `open` is. */
 	new(): void {
-		this.#leave();
-		this.conversationId = null;
-		this.#turns = [];
-		this.#held.clear();
-		this.#session = null;
-		this.files = [];
-		this.#version += 1;
-		void this.refreshQuota();
+		untrack(() => {
+			this.#leave();
+			this.conversationId = null;
+			this.#turns = [];
+			this.#held.clear();
+			this.#session = null;
+			this.files = [];
+			this.#version += 1;
+			void this.refreshQuota();
+		});
 	}
 
 	/**
