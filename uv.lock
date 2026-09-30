@@ -13,11 +13,11 @@ members = [
 
 [manifest.dependency-groups]
 dev = [
-    { name = "api-common", specifier = ">=2026.9.4", index = "https://pypi.godswood.au/poodle64/prod/+simple/" },
+    { name = "api-common", specifier = ">=2026.9.4", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" },
     { name = "mypy", specifier = ">=2.1.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "redactyl-core", specifier = ">=2026.7.0", index = "https://pypi.godswood.au/poodle64/prod/+simple/" },
+    { name = "redactyl-core", specifier = ">=2026.7.0", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" },
     { name = "respx", specifier = ">=0.22.0" },
     { name = "ruff", specifier = ">=0.15.16" },
 ]
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "library", specifier = ">=2026.9.62", index = "https://pypi.godswood.au/poodle64/prod/+simple/" }]
+requires-dist = [{ name = "library", specifier = ">=2026.9.62", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" }]
 
 [[package]]
 name = "annotated-types"
@@ -58,14 +58,14 @@ wheels = [
 [[package]]
 name = "api-common"
 version = "2026.9.372"
-source = { registry = "https://pypi.godswood.au/poodle64/prod/+simple/" }
+source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "redactyl-core" },
 ]
 wheels = [
-    { url = "https://pypi.godswood.au/poodle64/prod/+f/7b1/ad04aa36a5813/api_common-2026.9.372-py3-none-any.whl", hash = "sha256:7b1ad04aa36a58130400dfe03d04bdad2cb39c7170bbdeaf1e1bdccfd6b3d348" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/7b1/ad04aa36a5813/api_common-2026.9.372-py3-none-any.whl", hash = "sha256:7b1ad04aa36a58130400dfe03d04bdad2cb39c7170bbdeaf1e1bdccfd6b3d348" },
 ]
 
 [[package]]
@@ -208,7 +208,7 @@ wheels = [
 [[package]]
 name = "library"
 version = "2026.9.373"
-source = { registry = "https://pypi.godswood.au/poodle64/prod/+simple/" }
+source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "api-common" },
     { name = "certifi" },
@@ -218,7 +218,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://pypi.godswood.au/poodle64/prod/+f/7bb/e5e640a9eebc3/library-2026.9.373-py3-none-any.whl", hash = "sha256:7bbe5e640a9eebc3de027b673bef8afb6d25a1f82104c13c1d85b1202d8596b2" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/7bb/e5e640a9eebc3/library-2026.9.373-py3-none-any.whl", hash = "sha256:7bbe5e640a9eebc3de027b673bef8afb6d25a1f82104c13c1d85b1202d8596b2" },
 ]
 
 [[package]]
@@ -503,13 +503,13 @@ wheels = [
 [[package]]
 name = "redactyl-core"
 version = "2026.9.51"
-source = { registry = "https://pypi.godswood.au/poodle64/prod/+simple/" }
+source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
 wheels = [
-    { url = "https://pypi.godswood.au/poodle64/prod/+f/d76/8443730d8a1c5/redactyl_core-2026.9.51-py3-none-any.whl", hash = "sha256:d768443730d8a1c54799cbd4bb03b3ddc2b97c24ab51897867e7222ea1ca8459" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/d76/8443730d8a1c5/redactyl_core-2026.9.51-py3-none-any.whl", hash = "sha256:d768443730d8a1c54799cbd4bb03b3ddc2b97c24ab51897867e7222ea1ca8459" },
 ]
 
 [[package]]

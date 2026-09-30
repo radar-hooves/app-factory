@@ -78,6 +78,11 @@
 		showing?: string;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
+		/** Prices a turn's `outcome.costUsd` in the host's own currency and
+		 *  words ("about A$0.34"), for the footer's cost line beside a turn's
+		 *  `depth`. The package never converts currency itself; omitted, the
+		 *  line shows depth and duration only. */
+		formatCost?: (usd: number) => string;
 		collectionNames?: Set<string>;
 		/** The composer, rendered INSIDE the transcript column so the source
 		 *  pane narrows it too — a composer the host places outside slides
@@ -117,7 +122,8 @@
 		collectionNames = new Set(),
 		composer,
 		turn: presentTurn,
-		lead
+		lead,
+		formatCost
 	}: Props = $props();
 
 	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
@@ -231,6 +237,16 @@
 		if (onopenartefact) return showing === turn.id;
 		return column?.kind === 'artefact' && column.turn.id === turn.id;
 	}
+
+	// Lifts the shell's report button (`@poodle64/ui` ReportWidget) clear of
+	// Send, which shares its corner. Set on the document because the button
+	// renders outside this subtree; a constant because Send is always the
+	// composer's last row.
+	$effect(() => {
+		if (!composer || typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--ds-report-clearance', '4.5rem');
+		return () => document.documentElement.style.removeProperty('--ds-report-clearance');
+	});
 </script>
 
 <div class="ds-lib-surface">
@@ -301,6 +317,8 @@
 							artefactOpen: isShowing(turn),
 							onopenartefact: opener(turn),
 							describeTool,
+							depth: turn.depth,
+							formatCost,
 							oncite: oncite || loadDocument ? cite : undefined,
 							onregenerate: last && !running ? onregenerate : undefined,
 							onsuggest: last && !running ? onsuggest : undefined,

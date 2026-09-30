@@ -6,11 +6,14 @@
 import { describe as vdescribe, it, expect } from 'vitest';
 import {
 	describe,
+	outcomeLine,
 	summariseActivity,
 	Transcript,
 	type ActivityGroup,
+	type Outcome,
 	type ToolBlock
 } from '$lib/transcript.svelte';
+import { DEFAULT_COPY } from '$lib/copy';
 
 function tool(name: string, rawInput: Record<string, unknown>): ToolBlock {
 	return { kind: 'tool', index: 0, name, rawInput: JSON.stringify(rawInput) };
@@ -75,6 +78,32 @@ vdescribe('summariseActivity()', () => {
 			tallies: []
 		};
 		expect(summariseActivity(group)).toBe('Looked into it');
+	});
+});
+
+vdescribe('outcomeLine()', () => {
+	const outcome: Outcome = { durationMs: 56_400, costUsd: 0.34 };
+
+	it('renders exactly as before when the host never asked a depth', () => {
+		expect(outcomeLine(outcome, undefined, DEFAULT_COPY)).toBe('56.4s');
+	});
+
+	it('names the depth and rounds the seconds once a host offers one', () => {
+		expect(outcomeLine(outcome, 'quick', DEFAULT_COPY)).toBe('Quick · 56 s');
+		expect(outcomeLine(outcome, 'thorough', DEFAULT_COPY)).toBe('Thorough · 56 s');
+	});
+
+	it("prices it in the host's own words once the host can price it", () => {
+		const formatCost = (usd: number) => `about A$${(usd * 1.5).toFixed(2)}`;
+		expect(outcomeLine(outcome, 'quick', DEFAULT_COPY, formatCost)).toBe(
+			'Quick · 56 s · about A$0.51'
+		);
+	});
+
+	it('never shows a cost for a local model that spent nothing', () => {
+		const free: Outcome = { durationMs: 12_000, costUsd: 0 };
+		const formatCost = (usd: number) => `about A$${usd}`;
+		expect(outcomeLine(free, 'thorough', DEFAULT_COPY, formatCost)).toBe('Thorough · 12 s');
 	});
 });
 

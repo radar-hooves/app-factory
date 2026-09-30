@@ -7,8 +7,11 @@
  * verbatim under `other`, so nothing is silently dropped.
  */
 
-import type { AgentEvent } from './client';
+import type { AgentEvent, Depth } from './client';
 import type { Citation } from './citations';
+import type { LibrarianCopy } from './copy';
+
+export type { Depth };
 
 export interface TextBlock {
 	kind: 'text';
@@ -496,6 +499,9 @@ export interface Turn {
 	/** What the host asked for when this was not a plain question
 	 *  (`'briefing'`), in its own word, as `client.ask()` sent it. */
 	kind?: string;
+	/** How hard the persona worked on this one, as `client.ask()` sent it.
+	 *  Absent, a host that never offers the choice. */
+	depth?: Depth;
 }
 
 /** A turn's artefact, in the host's own words. */
@@ -613,6 +619,35 @@ function count(group: ActivityGroup, [one, many]: [string, string]): void {
 export function summariseActivity(group: ActivityGroup): string {
 	const parts = group.tallies.map((t) => `${t.count} ${t.count === 1 ? t.one : t.many}`);
 	return parts.length ? parts.join(' · ') : 'Looked into it';
+}
+
+/**
+ * What a settled answer took, as one quiet line: `Quick · 56 s · about
+ * A$0.34`. Depth first (absent on a turn the host never asked one for, or
+ * one read back before the feature shipped), then the duration, then what it
+ * cost — only when the host can price it (`formatCost`) and the run actually
+ * spent something, since a zero-cost run (a local model) has nothing worth
+ * saying about money.
+ *
+ * The host prices `outcome.costUsd`, never this package: the currency and
+ * the rate are the app's own setting, not something a shared component
+ * should be converting.
+ *
+ * A turn asked with no depth at all renders exactly what this line always
+ * has (`56.3s`, one decimal, no gap) — a host that never wires depth sees no
+ * change here either.
+ */
+export function outcomeLine(
+	outcome: Outcome,
+	depth: Depth | undefined,
+	words: Pick<LibrarianCopy, 'depthQuick' | 'depthThorough'>,
+	formatCost?: (usd: number) => string
+): string {
+	const seconds = (outcome.durationMs ?? 0) / 1000;
+	if (!depth) return `${seconds.toFixed(1)}s`;
+	const parts = [depth === 'quick' ? words.depthQuick : words.depthThorough, `${Math.round(seconds)} s`];
+	if (formatCost && outcome.costUsd) parts.push(formatCost(outcome.costUsd));
+	return parts.join(' · ');
 }
 
 /**

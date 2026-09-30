@@ -46,6 +46,18 @@ export interface LibrarianCopy {
 	/** The composer's placeholder, idle and while an answer streams. */
 	askPlaceholder: string;
 	answeringPlaceholder: string;
+	/** The depth switch: its group's accessible name, each side's label, and
+	 *  the one-line hint beside it saying what the picked side is for. Never
+	 *  which model sits behind it — that is never the colleague's concern. */
+	depthGroupLabel: string;
+	depthQuick: string;
+	depthThorough: string;
+	depthQuickHint: string;
+	depthThoroughHint: string;
+	/** Past a few turns, the quiet line above the composer that offers to
+	 *  start over — a follow-up re-reads the whole conversation, so each one
+	 *  costs more than the last. */
+	longConversation: string;
 	/** The pre-first-token words, cycled one every 2.6s. */
 	working: string[];
 	/** The scroll region's accessible name. */
@@ -141,6 +153,12 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		welcome: `Ask ${who} a question.`,
 		askPlaceholder: `Ask ${who}…`,
 		answeringPlaceholder: `${who} is answering…`,
+		depthGroupLabel: `How hard ${who} works`,
+		depthQuick: 'Quick',
+		depthThorough: 'Thorough',
+		depthQuickHint: 'Fast, for looking something up',
+		depthThoroughHint: 'Slower, reads more, for questions of interpretation',
+		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
 		working: [`${who} is looking`, `${who} is reading`],
 		conversationLabel: `Conversation with ${who}`,
 		copyAnswer: 'Copy',

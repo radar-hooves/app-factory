@@ -27,11 +27,13 @@ dev = [
 
 # The household's private index (devpi), explicit: ONLY the packages pinned to
 # it below resolve there, so a private name is never satisfied by a public
-# package of the same name (core/supply-chain.md). Auth is ambient: the atlas
-# runner's netrc, a dev machine's own (NETRC).
+# package of the same name (core/supply-chain.md). By its LAN address on atlas,
+# read anonymously, as publish-kit-python.yaml uploads to it: uv.lock records
+# whatever URL resolved, so a URL supplied at run time (UV_INDEX) would still
+# land in this public tree, and a household host name must not.
 [[tool.uv.index]]
 name = "godswood"
-url = "https://pypi.godswood.au/poodle64/prod/+simple/"
+url = "http://172.21.0.2:3141/poodle64/prod/+simple/"
 explicit = true
 
 [tool.uv.sources]

@@ -14,8 +14,13 @@ name: Security
 # this repo's dependency-audit gate (rules-library/core/supply-chain.md).
 #
 # Weekly, and on a dependency change: CVEs arrive with time, not with commits,
-# and pre-commit already runs gitleaks on every commit.
+# and pre-commit already runs gitleaks on every commit. The household-host scan
+# alone also runs on every push and pull request: a household host a commit
+# adds lands in this public tree the moment it is pushed.
 on:
+  push:
+    branches: [main]
+  pull_request:
   schedule:
     - cron: '0 18 * * 0' # Monday 04:00 AEST
   workflow_dispatch:
@@ -28,8 +33,38 @@ permissions:
   contents: read
 
 jobs:
+  household-hosts:
+    name: No household host in the tree
+    runs-on: ubuntu-latest # by-exception (30/09/2026): public repo takes fork PRs; fork code must not run on the household runner
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Refuse any dotted name that is, or ends in, a household one
+        # Hashes, so the guard does not itself publish what it guards: each is
+        # the sha256 of a household domain or of a label that marks one. Add
+        # one with `printf %s NAME | sha256sum`. A hit prints file:line only.
+        run: |
+          set -euo pipefail
+          git grep -n -o -I -E '[[:alnum:]-]+(\.[[:alnum:]-]+)+' | python3 -c '
+          import hashlib, sys
+          bad = {
+              "38109a5b402c0d782a7831aefb8225ba6c13d188d18a64939668794129fe5413",
+              "73bdd4226f463a814b9d85c0a7a1789448f926e88d3068c04b18a64d0b86d7d1",
+              "7e76162a0efade5e78e5f06a2011a2f499abb1c43ae54a01ec3e804cb3577159",
+              "cbc2b4deef897356c23a849b902b32b044d1c10fc33c9fc43d4422149a2c9ee0",
+          }
+          def names(token):
+              labels = token.lower().split(".")
+              return labels + [".".join(labels[i:]) for i in range(len(labels))]
+          hits = [loc for loc, _, token in (line.rstrip("\n").rpartition(":") for line in sys.stdin)
+                  if any(hashlib.sha256(n.encode()).hexdigest() in bad for n in names(token))]
+          sys.exit("\n".join(hits) or None)'
+
   gitleaks:
     name: Secret scan (gitleaks)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
     timeout-minutes: 15
     steps:
@@ -55,6 +90,7 @@ jobs:
 
   trivy-fs:
     name: Trivy filesystem scan
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest # by-exception (28/09/2026): public repo takes fork PRs; fork code must not run on the household runner
     timeout-minutes: 15
     steps:

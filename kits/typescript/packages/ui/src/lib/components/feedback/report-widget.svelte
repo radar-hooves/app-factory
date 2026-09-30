@@ -24,6 +24,8 @@
 	// components/ui — it is app machinery the layout mounts once (alongside
 	// initBrowserTelemetry), not page chrome a route composes from, so it does
 	// not sit in the situation→component registry either.
+	// A page control that shares its corner sets `--ds-report-clearance` on the
+	// document to lift the trigger clear of it (the librarian composer does).
 
 	let {
 		/** Where the report POSTs. The app's own route, defaulting to the one every household app serves. */
@@ -105,7 +107,7 @@
 <button
 	type="button"
 	onclick={() => (open = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 grid size-11 flex-none place-items-center rounded-full border transition-colors"
+	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-50 grid size-11 flex-none place-items-center rounded-full border transition-colors"
 	aria-label="Report a problem"
 >
 	<MessageSquarePlus class="size-4.5" />

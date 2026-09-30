@@ -252,6 +252,46 @@ artefact })` says that kind opens, on a live turn and a reopened one alike:
 `{ title: 'Briefing', isAnswer: true }` cards it and opens its prose in the
 column. `again()` asks it as the same kind.
 
+### Depth: Quick or Thorough, and what it cost
+
+`Composer`'s `depth` is optional and bindable, and entirely opt-in: omit it
+and the composer renders exactly as it always has. Bind it, the host's own
+`$state<Depth>('quick')`, and the switch always renders, both sides always
+enabled. The operator's ruling (30/09/2026) is that once a room offers the
+choice, it is never disabled, hidden, greyed out, or explained by naming a
+model. `depth` is `'quick' | 'thorough'`, exported from
+`@poodle64/librarian/composer` and `@poodle64/librarian/client`.
+
+```svelte
+<Composer bind:value={chat.draft} bind:depth onsubmit={() => chat.ask(undefined, undefined, depth)} ... />
+```
+
+`chat.ask(question?, kind?, depth?)` carries it to `client.ask()`'s `depth`,
+`StoredTurn.depth` reads it back, and `again()` keeps it: the same shape as
+`kind`, alongside it rather than replacing it. A host whose route does not
+read `depth` yet is unaffected, since the field rides along and is ignored.
+
+Under a settled answer, `AgentTranscript`'s footer folds the turn's `depth`
+and `outcome.costUsd` into the ONE line that already showed the duration:
+`Quick · 56 s · about A$0.34`. Both are opt-in the same way: pass `depth` to
+`Conversation`/`AgentTranscript` (it already has it, from `Turn.depth`) and a
+`formatCost(usd) => string` to price it in the host's own currency and words
+("about A$0.34"; cadmus converts USD to AUD with its own setting). Without
+`depth` the line renders exactly as before (`56.3s`). Without `formatCost`,
+or where `costUsd` is `0` (a local model), it shows depth and duration only,
+never a raw USD figure and never which model answered.
+
+Past `turnLimit` turns (`Composer`'s prop, 8 by default), a quiet banner
+appears above the box, "This conversation is getting long. A new question
+keeps Milton quick." with a "New question" button, because a follow-up
+re-reads the whole conversation, so each one costs more than the last.
+`turnCount` and `onnewquestion` are both required for it to render; either
+missing and the composer stays as it is today.
+
+None of this prices anything before asking, and none of it names a model.
+That is the operator's ruling on what a colleague sees, and the package
+never puts a control in front of it.
+
 The transport is the app's own client over its routes, and the shapes are
 the routes' own bodies (`ConversationSummary`, `ConversationRead`,
 `StoredTurn`, `Quota`), so the stamped slice returns them as they are and

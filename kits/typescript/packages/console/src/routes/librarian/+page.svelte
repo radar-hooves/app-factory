@@ -15,7 +15,7 @@
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
 	import Conversation from '@poodle64/librarian/conversation';
-	import Composer, { type Scope } from '@poodle64/librarian/composer';
+	import Composer, { type Depth, type Scope } from '@poodle64/librarian/composer';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 	import { Chat, type ConversationSummary, type Quota } from '@poodle64/librarian/chat';
@@ -58,7 +58,8 @@
 		'fair-use',
 		'limit',
 		'past',
-		'room'
+		'room',
+		'depth'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -86,6 +87,10 @@
 	let quota = $state<Quota | null>(null);
 	let past = $state<ConversationSummary[] | null>(null);
 	let current = $state<string | undefined>(undefined);
+	// The depth switch: bound only on the `depth` scene, which is also the
+	// one with a turn behind it long enough to price and a banner to show.
+	let depth = $state<Depth>('quick');
+	const formatCost = (usd: number) => `about A$${(usd * 1.5).toFixed(2)}`;
 	// `room` is the package's own controller over a fake of the rooms slice's
 	// routes, driven rather than seeded: every other scene is a picture.
 	let live = $state(false);
@@ -257,6 +262,7 @@
 				version = ++bump;
 			}}
 			{loadDocument}
+			formatCost={requested === 'depth' ? formatCost : undefined}
 		>
 			{#snippet composer()}
 				{#if job}
@@ -282,6 +288,9 @@
 						onscope={(next) => (scope = next)}
 						onsubmit={send}
 						onstop={() => (running = false)}
+						depth={requested === 'depth' ? depth : undefined}
+						turnCount={requested === 'depth' ? 9 : undefined}
+						onnewquestion={requested === 'depth' ? () => (turns = []) : undefined}
 					/>
 				{/if}
 			{/snippet}

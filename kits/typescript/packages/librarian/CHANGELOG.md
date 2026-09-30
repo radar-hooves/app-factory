@@ -4,6 +4,40 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.26] - 2026-09-30
+
+Quick or Thorough, and what it cost. Need: `radar-hooves/cadmus (Nightjar),
+30/09/2026`.
+
+### Added
+
+- **A turn's `depth`**: `Composer`'s optional, bindable `depth` (`'quick' |
+  'thorough'`) renders the two-way switch, always enabled once a host binds
+  it, never disabled or hidden. `Chat.ask(question,
+  kind, depth)` sends it as `client.ask()`'s `depth`, `StoredTurn.depth` reads
+  it back, and `again()` keeps it, the same shape as `kind`.
+- **The answer footer's cost line**: `AgentTranscript`/`Conversation` take a
+  turn's `depth` and a host's `formatCost(usd) => string`, and fold both into
+  the line that already showed the duration (`Quick · 56 s · about A$0.34`).
+  Absent depth, the line is unchanged; absent `formatCost`, or a zero cost, it
+  shows depth and duration only. The package prices nothing itself.
+- **`Composer`'s long-conversation banner**: past `turnLimit` turns (8 by
+  default), a quiet line above the box offers "New question", since a
+  follow-up re-reads the whole conversation and each one costs more than
+  the last.
+  Needs both `turnCount` and `onnewquestion`; without either, nothing renders.
+
+## [2026.9.25] - 2026-09-30
+
+### Fixed
+
+- **Send is never under the shell's report button.** `Conversation` sets
+  `--ds-report-clearance` while a composer is mounted; needs `@poodle64/ui`
+  2026.9.23 for the button to honour it (app-factory#15). Need:
+  `radar-hooves/cadmus (Nightjar), 30/09/2026`.
+
+## [2026.9.24] - 2026-09-30
+
 What a stamped room page needs to present an answer and a room's home in an
 app's own way. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`,
 app-factory#12.

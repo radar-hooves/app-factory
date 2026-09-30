@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.23] - 2026-09-30
+
+### Fixed
+
+- **The report button no longer covers a page control in its corner.** It reads
+  `--ds-report-clearance` (default 0) and lifts by that much; the librarian
+  composer sets it so Send stays clickable (app-factory#15). Need:
+  `radar-hooves/cadmus (Nightjar), 30/09/2026`.
+
 ## [2026.9.22] - 2026-09-30
 
 ### Fixed
