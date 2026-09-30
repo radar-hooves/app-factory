@@ -172,8 +172,8 @@ jobs:
       - name: Build every package
         run: pnpm -r run build
 
-      - name: Install Chromium
-        run: pnpm --filter @poodle64/ui exec playwright install --with-deps chromium
+      - name: Install Chromium and WebKit
+        run: pnpm --filter @poodle64/ui exec playwright install --with-deps chromium webkit
 
       - name: Drive the built package in a real browser
         run: pnpm --filter @poodle64/ui run test:browser
