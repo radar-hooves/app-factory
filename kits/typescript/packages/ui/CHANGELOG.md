@@ -2,6 +2,31 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.9.22] - 2026-09-30
+
+### Fixed
+
+- **`DataTableTanstack`'s sticky header never actually stuck, in any engine.**
+  Reported by godswood as a row unclickable on Mobile Safari (E2E,
+  31/08/2026, `@poodle64/ui@2026.8.11`), attributed to a WebKit hit-testing
+  fault. Driving the unmodified component in a real engine instead of
+  guessing from the label found a different, universal mechanism: `Table`'s
+  own scroll container (`data-slot=table-container`) carries
+  `overflow-x-auto`, which per the CSS Overflow spec forces `overflow-y` to
+  compute `auto` too — making that div a scroll container in its own right
+  even though it never actually scrolls (it is always sized to its own
+  content). A `position: sticky` element's containing block is its nearest
+  ancestor scroll container, so the header pinned to that inert box and
+  never visibly stuck at all — confirmed in both Chromium and WebKit, not
+  WebKit alone. Fixed by folding the table's own scroll region into
+  `Table`'s `containerClass` (rather than wrapping a second scrolling div
+  around it) and moving `sticky` from `<thead>` onto each `<th>` (WebKit has
+  a long history of not reliably keeping sticky positioning on a
+  table-section box). Verified against this repo's own pinned Playwright
+  (1.62.0) on both engines: before, a header cell's bounding-box top drifted
+  1:1 with scroll; after, it holds constant, and a row beneath it stays
+  tappable by touch.
+
 ## [2026.9.21] - 2026-09-29
 
 ### Added

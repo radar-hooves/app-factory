@@ -23,7 +23,7 @@
  *
  *     pnpm run test:browser        # harness:build + this
  */
-import { chromium } from 'playwright';
+import { chromium, webkit, devices } from 'playwright';
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
@@ -77,6 +77,22 @@ const browser = await chromium.launch();
  *  trap recorded in drive.md — the new JS runs against the old CSS. */
 async function open(query, viewport = { width: 1440, height: 900 }, colorScheme = 'light') {
 	const context = await browser.newContext({ viewport, colorScheme });
+	const page = await context.newPage();
+	const errors = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await page.goto(`http://127.0.0.1:${PORT}/index.html?${query}`, { waitUntil: 'load' });
+	return { context, page, errors };
+}
+
+// A second engine, launched only for the WebKit-specific gate below: WebKit's
+// own table-layout/sticky quirks (and Mobile Safari's touch dispatch) are not
+// something Chromium can stand in for.
+const webkitBrowser = await webkit.launch();
+
+/** Same contract as `open`, but on WebKit with a real phone's viewport, DPR
+ *  and touch input — `device` defaults to `playwright.devices['iPhone 13']`. */
+async function openWebkit(query, device = devices['iPhone 13']) {
+	const context = await webkitBrowser.newContext({ ...device });
 	const page = await context.newPage();
 	const errors = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -3785,7 +3801,72 @@ for (const density of ['comfortable', 'compact']) {
 	await context.close();
 }
 
+// ── DataTableTanstack: the sticky header actually sticks on WebKit, and a row
+// beneath it stays tappable (radar-hooves/godswood, 30/09/2026) ────────────
+// godswood's Workshop list — a plain DataTableTanstack with row click — could
+// not be tapped on Mobile Safari (E2E, 31/08/2026, `@poodle64/ui@2026.8.11`).
+// The actual mechanism, found by driving the unmodified component in a real
+// engine rather than guessing from the label: table.svelte's own scroll
+// container (`data-slot=table-container`) carries `overflow-x-auto`, and per
+// the CSS Overflow spec `overflow-x` other than `visible` forces `overflow-y`
+// to compute `auto` too — making that div a scroll container in its own right
+// even though it never actually scrolls (it is always sized to its own
+// content). A `position: sticky` element's containing block is its NEAREST
+// ancestor scroll container, so the header pinned to that inert box and never
+// visibly stuck AT ALL — measured here in BOTH engines, not only WebKit, so
+// this is not the WebKit-only hit-testing fault it was reported as; it is a
+// universal defect this package shipped since the component's creation.
+// Folding DataTableTanstack's own scroll region into table.svelte's own
+// `containerClass` (rather than wrapping a second scrolling div around it),
+// and moving `sticky` from `<thead>` onto each `<th>` (WebKit has a long
+// history of not reliably keeping sticky positioning on a table-section box),
+// fixes it: confirmed directly against this repo's own pinned Playwright
+// (1.62.0) on both chromium and webkit — before, a header cell's bounding-box
+// top drifted 1:1 with scroll; after, it holds constant.
+{
+	const { context, page, errors } = await openWebkit('surface=row-tap');
+	await page.waitForSelector('[data-probe="row-tap-wrap"] tbody tr');
+
+	const geometry = await page.evaluate(() => {
+		const wrap = document.querySelector('[data-probe="row-tap-wrap"]');
+		const scroller = wrap.querySelector('[data-slot="table-container"]');
+		const th = wrap.querySelector('thead th');
+		const beforeTop = th.getBoundingClientRect().top;
+		scroller.scrollTop = 300;
+		const afterTop = th.getBoundingClientRect().top;
+		const thBottom = th.getBoundingClientRect().bottom;
+		const rows = [...wrap.querySelectorAll('tbody tr')].map((tr) => {
+			const r = tr.getBoundingClientRect();
+			return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+		});
+		// The first row NOT covered by the (now correctly pinned) sticky header —
+		// i.e. genuinely visible, tappable content immediately beneath it.
+		const firstVisible = rows.find((r) => r.top >= thBottom);
+		return { beforeTop, afterTop, firstVisible };
+	});
+
+	check(
+		'DataTableTanstack on WebKit: the sticky header stays pinned after scrolling',
+		Math.abs(geometry.afterTop - geometry.beforeTop) < 1,
+		`top went from ${geometry.beforeTop.toFixed(1)}px to ${geometry.afterTop.toFixed(1)}px`
+	);
+
+	const x = (geometry.firstVisible.left + geometry.firstVisible.right) / 2;
+	const y = (geometry.firstVisible.top + geometry.firstVisible.bottom) / 2;
+	await page.touchscreen.tap(x, y);
+	const selectedByTouch = await page.textContent('[data-probe="row-tap-selected"]');
+	check(
+		'DataTableTanstack on WebKit: a row beneath the sticky header is tappable (touch)',
+		selectedByTouch !== 'none',
+		`selected = "${selectedByTouch}"`
+	);
+
+	check('DataTableTanstack on WebKit: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
+await webkitBrowser.close();
 server.close();
 
 for (const { name, ok, detail } of checks) {

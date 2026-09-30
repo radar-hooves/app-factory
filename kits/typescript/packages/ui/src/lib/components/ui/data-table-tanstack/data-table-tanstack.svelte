@@ -150,98 +150,115 @@
 			class="flex-1 rounded-none border-0"
 		/>
 	{:else}
-		<div class="min-h-0 flex-1 overflow-auto">
-			<TableRoot class="w-full">
-				<TableHeader class="bg-card sticky top-0 z-10">
-					{#each headerGroups as headerGroup (headerGroup.id)}
-						<TableRow class="border-0 hover:bg-transparent">
-							{#if selectable}
-								<TableHead class="border-border w-10 border-b px-3 py-1.5">
-									<Checkbox
-										checked={allSelected}
-										indeterminate={someSelected}
-										onCheckedChange={toggleAll}
-										aria-label="Select all rows"
+		<!-- containerClass targets table.svelte's own scroll container (`data-slot=
+		     table-container`), which otherwise carries only `overflow-x-auto` — and
+		     `overflow-x` other than visible forces `overflow-y` to compute `auto`
+		     too, making that div a scroll container in its own right even though it
+		     never actually scrolls (it is always sized to its own content). A
+		     `position: sticky` header's containing block is its NEAREST ancestor
+		     scroll container, so with no override here the header (radar-hooves/
+		     godswood, 30/09/2026) sticks to that inert box and never visibly pins,
+		     in every engine, not only WebKit — confirmed with this repo's own
+		     Playwright (chromium and webkit) driving the unmodified component.
+		     Folding this component's own intended scroll region into that SAME box
+		     (rather than wrapping a second one around it) makes it the one thing
+		     that actually scrolls, so sticky has a real ancestor to pin against. -->
+		<TableRoot class="w-full" containerClass="min-h-0 flex-1 overflow-y-auto">
+			<!-- Sticky lives on each `<th>`, not on `<thead>`: WebKit has a long
+			     history of not reliably keeping `position: sticky` on a table-section
+			     box (`<thead>`) pinned, while sticky on the `<th>` cells — which
+			     participate in table layout as ordinary boxes — sticks correctly. -->
+			<TableHeader>
+				{#each headerGroups as headerGroup (headerGroup.id)}
+					<TableRow class="border-0 hover:bg-transparent">
+						{#if selectable}
+							<TableHead
+								class="border-border bg-card sticky top-0 z-10 w-10 border-b px-3 py-1.5"
+							>
+								<Checkbox
+									checked={allSelected}
+									indeterminate={someSelected}
+									onCheckedChange={toggleAll}
+									aria-label="Select all rows"
+								/>
+							</TableHead>
+						{/if}
+						{#each headerGroup.headers as header (header.id)}
+							{@const meta = header.column.columnDef.meta}
+							<TableHead
+								class={cn(
+									'text-muted-foreground border-border bg-card sticky top-0 z-10 text-2xs tracking-eyebrow border-b px-3 py-1.5 text-left font-medium whitespace-nowrap uppercase',
+									meta?.class,
+									meta?.headClass
+								)}
+							>
+								{#if !header.isPlaceholder}
+									<FlexRender
+										content={header.column.columnDef.header}
+										context={header.getContext()}
 									/>
-								</TableHead>
-							{/if}
-							{#each headerGroup.headers as header (header.id)}
-								{@const meta = header.column.columnDef.meta}
-								<TableHead
-									class={cn(
-										'text-muted-foreground border-border text-2xs tracking-eyebrow border-b px-3 py-1.5 text-left font-medium whitespace-nowrap uppercase',
-										meta?.class,
-										meta?.headClass
-									)}
-								>
-									{#if !header.isPlaceholder}
-										<FlexRender
-											content={header.column.columnDef.header}
-											context={header.getContext()}
-										/>
-									{/if}
-								</TableHead>
-							{/each}
-						</TableRow>
-					{/each}
-				</TableHeader>
+								{/if}
+							</TableHead>
+						{/each}
+					</TableRow>
+				{/each}
+			</TableHeader>
 
-				<TableBody>
-					{#each rows as row (row.id)}
-						{@const originalRow = row.original}
-						{@const rowId = getRowId(originalRow)}
-						{@const isSelected = rowId === selectedId}
-						{@const isChecked = selectedSet.has(rowId)}
-						{@const extraStyle = getRowStyle ? getRowStyle(originalRow) : ''}
-						<TableRow
-							data-state={isSelected ? 'selected' : undefined}
-							class="border-border/60 border-b last:border-0 {onSelect
-								? 'cursor-pointer hover:bg-[color-mix(in_oklch,var(--foreground)_4%,transparent)]'
-								: ''} {isSelected ? 'bg-[color-mix(in_oklch,var(--primary)_10%,transparent)]' : ''}"
-							style="{extraStyle}{isSelected ? ' ' + selectedShadow : ''}"
-							onclick={onSelect ? () => onSelect(rowId) : undefined}
-							onkeydown={onSelect
-								? (e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											onSelect(rowId);
-										}
+			<TableBody>
+				{#each rows as row (row.id)}
+					{@const originalRow = row.original}
+					{@const rowId = getRowId(originalRow)}
+					{@const isSelected = rowId === selectedId}
+					{@const isChecked = selectedSet.has(rowId)}
+					{@const extraStyle = getRowStyle ? getRowStyle(originalRow) : ''}
+					<TableRow
+						data-state={isSelected ? 'selected' : undefined}
+						class="border-border/60 border-b last:border-0 {onSelect
+							? 'cursor-pointer hover:bg-[color-mix(in_oklch,var(--foreground)_4%,transparent)]'
+							: ''} {isSelected ? 'bg-[color-mix(in_oklch,var(--primary)_10%,transparent)]' : ''}"
+						style="{extraStyle}{isSelected ? ' ' + selectedShadow : ''}"
+						onclick={onSelect ? () => onSelect(rowId) : undefined}
+						onkeydown={onSelect
+							? (e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										onSelect(rowId);
 									}
-								: undefined}
-							tabindex={onSelect ? 0 : undefined}
-						>
-							{#if selectable}
-								<TableCell class="w-10 px-3 py-1.5">
-									<!-- The wrapper ONLY stops the event reaching the row, so ticking a
-									     checkbox never also opens the master-detail. The checkbox's own
-									     onCheckedChange is the single source of the selection change —
-									     handling the click here as well would toggle twice per click and
-									     net out to no selection at all. -->
-									<div
-										role="presentation"
-										onclick={(e) => e.stopPropagation()}
-										onkeydown={(e) => e.stopPropagation()}
-									>
-										<Checkbox
-											checked={isChecked}
-											onCheckedChange={(v) => setRowSelected(rowId, v)}
-											aria-label="Select row"
-										/>
-									</div>
-								</TableCell>
-							{/if}
-							{#each row.getVisibleCells() as cell (cell.id)}
-								{@const meta = cell.column.columnDef.meta}
-								<TableCell
-									class={cn('px-3 py-1.5 text-sm whitespace-nowrap', meta?.class, meta?.cellClass)}
+								}
+							: undefined}
+						tabindex={onSelect ? 0 : undefined}
+					>
+						{#if selectable}
+							<TableCell class="w-10 px-3 py-1.5">
+								<!-- The wrapper ONLY stops the event reaching the row, so ticking a
+								     checkbox never also opens the master-detail. The checkbox's own
+								     onCheckedChange is the single source of the selection change —
+								     handling the click here as well would toggle twice per click and
+								     net out to no selection at all. -->
+								<div
+									role="presentation"
+									onclick={(e) => e.stopPropagation()}
+									onkeydown={(e) => e.stopPropagation()}
 								>
-									<FlexRender content={cell.column.columnDef.cell} context={cell.getContext()} />
-								</TableCell>
-							{/each}
-						</TableRow>
-					{/each}
-				</TableBody>
-			</TableRoot>
-		</div>
+									<Checkbox
+										checked={isChecked}
+										onCheckedChange={(v) => setRowSelected(rowId, v)}
+										aria-label="Select row"
+									/>
+								</div>
+							</TableCell>
+						{/if}
+						{#each row.getVisibleCells() as cell (cell.id)}
+							{@const meta = cell.column.columnDef.meta}
+							<TableCell
+								class={cn('px-3 py-1.5 text-sm whitespace-nowrap', meta?.class, meta?.cellClass)}
+							>
+								<FlexRender content={cell.column.columnDef.cell} context={cell.getContext()} />
+							</TableCell>
+						{/each}
+					</TableRow>
+				{/each}
+			</TableBody>
+		</TableRoot>
 	{/if}
 </div>

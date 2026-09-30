@@ -683,6 +683,26 @@
 		getCoreRowModel: getCoreRowModel()
 	});
 
+	// design-system: godswood's Workshop-list clickable-row reproduction
+	// (radar-hooves/godswood, 30/09/2026). Deliberately bare — no AppShell, no
+	// overlay — so the sticky header inside DataTableTanstack's own
+	// overflow-auto body is the only thing between a row and a tap.
+	interface TapRow {
+		id: string;
+		label: string;
+	}
+	const TAP_ROWS: TapRow[] = Array.from({ length: 30 }, (_, i) => ({
+		id: `tap-${i}`,
+		label: `Row ${i + 1}`
+	}));
+	const tapColumns: ColumnDef<TapRow>[] = [{ accessorKey: 'label', header: 'Row' }];
+	const tapTable = createSvelteTable<TapRow>({
+		data: TAP_ROWS,
+		columns: tapColumns,
+		getCoreRowModel: getCoreRowModel()
+	});
+	let tapSelectedId = $state<string | null>(null);
+
 	const AUDIT_CARDS = [
 		{ title: 'Marketplace', body: 'The strategy paper and the working papers underneath.' },
 		{ title: 'Library', body: 'The primary-source evidence base behind the strategy.' },
@@ -1536,6 +1556,16 @@
 		nav={auditNav}
 		onNavigate={(href) => (location.hash = href.slice(1))}
 	/>
+{:else if surface === 'row-tap'}
+	<div style="width: 375px; height: 320px;" data-probe="row-tap-wrap">
+		<DataTableTanstack
+			table={tapTable}
+			getRowId={(r) => r.id}
+			selectedId={tapSelectedId}
+			onSelect={(id) => (tapSelectedId = id)}
+		/>
+	</div>
+	<div data-probe="row-tap-selected">{tapSelectedId ?? 'none'}</div>
 {:else if surface === 'list-shell'}
 	<!--
 		design-system: the working-list companion to SettingsShell
