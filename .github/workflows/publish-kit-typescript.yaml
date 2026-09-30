@@ -106,6 +106,8 @@ jobs:
           for dir in $DIRS; do filters+=(--filter "{./$dir}..."); done
           pnpm "${filters[@]}" run test
 
+      # Glob order is publish order: design-tokens, which librarian takes off the
+      # registry, sorts first. A new package must sort after what it depends on.
       - name: Publish
         if: steps.pending.outputs.dirs != ''
         env:
