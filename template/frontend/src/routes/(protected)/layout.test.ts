@@ -31,7 +31,7 @@ const init = vi.hoisted(() => vi.fn());
 
 const session = vi.hoisted(() => ({
 	isLoading: false,
-	failure: null as 'lapsed' | 'failed' | null,
+	failure: null as 'lapsed' | 'refused' | 'failed' | null,
 	user: null as { id: number; username: string } | null,
 	workspaces: [] as { workspace: { id: number; slug: string; name: string }; role: string }[],
 	activeWorkspace: null as { id: number; slug: string; name: string } | null
@@ -152,6 +152,33 @@ describe('the signed-in app layout', () => {
 
 		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
 		expect(init).toHaveBeenCalledOnce();
+	});
+
+	it('leaves a signed-in page restored from the back/forward cache as it was', () => {
+		signIn();
+		render(Layout, { props: { children } });
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+		expect(init).not.toHaveBeenCalled();
+		expect(screen.getByTestId('the-page')).toBeInTheDocument();
+	});
+
+	it('tells an account the app refuses so, with no sign-in and no retry', () => {
+		session.failure = 'refused';
+		render(Layout, { props: { children } });
+
+		expect(screen.getByRole('alert')).toHaveTextContent('This account is not active in this app.');
+		expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+		expect(redirectToAuthentik).not.toHaveBeenCalled();
+		expect(screen.queryByTestId('the-page')).toBeNull();
+	});
+
+	it('shows no error while signing out, when the store has let go of the caller', () => {
+		// logout() clears the user before the browser leaves for the outpost.
+		render(Layout, { props: { children } });
+
+		expect(screen.queryByRole('alert')).toBeNull();
+		expect(screen.getByRole('status')).toBeInTheDocument();
 	});
 
 	it('loads the caller, and renders nothing of the page until it has', () => {

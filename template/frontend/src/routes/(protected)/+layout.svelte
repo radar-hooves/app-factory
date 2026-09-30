@@ -50,25 +50,31 @@
 		}
 	});
 
-	// Back from the identity provider's page to this one, restored from the
+	// Back from the identity provider's page to a lapsed one, restored from the
 	// back/forward cache: the redirect above never finished, so ask again. A
 	// session still lapsed is sent again; one renewed meanwhile loads the page.
+	// Any other restored page is left exactly as it was, state and all.
 	function recheck(event: PageTransitionEvent) {
-		if (event.persisted) void auth.init();
+		if (event.persisted && auth.failure === 'lapsed') void auth.init();
 	}
 </script>
 
 <svelte:window onpageshow={recheck} />
 
 <AppFrame>
-	{#if auth.isLoading || auth.failure === 'lapsed'}
-		<LoadingState />
-	{:else if !auth.isAuthenticated}
+	{#if auth.failure === 'failed'}
 		<ErrorState message="Could not load your account, so this page cannot open yet.">
 			{#snippet action()}
 				<Button variant="outline" onclick={() => void auth.init()}>Try again</Button>
 			{/snippet}
 		</ErrorState>
+	{:else if auth.failure === 'refused'}
+		<ErrorState
+			message="This account is not active in this app. Whoever runs it can reactivate it."
+		/>
+	{:else if auth.isLoading || !auth.isAuthenticated}
+		<!-- Loading, a lapsed session on its way to sign in, or signing out. -->
+		<LoadingState />
 	{:else if auth.needsWorkspaceChoice}
 		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
 		<WorkspaceChooser label={workspaceLabel} />
