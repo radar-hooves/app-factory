@@ -15,6 +15,8 @@ Sharing an answer. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`.
   offers Copy link and Stop sharing, and says who can open it. Without
   `onshare` nothing about sharing renders. `StoredTurn.shared` and
   `Turn.shared` carry the address back on a reopened conversation.
+  `AnswerShare` (`./answer-share`) is the control itself, for a host's own
+  turn to place as it places `AnswerMark`.
 - **`storedTurn` is exported from `./chat`**: `Conversation` given one, with
   no handlers and no composer, is the read-only view of a shared answer.
 
