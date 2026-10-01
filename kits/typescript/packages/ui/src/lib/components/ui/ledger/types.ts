@@ -55,7 +55,10 @@ export interface LedgerColumn<R extends LedgerRow = LedgerRow> {
 	on?: boolean;
 	/** A plain cell. */
 	text?: (row: R) => string;
-	/** A cell of the module's own markup. */
+	/**
+	 * A cell of the module's own markup. On a row that opens, a click passes
+	 * through the cell to the row; a control inside takes `pointer-events-auto`.
+	 */
 	cell?: Snippet<[R]>;
 }
 

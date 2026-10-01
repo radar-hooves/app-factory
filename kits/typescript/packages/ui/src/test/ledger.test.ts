@@ -191,6 +191,19 @@ describe('Ledger: the viewer’s columns, the balance last', () => {
 		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Balance']);
 	});
 
+	it('reads a stale kept period as the default, and echoes no foreign key back', async () => {
+		const { all, probe } = mount({
+			preferences: { period: 'year', columns: undefined, density: 'one_line' }
+		});
+		expect(all('[data-slot="ledger-group"]')[0]).toHaveTextContent('October 2026');
+		const menu = await openColumns();
+		await fireEvent.click(within(menu).getAllByRole('checkbox')[4]!);
+		expect(JSON.parse(probe('emitted'))).toEqual({
+			columns: ['category', 'labels'],
+			period: 'month'
+		});
+	});
+
 	it('resets to the module’s defaults', async () => {
 		const { heads, probe } = mount({ preferences: { columns: ['balance'], period: 'day' } });
 		const menu = await openColumns();

@@ -23,7 +23,15 @@
 	import EmptyState from '../empty-state/empty-state.svelte';
 	import LedgerColumns from './ledger-columns.svelte';
 	import { cn } from '$lib/utils.js';
-	import { cents, fySpan, groupRows, ledgerDate, ledgerMoney, periodLabel } from './ledger.js';
+	import {
+		LEDGER_PERIODS,
+		cents,
+		fySpan,
+		groupRows,
+		ledgerDate,
+		ledgerMoney,
+		periodLabel
+	} from './ledger.js';
 	import type { LedgerColumn, LedgerOpenContext, LedgerPreferences, LedgerRow } from './types.js';
 
 	type Id = R['id'];
@@ -138,7 +146,14 @@
 		columns: resolved.filter((c) => !c.locked && c.on).map((c) => c.key),
 		period: 'month'
 	});
-	const prefs = $derived<LedgerPreferences>({ ...defaults, ...preferences });
+	/** What the consumer kept, read field by field: a stale or foreign key falls back. */
+	const prefs = $derived.by<LedgerPreferences>(() => {
+		const period = preferences?.period;
+		return {
+			columns: preferences?.columns ?? defaults.columns,
+			period: period && LEDGER_PERIODS.some((p) => p.value === period) ? period : defaults.period
+		};
+	});
 
 	function setPreferences(next: LedgerPreferences) {
 		preferences = next;
