@@ -42,6 +42,13 @@ describe('formatCurrency', () => {
 		expect(formatCurrency('1234.56')).toBe('$1,234.56');
 	});
 
+	it('brackets a negative when asked, and leaves a positive or zero plain', () => {
+		expect(formatCurrency(-1234.5, { negative: 'brackets' })).toBe('($1,234.50)');
+		expect(formatCurrency('-80', { negative: 'brackets', decimals: 0 })).toBe('($80)');
+		expect(formatCurrency(12, { negative: 'brackets' })).toBe('$12.00');
+		expect(formatCurrency(0, { negative: 'brackets' })).toBe('$0.00');
+	});
+
 	it('returns the fallback for null and undefined', () => {
 		expect(formatCurrency(null)).toBe('N/A');
 		expect(formatCurrency(undefined)).toBe('N/A');

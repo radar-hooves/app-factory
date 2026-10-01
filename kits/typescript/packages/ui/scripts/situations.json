@@ -118,6 +118,18 @@
       ]
     },
     {
+      "key": "ledger",
+      "title": "A ledger of what moved",
+      "description": "Dated rows of money, coins or units moving — a bank account, a property's books, a wallet, a brokerage — read the same way in every module: two lines a row, grouped by the period the viewer picks, the viewer's own columns and running balance. The module brings its rows and offers its columns; the look, the grouping and the toggles are the ledger's.",
+      "components": [
+        {
+          "name": "Ledger",
+          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, actions?, selected?, bulkActions?, open?, editor?",
+          "insteadOf": "a DataTableTanstack of transactions, or a hand-built grouped list with its own period headers and column picker"
+        }
+      ]
+    },
+    {
       "key": "sectioning-card",
       "title": "A titled section of a route",
       "description": "The generic titled card every route reaches for — an optional header with icon, subtitle and actions over a body. The default answer to 'I need a card here'.",

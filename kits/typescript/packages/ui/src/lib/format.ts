@@ -71,6 +71,11 @@ export interface CurrencyOptions {
 	 * must not confuse the two.
 	 */
 	currency?: string;
+	/**
+	 * How a negative reads. `sign` (the default) is `-$500`; `brackets` is the
+	 * accountant's `($500)`, which a ledger's amount column wants.
+	 */
+	negative?: 'sign' | 'brackets';
 }
 
 /**
@@ -96,23 +101,25 @@ function toFiniteNumber(value: string | number | null | undefined): number | nul
  * formatCurrency(1234.56)                      // '$1,234.56'
  * formatCurrency('1234.56', { decimals: 0 })   // '$1,235'
  * formatCurrency(-500, { decimals: 0 })        // '-$500'
+ * formatCurrency(-500, { negative: 'brackets' }) // '($500.00)'
  * formatCurrency(null)                         // 'N/A'
  */
 export function formatCurrency(
 	value: string | number | null | undefined,
 	options: CurrencyOptions = {}
 ): string {
-	const { decimals = 2, fallback = FALLBACK, currency = 'AUD' } = options;
+	const { decimals = 2, fallback = FALLBACK, currency = 'AUD', negative = 'sign' } = options;
 
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
-	return new Intl.NumberFormat(AU_LOCALE, {
+	const format = new Intl.NumberFormat(AU_LOCALE, {
 		style: 'currency',
 		currency,
 		minimumFractionDigits: decimals,
 		maximumFractionDigits: decimals
-	}).format(num);
+	});
+	return negative === 'brackets' && num < 0 ? `(${format.format(-num)})` : format.format(num);
 }
 
 /**
