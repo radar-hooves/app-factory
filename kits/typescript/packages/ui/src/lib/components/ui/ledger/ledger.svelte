@@ -147,6 +147,10 @@
 
 	// ── Layout ──
 	let width = $state(0);
+	let listOuter = $state(0);
+	let listInner = $state(0);
+	/** The bars above the list end where its cards do: clear of its scroll bar's gutter. */
+	const edge = $derived(`calc(0.5rem + ${Math.max(0, listOuter - listInner)}px)`);
 	const mode = $derived(
 		layout !== 'auto'
 			? layout
@@ -566,7 +570,7 @@
 			style:grid-template-columns={PHONE ? undefined : template}
 			data-slot="ledger-group"
 		>
-			{@render groupInner(label, metaText, net, netTone, t, single, isOpen)}
+			{@render groupInner(label, metaText, net, netTone, t, isOpen)}
 		</div>
 	{:else}
 		<button
@@ -577,7 +581,7 @@
 			style:grid-template-columns={PHONE ? undefined : template}
 			data-slot="ledger-group"
 		>
-			{@render groupInner(label, metaText, net, netTone, t, single, isOpen)}
+			{@render groupInner(label, metaText, net, netTone, t, isOpen)}
 		</button>
 	{/if}
 {/snippet}
@@ -588,7 +592,6 @@
 	net: string,
 	netTone: string,
 	t: { inn: number; out: number },
-	single: boolean,
 	isOpen: boolean
 )}
 	{#if PHONE}
@@ -613,7 +616,7 @@
 		</span>
 		<span class={cn(CELL, END, 'tabular-nums', netTone)} style="grid-column: {cAmount};">{net}</span
 		>
-		{#if WIDE && afterAmount > 0 && !single}
+		{#if WIDE && afterAmount > 0 && !BY_DAY}
 			<span class={CELL} style="grid-column: {cAmount + 1} / -1;">
 				In {money(t.inn)} · out {money(t.out)}
 			</span>
@@ -653,6 +656,7 @@
 			aria-label="Act on the ticked rows"
 			class="bg-card border-border-strong mx-2 mb-2.5 flex h-11 flex-none items-center gap-2 rounded-lg border pr-3 pl-1"
 			style="background: color-mix(in oklch, var(--color-primary) 9%, var(--color-card));"
+			style:margin-right={edge}
 			data-slot="ledger-bulk"
 		>
 			<span class="grid size-8 place-items-center">
@@ -680,6 +684,7 @@
 			role="toolbar"
 			aria-label="This ledger"
 			class="flex min-h-11 flex-none items-center gap-2 px-2 pb-2"
+			style:padding-right={edge}
 			data-slot="ledger-toolbar"
 		>
 			<span class="flex min-w-0 items-baseline gap-2.5 overflow-hidden whitespace-nowrap">
@@ -699,6 +704,8 @@
 	{/if}
 
 	<div
+		bind:offsetWidth={listOuter}
+		bind:clientWidth={listInner}
 		class="relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="ledger-rows"

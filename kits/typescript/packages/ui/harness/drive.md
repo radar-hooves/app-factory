@@ -1303,3 +1303,26 @@ is the resolved half.
 | A long, sentence-length value spans the full grid row     | `col-span-full` is a class; the CLAIM is the resolved width | 574.0px, exactly the grid's own 574.0px                                                  |
 | A numeric fact resolves the mono figures face             | `font-family` is unresolved (`var(--…)`-free here, but still a cascade fact) under jsdom | `"JetBrains Mono", "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace` |
 | A plain-words fact does NOT resolve the mono face         | as above                                                  | `"Avenir Next", "Hanken Grotesk", "Hanken Grotesk Variable", ui-sans-serif, system-ui, -apple-system, sans-serif` |
+
+## The ledger (`?surface=ledger`) — radar-hooves/godswood, 01/10/2026
+
+Every look the operator ruled for the ledger is a layout or paint fact, so
+`src/test/ledger.test.ts` holds the behaviour and this holds the look. Query:
+`period=<fy|cy|month|week|day|none>`, `balance=1` ticks the running balance,
+`open=<id>` opens a row in place.
+
+| Claim | Observed (Chromium, 1.62.0) |
+| --- | --- |
+| The head card is exactly as wide as every group card | 1382.0px at x=24.0, all six cards |
+| Every head column sits on its row column | edges equal to the pixel, at 1000, 1440 and 3360px |
+| A row with no note centres its title; a two-line row centres the block | 277.0 on 277.0; 169.0 on 169.0 |
+| The checkbox, review dot, date and amount centre on the row | all within 1px of the row's centre |
+| A group's label sits on the page ground just above its card | label transparent, 6px above its card, ground between cards |
+| Money in paints `--ds-color-status-success`; money out is bracketed | equal computed colours; `($312.40)` in the foreground ink |
+| Figures are the body face, tabular | the body's own family, `tabular-nums` |
+| The head holds while the rows scroll; the toolbar and bulk bar end where the cards do | head top 60.0 before and after; bar edges equal to the cards' |
+| 390px: the phone's list, nothing sideways; 3360px: the wide tracks | layout `phone`, 0px overflow; date track 112.0px |
+
+Driven red before keeping (01/10/2026): a head card with a 2px left border puts
+every head column 1px off its row column, and a title block set to
+`align-self: start` lands 9.25px above the row's centre; both fail.

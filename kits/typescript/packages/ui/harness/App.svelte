@@ -70,6 +70,13 @@
 	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
 	import { Segmented } from '../dist/components/ui/segmented/index.js';
 	import ListShell from '../dist/components/ui/list-shell/list-shell.svelte';
+	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
+	import type {
+		LedgerColumn,
+		LedgerPeriod,
+		LedgerPreferences,
+		LedgerRow
+	} from '../dist/components/ui/ledger/index.js';
 	import Plus from '@lucide/svelte/icons/plus';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -711,6 +718,46 @@
 		{ title: 'Intelligence', body: 'The entity/assertion knowledge graph, cut temporally.' },
 		{ title: 'Records', body: 'Preserved activity, kept as a record.' }
 	];
+
+	// `?surface=ledger` drives the ledger (radar-hooves/godswood, 01/10/2026).
+	// Every claim it carries is a layout or paint fact: the head card exactly as
+	// wide as the group cards with its columns on theirs, a row's text centred
+	// with or without a note, money in painted green, figures in the body face.
+	// `period`, `balance=1` and `open=<id>` reach the states the drive measures.
+	type LedgerFixtureRow = LedgerRow & { category: string; dwelling: string; labels?: string[] };
+	const ledgerRows: LedgerFixtureRow[] = [
+		{ id: 1, date: '2026-10-01', title: 'Urban Utilities', note: 'Water, July to September', amount: -312.4, balance: 5997.7, category: 'Water', dwelling: 'Both' },
+		{ id: 2, date: '2026-09-28', title: 'Ray White', amount: 2400, balance: 6310.1, category: 'Rent', dwelling: 'Front', review: true },
+		{ id: 3, date: '2026-09-15', title: 'Brisbane City Council', amount: -1210, balance: 3910.1, category: 'Rates', dwelling: 'Both', origins: { summary: 'Split from one statement line', lines: [{ date: '2026-09-15', description: 'BPAY BRISBANE CITY COUNCIL 4401', source: 'Statement 23, line 14', amount: -2420 }] } },
+		{ id: 4, date: '2026-09-15', title: 'Bunnings Warehouse', note: 'Hinges for the back gate', amount: -84.5, balance: 5120.1, category: 'Repairs', dwelling: 'Back', attachment: 'Receipt 1182', labels: ['tax'] },
+		{ id: 5, date: '2026-09-02', title: 'Ray White', note: 'Rent, August', amount: 2400, balance: 5204.6, category: 'Rent', dwelling: 'Front' },
+		{ id: 6, date: '2026-08-30', title: 'QBE Insurance', note: 'Landlord policy 2026–27', amount: -1689.21, balance: 2804.6, category: 'Insurance', dwelling: 'Both', attachment: 'Policy schedule' },
+		{ id: 7, date: '2026-08-12', title: 'Ray White', amount: 2400, balance: 4493.81, category: 'Rent', dwelling: 'Front' },
+		{ id: 8, date: '2026-08-03', title: 'Plumbing Brisbane', note: 'Hot water system', amount: -1906.19, balance: 2093.81, category: 'Repairs', dwelling: 'Back', review: 'error' },
+		...Array.from({ length: 24 }, (_, i) => ({
+			id: 100 + i,
+			date: `2026-0${7 - Math.floor(i / 8)}-${String(28 - (i % 8) * 3).padStart(2, '0')}`,
+			title: i % 3 ? 'Ray White' : 'Origin Energy',
+			note: i % 2 ? '' : 'A line long enough to have to truncate on a narrow ledger rather than wrap',
+			amount: i % 3 ? 600 : -142.35,
+			balance: 4000 - i * 10,
+			category: i % 3 ? 'Rent' : 'Power',
+			dwelling: 'Front'
+		}))
+	];
+	const ledgerColumns: LedgerColumn<LedgerFixtureRow>[] = [
+		{ key: 'category', label: 'Category', width: { narrow: '7rem', wide: 'minmax(11rem, 1fr)' }, text: (r) => r.category },
+		{ key: 'dwelling', label: 'Dwelling', width: { narrow: '5.25rem', wide: '7.5rem' }, text: (r) => r.dwelling },
+		{ key: 'labels', label: 'Labels', on: false, width: { narrow: '6rem', wide: 'minmax(8rem, 0.6fr)' }, text: (r) => (r.labels ?? []).join(', ') },
+		{ key: 'balance', label: 'Running balance', head: 'Balance' }
+	];
+	const ledgerPeriod = (params.get('period') ?? 'month') as LedgerPeriod;
+	let ledgerPrefs = $state<Partial<LedgerPreferences>>({
+		period: ledgerPeriod,
+		...(params.get('balance') === '1' ? { columns: ['category', 'dwelling', 'balance'] } : {})
+	});
+	let ledgerSelected = $state<(string | number)[]>([]);
+	let ledgerOpen = $state<string | number | null>(params.get('open') ? Number(params.get('open')) : null);
 
 	const AUDIT_STATS: StatItem[] = [
 		{ label: 'Accounts', value: 14 },
@@ -1566,6 +1613,33 @@
 		/>
 	</div>
 	<div data-probe="row-tap-selected">{tapSelectedId ?? 'none'}</div>
+{:else if surface === 'ledger'}
+	<div class="bg-background flex h-screen flex-col p-4">
+		<Ledger
+			rows={ledgerRows}
+			columns={ledgerColumns}
+			title="Transactions"
+			preferencesNote="Kept for you on every ledger"
+			bind:preferences={ledgerPrefs}
+			bind:selected={ledgerSelected}
+			bind:open={ledgerOpen}
+			onAttachment={() => {}}
+		>
+			{#snippet bulkActions()}
+				<Button size="sm">Mark reviewed</Button>
+			{/snippet}
+			{#snippet editor(row, ctx)}
+				<div class="flex items-center gap-3 p-4 text-sm" data-probe="ledger-editor">
+					<span class="flex-1">Editing {row.title}</span>
+					<Button variant="outline" size="sm" onclick={ctx.close}>Close</Button>
+				</div>
+			{/snippet}
+			{#snippet originActions()}
+				<Button variant="outline" size="sm">Split</Button>
+				<Button variant="outline" size="sm">Undo</Button>
+			{/snippet}
+		</Ledger>
+	</div>
 {:else if surface === 'list-shell'}
 	<!--
 		design-system: the working-list companion to SettingsShell

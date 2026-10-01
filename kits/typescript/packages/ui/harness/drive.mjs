@@ -3865,6 +3865,255 @@ for (const density of ['comfortable', 'compact']) {
 	await context.close();
 }
 
+// ── The ledger (radar-hooves/godswood, 01/10/2026) ──────────────────────────
+// Every look the operator ruled is a layout or paint fact, so it is measured
+// here and nowhere else: the head card exactly as wide as the group cards with
+// its columns on theirs to the pixel, each group its own rounded card on the
+// raised surface with its label on the page ground above it, a row's text
+// centred on the row whether or not it carries a note, the checkbox, dot, date
+// and amount centred too, money in painted the status-success ink, figures in
+// the body face with tabular numerals, and the head held at the top while the
+// rows scroll under it. Then the same at a phone's width (no overflow) and at
+// the operator's 3360px desk (the wide tracks).
+{
+	/** Every geometry and paint fact one ledger page answers, in one evaluate. */
+	const measureLedger = () =>
+		page.evaluate(() => {
+			const box = (el) => {
+				const r = el.getBoundingClientRect();
+				return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+			};
+			const mid = (el) => {
+				const r = el.getBoundingClientRect();
+				return (r.top + r.bottom) / 2;
+			};
+			const head = document.querySelector('[data-slot="ledger-head"]');
+			const cards = [...document.querySelectorAll('[data-slot="ledger-card"]')];
+			const groups = [...document.querySelectorAll('[data-slot="ledger-group"]')];
+			const rows = [...document.querySelectorAll('[data-slot="ledger-row"]')];
+			const row = (text) => rows.find((r) => r.textContent.includes(text));
+			const inkOf = (value) => {
+				const probe = document.createElement('span');
+				probe.style.color = value;
+				document.body.append(probe);
+				const c = getComputedStyle(probe).color;
+				probe.remove();
+				return c;
+			};
+			// A row's cells are its grid's children after the gutter (and the
+			// row's open button, which spans every column).
+			const cellsOf = (r) => [...r.children].filter((c) => c.tagName !== 'BUTTON').slice(1);
+			const headCells = head ? [...head.children].slice(1) : [];
+			const first = rows[0];
+			const noNote = head && rows.find((r) => r.textContent.includes('Ray White') && !r.querySelector('[data-slot="ledger-title"] > span:nth-child(2)'));
+			const withNote = head && row('Urban Utilities');
+			const titleOf = (r) => r.querySelector('[data-slot="ledger-title"]');
+			const income = rows.map((r) => r.querySelector('[data-slot="ledger-amount"]')).find((a) => !a.textContent.includes('('));
+			const outgo = rows.map((r) => r.querySelector('[data-slot="ledger-amount"]')).find((a) => a.textContent.includes('('));
+			const region = document.querySelector('[data-slot="ledger-rows"]');
+			return {
+				head: head ? box(head) : null,
+				cards: cards.map(box),
+				cardRadius: cards[0] ? getComputedStyle(cards[0]).borderTopLeftRadius : '',
+				cardBorder: cards[0] ? getComputedStyle(cards[0]).borderTopWidth : '',
+				cardBg: cards[0] ? getComputedStyle(cards[0]).backgroundColor : '',
+				groundBg: getComputedStyle(document.querySelector('[data-slot="ledger"]').parentElement).backgroundColor,
+				groups: groups.map((g) => ({ ...box(g), bg: getComputedStyle(g).backgroundColor, text: g.textContent.replace(/\s+/g, ' ').trim() })),
+				headTexts: headCells.map((c) => c.textContent.trim()),
+				headEdges: headCells.map(box).map((b) => [b.left, b.right]),
+				rowEdges: first ? cellsOf(first).map(box).map((b) => [b.left, b.right]) : [],
+				noNote: noNote && {
+					row: mid(noNote),
+					title: mid(titleOf(noNote).firstElementChild),
+					box: mid(noNote.querySelector('[data-slot="checkbox"]')),
+					amount: mid(noNote.querySelector('[data-slot="ledger-amount"]')),
+					dot: noNote.querySelector('[data-slot="ledger-review"]') ? mid(noNote.querySelector('[data-slot="ledger-review"]')) : null
+				},
+				withNote: withNote && {
+					row: mid(withNote),
+					block: mid(titleOf(withNote)),
+					lines: titleOf(withNote).children.length,
+					date: [...withNote.children].find((c) => /^\d+ \w{3}/.test(c.textContent.trim())) ? mid([...withNote.children].find((c) => /^\d+ \w{3}/.test(c.textContent.trim()))) : null
+				},
+				incomeInk: income ? getComputedStyle(income).color : '',
+				outgoInk: outgo ? getComputedStyle(outgo).color : '',
+				outgoText: outgo ? outgo.textContent.trim() : '',
+				successInk: inkOf('var(--ds-color-status-success)'),
+				amountFont: income ? getComputedStyle(income).fontFamily : '',
+				amountNumeric: income ? getComputedStyle(income).fontVariantNumeric : '',
+				bodyFont: getComputedStyle(document.body).fontFamily,
+				overflow: region ? region.scrollWidth - region.clientWidth : null,
+				docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+				dateTrack: head && headCells[0] ? box(headCells[0]).width : 0,
+				layout: document.querySelector('[data-slot="ledger"]').dataset.layout
+			};
+		});
+
+	let { context, page, errors } = await open('surface=ledger', { width: 1440, height: 900 }, 'dark');
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="ledger-row"]');
+	let m = await measureLedger();
+
+	check('Ledger: no panel wraps it — the toolbar sits on the page ground', m.groundBg !== m.cardBg, `ground ${m.groundBg}, card ${m.cardBg}`);
+	check(
+		'Ledger: the head card is exactly as wide as every group card',
+		m.cards.every((c) => Math.abs(c.width - m.head.width) < 0.5 && Math.abs(c.left - m.head.left) < 0.5),
+		`head ${m.head.left.toFixed(1)}+${m.head.width.toFixed(1)}; cards ${m.cards.map((c) => `${c.left.toFixed(1)}+${c.width.toFixed(1)}`).join(', ')}`
+	);
+	check(
+		'Ledger: every head column sits on its row column to the pixel',
+		m.headEdges.length > 0 &&
+			m.headEdges.length === m.rowEdges.length &&
+			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5),
+		`head ${JSON.stringify(m.headEdges.map((e) => e.map(Math.round)))} rows ${JSON.stringify(m.rowEdges.map((e) => e.map(Math.round)))}`
+	);
+	check(
+		'Ledger: each group is a rounded card with a hairline border on the raised surface',
+		parseFloat(m.cardRadius) >= 6 && m.cardBorder === '1px' && m.cardBg !== m.groundBg,
+		`radius ${m.cardRadius}, border ${m.cardBorder}, card ${m.cardBg}`
+	);
+	check(
+		'Ledger: a group’s label sits on the page ground just above its own card, with ground between cards',
+		m.groups.length === m.cards.length &&
+			m.groups.every((g, i) => g.bottom <= m.cards[i].top + 0.5 && m.cards[i].top - g.bottom < 12 && g.bg === 'rgba(0, 0, 0, 0)') &&
+			m.cards.slice(1).every((c, i) => c.top - m.cards[i].bottom > 16),
+		m.groups.map((g, i) => `${g.text}: label ${g.bottom.toFixed(0)} card ${m.cards[i]?.top.toFixed(0)}`).join('; ')
+	);
+	check(
+		'Ledger: a row with no note centres its title on the row',
+		m.noNote && Math.abs(m.noNote.title - m.noNote.row) < 1,
+		m.noNote ? `title ${m.noNote.title.toFixed(1)} row ${m.noNote.row.toFixed(1)}` : 'no such row'
+	);
+	check(
+		'Ledger: a two-line row centres its title and note as one block',
+		m.withNote && m.withNote.lines === 2 && Math.abs(m.withNote.block - m.withNote.row) < 1,
+		m.withNote ? `block ${m.withNote.block.toFixed(1)} row ${m.withNote.row.toFixed(1)}, ${m.withNote.lines} lines` : 'no such row'
+	);
+	check(
+		'Ledger: the checkbox, the review dot, the date and the amount centre on the row',
+		m.noNote && [m.noNote.box, m.noNote.dot, m.noNote.amount].every((y) => y !== null && Math.abs(y - m.noNote.row) < 1) && m.withNote.date !== null && Math.abs(m.withNote.date - m.withNote.row) < 1,
+		m.noNote ? `row ${m.noNote.row.toFixed(1)}: box ${m.noNote.box?.toFixed(1)}, dot ${m.noNote.dot?.toFixed(1)}, amount ${m.noNote.amount.toFixed(1)}; date ${m.withNote.date?.toFixed(1)} on ${m.withNote.row.toFixed(1)}` : 'no such row'
+	);
+	check('Ledger: money in is painted the status-success ink', m.incomeInk === m.successInk, `${m.incomeInk} vs ${m.successInk}`);
+	check(
+		'Ledger: money out is bracketed and not green',
+		/^\(\$[\d,]+\.\d\d\)$/.test(m.outgoText) && m.outgoInk !== m.successInk,
+		`${m.outgoText} in ${m.outgoInk}`
+	);
+	check(
+		'Ledger: figures are the body face with tabular numerals, never mono',
+		m.amountFont === m.bodyFont && m.amountNumeric.includes('tabular-nums'),
+		`${m.amountFont} / ${m.amountNumeric}`
+	);
+
+	// The bars above the list end where its cards do, clear of the scroll bar's gutter.
+	const trigger = await page.evaluate(() => document.querySelector('[data-slot="ledger-columns-trigger"]').getBoundingClientRect().right);
+	check('Ledger: the toolbar ends where the cards do', Math.abs(trigger - m.head.right) < 0.5, `toolbar ${trigger.toFixed(1)}, cards ${m.head.right.toFixed(1)}`);
+	await page.click('[aria-label^="Select Ray White"]');
+	const bulk = await page.evaluate(() => {
+		const r = document.querySelector('[data-slot="ledger-bulk"]').getBoundingClientRect();
+		return { left: r.left, right: r.right };
+	});
+	check(
+		'Ledger: a tick swaps the toolbar for a bulk bar as wide as the cards',
+		Math.abs(bulk.left - m.head.left) < 0.5 && Math.abs(bulk.right - m.head.right) < 0.5,
+		`bar ${bulk.left.toFixed(1)}–${bulk.right.toFixed(1)}, cards ${m.head.left.toFixed(1)}–${m.head.right.toFixed(1)}`
+	);
+	await page.click('[data-slot="ledger-bulk"] button[aria-label="Clear the ticks"]');
+
+	// The head stays at the top while the rows scroll under it.
+	const headTop = m.head.top;
+	await page.evaluate(() => (document.querySelector('[data-slot="ledger-rows"]').scrollTop = 600));
+	const afterScroll = await page.evaluate(() => document.querySelector('[data-slot="ledger-head"]').getBoundingClientRect().top);
+	check('Ledger: the head card stays put while the rows scroll', Math.abs(afterScroll - headTop) < 0.5, `top ${headTop.toFixed(1)} → ${afterScroll.toFixed(1)}`);
+	check('Ledger: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// By day, the date heads the group and its column goes; the head still lines up.
+	({ context, page, errors } = await open('surface=ledger&period=day&balance=1', { width: 1440, height: 900 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="ledger-row"]');
+	m = await measureLedger();
+	check(
+		'Ledger by day: the date heads each group and the Date column goes, the balance last',
+		!m.headTexts.includes('Date') &&
+			m.headTexts.at(-1) === 'Balance' &&
+			/^Thursday 1 Oct/.test(m.groups[0]?.text ?? '') &&
+			m.groups.every((g) => !g.text.includes('In $')),
+		`${m.headTexts.join(' | ')}; first group "${m.groups[0]?.text}"`
+	);
+	check(
+		'Ledger by day, light: the head still sits on the rows and the cards on the raised surface',
+		m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5) && m.cardBg !== m.groundBg,
+		`card ${m.cardBg}, ground ${m.groundBg}`
+	);
+	check('Ledger by day: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// A row opened in place lifts out of its card: the card splits around it.
+	({ context, page, errors } = await open('surface=ledger&open=3', { width: 1440, height: 900 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-probe="ledger-editor"]');
+	const lifted = await page.evaluate(() => {
+		const open = document.querySelector('[data-slot="ledger-open"]');
+		const r = open.getBoundingClientRect();
+		const above = open.previousElementSibling.getBoundingClientRect();
+		const below = open.nextElementSibling.getBoundingClientRect();
+		return { gapAbove: r.top - above.bottom, gapBelow: below.top - r.bottom, shadow: getComputedStyle(open).boxShadow };
+	});
+	check(
+		'Ledger: an opened row lifts out of its card, set apart by space and shadow',
+		lifted.gapAbove >= 6 && lifted.gapBelow >= 6 && lifted.shadow !== 'none',
+		`gap ${lifted.gapAbove.toFixed(1)}/${lifted.gapBelow.toFixed(1)}, shadow ${lifted.shadow}`
+	);
+	check('Ledger opened: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// A laptop's ledger: the narrow tracks, and still the head on the rows.
+	({ context, page, errors } = await open('surface=ledger&balance=1', { width: 1000, height: 800 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="ledger-row"]');
+	m = await measureLedger();
+	check(
+		'Ledger at 1000px: the narrow tracks, the head on the rows, nothing sideways',
+		m.layout === 'narrow' &&
+			Math.abs(m.dateTrack - 68) < 1 &&
+			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5) &&
+			m.overflow <= 0,
+		`layout ${m.layout}, date track ${m.dateTrack.toFixed(1)}px, overflow ${m.overflow}px`
+	);
+	check('Ledger at 1000px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// A phone: the phone's list, and nothing sideways.
+	({ context, page, errors } = await open('surface=ledger&balance=1', { width: 390, height: 844 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="ledger-row"]');
+	m = await measureLedger();
+	check(
+		'Ledger at 390px: the phone’s list, with nothing sideways',
+		m.layout === 'phone' && m.head === null && m.overflow <= 0 && m.docOverflow <= 0,
+		`layout ${m.layout}, rows overflow ${m.overflow}px, document ${m.docOverflow}px`
+	);
+	check('Ledger at 390px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// The operator's desk: the wide tracks, and the head still on the rows.
+	({ context, page, errors } = await open('surface=ledger&balance=1', { width: 3360, height: 1400 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="ledger-row"]');
+	m = await measureLedger();
+	check(
+		'Ledger at 3360px: the wide tracks, and the head on the rows',
+		m.layout === 'wide' &&
+			Math.abs(m.dateTrack - 112) < 1 &&
+			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5),
+		`layout ${m.layout}, date track ${m.dateTrack.toFixed(1)}px`
+	);
+	check('Ledger at 3360px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();
