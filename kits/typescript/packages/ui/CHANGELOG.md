@@ -2,6 +2,27 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.1] - 2026-10-01
+
+### Added
+
+- **`@poodle64/ui/ledger`: the one ledger every module draws.** The consumer
+  brings its rows and the columns it offers; the ledger owns PocketSmith's
+  look (a head card as wide as the group cards with its columns on theirs, one
+  rounded card per period with its label on the page ground, two lines a row,
+  money out bracketed and money in green, tabular figures in the body face),
+  the grouping (financial year from `fyStart`, calendar year, month, week, day,
+  none) and the viewer's Columns menu, the running balance a tick and always
+  last. It emits `{ columns, period }` for the consumer to keep. Ticking feeds
+  a bulk bar of the consumer's actions, a row opens in place as a lifted card
+  of the consumer's content, and a synthetic row's one badge opens it to the
+  statement lines it was made from, with the consumer's split, join and undo
+  beneath. The look is measured in a real engine at 390, 1000, 1440 and 3360px
+  (`harness/drive.md` §"The ledger"). Need: `radar-hooves/godswood`, its
+  attended session, on the operator's direction of 01/10/2026.
+- **`formatCurrency(value, { negative: 'brackets' })`**: `($1,234.56)`, the
+  accountant's negative the ledger's amounts use.
+
 ## [2026.10.0] - 2026-10-01
 
 ### Added

@@ -82,7 +82,7 @@ the one-owner-per-key note below). It becomes a candidate the day two apps want
 the same chart palette; until then a shared chart component would be a shared
 disagreement.
 
-**Composed components** (24). Primitives are not what makes an app look like an
+**Composed components.** Primitives are not what makes an app look like an
 app — the page chrome is. These are the cross-cutting surfaces every route
 composes from, so a household app gets its layout language from the package
 rather than rebuilding it:
@@ -112,6 +112,7 @@ rather than rebuilding it:
 | `collection-detail`                             | One collection's surface: identity (`detail-panel`), an at-a-glance `stat-list`, and the documents it holds, with `actions` and `children` slots for the app-specific rest.                                                                                                                                                                                             |
 | `document-detail`                               | One document's surface: identity fields, locations, tags and collection memberships, each section present exactly when its data is. Membership links are the app's own via `collectionHref`.                                                                                                                                                                            |
 | `search-results`                                | A ranked retrieval answer: title, the matched passage with accent-tinted highlights, source chip, mapped state and a mono relevance figure per hit; plus the before-any-search and matched-nothing empties.                                                                                                                                                             |
+| `ledger`                                        | The one ledger every module draws: dated rows of money, coins or units, two lines a row, grouped by the viewer's period, the viewer's columns and running balance. See [The ledger](#the-ledger).                                                                                                                                                                       |
 
 **The application shell** (`app-shell`, `command-palette`). Page chrome is not
 what makes an app feel like an app either — the shell is. Five household
@@ -853,6 +854,77 @@ but the same class on the `<th>` collapses the heading over its neighbour:
 ```ts
 { accessorKey: 'filename', header: 'Document', meta: { class: 'w-full', cellClass: 'max-w-0' } }
 ```
+
+## The ledger
+
+One component for every money list in the household: a property's books, a
+bank account, a wallet, a brokerage. The module brings its rows and the columns
+it offers; the ledger owns the look, the grouping and the viewer's toggles, so
+no module rebuilds them and a need one module finds becomes a toggle for all.
+
+```svelte
+<script lang="ts">
+	import Ledger, { type LedgerColumn, type LedgerRow } from '@poodle64/ui/ledger';
+
+	type Row = LedgerRow & { category: string | null };
+	const columns: LedgerColumn<Row>[] = [
+		{ key: 'category', label: 'Category', text: (r) => r.category ?? 'Uncategorised' },
+		{ key: 'balance', label: 'Running balance', head: 'Balance' }
+	];
+	let preferences = $state(saved.ledger); // the app's own persisted preference
+	let selected = $state<number[]>([]);
+	let open = $state<number | null>(null);
+</script>
+
+<Ledger {rows} {columns} title="Transactions" bind:preferences
+        onPreferencesChange={(next) => save('ledger', next)} bind:selected bind:open>
+	{#snippet bulkActions(ticked)}<Button size="sm" onclick={() => review(ticked)}>Mark reviewed</Button>{/snippet}
+	{#snippet editor(row, { close, template, column })}<!-- the module's fields -->{/snippet}
+</Ledger>
+```
+
+| Prop | Purpose |
+| --- | --- |
+| `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass them filtered; the ledger sorts newest first and keeps a day's rows in the order given. |
+| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it, and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). |
+| `preferences`, `onPreferencesChange` | The viewer's `{ columns, period }`. Missing fields take the module's defaults (each column's `on`, the balance off, grouped by month); an unknown column key is ignored. The ledger stores nothing. |
+| `fyStart` | The month a financial year starts, 1–12. July by default. |
+| `title`, `meta`, `actions` | The toolbar on the page ground: its title, the count beside it, and the module's own actions after the Columns menu. |
+| `selected`, `bulkActions` | Ticking exists only with `bulkActions`, whose snippet gets the ticked rows in the bar that replaces the toolbar. |
+| `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
+| `originActions`, `onAttachment` | Split, join and undo under a synthetic row's statement lines; the paperclip as a button. |
+| `noun`, `currency`, `empty`, `footer`, `layout` | "line" for a printed layer; a non-AUD account; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 600px, from 1200px) should not decide. |
+
+Settled here, the same in every module, and not props:
+
+- **Two lines a row**, the note under the title, the pair centred on the row; a
+  row with no note centres its title. The checkbox, the review dot, the date and
+  every single-value cell centre too.
+- **One mark per kind.** A review dot at the row's left edge, never a status
+  chip; a synthetic row's "Not as printed" badge leads its second line and
+  opens the row in place to the lines it was made from.
+- **PocketSmith's look.** No panel around the list; a head card exactly as wide
+  as the group cards, its columns on theirs; one rounded card per period with
+  hairlines between rows; the period's label, count and net on the page ground
+  above its card; figures in the body face with tabular numerals, money out
+  bracketed and money in green (`formatCurrency(v, { negative: 'brackets' })`).
+- **The Columns menu** holds every column as a tick, the three fixed ones
+  locked and the running balance last, then the period: financial year,
+  calendar year, month, week (from Monday), day (the date heads the group and
+  its column goes) or none.
+- **Density** is the package's own `data-ds-density`: a row is 3.5rem, 3rem
+  under `compact`. There is no one-line row.
+
+What the module keeps: Find (search, filters, views) in its `ContextColumn`, its
+rows' second layer (a bank's lines as printed) as a scope control that swaps
+the rows and columns it passes, the opened row's fields, and where a choice is
+persisted. Group totals are summed from the rows passed, so a module that pages
+its rows shows the totals of what it has loaded.
+
+It fills its parent's height and scrolls its own rows, which is what holds the
+head card at the top: give it a bounded parent (`flex min-h-0 flex-1`). Its look
+is measured in a real engine at 390, 1000, 1440 and 3360px
+(`harness/drive.md` §"The ledger").
 
 ## Hand-written forms
 
