@@ -3918,7 +3918,16 @@ for (const density of ['comfortable', 'compact']) {
 				cardBorder: cards[0] ? getComputedStyle(cards[0]).borderTopWidth : '',
 				cardBg: cards[0] ? getComputedStyle(cards[0]).backgroundColor : '',
 				groundBg: getComputedStyle(document.querySelector('[data-slot="ledger"]').parentElement).backgroundColor,
-				groups: groups.map((g) => ({ ...box(g), bg: getComputedStyle(g).backgroundColor, text: g.textContent.replace(/\s+/g, ' ').trim() })),
+				// Each label with the card right after it, where the window has mounted one.
+				groups: groups.map((g) => {
+					const next = g.parentElement.nextElementSibling;
+					return {
+						...box(g),
+						bg: getComputedStyle(g).backgroundColor,
+						text: g.textContent.replace(/\s+/g, ' ').trim(),
+						card: next && next.dataset.slot === 'ledger-card' ? box(next) : null
+					};
+				}),
 				headTexts: headCells.map((c) => c.textContent.trim()),
 				headEdges: headCells.map(box).map((b) => [b.left, b.right]),
 				rowEdges: first ? cellsOf(first).map(box).map((b) => [b.left, b.right]) : [],
@@ -3974,10 +3983,10 @@ for (const density of ['comfortable', 'compact']) {
 	);
 	check(
 		'Ledger: a group’s label sits on the page ground just above its own card, with ground between cards',
-		m.groups.length === m.cards.length &&
-			m.groups.every((g, i) => g.bottom <= m.cards[i].top + 0.5 && m.cards[i].top - g.bottom < 12 && g.bg === 'rgba(0, 0, 0, 0)') &&
+		m.groups.filter((g) => g.card).length >= 2 &&
+			m.groups.every((g) => g.bg === 'rgba(0, 0, 0, 0)' && (!g.card || (g.bottom <= g.card.top + 0.5 && g.card.top - g.bottom < 12))) &&
 			m.cards.slice(1).every((c, i) => c.top - m.cards[i].bottom > 16),
-		m.groups.map((g, i) => `${g.text}: label ${g.bottom.toFixed(0)} card ${m.cards[i]?.top.toFixed(0)}`).join('; ')
+		m.groups.map((g) => `${g.text}: label ${g.bottom.toFixed(0)} card ${g.card?.top.toFixed(0) ?? '(not mounted)'}`).join('; ')
 	);
 	check(
 		'Ledger: a row with no note centres its title on the row',
@@ -4021,6 +4030,25 @@ for (const density of ['comfortable', 'compact']) {
 	);
 	await page.click('[data-slot="ledger-bulk"] button[aria-label="Clear the ticks"]');
 
+	// A row's own Open control carries the house focus ring when the keyboard reaches it.
+	const ring = await page.evaluate(() => {
+		const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.textContent.includes('Ray White'));
+		const button = [...row.children].find((c) => c.tagName === 'BUTTON');
+		return { rest: getComputedStyle(button).boxShadow };
+	});
+	await page.focus('[aria-label^="Select Ray White"]');
+	await page.keyboard.press('Tab');
+	const focused = await page.evaluate(() => ({
+		label: document.activeElement.getAttribute('aria-label') ?? '',
+		shadow: getComputedStyle(document.activeElement).boxShadow,
+		visible: document.activeElement.matches(':focus-visible')
+	}));
+	check(
+		'Ledger: the keyboard reaches a row’s Open control and it wears the house ring',
+		focused.label.startsWith('Open Ray White') && focused.visible && focused.shadow !== ring.rest && /inset/.test(focused.shadow),
+		`${focused.label}: ${focused.shadow} (at rest ${ring.rest})`
+	);
+
 	// The head stays at the top while the rows scroll under it.
 	const headTop = m.head.top;
 	await page.evaluate(() => (document.querySelector('[data-slot="ledger-rows"]').scrollTop = 600));
@@ -4057,8 +4085,8 @@ for (const density of ['comfortable', 'compact']) {
 	const lifted = await page.evaluate(() => {
 		const open = document.querySelector('[data-slot="ledger-open"]');
 		const r = open.getBoundingClientRect();
-		const above = open.previousElementSibling.getBoundingClientRect();
-		const below = open.nextElementSibling.getBoundingClientRect();
+		const above = open.parentElement.previousElementSibling.getBoundingClientRect();
+		const below = open.parentElement.nextElementSibling.getBoundingClientRect();
 		return { gapAbove: r.top - above.bottom, gapBelow: below.top - r.bottom, shadow: getComputedStyle(open).boxShadow };
 	});
 	check(
@@ -4068,6 +4096,99 @@ for (const density of ['comfortable', 'compact']) {
 	);
 	check('Ledger opened: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
+
+	// A module's cell holding a control: the click is the control's, and a plain cell still opens the row.
+	({ context, page, errors } = await open('surface=ledger&labels=1', { width: 1440, height: 900 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-probe="ledger-label"]');
+	// By coordinates, not by locator: a control the row's button swallows must fail this check, not time out.
+	const at = await page.evaluate(() => {
+		const r = document.querySelector('[data-probe="ledger-label"]').getBoundingClientRect();
+		return { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+	});
+	await page.mouse.click(at.x, at.y);
+	const chip = await page.evaluate(() => ({
+		clicked: document.querySelector('[data-probe="ledger-label-clicked"]').textContent,
+		opened: !!document.querySelector('[data-probe="ledger-editor"]')
+	}));
+	check('Ledger: a control in a module’s cell takes its own click', chip.clicked === '4:tax' && !chip.opened, JSON.stringify(chip));
+	if (!chip.opened) {
+		const bunnings = await page.evaluate(() => {
+			const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.textContent.includes('Bunnings'));
+			const r = row.querySelector('[data-slot="ledger-amount"]').getBoundingClientRect();
+			return { x: r.left + 4, y: (r.top + r.bottom) / 2 };
+		});
+		await page.mouse.click(bunnings.x, bunnings.y);
+	}
+	const opened = await page.evaluate(() => document.querySelector('[data-probe="ledger-editor"]')?.textContent.trim() ?? '');
+	check('Ledger: a click on a plain cell still opens the row', !chip.opened && opened.startsWith('Editing Bunnings'), opened);
+	check('Ledger with a control in a cell: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// An account with years of history: only the rows near the view mount, wherever it scrolls.
+	for (const period of ['none', 'month']) {
+		const t0 = Date.now();
+		({ context, page, errors } = await open(`surface=ledger&many=5000&period=${period}`, { width: 1440, height: 900 }, 'dark'));
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-slot="ledger-row"]');
+		const firstRow = Date.now() - t0;
+		const atTop = await measureLedger();
+		const mountedAtTop = await page.evaluate(() => document.querySelectorAll('[data-slot="ledger-row"]').length);
+		// Halfway down, then at the very end: rows under the head, the head still on them.
+		await page.evaluate(() => {
+			const el = document.querySelector('[data-slot="ledger-rows"]');
+			el.scrollTop = el.scrollHeight / 2;
+		});
+		await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+		const middle = await page.evaluate(() => {
+			const list = document.querySelector('[data-slot="ledger-rows"]').getBoundingClientRect();
+			const head = document.querySelector('[data-slot="ledger-head"]');
+			const below = head.getBoundingClientRect().bottom;
+			const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.getBoundingClientRect().top >= below);
+			const cells = [...row.children].filter((c) => c.tagName !== 'BUTTON').slice(1).map((c) => c.getBoundingClientRect());
+			const heads = [...head.children].slice(1).map((c) => c.getBoundingClientRect());
+			return {
+				mounted: document.querySelectorAll('[data-slot="ledger-row"]').length,
+				rowTop: row.getBoundingClientRect().top - below,
+				inView: row.getBoundingClientRect().bottom <= list.bottom,
+				aligned: heads.length === cells.length && heads.every((h, i) => Math.abs(h.left - cells[i].left) < 0.5 && Math.abs(h.right - cells[i].right) < 0.5)
+			};
+		});
+		await page.evaluate(() => {
+			const el = document.querySelector('[data-slot="ledger-rows"]');
+			el.scrollTop = el.scrollHeight;
+		});
+		await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+		const end = await page.evaluate(() => {
+			const list = document.querySelector('[data-slot="ledger-rows"]');
+			const rows = [...document.querySelectorAll('[data-slot="ledger-row"]')];
+			const lastRow = rows.at(-1).getBoundingClientRect();
+			return {
+				padBottom: document.querySelector('[data-slot="ledger-body"]').style.paddingBottom,
+				lastInView: lastRow.bottom <= list.getBoundingClientRect().bottom && lastRow.bottom > list.getBoundingClientRect().top
+			};
+		});
+		check(
+			`Ledger at 5,000 rows by ${period}: a screen of rows mounts, not the account`,
+			mountedAtTop > 10 && mountedAtTop < 100 && middle.mounted < 100,
+			`${mountedAtTop} rows mounted at the top, ${middle.mounted} halfway; first row in ${firstRow}ms`
+		);
+		check(
+			`Ledger at 5,000 rows by ${period}: the head sits on the rows at the top and halfway down`,
+			atTop.headEdges.every(([l, r], i) => Math.abs(l - atTop.rowEdges[i][0]) < 0.5 && Math.abs(r - atTop.rowEdges[i][1]) < 0.5) &&
+				middle.aligned &&
+				middle.inView &&
+				middle.rowTop < 120,
+			`halfway: first row ${middle.rowTop.toFixed(1)}px under the head, aligned ${middle.aligned}`
+		);
+		check(
+			`Ledger at 5,000 rows by ${period}: the last row is reached at the end`,
+			end.padBottom === '0px' && end.lastInView,
+			JSON.stringify(end)
+		);
+		check(`Ledger at 5,000 rows by ${period}: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
 
 	// A laptop's ledger: the narrow tracks, and still the head on the rows.
 	({ context, page, errors } = await open('surface=ledger&balance=1', { width: 1000, height: 800 }, 'light'));

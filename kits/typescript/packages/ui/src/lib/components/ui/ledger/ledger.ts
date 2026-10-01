@@ -150,6 +150,129 @@ export function cents(value: number | string | null | undefined): number {
 }
 
 /** Money as the ledger prints it: in plain, out in brackets. */
-export function ledgerMoney(value: number | string, currency = 'AUD'): string {
-	return formatCurrency(value, { currency, negative: 'brackets' });
+export function ledgerMoney(value: number | string, currency = 'AUD', locale?: string): string {
+	return formatCurrency(value, { currency, locale, negative: 'brackets' });
+}
+
+// ── Windowing: the rows a long ledger mounts are only those near the view ──
+
+/** One thing the list stacks: a group's head, a row on its card, or a row opened out of it. */
+export type LedgerItem<R extends LedgerRow> =
+	| { kind: 'head'; key: string; group: number }
+	| {
+			kind: 'row';
+			key: string;
+			row: R;
+			group: number;
+			groupKey: string;
+			run: number;
+			first: boolean;
+			last: boolean;
+	  }
+	| { kind: 'open'; key: string; row: R; group: number };
+
+/** Every group's head and rows in order; a run of rows on one card breaks where a row is open. */
+export function ledgerItems<R extends LedgerRow>(
+	groups: readonly { key: string; rows: readonly R[] }[],
+	opts: { heads: boolean; closed: (key: string) => boolean; open: R['id'] | null }
+): LedgerItem<R>[] {
+	type Row = Extract<LedgerItem<R>, { kind: 'row' }>;
+	const out: LedgerItem<R>[] = [];
+	groups.forEach((g, group) => {
+		if (opts.heads) out.push({ kind: 'head', key: `h:${g.key}`, group });
+		if (opts.heads && opts.closed(g.key)) return;
+		let run = 0;
+		let from = -1;
+		const seal = () => {
+			if (from < 0) return;
+			(out[from] as Row).first = true;
+			(out[out.length - 1] as Row).last = true;
+			from = -1;
+		};
+		for (const row of g.rows) {
+			if (row.id === opts.open) {
+				seal();
+				out.push({ kind: 'open', key: `o:${row.id}`, row, group });
+				run++;
+				continue;
+			}
+			if (from < 0) from = out.length;
+			out.push({
+				kind: 'row',
+				key: `r:${row.id}`,
+				row,
+				group,
+				groupKey: g.key,
+				run,
+				first: false,
+				last: false
+			});
+		}
+		seal();
+	});
+	return out;
+}
+
+/** The first and last items overlapping `[top, bottom)`, given each item's start (and the end last). */
+export function windowOf(starts: ArrayLike<number>, top: number, bottom: number): [number, number] {
+	const n = starts.length - 1;
+	const firstAt = (pred: (i: number) => boolean) => {
+		let lo = 0;
+		let hi = n;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (pred(mid)) hi = mid;
+			else lo = mid + 1;
+		}
+		return lo;
+	};
+	const a = firstAt((i) => starts[i + 1]! > top);
+	const b = firstAt((i) => starts[i]! >= bottom) - 1;
+	return [a, b];
+}
+
+/** What renders for items `a..b`: heads, opened rows, and cards cut where the window cuts them. */
+export type LedgerBlock<R extends LedgerRow> =
+	| { kind: 'head'; key: string; group: number }
+	| { kind: 'open'; key: string; row: R; group: number }
+	| {
+			kind: 'card';
+			key: string;
+			group: number;
+			run: number;
+			rows: { row: R; first: boolean; key: string }[];
+			cutTop: boolean;
+			cutBottom: boolean;
+	  };
+
+export function blocksOf<R extends LedgerRow>(
+	items: readonly LedgerItem<R>[],
+	a: number,
+	b: number
+): LedgerBlock<R>[] {
+	const out: LedgerBlock<R>[] = [];
+	for (let i = Math.max(0, a); i <= b && i < items.length; i++) {
+		const it = items[i]!;
+		if (it.kind !== 'row') {
+			out.push(it);
+			continue;
+		}
+		const last = out[out.length - 1];
+		const entry = { row: it.row, first: it.first, key: it.key };
+		if (last?.kind === 'card' && last.group === it.group && last.run === it.run) {
+			last.rows.push(entry);
+			last.cutBottom = !it.last;
+		} else {
+			out.push({
+				kind: 'card',
+				key: `c:${it.groupKey}:${it.run}`,
+				group: it.group,
+				run: it.run,
+				rows: [entry],
+				cutTop: !it.first,
+				cutBottom: !it.last
+			});
+		}
+	}
+	return out;
 }

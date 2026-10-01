@@ -47,6 +47,16 @@ describe('formatCurrency', () => {
 		expect(formatCurrency('-80', { negative: 'brackets', decimals: 0 })).toBe('($80)');
 		expect(formatCurrency(12, { negative: 'brackets' })).toBe('$12.00');
 		expect(formatCurrency(0, { negative: 'brackets' })).toBe('$0.00');
+		// A negative that rounds to nothing is not money out.
+		expect(formatCurrency(-0.004, { negative: 'brackets' })).toBe('$0.00');
+		expect(formatCurrency(-0.4, { negative: 'brackets', decimals: 0 })).toBe('$0');
+		expect(formatCurrency(-0.005, { negative: 'brackets' })).toBe('($0.01)');
+	});
+
+	it('takes a locale for its digits and separators', () => {
+		expect(formatCurrency(-1234.5, { locale: 'de-DE', negative: 'brackets' })).toMatch(
+			/^\(1\.234,50\s?AU\$\)$/
+		);
 	});
 
 	it('returns the fallback for null and undefined', () => {
@@ -387,9 +397,7 @@ describe('formatDate', () => {
 describe('formatDateTime', () => {
 	it('renders a date and a 24-hour time', () => {
 		expect(formatDateTime('2024-12-19T04:05:00')).toBe('19 Dec 2024, 14:05');
-		expect(formatDateTime('2024-12-19T04:05:00', { format: 'numeric' })).toBe(
-			'19/12/2024, 14:05'
-		);
+		expect(formatDateTime('2024-12-19T04:05:00', { format: 'numeric' })).toBe('19/12/2024, 14:05');
 	});
 
 	it('zero-pads midnight rather than calling it 24:00', () => {

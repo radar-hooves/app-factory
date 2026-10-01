@@ -10,11 +10,14 @@
  * one review dot, a synthetic row opening to its statement lines, the bulk bar,
  * a row opening in place, and every choice emitted for the consumer to keep.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Harness from './ledger.svelte';
 import {
+	blocksOf,
 	fySpan,
+	ledgerItems,
+	windowOf,
 	groupRows,
 	ledgerDate,
 	periodKey,
@@ -153,7 +156,7 @@ describe('Ledger: rows, newest first, grouped by month until the viewer chooses'
 describe('Ledger: the viewer’s columns, the balance last', () => {
 	it('shows date, title and amount, then the module’s columns that start on', () => {
 		const { heads } = mount();
-		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Category']);
+		expect(heads()).toEqual(['Date', 'Description', 'Amount', 'Category']);
 	});
 
 	it('offers every column as a tick, the three fixed ones locked and the balance last', async () => {
@@ -164,7 +167,7 @@ describe('Ledger: the viewer’s columns, the balance last', () => {
 			.map((c) => c.closest('label')!.textContent?.replace(/\s+/g, ' ').trim());
 		expect(labels).toEqual([
 			'Date Always shown',
-			'Payee Always shown',
+			'Description Always shown',
 			'Amount Always shown',
 			'Category',
 			'Labels',
@@ -176,19 +179,19 @@ describe('Ledger: the viewer’s columns, the balance last', () => {
 		const { heads, probe } = mount();
 		const menu = await openColumns();
 		await fireEvent.click(within(menu).getAllByRole('checkbox')[5]!);
-		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Category', 'Balance']);
+		expect(heads()).toEqual(['Date', 'Description', 'Amount', 'Category', 'Balance']);
 		expect(JSON.parse(probe('emitted'))).toEqual({
 			columns: ['category', 'balance'],
 			period: 'month'
 		});
 
 		await fireEvent.click(within(menu).getAllByRole('checkbox')[4]!);
-		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Category', 'Labels', 'Balance']);
+		expect(heads()).toEqual(['Date', 'Description', 'Amount', 'Category', 'Labels', 'Balance']);
 	});
 
 	it('takes the consumer’s kept columns, and ignores one it no longer offers', () => {
 		const { heads } = mount({ preferences: { columns: ['balance', 'gone'] } });
-		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Balance']);
+		expect(heads()).toEqual(['Date', 'Description', 'Amount', 'Balance']);
 	});
 
 	it('reads a stale kept period as the default, and echoes no foreign key back', async () => {
@@ -208,7 +211,7 @@ describe('Ledger: the viewer’s columns, the balance last', () => {
 		const { heads, probe } = mount({ preferences: { columns: ['balance'], period: 'day' } });
 		const menu = await openColumns();
 		await fireEvent.click(within(menu).getByRole('button', { name: 'Reset' }));
-		expect(heads()).toEqual(['Date', 'Payee', 'Amount', 'Category']);
+		expect(heads()).toEqual(['Date', 'Description', 'Amount', 'Category']);
 		expect(JSON.parse(probe('emitted'))).toEqual({ columns: ['category'], period: 'month' });
 	});
 
@@ -236,7 +239,7 @@ describe('Ledger: the period', () => {
 
 	it('by day, heads each day with its date, drops the Date column and closes nothing', () => {
 		const { all, heads } = mount({ preferences: { period: 'day' } });
-		expect(heads()).toEqual(['Payee', 'Amount', 'Category']);
+		expect(heads()).toEqual(['Description', 'Amount', 'Category']);
 		const groups = all('[data-slot="ledger-group"]');
 		expect(groups.map((g) => g.tagName)).toEqual(['DIV', 'DIV', 'DIV']);
 		// One row on a day: the date alone. Two: their count and net too.
@@ -367,6 +370,136 @@ describe('Ledger: on a phone', () => {
 		const { all } = mount({ layout: 'phone', preferences: { columns: ['balance'] } });
 		const rent = all('[data-slot="ledger-row"]').find((r) => r.textContent?.includes('Ray White'))!;
 		expect(rent).toHaveTextContent('$2,400.00 $7,520.10');
+	});
+});
+
+/** An account with years of history: three rows a day back from 1 Oct 2026. */
+const many = (n: number): Row[] =>
+	Array.from({ length: n }, (_, i) => ({
+		id: i + 1,
+		date: new Date(Date.UTC(2026, 9, 1 - Math.floor(i / 3))).toISOString().slice(0, 10),
+		title: `Payee ${i + 1}`,
+		amount: i % 3 ? -40 : 600
+	}));
+
+describe('Ledger: a long account mounts only the rows near the view', () => {
+	it('mounts a screen of 5,000 rows, and pads for the rest so the scroll stays true', () => {
+		const { all, container } = mount({ rows: many(5000), preferences: { period: 'none' } });
+		const mounted = all('[data-slot="ledger-row"]').length;
+		expect(mounted).toBeGreaterThan(5);
+		expect(mounted).toBeLessThan(60);
+		const body = container.querySelector<HTMLElement>('[data-slot="ledger-body"]')!;
+		// What is not mounted is stood in for at its estimated height: about 3.5rem a row.
+		expect(parseFloat(body.style.paddingBottom)).toBeGreaterThan((5000 - mounted) * 50);
+		expect(parseFloat(body.style.paddingTop)).toBe(0);
+	});
+
+	it('keeps every group’s count and net while its rows are unmounted', () => {
+		const { all } = mount({ rows: many(5000) });
+		const october = all('[data-slot="ledger-group"]')[0]!;
+		expect(october).toHaveTextContent('October 2026 3 transactions');
+		// Months below the window are padding, not mounted heads.
+		expect(all('[data-slot="ledger-group"]').length).toBeLessThan(5);
+	});
+
+	it('ticks all 5,000 from the head, mounted or not', async () => {
+		const { probe } = mount({ rows: many(5000), preferences: { period: 'none' } });
+		await fireEvent.click(screen.getByRole('checkbox', { name: 'Select every transaction shown' }));
+		expect(probe('selected').split(',')).toHaveLength(5000);
+		expect(screen.getByRole('toolbar', { name: 'Act on the ticked rows' })).toHaveTextContent(
+			'5,000 ticked'
+		);
+	});
+});
+
+describe('Ledger: the locale', () => {
+	it('prints every figure in the locale it is given', () => {
+		const { all } = mount({ rows: many(1200), locale: 'de-DE', preferences: { period: 'none' } });
+		expect(screen.getByRole('toolbar', { name: 'This ledger' })).toHaveTextContent(
+			'1.200 transactions'
+		);
+		expect(all('[data-slot="ledger-amount"]')[1]!.textContent?.trim()).toMatch(
+			/^\(40,00\s?AU\$\)$/
+		);
+	});
+
+	it('defaults to the house’s en-AU', () => {
+		mount({ rows: many(1200), preferences: { period: 'none' } });
+		expect(screen.getByRole('toolbar', { name: 'This ledger' })).toHaveTextContent(
+			'1,200 transactions'
+		);
+	});
+});
+
+describe('Ledger: closing a group with a row open in it', () => {
+	it('closes the row too, and says so', async () => {
+		const { all, probe } = mount();
+		await fireEvent.click(screen.getByRole('button', { name: /^Open Ray White/ }));
+		expect(probe('open')).toBe('2');
+		await fireEvent.click(screen.getByRole('button', { name: /September 2026/ }));
+		expect(probe('open')).toBe('');
+		expect(all('[data-slot="ledger-open"]')).toHaveLength(0);
+		expect(JSON.parse(probe('open-changes'))).toEqual([2, null]);
+	});
+
+	it('leaves the open row alone when another group closes', async () => {
+		const { probe } = mount();
+		await fireEvent.click(screen.getByRole('button', { name: /^Open Ray White/ }));
+		await fireEvent.click(screen.getByRole('button', { name: /October 2026/ }));
+		expect(probe('open')).toBe('2');
+	});
+});
+
+describe('Ledger: a financial year that starts in no month', () => {
+	it('groups from July and says why, in development', () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { all } = mount({ preferences: { period: 'fy' }, fyStart: 13 });
+		expect(all('[data-slot="ledger-group"]')[0]).toHaveTextContent('FY 2026–27');
+		expect(error).toHaveBeenCalledWith(expect.stringContaining('fyStart is a month from 1 to 12'));
+		error.mockRestore();
+	});
+});
+
+describe('the ledger’s window', () => {
+	const rows = many(6);
+	const groups = [
+		{ key: 'a', rows: rows.slice(0, 3) },
+		{ key: 'b', rows: rows.slice(3) }
+	];
+
+	it('lists each group’s head and rows, a run breaking where a row is open', () => {
+		const items = ledgerItems(groups, { heads: true, closed: () => false, open: 2 });
+		expect(
+			items.map((it) =>
+				it.kind === 'row' ? `${it.key}${it.first ? '<' : ''}${it.last ? '>' : ''}` : it.key
+			)
+		).toEqual(['h:a', 'r:1<>', 'o:2', 'r:3<>', 'h:b', 'r:4<', 'r:5', 'r:6>']);
+	});
+
+	it('lists a closed group as its head alone', () => {
+		const items = ledgerItems(groups, { heads: true, closed: (k) => k === 'a', open: null });
+		expect(items.map((it) => it.key)).toEqual(['h:a', 'h:b', 'r:4', 'r:5', 'r:6']);
+	});
+
+	it('finds the items a window overlaps', () => {
+		const starts = [0, 10, 20, 30, 40, 50];
+		expect(windowOf(starts, 15, 35)).toEqual([1, 3]);
+		expect(windowOf(starts, -100, 5)).toEqual([0, 0]);
+		expect(windowOf(starts, 60, 90)).toEqual([5, 4]);
+	});
+
+	it('cuts a card where the window cuts it, and only there', () => {
+		const items = ledgerItems(groups, { heads: true, closed: () => false, open: null });
+		// Items: h:a r:1 r:2 r:3 h:b r:4 r:5 r:6.
+		expect(blocksOf(items, 5, 7)).toMatchObject([
+			{ kind: 'card', cutTop: false, cutBottom: false }
+		]);
+		expect(blocksOf(items, 6, 7)).toMatchObject([{ kind: 'card', cutTop: true, cutBottom: false }]);
+		expect(blocksOf(items, 3, 5)).toMatchObject([
+			{ kind: 'card', key: 'c:a:0', cutTop: true, cutBottom: false },
+			{ kind: 'head' },
+			{ kind: 'card', key: 'c:b:0', cutTop: false, cutBottom: true }
+		]);
 	});
 });
 

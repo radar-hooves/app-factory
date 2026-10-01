@@ -20,6 +20,7 @@
 		withBulk = true,
 		withEditor = true,
 		fyStart,
+		locale,
 		onAttachment
 	}: {
 		rows: Row[];
@@ -29,6 +30,7 @@
 		withBulk?: boolean;
 		withEditor?: boolean;
 		fyStart?: number;
+		locale?: string;
 		onAttachment?: (row: Row) => void;
 	} = $props();
 
@@ -38,6 +40,7 @@
 	let selected = $state<Row['id'][]>([]);
 	let open = $state<Row['id'] | null>(null);
 	let acted = $state('');
+	let openChanges = $state<(Row['id'] | null)[]>([]);
 </script>
 
 {#snippet bulk(ticked: Row[])}
@@ -63,7 +66,9 @@
 	{columns}
 	{layout}
 	{fyStart}
+	{locale}
 	{onAttachment}
+	onOpenChange={(id) => openChanges.push(id)}
 	title="Transactions"
 	bind:preferences={prefs}
 	onPreferencesChange={(next) => emitted.push(next)}
@@ -77,3 +82,4 @@
 <output data-probe="selected">{selected.join(',')}</output>
 <output data-probe="open">{open ?? ''}</output>
 <output data-probe="acted">{acted}</output>
+<output data-probe="open-changes">{JSON.stringify(openChanges)}</output>

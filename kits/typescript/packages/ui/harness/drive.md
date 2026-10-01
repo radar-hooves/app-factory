@@ -1322,7 +1322,13 @@ Every look the operator ruled for the ledger is a layout or paint fact, so
 | Figures are the body face, tabular | the body's own family, `tabular-nums` |
 | The head holds while the rows scroll; the toolbar and bulk bar end where the cards do | head top 60.0 before and after; bar edges equal to the cards' |
 | 390px: the phone's list, nothing sideways; 3360px: the wide tracks | layout `phone`, 0px overflow; date track 112.0px |
+| 5,000 rows (`many=5000`), ungrouped and by month: a screen mounts, the head sits on the rows halfway down, the last row is reached | 20–22 rows mounted at the top, 30 halfway; first row in 373–431ms; bottom padding 0px at the end |
+| A control in a module's cell takes its own click; a plain cell still opens the row | the label chip's own handler ran and no row opened; then the amount cell opened its row |
+| The keyboard reaches a row's Open control, which wears the house ring | `:focus-visible`, a 3px inset `ring/50` |
 
 Driven red before keeping (01/10/2026): a head card with a 2px left border puts
 every head column 1px off its row column, and a title block set to
-`align-self: start` lands 9.25px above the row's centre; both fail.
+`align-self: start` lands 9.25px above the row's centre; a label chip with its
+pointer events taken away opens the row instead, and a row button stripped of
+its shadow shows no ring; all four fail. Unwindowed, the same 5,000 rows mounted
+65,000 nodes and painted their first row in 7.6s.

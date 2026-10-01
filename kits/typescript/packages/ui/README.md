@@ -868,6 +868,7 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 
 	type Row = LedgerRow & { category: string | null };
 	const columns: LedgerColumn<Row>[] = [
+		{ key: 'title', label: 'Payee' },
 		{ key: 'category', label: 'Category', text: (r) => r.category ?? 'Uncategorised' },
 		{ key: 'balance', label: 'Running balance', head: 'Balance' }
 	];
@@ -885,15 +886,16 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 
 | Prop | Purpose |
 | --- | --- |
-| `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass them filtered; the ledger sorts newest first and keeps a day's rows in the order given. |
-| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it, and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). |
+| `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass every row the view covers, filtered: the ledger sorts newest first, keeps a day's rows in the order given, and mounts only those near the view. |
+| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it (the title reads "Description" until the module names it), and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). A `cell` snippet's links and buttons take their own clicks; the rest of the cell opens the row. |
 | `preferences`, `onPreferencesChange` | The viewer's `{ columns, period }`. Missing fields take the module's defaults (each column's `on`, the balance off, grouped by month); an unknown column key is ignored. The ledger stores nothing. |
-| `fyStart` | The month a financial year starts, 1–12. July by default. |
+| `fyStart` | The month a financial year starts, 1–12. July by default; anything else groups from July and logs an error in development. |
+| `locale`, `currency` | Every figure, amounts, nets and counts, in this locale (`AU_LOCALE` by default) and currency (AUD). Dates keep the drawn "15 Sep": the ledger's words are English. |
 | `title`, `meta`, `actions` | The toolbar on the page ground: its title, the count beside it, and the module's own actions after the Columns menu. |
 | `selected`, `bulkActions` | Ticking exists only with `bulkActions`, whose snippet gets the ticked rows in the bar that replaces the toolbar. |
 | `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
 | `originActions`, `onAttachment` | Split, join and undo under a synthetic row's statement lines; the paperclip as a button. |
-| `noun`, `currency`, `empty`, `footer`, `layout` | "line" for a printed layer; a non-AUD account; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 600px, from 1200px) should not decide. |
+| `noun`, `empty`, `footer`, `layout` | "line" for a printed layer; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 600px, from 1200px) should not decide. |
 
 Settled here, the same in every module, and not props:
 
@@ -918,13 +920,17 @@ Settled here, the same in every module, and not props:
 What the module keeps: Find (search, filters, views) in its `ContextColumn`, its
 rows' second layer (a bank's lines as printed) as a scope control that swaps
 the rows and columns it passes, the opened row's fields, and where a choice is
-persisted. Group totals are summed from the rows passed, so a module that pages
-its rows shows the totals of what it has loaded.
+persisted. Group totals are summed from the rows passed, which is why the module
+passes them all rather than a page.
 
 It fills its parent's height and scrolls its own rows, which is what holds the
-head card at the top: give it a bounded parent (`flex min-h-0 flex-1`). Its look
-is measured in a real engine at 390, 1000, 1440 and 3360px
-(`harness/drive.md` §"The ledger").
+head card at the top: give it a bounded parent (`flex min-h-0 flex-1`). It mounts
+only the rows within about a screen of the view, measuring each as it renders and
+standing in for the rest at their height, so the scroll bar and every card keep
+their true size. Measured in Chromium at 1440x900: 5,000 rows paint their first
+row in about 300ms with some 20 mounted, where mounting them all took 7.6 to 8.6
+seconds and 65,000 nodes. Its look is measured in a real engine at 390, 1000,
+1440 and 3360px, and at 5,000 rows (`harness/drive.md` §"The ledger").
 
 ## Hand-written forms
 

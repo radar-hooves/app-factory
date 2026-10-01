@@ -745,18 +745,36 @@
 			dwelling: 'Front'
 		}))
 	];
+	// `many=<n>`: an account with years of history, a few rows a day back from
+	// 1 Oct 2026, for the virtualisation gate.
+	const ledgerMany = Number(params.get('many') ?? 0);
+	const ledgerData: LedgerFixtureRow[] = ledgerMany
+		? Array.from({ length: ledgerMany }, (_, i) => ({
+				id: 1000 + i,
+				date: new Date(Date.UTC(2026, 9, 1 - Math.floor(i / 3))).toISOString().slice(0, 10),
+				title: ['Ray White', 'Origin Energy', 'Bunnings Warehouse'][i % 3]!,
+				note: i % 2 ? '' : `Line ${i + 1}`,
+				amount: i % 3 ? -42.5 - (i % 7) : 600,
+				balance: 4000 - i,
+				category: ['Rent', 'Power', 'Repairs'][i % 3]!,
+				dwelling: 'Front'
+			}))
+		: ledgerRows;
 	const ledgerColumns: LedgerColumn<LedgerFixtureRow>[] = [
+		{ key: 'title', label: 'Payee' },
 		{ key: 'category', label: 'Category', width: { narrow: '7rem', wide: 'minmax(11rem, 1fr)' }, text: (r) => r.category },
 		{ key: 'dwelling', label: 'Dwelling', width: { narrow: '5.25rem', wide: '7.5rem' }, text: (r) => r.dwelling },
-		{ key: 'labels', label: 'Labels', on: false, width: { narrow: '6rem', wide: 'minmax(8rem, 0.6fr)' }, text: (r) => (r.labels ?? []).join(', ') },
+		{ key: 'labels', label: 'Labels', on: false, width: { narrow: '6rem', wide: 'minmax(8rem, 0.6fr)' }, cell: ledgerLabels },
 		{ key: 'balance', label: 'Running balance', head: 'Balance' }
 	];
 	const ledgerPeriod = (params.get('period') ?? 'month') as LedgerPeriod;
 	let ledgerPrefs = $state<Partial<LedgerPreferences>>({
 		period: ledgerPeriod,
-		...(params.get('balance') === '1' ? { columns: ['category', 'dwelling', 'balance'] } : {})
+		...(params.get('balance') === '1' ? { columns: ['category', 'dwelling', 'balance'] } : {}),
+		...(params.get('labels') === '1' ? { columns: ['category', 'labels'] } : {})
 	});
 	let ledgerSelected = $state<(string | number)[]>([]);
+	let ledgerLabelClicked = $state('');
 	let ledgerOpen = $state<string | number | null>(params.get('open') ? Number(params.get('open')) : null);
 
 	const AUDIT_STATS: StatItem[] = [
@@ -778,6 +796,18 @@
 </script>
 
 <ModeWatcher defaultMode="system" />
+
+<!-- A module's own cell holding a control: a click on it is the control's, not the row's. -->
+{#snippet ledgerLabels(r: LedgerFixtureRow)}
+	{#each r.labels ?? [] as label (label)}
+		<button
+			type="button"
+			class="border-border bg-surface-1 text-2xs rounded-sm border px-1.5"
+			onclick={() => (ledgerLabelClicked = `${r.id}:${label}`)}
+			data-probe="ledger-label">{label}</button
+		>
+	{/each}
+{/snippet}
 
 {#if surface === 'detail-panel'}
 	<!-- design-system#9: DetailPanel's title face is a class-name choice
@@ -1616,7 +1646,7 @@
 {:else if surface === 'ledger'}
 	<div class="bg-background flex h-screen flex-col p-4">
 		<Ledger
-			rows={ledgerRows}
+			rows={ledgerData}
 			columns={ledgerColumns}
 			title="Transactions"
 			preferencesNote="Kept for you on every ledger"
@@ -1639,6 +1669,7 @@
 				<Button variant="outline" size="sm">Undo</Button>
 			{/snippet}
 		</Ledger>
+		<output class="hidden" data-probe="ledger-label-clicked">{ledgerLabelClicked}</output>
 	</div>
 {:else if surface === 'list-shell'}
 	<!--

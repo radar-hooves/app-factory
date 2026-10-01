@@ -76,6 +76,8 @@ export interface CurrencyOptions {
 	 * accountant's `($500)`, which a ledger's amount column wants.
 	 */
 	negative?: 'sign' | 'brackets';
+	/** BCP 47 locale for the digits and separators. Defaults to `AU_LOCALE`. */
+	locale?: string;
 }
 
 /**
@@ -108,18 +110,27 @@ export function formatCurrency(
 	value: string | number | null | undefined,
 	options: CurrencyOptions = {}
 ): string {
-	const { decimals = 2, fallback = FALLBACK, currency = 'AUD', negative = 'sign' } = options;
+	const {
+		decimals = 2,
+		fallback = FALLBACK,
+		currency = 'AUD',
+		negative = 'sign',
+		locale = AU_LOCALE
+	} = options;
 
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
-	const format = new Intl.NumberFormat(AU_LOCALE, {
+	const format = new Intl.NumberFormat(locale, {
 		style: 'currency',
 		currency,
 		minimumFractionDigits: decimals,
 		maximumFractionDigits: decimals
 	});
-	return negative === 'brackets' && num < 0 ? `(${format.format(-num)})` : format.format(num);
+	if (negative !== 'brackets' || num >= 0) return format.format(num);
+	// A negative that rounds to nothing is not money out: no brackets around a zero.
+	const magnitude = format.format(-num);
+	return magnitude === format.format(0) ? magnitude : `(${magnitude})`;
 }
 
 /**

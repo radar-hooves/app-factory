@@ -13,7 +13,9 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
+	import type { Attachment } from 'svelte/attachments';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { DEV } from 'esm-env';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
@@ -22,15 +24,19 @@
 	import { Checkbox } from '../checkbox/index.js';
 	import EmptyState from '../empty-state/empty-state.svelte';
 	import LedgerColumns from './ledger-columns.svelte';
+	import { AU_LOCALE } from '$lib/format.js';
 	import { cn } from '$lib/utils.js';
 	import {
 		LEDGER_PERIODS,
+		blocksOf,
 		cents,
 		fySpan,
 		groupRows,
 		ledgerDate,
+		ledgerItems,
 		ledgerMoney,
-		periodLabel
+		periodLabel,
+		windowOf
 	} from './ledger.js';
 	import type { LedgerColumn, LedgerOpenContext, LedgerPreferences, LedgerRow } from './types.js';
 
@@ -44,6 +50,7 @@
 		preferencesNote,
 		fyStart = 7,
 		currency = 'AUD',
+		locale = AU_LOCALE,
 		noun = ['transaction', 'transactions'],
 		title,
 		meta,
@@ -72,6 +79,8 @@
 		/** The month a financial year starts, 1–12. July by default. */
 		fyStart?: number;
 		currency?: string;
+		/** BCP 47 locale for every figure: amounts, nets and counts. */
+		locale?: string;
 		/** What a row is called, one and many: a printed layer's "line". */
 		noun?: [string, string];
 		title?: string;
@@ -101,7 +110,10 @@
 
 	const BUILT_IN: Record<string, Omit<LedgerColumn<R>, 'key'>> = {
 		date: { label: 'Date', width: { narrow: '4.25rem', wide: '7rem' } },
-		title: { label: 'Payee', width: { narrow: 'minmax(0, 1fr)', wide: 'minmax(16rem, 1.5fr)' } },
+		title: {
+			label: 'Description',
+			width: { narrow: 'minmax(0, 1fr)', wide: 'minmax(16rem, 1.5fr)' }
+		},
 		amount: { label: 'Amount', width: { narrow: '7.25rem', wide: '9.5rem' }, align: 'end' },
 		balance: {
 			label: 'Running balance',
@@ -116,6 +128,17 @@
 	const END = 'pr-5 text-right';
 	/** The row's height rides the package's density ramp: 3.5rem, 3rem compact. */
 	const ROW_HEIGHT = 'min-height: calc(var(--ds-control-height-md) + 1rem);';
+	/** The house focus ring, and the same ring drawn inside a control that fills a clipped card. */
+	const RING = 'focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none';
+	const RING_INSET =
+		'focus-visible:inset-ring-ring/50 focus-visible:inset-ring-3 focus-visible:outline-none';
+	/**
+	 * A cell over an openable row lets a click through to the row beneath it, and
+	 * gives one back to any control a module's cell renders, so a link or a button
+	 * in a cell is never silently inert.
+	 */
+	const THROUGH =
+		'pointer-events-none [&_:is(a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=checkbox],[tabindex])]:pointer-events-auto';
 
 	// ── Columns: the ledger's own three, the module's, the balance last ──
 	const resolved = $derived.by(() => {
@@ -200,7 +223,13 @@
 	const balanceOn = $derived(!!balanceColumn && prefs.columns.includes('balance'));
 
 	// ── Groups, newest first ──
-	const groups = $derived(groupRows(rows, prefs.period, fyStart));
+	const validStart = $derived(Number.isInteger(fyStart) && fyStart >= 1 && fyStart <= 12);
+	const fy = $derived(validStart ? fyStart : 7);
+	$effect(() => {
+		if (DEV && !validStart)
+			console.error(`Ledger: fyStart is a month from 1 to 12, not ${fyStart}; grouping from July.`);
+	});
+	const groups = $derived(groupRows(rows, prefs.period, fy));
 	/** Closed groups, keyed with their period so a new period starts open. */
 	const closed = new SvelteSet<string>();
 	const groupId = (key: string) => `${prefs.period}:${key}`;
@@ -210,6 +239,13 @@
 	function toggle<T>(set: SvelteSet<T>, value: T) {
 		if (set.has(value)) set.delete(value);
 		else set.add(value);
+	}
+
+	/** Closing a group closes the row open in it, and says so. */
+	function toggleGroup(g: { key: string; rows: readonly R[] }) {
+		const id = groupId(g.key);
+		if (!closed.has(id) && open !== null && g.rows.some((r) => r.id === open)) setOpen(null);
+		toggle(closed, id);
 	}
 
 	// ── Selection and the opened row ──
@@ -223,9 +259,10 @@
 
 	// Reassigned rather than mutated: these are the consumer's bound values.
 	function tick(ids: Id[], on: boolean) {
+		const these = new Set(ids);
 		selected = on
 			? [...selected, ...ids.filter((id) => !ticked.has(id))]
-			: selected.filter((id) => !ids.includes(id));
+			: selected.filter((id) => !these.has(id));
 		if (on) setOpen(null);
 	}
 
@@ -244,17 +281,87 @@
 		column
 	};
 
-	/** A group's rows in runs, split where a row is open: it lifts out of the card. */
-	function runs(rs: R[]): ({ open: R } | { rows: R[] })[] {
-		const out: ({ open: R } | { rows: R[] })[] = [];
-		for (const r of rs) {
-			const last = out[out.length - 1];
-			if (openable && r.id === open) out.push({ open: r });
-			else if (last && 'rows' in last) last.rows.push(r);
-			else out.push({ rows: [r] });
-		}
+	// ── Windowing: only the rows near the view mount ──
+	// Each item's height is measured once it renders and estimated until then;
+	// the rows above and below the window stand in as padding, so the scroll
+	// bar, the cards and the head keep their true geometry.
+	const items = $derived(
+		ledgerItems(groups, {
+			heads: prefs.period !== 'none',
+			closed: (key) => closed.has(groupId(key)),
+			open: openable ? open : null
+		})
+	);
+	const REM =
+		typeof document === 'undefined'
+			? 16
+			: parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+	const sizes = new Map<string, number>();
+	/** Bumped whenever a measurement lands, so the offsets recompute. */
+	let measured = $state(0);
+	let rowEstimate = $state(REM * 3.5);
+	let headEstimate = $state(REM * 3.125);
+	const sizeKey = (key: string) => `${mode}|${prefs.period}|${key}`;
+
+	const starts = $derived.by(() => {
+		void measured;
+		const out = new Float64Array(items.length + 1);
+		items.forEach((it, i) => {
+			let h = sizes.get(sizeKey(it.key));
+			if (it.kind === 'row') h = (h ?? rowEstimate) + (it.first ? 1 : 0) + (it.last ? 1 : 0);
+			else if (it.kind === 'head') h ??= it.group === 0 ? REM * 2 : headEstimate;
+			else h ??= REM * 6;
+			out[i + 1] = out[i]! + h;
+		});
 		return out;
-	}
+	});
+
+	let scrollTop = $state(0);
+	let viewHeight = $state(0);
+	let headHeight = $state(0);
+	const range = $derived.by(() => {
+		const view = viewHeight || (typeof window === 'undefined' ? 800 : window.innerHeight);
+		const over = Math.max(400, view / 2);
+		const top = scrollTop - (PHONE ? 0 : headHeight) - over;
+		return windowOf(starts, top, top + view + 2 * over);
+	});
+	const first = $derived(range[0]);
+	const last = $derived(range[1]);
+	const blocks = $derived(blocksOf(items, first, last));
+	const padTop = $derived(starts[first] ?? 0);
+	const padBottom = $derived(
+		Math.max(0, (starts[items.length] ?? 0) - (starts[Math.max(first, last + 1)] ?? 0))
+	);
+
+	const observer =
+		typeof ResizeObserver === 'undefined'
+			? null
+			: new ResizeObserver((entries) => {
+					let changed = false;
+					for (const e of entries) {
+						const el = e.target as HTMLElement;
+						const key = el.dataset.ledgerSize;
+						const h = e.borderBoxSize?.[0]?.blockSize ?? el.offsetHeight;
+						if (!key || !h || Math.abs((sizes.get(key) ?? -1) - h) < 0.5) continue;
+						sizes.set(key, h);
+						changed = true;
+						// A plain row (hairline, no lines opened) and a spaced head set the estimates.
+						if (el.dataset.estimate === 'row') rowEstimate = h;
+						if (el.dataset.estimate === 'head') headEstimate = h;
+					}
+					if (changed) measured++;
+				});
+	$effect(() => () => observer?.disconnect());
+
+	/** Measures an item as it renders, under the key its size is kept by. */
+	const measure =
+		(key: string, estimate?: 'row' | 'head'): Attachment<HTMLElement> =>
+		(node) => {
+			node.dataset.ledgerSize = sizeKey(key);
+			if (estimate) node.dataset.estimate = estimate;
+			observer?.observe(node);
+			return () => observer?.unobserve(node);
+		};
 
 	function totals(rs: R[]) {
 		let inn = 0;
@@ -267,8 +374,9 @@
 		return { net: (inn + out) / 100, inn: inn / 100, out: out / 100 };
 	}
 
-	const money = (value: number | string) => ledgerMoney(value, currency);
-	const count = (n: number) => `${n.toLocaleString('en-AU')} ${n === 1 ? noun[0] : noun[1]}`;
+	const money = (value: number | string) => ledgerMoney(value, currency, locale);
+	const number = (n: number) => n.toLocaleString(locale);
+	const count = (n: number) => `${number(n)} ${n === 1 ? noun[0] : noun[1]}`;
 	const income = (value: number | string | null | undefined) => cents(value) > 0;
 	const reviewOf = (r: R) => (r.review === true ? 'warning' : r.review || null);
 	const balanceText = (r: R) =>
@@ -279,7 +387,10 @@
 	{#if onAttachment}
 		<button
 			type="button"
-			class="text-muted-foreground hover:text-foreground focus-visible:ring-ring pointer-events-auto -m-0.5 grid size-5 flex-none place-items-center rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+			class={cn(
+				'text-muted-foreground hover:text-foreground pointer-events-auto -m-0.5 grid size-5 flex-none place-items-center rounded-sm',
+				RING
+			)}
 			title={r.attachment}
 			aria-label="Open {r.attachment}"
 			onclick={() => onAttachment(r)}
@@ -306,6 +417,7 @@
 		type="button"
 		class={cn(
 			'text-2xs pointer-events-auto inline-flex h-4.5 flex-none items-center gap-1 rounded-sm border pr-1 pl-1.5 font-medium whitespace-nowrap',
+			RING,
 			on
 				? 'border-border-strong bg-surface-3 text-foreground'
 				: 'border-border bg-surface-1 text-muted-foreground'
@@ -338,7 +450,7 @@
 {#snippet cells(r: R)}
 	{#each shown as c, i (c.key)}
 		{@const style = `grid-column: ${i + 2}; grid-row: 1;`}
-		{@const through = openable && 'pointer-events-none'}
+		{@const through = openable && THROUGH}
 		{#if c.key === 'date'}
 			<span class={cn(CELL, through, 'text-muted-foreground self-center tabular-nums')} {style}>
 				{ledgerDate(r.date, WIDE)}
@@ -492,7 +604,7 @@
 			{#if openable}
 				<button
 					type="button"
-					class="absolute inset-0 cursor-pointer"
+					class={cn('absolute inset-0 cursor-pointer', RING_INSET)}
 					aria-label="Open {label}"
 					onclick={() => setOpen(r.id)}
 				></button>
@@ -543,7 +655,7 @@
 			{#if openable}
 				<button
 					type="button"
-					class="cursor-pointer"
+					class={cn('cursor-pointer', RING_INSET)}
 					style="grid-column: 2 / -1; grid-row: 1;"
 					aria-label="Open {label}"
 					onclick={() => setOpen(r.id)}
@@ -555,50 +667,53 @@
 	{@render origins(r)}
 {/snippet}
 
-{#snippet groupHead(key: string, rs: R[], gi: number)}
+{#snippet groupHead(g: { key: string; rows: R[] }, gi: number)}
+	{@const key = g.key}
+	{@const rs = g.rows}
 	{@const isOpen = !closed.has(groupId(key))}
 	{@const t = totals(rs)}
 	{@const single = BY_DAY && rs.length === 1}
 	{@const label = periodLabel(
 		key,
 		prefs.period,
-		fyStart,
+		fy,
 		!(mode === 'narrow' && (BY_DAY || prefs.period === 'week'))
 	)}
-	{@const span = WIDE && prefs.period === 'fy' ? `${fySpan(key, fyStart)} · ` : ''}
-	{@const metaText = single
-		? ''
-		: PHONE
-			? rs.length.toLocaleString('en-AU')
-			: span + count(rs.length)}
+	{@const span = WIDE && prefs.period === 'fy' ? `${fySpan(key, fy)} · ` : ''}
+	{@const metaText = single ? '' : PHONE ? number(rs.length) : span + count(rs.length)}
 	{@const net = single ? '' : money(t.net)}
 	{@const netTone = t.net > 0 ? 'text-status-success' : 'text-muted-foreground'}
 	{@const klass = cn(
-		'text-muted-foreground mb-1.5 h-6.5 w-full text-left text-xs',
-		gi > 0 && 'mt-4.5',
+		'text-muted-foreground h-6.5 w-full text-left text-xs',
 		PHONE ? 'flex items-center gap-2 px-0.5' : 'grid items-center px-px'
 	)}
-	<!-- A day heads its rows and does not close; any other period's label opens and closes it. -->
-	{#if BY_DAY}
-		<div
-			class={klass}
-			style:grid-template-columns={PHONE ? undefined : template}
-			data-slot="ledger-group"
-		>
-			{@render groupInner(label, metaText, net, netTone, t, isOpen)}
-		</div>
-	{:else}
-		<button
-			type="button"
-			class={cn(klass, 'cursor-pointer')}
-			aria-expanded={isOpen}
-			onclick={() => toggle(closed, groupId(key))}
-			style:grid-template-columns={PHONE ? undefined : template}
-			data-slot="ledger-group"
-		>
-			{@render groupInner(label, metaText, net, netTone, t, isOpen)}
-		</button>
-	{/if}
+	<!-- The spacing is padding, not margin, so the measured height is the height it takes. -->
+	<div
+		class={cn('pb-1.5', gi > 0 && 'pt-4.5')}
+		{@attach measure(`h:${key}`, gi > 0 ? 'head' : undefined)}
+	>
+		<!-- A day heads its rows and does not close; any other period's label opens and closes it. -->
+		{#if BY_DAY}
+			<div
+				class={klass}
+				style:grid-template-columns={PHONE ? undefined : template}
+				data-slot="ledger-group"
+			>
+				{@render groupInner(label, metaText, net, netTone, t, isOpen)}
+			</div>
+		{:else}
+			<button
+				type="button"
+				class={cn(klass, 'cursor-pointer rounded-md', RING)}
+				aria-expanded={isOpen}
+				onclick={() => toggleGroup(g)}
+				style:grid-template-columns={PHONE ? undefined : template}
+				data-slot="ledger-group"
+			>
+				{@render groupInner(label, metaText, net, netTone, t, isOpen)}
+			</button>
+		{/if}
+	</div>
 {/snippet}
 
 {#snippet groupInner(
@@ -639,25 +754,6 @@
 	{/if}
 {/snippet}
 
-{#snippet card(rs: R[])}
-	{#each runs(rs) as run, i (i)}
-		{#if 'open' in run}
-			<div
-				class="bg-popover border-border-strong my-2 rounded-lg border shadow-md"
-				data-slot="ledger-open"
-			>
-				{@render editor?.(run.open, context)}
-			</div>
-		{:else}
-			<div class="bg-card border-border overflow-hidden rounded-lg border" data-slot="ledger-card">
-				{#each run.rows as r, j (r.id)}
-					{@render row(r, j === 0)}
-				{/each}
-			</div>
-		{/if}
-	{/each}
-{/snippet}
-
 <div
 	bind:clientWidth={width}
 	class={cn('relative flex min-h-0 flex-1 flex-col', className)}
@@ -677,8 +773,7 @@
 			<span class="grid size-8 place-items-center">
 				<Checkbox checked aria-label="Clear the ticks" onCheckedChange={() => (selected = [])} />
 			</span>
-			<span class="text-sm font-semibold whitespace-nowrap"
-				>{tickedRows.length.toLocaleString('en-AU')} ticked</span
+			<span class="text-sm font-semibold whitespace-nowrap">{number(tickedRows.length)} ticked</span
 			>
 			<span class="text-muted-foreground mr-2 text-xs whitespace-nowrap tabular-nums">
 				net {money(tickedRows.reduce((s, r) => s + cents(r.amount), 0) / 100)}
@@ -721,12 +816,14 @@
 	<div
 		bind:offsetWidth={listOuter}
 		bind:clientWidth={listInner}
+		bind:clientHeight={viewHeight}
+		onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
 		class="relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="ledger-rows"
 	>
 		{#if !PHONE}
-			<div class="bg-background sticky top-0 z-3 pb-3">
+			<div class="bg-background sticky top-0 z-3 pb-3" bind:offsetHeight={headHeight}>
 				<div
 					class="bg-card border-border grid h-9 items-center rounded-lg border"
 					style:grid-template-columns={template}
@@ -763,15 +860,45 @@
 
 		{#if rows.length === 0}
 			{#if empty}{@render empty()}{:else}<EmptyState title="No {noun[1]}" />{/if}
-		{:else if prefs.period === 'none'}
-			{@render card(groups[0]?.rows ?? [])}
 		{:else}
-			{#each groups as g, gi (g.key)}
-				{@render groupHead(g.key, g.rows, gi)}
-				{#if !closed.has(groupId(g.key))}
-					{@render card(g.rows)}
-				{/if}
-			{/each}
+			<div
+				style:padding-top="{padTop}px"
+				style:padding-bottom="{padBottom}px"
+				data-slot="ledger-body"
+			>
+				{#each blocks as block (block.key)}
+					{#if block.kind === 'head'}
+						{@render groupHead(groups[block.group]!, block.group)}
+					{:else if block.kind === 'open'}
+						<div class="py-2" {@attach measure(block.key)}>
+							<div
+								class="bg-popover border-border-strong rounded-lg border shadow-md"
+								data-slot="ledger-open"
+							>
+								{@render editor?.(block.row, context)}
+							</div>
+						</div>
+					{:else}
+						<!-- A card the window cuts keeps no edge at the cut, which is out of view. -->
+						<div
+							class={cn(
+								'bg-card border-border overflow-hidden rounded-lg border',
+								block.cutTop && 'rounded-t-none border-t-0',
+								block.cutBottom && 'rounded-b-none border-b-0'
+							)}
+							data-slot="ledger-card"
+						>
+							{#each block.rows as it (it.key)}
+								<div
+									{@attach measure(it.key, it.first || expanded.has(it.row.id) ? undefined : 'row')}
+								>
+									{@render row(it.row, it.first)}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				{/each}
+			</div>
 		{/if}
 		{@render footer?.()}
 	</div>

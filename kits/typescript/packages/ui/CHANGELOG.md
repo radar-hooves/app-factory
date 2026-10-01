@@ -17,11 +17,15 @@ All notable changes to this package are documented here. Format follows [Keep a 
   a bulk bar of the consumer's actions, a row opens in place as a lifted card
   of the consumer's content, and a synthetic row's one badge opens it to the
   statement lines it was made from, with the consumer's split, join and undo
-  beneath. The look is measured in a real engine at 390, 1000, 1440 and 3360px
-  (`harness/drive.md` §"The ledger"). Need: `radar-hooves/godswood`, its
-  attended session, on the operator's direction of 01/10/2026.
-- **`formatCurrency(value, { negative: 'brackets' })`**: `($1,234.56)`, the
-  accountant's negative the ledger's amounts use.
+  beneath. It mounts only the rows near the view, so a 5,000-row account
+  paints its first row in about 300ms rather than 8 seconds; figures follow a
+  `locale` prop. The look is measured in a real engine at 390, 1000, 1440 and
+  3360px and at 5,000 rows (`harness/drive.md` §"The ledger"). Need:
+  `radar-hooves/godswood`, its attended session, on the operator's direction of
+  01/10/2026.
+- **`formatCurrency(value, { negative: 'brackets', locale })`**: `($1,234.56)`,
+  the accountant's negative the ledger's amounts use, and never around a value
+  that rounds to zero; `locale` defaults to `AU_LOCALE`.
 
 ## [2026.10.0] - 2026-10-01
 
