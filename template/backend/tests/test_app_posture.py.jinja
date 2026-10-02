@@ -1,6 +1,6 @@
 """The application factory's posture: what the app serves, and to whom.
 
-Four settings-driven decisions main.py makes at construction time. Each is a
+Four settings-driven decisions main.py makes at construction time, and where the SPA stops. Each is a
 posture rather than a preference, and each was previously true only because
 nobody had changed the line — so this file pins them, and pins the
 `create_app(settings=...)` seam that lets a test drive them at all.
@@ -9,6 +9,7 @@ nobody had changed the line — so this file pins them, and pins the
 from fastapi.middleware.cors import CORSMiddleware
 from httpx import ASGITransport, AsyncClient
 
+from {{ package_name }} import main
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
 
@@ -60,3 +61,19 @@ async def test_no_cors_middleware_without_a_configured_origin(app):
 
 async def test_cors_middleware_is_installed_once_an_origin_is_configured():
     assert _has_cors(_app_with(cors_origins="https://example.test"))
+
+
+async def test_an_api_path_the_spa_declines_is_the_routers(monkeypatch, tmp_path):
+    """A redirect to the trailing-slash form that exists, or a JSON 404; never the SPA's page."""
+    (tmp_path / "index.html").write_text("<html></html>")
+    monkeypatch.setattr(main, "_FRONTEND_BUILD", tmp_path)
+    transport = ASGITransport(app=create_app(settings=get_settings()))
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/a/client/route")).text == "<html></html>"
+        api = main._API_PREFIX
+        for path, existing in ((f"{api}/system/health/", f"{api}/system/health"), ("/mcp", "/mcp/")):
+            redirect = await client.get(path)
+            assert (redirect.status_code, redirect.headers["location"]) == (307, f"http://test{existing}"), path
+        for path in (f"{api}/no-such-route", api):
+            missing = await client.get(path)
+            assert (missing.status_code, missing.json()) == (404, {"detail": "Not Found"}), path

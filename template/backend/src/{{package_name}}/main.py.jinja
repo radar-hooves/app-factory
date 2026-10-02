@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
+from starlette.routing import Match, Mount
 from starlette.types import Scope
 
 from {{ package_name }} import app_hooks
@@ -73,10 +74,8 @@ _IMMUTABLE_ASSET_PREFIX = "_app/"
 # Every vertical slice mounts under this; an app with an older consumer contract names its own in app_hooks.
 _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
 
-# Nor is a miss under an API namespace a client-side route. A machine caller
-# hitting a path that does not exist must get a 404 it can act on, not HTTP 200
-# and a page of HTML. Derived from what is mounted.
-_API_PREFIXES = tuple(f"{prefix.strip('/')}/" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
+# Nor is a path under an API namespace a client-side route. Derived from what is mounted.
+_API_PREFIXES = tuple(f"/{prefix.strip('/')}" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
 
 # Nor is a miss on one of these a client-side route. FastAPI serves all three
 # itself when openapi_enabled is True, so this branch only ever fires when it
@@ -100,13 +99,26 @@ class _SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if (
-                exc.status_code == 404
-                and path not in _DOCUMENT_ROUTES
-                and not path.startswith((_IMMUTABLE_ASSET_PREFIX, *_API_PREFIXES))
-            ):
+            if exc.status_code == 404 and path not in _DOCUMENT_ROUTES and not path.startswith(_IMMUTABLE_ASSET_PREFIX):
                 return await super().get_response("index.html", scope)
             raise
+
+
+class _SPAMount(Mount):
+    """Mount the SPA at `/` for every path but those under an API namespace.
+
+    A mount at `/` matches every path, and the router tries a path's other
+    trailing-slash form only once no route matches it, so the SPA would answer
+    a client's `/api/items/` with a 404 where the route `/api/items` exists.
+    Declined, an API path is the router's: a redirect to the form that exists,
+    or its JSON 404, never HTTP 200 and a page of HTML.
+    """
+
+    def matches(self, scope: Scope) -> tuple[Match, Scope]:
+        path = scope.get("path", "")
+        if any(path == prefix or path.startswith(f"{prefix}/") for prefix in _API_PREFIXES):
+            return Match.NONE, {}
+        return super().matches(scope)
 
 
 @asynccontextmanager
@@ -292,7 +304,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Serve the SPA — must be last so API routes take precedence.
     # Skip mounting if the frontend has not been built yet (dev-only path).
     if _FRONTEND_BUILD.is_dir():
-        app.mount("/", _SPAStaticFiles(directory=str(_FRONTEND_BUILD), html=True), name="frontend")
+        app.router.routes.append(
+            _SPAMount("/", app=_SPAStaticFiles(directory=str(_FRONTEND_BUILD), html=True), name="frontend")
+        )
     else:
         _log.warning("frontend/build not found; SPA not mounted. Run `pnpm build` in frontend/.")
 

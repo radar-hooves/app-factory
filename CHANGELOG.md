@@ -18,6 +18,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 ### Fixed
 
 - **`pytest` from an app's root is refused instead of running under the wrong config.** There it finds no config beside it and takes whichever lies above the checkout (master-project's own, for every app under `repos/`), or none, so the suite ran without its asyncio and import modes and its markers. `backend/tests/conftest.py` now raises a usage error naming `backend/pyproject.toml` and saying to run from `backend/`. Godswood, cadmus, mission-command and the library each carried "cd backend first" as prose. A root config that found the backend's would have been a new root entry in every app for a one-line instruction the error now carries.
+- **The SPA mount declines every API path, so the router's slash redirect and JSON 404 answer it.** An unmatched `/api/…` already got a JSON 404 rather than the index page; what the mount at `/` still swallowed was Starlette's redirect between a path's two trailing-slash forms, which the router tries only once no route matches. A client calling `/api/items/` against a route declared `/api/items` got a 404 in the browser and a 200 in a test that omitted the slash; `/api` and `/mcp` themselves got the index page. `main.py` mounts the SPA through `_SPAMount`, which matches nothing under the API prefix or `/mcp`. Mission-command carried this as a pitfall.
 
 ## [2026.10.1] - 2026-10-01
 
