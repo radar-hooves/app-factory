@@ -11,7 +11,7 @@
  *
  * `canonical-app-shape.md` makes this gate binding on every full-stack app.
  *
- * THREE RULES:
+ * FOUR RULES:
  *   1. vendored-copy — a local component whose name matches one @poodle64/ui
  *      ships, and which does not delegate to it; or a `components/ui/`
  *      primitive the package has since shipped.
@@ -21,6 +21,8 @@
  *      surface brief does not name. Inert until the app grows
  *      `docs/product/surfaces/`; surface briefs are optional, so an app
  *      without them never sees this rule fire.
+ *   4. viewport-variants — the app's count of viewport breakpoint variants
+ *      (`hidden md:flex`, `lg:grid-cols-3`) rising above its banked count.
  *
  * Usage:  node scripts/check-ui-drift.mjs [--json] [--baseline]
  * Exit:   0 clean · 1 new drift · 2 could not run
@@ -359,6 +361,24 @@ for (const surfaceFile of surfaceFiles) {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Viewport variants: one count per app, which only falls.
+//
+// A route renders inside the shell's content panel, which beside a sidebar or
+// a second column runs far narrower than the window. A viewport breakpoint
+// (`hidden lg:table-cell`, `md:grid-cols-3`) fires on the window, so it reveals
+// or splits content in a panel a third that size. A layout inside the shell
+// gates on its panel with a container query instead (`@container` on the
+// wrapper, `@lg:` on the cell), which is not counted. The first run banks the
+// app's count as `viewport-variants:<n>`; from then on it may fall, and each
+// fall is banked, but it never rises.
+// ---------------------------------------------------------------------------
+const VIEWPORT_VARIANT =
+	/(?<![\w@-])(?:(?:max-|min-)?(?:sm|md|lg|xl|2xl)|(?:max|min)-\[[^\]\s]+\]):(?=[!\w[-])/g;
+const viewportVariants = files
+	.filter((f) => f.endsWith('.svelte'))
+	.reduce((n, f) => n + (readFileSync(f, 'utf8').match(VIEWPORT_VARIANT)?.length ?? 0), 0);
+
+// ---------------------------------------------------------------------------
 // Informational: shipped components this app never imports.
 //
 // NOT a failure — plenty are legitimately unneeded. It is printed so the list
@@ -382,8 +402,11 @@ const unused = [...shipped]
 // there is nothing to grandfather. It is in copier's `_skip_if_exists`, so
 // `copier update` never wipes the debt an app has since banked.
 //
-// The baseline is a debt register, not an amnesty: `--baseline` rewrites it, so
-// shrinking it is a visible diff and growing it needs a deliberate act.
+// The baseline is a debt register, not an amnesty, and it only shrinks:
+// `--baseline` drops what has been fixed and banks a fall in the viewport
+// count, but never banks a fresh finding or a rise. A finding the app must keep
+// is added by hand, a diff a reviewer reads. Only an app with no baseline file
+// at all banks its whole backlog with `--baseline`, once.
 // ---------------------------------------------------------------------------
 //
 // The key is `${rule}:${file}` — deliberately NOT a line number or a selector,
@@ -404,17 +427,45 @@ const key = (f) =>
 		? `${f.rule}:${f.file}:${f.component}`
 		: `${f.rule}:${f.file}`;
 
-if (process.argv.includes('--baseline')) {
-	writeFileSync(BASELINE, JSON.stringify([...new Set(findings.map(key))].sort(), null, 2) + '\n');
-	console.log(
-		`Baseline written: ${findings.length} known finding(s) in ${path.relative(FRONTEND_ROOT, BASELINE)}`
-	);
-	process.exit(0);
-}
-
-const known = new Set(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : []);
+const VIEWPORT_KEY = 'viewport-variants:';
+const BASELINE_NAME = path.relative(FRONTEND_ROOT, BASELINE);
+const hasBaseline = existsSync(BASELINE);
+const known = new Set(hasBaseline ? JSON.parse(readFileSync(BASELINE, 'utf8')) : []);
+const viewportEntry = [...known].find((k) => k.startsWith(VIEWPORT_KEY));
+const viewportBanked =
+	viewportEntry === undefined ? undefined : Number(viewportEntry.slice(VIEWPORT_KEY.length));
+known.delete(viewportEntry);
 const fresh = findings.filter((f) => !known.has(key(f)));
 const fixed = [...known].filter((k) => !findings.some((f) => key(f) === k));
+
+const writeBaseline = (keys, viewport) =>
+	writeFileSync(
+		BASELINE,
+		JSON.stringify([...new Set(keys), `${VIEWPORT_KEY}${viewport}`].sort(), null, 2) + '\n'
+	);
+
+if (process.argv.includes('--baseline')) {
+	const keep = findings.map(key).filter((k) => !hasBaseline || known.has(k));
+	const viewport = Math.min(viewportVariants, viewportBanked ?? viewportVariants);
+	writeBaseline(keep, viewport);
+	console.log(
+		`Baseline written: ${new Set(keep).size} known finding(s) and ${viewport} viewport variant(s) in ${BASELINE_NAME}`
+	);
+	const unbanked = [
+		...(hasBaseline ? fresh : []).map((f) => `${f.file} [${f.rule}]`),
+		...(viewportVariants > viewport ? [`${viewportVariants - viewport} viewport variant(s)`] : [])
+	];
+	for (const u of unbanked) console.error(`Not banked, fix it: ${u}`);
+	process.exit(unbanked.length ? 1 : 0);
+}
+
+const viewportProblem =
+	viewportBanked === undefined || viewportVariants === viewportBanked
+		? null
+		: viewportVariants > viewportBanked
+			? `${viewportVariants} viewport variants against ${viewportBanked} banked; inside the shell, gate a layout on its panel with a container query (@container, @lg:), not a viewport breakpoint`
+			: `${viewportVariants} viewport variants against ${viewportBanked} banked; rerun with --baseline to bank the fall`;
+const failed = fresh.length > 0 || viewportProblem !== null;
 
 if (process.argv.includes('--json')) {
 	console.log(
@@ -423,6 +474,7 @@ if (process.argv.includes('--json')) {
 				fresh,
 				grandfathered: findings.length - fresh.length,
 				fixed,
+				viewportVariants: { count: viewportVariants, banked: viewportBanked ?? null },
 				unusedShippedComponents: unused,
 				staleBriefs
 			},
@@ -430,15 +482,25 @@ if (process.argv.includes('--json')) {
 			2
 		)
 	);
-	process.exit(fresh.length ? 1 : 0);
+	process.exit(failed ? 1 : 0);
+}
+
+if (viewportBanked === undefined) {
+	writeBaseline(known, viewportVariants);
+	console.log(
+		`Banked ${viewportVariants} viewport variant(s) in ${BASELINE_NAME} on this first run; commit it.\n`
+	);
 }
 
 for (const f of fresh) console.error(`${f.file}\n  [${f.rule}] ${f.detail}`);
+if (viewportProblem) console.error(`${rel(SRC)}\n  [viewport-variants] ${viewportProblem}`);
 if (fresh.length) {
 	console.error(`\n${fresh.length} NEW design-system drift finding(s).`);
 	console.error('Compose what the package ships; a local copy cannot receive an upstream fix.');
-} else {
-	console.log(`No new design-system drift. (${known.size} known, grandfathered.)`);
+} else if (!viewportProblem) {
+	console.log(
+		`No new design-system drift. (${known.size} known, grandfathered; ${viewportVariants} viewport variant(s).)`
+	);
 }
 if (fixed.length) {
 	console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
@@ -455,4 +517,4 @@ if (staleBriefs.length) {
 	console.log('  A brief for a route that has gone is a decision nobody is reading any more.');
 }
 
-process.exit(fresh.length ? 1 : 0);
+process.exit(failed ? 1 : 0);
