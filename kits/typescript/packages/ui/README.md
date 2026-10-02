@@ -886,8 +886,8 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 
 | Prop | Purpose |
 | --- | --- |
-| `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass every row the view covers, filtered: the ledger sorts newest first, keeps a day's rows in the order given, and mounts only those near the view. |
-| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it (the title reads "Description" until the module names it), and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). A `cell` snippet's links and buttons take their own clicks; the rest of the cell opens the row. |
+| `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`) with `reviewLabel` (the chip's words, "Review" by default), `conversion` (a swap inside the account: plain amount, in no total), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass every row the view covers, filtered: the ledger sorts newest first, keeps a day's rows in the order given, and mounts only those near the view. |
+| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it (the title reads "Description" until the module names it), and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). A `cell` snippet's links and buttons take their own clicks; the rest of the cell opens the row. A column's `sort` gives the real value its head sorts by (a number, not its text); a `text` column sorts by its text without one, a `cell`-only column does not sort, and the balance never does. |
 | `preferences`, `onPreferencesChange` | The viewer's `{ columns, period }`. Missing fields take the module's defaults (each column's `on`, the balance off, grouped by month); an unknown column key is ignored. The ledger stores nothing. |
 | `fyStart` | The month a financial year starts, 1–12. July by default; anything else groups from July and logs an error in development. |
 | `locale`, `currency` | Every figure, amounts, nets and counts, in this locale (`AU_LOCALE` by default) and currency (AUD). Dates keep the drawn "15 Sep": the ledger's words are English. |
@@ -900,16 +900,22 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 Settled here, the same in every module, and not props:
 
 - **Two lines a row**, the note under the title, the pair centred on the row; a
-  row with no note centres its title. The checkbox, the review dot, the date and
+  row with no note centres its title. The checkbox, the review chip, the date and
   every single-value cell centre too.
-- **One mark per kind.** A review dot at the row's left edge, never a status
-  chip; a synthetic row's "Not as printed" badge leads its second line and
+- **One mark per kind.** A review chip (StatusBadge's dot and label on a tint)
+  beside the title on line one, which truncates before the chip does; a synthetic row's "Not as printed" badge leads its second line and
   opens the row in place to the lines it was made from.
 - **PocketSmith's look.** No panel around the list; a head card exactly as wide
   as the group cards, its columns on theirs; one rounded card per period with
   hairlines between rows; the period's label, count and net on the page ground
   above its card; figures in the body face with tabular numerals, money out
   bracketed and money in green (`formatCurrency(v, { negative: 'brackets' })`).
+- **Sorting and the groups' one control.** Click a column head to sort by it,
+  largest or newest first; click again to reverse. A sorted list is one flat
+  run with no group heads and shows the Date column even by day. Until the
+  viewer sorts, rows sit newest first in their groups. A chevron in the head's
+  gutter opens or closes every group at once; where rows tick, the gutter
+  widens to hold it beside the select-all checkbox.
 - **The Columns menu** holds every column as a tick, the three fixed ones
   locked and the running balance last, then the period: financial year,
   calendar year, month, week (from Monday), day (the date heads the group and

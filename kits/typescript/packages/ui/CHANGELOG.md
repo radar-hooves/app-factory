@@ -2,6 +2,34 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.2] - 2026-10-03
+
+### Added
+
+- **Ledger: column heads sort.** A click sorts by that column, largest or
+  newest first, a second click reverses; until then rows sit newest first in
+  their groups. A sorted list is one flat run with no group heads, and shows
+  the Date column even when grouped by day. `LedgerColumn.sort` gives the real
+  value to sort by (a number, not the display text); a `text` column sorts by
+  its text without one, a `cell`-only column does not sort, and the running
+  balance never does.
+- **Ledger: one control opens or closes every group**, a chevron at the head's
+  far left in the gutter the group chevrons sit in. Where rows tick, that
+  gutter widens (2.5rem to 3.5rem) so the chevron sits beside the select-all
+  checkbox.
+- **`LedgerRow.conversion`**: a swap inside the account (dollars for a coin).
+  Its amount shows plain, neither income green nor the muted outgoing tone, and
+  it counts in no group's in, out or net nor the ticked rows' net.
+- **`LedgerRow.reviewLabel`**: the review chip's words, "Review" by default.
+
+### Changed
+
+- **Ledger: review is a chip beside the title, on line one**, in StatusBadge's
+  dot and label on a tint, in place of the dot at the card's left edge. The
+  title truncates before the chip does. `review` keeps its meaning. Need:
+  `radar-hooves/godswood` (the crypto ledger, `godswood#850`), on the
+  operator's rulings of 02/10/2026.
+
 ## [2026.10.1] - 2026-10-01
 
 ### Added

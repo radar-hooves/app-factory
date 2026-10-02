@@ -3999,7 +3999,7 @@ for (const density of ['comfortable', 'compact']) {
 		m.withNote ? `block ${m.withNote.block.toFixed(1)} row ${m.withNote.row.toFixed(1)}, ${m.withNote.lines} lines` : 'no such row'
 	);
 	check(
-		'Ledger: the checkbox, the review dot, the date and the amount centre on the row',
+		'Ledger: the checkbox, the review chip, the date and the amount centre on the row',
 		m.noNote && [m.noNote.box, m.noNote.dot, m.noNote.amount].every((y) => y !== null && Math.abs(y - m.noNote.row) < 1) && m.withNote.date !== null && Math.abs(m.withNote.date - m.withNote.row) < 1,
 		m.noNote ? `row ${m.noNote.row.toFixed(1)}: box ${m.noNote.box?.toFixed(1)}, dot ${m.noNote.dot?.toFixed(1)}, amount ${m.noNote.amount.toFixed(1)}; date ${m.withNote.date?.toFixed(1)} on ${m.withNote.row.toFixed(1)}` : 'no such row'
 	);
@@ -4054,8 +4054,70 @@ for (const density of ['comfortable', 'compact']) {
 	await page.evaluate(() => (document.querySelector('[data-slot="ledger-rows"]').scrollTop = 600));
 	const afterScroll = await page.evaluate(() => document.querySelector('[data-slot="ledger-head"]').getBoundingClientRect().top);
 	check('Ledger: the head card stays put while the rows scroll', Math.abs(afterScroll - headTop) < 0.5, `top ${headTop.toFixed(1)} → ${afterScroll.toFixed(1)}`);
+	// Needs 1–4 of 02/10/2026: sorting heads, one control for every group, the review chip, conversions.
+	await page.evaluate(() => (document.querySelector('[data-slot="ledger-rows"]').scrollTop = 0));
+	const grouping = await page.evaluate(() => {
+		const centreX = (el) => {
+			const r = el.getBoundingClientRect();
+			return (r.left + r.right) / 2;
+		};
+		const all = document.querySelector('[data-slot="ledger-all-groups"] svg');
+		const chev = document.querySelector('[data-slot="ledger-group"] svg');
+		const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.textContent.includes('Ray White'));
+		const chip = row.querySelector('[data-slot="ledger-review"]');
+		const title = row.querySelector('[data-slot="ledger-title"]');
+		const first = title.firstElementChild;
+		const text = first.firstElementChild;
+		const rows = [...document.querySelectorAll('[data-slot="ledger-row"]')];
+		const plain = rows.find((r) => r.textContent.includes('Bitcoin'))?.querySelector('[data-slot="ledger-amount"]');
+		const green = rows.find((r) => r.textContent.includes('Ray White') && !r.textContent.includes('Bitcoin'))?.querySelector('[data-slot="ledger-amount"]');
+		return {
+			allX: centreX(all),
+			chevX: centreX(chev),
+			chipMid: (chip.getBoundingClientRect().top + chip.getBoundingClientRect().bottom) / 2,
+			lineMid: (first.getBoundingClientRect().top + first.getBoundingClientRect().bottom) / 2,
+			chipAfterTitle: chip.getBoundingClientRect().left >= text.getBoundingClientRect().right - 0.5,
+			chipInLineOne: first.contains(chip),
+			plainInk: plain ? getComputedStyle(plain).color : '',
+			greenInk: green ? getComputedStyle(green).color : ''
+		};
+	});
+	check('Ledger: the all-groups chevron sits over the group chevrons in the one gutter', Math.abs(grouping.allX - grouping.chevX) < 1, `head ${grouping.allX.toFixed(1)}, group ${grouping.chevX.toFixed(1)}`);
+	check('Ledger: the review chip sits on line one, after the title and centred with it', grouping.chipInLineOne && grouping.chipAfterTitle && Math.abs(grouping.chipMid - grouping.lineMid) < 1.5, `chip ${grouping.chipMid.toFixed(1)}, line ${grouping.lineMid.toFixed(1)}`);
+	check('Ledger: a conversion’s amount is plain, not income green', grouping.plainInk !== m.successInk && grouping.greenInk === m.successInk, `plain ${grouping.plainInk}, income ${grouping.greenInk}`);
+	await page.click('[data-slot="ledger-all-groups"]');
+	check('Ledger: the head control closes every group at once', (await page.locator('[data-slot="ledger-row"]').count()) === 0 && (await page.locator('[data-slot="ledger-group"]').count()) >= 3);
+	await page.click('[data-slot="ledger-all-groups"]');
+	check('Ledger: and opens them all again', (await page.locator('[data-slot="ledger-row"]').count()) > 0);
+	await page.click('[aria-label="Sort by Amount"]');
+	m = await measureLedger();
+	const sorted = await page.evaluate(() =>
+		[...document.querySelectorAll('[data-slot="ledger-amount"]')].map((a) => Number(a.textContent.replace(/[^\d.-]/g, '').replace(/^\(?(.*)$/, '$1')) * (a.textContent.includes('(') ? -1 : 1))
+	);
+	check(
+		'Ledger sorted: one flat card, no group heads, head still on the rows to the pixel, largest first',
+		m.cards.length === 1 && m.groups.length === 0 && m.cards[0].left === m.head.left && Math.abs(m.cards[0].width - m.head.width) < 0.5 && m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5) && sorted.slice(1).every((v, i) => sorted[i] >= v),
+		`${m.cards.length} cards, ${m.groups.length} groups, ${sorted.slice(0, 5).join(', ')}`
+	);
 	check('Ledger: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
+
+	// A long title gives way to the review chip, on a phone and on a laptop.
+	for (const [w, label] of [[390, 'phone'], [1000, 'narrow']]) {
+		({ context, page, errors } = await open('surface=ledger&longchip=1', { width: w, height: 900 }, 'light'));
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-slot="ledger-row"]');
+		const fit = await page.evaluate(() => {
+			const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.textContent.includes('Ray White Real'));
+			const chip = row.querySelector('[data-slot="ledger-review"]');
+			const text = chip.parentElement.firstElementChild;
+			const card = row.closest('[data-slot="ledger-card"]').getBoundingClientRect();
+			const c = chip.getBoundingClientRect();
+			return { cut: text.scrollWidth > text.clientWidth, chipWide: c.width, chipWithin: c.right <= card.right && c.left >= card.left, label: chip.textContent.trim() };
+		});
+		check(`Ledger ${label}: the title truncates before the review chip does`, fit.cut && fit.chipWithin && fit.chipWide > 40 && fit.label === 'Review', JSON.stringify(fit));
+		await context.close();
+	}
 
 	// By day, the date heads the group and its column goes; the head still lines up.
 	({ context, page, errors } = await open('surface=ledger&period=day&balance=1', { width: 1440, height: 900 }, 'light'));

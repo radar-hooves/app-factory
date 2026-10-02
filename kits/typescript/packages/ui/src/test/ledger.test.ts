@@ -82,7 +82,7 @@ function mount(props: Record<string, unknown> = {}) {
 	const probe = (name: string) =>
 		r.container.querySelector(`[data-probe="${name}"]`)?.textContent ?? '';
 	const heads = () =>
-		all('[data-slot="ledger-head"] > span:not(:first-child)').map((s) => s.textContent?.trim());
+		all('[data-slot="ledger-head"] > :not(:first-child)').map((s) => s.textContent?.trim());
 	const titles = () =>
 		all('[data-slot="ledger-title"] > span:first-child > span:first-child').map(
 			(s) => s.textContent
@@ -130,11 +130,29 @@ describe('Ledger: rows, newest first, grouped by month until the viewer chooses'
 		expect(blocks[0]!.children).toHaveLength(1);
 	});
 
-	it('shows one review dot, only on the row that needs one', () => {
+	it('shows one review chip beside the title on line one, only on the row that needs one', () => {
 		const { all } = mount();
-		const dots = all('[data-slot="ledger-review"]');
-		expect(dots).toHaveLength(1);
-		expect(dots[0]!.closest('[data-slot="ledger-row"]')!.textContent).toContain('Ray White');
+		const chips = all('[data-slot="ledger-review"]');
+		expect(chips).toHaveLength(1);
+		expect(chips[0]).toHaveTextContent('Review');
+		expect(chips[0]!.querySelector('.ds-chip-warning')).not.toBeNull();
+		const lineOne = chips[0]!.parentElement!;
+		expect(lineOne).toBe(lineOne.closest('[data-slot="ledger-title"]')!.firstElementChild);
+		expect(lineOne).toHaveTextContent('Ray White');
+		// The title is the one that gives way; the chip never shrinks.
+		expect(lineOne.firstElementChild!.className).toContain('truncate');
+		expect(chips[0]!.className).toContain('flex-none');
+	});
+
+	it('words the chip as the module does, and keeps the phone’s title and chip on line one', () => {
+		const { all } = mount({
+			layout: 'phone',
+			rows: [{ id: 1, date: '2026-09-15', title: 'Staking', amount: 5, review: 'info', reviewLabel: 'Unpriced' }]
+		});
+		const chip = all('[data-slot="ledger-review"]')[0]!;
+		expect(chip).toHaveTextContent('Unpriced');
+		expect(chip.querySelector('.ds-chip-info')).not.toBeNull();
+		expect(chip.parentElement).toHaveTextContent('Staking');
 	});
 
 	it('trails the title with a paperclip named on hover, a button when the consumer opens it', async () => {
@@ -326,7 +344,7 @@ describe('Ledger: ticking rows', () => {
 	it('offers no ticks when the consumer has nothing to do with them', () => {
 		mount({ withBulk: false });
 		expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-		// The review dot still has its place at the row's left edge.
+		// The review chip is not a tick's business.
 		expect(document.querySelectorAll('[data-slot="ledger-review"]')).toHaveLength(1);
 	});
 });
@@ -536,5 +554,154 @@ describe('the ledger’s periods', () => {
 	it('reads a date without a time zone', () => {
 		expect(ledgerDate('2026-07-01')).toBe('1 Jul 2026');
 		expect(ledgerDate('2026-07-01', false)).toBe('1 Jul');
+	});
+});
+
+describe('Ledger: column heads sort', () => {
+	const sortHead = (name: RegExp) => screen.getByRole('button', { name });
+	const SORTABLE: Row[] = [
+		{ id: 1, date: '2026-09-02', title: 'Bunnings', amount: -84.5, balance: 1, category: 'b' },
+		{ id: 2, date: '2026-09-15', title: 'Ray White', amount: 2400, balance: 2, category: 'a' },
+		{ id: 3, date: '2026-10-01', title: 'Urban', amount: -312.4, balance: 3, category: 'c' },
+		{ id: 4, date: '2026-08-20', title: 'Council', amount: 9, balance: 4 }
+	];
+
+	it('sorts by a click, largest first, reverses on the second, one flat run with no group heads', async () => {
+		const { all, titles } = mount({ rows: SORTABLE });
+		expect(all('[data-slot="ledger-group"]').length).toBeGreaterThan(0);
+
+		await fireEvent.click(sortHead(/^Sort by Amount/));
+		expect(all('[data-slot="ledger-group"]')).toHaveLength(0);
+		expect(all('[data-slot="ledger-card"]')).toHaveLength(1);
+		expect(titles()).toEqual(['Ray White', 'Council', 'Bunnings', 'Urban']);
+		expect(sortHead(/^Sorted by Amount, descending/)).toHaveAttribute('data-sort', 'desc');
+
+		await fireEvent.click(sortHead(/^Sorted by Amount/));
+		expect(titles()).toEqual(['Urban', 'Bunnings', 'Council', 'Ray White']);
+		expect(sortHead(/^Sorted by Amount, ascending/)).toHaveAttribute('data-sort', 'asc');
+	});
+
+	it('sorts a module column by its own sort value, not its display text', async () => {
+		const columns: LedgerColumn<Row>[] = [
+			{
+				key: 'qty',
+				label: 'Quantity',
+				text: (r) => `${r.id} units`,
+				sort: (r) => -Number(r.id)
+			}
+		];
+		const { titles } = mount({ rows: SORTABLE, columns });
+		await fireEvent.click(sortHead(/^Sort by Quantity/));
+		// Largest sort value first: ids 4, 3, 2, 1 carry -4..-1, so 1 leads.
+		expect(titles()).toEqual(['Bunnings', 'Ray White', 'Urban', 'Council']);
+	});
+
+	it('sorts a text column by its text, empty last either way, and a cell-only column not at all', async () => {
+		const columns: LedgerColumn<Row>[] = [
+			{ key: 'category', label: 'Category', text: (r) => r.category ?? '' },
+			{ key: 'pic', label: 'Picture', cell: undefined }
+		];
+		const { titles } = mount({ rows: SORTABLE, columns });
+		await fireEvent.click(sortHead(/^Sort by Category/));
+		expect(titles()).toEqual(['Urban', 'Bunnings', 'Ray White', 'Council']);
+		await fireEvent.click(sortHead(/^Sorted by Category/));
+		expect(titles()).toEqual(['Ray White', 'Bunnings', 'Urban', 'Council']);
+		expect(screen.queryByRole('button', { name: /Sort by Picture/ })).toBeNull();
+	});
+
+	it('never sorts the running balance', () => {
+		mount({ rows: SORTABLE, preferences: { columns: ['category', 'balance'] } });
+		expect(screen.queryByRole('button', { name: /Sort by (Balance|Running balance)/ })).toBeNull();
+	});
+
+	it('shows the Date column in a sorted list even when grouped by day', async () => {
+		const { heads } = mount({ rows: SORTABLE, preferences: { period: 'day' } });
+		expect(heads()).not.toContain('Date');
+		await fireEvent.click(sortHead(/^Sort by Amount/));
+		expect(heads()).toContain('Date');
+	});
+
+	it('drops the sort when its column is unticked, back to newest first in groups', async () => {
+		const { all, titles } = mount({ rows: SORTABLE, preferences: { columns: ['category'] } });
+		await fireEvent.click(sortHead(/^Sort by Category/));
+		expect(all('[data-slot="ledger-group"]')).toHaveLength(0);
+		const menu = await openColumns();
+		await fireEvent.click(within(menu).getByRole('checkbox', { name: 'Category' }));
+		expect(all('[data-slot="ledger-group"]').length).toBeGreaterThan(0);
+		expect(titles()[0]).toBe('Urban');
+	});
+});
+
+describe('Ledger: one control opens or closes every group', () => {
+	it('collapses every group, then expands them, from the head', async () => {
+		const { all } = mount();
+		const toggle = screen.getByRole('button', { name: 'Collapse every group' });
+		expect(all('[data-slot="ledger-head"] [data-slot="ledger-all-groups"]')).toHaveLength(1);
+		await fireEvent.click(toggle);
+		expect(all('[data-slot="ledger-row"]')).toHaveLength(0);
+		expect(all('[data-slot="ledger-group"]')).toHaveLength(2);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand every group' }));
+		expect(all('[data-slot="ledger-row"]')).toHaveLength(4);
+	});
+
+	it('offers to collapse again only once every group is open, and closes a row open in a group', async () => {
+		const { all } = mount();
+		await fireEvent.click(screen.getByRole('button', { name: /October 2026/ }));
+		expect(screen.getByRole('button', { name: 'Expand every group' })).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand every group' }));
+		await fireEvent.click(screen.getByRole('button', { name: /^Open Bunnings/ }));
+		expect(all('[data-slot="ledger-open"]')).toHaveLength(1);
+		await fireEvent.click(screen.getByRole('button', { name: 'Collapse every group' }));
+		expect(all('[data-slot="ledger-open"]')).toHaveLength(0);
+	});
+
+	it('is absent when nothing is grouped: by day, none, or sorted', async () => {
+		const day = mount({ preferences: { period: 'day' } });
+		expect(day.all('[data-slot="ledger-all-groups"]')).toHaveLength(0);
+		day.unmount();
+		const none = mount({ preferences: { period: 'none' } });
+		expect(none.all('[data-slot="ledger-all-groups"]')).toHaveLength(0);
+	});
+
+	it('still keeps the select-all checkbox beside it', () => {
+		mount();
+		expect(screen.getByRole('checkbox', { name: 'Select every transaction shown' })).toBeInTheDocument();
+	});
+});
+
+describe('Ledger: a conversion inside the account', () => {
+	const CONV: Row[] = [
+		{ id: 1, date: '2026-09-15', title: 'Bitcoin', amount: 502, conversion: true },
+		{ id: 2, date: '2026-09-14', title: 'Rent', amount: 100 },
+		{ id: 3, date: '2026-09-13', title: 'Fees', amount: -30 },
+		{ id: 4, date: '2026-09-12', title: 'Sold', amount: -200, conversion: true }
+	];
+
+	it('shows its amount plain, neither income green nor muted', () => {
+		const { all } = mount({ rows: CONV });
+		const [btc, rent, , sold] = all('[data-slot="ledger-amount"]');
+		expect(btc!.className).not.toContain('text-status-success');
+		expect(rent!.className).toContain('text-status-success');
+		expect(sold!.className).not.toContain('text-status-success');
+		expect(btc).toHaveTextContent('$502.00');
+		expect(sold).toHaveTextContent('($200.00)');
+	});
+
+	it('counts in no group total: in, out or net', () => {
+		const { all } = mount({ rows: CONV, layout: 'wide' });
+		const group = all('[data-slot="ledger-group"]')[0]!.textContent!.replace(/\s+/g, ' ');
+		expect(group).toContain('4 transactions');
+		expect(group).toContain('$70.00');
+		expect(group).toContain('In $100.00 · out ($30.00)');
+	});
+
+	it('counts in not the ticked rows’ net', async () => {
+		mount({ rows: CONV });
+		await fireEvent.click(screen.getByRole('checkbox', { name: /^Select Bitcoin/ }));
+		await fireEvent.click(screen.getByRole('checkbox', { name: /^Select Rent/ }));
+		expect(screen.getByRole('toolbar', { name: 'Act on the ticked rows' })).toHaveTextContent(
+			'net $100.00'
+		);
 	});
 });

@@ -18,11 +18,13 @@
 	import { DEV } from 'esm-env';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import X from '@lucide/svelte/icons/x';
 	import Button from '../button/button.svelte';
 	import { Checkbox } from '../checkbox/index.js';
 	import EmptyState from '../empty-state/empty-state.svelte';
+	import StatusBadge from '../status-badge/status-badge.svelte';
 	import LedgerColumns from './ledger-columns.svelte';
 	import { AU_LOCALE } from '$lib/format.js';
 	import { cn } from '$lib/utils.js';
@@ -36,6 +38,7 @@
 		ledgerItems,
 		ledgerMoney,
 		periodLabel,
+		sortRows,
 		windowOf
 	} from './ledger.js';
 	import type { LedgerColumn, LedgerOpenContext, LedgerPreferences, LedgerRow } from './types.js';
@@ -109,12 +112,18 @@
 	} = $props();
 
 	const BUILT_IN: Record<string, Omit<LedgerColumn<R>, 'key'>> = {
-		date: { label: 'Date', width: { narrow: '4.25rem', wide: '7rem' } },
+		date: { label: 'Date', width: { narrow: '4.25rem', wide: '7rem' }, sort: (r) => r.date.slice(0, 10) },
 		title: {
 			label: 'Description',
+			sort: (r) => r.title,
 			width: { narrow: 'minmax(0, 1fr)', wide: 'minmax(16rem, 1.5fr)' }
 		},
-		amount: { label: 'Amount', width: { narrow: '7.25rem', wide: '9.5rem' }, align: 'end' },
+		amount: {
+			label: 'Amount',
+			width: { narrow: '7.25rem', wide: '9.5rem' },
+			align: 'end',
+			sort: (r) => cents(r.amount)
+		},
 		balance: {
 			label: 'Running balance',
 			head: 'Balance',
@@ -123,7 +132,9 @@
 			on: false
 		}
 	};
+	/** Ticking adds a checkbox to the gutter, so it widens to hold the chevron beside it. */
 	const GUTTER = '2.5rem';
+	const GUTTER_TICKS = '3.5rem';
 	const CELL = 'min-w-0 truncate px-2';
 	const END = 'pr-5 text-right';
 	/** The row's height rides the package's density ramp: 3.5rem, 3rem compact. */
@@ -202,7 +213,27 @@
 	);
 	const WIDE = $derived(mode === 'wide');
 	const PHONE = $derived(mode === 'phone');
-	const BY_DAY = $derived(prefs.period === 'day');
+
+	const selectable = $derived(!!bulkActions && !PHONE);
+	// ── Sorting: the viewer's own, kept here until a head is clicked again ──
+	let sort = $state<{ key: string; dir: 1 | -1 } | null>(null);
+	/** What a column sorts by; the running balance depends on the order, so never it. */
+	const sorter = (c: { key: string; sort?: LedgerColumn<R>['sort']; text?: LedgerColumn<R>['text'] }) =>
+		c.key === 'balance' ? undefined : (c.sort ?? c.text);
+	/** Click a head to sort by it, largest or newest first; again to reverse. */
+	function sortBy(key: string) {
+		sort = sort?.key === key ? { key, dir: sort.dir === 1 ? -1 : 1 } : { key, dir: -1 };
+	}
+	/** The sort in force: a column the viewer has since unticked no longer sorts. */
+	const activeSort = $derived.by(() => {
+		const col = sort && resolved.find((c) => c.key === sort!.key);
+		return sort && col && sorter(col) && (col.locked || prefs.columns.includes(col.key))
+			? sort
+			: null;
+	});
+	/** Until the viewer sorts, rows sit newest first in their period's groups. */
+	const grouped = $derived(prefs.period !== 'none' && !activeSort);
+	const BY_DAY = $derived(grouped && prefs.period === 'day');
 
 	const shown = $derived(
 		resolved.filter(
@@ -210,7 +241,7 @@
 		)
 	);
 	const template = $derived(
-		`${GUTTER} ${shown.map((c) => (WIDE ? c.track.wide : c.track.narrow)).join(' ')}`
+		`${selectable ? GUTTER_TICKS : GUTTER} ${shown.map((c) => (WIDE ? c.track.wide : c.track.narrow)).join(' ')}`
 	);
 	/** A column's grid line, the gutter being 1; 0 when it is not shown. */
 	const column = (key: string) => {
@@ -229,7 +260,11 @@
 		if (DEV && !validStart)
 			console.error(`Ledger: fyStart is a month from 1 to 12, not ${fyStart}; grouping from July.`);
 	});
-	const groups = $derived(groupRows(rows, prefs.period, fy));
+	const groups = $derived.by(() => {
+		const by = activeSort && sorter(resolved.find((c) => c.key === activeSort.key)!);
+		if (activeSort && by) return [{ key: '', rows: sortRows(rows, by, activeSort.dir) }];
+		return groupRows(rows, prefs.period, fy);
+	});
 	/** Closed groups, keyed with their period so a new period starts open. */
 	const closed = new SvelteSet<string>();
 	const groupId = (key: string) => `${prefs.period}:${key}`;
@@ -241,6 +276,17 @@
 		else set.add(value);
 	}
 
+	const allOpen = $derived(groups.every((g) => !closed.has(groupId(g.key))));
+	/** One control for every group: open them all, or close them all. */
+	function toggleAll() {
+		const closing = allOpen;
+		if (closing && open !== null) setOpen(null);
+		for (const g of groups) {
+			if (closing) closed.add(groupId(g.key));
+			else closed.delete(groupId(g.key));
+		}
+	}
+
 	/** Closing a group closes the row open in it, and says so. */
 	function toggleGroup(g: { key: string; rows: readonly R[] }) {
 		const id = groupId(g.key);
@@ -249,7 +295,6 @@
 	}
 
 	// ── Selection and the opened row ──
-	const selectable = $derived(!!bulkActions && !PHONE);
 	const openable = $derived(!!editor);
 	const ticked = $derived(new Set<Id>(selected));
 	const tickedRows = $derived(groups.flatMap((g) => g.rows).filter((r) => ticked.has(r.id)));
@@ -287,7 +332,7 @@
 	// bar, the cards and the head keep their true geometry.
 	const items = $derived(
 		ledgerItems(groups, {
-			heads: prefs.period !== 'none',
+			heads: grouped,
 			closed: (key) => closed.has(groupId(key)),
 			open: openable ? open : null
 		})
@@ -301,7 +346,7 @@
 	let measured = $state(0);
 	let rowEstimate = $state(REM * 3.5);
 	let headEstimate = $state(REM * 3.125);
-	const sizeKey = (key: string) => `${mode}|${prefs.period}|${key}`;
+	const sizeKey = (key: string) => `${mode}|${grouped ? prefs.period : 'flat'}|${key}`;
 
 	const starts = $derived.by(() => {
 		void measured;
@@ -367,6 +412,7 @@
 		let inn = 0;
 		let out = 0;
 		for (const r of rs) {
+			if (r.conversion) continue;
 			const c = cents(r.amount);
 			if (c > 0) inn += c;
 			else out += c;
@@ -378,6 +424,8 @@
 	const number = (n: number) => n.toLocaleString(locale);
 	const count = (n: number) => `${number(n)} ${n === 1 ? noun[0] : noun[1]}`;
 	const income = (value: number | string | null | undefined) => cents(value) > 0;
+	/** Green for money in; a conversion is neither in nor out, so plain. */
+	const isIncome = (r: R) => !r.conversion && income(r.amount);
 	const reviewOf = (r: R) => (r.review === true ? 'warning' : r.review || null);
 	const balanceText = (r: R) =>
 		balanceColumn?.text ? balanceColumn.text(r) : r.balance == null ? '' : money(r.balance);
@@ -431,19 +479,12 @@
 	</button>
 {/snippet}
 
-{#snippet dot(r: R, beside: boolean)}
+{#snippet chip(r: R)}
 	{@const status = reviewOf(r)}
 	{#if status}
-		<span
-			class={cn(
-				'ds-dot size-1.5',
-				`ds-dot-${status}`,
-				beside && 'absolute top-1/2 right-[calc(50%+0.75rem)] -translate-y-1/2'
-			)}
-			role="img"
-			aria-label="Needs review"
-			data-slot="ledger-review"
-		></span>
+		<span class="pointer-events-auto flex-none" data-slot="ledger-review">
+			<StatusBadge {status} label={r.reviewLabel ?? 'Review'} />
+		</span>
 	{/if}
 {/snippet}
 
@@ -467,6 +508,7 @@
 				<span class="flex min-w-0 items-center gap-1.5">
 					<span class="min-w-0 truncate">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
+					{@render chip(r)}
 				</span>
 				{#if r.note || r.origins}
 					<span class="text-muted-foreground flex min-w-0 items-center gap-2 text-xs font-normal">
@@ -482,7 +524,7 @@
 					END,
 					through,
 					'self-center tabular-nums',
-					income(r.amount) && 'text-status-success'
+					isIncome(r) && 'text-status-success'
 				)}
 				{style}
 				data-slot="ledger-amount"
@@ -611,9 +653,9 @@
 			{/if}
 			<span class="pointer-events-none flex min-w-0 flex-col justify-center gap-0.5">
 				<span class="flex min-w-0 items-center gap-1.5">
-					{@render dot(r, false)}
 					<span class="min-w-0 truncate font-medium">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
+					{@render chip(r)}
 				</span>
 				{#if two || r.origins}
 					<span class="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
@@ -623,7 +665,7 @@
 				{/if}
 			</span>
 			<span class="pointer-events-none flex flex-col items-end justify-center gap-0.5 tabular-nums">
-				<span class={cn(income(r.amount) && 'text-status-success')} data-slot="ledger-amount"
+				<span class={cn(isIncome(r) && 'text-status-success')} data-slot="ledger-amount"
 					>{money(r.amount)}</span
 				>
 				{#if balanceOn && balanceText(r)}<span class="text-muted-foreground text-xs"
@@ -643,7 +685,6 @@
 			data-slot="ledger-row"
 		>
 			<span class="relative flex items-center justify-center" style="grid-column: 1; grid-row: 1;">
-				{@render dot(r, selectable)}
 				{#if selectable}
 					<Checkbox
 						checked={on}
@@ -732,7 +773,10 @@
 		<span class="min-w-0 flex-1 truncate">{metaText}</span>
 		<span class={cn('tabular-nums', netTone)}>{net}</span>
 	{:else}
-		<span class="grid place-items-center" style="grid-column: 1;">
+		<span
+			class={cn('grid place-items-center', selectable && 'justify-items-start pl-[5px]')}
+			style="grid-column: 1;"
+		>
 			{#if !BY_DAY}<ChevronRight
 					class={cn('size-3.5 transition-transform', isOpen && 'rotate-90')}
 				/>{/if}
@@ -776,7 +820,7 @@
 			<span class="text-sm font-semibold whitespace-nowrap">{number(tickedRows.length)} ticked</span
 			>
 			<span class="text-muted-foreground mr-2 text-xs whitespace-nowrap tabular-nums">
-				net {money(tickedRows.reduce((s, r) => s + cents(r.amount), 0) / 100)}
+				net {money(tickedRows.reduce((s, r) => s + (r.conversion ? 0 : cents(r.amount)), 0) / 100)}
 			</span>
 			{@render bulkActions?.(tickedRows)}
 			<span class="flex-1"></span>
@@ -829,7 +873,23 @@
 					style:grid-template-columns={template}
 					data-slot="ledger-head"
 				>
-					<span class="grid place-items-center">
+					<span class="relative grid place-items-center">
+						{#if grouped && !BY_DAY && groups.length}
+							<button
+								type="button"
+								class={cn(
+									'text-muted-foreground hover:text-foreground absolute top-1/2 z-10 grid size-4 -translate-y-1/2 cursor-pointer place-items-center rounded-md',
+									selectable ? 'left-1' : 'left-1/2 -translate-x-1/2',
+									RING
+								)}
+								aria-label={allOpen ? 'Collapse every group' : 'Expand every group'}
+								aria-expanded={allOpen}
+								onclick={toggleAll}
+								data-slot="ledger-all-groups"
+							>
+								<ChevronRight class={cn('size-3.5 transition-transform', allOpen && 'rotate-90')} />
+							</button>
+						{/if}
 						{#if selectable}
 							<Checkbox
 								checked={allTicked}
@@ -844,15 +904,46 @@
 						{/if}
 					</span>
 					{#each shown as c (c.key)}
-						<span
-							class={cn(
-								CELL,
-								'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase',
-								c.align === 'end' && END
-							)}
-						>
-							{c.head ?? c.label}
-						</span>
+						{@const sortable = !!sorter(c)}
+						{@const mine = activeSort?.key === c.key ? activeSort : null}
+						{@const label = c.head ?? c.label}
+						{@const headClass = cn(
+							CELL,
+							'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase',
+							c.align === 'end' && END
+						)}
+						{#if sortable}
+							<button
+								type="button"
+								class={cn(
+									headClass,
+									'group flex cursor-pointer items-center gap-0.5 rounded-md hover:text-foreground',
+									RING_INSET,
+									c.align === 'end' && 'justify-end',
+									mine && 'text-foreground'
+								)}
+								aria-label={mine
+									? `Sorted by ${c.label}, ${mine.dir === -1 ? 'descending' : 'ascending'}. Click to reverse`
+									: `Sort by ${c.label}`}
+								onclick={() => sortBy(c.key)}
+								data-slot="ledger-sort"
+								data-sort={mine ? (mine.dir === -1 ? 'desc' : 'asc') : undefined}
+							>
+								<span class="truncate">{label}</span>
+								{#if mine?.dir === 1}
+									<ChevronUp class="size-3 flex-none" />
+								{:else}
+									<ChevronDown
+										class={cn(
+											'size-3 flex-none',
+											!mine && 'opacity-0 group-hover:opacity-50 group-focus-visible:opacity-50'
+										)}
+									/>
+								{/if}
+							</button>
+						{:else}
+							<span class={headClass}>{label}</span>
+						{/if}
 					{/each}
 				</div>
 			</div>

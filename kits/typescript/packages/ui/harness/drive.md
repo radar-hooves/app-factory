@@ -1316,8 +1316,11 @@ Every look the operator ruled for the ledger is a layout or paint fact, so
 | The head card is exactly as wide as every group card | 1382.0px at x=24.0, all six cards |
 | Every head column sits on its row column | edges equal to the pixel, at 1000, 1440 and 3360px |
 | A row with no note centres its title; a two-line row centres the block | 277.0 on 277.0; 169.0 on 169.0 |
-| The checkbox, review dot, date and amount centre on the row | all within 1px of the row's centre |
+| The checkbox, review chip, date and amount centre on the row | all within 1px of the row's centre |
 | A group's label sits on the page ground just above its card | label transparent, 6px above its card, ground between cards |
+| The head's all-groups chevron sits over the group chevrons; one click closes every group, another opens them | centres 37.0 and 37.0; no rows, then rows |
+| The review chip sits on line one after the title, centred with it; a long title truncates before it, at 390 and 1000px | chip 277.0 on line 277.0; chip 71px wide and within its card |
+| A conversion's amount is plain; a head click sorts to one flat card with no group heads, head still on the rows, largest first | not the success ink; 1 card, 0 groups |
 | Money in paints `--ds-color-status-success`; money out is bracketed | equal computed colours; `($312.40)` in the foreground ink |
 | Figures are the body face, tabular | the body's own family, `tabular-nums` |
 | The head holds while the rows scroll; the toolbar and bulk bar end where the cards do | head top 60.0 before and after; bar edges equal to the cards' |

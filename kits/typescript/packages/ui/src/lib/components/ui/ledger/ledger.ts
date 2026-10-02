@@ -143,6 +143,28 @@ export function groupRows<R extends LedgerRow>(
 	return out;
 }
 
+/**
+ * The rows ordered by a column's value, `dir` 1 ascending and -1 descending;
+ * rows without a value come last either way, and equal values keep newest first.
+ */
+export function sortRows<R extends LedgerRow>(
+	rows: readonly R[],
+	value: (row: R) => number | string | null | undefined,
+	dir: 1 | -1
+): R[] {
+	const keyed = (groupRows(rows, 'none')[0]?.rows ?? []).map((row) => ({ row, v: value(row) }));
+	const missing = (v: unknown) => v === null || v === undefined || v === '';
+	keyed.sort((a, b) => {
+		if (missing(a.v) || missing(b.v)) return Number(missing(a.v)) - Number(missing(b.v));
+		const cmp =
+			typeof a.v === 'number' && typeof b.v === 'number'
+				? a.v - b.v
+				: String(a.v).localeCompare(String(b.v), undefined, { numeric: true, sensitivity: 'base' });
+		return dir * cmp;
+	});
+	return keyed.map((k) => k.row);
+}
+
 /** Whole cents, so a group's sum carries no float error. */
 export function cents(value: number | string | null | undefined): number {
 	const n = Number(value);

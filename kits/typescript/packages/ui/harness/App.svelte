@@ -734,6 +734,7 @@
 		{ id: 6, date: '2026-08-30', title: 'QBE Insurance', note: 'Landlord policy 2026–27', amount: -1689.21, balance: 2804.6, category: 'Insurance', dwelling: 'Both', attachment: 'Policy schedule' },
 		{ id: 7, date: '2026-08-12', title: 'Ray White', amount: 2400, balance: 4493.81, category: 'Rent', dwelling: 'Front' },
 		{ id: 8, date: '2026-08-03', title: 'Plumbing Brisbane', note: 'Hot water system', amount: -1906.19, balance: 2093.81, category: 'Repairs', dwelling: 'Back', review: 'error' },
+		{ id: 9, date: '2026-09-20', title: 'Bitcoin', note: 'Bought 0.0044 BTC', amount: 502, balance: 4600, category: 'Buy', dwelling: 'Both', conversion: true },
 		...Array.from({ length: 24 }, (_, i) => ({
 			id: 100 + i,
 			date: `2026-0${7 - Math.floor(i / 8)}-${String(28 - (i % 8) * 3).padStart(2, '0')}`,
@@ -748,6 +749,9 @@
 	// `many=<n>`: an account with years of history, a few rows a day back from
 	// 1 Oct 2026, for the virtualisation gate.
 	const ledgerMany = Number(params.get('many') ?? 0);
+	// `longchip=1`: a title far longer than its line, beside a review chip.
+	if (params.get('longchip') === '1')
+		ledgerRows[1]!.title = 'Ray White Real Estate Paddington, trust account for the front dwelling';
 	const ledgerData: LedgerFixtureRow[] = ledgerMany
 		? Array.from({ length: ledgerMany }, (_, i) => ({
 				id: 1000 + i,
