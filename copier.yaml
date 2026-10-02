@@ -76,6 +76,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_explicit_test_server_guard.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_gateway_models_check.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_feedback_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_files_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_logging.py{% endif %}"
@@ -163,6 +164,13 @@ density:
 description:
   type: str
   help: 'One-sentence description of the project'
+
+model_module:
+  type: str
+  default: llm
+  when: "{{ skeleton == 'web' }}"
+  help: >-
+    The one module, dotted under the app's package, that calls models (`llm`, `core.litellm_client`). Everywhere else the app names a model only by a household gateway alias; backend/tests/test_gateway_models.py holds the line.
 
 backend_port:
   type: int

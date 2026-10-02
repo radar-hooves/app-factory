@@ -143,6 +143,19 @@ repos:
         pass_filenames: false
         files: ^backend/(src/.*\.py|pyproject\.toml|uv\.lock|mypy-baseline\.txt)$
 
+  # A model is reached only through the household gateway, by alias, from the one
+  # module copier's `model_module` answer names; the test's docstring lists what
+  # it refuses. It reads source and imports nothing of the app, so the suite's
+  # conftest, which starts a Postgres, is skipped.
+  - repo: local
+    hooks:
+      - id: gateway-only-models
+        name: 'python - Models only through the gateway alias'
+        entry: bash -c 'cd backend && exec uv run pytest -q --noconftest -p no:cacheprovider tests/test_gateway_models.py'
+        language: system
+        pass_filenames: false
+        files: '^(backend/src|scripts|tools)/.*\.py$'
+
   # Prettier is the frontend's only formatter, as ruff-format is the backend's.
   # Needs `pnpm install` in frontend/, like the two design gates below.
   #

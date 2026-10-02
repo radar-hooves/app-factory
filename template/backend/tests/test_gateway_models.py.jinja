@@ -1,0 +1,122 @@
+"""This app reaches a model only through the household gateway, by alias.
+
+Outside `{{ package_name }}.{{ model_module }}`, the one module copier's `model_module` answer
+names, no Python under backend/src, scripts/ or tools/ may:
+
+- import a provider SDK (`anthropic`, `openai`, `litellm`);
+- name a provider model id (`claude-…`, `gpt-…`, `gemini-…`): which model serves a job is the
+  gateway's alias;
+- name a provider key or endpoint (`OPENAI_API_KEY`, `api.anthropic.com`): the app holds a gateway
+  key, and provider keys live in the gateway alone;
+- default a model setting to an alias that is not a household box (`<box>/<workload>`, such as
+  `mimir/deep`): any other peer is an account or a vendor, and sending a job there is the
+  operator's choice (`rules-library/platform/model-calls.md`).
+
+Tests and docstrings are not read. It imports nothing of the app, so pre-commit runs it without
+the suite's conftest.
+"""
+
+import ast
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+TREES = ("backend/src", "scripts", "tools")
+MODEL_MODULE = "backend/src/{{ package_name }}/{{ model_module | replace('.', '/') }}"
+
+SDKS = {"anthropic", "openai", "litellm"}
+MODEL_ID = re.compile(
+    r"([\w-]+[./])*(claude-(opus|sonnet|haiku|fable|instant|\d)|gpt-(\d|oss|image)|gemini-(\d|exp|pro|flash))"
+    r"[\w.:@\[\]-]*"
+)
+# LITELLM_API_KEY is absent on purpose: it is the gateway's own key.
+PROVIDER_KEY = re.compile(
+    r"(?i)(\w+_)?(anthropic|openai|azure_openai|gemini|google|mistral|cohere|groq|xai|deepseek|openrouter)_api_key"
+)
+PROVIDER_HOST = re.compile(r"api\.anthropic\.com|api\.openai\.com|generativelanguage\.googleapis\.com")
+ALIAS = re.compile(r"[a-z][a-z0-9-]*/([a-z0-9][a-z0-9.-]*)")
+BOX_WORKLOAD = re.compile(r"(deep|fast|embed|rerank|stt|tts|voice-embed|image)(-[a-z]+)?")
+MODEL_NAME = re.compile(r"(?i)model|alias$")
+
+
+def _name(node: ast.AST) -> str:
+    return node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else ""
+
+
+def _bindings(node: ast.AST) -> list[tuple[str, ast.expr | None]]:
+    """Each (name, value) `node` binds: an assignment, a keyword, a parameter default or a dict entry."""
+    if isinstance(node, ast.Assign | ast.AnnAssign):
+        value = node.value
+        if isinstance(value, ast.Call):  # `model: str = Field(default=...)`
+            value = next((k.value for k in value.keywords if k.arg == "default"), None)
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        return [(_name(target), value) for target in targets]
+    if isinstance(node, ast.Call):
+        keywords: list[tuple[str, ast.expr | None]] = [(k.arg, k.value) for k in node.keywords if k.arg]
+        # A declared setting names its type, not itself: `Setting(type=SettingType.model_alias, default=...)`.
+        if any(isinstance(value, ast.Attribute) and value.attr == "model_alias" for _, value in keywords):
+            keywords += [("model_alias", value) for key, value in keywords if key == "default"]
+        return keywords
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        args = node.args
+        positional = args.posonlyargs + args.args
+        defaulted = zip(positional[len(positional) - len(args.defaults) :], args.defaults, strict=True)
+        return [
+            (arg.arg, default) for arg, default in [*defaulted, *zip(args.kwonlyargs, args.kw_defaults, strict=True)]
+        ]
+    if isinstance(node, ast.Dict):
+        return [
+            (key.value, value)
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and isinstance(key.value, str)
+        ]
+    return []
+
+
+def violations(source: str) -> list[str]:
+    """`line: what` for each place `source` reaches a model other than by a household gateway alias."""
+    tree = ast.parse(source)
+    docstrings = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Expr)}
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            modules = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
+            if not getattr(node, "level", 0):
+                found += [f"{node.lineno}: imports {m}" for m in modules if m.split(".")[0] in SDKS]
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings:
+            text = node.value
+            if MODEL_ID.fullmatch(text) or PROVIDER_KEY.fullmatch(text) or PROVIDER_HOST.search(text):
+                found.append(f"{node.lineno}: names {text!r}")
+        elif isinstance(node, ast.Name | ast.Attribute | ast.arg):
+            ident = node.arg if isinstance(node, ast.arg) else _name(node)
+            if PROVIDER_KEY.fullmatch(ident):
+                found.append(f"{node.lineno}: names {ident}")
+        for name, value in _bindings(node):
+            if MODEL_NAME.search(name or "") and isinstance(value, ast.Constant) and isinstance(value.value, str):
+                alias = ALIAS.fullmatch(value.value)
+                if alias and not BOX_WORKLOAD.fullmatch(alias[1]):
+                    found.append(f"{value.lineno}: {name} = {value.value!r}, not a household box")
+    return found
+
+
+def _in_model_module(relative: str) -> bool:
+    return relative == f"{MODEL_MODULE}.py" or relative.startswith(f"{MODEL_MODULE}/")
+
+
+def _sources() -> list[Path]:
+    return [
+        path
+        for tree in TREES
+        for path in sorted((ROOT / tree).rglob("*.py"))
+        if not any(part == "tests" or part.startswith(".") for part in path.relative_to(ROOT).parts)
+        and not _in_model_module(path.relative_to(ROOT).as_posix())
+    ]
+
+
+def test_models_are_reached_only_through_the_gateway() -> None:
+    found = [
+        f"{path.relative_to(ROOT)}:{violation}"
+        for path in _sources()
+        for violation in violations(path.read_text(encoding="utf-8"))
+    ]
+    assert not found, f"Outside {MODEL_MODULE}, name a model only by a household gateway alias:\n" + "\n".join(found)
