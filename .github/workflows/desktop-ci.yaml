@@ -8,6 +8,8 @@ name: desktop CI
 # Rust: fmt, clippy and the full suite on Linux (atlas) and macOS (huginn),
 # inside the app's own flake devShell, so a runner needs no ambient toolchain.
 # Frontend: the gates the app's package.json names, on atlas.
+# pnpmDeps hash: where the app's flake packages its pnpm dependencies, a pull
+# request that changes them gets flake.nix's hash corrected on its own branch.
 #
 # A public app takes fork pull requests, and fork code never runs on the
 # household runner: a fork's jobs run on a GitHub-hosted runner instead, which
@@ -112,3 +114,52 @@ jobs:
 
       - name: Production build
         run: pnpm build
+
+  pnpm-deps-hash:
+    name: pnpmDeps hash
+    # A fork's pull request never gets a write token, nor a household runner.
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ['self-hosted', 'atlas']
+    timeout-minutes: 20
+    # The one job that writes: the caller grants contents: write, and the jobs
+    # above keep this workflow's contents: read.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The branch head, not the merge ref, so a correction has a branch to land on.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Refresh flake.nix's pnpmDeps hash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          script=scripts/update-pnpm-deps-hash.sh
+          # Run by hand: verify the branch as it stands.
+          if [ -z "$BASE_SHA" ]; then exec "$script" --check; fi
+          if git diff --quiet "$BASE_SHA" HEAD -- flake.nix flake.lock package.json pnpm-lock.yaml; then
+            echo "No change to the pnpm dependencies or the flake."
+            exit 0
+          fi
+          # The base branch's copy, never the pull request's: this step holds a
+          # write token, and a branch must not edit what pushes to it.
+          base_script=scripts/.ci-update-pnpm-deps-hash.sh
+          trap 'rm -f "$base_script"' EXIT
+          if ! git show "$BASE_SHA:$script" > "$base_script"; then
+            echo "The base branch has no $script yet."
+            exit 0
+          fi
+          chmod +x "$base_script"
+          "$base_script" --check && exit 0
+          "$base_script"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(nix): refresh the pnpmDeps hash for the updated lockfile" -- flake.nix
+          git push origin "HEAD:$BRANCH"
+          # A push made with GITHUB_TOKEN starts no new run, so this run reports it.
+          echo "::notice::The pnpmDeps hash was stale and is corrected on $BRANCH."

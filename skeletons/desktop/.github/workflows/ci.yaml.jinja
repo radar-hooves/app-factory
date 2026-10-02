@@ -16,6 +16,10 @@ permissions:
 
 jobs:
   desktop:
+    # Reaches only the reusable's pnpm-deps-hash job, which pushes a corrected
+    # flake.nix hash to a pull request's branch; its other jobs keep read.
+    permissions:
+      contents: write
     uses: radar-hooves/app-factory/.github/workflows/desktop-ci.yaml@main
 {%- if linux_cargo_args %}
     with:
