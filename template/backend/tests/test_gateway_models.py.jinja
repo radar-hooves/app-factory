@@ -26,8 +26,8 @@ MODEL_MODULE = "backend/src/{{ package_name }}/{{ model_module | replace('.', '/
 
 SDKS = {"anthropic", "openai", "litellm"}
 MODEL_ID = re.compile(
-    r"([\w-]+[./])*(claude-(opus|sonnet|haiku|fable|instant|\d)|gpt-(\d|oss|image)|gemini-(\d|exp|pro|flash))"
-    r"[\w.:@\[\]-]*"
+    r"([\w-]+[./])*((claude-(opus|sonnet|haiku|fable|instant|\d)|gpt-(\d|oss|image)|gemini-(\d|exp|pro|flash))"
+    r"[\w.:@\[\]-]*|o[1-9](-(mini|preview|pro))?(-\d{4}-\d{2}-\d{2})?)"
 )
 # LITELLM_API_KEY is absent on purpose: it is the gateway's own key.
 PROVIDER_KEY = re.compile(
@@ -36,7 +36,8 @@ PROVIDER_KEY = re.compile(
 PROVIDER_HOST = re.compile(r"api\.anthropic\.com|api\.openai\.com|generativelanguage\.googleapis\.com")
 ALIAS = re.compile(r"[a-z][a-z0-9-]*/([a-z0-9][a-z0-9.-]*)")
 BOX_WORKLOAD = re.compile(r"(deep|fast|embed|rerank|stt|tts|voice-embed|image)(-[a-z]+)?")
-MODEL_NAME = re.compile(r"(?i)model|alias$")
+# `answer_model`, `MODEL_ID`, `decision_alias`; never `model_dir` or `data_model_path`.
+MODEL_NAME = re.compile(r"(?i)(^|_)(model|alias)(_(id|name))?$")
 
 
 def _name(node: ast.AST) -> str:
