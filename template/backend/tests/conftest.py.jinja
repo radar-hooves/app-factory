@@ -416,6 +416,18 @@ def _copy_test_database(template: str) -> None:
         engine.dispose()
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Refuse a run that read any pytest config but backend/pyproject.toml.
+
+    Run from the repo root, pytest finds no config beside it and takes whichever
+    lies above the checkout, or none: the suite then runs without its own
+    options (asyncio and import mode, markers) and skips what it cannot run.
+    """
+    own = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    if config.inipath is None or config.inipath.resolve() != own:
+        raise pytest.UsageError(f"this suite's config is {own}, not {config.inipath}: run pytest from backend/")
+
+
 def pytest_sessionstart(session) -> None:
     """Build the test database before anything can try to connect to it.
 

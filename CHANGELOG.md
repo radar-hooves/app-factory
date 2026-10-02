@@ -15,6 +15,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **The drift baseline only shrinks.** `--baseline` drops fixed entries and banks a fall in the viewport count, but no longer banks a fresh finding or a rise: a finding an app must keep is added to the file by hand, where a reviewer sees it. An app with no baseline file banks its backlog with `--baseline` once. Pebblestone held this with a hook of its own, which this replaces.
 
+### Fixed
+
+- **`pytest` from an app's root is refused instead of running under the wrong config.** There it finds no config beside it and takes whichever lies above the checkout (master-project's own, for every app under `repos/`), or none, so the suite ran without its asyncio and import modes and its markers. `backend/tests/conftest.py` now raises a usage error naming `backend/pyproject.toml` and saying to run from `backend/`. Godswood, cadmus, mission-command and the library each carried "cd backend first" as prose. A root config that found the backend's would have been a new root entry in every app for a one-line instruction the error now carries.
+
 ## [2026.10.1] - 2026-10-01
 
 ### Added
