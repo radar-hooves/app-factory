@@ -482,7 +482,7 @@
 {#snippet chip(r: R)}
 	{@const status = reviewOf(r)}
 	{#if status}
-		<span class="pointer-events-auto flex-none" data-slot="ledger-review">
+		<span class="flex-none" data-slot="ledger-review">
 			<StatusBadge {status} label={r.reviewLabel ?? 'Review'} />
 		</span>
 	{/if}
