@@ -132,11 +132,13 @@ jobs:
           # The branch head, not the merge ref, so a correction has a branch to land on.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          # No token on disk while the pull request's flake builds; the push step brings its own.
+          persist-credentials: false
 
       - name: Refresh flake.nix's pnpmDeps hash
+        id: refresh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           script=scripts/update-pnpm-deps-hash.sh
@@ -157,9 +159,18 @@ jobs:
           chmod +x "$base_script"
           "$base_script" --check && exit 0
           "$base_script"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push the corrected hash
+        if: steps.refresh.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(nix): refresh the pnpmDeps hash for the updated lockfile" -- flake.nix
-          git push origin "HEAD:$BRANCH"
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
           # A push made with GITHUB_TOKEN starts no new run, so this run reports it.
-          echo "::notice::The pnpmDeps hash was stale and is corrected on $BRANCH."
+          echo "::notice::The pnpmDeps hash was stale and is corrected on ${BRANCH}."
