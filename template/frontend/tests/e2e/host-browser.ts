@@ -23,8 +23,9 @@ export function hostChromium(): string | undefined {
 					.map((binary) => join(dir, build, binary))
 					.find((path) => existsSync(path))
 			: undefined;
+	// Said, not thrown: a config that throws stops `--list` and codegen too.
 	if (!shell) {
-		throw new Error(
+		console.warn(
 			'NixOS runs no downloaded browser, and this host declares none: set ' +
 				'environment.variables.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}".'
 		);
