@@ -6,7 +6,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/cadmus (Nightjar), 30/09/2026, and app-factory#12 for what converging cadmus onto it found. Its two new sanctioned per-app files, `config/rooms.yaml` and `frontend/src/lib/agent/app.ts`, wait on a sunset-review sitting (master-project#233) before the tag, and the stamp pins `@poodle64/librarian` 2026.9.27, which must be released first, from the package's own `[Unreleased]`.
+## [2026.10.4] - 2026-10-05
+
+Rooms, step 4 of the rooms design (`docs/design/agent-console.md`; need: radar-hooves/cadmus (Nightjar), 30/09/2026, and app-factory#12), and the signed-in app's route group, in which every stamped route reaches the app's own shell and session guard (need: godswood and cadmus, app-factory#6 and #7). The six paths the two make app-owned, `config/rooms.yaml`, `frontend/src/lib/agent/app.ts`, `frontend/src/lib/app-frame.svelte`, `frontend/src/lib/settings/app.ts` and `frontend/src/routes/(protected)/+page.svelte` with its `+page.ts`, were sanctioned at the sitting of 02/10/2026. The stamp pins `@poodle64/librarian` 2026.9.27.
 
 ### Added
 
@@ -14,8 +16,8 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 - **A person's conversations** (`agent_conversations`, replacing `agent_sessions`). The slice mints the conversation's id before the agent starts, so a stop has an address from the first second, and claims the agent's own session id from its `init`. It records every question asked, and what the page asked for when it was not a plain question (`kind`, a briefing), so a read returns each with its time (`at`) and kind, a question stopped before the agent took it included, and an answer mark addressed by the page's count lands on the agent's own answer. Routes: `GET rooms`, `POST rooms/{room}/ask` (JSON or multipart), `GET rooms/{room}/conversations`, `GET`/`PATCH`/`DELETE conversations/{id}`, its Markdown export and stop, and in a library room `PUT conversations/{id}/turns/{n}/mark` and `GET rooms/{room}/documents/{id}`, each body `@poodle64/librarian`'s own type.
 - **The turn is a task in the worker, not the request.** A refresh or a closed tab leaves the answer being written; a stop is a row flag any worker sets and the holder reads every second; the holder's heartbeat keeps a live stamp fresh, and one unrefreshed for 90 s reads as not answering. A second ask on a conversation being answered is refused 409.
 - **A daily allowance** (`agent_question_counts`): questions per person per local day across every room, charged when the agent accepts one, admins exempt, 429 once spent, with `Retry-After` the seconds until the local day ends, logged with it. `<APP>_AGENT_DAILY_QUESTIONS` (40; 0 is off), `<APP>_AGENT_QUOTA_TIMEZONE`, `<APP>_AGENT_SUPPORT_URL`.
-- **The rooms pages**, from `@poodle64/librarian` 2026.9.24's `Chat`: `routes/rooms` (who this person may ask) and `routes/rooms/[room]`, whose address names the room and the conversation, so a link reopens it mid-answer on any device, a link to another room shows that room, and a question another page hands over (`?q=`) waits in the box, unsent. `$lib/agent/app.ts` is the page's app-owned extension point, exporting nothing by default (`RoomExtensions`): `oncite` (what a citation opens), `describeTool`, `copy`, `Home` (inside the conversation's scroll, so a tall one scrolls on a phone), `Turn` (a question and its answer presented the app's own way, given every prop the package's own takes) and `briefing` (the composer's briefing control, asked as kind `briefing` and carded, on a reopened conversation too). A test app's use of them is `src/test/rooms` (self-test only), photographed as `docs/design/rooms-screenshots/extended-*`.
-- **Sharing an answer.** A settled answer's footer offers Share (`@poodle64/librarian`'s `AnswerShare`, which an app's own `Turn` places too): it records the answer's place in `agent_conversations.shared` and copies a link to `routes/rooms/[room]/answers/[conversation]/[turn]`, the question, the answer and its sources read-only, for anyone who may enter that room and refused to anyone else by the room's own gate. Nothing is shared by default, only the asker shares or withdraws, and the words stay in the agent's transcript, so a deleted conversation takes its shares with it. `PUT` and `DELETE conversations/{id}/turns/{n}/share`, `GET rooms/{room}/answers/{conversation}/{n}`; `StoredTurn.shared` is where a shared answer is read.
+- **The rooms pages**, from `@poodle64/librarian` 2026.9.24's `Chat`: `routes/(protected)/rooms` (who this person may ask) and `routes/(protected)/rooms/[room]`, whose address names the room and the conversation, so a link reopens it mid-answer on any device, a link to another room shows that room, and a question another page hands over (`?q=`) waits in the box, unsent. `$lib/agent/app.ts` is the page's app-owned extension point, exporting nothing by default (`RoomExtensions`): `oncite` (what a citation opens), `describeTool`, `copy`, `Home` (inside the conversation's scroll, so a tall one scrolls on a phone), `Turn` (a question and its answer presented the app's own way, given every prop the package's own takes) and `briefing` (the composer's briefing control, asked as kind `briefing` and carded, on a reopened conversation too). A test app's use of them is `src/test/rooms` (self-test only), photographed as `docs/design/rooms-screenshots/extended-*`.
+- **Sharing an answer.** A settled answer's footer offers Share (`@poodle64/librarian`'s `AnswerShare`, which an app's own `Turn` places too): it records the answer's place in `agent_conversations.shared` and copies a link to `routes/(protected)/rooms/[room]/answers/[conversation]/[turn]`, the question, the answer and its sources read-only, for anyone who may enter that room and refused to anyone else by the room's own gate. Nothing is shared by default, only the asker shares or withdraws, and the words stay in the agent's transcript, so a deleted conversation takes its shares with it. `PUT` and `DELETE conversations/{id}/turns/{n}/share`, `GET rooms/{room}/answers/{conversation}/{n}`; `StoredTurn.shared` is where a shared answer is read.
 - **A room's home says how current its documents are** ("Checked against the open record on 30 September 2026."), after what Milton answers from. `RoomRead.documents_to` is the newest date, across the room's own collections, that the library confirmed a document current — a recheck's `unchanged`, or a fetch — never a publication date, since the corpus records only a four-digit `year` and a filing date would claim currency an old document filed yesterday lacks; null, and nothing renders, where the library genuinely does not know. `LibraryAgent.documents_to()` reads it from the one collections listing it already makes (`GET /api/caller/collections`, `CollectionSummary.documents_to`), narrowed to the room's own collections. Need: radar-hooves/cadmus (Nightjar), 01/10/2026 — the library side landed as radar-hooves/library `8e32030b`.
 - **`app_hooks.agent_turn_settled(room, conversation, turn)`**, for an app that files something against an answer.
 - **`tests/test_route_walk.py`, stamped into every app:** every route outside the person-facing set declares a module gate (`entitlements.gate` marks one that reads its module off the path), so a colleague granted a room reaches nothing else. A route an app holds open by design is declared in `app_hooks.OPEN_ROUTES` with what guards it instead, matched whole; a declaration naming no route fails.
@@ -27,25 +29,20 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 - **The people list (`GET /api/users/`) answers only an account admitted to the app itself** (`entitlements.require_app_module`: any entitlement but a room's, `admin` included), so a colleague invited to a room cannot list who else uses the app; `/api/users/me` stays open to everyone. Workspace ownership could not draw the line, because every account owns the personal workspace it is given on first sight.
 - **The example slice gates on its own module** (`example`), as every domain slice now must; the E2E person holds it unless a run names its own entitlements.
 - **`agent_turn` and `agent_event` take the room's id** for a room's turn, a job's persona for a job.
-- **A stamped backend pins `agent-common>=2026.9.58`**, the release that carries `LibraryAgent`, and declares `python-multipart` for an ask with attachments.
-
-### Removed
-
-- **The persona chat:** `api/agent/ownership.py`, `GET /agent/personas`, `POST /agent/{persona}/ask` and `routes/agent/[persona]`. Every `agent_sessions` row moves to `agent_conversations` owned as before, in no room, since that slice never recorded which persona a session was with.
-
-**Not releasable until `canonical-app-shape.md` sanctions four app-owned files:** `frontend/src/lib/app-frame.svelte`, `frontend/src/lib/settings/app.ts`, `frontend/src/routes/(protected)/+page.svelte` and `+page.ts` (lodged on master-project#233). Until then the gate grades all four as owed. A merge to main is the release, because converge renders main.
-
-### Changed
-
+- **A stamped backend pins `agent-common>=2026.10.4`**, the release that carries `LibraryAgent`'s depth and `documents_to()` and `LocalAgent`'s `run_env`, and declares `python-multipart` for an ask with attachments.
 - **A route the factory stamps reaches the app's own shell and session guard with no move.** Before this, the root `+layout.svelte` was the whole shell and was owed byte-identical, so every app with a real nav excepted it and kept its shell in a group of its own. Every stamped route then landed outside that shell. Now:
   - **The group.** The signed-in app lives in `routes/(protected)/`, the protected layout `strategy-authentication.md` names. Its `+layout.svelte` belongs to the factory. It runs `auth.init()` once per page load and the session guard, shows the workspace chooser, remounts the page per workspace, and mounts the feedback widget. It renders `src/lib/app-frame.svelte` around the page.
   - **The frame.** `app-frame.svelte` is the app's extension point: nav, `homeHref`, `measure`, brand, top-bar actions, palette groups, and `workspaceLabel`, which the factory's members page and chooser read. It passes `padded={page.data.padded ?? true}`, so a route that pads itself (settings returns `padded: false`) is honoured. It renders from the first paint, before the session is confirmed.
-  - **Stamped routes and the root.** Every stamped route (settings, the agent console, members, the landing page) sits under `(protected)/`. The root layout keeps what every route needs, so a route that must render without a session sits outside the group.
+  - **Stamped routes and the root.** Every stamped route (settings, rooms, members, the landing page) sits under `(protected)/`. The root layout keeps what every route needs, so a route that must render without a session sits outside the group.
   - **Landing and errors.** The landing page, `(protected)/+page.svelte` and `+page.ts`, belongs to the scaffold slice and the app replaces it. A URL nothing serves, or a load that throws, renders `(protected)/+error.svelte` inside the frame. The catch-all's `spa` matcher (`src/params/spa.ts`) leaves what the backend and the proxy serve (`/api`, `/mcp`, `/_app`, a static file, and every prefix the app declares in `app-proxy.ts`, which `vite.config.ts` hands it) to a full page load, so a download link still downloads.
   - **Tests.** `shell.spec.ts` drives the stamped routes, a missing page and `/settings`, and fails on a frame that renders a page bare.
 
   Need: godswood and cadmus (app-factory#6, from full-stack-app-template#48).
 - **An app adds its own settings sections in `src/lib/settings/app.ts`.** The owed settings layout reads `settingsSections()`, which lists the app's groups first and the factory's "This deployment" last. `/settings` now goes to the first page the caller can open, or says there is none; it had no page, so the rail's Settings row landed on a 404. Need: godswood and cadmus (app-factory#7).
+
+### Removed
+
+- **The persona chat:** `api/agent/ownership.py`, `GET /agent/personas`, `POST /agent/{persona}/ask` and `routes/agent/[persona]`. Every `agent_sessions` row moves to `agent_conversations` owned as before, in no room, since that slice never recorded which persona a session was with.
 
 ### Fixed
 
@@ -55,7 +52,7 @@ Step 4 of the rooms design (`docs/design/agent-console.md`). Need: radar-hooves/
 
 ### Converging onto it
 
-Do this after the release, never before it. The steps are per app for two reasons:
+The steps are per app for two reasons:
 
 - A route group does not change a URL. Any route an app still holds at the URL of one the factory now stamps under `(protected)/` fails `svelte-kit sync` as a duplicate.
 - A root layout kept under an exception still draws its own shell, so the app gets two shells.
@@ -78,7 +75,7 @@ Per app, from its tree on 30/09/2026:
   - **Frame:** move in its nav, `measure`, `padded`, brand mark, `homeHref="/home"`, collapsible rail, `searchLabel` and bell. Set `workspaceLabel = 'Household'`. Move the casefile embed `<script>` into the frame's `<svelte:head>`. `$lib/fonts` covers its two font imports.
   - **Routes:** none of its own outside `(protected)/`; nothing moves. Its root `+error.svelte` stays, as the error page for anything that fails outside the group.
   - **Landing:** root `+page.svelte` and `+page.ts` duplicate `/`. Delete them, and redirect to `/home` from `(protected)/+page.ts`.
-  - **Settings:** Profile and Integrations become a "Your account" group in `settings/app.ts`. Take the factory's `(protected)/settings/+layout.svelte`, `+page.svelte` and `+page.ts`, and its members page, agent console and settings/application.
+  - **Settings:** Profile and Integrations become a "Your account" group in `settings/app.ts`. Take the factory's `(protected)/settings/+layout.svelte`, `+page.svelte` and `+page.ts`, and its members page, rooms and settings/application.
   - **Exceptions:** retires all 9.
 - **cadmus** (`(protected)` already), as godswood.
   - **Frame:** its overlay sidebars, past questions, lessons palette group, section-visibility effects, brand star, and `/records/id26` rendered bare.
@@ -115,6 +112,8 @@ Per app, from its tree on 30/09/2026:
 - **portcullis** (`(app)`, stamped at 2026.8.6). Not a candidate yet: it signs in at its own `/login`, and the factory's guard sends a lapsed session to the proxy. When it converges:
   - **Routes:** rename `(app)` to `(protected)`. Its root `+page.svelte`, a redirect to `/overview`, becomes `(protected)/+page.ts`. Its root `+error.svelte` stays.
   - **Stays outside:** `login/`. It is the sign-in hand-off a signed-out visitor must reach, so it cannot sit behind the guard.
+
+An app takes this with `copier update` to the release, a regenerated `.template-parity.json`, `agent-common` raised to `>=2026.10.4`, and the seeded `agent_conversations` migration with its `down_revision` repointed at the app's own head.
 
 ## [2026.10.3] - 2026-10-05
 

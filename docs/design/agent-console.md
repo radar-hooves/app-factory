@@ -1,6 +1,6 @@
 # Agent console
 
-Status: **steps 1 to 3 released (factory 2026.9.57 and 2026.9.58, `@poodle64/librarian` 2026.9.22); step 4 built, with what converging cadmus onto it found (app-factory#12), its tag waiting on the sitting below and on `@poodle64/librarian` 2026.9.24's release; the asker, the tier and the writes answered 01/10/2026.** Need: radar-hooves/cadmus (Nightjar), 30/09/2026; radar-hooves/godswood#846 via Nightjar, 01/10/2026. Colleagues chat with Milton about a collection (PACMAN, DASR, any collection) and keep their conversations, in a chat that behaves as people now expect; every app that lets a person chat with an agent gets that same product from the factory.
+Status: **steps 1 to 4 released (factory 2026.9.57, 2026.9.58 and 2026.10.4, `@poodle64/librarian` 2026.9.27), step 4 with what converging cadmus onto it found (app-factory#12); the asker, the tier and the writes answered 01/10/2026.** Need: radar-hooves/cadmus (Nightjar), 30/09/2026; radar-hooves/godswood#846 via Nightjar, 01/10/2026. Colleagues chat with Milton about a collection (PACMAN, DASR, any collection) and keep their conversations, in a chat that behaves as people now expect; every app that lets a person chat with an agent gets that same product from the factory.
 
 ## Decision
 
@@ -197,7 +197,7 @@ Estimates carry "about"; everything else is `wc -l` at 30/09/2026.
 
 ## Where the operator rules
 
-**Two entries on the closed sanctioned-per-app list** in `platform/canonical-app-shape.md`: `config/rooms.yaml` (the rooms this app offers) and `frontend/src/lib/agent/app.ts` (the room page's extension point). A shared rule changes only at a sunset-review sitting, so step 4 cannot tag before one.
+**Two entries on the closed sanctioned-per-app list** in `platform/canonical-app-shape.md`: `config/rooms.yaml` (the rooms this app offers) and `frontend/src/lib/agent/app.ts` (the room page's extension point). A shared rule changes only at a sunset-review sitting; the sitting of 02/10/2026 added both.
 
 **The relaxed hard limit** (§2): `core.md` §Guardrails amended so that a likely collection's free text may reach a Claude session once Redactyl has redacted it and its verify pass has released it. Ruled by the operator 01/10/2026; a shared rule changes only at a sitting, so until then the library withholds that text from every machine caller.
 
