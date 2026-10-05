@@ -76,9 +76,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Stage 4: Debian's archive as it stands at this build, the apt layer's cache key
 # below. BuildKit fetches an ADD URL on every build and keys it on the bytes, so
-# this stage changes exactly when Debian publishes to a suite the runtime base
-# reads, whatever that base image's digest does. Each file is named as apt names
-# it in /var/lib/apt/lists; the suites are the runtime FROM's and move with it.
+# this stage changes whenever Debian republishes a suite the runtime base reads,
+# and only then, whatever that base image's digest does. Each file is named as
+# apt names it in /var/lib/apt/lists; the suites are the runtime FROM's and move
+# with it.
 FROM scratch AS debian-archive
 ADD https://deb.debian.org/debian/dists/bookworm/InRelease deb.debian.org_debian_dists_bookworm_InRelease
 ADD https://deb.debian.org/debian/dists/bookworm-updates/InRelease deb.debian.org_debian_dists_bookworm-updates_InRelease
@@ -113,7 +114,7 @@ RUN --mount=type=bind,from=debian-archive,target=/run/debian-archive \
     && apt-get update \
     && for f in /run/debian-archive/*; do \
          cmp -s "$f" "/var/lib/apt/lists/${f##*/}" \
-         || { echo "Debian published ${f##*/} during this build; run it again." >&2; exit 1; }; \
+         || { echo "${f##*/}: apt's differs from debian-archive's (Debian published mid-build: run again; or the stage's suites no longer match FROM)" >&2; exit 1; }; \
        done \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends curl ca-certificates $packages \
