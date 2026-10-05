@@ -36,12 +36,6 @@ desktop.ini
 .claude/.sessions/
 .claude/worktrees/
 .worktrees/
-# Worktree governance-resolution shims: deliberately UNTRACKED. A tracked shim
-# would place .claude/.claude/skills inside the scanned tree and register the
-# whole master skills pool a second time in every session.
-.claude/.claude
-.claude/docs
-.claude/rules-library
 
 # ============================================================================
 # Environment & Secrets
