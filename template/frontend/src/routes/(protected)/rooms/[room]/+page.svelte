@@ -160,9 +160,10 @@
 {:else}
 	{@const c = chat}
 	{@const r = room}
-	<!-- On a phone the composer sits above the shell's fixed report button
-	     (size-11 at bottom-4), never under it. -->
-	<div class="relative flex h-full min-h-0 flex-1 max-md:pb-14">
+	<!-- No room reserved here for the shell's report button: the composer lifts
+	     it clear of Send (`--ds-report-clearance`), and a reserve here as well
+	     lifts Send back under it on a phone (app-factory#29). -->
+	<div class="relative flex h-full min-h-0 flex-1">
 		<aside
 			class="border-border bg-background absolute inset-y-0 left-0 z-10 w-72 overflow-y-auto border-r shadow-lg md:static md:shadow-none {listOpen
 				? ''

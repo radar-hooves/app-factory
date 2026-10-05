@@ -260,6 +260,34 @@ test('a library room offers Quick or Thorough; a persona room offers neither', a
 	await expect(page.getByText('Quick', { exact: true })).toHaveCount(0);
 });
 
+// The library room's composer is the tallest, with its Quick or Thorough row.
+// On a phone the report button shares its corner with Send (app-factory#29).
+test('on a phone, Send is clear of the report button', async ({ browser }) => {
+	const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	const page = await phone.newPage();
+	try {
+		await page.goto('/rooms/manual');
+		const send = page.getByRole('button', { name: 'Send' });
+		const report = page.getByRole('button', { name: 'Report a problem' });
+		await expect(send).toBeVisible();
+		await expect(report).toBeVisible();
+		const s = await send.boundingBox();
+		const r = await report.boundingBox();
+		if (!s || !r) throw new Error('Send or the report button has no box');
+		const apart =
+			s.y + s.height <= r.y ||
+			r.y + r.height <= s.y ||
+			s.x + s.width <= r.x ||
+			r.x + r.width <= s.x;
+		expect(apart, `Send ${JSON.stringify(s)}, the report button ${JSON.stringify(r)}`).toBe(true);
+
+		await ask(page, 'And on a phone?');
+		await expect(page.getByText(/On and on a phone: a member accrues/)).toBeVisible();
+	} finally {
+		await phone.close();
+	}
+});
+
 test('a link to another room shows that room, not the last one', async ({ page }) => {
 	await page.goto(`/rooms/manual?c=${manualConversation}`);
 	await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
