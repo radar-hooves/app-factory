@@ -42,7 +42,7 @@ jobs:
           - os: macos
             runner: '["self-hosted", "huginn"]'
             hosted: macos-latest
-    # by-exception (01/10/2026): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ github.event.pull_request.head.repo.fork && matrix.hosted || fromJSON(matrix.runner) }}
     # Bounds a hang once the job runs; an offline huginn leaves it queued instead.
     timeout-minutes: 75
@@ -74,7 +74,7 @@ jobs:
 
   frontend:
     name: Frontend
-    # by-exception (01/10/2026): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "atlas"]') }}
     timeout-minutes: 20
     steps:

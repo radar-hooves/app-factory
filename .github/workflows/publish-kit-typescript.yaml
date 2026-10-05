@@ -17,7 +17,7 @@ name: Publish kits/typescript
 # is re-made on npmjs (docs/master/reference/guide-package-distribution.md in
 # master-project).
 #
-# by-exception: a GitHub-hosted runner, because npm trusted publishing does not
+# by-exception (2026-09-30): a GitHub-hosted runner, because npm trusted publishing does not
 # support self-hosted runners (docs.npmjs.com/trusted-publishers); an OIDC
 # publish from atlas fails ENEEDAUTH. Never pull_request. A dispatch on main
 # re-runs a publish that failed; a dispatch on any other ref is a dry run of the
@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # by-exception (2026-09-30): npm trusted publishing, see the header
     timeout-minutes: 30
     permissions:
       contents: read

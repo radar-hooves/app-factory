@@ -37,6 +37,7 @@ permissions:
 jobs:
   household-hosts:
     name: No household host in the tree
+    # by-exception (2026-09-28): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     timeout-minutes: 5
     steps:

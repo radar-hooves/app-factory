@@ -92,7 +92,7 @@ jobs:
         # (radar-hooves/master-project/.github/actions/setup-uv): this repo is
         # PUBLIC and cannot reach a private-repo action, the constraint
         # security.yaml records for the golden reusable —
-        # by-exception (29/09/2026), same reason. Costs the wrapper's persisted
+        # by-exception (2026-09-29), same reason. Costs the wrapper's persisted
         # tool-cache trick (a fresh uv download each run instead of a restored
         # one); worth it for a job that runs only on template/copier.yaml/
         # variants.yaml changes, not on every push.
