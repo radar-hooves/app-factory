@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.2] - 2026-10-05
+
 ### Added
 
 - **A stamped app reaches a model only through the household gateway, by alias.** `backend/tests/test_gateway_models.py` reads the app's Python under `backend/src`, `scripts/` and `tools/` and refuses, outside the one module the new `model_module` answer names (default `llm`): a provider SDK import, a provider model id (`claude-…`, `gpt-…`, `gemini-…`, `o3-…`), a provider key name or endpoint, and a model setting (a name ending `model`, `alias`, `model_id` or `model_name`) defaulted to an alias that is not a household box (`<box>/<workload>`). Pre-commit runs it without the suite's conftest, in under a second. Cadmus, saul, pebblestone, eight and the library each carried this as prose, and pebblestone as a test of its own. Measured against the fleet's main on 03/10/2026: pebblestone names `gpt-4` three times for tiktoken, eight defaults three settings to `goku/*` in `config/sections/llm.py`, and godswood names `gpt-5-*` four times; an app answers `model_module` with `copier update --data model_module=<module>`.
