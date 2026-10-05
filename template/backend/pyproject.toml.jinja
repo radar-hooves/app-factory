@@ -54,7 +54,6 @@ dev = [
     "mypy-baseline>=0.7.4",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
-    "pytest-cov>=7.1.0",
     # pytest-xdist: CI runs the suite across workers (python-ci.yaml's -n);
     # conftest.py gives each worker its own database on one shared Postgres.
     "pytest-xdist>=3.8.0",
@@ -143,11 +142,3 @@ markers = [
     "unit: fast, isolated, no external dependencies",
     "integration: exercises multiple components; may need fixtures or services",
 ]
-
-[tool.coverage.run]
-source = ["src/{{ package_name }}"]
-omit = ["*/tests/*", "*/migrations/*"]
-branch = true
-
-[tool.coverage.report]
-fail_under = 70
