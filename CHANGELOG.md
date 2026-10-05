@@ -6,6 +6,24 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.3] - 2026-10-05
+
+### Removed
+
+- **The coverage floor no CI enforced.** `[tool.coverage.report] fail_under = 70` and `pytest-cov` leave the stamped `backend/pyproject.toml`: neither addopts nor the `python-ci` caller passes `--cov`, and an app adding it to addopts trips the one-test gateway-models hook. An app that wants a floor runs it in a local workflow, the reason `canonical-app-shape.md` already names for one. `backend/pyproject.toml` is the app's own, so an app deletes the two tables by hand. Need: godswood.
+- **`.env.example` names no `SECRET_KEY`.** The setting left the factory at 2026.9.17, but the example kept a commented line, and the `DEBUG` note still claimed production mode demands a real secret key. An app still logging "SECRET_KEY is set to the insecure default" carries a pre-2026.9.17 `config/__init__.py` and converges it. Need: eight.
+
+### Fixed
+
+- **The shell's chrome no longer covers an app's own controls** (`@poodle64/ui` 2026.10.3, which the stamped `frontend/package.json` now floors). From `xl` the bar was held to one row, so a crowded bar painted the next item over the `context` slot (mission-command's workspace menu); it now wraps at every width. The report button sat on a page's last control with no room to scroll it clear (earworm's column toggle in a 180px-tall window); the widget declares its footprint and padded content ends with that room, so while it is mounted a page that exactly filled the content area now scrolls by up to 4.5rem (nothing changes where a page lifts the button with `--ds-report-clearance`). Both are driven in the ui harness and fail against 2026.10.2. Library's missing Members is its own: its held layout never passes `onManageMembers`. Need: mission-command, earworm.
+- **The live server's start budget stretches with the host's load.** `tests/support/live_server.py` gave a booting server a flat 60s, and godswood's `test_db_session_commit_ordering` saw one take longer at load 58 on 20 cores. The budget is now 60s times the run queue per core when that exceeds one, so a hang on a quiet host still fails at sixty seconds. Need: godswood.
+- **A stamped app's E2E suite runs on atlas with no config of its own.** atlas exports nixpkgs' Playwright browsers as `PLAYWRIGHT_BROWSERS_PATH`, at nixpkgs' revision rather than the app's; when the expected browser is absent there, `playwright.config.ts` launches the headless shell that is present. CI's image is untouched, and pixel baselines remain CI's. Proven on a scratch stamp on atlas: all four of its specs pass on Chromium 141 under `@playwright/test` 1.62.1. Need: godswood.
+- **The scaffold E2E spec reads the home page's count in its Detail view,** the only view that shows it since 2026.9.8; a fresh stamp's suite failed one of four specs.
+- **The security scans run on atlas, the factory's own and the desktop skeleton's;** only a fork's pull request takes a hosted runner. On atlas gitleaks is the runner's own and Trivy keeps its database on local disk, as master's `security-checks.yaml` does.
+- **The kit's lock overrides `devalue` to 5.9.4 and `fast-uri` to 3.1.8,** and the stamped `.gitignore` drops the retired worktree-shim lines.
+
+An app takes this with `copier update` to the release, a regenerated `.template-parity.json`, and `@poodle64/ui` raised to `^2026.10.3`.
+
 ## [2026.10.2] - 2026-10-05
 
 ### Added
