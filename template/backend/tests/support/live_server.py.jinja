@@ -16,12 +16,22 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import httpx
 
 BACKEND = Path(__file__).resolve().parents[1]
+
+# A quiet host's start budget. It stretches by the host's run queue per core: a
+# loaded host slows the same boot (over 60s at load 58 on 20 cores, 05/10/2026),
+# while a hang on a quiet host still fails at sixty seconds.
+START_BUDGET_SECONDS = 60.0
+
+
+def start_budget() -> float:
+    return START_BUDGET_SECONDS * max(1.0, os.getloadavg()[0] / (os.cpu_count() or 1))
 
 
 def free_port() -> int:
@@ -49,13 +59,16 @@ async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[s
         env={**os.environ, **(env or {})},
     )
     base_url = f"http://127.0.0.1:{port}"
+    started = time.monotonic()
     try:
-        async with asyncio.timeout(60), httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
+        async with httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
             while True:
                 assert process.poll() is None, "the server process exited during startup"
                 with contextlib.suppress(httpx.TransportError):
                     if (await probe.get("/openapi.json")).status_code == 200:
                         break
+                waited, budget = time.monotonic() - started, start_budget()
+                assert waited < budget, f"the server did not answer within {waited:.0f}s (budget {budget:.0f}s)"
                 await asyncio.sleep(0.1)
         yield base_url, process.pid
     finally:

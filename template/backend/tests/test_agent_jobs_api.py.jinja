@@ -33,10 +33,7 @@ import datetime
 import json
 import os
 import shutil
-import socket
 import stat
-import subprocess
-import sys
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -63,10 +60,9 @@ from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
-from tests.support import fake_agent_cli
+from tests.support import fake_agent_cli, live_server
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
-BACKEND = Path(__file__).parents[1]
 
 ENTITLED = {"x-authentik-uid": "job-1", "x-authentik-username": "asker", "x-authentik-entitlements": "agent-jobagent"}
 UNENTITLED = {"x-authentik-uid": "job-2", "x-authentik-username": "bystander"}
@@ -1038,44 +1034,19 @@ async def test_a_stop_that_loses_the_row_lock_race_to_the_runs_own_settle_is_a_n
 # -- Any worker ------------------------------------------------------------------
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return int(probe.getsockname()[1])
-
-
-@contextlib.asynccontextmanager
-async def _second_worker(agent_settings: AgentSettings) -> AsyncIterator[tuple[str, int]]:
+def _second_worker(agent_settings: AgentSettings) -> contextlib.AbstractAsyncContextManager[tuple[str, int]]:
     """Another worker process of this deployment: the same app, database and data directory, its
     own process, event loop and children -- what gunicorn's other workers are to the one running a
     job. Yields its base URL and pid."""
-    port = _free_port()
     prefix = "{{ project_name | upper | replace('-', '_') }}_AGENT_"
-    env = {
-        **os.environ,
-        f"{prefix}PERSONAS_DIR": str(agent_settings.personas_dir),
-        f"{prefix}EXECUTABLE": agent_settings.executable,
-        f"{prefix}TIMEOUT_SECONDS": str(agent_settings.timeout_seconds),
-        "DATA_DIR": str(data_dir()),
-    }
-    process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "{{ package_name }}.server:app", "--port", str(port), "--log-level", "warning"],
-        cwd=BACKEND,
-        env=env,
+    return live_server.run_server(
+        {
+            f"{prefix}PERSONAS_DIR": str(agent_settings.personas_dir),
+            f"{prefix}EXECUTABLE": agent_settings.executable,
+            f"{prefix}TIMEOUT_SECONDS": str(agent_settings.timeout_seconds),
+            "DATA_DIR": str(data_dir()),
+        }
     )
-    base_url = f"http://127.0.0.1:{port}"
-    try:
-        async with asyncio.timeout(60), httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
-            while True:
-                assert process.poll() is None, "the second worker exited during startup"
-                with contextlib.suppress(httpx.TransportError):
-                    if (await probe.get("/openapi.json")).status_code == 200:
-                        break
-                await asyncio.sleep(0.1)
-        yield base_url, process.pid
-    finally:
-        process.terminate()
-        process.wait(timeout=30)
 
 
 async def _collect(stream: AsyncIterator[str], into: list[dict[str, Any]]) -> None:
@@ -1094,8 +1065,8 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
     itself once it has settled.
 
     `hanging`'s own idle timeout is widened well past any plausible boot time for the second
-    worker's real `uvicorn` subprocess below (`_second_worker` itself allows up to 60s and only
-    THEN starts the stop that ends the hang) -- CI hit exactly this race under load
+    worker's real `uvicorn` subprocess below (twice the live server's start budget, which the stop
+    that ends the hang waits out first) -- CI hit exactly this race under load
     (radar-hooves/cadmus run 36655467242, 30/09/2026): the shared fixture's 10s default left too
     little headroom, and the hang's own wall-clock timeout fired first, settling it `failed` before
     the stop below ever reached the row. `test_a_stop_that_loses_the_row_lock_race_to_the_runs_own
@@ -1103,7 +1074,7 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
     timeout here removes it from THIS test so this test is only ever exercising the any-worker
     stop/message/resume behaviour it names."""
     _, workspace_id = identity
-    patient = agent_settings.model_copy(update={"timeout_seconds": 120.0})
+    patient = agent_settings.model_copy(update={"timeout_seconds": 2 * live_server.start_budget()})
     hanging = await _start(patient, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until_running(hanging)
 
