@@ -70,6 +70,7 @@
 	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
 	import { Segmented } from '../dist/components/ui/segmented/index.js';
 	import ListShell from '../dist/components/ui/list-shell/list-shell.svelte';
+	import { ReportWidget } from '../dist/components/feedback/index.js';
 	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
 	import type {
 		LedgerColumn,
@@ -221,6 +222,10 @@
 	// not a shell slot because the shell has no second-column slot to put it in —
 	// `sidebar` was removed in 2026.8.11.
 	const withPageNav = params.get('pagenav') === '1';
+	// `?surface=chrome` puts the shell's own chrome where it can cover an app's
+	// controls: a bar crowded past one row beside a wide `context`, and the report
+	// widget over the last row of a page `?long=1` makes scroll.
+	const chromeLong = params.get('long') === '1';
 	// `?surface=measure&measure=<tier>` drives the content measure. Every claim
 	// it makes is a resolved length — `80rem` against the root font size, `72ch`
 	// against the body face, a cap that binds only once the viewport is wide
@@ -1823,6 +1828,22 @@
 			</Panel>
 		</SettingsShell>
 	</AppShell>
+{:else if surface === 'chrome'}
+	<AppShell {nav} currentPath="#/overview" brandTitle="Harness" onSearch={() => {}}>
+		{#snippet context()}
+			<Button variant="outline" size="sm" data-testid="chrome-context">A workspace with a long name</Button>
+		{/snippet}
+		{#snippet actions()}
+			{#each ['Gauge one 72%', 'Gauge two 41%', 'Gauge three 9%', 'Gauge four 88%', 'Majordomo live', 'Mon 17:05'] as label (label)}
+				<Badge variant="outline">{label}</Badge>
+			{/each}
+		{/snippet}
+		{#if chromeLong}<div class="h-[150vh] flex-none"></div>{/if}
+		<div class="flex justify-end">
+			<Button variant="outline" size="icon" aria-label="Toggle columns" data-testid="chrome-last"><Plus /></Button>
+		</div>
+	</AppShell>
+	<ReportWidget />
 {:else}
 	<AppShell
 		{nav}

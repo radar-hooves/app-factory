@@ -16,6 +16,12 @@
  *
  * The bottom pad carries `env(safe-area-inset-bottom)` so the last row of a page
  * clears a home-indicator gesture bar.
+ *
+ * The trailing `::after` is `--ds-report-reserve`, the footprint the mounted
+ * report widget declares, so a page's last row can scroll clear of the button
+ * floating over its corner. An element rather than padding: a page taller than
+ * the content area overflows this box, which leaves its padding behind at the
+ * area's foot, while a last flex item follows the overflow to its end.
  */
 export const CONTENT_PADDING =
-	'px-4 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pt-7 md:pb-[calc(1.75rem+env(safe-area-inset-bottom))] 2xl:px-12';
+	'px-4 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pt-7 md:pb-[calc(1.75rem+env(safe-area-inset-bottom))] 2xl:px-12 after:block after:flex-none after:h-[var(--ds-report-reserve,0px)]';

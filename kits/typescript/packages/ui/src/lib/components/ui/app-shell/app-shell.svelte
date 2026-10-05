@@ -720,8 +720,13 @@
 	{/if}
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+		<!-- The bar wraps when crowded, at every width, and pads top and bottom
+		     alike so a second row clears both edges. Kept to one row, it shrank
+		     `context` below its own content and the next item painted over it, so
+		     the app's own control under the overlap could not be clicked
+		     (mission-command's workspace menu, 04/10/2026). -->
 		<header
-			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none flex-wrap items-center gap-2 border-b px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:gap-3 sm:px-5 xl:flex-nowrap"
+			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none flex-wrap items-center gap-2 border-b px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 backdrop-blur sm:gap-3 sm:px-5"
 		>
 			{#if hasNav}
 				<!-- `aria-controls` names the region this toggle opens. It is present
@@ -773,7 +778,7 @@
 					class={cn(
 						'flex min-w-0 items-center gap-2 sm:gap-3',
 						controls.content
-							? 'order-last basis-full pb-2 xl:order-none xl:basis-auto xl:pb-0'
+							? 'order-last basis-full xl:order-none xl:basis-auto'
 							: 'hidden md:flex'
 					)}
 					data-testid="ds-shell-location"

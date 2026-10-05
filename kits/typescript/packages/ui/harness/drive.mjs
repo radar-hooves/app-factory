@@ -4297,6 +4297,41 @@ for (const density of ['comfortable', 'compact']) {
 	await context.close();
 }
 
+// The shell's own chrome never takes a click meant for an app's control. Both
+// were app CI failures on 04/10/2026: a crowded bar painted the next item over
+// mission-command's workspace menu, and the report button sat on earworm's last
+// control in a 180px-tall window. The bar's claim is Playwright's own
+// actionability check, which refuses a control another element intercepts; the
+// button's is geometric, since a round disc misses a control's centre by luck.
+for (const [height, long] of [
+	[720, 1],
+	[180, 0]
+]) {
+	const { context, page, errors } = await open(`surface=chrome&long=${long}`, { width: 1280, height });
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-testid="chrome-context"]');
+	const target = await page
+		.getByTestId('chrome-context')
+		.click({ trial: true, timeout: 3000 })
+		.then(
+			() => 'clickable',
+			(error) => error.message.match(/<[^>]+> (from .+ subtree )?intercepts pointer events/)?.[0] ?? error.message.split('\n')[0]
+		);
+	check(`chrome at 1280x${height}: a crowded bar leaves the context control its own`, target === 'clickable', target);
+	const shared = await page.evaluate(() => {
+		const main = document.querySelector('[data-slot="app-shell-content"]');
+		main.scrollTop = main.scrollHeight;
+		const a = document.querySelector('[data-testid="chrome-last"]').getBoundingClientRect();
+		const b = document.querySelector('[aria-label="Report a problem"]').getBoundingClientRect();
+		const across = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+		const down = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+		return Math.round(across * down);
+	});
+	check(`chrome at 1280x${height}: scrolled to its end, the last control clears the report button`, shared === 0, `${shared}px² shared`);
+	check(`chrome at 1280x${height}: no page error`, errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();

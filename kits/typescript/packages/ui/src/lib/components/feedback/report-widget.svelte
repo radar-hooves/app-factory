@@ -26,6 +26,9 @@
 	// not sit in the situation→component registry either.
 	// A page control that shares its corner sets `--ds-report-clearance` on the
 	// document to lift the trigger clear of it (the librarian composer does).
+	// Every other page gets the trigger's footprint, net of that lift, as
+	// `--ds-report-reserve`: the shell ends its padded content with that much
+	// room, so a control under the corner can always scroll clear.
 
 	let {
 		/** Where the report POSTs. The app's own route, defaulting to the one every household app serves. */
@@ -49,6 +52,15 @@
 	const formId = `feedback-form-${uid}`;
 	const messageId = `feedback-message-${uid}`;
 	const screenshotId = `feedback-screenshot-${uid}`;
+
+	// The trigger's top edge sits 3.75rem up (1rem offset, 2.75rem disc); 4.5rem
+	// leaves a gap above it. Resolved on the document, so a lift set or cleared
+	// later moves it too.
+	$effect(() => {
+		const root = document.documentElement;
+		root.style.setProperty('--ds-report-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))');
+		return () => root.style.removeProperty('--ds-report-reserve');
+	});
 
 	async function submit() {
 		phase = 'submitting';

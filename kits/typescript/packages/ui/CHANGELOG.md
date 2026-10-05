@@ -2,6 +2,24 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.3] - 2026-10-05
+
+### Fixed
+
+- **The shell's chrome no longer covers an app's own controls.** The bar was
+  held to one row from `xl`, so a crowded bar shrank `context` below its own
+  content and the next item painted over it: mission-command's workspace menu
+  could not be clicked at 1280px. The bar now wraps at every width, padded top
+  and bottom alike; a bar that fits is one 56px row as before. And the report
+  button floated over a page's last control with no room to scroll it clear
+  (earworm's column toggle in a 180px-tall window): `ReportWidget` declares its
+  footprint as `--ds-report-reserve`, net of any `--ds-report-clearance` lift,
+  and the shell's padded content ends with that much room, as a trailing
+  element, because a page taller than the content area leaves its bottom
+  padding behind. `harness/drive.mjs` drives both at 1280x720 and 1280x180;
+  each check fails against 2026.10.2. Need: radar-hooves/mission-command and
+  radar-hooves/earworm, via master-project's orchestrator.
+
 ## [2026.10.2] - 2026-10-03
 
 ### Added
