@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.5] - 2026-10-05
+
 ### Fixed
 
 - **The stamped `exceptions.py` passes `ruff format --check`.** 2026.10.4 left three blank lines before `AccountInactiveError` and one after it, so every app's Python CI failed the format gate on a file it may not edit. Need: eight, 05/10/2026.
