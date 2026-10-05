@@ -50,7 +50,7 @@ _skip_if_exists:
   - src-tauri/capabilities/default.json
   - src-tauri/src/lib.rs
   - src-tauri/icons/icon.png
-  # THE extension point for the room page (routes/rooms/[room]), which the
+  # THE extension point for the room page (routes/(protected)/rooms/[room]), which the
   # factory owns: what a citation opens, how an answer reads, what sits on a
   # room's home. App-owned by definition (docs/design/agent-console.md).
   - frontend/src/lib/agent/app.ts

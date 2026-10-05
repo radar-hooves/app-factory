@@ -30,8 +30,8 @@ vi.mock('$lib/agent/app', async () => ({
 	...(await import('./app'))
 }));
 
-import RoomPage from '../../routes/rooms/[room]/+page.svelte';
-import SharedPage from '../../routes/rooms/[room]/answers/[conversation]/[turn]/+page.svelte';
+import RoomPage from '../../routes/(protected)/rooms/[room]/+page.svelte';
+import SharedPage from '../../routes/(protected)/rooms/[room]/answers/[conversation]/[turn]/+page.svelte';
 
 const ROOM = {
 	id: 'manual',

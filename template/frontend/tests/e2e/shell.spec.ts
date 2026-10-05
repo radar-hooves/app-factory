@@ -29,14 +29,16 @@ test('the top bar search affordance opens the command palette', async ({ page })
 const STAMPED_ROUTES = [
 	{ path: '/workspace', heading: 'Members' },
 	{ path: '/settings/application', heading: 'Application' },
-	{ path: '/agent/no-such-persona', heading: 'No such persona' }
+	{ path: '/rooms', heading: 'Ask' }
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {
 	test(`the factory's ${path} renders inside the app's shell`, async ({ page }) => {
 		await page.goto(path);
 
-		await expect(page.locator('#ds-main').getByRole('heading', { name: heading })).toBeVisible();
+		await expect(
+			page.locator('#ds-main').getByRole('heading', { name: heading, exact: true })
+		).toBeVisible();
 		await expect(page.getByTestId('ds-shell-search')).toBeVisible();
 	});
 }
