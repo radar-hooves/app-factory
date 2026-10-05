@@ -5,9 +5,10 @@ name: Security
 # private one (radar-hooves/master-project) — the attempt dies at startup
 # validation with zero jobs. Mirrored from radar-hooves/thoth's own security.yaml,
 # which carries the same constraint and the same fix: gitleaks and trivy-fs
-# inlined here, on atlas (rules-library/fleet/ci.md); only a fork's pull request
-# runs on a GitHub-hosted runner, so fork code never reaches the household
-# runner. This repo's own first-party code is its kits (template/ is
+# inlined here, on atlas (rules-library/fleet/ci.md), with a fork's pull request
+# routed to a GitHub-hosted runner. Routing, not a fence: a pull request runs
+# its own copy of this file, so the runner group's settings are what keep fork
+# code off atlas. This repo's own first-party code is its kits (template/ is
 # jinja source stamped into apps, not runnable code of this repo's own — its
 # own audit runs in the scaffolded app via
 # template/.github/workflows/security.yaml.jinja); trivy-fs reads every kit's

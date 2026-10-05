@@ -16,7 +16,9 @@ All notable changes to this package are documented here. Format follows [Keep a 
   footprint as `--ds-report-reserve`, net of any `--ds-report-clearance` lift,
   and the shell's padded content ends with that much room, as a trailing
   element, because a page taller than the content area leaves its bottom
-  padding behind. `harness/drive.mjs` drives both at 1280x720 and 1280x180;
+  padding behind. While the widget is mounted, a page that exactly filled the
+  content area now scrolls by up to 4.5rem; a page that lifts the button with
+  `--ds-report-clearance` is unchanged. `harness/drive.mjs` drives both at 1280x720 and 1280x180;
   each check fails against 2026.10.2. Need: radar-hooves/mission-command and
   radar-hooves/earworm, via master-project's orchestrator.
 

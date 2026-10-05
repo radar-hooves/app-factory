@@ -6,8 +6,10 @@ name: Security
 # Do NOT convert this to the estate thin caller of master-project's
 # security-checks.yaml: a public repo cannot reach a reusable workflow in a
 # private one, and the attempt dies at startup validation with zero jobs.
-# The repo's own code runs on atlas (rules-library/fleet/ci.md); a fork's pull
-# request runs on a GitHub-hosted runner, so fork code never reaches it.
+# The repo's own code runs on atlas (rules-library/fleet/ci.md), with a fork's
+# pull request routed to a GitHub-hosted runner. Routing, not a fence: a pull
+# request runs its own copy of this file, so the runner group's settings are
+# what keep fork code off atlas.
 
 # Weekly, and on a dependency change: CVEs arrive with time, not with commits,
 # and pre-commit already runs gitleaks on every commit. Measured 06/09/2026:
