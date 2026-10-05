@@ -1,27 +1,12 @@
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-
-import { chromium, defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 import { appWebServer } from './tests/e2e/app-web-server';
+import { hostChromium } from './tests/e2e/host-browser';
 
 const CI = !!process.env.CI;
-
-// NixOS runs no downloaded browser. atlas exports nixpkgs' patched build as
-// PLAYWRIGHT_BROWSERS_PATH, at nixpkgs' Playwright revision rather than this
-// app's, so the browser this @playwright/test expects is absent there and the
-// headless shell that is present runs the suite instead. A pixel baseline is
-// still CI's own (playwright-container.yaml): this is a different Chromium.
-function hostHeadlessShell(): string | undefined {
-	const dir = process.env.PLAYWRIGHT_BROWSERS_PATH;
-	if (!dir || !existsSync(dir) || existsSync(chromium.executablePath())) return undefined;
-	const build = readdirSync(dir).find((name) => name.startsWith('chromium_headless_shell-'));
-	if (!build) return undefined;
-	return ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell']
-		.map((binary) => join(dir, build, binary))
-		.find((path) => existsSync(path));
-}
-const HOST_HEADLESS_SHELL = hostHeadlessShell();
+// NixOS runs no downloaded browser; tests/e2e/host-browser.ts finds the one the
+// host declares, so `pnpm exec playwright test` runs there as it does on CI.
+const HOST_CHROMIUM = hostChromium();
 
 // There is one database and no staging environment (dev-environment.md
 // "There Is No Development Database"), so this suite gets its own port and
@@ -80,7 +65,7 @@ export default defineConfig({
 			name: 'chromium',
 			use: {
 				...devices['Desktop Chrome'],
-				...(HOST_HEADLESS_SHELL && { launchOptions: { executablePath: HOST_HEADLESS_SHELL } })
+				...(HOST_CHROMIUM && { launchOptions: { executablePath: HOST_CHROMIUM } })
 			}
 		}
 	],
