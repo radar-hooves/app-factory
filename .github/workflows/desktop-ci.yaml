@@ -15,9 +15,9 @@ name: desktop CI
 # household runner: a fork's jobs run on a GitHub-hosted runner instead, which
 # installs Nix first.
 #
-# by-exception (01/10/2026): no ntfy-failure step. This repo is public, so it
-# can neither call master-project's private action nor name the household
-# endpoint, and CI runs on a PR, whose page is where its failure is read.
+# No push on a failure. Only atlas-n8n and atlas-systemd write the operator's
+# ntfy topics, and the red-CI digest reports a failed run (the operator's
+# ruling, 05/10/2026).
 on:
   workflow_call:
     inputs:

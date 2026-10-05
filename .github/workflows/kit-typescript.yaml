@@ -9,8 +9,11 @@ name: kits/typescript
 # The household CI rule's self-hosted default applies (rules-library/fleet/ci.md):
 # a push or a same-repo PR runs on atlas. This repo is PUBLIC and takes fork
 # PRs, so a fork's own code runs on a GitHub-hosted runner instead, as in
-# kit-rust.yaml. No ntfy-failure step: a public repo cannot call master-project's
-# private composite action, so failures show in the run and PR UI only.
+# kit-rust.yaml.
+#
+# No push on a failure. Only atlas-n8n and atlas-systemd write the operator's
+# ntfy topics, and the red-CI digest reports a failed run (the operator's
+# ruling, 05/10/2026).
 
 on:
   pull_request:

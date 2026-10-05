@@ -50,8 +50,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# No ntfy-failure step: a public repo cannot call master-project's private
-# composite action, so failures show in the run and PR UI only (kit-rust.yaml).
+# No push on a failure. Only atlas-n8n and atlas-systemd write the operator's
+# ntfy topics, and the red-CI digest reports a failed run (the operator's
+# ruling, 05/10/2026).
 
 permissions:
   contents: read
@@ -89,8 +90,8 @@ jobs:
       - name: Set up uv
         # astral-sh/setup-uv directly, not master-project's setup-uv wrapper
         # (radar-hooves/master-project/.github/actions/setup-uv): this repo is
-        # PUBLIC and cannot reach a private-repo action, exactly the constraint
-        # security.yaml and kit-rust.yaml already record for ntfy-failure —
+        # PUBLIC and cannot reach a private-repo action, the constraint
+        # security.yaml records for the golden reusable —
         # by-exception (29/09/2026), same reason. Costs the wrapper's persisted
         # tool-cache trick (a fresh uv download each run instead of a restored
         # one); worth it for a job that runs only on template/copier.yaml/
