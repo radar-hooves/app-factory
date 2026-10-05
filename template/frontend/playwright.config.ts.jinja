@@ -1,8 +1,27 @@
-import { defineConfig, devices } from '@playwright/test';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { chromium, defineConfig, devices } from '@playwright/test';
 
 import { appWebServer } from './tests/e2e/app-web-server';
 
 const CI = !!process.env.CI;
+
+// NixOS runs no downloaded browser. atlas exports nixpkgs' patched build as
+// PLAYWRIGHT_BROWSERS_PATH, at nixpkgs' Playwright revision rather than this
+// app's, so the browser this @playwright/test expects is absent there and the
+// headless shell that is present runs the suite instead. A pixel baseline is
+// still CI's own (playwright-container.yaml): this is a different Chromium.
+function hostHeadlessShell(): string | undefined {
+	const dir = process.env.PLAYWRIGHT_BROWSERS_PATH;
+	if (!dir || !existsSync(dir) || existsSync(chromium.executablePath())) return undefined;
+	const build = readdirSync(dir).find((name) => name.startsWith('chromium_headless_shell-'));
+	if (!build) return undefined;
+	return ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell']
+		.map((binary) => join(dir, build, binary))
+		.find((path) => existsSync(path));
+}
+const HOST_HEADLESS_SHELL = hostHeadlessShell();
 
 // There is one database and no staging environment (dev-environment.md
 // "There Is No Development Database"), so this suite gets its own port and
@@ -56,7 +75,10 @@ export default defineConfig({
 		// cross-browser coverage becomes worth the run-time cost.
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] }
+			use: {
+				...devices['Desktop Chrome'],
+				...(HOST_HEADLESS_SHELL && { launchOptions: { executablePath: HOST_HEADLESS_SHELL } })
+			}
 		}
 	],
 	webServer: {
