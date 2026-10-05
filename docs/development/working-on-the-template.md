@@ -32,6 +32,20 @@ An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for 
 
 `copier update` diffs the template's render at the *previous* commit against its render at the *new* one, both using the answers in `.copier-answers.yml` at the time it runs. Hand-edit an answer in that file first and both renders use the new value — there is no "old" value left to diff against — so a file whose only change is that one answer shows no delta and keeps its old text, while `.copier-answers.yml` itself now claims the new value. Casefile's first Deploy called a dead port this way: the answers file said the new port, the rendered file still said the old one. Pass the change as `copier update --data key=value` instead; that gives copier the old value to diff against and the file actually re-renders.
 
+## An update that stops on `Question "…" is required`
+
+`copier update` renders the app's previous version from the answers recorded in `.copier-answers.yml` and nothing else (`--defaults` forced, no `--data`). An app whose answers file was hand-written (a repoint, an adoption) can lack a question its own `_commit` already asks, and that render stops before anything is diffed. `--data` and `--data-file` never reach it, and no default added to a later `copier.yaml` does either, because the old render reads the old one. Measured on pebblestone, 05/10/2026, at `v2026.9.49`: `private_index_name`.
+
+What reaches both renders is copier's own settings file. A fleet declares its values once under `defaults:` and points `COPIER_SETTINGS_PATH` at it for the update:
+
+```yaml
+defaults:
+  private_index_name: <name>
+  private_index_url: https://<index>/+simple/
+```
+
+A recorded answer still wins, so an app answering differently keeps its own. The update then records the value, and the next one needs nothing.
+
 ## Traps in the shape
 
 **The `/mcp` mount is order-sensitive.** `raw_mcp_app` carries the FastMCP lifespan — the streamable-HTTP session manager's task group lives there — while the *gated* wrapper is what mounts. Chain the lifespan from the raw app, mount the gated one. Backwards either leaves the session manager unstarted or leaves the surface open. The agent endpoint is `POST /mcp/`, trailing slash required.

@@ -247,7 +247,7 @@ private_index_url:
   type: str
   when: "{{ skeleton == 'web' }}"
   help: >-
-    Base URL of that index's simple API (e.g. `https://your-index.example/your-user/prod/+simple/`). No factory default, for the same reason as private_index_name — a fleet stamping its own apps supplies both from its own declaration rather than typing them per app.
+    Base URL of that index's simple API (e.g. `https://your-index.example/your-user/prod/+simple/`). No factory default, for the same reason as private_index_name — a fleet supplies both from its own declaration rather than typing them per app: `--data-file` for a stamp, copier's settings-file `defaults:` for an update (docs/development/working-on-the-template.md).
 
 
 registry_host:

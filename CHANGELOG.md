@@ -10,6 +10,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **On a phone the room page's Send is clear of the report button.** Below `md` the page reserved 3.5rem under the composer for the button, and the composer already lifts the button clear of Send (`--ds-report-clearance`, 4.5rem). Together they put the button back on Send, measured at 390x844 on cadmus: Send at y 733-765, the button at 712-756. The page now reserves nothing, so the kit's lift and the shell's reserve are the only two clearances. The other members of the family were the shell's own, fixed in `@poodle64/ui` 2026.10.3 (2026.10.3 below) and waiting on those apps taking it: earworm's column toggle and mission-command's workspace menu. Library's missing Members is its own held layout. `rooms.spec.ts` now asks from a phone and fails on the old page. Need: cadmus (app-factory#29).
 
+### Changed
+
+- **An update that stops on `Question "private_index_name" is required` is answered by copier's settings file, not by this factory.** `copier update` renders the app's previous version from its recorded answers alone, so a hand-written answers file missing a question its own `_commit` asks stops there, and no `--data` and no default added here can reach that render. `defaults:` in the file `COPIER_SETTINGS_PATH` names does, beneath any answer the app recorded, and the update then records it. `working-on-the-template.md` says how; the `private_index_url` help names it. Proven on pebblestone's answers at `v2026.9.49`: the update to 2026.10.5 fails without the file and succeeds with it. Need: pebblestone, 05/10/2026.
+
 ## [2026.10.5] - 2026-10-05
 
 ### Fixed
