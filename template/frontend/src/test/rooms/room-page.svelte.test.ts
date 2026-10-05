@@ -27,6 +27,7 @@ vi.mock('$lib/agent/app', async () => ({
 	oncite: undefined,
 	describeTool: undefined,
 	copy: undefined,
+	formatCost: undefined,
 	...(await import('./app'))
 }));
 
@@ -179,7 +180,9 @@ describe('A room page, through the app extension points', () => {
 describe('Sharing an answer', () => {
 	it("says how current the room's documents are on its home", async () => {
 		at('/rooms/manual');
-		expect(await screen.findByText(/Checked against the open record on .*2026\./)).toBeInTheDocument();
+		expect(
+			await screen.findByText(/Checked against the open record on .*2026\./)
+		).toBeInTheDocument();
 	});
 
 	it("shares a settled answer from the app's own turn, by its place", async () => {
