@@ -71,6 +71,9 @@ export interface RoomExtensions {
 	/** A briefing on the room, from the composer's own control; absent, the
 	 *  composer offers none. */
 	briefing?: (room: Room) => Briefing;
+	/** What an answer cost, in this app's own currency and words ("about
+	 *  A$0.34"), from US dollars; absent, the plain US dollar figure. */
+	formatCost?: (usd: number) => string;
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? '';

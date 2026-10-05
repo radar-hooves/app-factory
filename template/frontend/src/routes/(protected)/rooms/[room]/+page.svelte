@@ -34,13 +34,10 @@
 	/** The kind a briefing is asked as, and read back by. */
 	const BRIEFING = 'briefing';
 
-	// Currency and rate are this app's own setting, never the package's or
-	// the factory's to hardcode (@poodle64/librarian README §Depth): a build
-	// with neither set shows the plain USD figure, which is always correct,
-	// merely unconverted.
-	const COST_CURRENCY = import.meta.env.VITE_AGENT_COST_CURRENCY ?? '$';
-	const COST_RATE = Number(import.meta.env.VITE_AGENT_COST_RATE ?? 1);
-	const formatCost = (usd: number) => `about ${COST_CURRENCY}${(usd * COST_RATE).toFixed(2)}`;
+	// Currency and rate are this app's own (@poodle64/librarian README §Depth),
+	// declared in $lib/agent/app.ts; without one, the plain USD figure, which
+	// is always correct, merely unconverted.
+	const formatCost = extensions.formatCost ?? ((usd: number) => `about US$${usd.toFixed(2)}`);
 
 	let room = $state<Room | null>(null);
 	let chat = $state<Chat | null>(null);

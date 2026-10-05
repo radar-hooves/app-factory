@@ -252,7 +252,8 @@ test('a library room offers Quick or Thorough; a persona room offers neither', a
 	await page.getByRole('button', { name: 'Thorough' }).click();
 	await ask(page, 'What about long service leave, in detail?');
 	await expect(page.getByText(/long service leave after ten years/)).toBeVisible();
-	await expect(page.getByText(/^Thorough · /)).toBeVisible();
+	// Priced in US dollars, since the factory's app.ts declares no currency of its own.
+	await expect(page.getByText(/^Thorough · .* · about US\$0\.03$/)).toBeVisible();
 	expect((await read(page, conversationId(page))).turns.at(-1)?.depth).toBe('thorough');
 
 	await page.goto('/rooms/helper');

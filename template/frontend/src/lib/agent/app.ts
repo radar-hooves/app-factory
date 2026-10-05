@@ -8,7 +8,9 @@
  * answer reads), `copy` (the words, per room), `Home` (a component on a new
  * conversation, inside its scroll), `Turn` (a component presenting a question
  * and its answer in place of the package's own) and `briefing` (what the
- * composer's briefing control asks, and the card it reads as). The factory's
- * copy exports none, and the page is the package's own.
+ * composer's briefing control asks, and the card it reads as) and
+ * `formatCost` (an answer's cost in this app's own currency and words, from
+ * US dollars, "about A$0.34"). The factory's copy exports none, and the page
+ * is the package's own.
  */
 export {};

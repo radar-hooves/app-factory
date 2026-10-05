@@ -227,6 +227,7 @@ class _Handler(BaseHTTPRequestHandler):
                     "session_id": session_id,
                     "result": answer,
                     "duration_ms": 1200,
+                    "total_cost_usd": 0.0321,
                 }
             )
             self._frame({"type": "citations", "items": [citation]})
