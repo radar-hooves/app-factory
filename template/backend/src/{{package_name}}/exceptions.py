@@ -79,7 +79,6 @@ class ForbiddenError(BackendBaseException):
     error_code = "forbidden"
 
 
-
 class AccountInactiveError(ForbiddenError):
     """The caller's account here is deactivated (403, ``account_inactive``).
 
@@ -90,6 +89,7 @@ class AccountInactiveError(ForbiddenError):
     """
 
     error_code = "account_inactive"
+
 
 class ConflictError(BackendBaseException):
     """The request conflicts with the resource's current state (409)."""

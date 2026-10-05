@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **The stamped `exceptions.py` passes `ruff format --check`.** 2026.10.4 left three blank lines before `AccountInactiveError` and one after it, so every app's Python CI failed the format gate on a file it may not edit. Need: eight, 05/10/2026.
+
 ## [2026.10.4] - 2026-10-05
 
 Rooms, step 4 of the rooms design (`docs/design/agent-console.md`; need: radar-hooves/cadmus (Nightjar), 30/09/2026, and app-factory#12), and the signed-in app's route group, in which every stamped route reaches the app's own shell and session guard (need: godswood and cadmus, app-factory#6 and #7). The six paths the two make app-owned, `config/rooms.yaml`, `frontend/src/lib/agent/app.ts`, `frontend/src/lib/app-frame.svelte`, `frontend/src/lib/settings/app.ts` and `frontend/src/routes/(protected)/+page.svelte` with its `+page.ts`, were sanctioned at the sitting of 02/10/2026. The stamp pins `@poodle64/librarian` 2026.9.27.
