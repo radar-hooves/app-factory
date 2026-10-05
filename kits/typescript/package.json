@@ -13,9 +13,10 @@
 	"packageManager": "pnpm@10.28.0",
 	"pnpm": {
 		"overrides": {
+			"devalue": "5.9.4",
 			"fast-uri": "3.1.6",
 			"nanoid": "3.3.18"
 		},
-		"//overrides": "fast-uri (transitive via ajv): CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172. nanoid (transitive via postcss): CVE-2026-67213."
+		"//overrides": "fast-uri (transitive via ajv): CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172. nanoid (transitive via postcss): CVE-2026-67213. devalue (transitive via svelte, @sveltejs/kit): fixed in 5.9.3."
 	}
 }
