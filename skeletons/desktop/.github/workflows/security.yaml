@@ -27,6 +27,7 @@ on:
       - '**/Cargo.lock'
       - '**/go.sum'
       - '**/Dockerfile*'
+      - '**/.trivyignore*'
       - '.github/workflows/security.yaml'
   workflow_dispatch:
 
@@ -40,6 +41,7 @@ permissions:
 jobs:
   gitleaks:
     name: Secret scan (gitleaks)
+    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     timeout-minutes: 15
     steps:
@@ -73,6 +75,7 @@ jobs:
 
   trivy-fs:
     name: Trivy filesystem scan
+    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
     timeout-minutes: 15
     steps:
