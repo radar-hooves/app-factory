@@ -74,7 +74,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && mkdir -p /app/package-bin \
     && if [ -d /app/package/bin ]; then mv /app/package/bin/* /app/package-bin/ && rmdir /app/package/bin; fi
 
-# Stage 4: Runtime
+# Stage 4: Debian's archive as it stands at this build, the apt layer's cache key
+# below. BuildKit fetches an ADD URL on every build and keys it on the bytes, so
+# this stage changes exactly when Debian publishes to a suite the runtime base
+# reads, whatever that base image's digest does. Each file is named as apt names
+# it in /var/lib/apt/lists; the suites are the runtime FROM's and move with it.
+FROM scratch AS debian-archive
+ADD https://deb.debian.org/debian/dists/bookworm/InRelease deb.debian.org_debian_dists_bookworm_InRelease
+ADD https://deb.debian.org/debian/dists/bookworm-updates/InRelease deb.debian.org_debian_dists_bookworm-updates_InRelease
+ADD https://deb.debian.org/debian-security/dists/bookworm-security/InRelease deb.debian.org_debian-security_dists_bookworm-security_InRelease
+
+# Stage 5: Runtime
 FROM python:3.14-slim-bookworm
 
 WORKDIR /app
@@ -82,26 +92,32 @@ WORKDIR /app
 ENV TZ=Australia/Brisbane
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Domain runtime binaries. This block is the factory's and is identical in every
-# app; the LIST is the app's, the same shape as the palette or the port. Most
-# apps ship an empty backend/system-packages.txt and this is a no-op adding no
-# layer. It sits here, above every app-code COPY, so an ordinary code change
-# never invalidates the apt layer — and above USER, because apt needs root.
-# The file is REQUIRED: delete it in an app and the COPY fails the build.
-# Debian's own security patches first: the base image rebuilds days after an
-# advisory, and the image scan gates on a HIGH the moment it is published.
-# curl and the CA bundle are the factory's own need: the Claude Code install
-# stanza below fetches over HTTPS, and the slim base ships neither.
-RUN apt-get update && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Debian's own patches, then the domain's runtime binaries. This block is the
+# factory's and is identical in every app; the LIST is the app's, the same shape
+# as the palette or the port, and most apps' is empty. The file is REQUIRED:
+# delete it in an app and the COPY fails the build. Above every app-code COPY, so
+# a code change never reruns apt, and above USER, because apt needs root. curl
+# and the CA bundle are the factory's own need: the Claude Code install below
+# fetches over HTTPS, and the slim base ships neither.
+#
+# The upgrade is here because the base image rebuilds days after an advisory,
+# while the image scan gates on a HIGH the moment it is published. Keyed on its
+# text and the base digest alone, the shared builder would serve this layer as
+# built before Debian shipped a fix for as long as the base digest held; the
+# debian-archive mount keys it on the archive too, so it reruns when Debian
+# publishes and only then. The cmp refuses a layer built from an archive other
+# than the one its key names, which a publish landing mid-build would give.
 COPY backend/system-packages.txt ./backend/system-packages.txt
-RUN packages="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' ./backend/system-packages.txt | tr '\n' ' ')" \
-    && if [ -n "$packages" ]; then \
-         apt-get update \
-         && apt-get install -y --no-install-recommends $packages \
-         && rm -rf /var/lib/apt/lists/*; \
-       fi
+RUN --mount=type=bind,from=debian-archive,target=/run/debian-archive \
+    packages="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' ./backend/system-packages.txt | tr '\n' ' ')" \
+    && apt-get update \
+    && for f in /run/debian-archive/*; do \
+         cmp -s "$f" "/var/lib/apt/lists/${f##*/}" \
+         || { echo "Debian published ${f##*/} during this build; run it again." >&2; exit 1; }; \
+       done \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends curl ca-certificates $packages \
+    && rm -rf /var/lib/apt/lists/*
 
 # Strip the base image's system pip and setuptools. The app runs entirely from
 # the self-contained venv copied below, so the base interpreter's own pip and
