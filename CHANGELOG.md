@@ -13,6 +13,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 ### Changed
 
 - **An update that stops on `Question "private_index_name" is required` is answered by copier's settings file, not by this factory.** `copier update` renders the app's previous version from its recorded answers alone, so a hand-written answers file missing a question its own `_commit` asks stops there, and no `--data` and no default added here can reach that render. `defaults:` in the file `COPIER_SETTINGS_PATH` names does, beneath any answer the app recorded, and the update then records it. `working-on-the-template.md` says how; the `private_index_url` help names it. Proven on pebblestone's answers at `v2026.9.49`: the update to 2026.10.5 fails without the file and succeeds with it. Need: pebblestone, 05/10/2026.
+- **A room's answer is priced in the app's own currency from `$lib/agent/app.ts`.** `formatCost(usd)` is a `RoomExtensions` member like the rest. The page read `VITE_AGENT_COST_CURRENCY` and `VITE_AGENT_COST_RATE`, which no stamped build passes and an app could only set by editing the factory's `Dockerfile`, so every app showed US dollars. Without one the page shows `about US$0.03`, never a bare `$`. The fake library now prices its answers, so the rooms E2E reads the cost line; an app exporting `(usd) => \`about A$${(usd * 1.55).toFixed(2)}\`` reads `about A$0.05` in the same test. Need: cadmus, 05/10/2026.
+- **The stamped `security.yaml` runs on a pull request that changes a `.trivyignore`,** in the web template and the desktop skeleton, so an exception added or lifted is scanned before it merges. `deploy.yaml` has run on every merge since 2026.10.0 (app-factory#16); an app whose deploy still filters by path is on an older stamp and takes it by converging. Need: master-project's red-CI survey, 05/10/2026.
+- **The stamped `.gitignore` ignores `/result` and `/result-*`,** `nix build`'s output links. Need: cadmus, 05/10/2026.
+- **Every GitHub-hosted runner in this repo and the desktop skeleton carries a dated `# by-exception (YYYY-MM-DD)` at its line,** the form `ci-workflow-standard.md` asks for and `check-canonical-shape.py` reads. `security.yaml`'s fork route had none, `publish-kit-typescript.yaml` an undated one, and four more were dated day first. The routes are unchanged: a fork's code never runs on atlas, and npm's trusted publishing takes no self-hosted runner. Need: master-project's red-CI survey, 05/10/2026.
+
+### Removed
+
+- **The factory's CI comments citing ntfy.** None of its workflows, and nothing it stamps, sends a push; the comments now give the operator's ruling of 05/10/2026 that only atlas-n8n and atlas-systemd write his ntfy topics and the red-CI digest reports a failed run.
 
 ## [2026.10.5] - 2026-10-05
 
