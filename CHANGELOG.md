@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.6] - 2026-10-06
+
+On a phone the room page's Send is clear of the report button (need: cadmus, app-factory#29); a room prices its answers in the app's own currency (need: cadmus); a stamped app's E2E runs on NixOS from any environment; and an update missing an answer its own version asks is answered by copier's settings file (need: pebblestone). Via master-project's orchestrator, 05/10/2026.
+
 ### Fixed
 
 - **A stamped app's E2E runs on NixOS whatever the caller's environment and whatever is in Playwright's cache.** 2026.10.3 used the host's browser only when the one this `@playwright/test` expects was absent, and read the host's browsers from the process's own `PLAYWRIGHT_BROWSERS_PATH`. On atlas both fail: a `playwright install` has left downloaded Chromiums in `~/.cache/ms-playwright`, which are found and die on a missing `libglib`, and a process descended from one started before the variable was declared (an editor, an agent, a runner) never has it, since NixOS's shells read `/etc/set-environment` once per process tree. The resolution is now `tests/e2e/host-browser.ts`'s `hostChromium()`, factory-owned: on NixOS it always launches the declared headless shell, reading the declaration from `/etc/set-environment` when the process lacks it, and warns what to declare when the host declares nothing; anywhere else it leaves Playwright's own. `playwright.config.ts` gives it to every spec, and a precondition that launches a browser of its own imports it, as cadmus's warm-up copied it. Measured on a scratch stamp on atlas with no `PLAYWRIGHT_BROWSERS_PATH` in the environment: the old resolution failed 11 specs on `libglib-2.0.so.0`, the new one passes all 24. Need: master-project's orchestrator and cadmus, 05/10/2026.
@@ -18,10 +22,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 - **The stamped `security.yaml` runs on a pull request that changes a `.trivyignore`,** in the web template and the desktop skeleton, so an exception added or lifted is scanned before it merges. `deploy.yaml` has run on every merge since 2026.10.0 (app-factory#16); an app whose deploy still filters by path is on an older stamp and takes it by converging. Need: master-project's red-CI survey, 05/10/2026.
 - **The stamped `.gitignore` ignores `/result` and `/result-*`,** `nix build`'s output links. Need: cadmus, 05/10/2026.
 - **Every GitHub-hosted runner in this repo and the desktop skeleton carries a dated `# by-exception (YYYY-MM-DD)` at its line,** the form `ci-workflow-standard.md` asks for and `check-canonical-shape.py` reads. `security.yaml`'s fork route had none, `publish-kit-typescript.yaml` an undated one, and four more were dated day first. The routes are unchanged: a fork's code never runs on atlas, and npm's trusted publishing takes no self-hosted runner. Need: master-project's red-CI survey, 05/10/2026.
+- **The factory's CI says why it sends no push on a failure.** None of its workflows, and nothing it stamps, carries an ntfy step; their comments gave a public repo's reach as the reason, and now give the operator's ruling of 05/10/2026 that only atlas-n8n and atlas-systemd write his ntfy topics and the red-CI digest reports a failed run.
 
-### Removed
-
-- **The factory's CI comments citing ntfy.** None of its workflows, and nothing it stamps, sends a push; the comments now give the operator's ruling of 05/10/2026 that only atlas-n8n and atlas-systemd write his ntfy topics and the red-CI digest reports a failed run.
+An app takes this with `copier update` to the release and a regenerated `.template-parity.json`. An app that prices answers in its own currency exports `formatCost` from `src/lib/agent/app.ts`. cadmus drops its `#29` exception on the room page, and its warm-up imports `hostChromium()` from `tests/e2e/host-browser.ts` in place of its own copy.
 
 ## [2026.10.5] - 2026-10-05
 
