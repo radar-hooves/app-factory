@@ -93,8 +93,10 @@ test('two people each see their own items, and a granted member sees the shared 
 		expect(theirs).toContain(theirsTitle);
 		expect(theirs).not.toContain(mineTitle);
 
-		// The page reports the caller's own workspace, and the count it holds.
+		// The page reports the caller's own workspace, and the count it holds, in
+		// its Detail view.
 		await page.goto('/');
+		await page.getByRole('radio', { name: 'Detail' }).click();
 		await expect(page.getByText(`Connected — ${mine.length} example items in`)).toBeVisible();
 
 		// The grant: the partner shares a workspace holding one item. Chosen from
@@ -116,6 +118,7 @@ test('two people each see their own items, and a granted member sees the shared 
 
 		await page.goto('/');
 		await page.getByRole('button', { name: sharedName }).click();
+		await page.getByRole('radio', { name: 'Detail' }).click();
 		await expect(page.getByText(`Connected — 1 example items in ${sharedName}.`)).toBeVisible();
 		expect(await titles(page.request.get('/api/example/', { headers: inShared }))).toEqual([
 			`shared ${stamp}`
