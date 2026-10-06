@@ -101,7 +101,8 @@ repos:
       # still part the two.
       - id: cargo-fmt
         name: 'rust · cargo fmt (kits/rust)'
-        entry: bash -c 'cd kits/rust && cargo fmt --all'
+        # Through the kit's devShell, as CI runs it: atlas has cargo nowhere else.
+        entry: bash -c 'cd kits/rust && nix develop --command cargo fmt --all'
         language: system
         files: '^kits/rust/.*\.rs$'
         pass_filenames: false
