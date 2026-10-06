@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 // The shell's own spec, and unlike example.spec.ts it is NOT the scaffold's to
 // delete: it drives the one piece of chrome canonical-app-shape.md requires of
@@ -40,6 +40,65 @@ for (const { path, heading } of STAMPED_ROUTES) {
 			page.locator('#ds-main').getByRole('heading', { name: heading, exact: true })
 		).toBeVisible();
 		await expect(page.getByTestId('ds-shell-search')).toBeVisible();
+	});
+}
+
+// The shell's chrome sits on none of the app's controls, asked of this app's own
+// frame on a phone and a desktop. It did three ways: the report button on a
+// room's Send at 390x844 (app-factory#29) and on earworm's last control, and a
+// crowded top bar over mission-command's workspace menu. A control's trial click
+// fails naming whatever would take the click instead. The household's E2E widths
+// (stacks/sveltekit-testing.md), and 1280, where a crowded bar overlapped.
+const VIEWPORTS = [
+	{ width: 375, height: 812 },
+	{ width: 768, height: 1024 },
+	{ width: 1280, height: 720 },
+	{ width: 1920, height: 1080 }
+];
+
+async function expectEachTakesItsClick(controls: Locator) {
+	for (const control of await controls.filter({ visible: true }).all()) {
+		if (await control.isEnabled()) await control.click({ trial: true });
+	}
+}
+
+for (const viewport of VIEWPORTS) {
+	const size = `${viewport.width}x${viewport.height}`;
+
+	for (const { path, heading } of STAMPED_ROUTES) {
+		test(`nothing of the shell covers a control on ${path} at ${size}`, async ({ page }) => {
+			await page.setViewportSize(viewport);
+			await page.goto(path);
+			const main = page.locator('#ds-main');
+			await expect(main.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+
+			for (const region of [page.getByRole('banner'), main]) {
+				await expectEachTakesItsClick(region.getByRole('button'));
+				await expectEachTakesItsClick(region.getByRole('link'));
+			}
+		});
+	}
+
+	// A page's last control, a Button's height at its right edge below more page
+	// than the window holds, is where the report button floats; the padded page
+	// ends with room to scroll it clear.
+	test(`a page's last control scrolls clear of the report button at ${size}`, async ({ page }) => {
+		await page.setViewportSize(viewport);
+		await page.goto('/workspace');
+		const main = page.locator('#ds-main');
+		await expect(main.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
+		await main.evaluate((region) => {
+			const row = document.createElement('div');
+			row.style.cssText = 'display: flex; justify-content: flex-end; padding-top: 150vh';
+			const last = document.createElement('button');
+			last.textContent = 'Last';
+			last.dataset.testid = 'last-control';
+			last.style.height = '2.5rem';
+			row.append(last);
+			(region.firstElementChild ?? region).append(row);
+		});
+
+		await page.getByTestId('last-control').click({ trial: true });
 	});
 }
 
