@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.8] - 2026-10-06
+
 Two first-sight requests no longer 500; the people list's rule for an account with no entitlement is written down; the database pool is a setting; the test Postgres is removed on every exit; the kit installs under pnpm 10.34 and 12. Via master-project's orchestrator, 06/10/2026.
 
 ### Fixed
@@ -17,9 +19,9 @@ Two first-sight requests no longer 500; the people list's rule for an account wi
 
 ### Added
 
-- **`DatabaseSettings.pool_size` and `max_overflow`, read by the engine** (need: library, #33). Defaults 5 and 10, SQLAlchemy's own, so a request-only app changes nothing. A worker app sets `<APP>_DB_POOL_SIZE` and `<APP>_DB_MAX_OVERFLOW` rather than forking `db/session.py`.
+- **`DatabaseSettings.pool_size` and `max_overflow`, read by the engine** (need: library, #33). Defaults 5 and 10, SQLAlchemy's own, so a request-only app changes nothing. A worker app sets `<APP>_DB_POOL_SIZE` and `<APP>_DB_MAX_OVERFLOW` rather than forking `db/session.py`; the bare `POOL_SIZE` and `MAX_OVERFLOW` are ignored.
 
-An app takes this with `copier update` and a regenerated `.template-parity.json`. earworm drops its workspace-service exception and has its household members bound a non-room entitlement at the identity provider. library drops its pool exception and sets `LIBRARY_DB_POOL_SIZE=10` and `LIBRARY_DB_MAX_OVERFLOW=20` in its committed per-host `.env`. mission-command binds its people an entitlement likewise.
+An app takes this with `copier update` and a regenerated `.template-parity.json`. earworm drops its workspace-service exception and has its household members bound a non-room entitlement at the identity provider. library drops its pool exception and adds `LIBRARY_DB_POOL_SIZE: "10"` and `LIBRARY_DB_MAX_OVERFLOW: "20"` to the `x-library-env` block of yggdrasil's `hosts/poodle64/atlas/stacks/library/compose.yaml` (that host's `.env` is gitignored and the file carries no `env_file`). mission-command binds its people an entitlement likewise.
 
 ## [2026.10.7] - 2026-10-06
 
