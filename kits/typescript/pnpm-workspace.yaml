@@ -1,2 +1,15 @@
 packages:
   - 'packages/*'
+# pnpm 10.34+ and 12 fail an install that leaves a build script undecided (12 reads
+# `allowBuilds`, 10 the two lists). esbuild needs its binary; the others only make optional output.
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - '@bundled-es-modules/glob'
+  - '@parcel/watcher'
+  - style-dictionary
+allowBuilds:
+  esbuild: true
+  '@bundled-es-modules/glob': false
+  '@parcel/watcher': false
+  style-dictionary: false

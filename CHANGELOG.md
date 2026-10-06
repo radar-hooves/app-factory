@@ -6,6 +6,21 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Two first-sight requests no longer 500; an account holding no entitlement gets the app's ordinary surface; the database pool is a setting; the test Postgres is removed on every exit; the kit installs under pnpm 10.34 and 12. Via master-project's orchestrator, 06/10/2026.
+
+### Fixed
+
+- **`ensure_personal_workspace` survives two concurrent first-sight requests** (need: earworm, radar-hooves/app-factory#31). Both found no membership and both inserted `personal-<user id>`; the loser took a 500 on the slug's unique index. The insert runs in a SAVEPOINT, and the loser returns the winner's membership. `test_workspace_race.py` fails on the old code.
+- **`require_app_module` admits an account holding no entitlement** (need: earworm and mission-command, #31). It refused an empty set, so a signed-in member got 403 on `/users/` and the member picker showed nobody. Only an account holding room grants (`room-<id>`) alone is refused. `admin` gates are unchanged. The rule is in `docs/development/tenancy-design.md`.
+- **The test Postgres is claimed and its cleanup registered before `container.start()`** (need: eight's council, eight#82). A start that failed part-way (the Docker API timing out under load) left a Created container nothing removed.
+- **The TypeScript kit declares its build scripts** (`onlyBuiltDependencies`, `ignoredBuiltDependencies` and `allowBuilds` in `pnpm-workspace.yaml`), so renovate's pnpm 10.34 and 12 bumps (#26, #27) stop failing `ERR_PNPM_IGNORED_BUILDS`; checked on 10.28.0, 10.34.6 and 12.9.1.
+
+### Added
+
+- **`DatabaseSettings.pool_size` and `max_overflow`, read by the engine** (need: library, #33). Defaults 5 and 10, SQLAlchemy's own, so a request-only app changes nothing. A worker app sets `POOL_SIZE` and `MAX_OVERFLOW`, or its section default, rather than forking `db/session.py`.
+
+An app takes this with `copier update` and a regenerated `.template-parity.json`. earworm drops its workspace-service exception; library drops its pool exception and sets 10 and 20 in its `DatabaseSettings` answers; mission-command needs nothing else.
+
 ## [2026.10.7] - 2026-10-06
 
 Every app's own E2E proves the shell covers none of its controls (need: earworm and mission-command); the factory's CI states, dated, why it carries no `ntfy-failure` step; 2026.10.6's removed cost variables get their line; the kit's lock clears a new `source-map-js` CVE; and a Rust kit test no longer depends on test order. Via master-project's orchestrator, 06/10/2026.
