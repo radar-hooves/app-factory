@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.7] - 2026-10-06
+
+Every app's own E2E proves the shell covers none of its controls (need: earworm and mission-command); the factory's CI states, dated, why it carries no `ntfy-failure` step; 2026.10.6's removed cost variables get their line; the kit's lock clears a new `source-map-js` CVE; and a Rust kit test no longer depends on test order. Via master-project's orchestrator, 06/10/2026.
+
 ### Added
 
 - **Every app's own E2E proves the shell covers none of its controls.** The family that failed earworm's, mission-command's and cadmus's runs (the report button on a page's last control and on a room's Send, a crowded top bar over the workspace menu) was fixed in `@poodle64/ui` 2026.10.3 and 2026.10.6 and measured in the kit's harness, never in an app's own frame. `shell.spec.ts` now asks it on every stamped route at 375, 768, 1280 and 1920: each top-bar and page control takes its own trial click, and a Button-high control at a padded page's end scrolls clear of the report button. Proven on a scratch stamp on atlas: all pass on ui 2026.10.3; on 2026.10.2 the last control fails at 375, 768 and 1280 on "Report a problem intercepts pointer events", and a frame with eight actions crowding its bar fails at 1280 on the search covering the context slot. Need: earworm and mission-command, via master-project's orchestrator.
@@ -14,6 +18,11 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **Each of the factory's workflows, and the desktop skeleton's security scan, says why it carries no `ntfy-failure` step, as a dated by-exception.** GitHub lends a private repo's actions only to private repos, and this repo and Thoth are public, so master-project's `ntfy-failure` cannot load here. Four gave the operator's ruling of 05/10/2026 instead, which that action now meets by filing through the intake, so it read as a gap to fill. A failure surfaces in the red-CI digest on main, or for the tag-triggered Python publish, in the release that pushed the tag. Need: master-project's orchestrator.
 - **`working-on-the-template.md` names master's tools for converging behind `main`:** `check-template-parity.py --generate --ref <tag>`, and `/master:update-app-template`, which sets `COPIER_SETTINGS_PATH` from the household's values. Need: pebblestone.
+
+### Fixed
+
+- **The TypeScript kit's lock overrides `source-map-js` to 1.2.2** (CVE-2026-93749, HIGH), which postcss, css-tree and `@tailwindcss/node` pulled in at 1.2.1 and the factory's own security scan failed on.
+- **The Rust kit's telemetry client test installs rustls' crypto provider before building a client,** as the crate's own clients do. Without it the test passed only when another had installed one first, so the kits/rust gate failed on test order.
 
 An app takes this with `copier update` to the release and a regenerated `.template-parity.json`, after `@poodle64/ui` `^2026.10.3`: earworm and mission-command, on 2026.9.21, fail the new checks as their own E2E already does. A spec's `getByLabel('Repo')` also matches the shell's "Report a problem", because Playwright matches a label by substring; it passes `{ exact: true }` (mission-command's work-dispatch specs).
 
