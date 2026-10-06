@@ -107,6 +107,9 @@ mod tests {
         let dispatch = tracing::Dispatch::new(registry().with(captured));
         let _guard = tracing::dispatcher::set_default(&dispatch);
 
+        // As every client this crate builds: run alone, no other test has
+        // installed one, and reqwest panics.
+        crate::ensure_crypto_provider();
         let request = reqwest::Client::new()
             .get("https://music.example.com/rest/search3.view?u=demo&t=leaked&s=salt")
             .build()
