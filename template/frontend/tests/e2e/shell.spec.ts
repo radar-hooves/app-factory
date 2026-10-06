@@ -56,9 +56,13 @@ const VIEWPORTS = [
 	{ width: 1920, height: 1080 }
 ];
 
+// Passed over: a control a re-render has since removed, a disabled one, and a
+// visually hidden one, smaller than a pointer.
 async function expectEachTakesItsClick(controls: Locator) {
-	for (const control of await controls.filter({ visible: true }).all()) {
-		if (await control.isEnabled()) await control.click({ trial: true });
+	for (const control of await controls.all()) {
+		const box = (await control.isVisible()) ? await control.boundingBox() : null;
+		if (!box || box.width < 4 || box.height < 4 || !(await control.isEnabled())) continue;
+		await control.click({ trial: true });
 	}
 }
 
