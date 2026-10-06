@@ -10,6 +10,7 @@ import re
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from {{ package_name }}.api.users.models import User
@@ -109,12 +110,25 @@ def ensure_personal_workspace(session: Session, user: User) -> WorkspaceMembersh
     if existing is not None:
         return existing
 
-    workspace = Workspace(slug=f"personal-{user.id}", name=user.username)
-    session.add(workspace)
-    session.flush()
-
-    membership = WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.OWNER)
-    session.add(membership)
+    # A person's first load sends `/users/me` and `/workspaces/me` together, so two
+    # requests can both find nothing and both insert `personal-<id>`. The loser's
+    # insert is refused by the slug's unique index; a SAVEPOINT takes that refusal
+    # without poisoning the transaction, and the winner's membership is returned.
+    try:
+        with session.begin_nested():
+            workspace = Workspace(slug=f"personal-{user.id}", name=user.username)
+            session.add(workspace)
+            session.flush()
+            membership = WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.OWNER)
+            session.add(membership)
+            session.flush()
+    except IntegrityError:
+        winner = session.execute(
+            select(WorkspaceMembership).where(WorkspaceMembership.user_id == user.id).limit(1)
+        ).scalar_one_or_none()
+        if winner is None:
+            raise
+        return winner
     session.commit()
     logger.info("Provisioned a personal workspace", extra={"user_id": user.id, "workspace_id": workspace.id})
     return membership

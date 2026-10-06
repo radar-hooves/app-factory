@@ -120,3 +120,10 @@ async def test_an_account_admitted_only_to_a_room_reaches_its_own_record_and_not
     assert (await client.get("/api/users/", headers=rooms_only)).status_code == 403
     admitted = {**rooms_only, "x-authentik-entitlements": "room-x|example"}
     assert (await client.get("/api/users/", headers=admitted)).status_code == 200
+
+
+async def test_an_account_holding_no_entitlement_is_admitted_to_the_people(client: AsyncClient) -> None:
+    """An app whose people carry no module grants still lists them; only the admin area stays closed."""
+    bare = {"x-authentik-uid": "no-grants", "x-authentik-username": "no-grants", "x-authentik-entitlements": ""}
+    assert (await client.get("/api/users/", headers=bare)).status_code == 200
+    assert (await client.get("/api/admin/users", headers=bare)).status_code == 403

@@ -121,16 +121,22 @@ def module_dependency(module: str, *, write: bool = False) -> params.Depends:
 
 
 def require_app_module(identity: CurrentIdentity) -> Identity:
-    """An account admitted to this app itself: any entitlement but a room's, ``admin`` included.
+    """An account the app itself admitted: anyone but one holding room grants alone.
 
     A colleague invited to a room holds ``room-<id>`` and nothing else, and is
     refused what the app keeps for its own people, the list of everyone it has
     seen first. Workspace ownership cannot draw that line: every account is made
     owner of a personal workspace the first time it signs in.
+
+    An account holding NO entitlement is admitted. An app whose people carry no
+    module grants (any signed-in household member may open it, only the admins
+    hold ``admin``) would otherwise refuse everyone but them, and the member
+    picker would show nobody. The admin gates are unchanged: ``admin`` is
+    still the only way into the admin area.
     """
-    if any(not grant.startswith(ROOM_PREFIX) for grant in identity.entitlements):
-        return identity
-    raise ForbiddenError("You do not have access to the people in this app")
+    if identity.entitlements and all(grant.startswith(ROOM_PREFIX) for grant in identity.entitlements):
+        raise ForbiddenError("You do not have access to the people in this app")
+    return identity
 
 
-gate(require_app_module, "any module but a room")
+gate(require_app_module, "any account but one holding only rooms")

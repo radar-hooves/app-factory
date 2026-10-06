@@ -157,8 +157,8 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     arrives as a signal Python turns into a clean shutdown. Both happened on the
     fleet's runner and both leaked (yggdrasil#276).
 
-    So the teardown is registered here with ``atexit`` as well, next to the
-    ``start()`` it undoes. Registered AFTER the reaper's own handler, it runs
+    So the teardown is registered here with ``atexit`` as well, before the
+    ``start()`` it undoes, so a start that fails part-way is cleaned up too. Registered AFTER the reaper's own handler, it runs
     BEFORE it (atexit is LIFO), so the container is stopped while Ryuk is still
     alive to catch anything this misses.
 
@@ -176,9 +176,16 @@ def _start_ephemeral_postgres() -> dict[str, str]:
         dbname="postgres",
         driver=None,
     )
+    # Claimed and registered BEFORE start(): a start that fails part-way (the Docker
+    # API timing out under load) has already created the container, and a cleanup
+    # registered only after success leaves that one behind. Stopping a container
+    # that was never created is a no-op, so every exit path may run it.
+    _EPHEMERAL_POSTGRES = container
+    atexit.register(_stop_ephemeral_postgres)
     try:
         container.start()
     except Exception as exc:  # any startup failure needs the same actionable message
+        _stop_ephemeral_postgres()
         raise RuntimeError(
             "The test suite provisions its own Postgres via testcontainers, and it could not start.\n"
             f"  {type(exc).__name__}: {exc}\n"
@@ -187,8 +194,6 @@ def _start_ephemeral_postgres() -> dict[str, str]:
             "It deliberately will NOT use POSTGRES_* from your shell."
         ) from exc
 
-    _EPHEMERAL_POSTGRES = container
-    atexit.register(_stop_ephemeral_postgres)
     return {
         "host": container.get_container_host_ip(),
         "port": str(container.get_exposed_port(5432)),

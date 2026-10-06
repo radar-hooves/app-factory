@@ -1,0 +1,52 @@
+"""Two first-sight requests racing to give one person a personal workspace both succeed.
+
+The SPA opens with `/users/me` and `/workspaces/me` together. Both find no membership, both
+insert the workspace `personal-<user id>`, and the loser is refused on the slug's unique
+index. `ensure_personal_workspace` takes that refusal in a SAVEPOINT and returns the winner's
+membership (radar-hooves/app-factory#31).
+"""
+
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.api.users.models import User
+from {{ package_name }}.api.workspaces import service
+from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+
+
+def test_the_loser_of_a_first_sight_race_gets_the_winners_membership(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = User(authentik_uid="uid-first-sight-race", username="racer")
+    session.add(user)
+    session.flush()
+
+    # The winner: its workspace and membership are already there.
+    winner = Workspace(slug=f"personal-{user.id}", name="racer")
+    session.add(winner)
+    session.flush()
+    session.add(WorkspaceMembership(workspace_id=winner.id, user_id=user.id, role=WorkspaceRole.OWNER))
+    session.flush()
+
+    # The loser looked a moment earlier, before the winner committed: its first read found nothing.
+    real_execute = session.execute
+    reads = {"n": 0}
+
+    def execute(*args: Any, **kwargs: Any) -> Any:
+        reads["n"] += 1
+        if reads["n"] == 1:
+            return SimpleNamespace(scalar_one_or_none=lambda: None)
+        return real_execute(*args, **kwargs)
+
+    monkeypatch.setattr(session, "execute", execute)
+
+    membership = service.ensure_personal_workspace(session, user)
+
+    assert membership.workspace_id == winner.id
+    monkeypatch.undo()
+    slugs = session.execute(select(func.count()).select_from(Workspace).where(Workspace.slug == winner.slug))
+    assert slugs.scalar_one() == 1

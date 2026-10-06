@@ -3,6 +3,7 @@
 from typing import Annotated
 from urllib.parse import quote_plus
 
+from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
 from {{ package_name }}.config.vend import Vended, VendedSettings
@@ -64,6 +65,12 @@ class DatabaseSettings(VendedSettings):
     # or whose app cannot vend it without already having the store running. Unset
     # everywhere else, including development, which vends.
     postgres_password_file: str | None = None
+    # The engine's pool, sized by an app that holds several concurrent lanes (a
+    # worker) rather than by forking `db/session.py`. These are SQLAlchemy's own
+    # defaults, right for a request-only app. A burst of failure handling at 5+10
+    # exhausted library's pool, and the write recording the failure starved with it.
+    pool_size: int = Field(default=5, ge=1)
+    max_overflow: int = Field(default=10, ge=0)
 
     @property
     def database_url(self) -> str:

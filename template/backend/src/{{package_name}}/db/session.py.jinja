@@ -33,6 +33,8 @@ def get_engine() -> Engine:
             settings.database.database_url,
             echo=settings.debug,
             pool_pre_ping=True,
+            pool_size=settings.database.pool_size,
+            max_overflow=settings.database.max_overflow,
         )
 
         @event.listens_for(_engine, "connect")

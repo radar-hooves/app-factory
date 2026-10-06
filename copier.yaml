@@ -102,6 +102,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_storage.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_system_health.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_vend.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_workspace_race.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_version.py{% endif %}"
   - "{% if not factory_selftest %}frontend/src/dev-identity.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/hooks.client.test.ts{% endif %}"
