@@ -30,6 +30,7 @@ class DatabaseSettings(VendedSettings):
     model_config = SettingsConfigDict(
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     # The app's own role, not the superuser: a deployed database is created with a
@@ -66,11 +67,15 @@ class DatabaseSettings(VendedSettings):
     # everywhere else, including development, which vends.
     postgres_password_file: str | None = None
     # The engine's pool, sized by an app that holds several concurrent lanes (a
-    # worker) rather than by forking `db/session.py`. These are SQLAlchemy's own
-    # defaults, right for a request-only app. A burst of failure handling at 5+10
+    # worker) rather than by forking `db/session.py`. The defaults are SQLAlchemy's
+    # own, right for a request-only app; a burst of failure handling at 5+10
     # exhausted library's pool, and the write recording the failure starved with it.
-    pool_size: int = Field(default=5, ge=1)
-    max_overflow: int = Field(default=10, ge=0)
+    # Set per app as `<APP>_DB_POOL_SIZE` and `<APP>_DB_MAX_OVERFLOW`, in the
+    # deployment's committed per-host `.env`, like the app's other settings.
+    pool_size: int = Field(default=5, ge=1, validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_POOL_SIZE")
+    max_overflow: int = Field(
+        default=10, ge=0, validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_MAX_OVERFLOW"
+    )
 
     @property
     def database_url(self) -> str:

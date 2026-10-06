@@ -6,20 +6,20 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Two first-sight requests no longer 500; an account holding no entitlement gets the app's ordinary surface; the database pool is a setting; the test Postgres is removed on every exit; the kit installs under pnpm 10.34 and 12. Via master-project's orchestrator, 06/10/2026.
+Two first-sight requests no longer 500; the people list's rule for an account with no entitlement is written down; the database pool is a setting; the test Postgres is removed on every exit; the kit installs under pnpm 10.34 and 12. Via master-project's orchestrator, 06/10/2026.
 
 ### Fixed
 
 - **`ensure_personal_workspace` survives two concurrent first-sight requests** (need: earworm, radar-hooves/app-factory#31). Both found no membership and both inserted `personal-<user id>`; the loser took a 500 on the slug's unique index. The insert runs in a SAVEPOINT, and the loser returns the winner's membership. `test_workspace_race.py` fails on the old code.
-- **`require_app_module` admits an account holding no entitlement** (need: earworm and mission-command, #31). It refused an empty set, so a signed-in member got 403 on `/users/` and the member picker showed nobody. Only an account holding room grants (`room-<id>`) alone is refused. `admin` gates are unchanged. The rule is in `docs/development/tenancy-design.md`.
+- **The people list stays closed to an account holding no entitlement, and the rule is stated** (second need, earworm and mission-command, #31). `GET /api/users/` lists every active user across all workspaces, so an account the identity provider admitted without a grant must not reach it. The need is met at the identity provider: bind each person who should use the member picker a non-room entitlement. `require_app_module` is unchanged; its test now locks in the refusal. `tenancy-design.md` carries the rule.
 - **The test Postgres is claimed and its cleanup registered before `container.start()`** (need: eight's council, eight#82). A start that failed part-way (the Docker API timing out under load) left a Created container nothing removed.
-- **The TypeScript kit declares its build scripts** (`onlyBuiltDependencies`, `ignoredBuiltDependencies` and `allowBuilds` in `pnpm-workspace.yaml`), so renovate's pnpm 10.34 and 12 bumps (#26, #27) stop failing `ERR_PNPM_IGNORED_BUILDS`; checked on 10.28.0, 10.34.6 and 12.9.1.
+- **The TypeScript kit declares its build scripts** (`onlyBuiltDependencies`, `ignoredBuiltDependencies` and `allowBuilds` in `pnpm-workspace.yaml`), so renovate's pnpm 10.34 bump (#26) stops failing `ERR_PNPM_IGNORED_BUILDS`; checked on 10.28.0 and 10.34.6. The pnpm 12 bump (#27) also needs its lock and overrides regenerated (12.9.1 fails `--frozen-lockfile` on an overrides mismatch), which is renovate's rebase to do.
 
 ### Added
 
-- **`DatabaseSettings.pool_size` and `max_overflow`, read by the engine** (need: library, #33). Defaults 5 and 10, SQLAlchemy's own, so a request-only app changes nothing. A worker app sets `POOL_SIZE` and `MAX_OVERFLOW`, or its section default, rather than forking `db/session.py`.
+- **`DatabaseSettings.pool_size` and `max_overflow`, read by the engine** (need: library, #33). Defaults 5 and 10, SQLAlchemy's own, so a request-only app changes nothing. A worker app sets `<APP>_DB_POOL_SIZE` and `<APP>_DB_MAX_OVERFLOW` rather than forking `db/session.py`.
 
-An app takes this with `copier update` and a regenerated `.template-parity.json`. earworm drops its workspace-service exception; library drops its pool exception and sets 10 and 20 in its `DatabaseSettings` answers; mission-command needs nothing else.
+An app takes this with `copier update` and a regenerated `.template-parity.json`. earworm drops its workspace-service exception and has its household members bound a non-room entitlement at the identity provider. library drops its pool exception and sets `LIBRARY_DB_POOL_SIZE=10` and `LIBRARY_DB_MAX_OVERFLOW=20` in its committed per-host `.env`. mission-command binds its people an entitlement likewise.
 
 ## [2026.10.7] - 2026-10-06
 
