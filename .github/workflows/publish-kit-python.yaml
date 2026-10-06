@@ -14,6 +14,11 @@ name: Publish kits/python
 # reusable. The upload password is read from the atlas runner host
 # (/var/lib/devpi-ci/upload_password), never a GitHub secret (fleet/ci.md).
 #
+# by-exception (2026-10-06): no ntfy-failure step. GitHub lends a private
+# repo's actions to private repos only, so this public one cannot load
+# master-project's. The red-CI digest reads main and this runs on a tag, so
+# the release that pushed the tag reads its publish run.
+#
 # On a release tag, or a dispatch ON a tag. Never pull_request: a public repo's
 # pull request must not reach the self-hosted runner.
 

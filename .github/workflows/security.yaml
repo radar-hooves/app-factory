@@ -15,6 +15,10 @@ name: Security
 # lock natively (kits/rust/Cargo.lock, uv.lock, kits/typescript/pnpm-lock.yaml),
 # this repo's dependency-audit gate (rules-library/core/supply-chain.md).
 #
+# by-exception (2026-10-06): no ntfy-failure step. GitHub lends a private
+# repo's actions to private repos only, so this public one cannot load
+# master-project's; the red-CI digest reports a failed run on main.
+#
 # Weekly, and on a dependency change: CVEs arrive with time, not with commits,
 # and pre-commit already runs gitleaks on every commit. The household-host scan
 # alone also runs on every push and pull request: a household host a commit

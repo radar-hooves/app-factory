@@ -50,9 +50,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# No push on a failure. Only atlas-n8n and atlas-systemd write the operator's
-# ntfy topics, and the red-CI digest reports a failed run (the operator's
-# ruling, 05/10/2026).
+# by-exception (2026-10-06): no ntfy-failure step. GitHub lends a private
+# repo's actions to private repos only, so this public one cannot load
+# master-project's; the red-CI digest reports a failed run on main.
 
 permissions:
   contents: read
