@@ -24,7 +24,7 @@ Every stamped app carries its own `.template-parity.json`: the sha256 of each fa
 Two consequences:
 
 - Changing a gated file in `template/` breaks parity in every app until each takes the new copy **and** a re-stamped manifest. Both halves, or the gate lies.
-- You do not maintain the manifest by hand. `check-template-parity.py --generate` (in master's `canonical-app-migration` skill) writes it into the app from a fresh render of the tagged template; an app takes a new factory file and regenerates its manifest in the same commit. A stale manifest is worse than none — it passes every app matching the *old* template.
+- You do not maintain the manifest by hand. `check-template-parity.py --generate` (in master's `canonical-app-migration` skill) writes it into the app from a fresh render of the tagged template, `--ref <tag>` for a release behind `main` and `--ref stamped` for the app's own `_commit`; an app takes a new factory file and regenerates its manifest in the same commit. A stale manifest is worse than none — it passes every app matching the *old* template.
 
 An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for a dependency floor, in its `.canonical-exceptions`, dated, with a reason. The bar is `canonical-app-shape.md` §Sameness: a difference that is right is right for every app, so it belongs here, not there.
 
@@ -36,7 +36,7 @@ An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for 
 
 `copier update` renders the app's previous version from the answers recorded in `.copier-answers.yml` and nothing else (`--defaults` forced, no `--data`). An app whose answers file was hand-written (a repoint, an adoption) can lack a question its own `_commit` already asks, and that render stops before anything is diffed. `--data` and `--data-file` never reach it, and no default added to a later `copier.yaml` does either, because the old render reads the old one. Measured on pebblestone, 05/10/2026, at `v2026.9.49`: `private_index_name`.
 
-What reaches both renders is copier's own settings file. A fleet declares its values once under `defaults:` and points `COPIER_SETTINGS_PATH` at it for the update:
+What reaches both renders is copier's own settings file. A fleet declares its values once under `defaults:` and points `COPIER_SETTINGS_PATH` at it for the update; master's `/master:update-app-template` does so from the household's values (`copier-settings.py`):
 
 ```yaml
 defaults:

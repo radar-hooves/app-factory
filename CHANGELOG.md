@@ -6,6 +6,17 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- **Every app's own E2E proves the shell covers none of its controls.** The family that failed earworm's, mission-command's and cadmus's runs (the report button on a page's last control and on a room's Send, a crowded top bar over the workspace menu) was fixed in `@poodle64/ui` 2026.10.3 and 2026.10.6 and measured in the kit's harness, never in an app's own frame. `shell.spec.ts` now asks it on every stamped route at 375, 768, 1280 and 1920: each top-bar and page control takes its own trial click, and a Button-high control at a padded page's end scrolls clear of the report button. Proven on a scratch stamp on atlas: all pass on ui 2026.10.3; on 2026.10.2 the last control fails at 375, 768 and 1280 on "Report a problem intercepts pointer events", and a frame with eight actions crowding its bar fails at 1280 on the search covering the context slot. Need: earworm and mission-command, via master-project's orchestrator.
+
+### Changed
+
+- **Each of the factory's workflows, and the desktop skeleton's security scan, says why it carries no `ntfy-failure` step, as a dated by-exception.** GitHub lends a private repo's actions only to private repos, and this repo and Thoth are public, so master-project's `ntfy-failure` cannot load here. Four gave the operator's ruling of 05/10/2026 instead, which that action now meets by filing through the intake, so it read as a gap to fill. A failure surfaces in the red-CI digest on main, or for the tag-triggered Python publish, in the release that pushed the tag. Need: master-project's orchestrator.
+- **`working-on-the-template.md` names master's tools for converging behind `main`:** `check-template-parity.py --generate --ref <tag>`, and `/master:update-app-template`, which sets `COPIER_SETTINGS_PATH` from the household's values. Need: pebblestone.
+
+An app takes this with `copier update` to the release and a regenerated `.template-parity.json`, after `@poodle64/ui` `^2026.10.3`: earworm and mission-command, on 2026.9.21, fail the new checks as their own E2E already does. A spec's `getByLabel('Repo')` also matches the shell's "Report a problem", because Playwright matches a label by substring; it passes `{ exact: true }` (mission-command's work-dispatch specs).
+
 ## [2026.10.6] - 2026-10-06
 
 On a phone the room page's Send is clear of the report button (need: cadmus, app-factory#29); a room prices its answers in the app's own currency (need: cadmus); a stamped app's E2E runs on NixOS from any environment; and an update missing an answer its own version asks is answered by copier's settings file (need: pebblestone). Via master-project's orchestrator, 05/10/2026.
@@ -23,6 +34,10 @@ On a phone the room page's Send is clear of the report button (need: cadmus, app
 - **The stamped `.gitignore` ignores `/result` and `/result-*`,** `nix build`'s output links. Need: cadmus, 05/10/2026.
 - **Every GitHub-hosted runner in this repo and the desktop skeleton carries a dated `# by-exception (YYYY-MM-DD)` at its line,** the form `ci-workflow-standard.md` asks for and `check-canonical-shape.py` reads. `security.yaml`'s fork route had none, `publish-kit-typescript.yaml` an undated one, and four more were dated day first. The routes are unchanged: a fork's code never runs on atlas, and npm's trusted publishing takes no self-hosted runner. Need: master-project's red-CI survey, 05/10/2026.
 - **The factory's CI says why it sends no push on a failure.** None of its workflows, and nothing it stamps, carries an ntfy step; their comments gave a public repo's reach as the reason, and now give the operator's ruling of 05/10/2026 that only atlas-n8n and atlas-systemd write his ntfy topics and the red-CI digest reports a failed run.
+
+### Removed
+
+- **`VITE_AGENT_COST_CURRENCY` and `VITE_AGENT_COST_RATE`.** The room page read them from 2026.10.4 and no longer does, so an app that set either shows US dollars until it exports `formatCost` from `src/lib/agent/app.ts` (Changed, above). Need: master-project's orchestrator, 06/10/2026.
 
 An app takes this with `copier update` to the release and a regenerated `.template-parity.json`. An app that prices answers in its own currency exports `formatCost` from `src/lib/agent/app.ts`. cadmus drops its `#29` exception on the room page, and its warm-up imports `hostChromium()` from `tests/e2e/host-browser.ts` in place of its own copy.
 
