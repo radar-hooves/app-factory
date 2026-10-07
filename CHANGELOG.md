@@ -6,6 +6,17 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.9] - 2026-10-07
+
+The container healthcheck can no longer pass on a login page, and the deploy smoke checks the app's own health route. Via master-project's orchestrator, 07/10/2026, from pebblestone's finding on mimir.
+
+### Fixed
+
+- **The compose healthcheck does not follow a redirect and requires the OpenAPI schema body.** It still polls the database-free `/openapi.json` (a `SELECT 1` probe would turn a Postgres blip into a restart loop), but an app whose schema sits behind its auth middleware answered 302 to `/login`, urllib followed it, and the check passed on the login page. A 3xx now fails it, as does a 200 that is not the schema.
+- **`.github/image-smoke.sh` runs the image beside a throwaway `postgres:17-alpine` and requires `GET /api/system/health` 200 with `status: "healthy"`, never following a redirect.** It had polled `/openapi.json`. Proved on a stamped app: green on a healthy image; red with a wrong database password (503) and against a server that only answers 302.
+
+An app takes this with `copier update`: `compose.yaml` changes its healthcheck, and the app-owned `.github/image-smoke.sh` is replaced by the template's copy where the app has not edited it. An app that moved its own `/openapi.json` behind auth now shows unhealthy until that is fixed, which is the point.
+
 ## [2026.10.8] - 2026-10-06
 
 Two first-sight requests no longer 500; the people list's rule for an account with no entitlement is written down; the database pool is a setting; the test Postgres is removed on every exit; the kit installs under pnpm 10.34 and 12. Via master-project's orchestrator, 06/10/2026.
