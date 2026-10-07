@@ -1,32 +1,47 @@
 #!/usr/bin/env bash
 # THE extension point for deploy.yaml's boot check (canonical-app-shape.md
-# §Extension points), app-owned: proves THIS app's image boots and serves.
-# `$IMAGE` is the image just built; non-zero stops the deploy. DB-free:
-# create_app() defers database access to the lifespan, so the server boots
-# directly, bypassing entrypoint.sh, and must serve /openapi.json 200.
+# §Extension points), app-owned: proves THIS app's image boots and is healthy.
+# `$IMAGE` is the image just built; non-zero stops the deploy. The server runs
+# directly, bypassing entrypoint.sh, beside a throwaway Postgres, and must
+# answer /api/system/health 200 with status "healthy" — the route that pings the
+# database. A redirect is never a pass (the probe does not follow one), and
+# /openapi.json is not the signal: behind the auth middleware it answers 302.
 set -eu
 
 name="smoke-{{ project_name }}-$$"
-# POSTGRES_PASSWORD is never used; eager settings validation needs a value to construct.
+net="$name"
+pgname="$name-db"
+pgpass="smoke$$"
+docker network create "$net" >/dev/null
+docker run -d --name "$pgname" --network "$net" -e POSTGRES_PASSWORD="$pgpass" postgres:17-alpine >/dev/null
 # {{ package_name | upper }}_VEND=off: this container has no software identity
 # key and nothing else here names a Vended field, so the broker is never asked
 # (config/vend.py) — any Vended field an app's own domain settings later add
 # stays at its empty default instead of failing the boot this gate exists to prove.
-docker run -d --name "$name" -e POSTGRES_PASSWORD=smoke -e {{ package_name | upper }}_VEND=off "$IMAGE" \
-  gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py
-trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+docker run -d --name "$name" --network "$net" \
+  -e POSTGRES_HOST="$pgname" -e POSTGRES_PORT=5432 -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD="$pgpass" -e POSTGRES_DB=postgres -e {{ package_name | upper }}_VEND=off \
+  "$IMAGE" gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py >/dev/null
+trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" "$pgname" >/dev/null 2>&1 || true; docker network rm "$net" >/dev/null 2>&1 || true' EXIT
 
-for _ in $(seq 1 30); do
+probe='import json, sys, urllib.request
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+r = urllib.request.build_opener(NoRedirect).open("http://localhost:{{ backend_port }}/api/system/health", timeout=5)
+sys.exit(0 if r.getcode() == 200 and json.load(r).get("status") == "healthy" else 1)'
+
+for _ in $(seq 1 45); do
   if [ -z "$(docker ps -q -f name="^${name}$" -f status=running)" ]; then
     echo "smoke: container exited before serving — the server failed to boot"
     exit 1
   fi
-  # stderr silenced: an early poll raises a benign ConnectionRefused; the container log is the diagnosis.
-  if docker exec "$name" python3 -c 'import urllib.request, sys; sys.exit(0 if urllib.request.urlopen("http://localhost:{{ backend_port }}/openapi.json", timeout=5).getcode() == 200 else 1)' 2>/dev/null; then
-    echo "smoke: {{ project_name }} booted and served /openapi.json 200"
+  # stderr silenced: an early poll raises a benign ConnectionRefused or 503 while Postgres starts; the container log is the diagnosis.
+  if docker exec "$name" python3 -c "$probe" 2>/dev/null; then
+    echo "smoke: {{ project_name }} booted and /api/system/health answered 200 healthy"
     exit 0
   fi
   sleep 2
 done
-echo "smoke: {{ project_name }} never served /openapi.json 200 within the timeout — image will NOT be deployed"
+echo "smoke: {{ project_name }} never answered /api/system/health 200 healthy within the timeout — image will NOT be deployed"
 exit 1

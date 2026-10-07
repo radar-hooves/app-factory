@@ -73,7 +73,10 @@ services:
         - |
           import socket, urllib.request
           socket.setdefaulttimeout(5)
-          response = urllib.request.urlopen("http://localhost:{{ backend_port }}/openapi.json")
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+          response = urllib.request.build_opener(NoRedirect).open("http://localhost:{{ backend_port }}/api/system/health")
           exit(0 if response.getcode() == 200 else 1)
       interval: 30s
       timeout: 10s

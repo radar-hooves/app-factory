@@ -77,8 +77,8 @@ class Settings(BaseSettings):
     # because the shared ingress shell 404-guards all three for an app behind
     # it. An app whose port is reachable WITHOUT traversing that proxy sets
     # OPENAPI_ENABLED=false and closes them in the app, where nothing can go
-    # round the edge — at the cost of /openapi.json, which the container
-    # healthcheck and the CI smoke probe both poll.
+    # round the edge. The container healthcheck and the CI smoke probe poll
+    # /api/system/health, so closing the schema costs them nothing.
     openapi_enabled: bool = True
 
     # Build revision (commit SHA) the running image was built from, read once
