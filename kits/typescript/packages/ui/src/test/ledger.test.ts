@@ -595,6 +595,17 @@ describe('Ledger: column heads sort', () => {
 		expect(head).not.toHaveAttribute('data-sort');
 	});
 
+	it('keeps a closed group closed through a sort and its clearing', async () => {
+		const { titles } = mount({ rows: SORTABLE });
+		await fireEvent.click(screen.getByRole('button', { name: /September 2026/ }));
+		expect(titles()).toEqual(['Urban', 'Council']);
+		await fireEvent.click(sortHead(/^Sort by Amount/));
+		expect(titles()).toEqual(['Urban', 'Council']);
+		await fireEvent.click(sortHead(/^Sorted by Amount/));
+		await fireEvent.click(sortHead(/^Sorted by Amount/));
+		expect(titles()).toEqual(['Urban', 'Council']);
+	});
+
 	it('keeps the flat list flat when grouped by none, sorting the whole run', async () => {
 		const { all, titles } = mount({ rows: SORTABLE, preferences: { period: 'none' } });
 		await fireEvent.click(sortHead(/^Sort by Amount/));
