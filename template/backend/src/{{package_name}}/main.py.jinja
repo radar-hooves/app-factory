@@ -242,7 +242,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=app_version(),
         lifespan=lifespan,
         # OPENAPI_ENABLED=false closes the schema and both UIs for an app reachable
-        # without the ingress proxy; its healthcheck and smoke probe poll /api/system/health, which stays.
+        # without the ingress proxy; its healthcheck then has no route to poll.
         docs_url="/docs" if settings.openapi_enabled else None,
         redoc_url="/redoc" if settings.openapi_enabled else None,
         openapi_url="/openapi.json" if settings.openapi_enabled else None,

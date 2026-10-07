@@ -4,8 +4,8 @@
 # `$IMAGE` is the image just built; non-zero stops the deploy. The server runs
 # directly, bypassing entrypoint.sh, beside a throwaway Postgres, and must
 # answer /api/system/health 200 with status "healthy" — the route that pings the
-# database. A redirect is never a pass (the probe does not follow one), and
-# /openapi.json is not the signal: behind the auth middleware it answers 302.
+# database; a one-shot gate may touch it, the container healthcheck may not.
+# A redirect is never a pass: the probe does not follow one.
 set -eu
 
 name="smoke-{{ project_name }}-$$"

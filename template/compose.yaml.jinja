@@ -71,13 +71,13 @@ services:
         - python3
         - -c
         - |
-          import socket, urllib.request
+          import json, socket, urllib.request
           socket.setdefaulttimeout(5)
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, *args, **kwargs):
                   return None
-          response = urllib.request.build_opener(NoRedirect).open("http://localhost:{{ backend_port }}/api/system/health")
-          exit(0 if response.getcode() == 200 else 1)
+          response = urllib.request.build_opener(NoRedirect).open("http://localhost:{{ backend_port }}/openapi.json")
+          exit(0 if response.getcode() == 200 and "openapi" in json.load(response) else 1)
       interval: 30s
       timeout: 10s
       retries: 3
