@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.4] - 2026-10-08
+
+### Changed
+
+- **Ledger: a sort orders rows inside the grouping the viewer chose, and a third
+  click clears it.** A sorted ledger was one flat run with no group heads, and
+  the head only toggled descending and ascending, so a viewer who sorted could
+  not get back to the grouped view. A click on a head now sorts within each
+  period's group (the groups stay newest first, the Date column stays hidden
+  by day); grouped by none, the list stays the flat run it was. The head goes
+  descending, ascending, then back to the default order, newest first; a
+  down chevron, an up chevron and none at rest say which state it is in, and
+  the button's label names the next click. Need: radar-hooves/godswood (the
+  property, bank and crypto ledgers), via master-project's orchestrator.
+
 ## [2026.10.3] - 2026-10-05
 
 ### Fixed

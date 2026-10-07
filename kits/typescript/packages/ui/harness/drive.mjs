@@ -4089,16 +4089,23 @@ for (const density of ['comfortable', 'compact']) {
 	check('Ledger: the head control closes every group at once', (await page.locator('[data-slot="ledger-row"]').count()) === 0 && (await page.locator('[data-slot="ledger-group"]').count()) >= 3);
 	await page.click('[data-slot="ledger-all-groups"]');
 	check('Ledger: and opens them all again', (await page.locator('[data-slot="ledger-row"]').count()) > 0);
+	const before = await measureLedger();
 	await page.click('[aria-label="Sort by Amount"]');
 	m = await measureLedger();
 	const sorted = await page.evaluate(() =>
-		[...document.querySelectorAll('[data-slot="ledger-amount"]')].map((a) => Number(a.textContent.replace(/[^\d.-]/g, '').replace(/^\(?(.*)$/, '$1')) * (a.textContent.includes('(') ? -1 : 1))
+		[...document.querySelectorAll('[data-slot="ledger-card"]')].map((card) =>
+			[...card.querySelectorAll('[data-slot="ledger-amount"]')].map((a) => Number(a.textContent.replace(/[^\d.-]/g, '').replace(/^\(?(.*)$/, '$1')) * (a.textContent.includes('(') ? -1 : 1))
+		)
 	);
 	check(
-		'Ledger sorted: one flat card, no group heads, head still on the rows to the pixel, largest first',
-		m.cards.length === 1 && m.groups.length === 0 && m.cards[0].left === m.head.left && Math.abs(m.cards[0].width - m.head.width) < 0.5 && m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5) && sorted.slice(1).every((v, i) => sorted[i] >= v),
-		`${m.cards.length} cards, ${m.groups.length} groups, ${sorted.slice(0, 5).join(', ')}`
+		'Ledger sorted: the groups and their cards stay, head still on the rows to the pixel, largest first inside each group',
+		m.cards.length === before.cards.length && m.groups.length === before.groups.length && m.groups.length > 1 && m.cards[0].left === m.head.left && Math.abs(m.cards[0].width - m.head.width) < 0.5 && m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5) && sorted.every((card) => card.slice(1).every((v, i) => card[i] >= v)),
+		`${m.cards.length} cards, ${m.groups.length} groups, ${sorted.map((c) => c.slice(0, 3).join('/')).join(' | ')}`
 	);
+	await page.click('[aria-label^="Sorted by Amount, descending"]');
+	const asc = await page.getAttribute('[data-slot="ledger-sort"][data-sort]', 'data-sort');
+	await page.click('[aria-label^="Sorted by Amount, ascending"]');
+	check('Ledger: a third click on the head clears the sort', asc === 'asc' && (await page.locator('[data-slot="ledger-sort"][data-sort]').count()) === 0 && (await page.locator('[aria-label="Sort by Amount"]').count()) === 1);
 	check('Ledger: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 

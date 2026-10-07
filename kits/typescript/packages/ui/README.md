@@ -911,9 +911,11 @@ Settled here, the same in every module, and not props:
   above its card; figures in the body face with tabular numerals, money out
   bracketed and money in green (`formatCurrency(v, { negative: 'brackets' })`).
 - **Sorting and the groups' one control.** Click a column head to sort by it,
-  largest or newest first; click again to reverse. A sorted list is one flat
-  run with no group heads and shows the Date column even by day. Until the
-  viewer sorts, rows sit newest first in their groups. A chevron in the head's
+  largest or newest first; click again to reverse; a third click returns to the
+  default order. A sort orders rows inside the grouping the viewer chose (the
+  groups stay newest first); grouped by none, the list is one flat run. The
+  head shows its state: a down chevron descending, an up chevron ascending,
+  none at rest. Until the viewer sorts, rows sit newest first. A chevron in the head's
   gutter opens or closes every group at once; where rows tick, the gutter
   widens to hold it beside the select-all checkbox.
 - **The Columns menu** holds every column as a tick, the three fixed ones

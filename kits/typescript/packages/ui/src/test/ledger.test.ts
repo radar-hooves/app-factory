@@ -566,19 +566,41 @@ describe('Ledger: column heads sort', () => {
 		{ id: 4, date: '2026-08-20', title: 'Council', amount: 9, balance: 4 }
 	];
 
-	it('sorts by a click, largest first, reverses on the second, one flat run with no group heads', async () => {
-		const { all, titles } = mount({ rows: SORTABLE });
-		expect(all('[data-slot="ledger-group"]').length).toBeGreaterThan(0);
+	const DEFAULT = ['Urban', 'Ray White', 'Bunnings', 'Council'];
 
+	it('sorts inside each group, largest first, reverses on the second click, group heads kept', async () => {
+		const { all, titles } = mount({ rows: SORTABLE });
+		const groupHeads = all('[data-slot="ledger-group"]').length;
+		expect(groupHeads).toBe(3);
+		expect(titles()).toEqual(DEFAULT);
+
+		await fireEvent.click(sortHead(/^Sort by Amount/));
+		expect(all('[data-slot="ledger-group"]')).toHaveLength(groupHeads);
+		expect(all('[data-slot="ledger-card"]')).toHaveLength(groupHeads);
+		expect(titles()).toEqual(['Urban', 'Ray White', 'Bunnings', 'Council']);
+		expect(sortHead(/^Sorted by Amount, descending/)).toHaveAttribute('data-sort', 'desc');
+
+		await fireEvent.click(sortHead(/^Sorted by Amount/));
+		expect(titles()).toEqual(['Urban', 'Bunnings', 'Ray White', 'Council']);
+		expect(sortHead(/^Sorted by Amount, ascending/)).toHaveAttribute('data-sort', 'asc');
+	});
+
+	it('returns to the default order, newest first, on the third click', async () => {
+		const { titles } = mount({ rows: SORTABLE });
+		await fireEvent.click(sortHead(/^Sort by Amount/));
+		await fireEvent.click(sortHead(/^Sorted by Amount/));
+		await fireEvent.click(sortHead(/^Sorted by Amount, ascending/));
+		expect(titles()).toEqual(DEFAULT);
+		const head = sortHead(/^Sort by Amount/);
+		expect(head).not.toHaveAttribute('data-sort');
+	});
+
+	it('keeps the flat list flat when grouped by none, sorting the whole run', async () => {
+		const { all, titles } = mount({ rows: SORTABLE, preferences: { period: 'none' } });
 		await fireEvent.click(sortHead(/^Sort by Amount/));
 		expect(all('[data-slot="ledger-group"]')).toHaveLength(0);
 		expect(all('[data-slot="ledger-card"]')).toHaveLength(1);
 		expect(titles()).toEqual(['Ray White', 'Council', 'Bunnings', 'Urban']);
-		expect(sortHead(/^Sorted by Amount, descending/)).toHaveAttribute('data-sort', 'desc');
-
-		await fireEvent.click(sortHead(/^Sorted by Amount/));
-		expect(titles()).toEqual(['Urban', 'Bunnings', 'Council', 'Ray White']);
-		expect(sortHead(/^Sorted by Amount, ascending/)).toHaveAttribute('data-sort', 'asc');
 	});
 
 	it('sorts a module column by its own sort value, not its display text', async () => {
@@ -592,8 +614,8 @@ describe('Ledger: column heads sort', () => {
 		];
 		const { titles } = mount({ rows: SORTABLE, columns });
 		await fireEvent.click(sortHead(/^Sort by Quantity/));
-		// Largest sort value first: ids 4, 3, 2, 1 carry -4..-1, so 1 leads.
-		expect(titles()).toEqual(['Bunnings', 'Ray White', 'Urban', 'Council']);
+		// Largest sort value first within each month: Bunnings (id 1) leads Ray White (id 2).
+		expect(titles()).toEqual(['Urban', 'Bunnings', 'Ray White', 'Council']);
 	});
 
 	it('sorts a text column by its text, empty last either way, and a cell-only column not at all', async () => {
@@ -605,7 +627,7 @@ describe('Ledger: column heads sort', () => {
 		await fireEvent.click(sortHead(/^Sort by Category/));
 		expect(titles()).toEqual(['Urban', 'Bunnings', 'Ray White', 'Council']);
 		await fireEvent.click(sortHead(/^Sorted by Category/));
-		expect(titles()).toEqual(['Ray White', 'Bunnings', 'Urban', 'Council']);
+		expect(titles()).toEqual(['Urban', 'Ray White', 'Bunnings', 'Council']);
 		expect(screen.queryByRole('button', { name: /Sort by Picture/ })).toBeNull();
 	});
 
@@ -614,21 +636,19 @@ describe('Ledger: column heads sort', () => {
 		expect(screen.queryByRole('button', { name: /Sort by (Balance|Running balance)/ })).toBeNull();
 	});
 
-	it('shows the Date column in a sorted list even when grouped by day', async () => {
+	it('keeps the Date column hidden when sorting inside day groups', async () => {
 		const { heads } = mount({ rows: SORTABLE, preferences: { period: 'day' } });
-		expect(heads()).not.toContain('Date');
 		await fireEvent.click(sortHead(/^Sort by Amount/));
-		expect(heads()).toContain('Date');
+		expect(heads()).not.toContain('Date');
 	});
 
-	it('drops the sort when its column is unticked, back to newest first in groups', async () => {
-		const { all, titles } = mount({ rows: SORTABLE, preferences: { columns: ['category'] } });
+	it('drops the sort when its column is unticked, back to newest first', async () => {
+		const { titles } = mount({ rows: SORTABLE, preferences: { columns: ['category'] } });
 		await fireEvent.click(sortHead(/^Sort by Category/));
-		expect(all('[data-slot="ledger-group"]')).toHaveLength(0);
+		expect(titles()).toEqual(['Urban', 'Bunnings', 'Ray White', 'Council']);
 		const menu = await openColumns();
 		await fireEvent.click(within(menu).getByRole('checkbox', { name: 'Category' }));
-		expect(all('[data-slot="ledger-group"]').length).toBeGreaterThan(0);
-		expect(titles()[0]).toBe('Urban');
+		expect(titles()).toEqual(DEFAULT);
 	});
 });
 
@@ -656,7 +676,7 @@ describe('Ledger: one control opens or closes every group', () => {
 		expect(all('[data-slot="ledger-open"]')).toHaveLength(0);
 	});
 
-	it('is absent when nothing is grouped: by day, none, or sorted', async () => {
+	it('is absent when nothing is grouped: by day or none', async () => {
 		const day = mount({ preferences: { period: 'day' } });
 		expect(day.all('[data-slot="ledger-all-groups"]')).toHaveLength(0);
 		day.unmount();

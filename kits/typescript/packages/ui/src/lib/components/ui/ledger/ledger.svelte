@@ -220,9 +220,9 @@
 	/** What a column sorts by; the running balance depends on the order, so never it. */
 	const sorter = (c: { key: string; sort?: LedgerColumn<R>['sort']; text?: LedgerColumn<R>['text'] }) =>
 		c.key === 'balance' ? undefined : (c.sort ?? c.text);
-	/** Click a head to sort by it, largest or newest first; again to reverse. */
+	/** Click a head to sort by it, largest or newest first; again to reverse; a third time back to the default order. */
 	function sortBy(key: string) {
-		sort = sort?.key === key ? { key, dir: sort.dir === 1 ? -1 : 1 } : { key, dir: -1 };
+		sort = sort?.key !== key ? { key, dir: -1 } : sort.dir === -1 ? { key, dir: 1 } : null;
 	}
 	/** The sort in force: a column the viewer has since unticked no longer sorts. */
 	const activeSort = $derived.by(() => {
@@ -231,8 +231,8 @@
 			? sort
 			: null;
 	});
-	/** Until the viewer sorts, rows sit newest first in their period's groups. */
-	const grouped = $derived(prefs.period !== 'none' && !activeSort);
+	/** A sort orders rows inside their period's groups; only `none` is the flat list. */
+	const grouped = $derived(prefs.period !== 'none');
 	const BY_DAY = $derived(grouped && prefs.period === 'day');
 
 	const shown = $derived(
@@ -262,8 +262,9 @@
 	});
 	const groups = $derived.by(() => {
 		const by = activeSort && sorter(resolved.find((c) => c.key === activeSort.key)!);
-		if (activeSort && by) return [{ key: '', rows: sortRows(rows, by, activeSort.dir) }];
-		return groupRows(rows, prefs.period, fy);
+		const base = groupRows(rows, prefs.period, fy);
+		if (!activeSort || !by) return base;
+		return base.map((g) => ({ key: g.key, rows: sortRows(g.rows, by, activeSort.dir) }));
 	});
 	/** Closed groups, keyed with their period so a new period starts open. */
 	const closed = new SvelteSet<string>();
@@ -923,7 +924,7 @@
 									mine && 'text-foreground'
 								)}
 								aria-label={mine
-									? `Sorted by ${c.label}, ${mine.dir === -1 ? 'descending' : 'ascending'}. Click to reverse`
+									? `Sorted by ${c.label}, ${mine.dir === -1 ? 'descending' : 'ascending'}. Click ${mine.dir === -1 ? 'to reverse' : 'for the default order'}`
 									: `Sort by ${c.label}`}
 								onclick={() => sortBy(c.key)}
 								data-slot="ledger-sort"

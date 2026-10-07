@@ -1320,7 +1320,7 @@ Every look the operator ruled for the ledger is a layout or paint fact, so
 | A group's label sits on the page ground just above its card | label transparent, 6px above its card, ground between cards |
 | The head's all-groups chevron sits over the group chevrons; one click closes every group, another opens them | centres 37.0 and 37.0; no rows, then rows |
 | The review chip sits on line one after the title, centred with it; a long title truncates before it, at 390 and 1000px | chip 277.0 on line 277.0; chip 71px wide and within its card |
-| A conversion's amount is plain; a head click sorts to one flat card with no group heads, head still on the rows, largest first | not the success ink; 1 card, 0 groups |
+| A conversion's amount is plain; a head click sorts inside each group, the group heads and cards kept, head still on the rows, largest first; a third click clears it | not the success ink; groups and cards unchanged |
 | Money in paints `--ds-color-status-success`; money out is bracketed | equal computed colours; `($312.40)` in the foreground ink |
 | Figures are the body face, tabular | the body's own family, `tabular-nums` |
 | The head holds while the rows scroll; the toolbar and bulk bar end where the cards do | head top 60.0 before and after; bar edges equal to the cards' |
