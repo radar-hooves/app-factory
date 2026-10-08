@@ -2,6 +2,51 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.5] - 2026-10-08
+
+### Added
+
+- **`ListToolbar`** (`@poodle64/ui/list-toolbar`): the bar above a list, on
+  the page ground. Title (a heading) and count, the list's own controls, icon
+  actions each named by its tooltip (`tools`), and one labelled action
+  (`action`), each a button or, with `href`, a link. A crowded bar drops the
+  count before it ends the title in an ellipsis. The Ledger draws its bar with
+  it, so `Ledger` takes `tools` and `action` too, and its title is now a
+  heading (`h2`) that ends in an ellipsis when crowded.
+- **`RecordList`** (`@poodle64/ui/record-list`): the ledger's look for a list
+  that is not money (properties, managers, tools, a P&L's lines), drawn from
+  the ledger's own classes (`ledger/look.ts`) so the two cannot drift. A row is
+  its thumbnail (`image`, the row's `icon`, or the list's `icon` as a quiet tile), its
+  title and a second line of `flags` and `note`, then the module's columns.
+  Groups by `group` in the order their rows come, each label on the ground with
+  its count and each column's `total`; `totalLabel` adds a total card. Sorts
+  inside its groups, largest first and words from A. Rows link (`href`) or
+  open a detail (`onOpen`, `open` marking the row). `head={false}` drops the
+  head card and the Columns menu.
+- **`RecordSwitcher`** (`@poodle64/ui/record-switcher`): the open record's
+  whole name as the top bar's control, raised, its chevron inside, after a
+  "/". Its menu searches, lists each group under its heading with thumbnails,
+  opens on the open record and ends on `all`; `pages` are the record's tabs.
+  It goes inside `ShellControls`, beside whatever else the page sets there.
+- **`DocumentPane`** (`@poodle64/ui/document-pane`): one document, titled and
+  closable, its page fitted with paging and zoom (`PageCanvas` in a `Panel`).
+  `pages` takes one image URL a page, or `page` with `pageCount` draws them;
+  a page that fails to load says so. Another document swapped in opens on its
+  first page.
+- **`ContextColumn`'s record form**: `title`, `subtitle`, `onClose` and
+  `children` hold the one item a record page opened, as tall as what it holds
+  and then scrolling inside itself; `documentPane` takes the column's place,
+  and stands beside it as a third pane once the page's row is 1250px wide (a
+  1600px screen with the rail open). The row decides, never the screen.
+- **`Panel`'s `scroll`**: the body scrolls inside the card under a header that
+  stays.
+- **`ListColumn`** (from `@poodle64/ui/ledger`): the column shape the Ledger
+  and the RecordList share. `on: 'wide'` ticks a column only on a wide list,
+  so extra width shows more columns; the Ledger honours it too.
+
+Need: radar-hooves/godswood (session godswood-8f), the property module redesign
+the operator approved on 08/10/2026, via master-project's orchestrator.
+
 ## [2026.10.4] - 2026-10-08
 
 ### Changed
