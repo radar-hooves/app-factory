@@ -4,6 +4,18 @@
  * group's label on the page ground.
  */
 
+/**
+ * The layout a list's own width picks: a phone's list below 480px, the wide
+ * tracks from 1200px, the narrow tracks between. The list's width, not the
+ * window's: beside a ContextColumn at 1280px with the rail open it is 588px,
+ * which is a laptop's list, not a phone's.
+ */
+export const PHONE_BELOW = 480;
+export const WIDE_FROM = 1200;
+export function listLayout(width: number): 'phone' | 'narrow' | 'wide' {
+	return width === 0 ? 'narrow' : width < PHONE_BELOW ? 'phone' : width >= WIDE_FROM ? 'wide' : 'narrow';
+}
+
 export const CELL = 'min-w-0 truncate px-2';
 export const END = 'pr-5 text-right';
 /** The row's height rides the package's density ramp: 3.5rem, 3rem compact. */

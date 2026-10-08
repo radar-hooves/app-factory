@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.6] - 2026-10-08
+
+### Fixed
+
+- **`RecordList` and `Ledger` keep their desktop layout beside a ContextColumn
+  at laptop widths.** A list went to its phone layout below 600px of its own
+  width, and a 1280px window with the rail open and the 360px ContextColumn
+  standing leaves the list 588px. The phone layout now starts below 480px
+  (`PHONE_BELOW`, with `listLayout`, in `ledger/look.ts`), so only a phone's
+  list takes it. Reported by godswood, via the master-project orchestrator
+  (app-factory#35); an app needs no breakpoint of its own.
+
 ## [2026.10.5] - 2026-10-08
 
 ### Added

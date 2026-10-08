@@ -899,7 +899,7 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 | `selected`, `bulkActions` | Ticking exists only with `bulkActions`, whose snippet gets the ticked rows in the bar that replaces the toolbar. |
 | `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
 | `originActions`, `onAttachment` | Split, join and undo under a synthetic row's statement lines; the paperclip as a button. |
-| `noun`, `empty`, `footer`, `layout` | "line" for a printed layer; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 600px, from 1200px) should not decide. |
+| `noun`, `empty`, `footer`, `layout` | "line" for a printed layer; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 480px, from 1200px) should not decide. |
 
 Settled here, the same in every module, and not props:
 
@@ -985,7 +985,7 @@ stays for a dense grid of data; a module's own records are a RecordList.
 | `noun`, `empty`, `footer`, `layout` | As the Ledger's. |
 
 A sort orders rows inside their groups, largest first (words from A), then
-reversed, then the list's own order. On a phone (below 600px of list) a row is its thumbnail, title
+reversed, then the list's own order. On a phone (below 480px of list) a row is its thumbnail, title
 and lines, with the first end-aligned column's value beside the title. Measured
 in a real engine at 390, 1440 and 3360px (`harness/drive.mjs`, `?surface=records`).
 

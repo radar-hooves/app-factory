@@ -198,3 +198,15 @@ describe('RecordList: how a row opens', () => {
 		expect(screen.getByText('No properties')).toBeInTheDocument();
 	});
 });
+
+describe('list layout by the list’s own width', () => {
+	it('keeps the narrow tracks for a list beside a ContextColumn at 1280px with the rail open', async () => {
+		const { listLayout } = await import('$lib/components/ui/ledger/look.js');
+		// 1280 window, 248px rail, 360px column: godswood measured 588px of list.
+		expect(listLayout(588)).toBe('narrow');
+		expect(listLayout(479)).toBe('phone');
+		expect(listLayout(390)).toBe('phone');
+		expect(listLayout(1200)).toBe('wide');
+		expect(listLayout(0)).toBe('narrow');
+	});
+});

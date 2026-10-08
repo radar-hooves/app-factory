@@ -8,7 +8,7 @@
 	 *
 	 * It fills its parent's height and scrolls its own rows, so the head card
 	 * stays at the top: give it a bounded parent (`flex-1 min-h-0` in a
-	 * full-height page). Width picks the layout: a phone's list below 600px, the
+	 * full-height page). Width picks the layout: a phone's list below 480px, the
 	 * wide column widths from 1200px.
 	 */
 	import type { Snippet } from 'svelte';
@@ -42,7 +42,8 @@
 		ROW_TEXT,
 		RULE,
 		THROUGH,
-		groupSpacing
+		groupSpacing,
+		listLayout
 	} from './look.js';
 	import { AU_LOCALE } from '$lib/format.js';
 	import { cn } from '$lib/utils.js';
@@ -212,15 +213,7 @@
 	/** The bars above the list end where its cards do: clear of its scroll bar's gutter. */
 	const edge = $derived(`calc(0.5rem + ${Math.max(0, listOuter - listInner)}px)`);
 	const mode = $derived(
-		layout !== 'auto'
-			? layout
-			: width === 0
-				? 'narrow'
-				: width < 600
-					? 'phone'
-					: width >= 1200
-						? 'wide'
-						: 'narrow'
+		layout !== 'auto' ? layout : listLayout(width)
 	);
 	const WIDE = $derived(mode === 'wide');
 	const PHONE = $derived(mode === 'phone');

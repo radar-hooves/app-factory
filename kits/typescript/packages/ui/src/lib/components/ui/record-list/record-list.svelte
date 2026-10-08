@@ -13,7 +13,7 @@
 	 *
 	 * It fills its parent's height and scrolls its own rows, so the head card
 	 * stays at the top: give it a bounded parent (`flex-1 min-h-0`). Width picks
-	 * the layout, as the Ledger's does: a phone's list below 600px, the wide
+	 * the layout, as the Ledger's does: a phone's list below 480px, the wide
 	 * tracks and the `'wide'` columns from 1200px. On a phone a row is its
 	 * thumbnail, title and lines, with the first end-aligned column's value
 	 * beside the title.
@@ -38,7 +38,8 @@
 		ROW_TEXT,
 		RULE,
 		THROUGH,
-		groupSpacing
+		groupSpacing,
+		listLayout
 	} from '../ledger/look.js';
 	import ListToolbar from '../list-toolbar/list-toolbar.svelte';
 	import type { ListAction, ListIconAction } from '../list-toolbar/types.js';
@@ -146,15 +147,7 @@
 	/** The bar ends where the cards do: clear of the scroll bar's gutter. */
 	const edge = $derived(`calc(0.5rem + ${Math.max(0, listOuter - listInner)}px)`);
 	const mode = $derived(
-		layout !== 'auto'
-			? layout
-			: width === 0
-				? 'narrow'
-				: width < 600
-					? 'phone'
-					: width >= 1200
-						? 'wide'
-						: 'narrow'
+		layout !== 'auto' ? layout : listLayout(width)
 	);
 	const WIDE = $derived(mode === 'wide');
 	const PHONE = $derived(mode === 'phone');

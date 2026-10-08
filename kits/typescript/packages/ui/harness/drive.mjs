@@ -4330,6 +4330,7 @@ for (const density of ['comfortable', 'compact']) {
 			const region = document.querySelector('[data-slot="app-shell-content"]');
 			return {
 				layout: list?.dataset.layout,
+				listWidth: list?.getBoundingClientRect().width,
 				heads: head ? [...head.children].map((c) => c.textContent.trim()) : null,
 				headEdges: head ? cells(head) : [],
 				rowEdges: row && head ? cells(row) : [],
@@ -4404,6 +4405,21 @@ for (const density of ['comfortable', 'compact']) {
 		'RecordList at 390px: the phone’s list, with nothing sideways',
 		m.layout === 'phone' && m.heads === null && m.overflow <= 0 && m.docOverflow <= 0,
 		`layout ${m.layout}, overflow ${m.overflow}px, document ${m.docOverflow}px`
+	);
+	await context.close();
+
+	// godswood, via the master-project orchestrator (app-factory#35): a 1280px
+	// window with the rail open and the ContextColumn standing leaves the list
+	// ~588px, which is a laptop's list, not a phone's.
+	({ context, page, errors } = await open('surface=records', { width: 1280, height: 800 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-row"]');
+	m = await measureRecords(page);
+	const columnWidth = await page.evaluate(() => document.querySelector('[data-slot="context-column"]').getBoundingClientRect().width);
+	check(
+		'RecordList at 1280px beside the ContextColumn: the desktop layout, head card and columns',
+		columnWidth >= 360 && m.listWidth < 600 && m.layout === 'narrow' && m.heads !== null && m.heads.length >= 4,
+		`list ${m.listWidth}px, column ${columnWidth}px, layout ${m.layout}, heads ${JSON.stringify(m.heads)}`
 	);
 	await context.close();
 
