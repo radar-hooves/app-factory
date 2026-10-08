@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.10] - 2026-10-08
+
+Every app on a gateway names itself as the gateway's end user. Via master-project's orchestrator (fleet Grafana work, session master-project-55), from godswood's session godswood-8f.
+
+### Changed
+
+- **`agent_common` sends `ANTHROPIC_CUSTOM_HEADERS=x-litellm-end-user-id: <service>` when `gateway_url` is set**, and `ANTHROPIC_CUSTOM_HEADERS` joins the names a turn's `run_env` may not displace. Claude Code otherwise sends a per-session `metadata.user_id`, which LiteLLM maps to `end_user`: one unbounded value per session, against a Prometheus label capped at 300 series. LiteLLM reads `x-litellm-end-user-id` first (`get_end_user_id_from_request_body`, check 1 of 6; `metadata.user_id` is check 5). An app takes it by raising `agent-common` to `>=2026.10.10`.
+
 ## [2026.10.9] - 2026-10-07
 
 The container healthcheck can no longer pass on a login page, and the deploy smoke checks the app's own health route. Via master-project's orchestrator, 07/10/2026, from pebblestone's finding on mimir.

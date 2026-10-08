@@ -110,7 +110,17 @@ def test_a_named_gateway_confines_the_child_to_it_even_with_no_key(
     assert env["ANTHROPIC_AUTH_TOKEN"] == ""
     assert env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "h"
     assert env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
+    assert env["ANTHROPIC_CUSTOM_HEADERS"] == "x-litellm-end-user-id: s"
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
+
+
+def test_no_gateway_names_no_end_user_header(settings: cli.Settings, milton: Persona) -> None:
+    assert "ANTHROPIC_CUSTOM_HEADERS" not in cli.environment(settings, milton)
+
+
+def test_a_run_cannot_displace_the_end_user_header(settings: cli.Settings, milton: Persona) -> None:
+    with pytest.raises(ValueError, match="ANTHROPIC_CUSTOM_HEADERS"):
+        cli.environment(settings, milton, {"ANTHROPIC_CUSTOM_HEADERS": "x-litellm-end-user-id: other"})
 
 
 def test_a_runs_own_variables_reach_its_environment_and_nothing_else(

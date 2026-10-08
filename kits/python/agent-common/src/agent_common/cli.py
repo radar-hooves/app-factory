@@ -91,6 +91,7 @@ _DECIDED = frozenset(
         "MAX_THINKING_TOKENS",
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_CUSTOM_HEADERS",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
         *_INHERITED_IF_SET,
@@ -177,6 +178,11 @@ def environment(settings: Settings, persona: Persona, run_env: Mapping[str, str]
         env["ANTHROPIC_BASE_URL"] = settings.gateway_url
         env["ANTHROPIC_AUTH_TOKEN"] = settings.gateway_key
         env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = settings.haiku_model
+        # The gateway's end user is the deployment, a bounded name. Left alone,
+        # Claude Code sends a per-session `metadata.user_id`, which LiteLLM
+        # maps to `end_user`: one unbounded value per session. LiteLLM reads
+        # this header before the body's `metadata.user_id`.
+        env["ANTHROPIC_CUSTOM_HEADERS"] = f"x-litellm-end-user-id: {settings.service}"
         # No auto-update, telemetry, or availability checks: a container that
         # reaches past its gateway on start is one more thing to diagnose.
         env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
