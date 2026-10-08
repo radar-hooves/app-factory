@@ -71,7 +71,8 @@ const server = createServer((request, response) => {
 });
 await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve));
 
-const browser = await chromium.launch();
+// CHROMIUM_PATH points at a system Chromium where Playwright's bundled one will not run (NixOS).
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
 /** A fresh context per surface: a stylesheet cached across navigations is the
  *  trap recorded in drive.md — the new JS runs against the old CSS. */
@@ -3673,7 +3674,7 @@ for (const density of ['comfortable', 'compact']) {
 		.then((t) => t?.trim());
 	check(
 		'PageCanvas: hovering (activeRegionId), unlike focusing, does NOT turn the page',
-		pageAfterHoveringElsewhere === '1 / 2',
+		pageAfterHoveringElsewhere === '1 of 2',
 		pageAfterHoveringElsewhere
 	);
 	await page.click('[data-action="hover-page2"]');
@@ -4565,6 +4566,35 @@ for (const density of ['comfortable', 'compact']) {
 		.then(() => true, () => false);
 	check('RecordSwitcher: typed and chosen by keyboard, it goes to that record', went, await page.evaluate(() => location.hash));
 	check('RecordSwitcher: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// A phone: the bar's second row is the switcher and its tabs, no breadcrumb, and every page reachable.
+	({ context, page, errors } = await open('surface=record', { width: 390, height: 844 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
+	const phone = await page.evaluate(() => {
+		const row = document.querySelector('[data-testid="ds-shell-location"]');
+		const nav = row.querySelector('nav');
+		const vis = (el) => el && el.getBoundingClientRect().width > 0;
+		const last = nav.lastElementChild;
+		last.scrollIntoView({ inline: 'end' });
+		const r = row.getBoundingClientRect();
+		const l = last.getBoundingClientRect();
+		const trigger = row.querySelector('[data-slot="record-switcher-trigger"]').getBoundingClientRect();
+		return {
+			label: [...row.children].some((c) => c.matches('span') && vis(c)),
+			slash: [...row.querySelectorAll('[aria-hidden="true"]')].some((c) => c.textContent === '/' && vis(c)),
+			scrolls: nav.scrollWidth > nav.clientWidth,
+			lastInRow: l.right <= r.right + 1 && l.left >= r.left,
+			triggerInRow: trigger.right <= r.right + 1,
+			pageOverflow: document.documentElement.scrollWidth - innerWidth
+		};
+	});
+	check(
+		'RecordSwitcher at 390px: no breadcrumb, the tabs scroll in the row and the last page is reachable',
+		!phone.label && !phone.slash && phone.scrolls && phone.lastInRow && phone.triggerInRow && phone.pageOverflow <= 0,
+		JSON.stringify(phone)
+	);
 	await context.close();
 }
 

@@ -332,7 +332,7 @@
 						<ChevronLeft class="size-4" />
 					</Button>
 					<span class="text-foreground min-w-16 text-center text-xs font-medium tabular-nums">
-						{currentPage} / {pageCount}
+						{currentPage} of {pageCount}
 					</span>
 					<Button
 						variant="outline"
@@ -355,7 +355,7 @@
 				<Minus class="size-4" />
 			</Button>
 			<span class="text-foreground min-w-11 text-center text-xs font-medium tabular-nums">
-				{Math.round(zoom * 100)}%
+				{zoom === 1 ? 'Fit' : `${Math.round(zoom * 100)}%`}
 			</span>
 			<Button variant="outline" size="icon" class="size-8" onclick={zoomIn} aria-label="Zoom in">
 				<Plus class="size-4" />

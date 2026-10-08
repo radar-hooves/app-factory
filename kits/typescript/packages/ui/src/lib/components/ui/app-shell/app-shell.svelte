@@ -701,8 +701,11 @@
 					data-testid="ds-shell-location"
 				>
 					{#if location}
-						<span class="text-shell-muted-foreground max-w-48 flex-none truncate text-sm"
-							>{location}</span
+						<span
+							class={cn(
+								'text-shell-muted-foreground max-w-48 flex-none truncate text-sm',
+								controls.content && 'max-sm:hidden'
+							)}>{location}</span
 						>
 					{/if}
 					{#if controls.content}{@render controls.content()}{/if}

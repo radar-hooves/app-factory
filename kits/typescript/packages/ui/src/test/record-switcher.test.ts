@@ -118,4 +118,17 @@ describe('RecordSwitcher', () => {
 		expect(within(nav).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
 		expect(within(nav).getByRole('link', { name: 'Ledger' })).not.toHaveAttribute('aria-current');
 	});
+
+	it('lets the tabs scroll inside the row and hides the breadcrumb on a phone', () => {
+		const { container } = mount({
+			pages: [
+				{ label: 'Overview', href: '/property/4', current: true },
+				{ label: 'Ledger', href: '/property/4/ledger' }
+			]
+		});
+		const nav = screen.getByRole('navigation', { name: 'Pages of 4. Banksia' });
+		expect(nav).toHaveClass('min-w-0', 'overflow-x-auto');
+		expect(within(nav).getByRole('link', { name: 'Ledger' })).toHaveClass('flex-none');
+		expect(container.querySelector('[aria-hidden="true"]')).toHaveClass('max-sm:hidden');
+	});
 });

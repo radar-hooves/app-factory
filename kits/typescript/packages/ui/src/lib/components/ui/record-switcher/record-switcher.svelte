@@ -4,7 +4,9 @@
 	 * with its chevron inside, after the section's name. Its menu finds a
 	 * record by name, lists them under their headings (owned, then sold) with
 	 * a thumbnail each, and ends with the way to all of them, so it still
-	 * works at fifty. The record's own pages follow as tabs.
+	 * works at fifty. The record's own pages follow as tabs. On a phone the
+	 * breadcrumb (the section's name and the "/") gives way, and the tabs scroll
+	 * sideways inside the row, so every page stays reachable.
 	 *
 	 * It places nothing itself: put it inside `ShellControls` with whatever
 	 * else the page sets in the bar.
@@ -81,7 +83,7 @@
 </script>
 
 <div class={cn('flex min-w-0 items-center gap-2 sm:gap-3', className)} data-slot="record-switcher">
-	{#if separator}<span class="text-shell-muted-foreground flex-none" aria-hidden="true">/</span>{/if}
+	{#if separator}<span class="text-shell-muted-foreground flex-none max-sm:hidden" aria-hidden="true">/</span>{/if}
 	<Popover.Root bind:open onOpenChange={(o) => o && (highlighted = here())}>
 		<Popover.Trigger
 			class={cn(
@@ -147,13 +149,16 @@
 	</Popover.Root>
 
 	{#if pages.length}
-		<nav aria-label="Pages of {name}" class="ml-1 flex items-stretch gap-1 self-stretch sm:ml-3">
+		<nav
+			aria-label="Pages of {name}"
+			class="ml-1 flex min-w-0 items-stretch gap-1 self-stretch overflow-x-auto sm:ml-3"
+		>
 			{#each pages as p (p.href)}
 				<a
 					href={p.href}
 					aria-current={p.current ? 'page' : undefined}
 					class={cn(
-						'flex items-center border-b-2 px-2 text-sm transition-colors sm:px-3',
+						'flex flex-none items-center border-b-2 px-2 text-sm transition-colors sm:px-3',
 						p.current
 							? 'border-primary text-foreground font-semibold'
 							: 'text-muted-foreground hover:text-foreground border-transparent'

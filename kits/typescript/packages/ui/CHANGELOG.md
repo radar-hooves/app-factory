@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.11] - 2026-10-08
+
+### Changed
+
+- **A record's switcher and all its pages fit the bar on a phone.** Below `sm`, when a page registers `ShellControls`, the bar's second row drops the shell's `location` label and RecordSwitcher's "/" (the board draws the switcher and tabs alone), and RecordSwitcher's tabs scroll sideways inside the row, so every page is reachable at 390 px. From `sm` up nothing moves.
+- **PageCanvas (so DocumentPane) uses plain words**: "1 of 9" for the page, "Fit" for the zoom while the page is fitted (zoom 1) and a percentage once it is not. Anything matching the text "1 / 9" or "100%" must change. Asked for by godswood, via the master-project orchestrator.
+
 ## [2026.10.10] - 2026-10-08
 
 ### Changed

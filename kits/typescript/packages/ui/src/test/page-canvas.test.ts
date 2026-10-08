@@ -17,8 +17,8 @@ import Harness from './page-canvas.svelte';
 import type { PageCanvasRegion } from '$lib/components/ui/page-canvas/types';
 
 const stage = () => screen.getByRole('document');
-const zoomLabel = () => screen.getByText(/^\d+%$/);
-const pageLabel = () => screen.queryByText(/^\d+ \/ \d+$/);
+const zoomLabel = () => screen.getByText(/^(\d+%|Fit)$/);
+const pageLabel = () => screen.queryByText(/^\d+ of \d+$/);
 
 describe('PageCanvas — the empty and single-page states', () => {
 	it('shows a message and no chrome when there are no pages', () => {
@@ -47,7 +47,7 @@ describe('PageCanvas — the empty and single-page states', () => {
 describe('PageCanvas — the pager', () => {
 	it('shows the pager once there is more than one page', () => {
 		render(Harness, { props: { pageCount: 3 } });
-		expect(pageLabel()).toHaveTextContent('1 / 3');
+		expect(pageLabel()).toHaveTextContent('1 of 3');
 	});
 
 	it('disables Previous on the first page and Next on the last', () => {
@@ -59,7 +59,7 @@ describe('PageCanvas — the pager', () => {
 	it('advances the page on Next, and renders that page\'s content', async () => {
 		render(Harness, { props: { pageCount: 2 } });
 		await fireEvent.click(screen.getByLabelText('Next page'));
-		expect(pageLabel()).toHaveTextContent('2 / 2');
+		expect(pageLabel()).toHaveTextContent('2 of 2');
 		expect(screen.getByTestId('page-content')).toHaveTextContent('page 2');
 		expect(screen.getByLabelText('Next page')).toBeDisabled();
 	});
@@ -73,24 +73,29 @@ describe('PageCanvas — the pager', () => {
 	it('changes page on the arrow keys', async () => {
 		render(Harness, { props: { pageCount: 2 } });
 		await fireEvent.keyDown(stage(), { key: 'ArrowRight' });
-		expect(pageLabel()).toHaveTextContent('2 / 2');
+		expect(pageLabel()).toHaveTextContent('2 of 2');
 		await fireEvent.keyDown(stage(), { key: 'ArrowLeft' });
-		expect(pageLabel()).toHaveTextContent('1 / 2');
+		expect(pageLabel()).toHaveTextContent('1 of 2');
 	});
 
-	it('resets zoom to 100% when the page changes', async () => {
+	it('resets zoom to Fit when the page changes', async () => {
 		render(Harness, { props: { pageCount: 2 } });
 		await fireEvent.click(screen.getByLabelText('Zoom in'));
 		expect(zoomLabel()).toHaveTextContent('125%');
 		await fireEvent.click(screen.getByLabelText('Next page'));
-		expect(zoomLabel()).toHaveTextContent('100%');
+		expect(zoomLabel()).toHaveTextContent('Fit');
 	});
 });
 
 describe('PageCanvas — zoom', () => {
-	it('starts at 100%', () => {
+	it('starts fitted, and says Fit rather than a percentage', () => {
 		render(Harness, { props: { pageCount: 1 } });
-		expect(zoomLabel()).toHaveTextContent('100%');
+		expect(zoomLabel()).toHaveTextContent('Fit');
+	});
+
+	it('says 1 of 3, not 1 / 3', () => {
+		render(Harness, { props: { pageCount: 3 } });
+		expect(screen.getByText('1 of 3')).toBeInTheDocument();
 	});
 
 	it('steps by 25% on the zoom buttons', async () => {
@@ -98,7 +103,7 @@ describe('PageCanvas — zoom', () => {
 		await fireEvent.click(screen.getByLabelText('Zoom in'));
 		expect(zoomLabel()).toHaveTextContent('125%');
 		await fireEvent.click(screen.getByLabelText('Zoom out'));
-		expect(zoomLabel()).toHaveTextContent('100%');
+		expect(zoomLabel()).toHaveTextContent('Fit');
 	});
 
 	it('clamps at 300%', async () => {
@@ -121,13 +126,13 @@ describe('PageCanvas — zoom', () => {
 		await fireEvent.keyDown(stage(), { key: '-' });
 		expect(zoomLabel()).toHaveTextContent('75%');
 		await fireEvent.keyDown(stage(), { key: '0' });
-		expect(zoomLabel()).toHaveTextContent('100%');
+		expect(zoomLabel()).toHaveTextContent('Fit');
 	});
 
 	it('only zooms on a ctrl/cmd wheel, not a plain scroll', async () => {
 		render(Harness, { props: { pageCount: 1 } });
 		await fireEvent.wheel(stage(), { deltaY: -100 });
-		expect(zoomLabel()).toHaveTextContent('100%');
+		expect(zoomLabel()).toHaveTextContent('Fit');
 		await fireEvent.wheel(stage(), { deltaY: -100, ctrlKey: true });
 		expect(zoomLabel()).toHaveTextContent('125%');
 	});
@@ -159,7 +164,7 @@ describe('PageCanvas — focus and the way back', () => {
 		expect(screen.getByText('Whole page')).toBeInTheDocument();
 		await fireEvent.click(screen.getByText('Whole page'));
 		expect(screen.queryByText('Whole page')).not.toBeInTheDocument();
-		expect(pageLabel()).toHaveTextContent('1 / 2');
+		expect(pageLabel()).toHaveTextContent('1 of 2');
 	});
 
 	it('clears the focus on Escape', async () => {
@@ -174,7 +179,7 @@ describe('PageCanvas — focus and the way back', () => {
 		render(Harness, { props: { pageCount: 2, regions: [region], focusedRegionId: 'r1' } });
 		await fireEvent.keyDown(stage(), { key: 'ArrowRight' });
 		expect(screen.queryByText('Whole page')).not.toBeInTheDocument();
-		expect(pageLabel()).toHaveTextContent('2 / 2');
+		expect(pageLabel()).toHaveTextContent('2 of 2');
 	});
 });
 

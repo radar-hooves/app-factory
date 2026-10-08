@@ -405,7 +405,7 @@
 		</div>
 	</AppShell>
 {:else}
-	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" onSearch={() => {}} searchPlacement="trailing" texture="grid">
+	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" location="Property" onSearch={() => {}} searchPlacement="trailing" texture="grid">
 		<ShellControls>
 			<RecordSwitcher
 				name="4. Banksia"
@@ -417,7 +417,9 @@
 				pages={[
 					{ label: 'Overview', href: '#/property/4', current: true },
 					{ label: 'Ledger', href: '#/property/4/ledger' },
-					{ label: 'P&L', href: '#/property/4/pnl' }
+					{ label: 'P&L', href: '#/property/4/pnl' },
+					{ label: 'Documents', href: '#/property/4/documents' },
+					{ label: 'Tenancy', href: '#/property/4/tenancy' }
 				]}
 				bind:open={switcherOpen}
 			/>

@@ -117,7 +117,7 @@ describe('DocumentPane', () => {
 		expect(screen.getByRole('img', { name: 'Lease, page 1 of 3' })).toHaveAttribute('src', '/p1.png');
 		await fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
 		expect(screen.getByRole('img', { name: 'Lease, page 2 of 3' })).toHaveAttribute('src', '/p2.png');
-		expect(screen.getByText('2 / 3')).toBeInTheDocument();
+		expect(screen.getByText('2 of 3')).toBeInTheDocument();
 	});
 
 	it('says which page failed to load, and still pages past it', async () => {

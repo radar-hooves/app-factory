@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Changed
+
+- **`@poodle64/ui` 2026.10.11: a record's switcher and pages fit the bar on a phone, and DocumentPane speaks plainly.** Below `sm` the bar's second row drops the shell's `location` label and RecordSwitcher's "/" when the page registers controls, and the tabs scroll sideways inside the row so every page is reachable. PageCanvas reads "1 of 9" and "Fit" (while fitted) in place of "1 / 9" and "100%". Via master-project's orchestrator, from godswood's session godswood-8f.
+
 ## [2026.10.10] - 2026-10-08
 
 Every app on a gateway names itself as the gateway's end user. Via master-project's orchestrator (fleet Grafana work, session master-project-55), from godswood's session godswood-8f.
