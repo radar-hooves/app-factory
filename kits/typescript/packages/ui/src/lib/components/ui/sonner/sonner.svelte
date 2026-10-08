@@ -7,11 +7,26 @@
 	import InfoIcon from '@lucide/svelte/icons/info';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 
-	let { ...restProps }: SonnerProps = $props();
+	let { toastOptions = {}, ...restProps }: SonnerProps = $props();
+	const options = $derived({
+		...toastOptions,
+		style: 'font-family: var(--ds-font-body, inherit); font-size: var(--ds-text-sm, 0.875rem); ' + (toastOptions.style ?? ''),
+		classes: {
+			icon: 'size-4!',
+			content: 'min-w-0 max-h-[calc(100dvh-6rem)] overflow-y-auto',
+			title: 'whitespace-pre-wrap [overflow-wrap:anywhere]',
+			description: 'whitespace-pre-wrap [overflow-wrap:anywhere] text-inherit!',
+			...toastOptions.classes
+		}
+	});
 </script>
 
 <Sonner
 	theme={mode.current}
+	position="top-right"
+	closeButton
+	richColors={false}
+	toastOptions={options}
 	class="toaster group"
 	style="--normal-bg: var(--popover, var(--ds-color-surface-3)); --normal-text: var(--popover-foreground, var(--ds-color-foreground)); --normal-border: var(--border);"
 	{...restProps}

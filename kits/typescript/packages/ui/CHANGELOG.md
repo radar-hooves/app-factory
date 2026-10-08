@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.7] - 2026-10-08
+
+### Added
+
+- `About` (`@poodle64/ui/about`): shared version, brand, project links and explicitly selected non-sensitive diagnostics, composed from Panel and FactGrid. Clipboard failures are visible; desktop hosts can pass their clipboard API directly through `writeClipboard`.
+
+### Changed
+
+- `Toaster` defaults to top-right, closeable, neutral notifications with token colours and scalable fonts. Titles and descriptions preserve line breaks and wrap unbroken diagnostic text; oversized content scrolls within the viewport. Call sites keep using `toast.*` directly from `svelte-sonner`.
+
 ## [2026.10.6] - 2026-10-08
 
 ### Fixed

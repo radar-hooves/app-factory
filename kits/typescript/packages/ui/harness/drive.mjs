@@ -4603,6 +4603,83 @@ for (const [height, long] of [
 	await context.close();
 }
 
+// Desktop presentation: assert copied content and failure outcomes, not screenshots.
+for (const [label, viewport, theme, scale, rtl] of [
+	['landscape light', { width: 1440, height: 900 }, 'light', 1, false],
+	['landscape dark', { width: 1440, height: 900 }, 'dark', 1, false],
+	['portrait light', { width: 900, height: 1440 }, 'light', 1, false],
+	['portrait dark', { width: 900, height: 1440 }, 'dark', 1, false],
+	['large text', { width: 900, height: 1440 }, 'light', 2, false],
+	['RTL', { width: 1440, height: 900 }, 'dark', 1, true]
+]) {
+	const { context, page, errors } = await open('surface=desktop-about', viewport, theme);
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.evaluate(({ scale, rtl }) => {
+		document.documentElement.style.fontSize = `${scale * 100}%`;
+		document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+	}, { scale, rtl });
+	const copy = page.getByRole('button', { name: 'Copy diagnostics' });
+	await copy.focus();
+	check(`About keyboard focus (${label})`, await copy.evaluate((node) => node === document.activeElement), 'copy control focused');
+	await copy.hover();
+	await copy.press('Enter');
+	await page.getByText('Diagnostics copied', { exact: true }).waitFor();
+	const copied = await page.evaluate(() => navigator.clipboard.readText());
+	check(`About copies explicit diagnostics (${label})`,
+		copied === 'Desktop fixture\nVersion: 2026.10.11\nPlatform: macOS\nTelemetry: Off', 'exact fixture fields');
+	const link = page.getByRole('link', { name: 'Project', exact: true });
+	check(`About external link (${label})`, (await link.getAttribute('rel')) === 'noopener noreferrer', 'isolated new tab');
+	await page.getByRole('button', { name: 'Long error' }).click();
+	const description = page.locator('[data-sonner-toast] [data-description]').filter({ hasText: 'Cannot reach collector.' });
+	await description.waitFor();
+	await page.waitForFunction(() => {
+		const toast = [...document.querySelectorAll('[data-sonner-toast]')].find((node) => node.textContent.includes('Connection failed'));
+		if (!toast) return false;
+		const box = toast.getBoundingClientRect();
+		return box.top >= 0 && box.bottom <= innerHeight && getComputedStyle(toast).opacity === '1';
+	});
+	const geometry = await description.evaluate((node) => {
+		const box = node.getBoundingClientRect();
+		const style = getComputedStyle(node);
+		return { fits: box.left >= 0 && box.right <= innerWidth && node.scrollWidth <= node.clientWidth + 1,
+			wrap: style.overflowWrap, lines: node.textContent.includes('\n') && style.whiteSpace === 'pre-wrap',
+			font: Number.parseFloat(style.fontSize), tokenColour: style.color === getComputedStyle(node.closest('[data-sonner-toast]')).color };
+	});
+	check(`Toast wraps long diagnostics (${label})`, geometry.fits && geometry.wrap === 'anywhere' && geometry.lines && geometry.font >= 13 * scale && geometry.tokenColour, JSON.stringify(geometry));
+	const readable = await description.evaluate((node) => {
+		const body = node.closest('[data-content]');
+		body.scrollTop = body.scrollHeight;
+		const readable = body.scrollHeight <= body.clientHeight + 1 || body.scrollTop > 0;
+		body.scrollTop = 0;
+		return readable;
+	});
+	check(`Toast overflow stays readable (${label})`, readable, 'bounded content scrolls when needed');
+	await page.screenshot({ path: join(root, `desktop-about-${label.replaceAll(' ', '-')}.png`) });
+	await page.locator('[data-sonner-toast]').filter({ hasText: 'Connection failed' }).locator('[data-close-button]').click();
+	await description.waitFor({ state: 'hidden' });
+	await page.evaluate(() => {
+		Object.defineProperty(navigator.clipboard, 'writeText', { value: () => Promise.reject(new Error('fixture denial')) });
+	});
+	await copy.focus();
+	await copy.press('Enter');
+	await page.getByText('Could not copy diagnostics', { exact: true }).waitFor();
+	check(`About clipboard failure (${label})`, await page.getByText('Clipboard access is unavailable.', { exact: true }).isVisible(), 'failure surfaced');
+	check(`Desktop presentation runtime (${label})`, errors.length === 0, `${errors.length} page errors`);
+	await context.close();
+}
+
+{
+	const { context, page } = await open('surface=desktop-about&clipboard=host');
+	await page.evaluate(() => {
+		Object.defineProperty(navigator, 'clipboard', { get: () => { throw new Error('browser clipboard unavailable'); } });
+	});
+	await page.getByRole('button', { name: 'Copy diagnostics' }).click();
+	await page.getByText('Diagnostics copied', { exact: true }).waitFor();
+	check('About supports host clipboard API', (await page.locator('[data-probe="host-clipboard"]').textContent()) ===
+		'Desktop fixture\nVersion: 2026.10.11\nPlatform: macOS\nTelemetry: Off', 'host writer receives explicit fields without browser clipboard');
+	await context.close();
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();

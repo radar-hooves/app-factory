@@ -315,6 +315,11 @@
           "name": "SettingsShell",
           "props": "sections, children, currentPath?, listLabel?",
           "insteadOf": "a hand-built two-pane settings layout, or a card of tab links in a grid, per app"
+        },
+        {
+          "name": "About",
+          "props": "name, version, description?, brand?, links?, diagnostics?, writeClipboard?",
+          "insteadOf": "a per-app About page or dialogue with duplicated version, links and diagnostic copying"
         }
       ]
     },

@@ -17,6 +17,10 @@
 	 * `harness/drive.md` records the choreography and the assertions.
 	 */
 	import { ModeWatcher } from 'mode-watcher';
+	import About from '../dist/components/ui/about/about.svelte';
+	import Toaster from '../dist/components/ui/sonner/sonner.svelte';
+	import { toast } from 'svelte-sonner';
+	let hostClipboard = $state('');
 	import AppShell from '../dist/components/ui/app-shell/app-shell.svelte';
 	import AppNav from '../dist/components/ui/app-shell/app-nav.svelte';
 	import CommandPalette from '../dist/components/ui/command-palette/command-palette.svelte';
@@ -819,7 +823,19 @@
 	{/each}
 {/snippet}
 
-{#if surface === 'detail-panel'}
+{#if surface === 'desktop-about'}
+	<div class="p-8">
+		<About name="Desktop fixture" version="2026.10.11" description="One shared About surface."
+			links={[{ label: 'Project', href: 'https://example.test/project' }, { label: 'Source', href: 'https://example.test/project' }]}
+			diagnostics={{ Platform: 'macOS', Telemetry: 'Off' }}
+			writeClipboard={params.get('clipboard') === 'host' ? async (text: string) => { hostClipboard = text; } : undefined} />
+		<output data-probe="host-clipboard">{hostClipboard}</output>
+		<Button onclick={() => toast.error('Connection failed', {
+			description: `Cannot reach collector.\n${'long-diagnostic-'.repeat(40)}`, duration: Infinity
+		})}>Long error</Button>
+	</div>
+	<Toaster />
+{:else if surface === 'detail-panel'}
 	<!-- design-system#9: DetailPanel's title face is a class-name choice
 	     (font-mono vs font-display), which is exactly the shape of dead
 	     utility this package's other gates guard against — the class can be
