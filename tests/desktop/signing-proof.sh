@@ -10,7 +10,8 @@ trap 'rm -rf "$root"' EXIT
 mkdir -p "$root/scripts" "$root/src-tauri/src"
 cp "$source_root/skeletons/desktop/scripts/cargo-codesign.sh" "$root/scripts/"
 printf '[package]\nname = "signing-proof"\nversion = "0.1.0"\nedition = "2021"\n' > "$root/src-tauri/Cargo.toml"
-jq -n --arg identity "$identity" '{identifier: "com.example.factorysigningproof", bundle: {macOS: {signingIdentity: $identity}}}' > "$root/src-tauri/tauri.conf.json"
+export APPLE_SIGNING_IDENTITY="$identity"
+jq -n '{identifier: "com.example.factorysigningproof", bundle: {macOS: {signingIdentity: "-"}}}' > "$root/src-tauri/tauri.conf.json"
 cd "$root/src-tauri"
 binary="$root/src-tauri/target/debug/signing-proof"
 first_requirement=''

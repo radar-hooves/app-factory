@@ -16,16 +16,17 @@ esac
 fail() { printf 'codesign: %s\n' "$1" >&2; exit 1; }
 root="$(cd "$(dirname "$0")/.." && pwd)"
 config="$root/src-tauri/tauri.conf.json"
-identity=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .bundle.macOS.signingIdentity |
+config_identity=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .bundle.macOS.signingIdentity |
     if . == null or . == "" then "-" elif type == "string" then . else error("Invalid identity") end' "$config" 2>/dev/null) \
     || fail 'Invalid bundle.macOS.signingIdentity in tauri.conf.json.'
+[[ "$config_identity" == - ]] \
+    || fail 'Declare APPLE_SIGNING_IDENTITY; tauri.conf.json must not pin a certificate.'
+# Tauri reads this same declaration when signing the final bundle and nested code.
+identity=${APPLE_SIGNING_IDENTITY--}
 [[ "$identity" == - || "$identity" =~ ^[[:xdigit:]]{40}$ ]] \
-    || fail 'Pin the certificate SHA-1 fingerprint, not its display name.'
+    || fail 'APPLE_SIGNING_IDENTITY must be a certificate SHA-1 fingerprint or local -.'
 identifier=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .identifier | select(type == "string" and . != "")' "$config" 2>/dev/null) \
     || fail 'Missing bundle identifier.'
-# The bundler and runner must use the same identity; never auto-pick a certificate.
-[[ -z "${APPLE_SIGNING_IDENTITY:-}" || "$APPLE_SIGNING_IDENTITY" == "$identity" ]] \
-    || fail 'APPLE_SIGNING_IDENTITY disagrees with tauri.conf.json.'
 
 build_args=()
 app_args=()

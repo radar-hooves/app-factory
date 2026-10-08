@@ -38,7 +38,7 @@ Live source checked on 08/10/2026: Thoth carries **127** lines of `traffic_light
 | --- | --- | --- |
 | `desktop-shell` | Existing centred traffic lights and guarded tray setup | Window/header dimensions and domain tray actions |
 | Official Tauri plugins | Window state; native update/install/relaunch where supported | Supported windows, endpoint/public key and installation mode |
-| Factory signing runner | Actual Cargo artefacts, verify before execution, stable configured certificate/identifier; explicit certificate-free local mode | Certificate fingerprint and bundle identifier |
+| Factory signing runner | Actual Cargo artefacts, verify before execution; Tauri signs the final bundle with the same host declaration; explicit certificate-free local mode | Host-declared `APPLE_SIGNING_IDENTITY` fingerprint and app bundle identifier |
 | Native telemetry kits | Exporter, probe and configured-versus-healthy status; no webview exporter | Service identity, emission allow-list and existing persistence |
 | `@poodle64/ui` | About, toast layout/tokens, settings chrome, common optional-integration/update presentation | Brand/links, typed sections and actual native capabilities |
 | Existing AppShell/AppNav | Hide/reorder optional destinations, collapse and restore defaults | Destinations, groups, badges and playlist/artwork contributions |

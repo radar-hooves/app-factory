@@ -209,15 +209,6 @@ bundle_identifier:
   help: >-
     The desktop app's reverse-DNS bundle identifier (e.g. `com.example.app`), which names its data directories and its macOS bundle. Asked, never derived: changing it later moves every user's data out from under the app.
 
-macos_signing_identity:
-  type: str
-  default: ''
-  when: "{{ skeleton == 'desktop' }}"
-  help: >-
-    Existing stable macOS certificate SHA-1 fingerprint (security find-identity -v -p codesigning).
-    Leave empty for certificate-free local builds; macOS releases require a fingerprint.
-    Never create a certificate during a build.
-
 linux_cargo_args:
   type: str
   default: ''

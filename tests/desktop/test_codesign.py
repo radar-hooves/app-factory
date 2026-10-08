@@ -28,7 +28,7 @@ class SigningRunnerTests(unittest.TestCase):
             "PATH": f"{self.tools}:{os.environ['PATH']}",
             "CALLS": str(self.calls),
             "BINARY": str(self.binary),
-            "APPLE_SIGNING_IDENTITY": "",
+            "APPLE_SIGNING_IDENTITY": "A" * 40,
             "TAURI_CONFIG": "{}",
             "TAURI_ENV_DEBUG": "false",
             "FAKE_OS": "Darwin",
@@ -37,7 +37,7 @@ class SigningRunnerTests(unittest.TestCase):
             "VERIFY_STATUS": "0",
             "NO_ARTIFACT": "0",
         }
-        self.config("A" * 40)
+        self.config("-")
         self.tool(self.tools / "uname", 'printf "%s\\n" "$FAKE_OS"')
         self.tool(
             self.tools / "cargo",
@@ -67,7 +67,7 @@ class SigningRunnerTests(unittest.TestCase):
         return subprocess.run(
             ["bash", str(self.root / "scripts/cargo-codesign.sh"), *args],
             cwd=self.root / "src-tauri",
-            env={**self.env, **env},
+            env={key: value for key, value in {**self.env, **env}.items() if value is not None},
             capture_output=True,
             text=True,
             check=False,
@@ -93,8 +93,16 @@ class SigningRunnerTests(unittest.TestCase):
         self.assertEqual(self.trace()[-1], "app:two words --flag")
         self.assertEqual(sum(line.startswith("cargo:") for line in self.trace()), 1)
 
-    def test_invalid_identity_fails_before_cargo(self):
-        for identity in ("Local Development", "A" * 39, 42, False):
+    def test_invalid_environment_identity_fails_before_cargo(self):
+        for identity in ("Local Development", "A" * 39, "", " "):
+            with self.subTest(identity=identity):
+                result = self.run_runner("build", APPLE_SIGNING_IDENTITY=identity)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("APPLE_SIGNING_IDENTITY must be", result.stderr)
+                self.assertEqual(self.trace(), [])
+
+    def test_configured_identity_is_refused_even_with_environment_identity(self):
+        for identity in ("A" * 40, "Local Development", 42, False):
             with self.subTest(identity=identity):
                 self.config(identity)
                 self.assertNotEqual(self.run_runner("build").returncode, 0)
@@ -105,25 +113,24 @@ class SigningRunnerTests(unittest.TestCase):
             with self.subTest(identity=identity):
                 self.calls.unlink(missing_ok=True)
                 self.config(identity)
-                result = self.run_runner("build", "--profile=dev")
+                result = self.run_runner("build", "--profile=dev", APPLE_SIGNING_IDENTITY=None)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("local ad-hoc signing", result.stderr)
                 self.assertIn("--sign - --identifier com.example.app", self.trace()[1])
                 self.assertEqual(len(self.trace()), 3)
 
     def test_certificate_free_release_and_custom_profiles_fail_before_cargo(self):
-        for identity in ("", "-", None):
+        for identity in ("-", None):
             for args in (("--release",), ("-r",), ("-vr",), ("--profile", "release"), ("--profile=custom",)):
                 with self.subTest(identity=identity, args=args):
-                    self.config(identity)
-                    result = self.run_runner("build", *args)
+                    result = self.run_runner("build", *args, APPLE_SIGNING_IDENTITY=identity)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("Release builds require", result.stderr)
                     self.assertEqual(self.trace(), [])
 
     def test_local_package_argument_and_application_flags_are_not_release_flags(self):
         self.config("-")
-        result = self.run_runner("run", "-pbragi", "--", "-r")
+        result = self.run_runner("run", "-pbragi", "--", "-r", APPLE_SIGNING_IDENTITY="-")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.trace()[-1], "app:-r")
 
@@ -131,34 +138,38 @@ class SigningRunnerTests(unittest.TestCase):
         self.config("-")
         for debug in ("false", "", "0"):
             with self.subTest(debug=debug):
-                result = self.run_runner("check-bundle", TAURI_ENV_DEBUG=debug)
+                result = self.run_runner("check-bundle", TAURI_ENV_DEBUG=debug, APPLE_SIGNING_IDENTITY=None)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Release builds require", result.stderr)
                 self.assertEqual(self.trace(), [])
 
     def test_debug_bundle_preflight_allows_explicit_adhoc(self):
         self.config("-")
-        result = self.run_runner("check-bundle", TAURI_ENV_DEBUG="true")
+        result = self.run_runner("check-bundle", TAURI_ENV_DEBUG="true", APPLE_SIGNING_IDENTITY="-")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("local ad-hoc signing", result.stderr)
         self.assertEqual(self.trace(), [])
 
-    def test_release_bundle_preflight_uses_effective_tauri_config(self):
-        result = self.run_runner(
-            "check-bundle",
-            TAURI_CONFIG=json.dumps({"bundle": {"macOS": {"signingIdentity": "-"}}}),
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Release builds require", result.stderr)
+    def test_release_bundle_preflight_uses_environment_identity(self):
+        result = self.run_runner("check-bundle", APPLE_SIGNING_IDENTITY="B" * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.trace(), [])
 
-    def test_effective_tauri_identity_and_identifier_are_shared(self):
+    def test_effective_tauri_config_cannot_add_a_competing_identity(self):
+        result = self.run_runner(
+            "check-bundle",
+            TAURI_CONFIG=json.dumps({"bundle": {"macOS": {"signingIdentity": "B" * 40}}}),
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must not pin a certificate", result.stderr)
+        self.assertEqual(self.trace(), [])
+
+    def test_environment_identity_and_effective_identifier_are_shared(self):
         result = self.run_runner(
             "build",
             "--release",
-            TAURI_CONFIG=json.dumps(
-                {"identifier": "com.example.override", "bundle": {"macOS": {"signingIdentity": "B" * 40}}}
-            ),
+            APPLE_SIGNING_IDENTITY="B" * 40,
+            TAURI_CONFIG=json.dumps({"identifier": "com.example.override"}),
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"--sign {'B' * 40} --identifier com.example.override", self.trace()[1])
@@ -171,8 +182,21 @@ class SigningRunnerTests(unittest.TestCase):
                 self.assertEqual(result.stderr, "codesign: Invalid bundle.macOS.signingIdentity in tauri.conf.json.\n")
                 self.assertEqual(self.trace(), [])
 
-    def test_bundler_identity_override_cannot_disagree(self):
-        self.assertNotEqual(self.run_runner("build", APPLE_SIGNING_IDENTITY="Other").returncode, 0)
+    def test_both_mac_targets_sign_cargo_artifacts_not_guessed_paths(self):
+        for target in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
+            with self.subTest(target=target):
+                self.calls.unlink(missing_ok=True)
+                binary = self.root / f"target/{target}/release/app"
+                binary.parent.mkdir(parents=True)
+                self.tool(binary, "exit 0")
+                result = self.run_runner("build", "--release", "--target", target, BINARY=str(binary))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(self.trace()[1].endswith(str(binary)))
+                self.assertTrue(self.trace()[2].endswith(str(binary)))
+
+    def test_bundle_preflight_refuses_invalid_declaration_in_debug_too(self):
+        result = self.run_runner("check-bundle", TAURI_ENV_DEBUG="true", APPLE_SIGNING_IDENTITY="")
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.trace(), [])
 
     def test_failed_cargo_never_signs(self):
