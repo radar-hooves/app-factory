@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn an_empty_endpoint_is_no_exporter() {
-        assert!(exporter_of("", "signet headers otlp").is_none());
+        assert!(exporter_of("", "header-helper").is_none());
         assert!(exporter_of("   ", "").is_none());
     }
 
@@ -210,8 +210,8 @@ mod tests {
 
     #[test]
     fn the_helper_command_is_carried_verbatim() {
-        let e = exporter_of("https://otlp.example", " signet headers otlp ").unwrap();
-        assert_eq!(e.headers_helper.as_deref(), Some("signet headers otlp"));
+        let e = exporter_of("https://otlp.example", " header-helper ").unwrap();
+        assert_eq!(e.headers_helper.as_deref(), Some("header-helper"));
     }
 
     #[test]

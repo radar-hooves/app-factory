@@ -99,11 +99,17 @@ pub struct Exporter {
 impl Exporter {
     /// The fleet's answer, read from the standard variables — the crate's one
     /// reader of them, so [`init`] and a Settings pane cannot disagree about what
-    /// the environment says. `None` when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset.
+    /// the environment says. `None` when the endpoint is unset or blank.
     pub fn from_env() -> Option<Self> {
+        let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok()?;
+        if endpoint.trim().is_empty() {
+            return None;
+        }
         Some(Self {
-            endpoint: std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok()?,
-            headers_helper: std::env::var("OTEL_EXPORTER_OTLP_HEADERS_HELPER").ok(),
+            endpoint,
+            headers_helper: std::env::var("OTEL_EXPORTER_OTLP_HEADERS_HELPER")
+                .ok()
+                .filter(|command| !command.trim().is_empty()),
         })
     }
 }
@@ -423,7 +429,7 @@ enum Plan {
 fn plan(exporter: Option<&Exporter>) -> Plan {
     let Some(exporter) = exporter else {
         return Plan::LocalOnly {
-            why: "OTEL_EXPORTER_OTLP_ENDPOINT is unset",
+            why: "OTEL_EXPORTER_OTLP_ENDPOINT is unset or blank",
         };
     };
     match headers_for(exporter) {
@@ -683,6 +689,49 @@ mod tests {
             Plan::LocalOnly { .. }
         ));
         assert_eq!(Exporter::from_env(), None);
+    }
+
+    #[test]
+    #[serial]
+    fn blank_environment_endpoint_disables_export_and_helper() {
+        for endpoint in ["", " \t\n"] {
+            clear_env();
+            set_env(&[
+                ("OTEL_EXPORTER_OTLP_ENDPOINT", Some(endpoint)),
+                ("OTEL_EXPORTER_OTLP_HEADERS_HELPER", Some("exit 3")),
+            ]);
+            assert_eq!(Exporter::from_env(), None);
+            assert!(matches!(
+                plan(Exporter::from_env().as_ref()),
+                Plan::LocalOnly {
+                    why: "OTEL_EXPORTER_OTLP_ENDPOINT is unset or blank"
+                }
+            ));
+        }
+        clear_env();
+    }
+
+    #[test]
+    #[serial]
+    fn blank_environment_helper_is_no_helper() {
+        for helper in ["", " \t\n"] {
+            clear_env();
+            set_env(&[
+                (
+                    "OTEL_EXPORTER_OTLP_ENDPOINT",
+                    Some("https://collector.example"),
+                ),
+                ("OTEL_EXPORTER_OTLP_HEADERS_HELPER", Some(helper)),
+            ]);
+            let exporter = Exporter::from_env().expect("configured endpoint");
+            assert!(exporter.headers_helper.is_none());
+            assert!(
+                headers_for(&exporter)
+                    .expect("no helper required")
+                    .is_empty()
+            );
+        }
+        clear_env();
     }
 
     #[test]

@@ -1,10 +1,9 @@
 //! The bearer, and the HTTP client that carries it.
 //!
 //! `OTEL_EXPORTER_OTLP_HEADERS_HELPER` names a command printing a JSON object of
-//! header name to header value — Claude Code's `headersHelper` contract, which
-//! `signet headers` already satisfies. It runs once per exporter — at init, at a
-//! swap, at a probe: the credential is a static bearer with no expiry, so a
-//! rotated one is picked up at the next launch and there is no refresh loop.
+//! header name to header value. The caller supplies it through settings or its
+//! launch declaration; no helper command is built in. It runs once per exporter
+//! at init, at a swap or at a probe; there is no refresh loop.
 //! Nothing here ever logs a header value, the helper's stdout, or anything
 //! derived from either — `Debug` included.
 

@@ -62,16 +62,16 @@ It never returns.
 
 ## The Settings pane
 
-A Tauri app launched from the Dock inherits no fleet environment, so a desktop app takes the endpoint from its own Settings. The crate never reads that file; the app does, and hands the value over.
+Telemetry defaults to no exporter and no header helper. A public build needs no household command, endpoint or credential. A configured desktop app takes these values from its launch declaration or its own Settings; the crate never reads that settings file. A Dock launch may have no configured environment.
 
 ```rust
 let exporter = telemetry::Exporter {
     endpoint: "https://otlp.example".to_owned(),
-    headers_helper: Some("signet headers otlp".to_owned()),
+    headers_helper: None, // set the caller's helper only when authentication is needed
 };
 
 match telemetry::probe(&exporter) {
-    Ok(()) => guard.set_exporter(Some(exporter)),   // saves and repoints, live
+    Ok(()) => guard.set_exporter(Some(exporter)),   // repoints live; the app owns persistence
     Err(why) => eprintln!("{why}"),                 // a class or a status, never a URL
 }
 ```
@@ -104,8 +104,8 @@ match some_fallible_call() {
 
 | Variable | What it does |
 | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | The bearer-gated front door, and the only thing that makes the exporter read-only to a pane. Unset means local only until `set_exporter` says otherwise. Signal-specific `_LOGS_`/`_TRACES_` endpoints and `_TIMEOUT` are read by the SDK as usual. |
-| `OTEL_EXPORTER_OTLP_HEADERS_HELPER` | A command printing a JSON object of header name to header value — `signet headers …` prints exactly this. Run once at init under `sh -c`, bounded to 10 s. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | The bearer-gated front door, and the only thing that makes the exporter read-only to a pane. Unset or blank means local only until `set_exporter` says otherwise. Signal-specific `_LOGS_`/`_TRACES_` endpoints and `_TIMEOUT` are read by the SDK as usual. |
+| `OTEL_EXPORTER_OTLP_HEADERS_HELPER` | Caller-supplied command printing a JSON object of header name to header value. Unset or blank means no helper; no default. Run at init, exporter swaps and probes under `sh -c`, bounded to 10 s. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Static headers, in the standard `k=v,k=v` form. The helper's headers win where both set the same name. |
 | `RUST_LOG` | The stderr layer only, defaulting to `info`. The developer's view is never allow-listed, though the exporter's own reporting is floored at INFO and capped at one line a minute. |
 
