@@ -183,6 +183,9 @@ jobs:
             uv add --frozen --editable "$kit"
           done
           uv sync --no-default-groups --group dev
+          # The stamp must already be in the shape the app's own ruff-format
+          # hook leaves it, or a re-stamp can never commit clean.
+          uv run ruff format --check .
           uv run pytest -q -n 8 --dist loadfile
 
       - name: Set up pnpm
@@ -218,6 +221,9 @@ jobs:
           pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/ui pack --pack-destination "${RUNNER_TEMP}"
           pnpm add "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)"
           pnpm exec svelte-kit sync
+          # Same reason as ruff format --check above: the app's prettier hook
+          # must change nothing in a fresh stamp.
+          pnpm exec prettier --check .
           pnpm test -- --run
           pnpm check
 
