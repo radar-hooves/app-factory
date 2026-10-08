@@ -47,6 +47,11 @@ on:
       - 'uv.lock'
       - '.github/workflows/factory-selftest.yaml'
   workflow_dispatch:
+    inputs:
+      macos-signing-identity:
+        description: Existing certificate fingerprint; runs only the native signing proof when supplied.
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -60,9 +65,24 @@ permissions:
   contents: read
 
 jobs:
+  macos-signing:
+    name: Native macOS signing proof
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.macos-signing-identity != '' }}
+    runs-on: ['self-hosted', 'huginn']
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Build twice with the real signing runner and verify identity
+        env:
+          SIGNING_IDENTITY: ${{ inputs.macos-signing-identity }}
+        run: nix develop ./kits/rust --command bash tests/desktop/signing-proof.sh "$SIGNING_IDENTITY"
+
   render-and-test:
     name: Render a scratch app and run its own suite
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ !github.event.pull_request.head.repo.fork && inputs.macos-signing-identity == '' }}
     runs-on: ['self-hosted', 'atlas']
     timeout-minutes: 30
     env:

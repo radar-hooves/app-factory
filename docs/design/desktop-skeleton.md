@@ -34,7 +34,11 @@ The owned set is what the skeleton renders minus copier's `_skip_if_exists`. An 
 
 ## Signing verification — 08/10/2026
 
-The 70-line signing runner's ten contract tests pass. The factory self-test's full Python kit suites, rendered backend and frontend gates pass with CI's installs. A committed skeleton compiled on huginn in its devShell using Bragi's existing lockfile inputs; fresh input downloads were blocked by Nix cache transport failures. Native signing then returned `errSecInternalComponent` for the existing certificate and the runner stopped the build: no `.app` bundle was produced. A successful signature/Authority and stable designated requirement across rebuilds remain unproved until huginn authorises use of that signing key. Privacy-grant survival needs the apps' two-version drive test.
+The 70-line signing runner's ten contract tests pass. The factory self-test's full Python kit suites, rendered backend and frontend gates passed with CI's installs. A committed skeleton compiled on huginn using Bragi's existing lockfile inputs; fresh input downloads were blocked by Nix cache transport failures.
+
+Huginn's existing `poodle64` identity (`104B085265F9E2BBE7BBFA15C289B55363E529E0`) has a software private key in `~/Library/Keychains/login.keychain-db`, not a PIV/signet key. Native Security queries found that keychain locked in SSH's security session and unlocked in the GUI login session. A temporary GUI launchd proof signed the compiled skeleton without unlocking a keychain or changing credentials, ACLs or trust. `codesign --verify --strict --verbose=2` returned **valid on disk** and **satisfies its Designated Requirement**; the requirement binds `com.example.signingproof` to that certificate leaf. The proof job was removed.
+
+Yggdrasil owns moving its existing runner from a system daemon to a GUI user agent, matching its keychain-dependent token refresher. The factory self-test now has an opt-in `macos-signing-identity` dispatch input: its huginn job exercises the real Cargo runner over two changed binaries and asserts one stable designated requirement. That runner-context job is not yet proved here. A full `.app` build also remains unproved: the scratch install resolved JavaScript Tauri API 2.12.1 against native Tauri 2.11.6, and the CLI rejected that mismatch before signing. Privacy-grant survival still needs the apps' signed in-place-update drive test.
 
 The proposed shared desktop layer is `desktop-layer.md`; no app adoption is included here.
 

@@ -38,6 +38,7 @@
               pkg-config
               openssl
               cmake
+              jq
             ]
             ++ lib.optionals stdenv.isLinux [
               webkitgtk_4_1
