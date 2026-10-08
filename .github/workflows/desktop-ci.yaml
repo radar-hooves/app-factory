@@ -61,9 +61,6 @@ jobs:
         env:
           CARGO_ARGS: ${{ matrix.os == 'linux' && inputs.linux-cargo-args || '' }}
         run: |
-          # A cargo home under the runner's own HOME, so cargo resolves to the
-          # devShell's toolchain and the crate cache stays warm across jobs.
-          export CARGO_HOME="$HOME/.cargo"
           nix develop --command bash -c '
             set -euo pipefail
             cd src-tauri
