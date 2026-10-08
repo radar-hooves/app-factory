@@ -36,6 +36,11 @@ class SigningRunnerTests(unittest.TestCase):
             "SIGN_STATUS": "0",
             "VERIFY_STATUS": "0",
             "NO_ARTIFACT": "0",
+            "REQUIREMENT_STATUS": "0",
+            "REQUIREMENT_LEAF": "A" * 40,
+            "REQUIREMENT_TEXT": "",
+            "FAIL_VERIFY_PATH": "",
+            "FILE_STATUS": "0",
         }
         self.config("-")
         self.tool(self.tools / "uname", 'printf "%s\\n" "$FAKE_OS"')
@@ -50,8 +55,24 @@ class SigningRunnerTests(unittest.TestCase):
         self.tool(
             self.tools / "codesign",
             'printf "codesign:%s\\n" "$*" >> "$CALLS"\n'
-            'if [[ "$1" == --verify ]]; then exit "$VERIFY_STATUS"; fi\n'
+            'if [[ "$1" == --verify ]]; then\n'
+            '  [[ "${@: -1}" != "$FAIL_VERIFY_PATH" ]] || exit 9\n'
+            '  exit "$VERIFY_STATUS"\n'
+            "fi\n"
+            'if [[ "$1" == -dr ]]; then\n'
+            '  [[ "$REQUIREMENT_STATUS" == 0 ]] || exit "$REQUIREMENT_STATUS"\n'
+            '  if [[ -n "$REQUIREMENT_TEXT" ]]; then printf "%s\\n" "$REQUIREMENT_TEXT"; else\n'
+            '    printf \'designated => certificate leaf = H"%s"\\n\' "$REQUIREMENT_LEAF"\n'
+            "  fi\n"
+            "  exit 0\n"
+            "fi\n"
             'exit "$SIGN_STATUS"',
+        )
+        self.tool(
+            self.tools / "file",
+            '[[ "$FILE_STATUS" == 0 ]] || exit "$FILE_STATUS"\n'
+            'case "$2" in *.dylib|*/MacOS/app) printf "Mach-O universal binary\\n" ;;\n'
+            '*) printf "ASCII text\\n" ;; esac',
         )
 
     def tool(self, path, body):
@@ -196,6 +217,74 @@ class SigningRunnerTests(unittest.TestCase):
 
     def test_bundle_preflight_refuses_invalid_declaration_in_debug_too(self):
         result = self.run_runner("check-bundle", TAURI_ENV_DEBUG="true", APPLE_SIGNING_IDENTITY="")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.trace(), [])
+
+    def bundle_fixture(self, target="aarch64-apple-darwin"):
+        directory = self.root / f"target/{target}/release/bundle/macos"
+        app = directory / "Example app.app"
+        nested = app / "Contents/Helpers/Helper.app"
+        binaries = (app / "Contents/MacOS/app", app / "Contents/Frameworks/player.dylib", nested / "Contents/MacOS/app")
+        for binary in binaries:
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("fixture")
+        (app / "Contents/resource.txt").write_text("not executable code")
+        return directory, (app, nested, *binaries)
+
+    def test_final_bundles_and_nested_code_verified_for_both_targets_without_signing(self):
+        for target in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
+            with self.subTest(target=target):
+                self.calls.unlink(missing_ok=True)
+                directory, paths = self.bundle_fixture(target)
+                result = self.run_runner("verify-bundles", str(directory))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(self.trace()), 2 * len(paths))
+                for path in paths:
+                    self.assertIn(f"codesign:--verify --strict --verbose=2 {path}", self.trace())
+                    self.assertIn(f"codesign:-dr - {path}", self.trace())
+                    self.assertIn(f"SIGNATURE_VERIFIED: {path};", result.stdout)
+                self.assertFalse(any("--force" in line or line.startswith("cargo:") for line in self.trace()))
+
+    def test_final_bundle_verification_requires_existing_bundles_and_stable_identity(self):
+        for args in ((), (str(self.root / "missing"),), (str(self.tools),)):
+            with self.subTest(args=args):
+                self.assertNotEqual(self.run_runner("verify-bundles", *args).returncode, 0)
+        directory, _ = self.bundle_fixture()
+        for identity in (None, "-", "", "Not a fingerprint"):
+            with self.subTest(identity=identity):
+                self.assertNotEqual(
+                    self.run_runner("verify-bundles", str(directory), APPLE_SIGNING_IDENTITY=identity).returncode, 0
+                )
+        self.assertEqual(self.trace(), [])
+
+    def test_each_final_bundle_and_nested_binary_failure_stops_verification(self):
+        directory, paths = self.bundle_fixture()
+        for path in paths:
+            with self.subTest(path=path):
+                self.calls.unlink(missing_ok=True)
+                result = self.run_runner("verify-bundles", str(directory), FAIL_VERIFY_PATH=str(path))
+                self.assertEqual(result.returncode, 9)
+                self.assertNotIn(f"SIGNATURE_VERIFIED: {path};", result.stdout)
+
+    def test_final_bundle_requirement_and_classification_fail_closed(self):
+        directory, _ = self.bundle_fixture()
+        for env in (
+            {"REQUIREMENT_LEAF": "B" * 40},
+            {"REQUIREMENT_TEXT": 'designated => certificate leaf[subject.OU] = "TEAMID"'},
+            {"REQUIREMENT_STATUS": "7"},
+            {"FILE_STATUS": "5"},
+        ):
+            with self.subTest(env=env):
+                self.assertNotEqual(self.run_runner("verify-bundles", str(directory), **env).returncode, 0)
+
+    def test_every_supplied_bundle_directory_must_contain_an_app(self):
+        directory, _ = self.bundle_fixture()
+        result = self.run_runner("verify-bundles", str(directory), str(self.tools))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No macOS application bundle", result.stderr)
+
+    def test_linux_cannot_claim_mac_bundle_verification(self):
+        result = self.run_runner("verify-bundles", str(self.tools), FAKE_OS="Linux")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.trace(), [])
 

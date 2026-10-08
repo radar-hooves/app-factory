@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # Tauri's cargo runner: build, sign, verify, then execute without re-linking.
 set -euo pipefail
+fail() { printf 'codesign: %s\n' "$1" >&2; exit 1; }
 
 if [[ "$(uname -s)" != Darwin ]]; then
     [[ "${1:-}" != check-bundle ]] || exit 0
+    [[ "${1:-}" != verify-bundles ]] || fail 'Bundle verification requires macOS.'
     exec cargo "$@"
 fi
 
 command=${1:-}
 case "$command" in
-    build|run|check-bundle) shift ;;
+    build|run|check-bundle|verify-bundles) shift ;;
     *) exec cargo "$@" ;;
 esac
 
-fail() { printf 'codesign: %s\n' "$1" >&2; exit 1; }
 root="$(cd "$(dirname "$0")/.." && pwd)"
 config="$root/src-tauri/tauri.conf.json"
 config_identity=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .bundle.macOS.signingIdentity |
@@ -27,6 +28,33 @@ identity=${APPLE_SIGNING_IDENTITY--}
     || fail 'APPLE_SIGNING_IDENTITY must be a certificate SHA-1 fingerprint or local -.'
 identifier=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .identifier | select(type == "string" and . != "")' "$config" 2>/dev/null) \
     || fail 'Missing bundle identifier.'
+
+if [[ "$command" == verify-bundles ]]; then
+    [[ "$identity" != - ]] || fail 'Release builds require an existing stable certificate fingerprint.'
+    (($#)) || fail 'Supply macOS bundle output directories.'
+    verify_code() {
+        codesign --verify --strict --verbose=2 "$1"
+        local requirement
+        requirement=$(codesign -dr - "$1" 2>&1)
+        printf '%s\n' "$requirement" | grep -Fqi "certificate leaf = H\"$identity\"" \
+            || fail 'Bundle code does not match APPLE_SIGNING_IDENTITY.'
+        printf 'SIGNATURE_VERIFIED: %s; certificate leaf matches declaration\n' "$1"
+    }
+    paths=$(mktemp)
+    trap 'rm -f "$paths"' EXIT
+    for directory in "$@"; do
+        find "$directory" -type d -name '*.app' -print0 > "$paths"
+        [[ -s "$paths" ]] || fail 'No macOS application bundle found.'
+        while IFS= read -r -d '' bundle; do verify_code "$bundle"; done < "$paths"
+        find "$directory" -type f -print0 > "$paths"
+        while IFS= read -r -d '' binary; do
+            kind=$(file -b "$binary")
+            [[ "$kind" == *Mach-O* ]] || continue
+            verify_code "$binary"
+        done < "$paths"
+    done
+    exit 0
+fi
 
 build_args=()
 app_args=()

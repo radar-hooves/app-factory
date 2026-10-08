@@ -33,6 +33,23 @@ Linux passes straight through to cargo. This skeleton's build
 hosts are Linux and macOS, with Bash; it does not supply a Windows runner. The
 devShell provides `jq`; macOS provides `codesign`. Builds never create certificates.
 
+Immediately after macOS bundling, before packaging/uploading, the app-owned
+release workflow runs this one step. `BUNDLE_DIRECTORY` is that target's actual
+macOS bundle output directory, including any custom Cargo target directory.
+
+```yaml
+- name: Verify final macOS bundle signatures
+  if: runner.os == 'macOS'
+  run: bash scripts/cargo-codesign.sh verify-bundles "$BUNDLE_DIRECTORY"
+```
+
+It verifies every `.app` and Mach-O file under that directory, checks the declared
+certificate leaf, and fails on missing bundles or failed checks. It never signs.
+The job log records `SIGNATURE_VERIFIED` for each successful check; no extra
+artefact or inspection service is needed. Run it for each built architecture.
+This gate requires the self-signed route's designated certificate-leaf hash; a
+Developer ID requirement that pins only a team ID is not accepted.
+
 A stable local certificate is not notarisation, does not solve macOS Keychain
 partition prompts, and does not transfer privacy grants to another Mac. Use the
 household's file credential store without an Apple-issued identity.
