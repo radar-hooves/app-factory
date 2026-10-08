@@ -215,7 +215,7 @@ macos_signing_identity:
   when: "{{ skeleton == 'desktop' }}"
   help: >-
     Existing stable macOS certificate SHA-1 fingerprint (security find-identity -v -p codesigning).
-    Leave empty for Linux-only work; macOS builds fail until it is declared.
+    Leave empty for certificate-free local builds; macOS releases require a fingerprint.
     Never create a certificate during a build.
 
 linux_cargo_args:

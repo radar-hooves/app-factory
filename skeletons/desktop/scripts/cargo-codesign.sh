@@ -3,22 +3,25 @@
 set -euo pipefail
 
 if [[ "$(uname -s)" != Darwin ]]; then
+    [[ "${1:-}" != check-bundle ]] || exit 0
     exec cargo "$@"
 fi
 
 command=${1:-}
 case "$command" in
-    build|run) shift ;;
+    build|run|check-bundle) shift ;;
     *) exec cargo "$@" ;;
 esac
 
 fail() { printf 'codesign: %s\n' "$1" >&2; exit 1; }
 root="$(cd "$(dirname "$0")/.." && pwd)"
 config="$root/src-tauri/tauri.conf.json"
-identity=$(jq -er '.bundle.macOS.signingIdentity | select(type == "string" and . != "" and . != "-")' "$config") \
-    || fail 'Declare an existing stable bundle.macOS.signingIdentity in tauri.conf.json.'
-[[ "$identity" =~ ^[[:xdigit:]]{40}$ ]] || fail 'Pin the certificate SHA-1 fingerprint, not its display name.'
-identifier=$(jq -er '.identifier | select(type == "string" and . != "")' "$config") \
+identity=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .bundle.macOS.signingIdentity |
+    if . == null or . == "" then "-" elif type == "string" then . else error("Invalid identity") end' "$config" 2>/dev/null) \
+    || fail 'Invalid bundle.macOS.signingIdentity in tauri.conf.json.'
+[[ "$identity" == - || "$identity" =~ ^[[:xdigit:]]{40}$ ]] \
+    || fail 'Pin the certificate SHA-1 fingerprint, not its display name.'
+identifier=$(jq -er '. * (env.TAURI_CONFIG // "{}" | fromjson) | .identifier | select(type == "string" and . != "")' "$config" 2>/dev/null) \
     || fail 'Missing bundle identifier.'
 # The bundler and runner must use the same identity; never auto-pick a certificate.
 [[ -z "${APPLE_SIGNING_IDENTITY:-}" || "$APPLE_SIGNING_IDENTITY" == "$identity" ]] \
@@ -26,6 +29,10 @@ identifier=$(jq -er '.identifier | select(type == "string" and . != "")' "$confi
 
 build_args=()
 app_args=()
+release=false
+if [[ "$command" == check-bundle && "${TAURI_ENV_DEBUG:-false}" != true ]]; then
+    release=true
+fi
 while (($#)); do
     if [[ "$1" == -- && "$command" == run ]]; then
         shift
@@ -34,10 +41,21 @@ while (($#)); do
     fi
     case "$1" in
         --message-format*) fail 'The signing runner owns cargo --message-format.' ;;
+        --release|-r) release=true ;;
+        --profile) [[ "${2:-}" == dev ]] || release=true ;;
+        --profile=*) [[ "$1" == --profile=dev ]] || release=true ;;
+        -*) [[ ! "$1" =~ ^-[vq]*r ]] || release=true ;;
     esac
     build_args+=("$1")
     shift
 done
+
+if [[ "$identity" == - ]]; then
+    [[ "$release" == false ]] || fail 'Release builds require an existing stable certificate fingerprint.'
+    printf 'codesign: local ad-hoc signing; identity changes on rebuild, releases require a stable certificate.\n' >&2
+fi
+
+[[ "$command" != check-bundle ]] || exit 0
 
 messages=$(mktemp)
 trap 'rm -f "$messages"' EXIT

@@ -17,9 +17,16 @@ pnpm tauri dev
 Tauri's bundle signer use that same identity and bundle identifier. Keep both stable across updates: changing either
 can require granting macOS permissions again.
 
-The runner signs and verifies every dev/release executable before it can run or
-be bundled. Missing identities and signing failures stop the build; there is no
-ad-hoc fallback. Linux passes straight through to cargo. This skeleton's build
+The runner signs and verifies every executable before it can run or be bundled.
+Without a certificate, local debug builds use explicit ad-hoc signing (`-`) and
+warn that their identity changes on rebuild. Releases and custom profiles require
+a stable fingerprint. A configured signing or verification failure always stops
+the build; it never falls back to ad-hoc. The bundle preflight applies the same
+policy to `tauri bundle`, including effective `TAURI_CONFIG` overrides; only
+Tauri's `TAURI_ENV_DEBUG=true` permits local ad-hoc bundling. Cargo selects release
+through CLI profile flags: `CARGO_PROFILE` is not a selector, and a config alias
+cannot shadow the built-in `build` command. Optimised dev remains a local build.
+Linux passes straight through to cargo. This skeleton's build
 hosts are Linux and macOS, with Bash; it does not supply a Windows runner. The
 devShell provides `jq`; macOS provides `codesign`. Builds never create certificates.
 

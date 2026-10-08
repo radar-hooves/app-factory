@@ -1,130 +1,87 @@
 # Shared desktop layer
 
-**Proposal — OPEN, 08/10/2026.** One factory-owned desktop layer, consumed through the existing Rust kits and `@poodle64/ui`; each app supplies its business behaviour and brand. Estimated addition: **920 production lines + 400 test lines**, not another framework or service. Only the fail-closed signing runner is built here. No app adopts the proposal before the operator approves it.
+**APPROVED by the operator at 15:35 on 08/10/2026**, relayed by the master orchestrator with the second-read amendments below, including contributors building without his signing certificate. One imported layer, not another framework. Budget: **570 production lines, 300 tests and 120 CI lines**, added to existing owners. These are ceilings, not measured implementation sizes. Build the Thoth-facing slice first, then Bragi's; each app adopts in its own repo.
 
-The master orchestrator requested signing and a settings proposal for Thoth and Bragi, then relayed the operator's wider request at 14:45 on 08/10/2026: updates, toasts, About, navigation, scroll, sort and search must be shared too. This document supersedes the narrower settings proposal. The existing factory shell, UI kits, native telemetry plugin and desktop CI are the rails; n8n/foreman are not runtime UI or native app services. No parallel desktop framework is needed.
+## The acceptance test
 
-## What the apps carry
+An external contributor can clone either app, resolve npm packages and ordinary crates publicly, fetch factory Rust kits from the public app-factory repository at a pinned factory tag, and build/run without the household broker, telemetry endpoint, signing certificate, atlas or a fleet checkout. The check uses an isolated home, no household environment and only the app's documented toolchain. It must launch the native app and observe its ready state, not merely compile mocks.
 
-Live source inspected on atlas on 08/10/2026; paths below are relative to the named repo. Both apps have active work, so this is a source snapshot, not a claim that their current working changes have been released. The two `docs/research/ux-audit-2026-10-08.md` audits supply the earlier installed-app signing measurements, not visual acceptance evidence.
+Household integrations default **off**. An unconfigured integration neither starts a helper nor contacts a household service. Optional settings enable it; environment overrides are shown read-only. No automatic certificate or credential creation. Certificate-free local macOS builds may be explicitly ad-hoc; release builds require the configured stable identity. A failed configured signature never falls back to ad-hoc.
 
-| Concern | Thoth | Bragi | Divergence the factory removes |
-| --- | --- | --- | --- |
-| Updates | Native updater/process plugins (`src-tauri/src/lib.rs:246–257`); check/download/install/relaunch and retry toasts (`src/lib/stores/updater.svelte.ts:38–145`). Release targets hosted macOS/Ubuntu (`.github/workflows/release.yaml:25–43`). | No updater dependency in `src-tauri/Cargo.toml` or registration in `src-tauri/src/lib.rs`; release builds inside the flake (`.github/workflows/release.yaml:116–131`). | One update state/UX, with a truthful manual mode until a platform has installable, signed update artefacts. Build/artefact pipelines still need convergence; a common page alone is not an updater. |
-| Signing | No `build.runner` (`src-tauri/tauri.conf.json:6–11`); installed app was ad-hoc in the audit; update-triggered TCC compensation (`src-tauri/src/config.rs:476–483`). | Runner configured (`src-tauri/tauri.conf.json:7`), but signing failure continues (`scripts/cargo-codesign.sh:78–83`); installed app was ad-hoc in the audit. | The built factory runner pins an existing certificate fingerprint, signs and verifies actual cargo artefacts, and refuses an unsigned build. |
-| Toasts | Already imports shared Toaster, but sets bottom-centre/rich colours (`src/routes/+layout.svelte:43`); local Sonner dark-colour overrides (`src/app.css:109–144`). | Same shared Toaster with defaults, separately mounted for main/mini-player (`src/routes/+layout.svelte:211–244`). | One shared presentation contract. The operator reports Thoth's toasts cramped; source confirms configuration drift, not the measured cause of that cramped rendering. |
-| About | A small centred dialogue with version and links (`src/lib/components/AboutDialog.svelte:15–101`, 102 lines). | Settings page with version, branding, build/cache information and copy action (`src/lib/components/settings/AboutPage.svelte:9–128`, 248 lines). | One About content composition; menu/dialogue and settings can mount it without duplicating content or diagnostic formatting. |
-| Settings | Ten flat panes in `src/lib/windows/Settings.svelte:73–86`; local sidebar/frame at `:349–373, :1072–1138`; workflows mixed with configuration. | Local settings sidebar/view (`src/lib/components/settings/SettingsSidebar.svelte:27–35`, `SettingsView.svelte:14–54`); inline disclosure in playback. | Existing `SettingsShell`, common sections, app-owned domain sections and one disclosure pattern. |
-| Sidebar | Fixed settings-window pane list and About footer, not a general configurable working sidebar (`src/lib/windows/Settings.svelte:73–84, 349–373`). | Fixed Library/Activity groups plus dynamic playlists, collapse and badge state (`src/lib/components/layout/Sidebar.svelte:31–82, 86–210`). | Extend the existing AppShell/AppNav, not copy Bragi's media sidebar. Preserve domain playlists/artwork as app contributions. |
-| Scroll/Back | Settings pane owns overflow; history has its own fixed-row virtual scroller and keyboard scrolling (`src/lib/windows/Settings.svelte:1138`; `src/lib/components/HistoryList.svelte:44–124`). | View-keyed scroll memory (`src/lib/utils/scrollMemory.svelte.ts:14–61`); navigation snapshots section/selection/column browser, not search query (`src/lib/stores/navigation.svelte.ts:9–26, 68–82`). | One actual scroll owner per region; restore the visited entry, not merely the last offset for a broad view name. These Thoth files do not establish a general Back/scroll restoration contract. |
-| Sort | History is newest-first SQL (`src-tauri/src/database/transcription.rs:468, 490`), with local filtering (`src/lib/components/HistoryPane.svelte:67–105`). | Domain-specific album/artist/track options and cached comparators (`src/lib/utils/sorting.ts:10–85`, 171 lines); search explicitly preserves relevance (`src/routes/+page.svelte:103–123`). | Common sort controls/state/tie-breaking mechanics; domain sort keys and music ordering remain business logic. |
-| Search | Inline transcription/date filtering (`src/lib/components/HistoryPane.svelte:67–76`); native text search also orders newest-first (`src-tauri/src/database/transcription.rs:490`). | Latest-wins search session (`src/lib/utils/searchSession.svelte.ts:25–55`); result groups (`SearchResultsView.svelte:44–90`) replace library content (`LibraryContent.svelte:124–128`). Search query is outside navigation entries. | A real results destination. Today Bragi does not snapshot search as a navigation entry; existing per-view scroll memory alone cannot satisfy Back to the prior query and view. |
+This is a release gate for **each app**, not evidence supplied by a scratch factory stamp. The factory additionally checks its public package artefacts and its stamped desktop build. App adoption and the two clone-and-run proofs remain **OPEN** until their owning sessions run them.
 
-Thoth's defaults repair is already visible in live source: `FilterSettings.svelte:42–65` now loads `get_default_config` through the store instead of hard-coding filter defaults. Rust still enables Australian spelling (`config.rs:277`). The audit's mismatch is the regression case to preserve, not an outstanding bug to rebuild here.
-
-## Ownership and the proposed shape
+## Reuse before adding
 
 ```text
-App: brand + nav/setting declarations + domain queries, actions and renderers
-  │
+App: brand, destinations, search queries/results, typed domain settings
   ├─ @poodle64/ui
-  │    AppShell / AppNav / ShellControls / SettingsShell (already shipped)
-  │    Toaster / Panel / RecordList / ListToolbar / controls (already shipped)
-  │    desktop composition: About, Updates, native settings sections (proposed)
-  │    navigation entry + scroll restoration, results destination (proposed)
-  │
-  └─ factory Rust kits
-       desktop-shell: native settings/permission/update mounting (proposed)
-       tauri-plugin-telemetry: get / set / probe (already shipped)
-       app native modules: recording, playback, library, domain storage
+  │    AppShell / AppNav / SettingsShell / Panel
+  │    RecordList / ListToolbar / search and sort controls
+  │    Toaster + About + optional integration/update presentation
+  │    sidebar preferences + SvelteKit snapshot scroll restoration
+  └─ factory Rust kits pinned to one public factory tag
+       desktop-shell: traffic lights + guard_tray
+       telemetry + Tauri telemetry plugin: optional native exporter
+       official Tauri plugins: window state, updater/process where applicable
 
-Skeleton: mount those exports, declare the app, pin releases
-           cargo signing runner + one shared desktop CI/release shape
+Skeleton: mount these APIs, declare defaults, pin compatible packages
+          one Cargo signing runner + the existing desktop CI
 ```
 
-The drawing is an ownership hierarchy, not a new visual design. **No per-app adapters, copied components, emitter or toast service.** Extend each existing factory owner at its own API. A desktop-only UI entry point must keep Tauri imports out of browser consumers. Apps import it directly. Native registration composes the existing Tauri plugins, not a second updater or permission daemon. App-specific commands remain app-specific.
+The existing factory kits, `@poodle64/ui`, official Tauri plugins and SvelteKit snapshots are the machinery. Foreman, n8n and the MCP fleet are not native UI runtimes. No app adapters, copied shared components, second history stack, custom updater or new settings engine.
 
-| Factory owner | Owns | App contributes |
+Live source checked on 08/10/2026: Thoth carries **127** lines of `traffic_lights.rs`, Bragi **125**. Both still call their local implementation rather than `desktop-shell`; neither uses its `guard_tray`. **Bragi already registers the official window-state plugin**, excluding visibility restoration; the second read's claim that neither app uses window state is not supported by current source. Keep Bragi's working registration; adopt the official plugin in Thoth where appropriate. Do not implement another window-state owner.
+
+## Ownership
+
+| Owner | Shared behaviour | App-owned input |
 | --- | --- | --- |
-| `desktop-shell` and skeleton | Native capability/status commands, typed defaults/reset contract, registration of supported updater/process plugins; stable signing and build wiring | Required/optional capabilities, typed domain settings, update endpoint/public key and installation mode; secrets remain broker-vended |
-| `tauri-plugin-telemetry` | Exporter configuration, probe and truthful startup/health status | Allow-list and service identity; no frontend exporter |
-| `@poodle64/ui` shared primitives | Toast sizing/wrapping/actions and token colours; sort/search controls; all section/row/dialogue states | Message title/detail/action and domain labels; continue calling `toast.*` directly |
-| Desktop compositions in `@poodle64/ui` | One About, Updates and native telemetry/permission presentation; settings assembly | Brand, links/licence and declared domain sections; no alternate chrome |
-| Existing AppShell/AppNav, extended | Customisable sidebar: hide/reorder optional items, collapse, restore defaults; one persisted preference shape keyed by stable route IDs | Nav groups/items, badges and domain content; required Settings/Help remain reachable; native settings owns preference persistence |
-| Shared view-state support | Back/Forward through SvelteKit/browser history; entry-keyed filter/sort/selection and scroll snapshot; dedicated search destination with loading/error/empty/results states | Route identity, item IDs, data-ready signal and domain result renderers/query |
+| `desktop-shell` | Existing centred traffic lights and guarded tray setup | Window/header dimensions and domain tray actions |
+| Official Tauri plugins | Window state; native update/install/relaunch where supported | Supported windows, endpoint/public key and installation mode |
+| Factory signing runner | Actual Cargo artefacts, verify before execution, stable configured certificate/identifier; explicit certificate-free local mode | Certificate fingerprint and bundle identifier |
+| Native telemetry kits | Exporter, probe and configured-versus-healthy status; no webview exporter | Service identity, emission allow-list and existing persistence |
+| `@poodle64/ui` | About, toast layout/tokens, settings chrome, common optional-integration/update presentation | Brand/links, typed sections and actual native capabilities |
+| Existing AppShell/AppNav | Hide/reorder optional destinations, collapse and restore defaults | Destinations, groups, badges and playlist/artwork contributions |
+| Shared scroll support | Scroll capture/restore through SvelteKit's per-history-entry snapshots | Data-ready signal, stable item anchors and virtual-list positioning |
+| Existing ListToolbar/RecordList | Search/sort controls and loading/error/empty/result presentation | Available sort choices, comparators, ranking, queries and result renderers |
 
-Keep one content scroll owner, and explicitly register any independent sidebar/list owner. Save an entry's item anchor plus offset; restore after the matching data and DOM are ready, including virtual lists, rather than after a guessed timer. State keys include history entry, route and query. Back from a result returns to the results entry; Back again restores the previous library/filter/sort/selection and scroll. Query changes replace the current search entry rather than fill history on every keystroke. The app's search API supplies results/ranking; the factory owns latest-wins cancellation and navigation, not a music or transcription search engine.
+Typed settings, constraints, current/default/reset values remain each app's Rust contract. No generic native settings service and no frontend copy of defaults. Preserve Thoth's already-landed `get_default_config` repair and Australian-spelling regression. Preference reset never erases recordings, credentials or OS grants.
 
-`ListToolbar`/`RecordList` already cover much of the presentation. Share sort state, available-key validation, stable item-ID tie-breaking and generic collation once; leave Bragi's artist/album rules and Thoth's native query semantics in domain code. Never silently re-sort relevance results by the preceding library sort. Do not add another list framework, database or history stack alongside SvelteKit.
+Search is its own destination. Query/filter/sort state belongs in the URL; selection and scroll use SvelteKit snapshots. Query edits replace the current search entry rather than fill history per keystroke. Back from a result restores its results entry; Back again restores the previous view, selection and scroll. Never re-sort relevance by the preceding library sort. The shared layer does not decide what music or transcription search means.
 
-## Settings: what appears first
+## Settings and presentation
 
-The first section is the app's essential configuration: **Recording** in Thoth, **Connections** in Bragi. A failure deep-link opens the relevant section instead. Group by scope; neither app currently needs workspace settings.
+Use the shipped SettingsShell, Panel, controls, disclosure and status/error/loading states. Recording is Thoth's first essential section; Connections is Bragi's. A failure deep-link opens the relevant section. General contains appearance/startup and an initially closed Advanced disclosure for optional telemetry/integrations. Permissions shows only capabilities the app actually uses; Updates describes its actual installation method; About is one content composition usable in a dialogue or page.
 
-```text
-SettingsShell section list        Selected section
-This app                         Essential controls first
-  Recording / Connections        Dependent fields beside their enable control
-  [other domain sections]
-This device                      General
-  General                          Appearance and startup
-  Permissions                      ▸ Advanced (closed initially)
-  Updates                            Telemetry / integrations / diagnostics
-  About
-```
+Enable controls remain visible when off. Dependent fields sit beside their enable control. Environment-owned configuration is read-only and names its source. Configured is not healthy: missing helpers and failed exporter startup must be visible through the native plugin's status, not an endpoint-presence check. The obsolete `signet` helper is absent on huginn; the current fleet declaration uses `portcullis headers`. No saved app configuration was inspected or changed here.
 
-Use the shipped `SettingsShell` from `@poodle64/ui/settings-shell`, `NavSource`, `Panel`, controls, `Collapsible`, `StatusBadge`, `AlertDialog` and loading/error states. Use household design tokens for spacing, type, surfaces and status; apps supply their palette, not an alternative density system. No repeated Settings heading, bespoke sidebar or overview dashboard.
+History, import/transcribe, insights, model downloads, prompt/word-list editing, sync, cache/data deletion and shortcut reference are workflows or Help, not settings. A failed load exposes no editable guessed defaults. Failed saves leave persisted state unchanged and show an actionable error.
 
-**Advanced is a disclosure inside General, not another flat nav category.** Expert domain fields use the same inline disclosure in their own section. Deep links expand it and focus the target. Keep feature enable controls visible even when off; never hide the only way to enable something.
+## Addition/deletion budget
 
-| Common section | First view | Disclosed/conditional | Excluded |
-| --- | --- | --- | --- |
-| General | System theme, relevant startup/window behaviour; one copy each | Advanced: telemetry, local API/MCP, diagnostic detail | Setup checklist, notification-test row |
-| Permissions | Live OS status, reason and link to the correct OS settings | Only capabilities the app uses; optional grant requested when its feature is enabled | Per-update resets, raw `tccutil`, pretend grant switches |
-| Updates | Installed version, actual update method; check/install when supported | Channel only if multiple exist; restart when needed | A disabled page implying Bragi already self-updates |
-| Telemetry, inside General → Advanced | Effective endpoint, separate configured and healthy/failed status, credential-source reference, collector probe | Environment-controlled values read-only, with their source; failure detail | Secret reveal, log viewer, browser exporter |
-| About | Brand/version, help/licence links and link to Updates | Non-sensitive build/diagnostic detail and copy action | Decorative device ID, duplicated configuration |
+| Addition to existing owners | Production | Tests | CI |
+| --- | ---: | ---: | ---: |
+| About, toast and optional integration/update presentation | 240 | 100 | 0 |
+| Sidebar preferences and snapshot scroll restoration | 190 | 100 | 0 |
+| Public Rust distribution, skeleton wiring and local signing mode | 140 | 100 | 40 |
+| Credential-free native acceptance gate | 0 | 0 | 80 |
+| **Maximum** | **570** | **300** | **120** |
 
-Bragi's lane reported a saved telemetry endpoint making the app look configured while its authorisation helper was missing. A read-only huginn check on 08/10/2026 confirms `/etc/profiles/per-user/paul/bin/signet` is not executable; the saved configuration and exporter state were not independently read here. Native startup failure must be exposed separately from configuration presence; no plugin fix is claimed in this change.
+No new generic Rust settings/capability contract. Search and sorting reuse the shipped components and app domain logic. If the budget is insufficient, report the measured gap before adding machinery.
 
-Thoth's domain sections: Recording; Output (filters and vocabulary-bias toggle); Enhancement (enable/backend/model/prompt selection); Storage (retention/resource policy). Disclose hands-free silence duration, enabled indicator style, provider-dependent fields and model idle-unload. Bragi's: Connections; Playback; Library policy; AI playlists with its enable control visible. Disclose crossfade duration, lossy bitrate and AI budget/prompt override. Existing defaults, including ReplayGain, do not change with this proposal.
+Replacement scope, measured from source on 08/10/2026: shared mechanics only; domain code stays app-owned.
 
-**Workflows never belong here:** history, import/transcribe, insights, model catalogue/download, word-list or prompt editing, sync now, cache/data deletion. Put these in working navigation or storage/library management; put the shortcut reference in Help. Selection/policy stays in settings; doing the work does not. Destructive actions need named confirmation and completion feedback; failed actions show an error and leave persisted state unchanged. A failed load must not expose editable guessed defaults.
+- **Both:** delete their local traffic-light modules (**252 lines combined**), then local shared chrome as each import lands. Mount `desktop_shell::traffic_lights::setup` and `guard_tray`; preserve actual tray actions. Do not duplicate Bragi's existing window-state plugin.
+- **Thoth:** replace the **102-line** About dialogue; remove local bottom-centre/rich-colour Toaster configuration and dark Sonner overrides. Its **1,288-line** settings window mixes chrome and business behaviour: remove only shared framing/sections. Its **397-line** integrations section likewise retains local API/MCP logic. Replace the **153-line** updater store only when shared update behaviour is proven. **Keep all TCC compensation until a signed in-place update proves grant preservation**; local signing or matching requirements alone does not prove this.
+- **Bragi:** replace its **129-line** fail-open runner and **248-line** About page. Replace the **102-line** settings sidebar and **67-line** scroll-memory mechanism. Its **402-line** sidebar, **158-line** navigation store, **68-line** search session and **171-line** sorter mix shared mechanics with music behaviour: remove only the shared parts. Replace its **162-line** telemetry form when the common section is published. Useful diagnostics/shortcuts move to Advanced/Help; notification-test furniture goes.
 
-## Rust owns defaults
+## Adoption and proof
 
-The app's typed Rust settings definition owns defaults, constraints and validation. Its native command supplies current/default values; a section-scoped reset persists those same defaults and returns the effective result. Generate IPC types; do not retype a defaults object in Svelte or seed another store copy. Reuse Thoth's existing defaults command as the native precedent. `SchemaForm` can render ordinary declarations; device/connection controls need their specialised compositions, not another form engine.
+1. **Thoth first:** adopt shipped native shell APIs, public package dependencies, optional integrations and explicit local signing mode; import shared About/toasts/settings. Run the clean external-contributor clone/build/run test. Prove load/save failures and native defaults. Keep TCC compensation.
+2. **Bragi next:** adopt the same shell/presentation APIs, retaining its window-state configuration. On one real library slice, customise the sidebar, scroll, search, open a result and Back twice. Assert query/filter/sort/selection and item anchor restoration, including virtualised data; then use the same support for Thoth history. Run Bragi's clean clone/build/run test.
+3. **Updates:** inspect every Bragi installation's actual executable/bundle path and owner before enabling in-place installation. The Mac fleet configuration examined by the orchestrator declares no Bragi Nix package; **that is not proof that no Nix-managed install exists**. Read-only `/nix/store` installs retain a truthful manual/managed-update mode. Reuse the official Tauri updater, existing signing material and installation-compatible artefacts; mint no key. Simulate failed download/signature and prove the old app still starts.
+4. **Thoth grant proof:** install two different stably signed versions in place on one Mac and assert existing grants survive. Only then remove version-triggered TCC resets, stale-grant compensation and admin/reset/deploy prompts. Retain genuine permission status/requests. Self-signed signing is not notarisation or a cure for Keychain partition gates.
 
-Assert fresh config = defaults command = reset result. Preserve the Australian-spelling regression test. Preference reset does not erase recordings, credentials or OS grants. Defaults are unavailable until loaded, not guessed.
+**Keep Rust distribution on public Git; eliminate crates.io publishing.** The master orchestrator's catalogue/declaration check found no crates.io credential on 08/10/2026. Public git dependencies require no household credential and avoid occupied names and another publishing pipeline. Keep `publish = false` and existing crate names; apps pin one factory release tag, for example `desktop-shell = { git = "https://github.com/radar-hooves/app-factory", tag = "<factory release>" }`. npm's existing OIDC workflow remains the UI publisher. The merging session owns factory tags/releases; this worktree supplies reviewed commits and exact package versions, with no package-specific tags.
 
-## Addition and deletion budget
-
-Estimates below are **design budgets, not measured implementation sizes**; no shared desktop implementation has been built. Stop and reshape if they are exceeded rather than fill the budget with abstractions.
-
-| Addition to existing owners | Production lines | Tests |
-| --- | ---: | ---: |
-| Native settings/capability contract and plugin mounting | 140 | 80 |
-| About, update state/presentation and native settings sections | 260 | 100 |
-| Shared toast defaults/wrapping and sidebar preferences | 110 | 50 |
-| Entry/scroll restoration and results-destination lifecycle | 240 | 100 |
-| Sort-state support and skeleton mount/release wiring | 170 | 70 |
-| **Total proposed addition** | **920** | **400** |
-
-The signing implementation is separate: **316 added lines, 1 removed** in its commit, including tests and the initial proposal, not 316 lines of runtime. The runner itself is 70 lines. Source file counts below were measured with `wc -l` on 08/10/2026; they are review envelopes, not promised net deletion.
-
-- **Thoth:** replace the 153-line updater store and 102-line About dialogue (**255 whole-file lines**) with kit imports. Remove the local bottom-centre/rich-colour Toaster options and Sonner dark-colour CSS overrides when the shared toast contract lands. Its 1,288-line settings window mixes shell and business behaviour: remove only its pane-list/frame and common sections, not all 1,288 lines. Integrations is 397 lines and mixes API/MCP with telemetry; extract common telemetry only. After a signed-update grant-preservation test, delete version-triggered TCC reset, `reset_permissions_after_update`, stale-grant compensation, admin/reset prompts, raw reset commands and deploy-time reset. Preserve genuine permission status/requests and domain work. Its defaults repair is already present; do not replace it with another frontend copy.
-- **Bragi:** replace its 129-line fail-open signing runner and the 248-line About page (**377 whole-file lines**). The 402-line sidebar includes domain playlist/artwork content: remove its navigation chrome, retaining those contributions. Replace the 102-line settings sidebar; replace the 67-line scroll-memory mechanism and generic portions of the 158-line navigation store/68-line search session. Retain music selection/ranking, renderers and the domain parts of the 171-line sorter. Replace the 162-line telemetry form when the shared section lands. Remove Developer nav, notification-test row and settings shortcut reference; move useful diagnostics/Help content rather than discard it.
-- **Both:** delete local copies of common presentation and behaviours as their imports land, one concern at a time. No app-level compatibility shim or permanent parallel implementation. Factory code must not learn a Thoth or Bragi special case.
-
-## Order of adoption and proof
-
-1. **Signing, then permission compensation removal.** Adopt the factory runner and matching bundle identity in each app-owned config/flake. Keep certificate fingerprint and bundle identifier stable. The runner refuses missing/invalid identity, signing and verification failure and executes the verified dev binary without a second cargo invocation. Builds never create certificates. Linux/macOS are the skeleton's current build hosts; no Windows runner is supplied. Install two different signed versions on the same Mac and assert existing grants survive before deleting compensation. Local signing is not notarisation, cross-Mac grant transfer or a cure for Keychain partition prompts.
-2. **Shared primitives, About and settings/defaults.** Fix toast wrapping in the shared primitive against native-resolution main/mini-player screenshots; mount one About and the common settings sections; preserve Thoth's native-default regression. Verify load/save failures and irreversible confirmations, not just component rendering.
-3. **Sidebar, navigation/search and sort.** Use one Bragi slice first: customise nav, scroll a real library, search, open a result, Back twice. Assert route/query/sort/selection and item anchor restored, including virtualised data, then adopt Thoth's history slice. No bulk app migration before that drive test.
-4. **In-place updates.** Converge on the household's existing build hosts and one reusable release shape; declare platform artefacts/install modes, then enable check/download/verified install/restart. Tauri's updater artefact signature is distinct from macOS code signing. Use an existing broker-held updater key; absence is a credential-owner decision, never a key minted by the app or this lane. Linux AppImage versus Nix-managed installation must be settled and proven; keep truthful manual mode until then. Simulate failed download/signature and prove the old version still starts.
-
-Each proven concern lands in the factory and then each app deletes its duplicate. The merging session owns releases/tags; this worktree only commits and pushes its branch. App-owned configs/flakes require explicit adoption, not an assumption that copier overwrites them.
-
-## Verdict
-
-**There is juice left: stable signing, one imported desktop layer, correct defaults, and navigation that returns you to where you were. Those remove duplicated machinery and daily friction. Do not build another desktop framework or endlessly redraw settings: after those concrete wins, spend the effort on recording, playback and the apps' useful work. That is where squeezing the chrome becomes flogging a dead horse.**
+Huginn's measured signing route and proof are in `desktop-skeleton.md`. No Thoth or Bragi file is changed by this factory lane.

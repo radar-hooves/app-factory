@@ -8,6 +8,7 @@
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:{{ frontend_port }}",
     "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "bash scripts/cargo-codesign.sh check-bundle",
     "frontendDist": "../build"
   },
   "app": {
@@ -30,7 +31,7 @@
     "targets": "all",
     "icon": ["icons/icon.png"],
     "macOS": {
-      "signingIdentity": {{ macos_signing_identity | tojson }}
+      "signingIdentity": {{ (macos_signing_identity or '-') | tojson }}
     },
     "linux": {
       "deb": {
