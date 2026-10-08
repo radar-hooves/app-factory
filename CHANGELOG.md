@@ -8,6 +8,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ### Changed
 
+- **A stamped app's browser specs carry `@smoke`, and the config's port is movable.** `shell.spec.ts` tags home (the search affordance) and `/workspace` rendering inside the shell, and `workspaces.spec.ts` tags its seat-chooser flow, so sign-in and home are always in the smoke set: `playwright test --grep @smoke` runs those three. `@playwright/test` is pinned exactly (`1.58.2`), the form a CI caller's `playwright-version` must equal. `<APP>_E2E_PORT` moves the config's Vite port off the stamped default for a second suite on one host. Need: godswood, whose 273-test suite took 32 minutes a push; operator ruling 08/10/2026.
+- **The per-app `canonical-shape.yaml` caller is gone.** It was `workflow_dispatch`-only and never dispatched. Template parity already refuses a factory-file edit at every commit (the `template-parity` hook), and `/master:converge-fleet` runs both checkers on every app; the workflow repeated the first and ran the second where no one looked. A live `.canonical-exceptions` line already counts as excepted, never failed: godswood's 57 red runs were edits with no line. An app takes the deletion on its next re-stamp. Need: godswood; operator ruling 08/10/2026.
+
 - **`@poodle64/ui` 2026.10.11: a record's switcher and pages fit the bar on a phone, and DocumentPane speaks plainly.** Below `sm` the bar's second row drops the shell's `location` label and RecordSwitcher's "/" when the page registers controls, and the tabs scroll sideways inside the row so every page is reachable. PageCanvas reads "1 of 9" and "Fit" (while fitted) in place of "1 / 9" and "100%". Via master-project's orchestrator, from godswood's session godswood-8f.
 
 ## [2026.10.10] - 2026-10-08

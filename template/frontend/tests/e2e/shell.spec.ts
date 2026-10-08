@@ -9,7 +9,7 @@ import { expect, test, type Locator } from '@playwright/test';
 // actually open the palette. A search button wired to nothing looks identical in
 // a screenshot, which is how three apps shipped a top bar with no search at all
 // without anything going red.
-test('the top bar search affordance opens the command palette', async ({ page }) => {
+test('the top bar search affordance opens the command palette @smoke', async ({ page }) => {
 	await page.goto('/');
 
 	// The shared shell's own test id, so this spec does not depend on the label
@@ -33,7 +33,7 @@ const STAMPED_ROUTES = [
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {
-	test(`the factory's ${path} renders inside the app's shell`, async ({ page }) => {
+	test(`the factory's ${path} renders inside the app's shell${path === '/workspace' ? ' @smoke' : ''}`, async ({ page }) => {
 		await page.goto(path);
 
 		await expect(

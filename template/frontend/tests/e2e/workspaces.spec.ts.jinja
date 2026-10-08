@@ -81,7 +81,7 @@ test.afterEach(async ({ page }) => {
 	await retractStraySeats(page);
 });
 
-test('a person granted a seat chooses the shared workspace, and every request carries it', async ({
+test('a person granted a seat chooses the shared workspace, and every request carries it @smoke', async ({
 	page
 }) => {
 	await page.goto('/');

@@ -268,8 +268,8 @@ repos:
   # The mechanical fence for master-project#839: a commit that edits a file the
   # factory owns is refused, derived every run from the factory's own file list
   # (`git ls-files template/` in check-template-parity.py's `stamped_files()`)
-  # rather than a list hand-kept here — the same derivation canonical-shape.yaml
-  # already runs in CI, now also at commit time, on THIS machine, before the
+  # rather than a list hand-kept here — the one gate for this, run
+  # at commit time on THIS machine (no CI workflow repeats it), before the
   # edit ever reaches a PR. `pass_filenames: false`: DRIFT can appear in any
   # owed file, not only a staged one, exactly like the mypy hook above.
   #

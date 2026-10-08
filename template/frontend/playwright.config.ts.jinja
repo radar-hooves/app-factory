@@ -12,7 +12,7 @@ const HOST_CHROMIUM = hostChromium();
 // "There Is No Development Database"), so this suite gets its own port and
 // its own identity — the two things that stop it colliding with a `pnpm dev`
 // session already running, or writing under the identity that session uses.
-const E2E_PORT = {{ frontend_e2e_port }}; // not {{ frontend_port }}: this app's own row in the registry's Frontend E2E band, so it collides with no interactive dev server and nothing else can be allocated over it. Derived offsets landed outside every band.
+const E2E_PORT = Number(process.env.{{ project_name | upper | replace('-', '_') }}_E2E_PORT ?? {{ frontend_e2e_port }}); // `<APP>_E2E_PORT` moves a second suite (a worktree's) off this one; the default is not {{ frontend_port }}: this app's own row in the registry's Frontend E2E band, so it collides with no interactive dev server and nothing else can be allocated over it. Derived offsets landed outside every band.
 const E2E_UID = 'e2e-uid';
 // What the suite's person holds: the scaffold's own module, unless the run names
 // others (a run of the rooms spec names its rooms).
