@@ -25,6 +25,7 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 | Frontend shell | `@poodle64/ui`, `@poodle64/design-tokens` | `svelte.config.js`, `vite.config.ts` (port from answers), `vitest.config.ts`, `tsconfig.json`, `components.json`, `.npmrc`, `src/app.html`, `src/routes/+layout.ts`, `src/lib/utils.ts`, `src/test/setup.ts` | `package.json`, `src/app.css` (palette), routes and components |
 | Settings pane | the telemetry section: next, into `@poodle64/ui` once `@poodle64/ui/settings` lands | | the pane's other sections |
 | CI | `desktop-ci.yaml`: fmt, clippy, tests on atlas and huginn in the app's devShell; the frontend gates on atlas; `flake.nix`'s `pnpmDeps` hash corrected on a pull request's branch, where the flake packages pnpm dependencies | `.github/workflows/ci.yaml` (the caller, granting that one job its write), `security.yaml`, `scripts/update-pnpm-deps-hash.sh` | a workflow of its own for checks only it needs |
+| macOS signing | | `scripts/cargo-codesign.sh`: build, sign, verify; fail closed; execute the signed dev binary | `tauri.conf.json`: runner and stable identity shared with the bundle signer; `flake.nix`: `jq` |
 | Release and updater | not built; see below | | `release.yaml`, the updater wiring |
 | Lints and formatters | | `stylelint.config.js`, the drift and craft lints, `.pre-commit-config.yaml` | the lints' baselines |
 | Repo | | `.gitignore`, `.gitattributes`, `.envrc`, `renovate.json`, `.vscode/extensions.json` | `flake.nix`, `README.md`, `CHANGELOG.md`, `docs/`, `.claude/` |

@@ -9,3 +9,20 @@ direnv allow   # or: nix develop
 pnpm install
 pnpm tauri dev
 ```
+
+## macOS signing
+
+`src-tauri/tauri.conf.json` pins the existing certificate's SHA-1 fingerprint in
+`bundle.macOS.signingIdentity`, answered at stamp time. The cargo runner and
+Tauri's bundle signer use that same identity and bundle identifier. Keep both stable across updates: changing either
+can require granting macOS permissions again.
+
+The runner signs and verifies every dev/release executable before it can run or
+be bundled. Missing identities and signing failures stop the build; there is no
+ad-hoc fallback. Linux passes straight through to cargo. This skeleton's build
+hosts are Linux and macOS, with Bash; it does not supply a Windows runner. The
+devShell provides `jq`; macOS provides `codesign`. Builds never create certificates.
+
+A stable local certificate is not notarisation, does not solve macOS Keychain
+partition prompts, and does not transfer privacy grants to another Mac. Use the
+household's file credential store without an Apple-issued identity.

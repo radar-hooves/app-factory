@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "identifier": "{{ bundle_identifier }}",
   "build": {
+    "runner": "../scripts/cargo-codesign.sh",
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:{{ frontend_port }}",
     "beforeBuildCommand": "pnpm build",
@@ -28,6 +29,9 @@
     "active": true,
     "targets": "all",
     "icon": ["icons/icon.png"],
+    "macOS": {
+      "signingIdentity": {{ macos_signing_identity | tojson }}
+    },
     "linux": {
       "deb": {
         "depends": ["libayatana-appindicator3-1 | libappindicator3-1"]

@@ -26,7 +26,7 @@
         # CI and the release build run inside this shell (`nix develop`).
         devShells.default = pkgs.mkShell {
           packages = with pkgs;
-            [ rustToolchain pkg-config openssl cmake nodejs_22 pnpm gh ]
+            [ rustToolchain pkg-config openssl cmake nodejs_22 pnpm gh jq ]
             ++ lib.optionals isLinux [ webkitgtk_4_1 libappindicator-gtk3 librsvg glib libsecret ]
             ++ lib.optionals isDarwin [ libiconv ];
           # WebKitGTK's DMABUF renderer crashes on NVIDIA under Wayland, and the
