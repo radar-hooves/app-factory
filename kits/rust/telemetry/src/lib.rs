@@ -200,6 +200,13 @@ impl Guard {
         lock(&self.exporter).clone()
     }
 
+    /// One snapshot of the configured exporter and installed log/span providers.
+    /// Provider presence proves startup, not collector reachability or acceptance.
+    pub fn exporter_status(&self) -> (Option<Exporter>, bool) {
+        let live = lock(&self.providers);
+        (lock(&self.exporter).clone(), live.is_some())
+    }
+
     /// True when the environment set the exporter, which makes it read-only:
     /// [`Guard::set_exporter`] will not change it, so a pane should say so.
     pub fn exporter_is_from_env(&self) -> bool {
@@ -893,6 +900,25 @@ mod tests {
         );
     }
 
+    #[test]
+    #[serial]
+    fn failed_start_keeps_configuration_but_reports_no_started_exporter() {
+        clear_env();
+        let (subscriber, reload) = subscriber(ALLOW, OtlpLayers::new());
+        let guard = guard_over(reload, None);
+        assert_eq!(guard.exporter_status(), (None, false));
+        tracing::subscriber::with_default(subscriber, || {
+            let wanted = Exporter {
+                endpoint: "http://127.0.0.1:9".to_owned(),
+                headers_helper: Some("exit 3".to_owned()),
+            };
+            guard.set_exporter(Some(wanted.clone()));
+            assert_eq!(guard.exporter_status(), (Some(wanted), false));
+            guard.set_exporter(None);
+            assert_eq!(guard.exporter_status(), (None, false));
+        });
+    }
+
     /// `reqwest::blocking::ClientBuilder::build` panics inside a Tokio runtime, and
     /// a Settings pane's save is an async command.
     #[test]
@@ -913,11 +939,18 @@ mod tests {
                     headers_helper: None,
                 }));
             });
+            let (configured, started) = guard.exporter_status();
+            assert!(
+                started,
+                "providers started even though the collector is unreachable"
+            );
+            assert_eq!(
+                configured.map(|e| e.endpoint),
+                Some("http://127.0.0.1:9".to_owned())
+            );
+            guard.set_exporter(None);
+            assert_eq!(guard.exporter_status(), (None, false));
         });
-        assert!(
-            lock(&guard.providers).is_some(),
-            "the swap installed an exporter"
-        );
     }
 
     /// The fleet's variables win over a pane: on a machine that sets them, a

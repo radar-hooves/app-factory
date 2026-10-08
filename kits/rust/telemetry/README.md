@@ -8,7 +8,7 @@ Lives in `radar-hooves/full-stack-app-template` under `kits/rust/telemetry` (mov
 telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
 ```
 
-The public surface is `init(service_name, service_version, allow) -> Guard`, `Guard` (`set_exporter`, `exporter`, `exporter_is_from_env`), `Exporter` (`from_env`), `probe(&Exporter) -> Result<(), ProbeError>`, `ProbeError`, `http_client()`, `sample_process_metrics()`, `report_error(context: &'static str)`, and `report_error_with_cause(context: &'static str, error: &(dyn std::error::Error + 'static))`. Nothing is added to it without the contract changing first.
+The public surface is `init(service_name, service_version, allow) -> Guard`, `Guard` (`set_exporter`, `exporter`, `exporter_status`, `exporter_is_from_env`), `Exporter` (`from_env`), `probe(&Exporter) -> Result<(), ProbeError>`, `ProbeError`, `http_client()`, `sample_process_metrics()`, `report_error(context: &'static str)`, and `report_error_with_cause(context: &'static str, error: &(dyn std::error::Error + 'static))`. Nothing is added to it without the contract changing first.
 
 ## The one call
 
@@ -79,6 +79,8 @@ match telemetry::probe(&exporter) {
 `Guard::set_exporter` swaps the live OTLP log and span layers and flushes the previous ones on a plain thread; the stderr layer is untouched. It never fails and never panics — a helper that fails or an endpoint that will not build degrades to local only, exactly as `init` does. Both it and `probe` build the blocking client on a plain thread of their own, so an async Tauri command cannot make them panic; both still block the caller, so reach them through `spawn_blocking`.
 
 **The environment wins.** Where the fleet set `OTEL_EXPORTER_OTLP_ENDPOINT`, `set_exporter` is a no-op that logs one line. `Guard::exporter()` gives the pane the value to show and `Guard::exporter_is_from_env()` tells it to show that value read-only. `Exporter::from_env()` is the crate's one reader of those variables, so `init` and the pane cannot disagree.
+
+`Guard::exporter_status()` returns one coherent `(configured_exporter, started)` snapshot. `started` means the log/span providers are installed, not that a collector is reachable. A configured exporter with `started == false` failed to start; an absent exporter is off. Only a successful probe proves collector acceptance at that moment.
 
 `probe` sends a single INFO record to `<endpoint>/v1/logs` through the same header client the exporters use, bounded by the OTLP timeout. `ProbeError` is `Helper`, `Connect`, `Tls`, `Timeout`, `Transport` or `Status(u16)` — a class or an HTTP status, and never a URL, a header value or a response body.
 

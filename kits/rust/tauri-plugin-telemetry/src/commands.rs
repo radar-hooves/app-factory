@@ -40,13 +40,15 @@ impl Serialize for Error {
     }
 }
 
-/// The exporter in force plus what this machine has saved, for the pane.
+/// The configured exporter, startup state and saved values, for the pane.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TelemetryStatus {
-    /// The endpoint this process exports to. Empty means local only.
+    /// The configured endpoint. A value does not prove the exporter started.
     pub endpoint: String,
-    /// The header helper in force. Empty means no authorisation headers.
+    /// Installed log/span providers, not proof of collector reachability.
+    pub started: bool,
+    /// The configured header helper. Empty means no helper.
     pub headers_helper: String,
     /// The fleet's environment set the exporter, so it cannot be changed here.
     pub from_env: bool,
@@ -95,14 +97,18 @@ fn with_guard<R: Runtime, T>(
 /// What the pane shows, assembled from the live guard and the app's own store.
 fn status<R: Runtime>(app: &AppHandle<R>, store: &Arc<dyn TelemetryStore>) -> TelemetryStatus {
     let saved = store.load();
-    let (in_force, from_env) =
-        with_guard(app, |g| (g.exporter(), g.exporter_is_from_env())).unwrap_or((None, false));
+    let (in_force, started, from_env) = with_guard(app, |g| {
+        let (exporter, started) = g.exporter_status();
+        (exporter, started, g.exporter_is_from_env())
+    })
+    .unwrap_or((None, false, false));
     TelemetryStatus {
         endpoint: in_force
             .as_ref()
             .map(|e| e.endpoint.clone())
             .unwrap_or_default(),
         headers_helper: in_force.and_then(|e| e.headers_helper).unwrap_or_default(),
+        started,
         from_env,
         saved_endpoint: saved
             .as_ref()
