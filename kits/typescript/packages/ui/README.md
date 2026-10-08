@@ -90,10 +90,14 @@ rather than rebuilding it:
 | Import                                          | What it is                                                                                                                                                                                                                                                                                                                                                              |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `page-header`                                   | The only page-title pattern: optional `breadcrumbs` and `icon` snippets, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                                   |
-| `panel`                                         | The generic titled card, and the settings section: optional icon, a clamped one-line `subtitle` or a wrapping `description`, trailing `action`s, a body that can opt out of padding, an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
+| `panel`                                         | The generic titled card, and the settings section: optional icon, a clamped one-line `subtitle` or a wrapping `description`, trailing `action`s, a body that can opt out of padding or scroll inside the card (`scroll`), an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
+| `list-toolbar`                                  | The bar above a list, on the page ground: title, count, icon actions named by their tooltips, one labelled action. The Ledger and the RecordList draw theirs with it. |
+| `record-list`                                   | The ledger's look for a list that is not money. See [Lists that are not money](#lists-that-are-not-money). |
+| `record-switcher`                               | The open record's whole name as the top bar's control, its menu finding, grouping and picturing every record, and the record's pages as tabs. |
+| `document-pane`                                 | One document beside what it belongs to: titled, closable, its page fitted, with paging and zoom (a `PageCanvas` in a `Panel`). |
 | `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                                      |
 | `settings-shell`                                | The settings destination: a grouped section list of `NavItem` rows beside the section you are reading, both scrolling independently from `md`, stacked below it. Render it inside `AppShell` with `padded={false}`.                                                                                                                                                     |
-| `context-column`                                | The persistent right-hand column: a standing `StatList` plus an optional detail that flows in on select. Below `xl` (1280px), where the column has nowhere to sit, the same content opens from a floating trigger instead of disappearing.                                                                                                                              |
+| `context-column`                                | The persistent right-hand column. A list page's: a standing `StatList` plus an optional detail that flows in on select. A record page's (`title`, `children`): the one opened item, closable, scrolling inside itself, and its `documentPane` beside it once the page's row has room. Below `xl` (1280px) the same content opens from a floating trigger instead of disappearing. See [A record's page](#a-records-page). |
 | `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                                       |
 | `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                            |
 | `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
@@ -887,11 +891,11 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 | Prop | Purpose |
 | --- | --- |
 | `rows` | `LedgerRow`s, extended with whatever the module's columns read: `id`, `date` (ISO), `title`, `note`, `amount` (signed), `balance`, `review` (`true` or a `Status`) with `reviewLabel` (the chip's words, "Review" by default), `conversion` (a swap inside the account: plain amount, in no total), `attachment` (its name), `origins` (a synthetic row's statement lines). Pass every row the view covers, filtered: the ledger sorts newest first, keeps a day's rows in the order given, and mounts only those near the view. |
-| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it (the title reads "Description" until the module names it), and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). A `cell` snippet's links and buttons take their own clicks; the rest of the cell opens the row. A column's `sort` gives the real value its head sorts by (a number, not its text); a `text` column sorts by its text without one, a `cell`-only column does not sort, and the balance never does. |
+| `columns` | The module's columns, in order after the amount. The keys `date`, `title`, `amount` and `balance` are the ledger's own cells: list one to rename or resize it (the title reads "Description" until the module names it), and list `balance` to offer the running balance at all, with `text` saying what it counts (money, a coin, units). A column `on: 'wide'` is ticked only on a wide ledger. A `cell` snippet's links and buttons take their own clicks; the rest of the cell opens the row. A column's `sort` gives the real value its head sorts by (a number, not its text); a `text` column sorts by its text without one, a `cell`-only column does not sort, and the balance never does. |
 | `preferences`, `onPreferencesChange` | The viewer's `{ columns, period }`. Missing fields take the module's defaults (each column's `on`, the balance off, grouped by month); an unknown column key is ignored. The ledger stores nothing. |
 | `fyStart` | The month a financial year starts, 1–12. July by default; anything else groups from July and logs an error in development. |
 | `locale`, `currency` | Every figure, amounts, nets and counts, in this locale (`AU_LOCALE` by default) and currency (AUD). Dates keep the drawn "15 Sep": the ledger's words are English. |
-| `title`, `meta`, `actions` | The toolbar on the page ground: its title, the count beside it, and the module's own actions after the Columns menu. |
+| `title`, `meta`, `actions`, `tools`, `action` | The bar on the page ground, a `ListToolbar`: its title (a heading), the count beside it, the module's own controls after the Columns menu, its icon actions (each named by its tooltip) and its one labelled action. |
 | `selected`, `bulkActions` | Ticking exists only with `bulkActions`, whose snippet gets the ticked rows in the bar that replaces the toolbar. |
 | `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
 | `originActions`, `onAttachment` | Split, join and undo under a synthetic row's statement lines; the paperclip as a button. |
@@ -939,6 +943,98 @@ their true size. Measured in Chromium at 1440x900: 5,000 rows paint their first
 row in about 300ms with some 20 mounted, where mounting them all took 7.6 to 8.6
 seconds and 65,000 nodes. Its look is measured in a real engine at 390, 1000,
 1440 and 3360px, and at 5,000 rows (`harness/drive.md` §"The ledger").
+
+## Lists that are not money
+
+Properties, managers, tools, the lines of a profit and loss: `RecordList` wears
+the ledger's look, so every list in an app reads one way. The same bar, head
+card, row cards with hairlines and group labels on the ground, drawn from the
+ledger's own classes (`ledger/look.ts`), so the two cannot drift. `DataTable`
+stays for a dense grid of data; a module's own records are a RecordList.
+
+```svelte
+<script lang="ts">
+	import RecordList, { type RecordListColumn, type RecordListRow } from '@poodle64/ui/record-list';
+	import House from '@lucide/svelte/icons/house';
+
+	type Property = RecordListRow & { value: number; loan: number };
+	const columns: RecordListColumn<Property>[] = [
+		{ key: 'title', label: 'Property' },
+		{ key: 'value', label: 'Value', align: 'end', sort: (r) => r.value, text: (r) => aud(r.value) },
+		{ key: 'loan', label: 'Loan', align: 'end', on: 'wide', text: (r) => aud(r.loan) }
+	];
+</script>
+
+<RecordList rows={properties} {columns} title="Owned properties" noun={['property', 'properties']}
+	icon={House} href={(r) => `/property/${r.id}`} bind:preferences
+	tools={[{ label: 'Download as CSV', icon: Download, onclick: save }]}
+	action={{ label: 'Add property', icon: Plus, href: '/property/new' }} />
+```
+
+| Prop | Purpose |
+| --- | --- |
+| `rows` | `RecordListRow`s: `id`, `title`, `note`, `image` (a thumbnail), `icon` (a row's own tile, for a tool), `flags` (what wants the viewer: the first a chip on line two with "+N more" naming the rest, every one on a phone). |
+| `columns` | The module's columns after the title, the Ledger's `ListColumn` shape plus `total`. List `title` to rename, resize or draw it with `cell`. `on: 'wide'` ticks a column only on a wide list (1200px of list), so extra width shows more columns and the viewer can tick it back. |
+| `preferences`, `onPreferencesChange`, `preferencesNote` | The viewer's `{ columns }` from the Columns menu, which the bar carries while the list has heads. The list stores nothing. |
+| `title`, `meta`, `leading`, `toolbar`, `tools`, `action` | The `ListToolbar`. No title, no bar. |
+| `group` | A row's group label: groups show in the order their first rows come, each label on the ground with its count and each column's `total` over its rows. |
+| `totalLabel` | A card after the rows with each column's `total` over every row: "All three". |
+| `head` | `false` drops the head card (and the Columns menu): a tools list. |
+| `icon` | The quiet tile a row without a photo or its own `icon` shows; with it every row has a thumbnail. |
+| `href`, `onOpen`, `open` | A row is a link, or a button that opens a detail beside the list; `open` marks that row. A control in a `cell` takes its own click. |
+| `noun`, `empty`, `footer`, `layout` | As the Ledger's. |
+
+A sort orders rows inside their groups, largest first (words from A), then
+reversed, then the list's own order. On a phone (below 600px of list) a row is its thumbnail, title
+and lines, with the first end-aligned column's value beside the title. Measured
+in a real engine at 390, 1440 and 3360px (`harness/drive.mjs`, `?surface=records`).
+
+## A record's page
+
+The record's whole name is the top bar's control; its column holds the one item
+the page opened; that item's document stands beside it (`?surface=record`).
+
+```svelte
+<ShellControls>
+	<RecordSwitcher name="4. Banksia" current={4} noun="property" icon={House}
+		groups={[{ label: 'Owned', items: owned }, { label: 'Sold', items: sold }]}
+		all={{ label: 'All properties', href: '/property' }}
+		pages={[{ label: 'Overview', href: '/property/4', current: true }, …]} />
+</ShellControls>
+
+<div class="flex min-h-0 flex-1 gap-5">
+	<div class="min-w-0 flex-1"><!-- header card, one line a section --></div>
+	<ContextColumn title={opened.title} subtitle="Opened on what needs you"
+		onClose={reopenWhatNeedsYou} documentPane={lease ? leaseDoc : undefined}>
+		<!-- the opened section -->
+	</ContextColumn>
+</div>
+
+{#snippet leaseDoc()}
+	<DocumentPane title="Residential tenancy agreement" subtitle={lease.span} pages={lease.pages}
+		actions={[{ label: 'Download', icon: Download, href: lease.url, download: true }]}
+		onClose={() => (lease = null)} />
+{/snippet}
+```
+
+- **RecordSwitcher** is a raised button, its chevron inside, after the section's
+  name and a "/". Its menu searches by name and note, lists each group under its
+  heading with a thumbnail (`image`, else `icon`'s tile), opens on the open
+  record ticked, and ends on `all`. Every record is a link. `pages` are the
+  record's own tabs. It places nothing itself: put it in `ShellControls` with
+  whatever else the page sets in the bar.
+- **ContextColumn's record form** holds one item, never none: the page opens it
+  on what needs the viewer first and `onClose` reopens that. The item is as tall
+  as what it holds up to the column, then scrolls inside itself; a new `title`
+  swaps it in from the top. Its `documentPane` takes the column's place, and
+  stands beside the column as a third pane once the page's row is 1250px wide,
+  which a 1600px screen gives with the rail open. The row decides, not the
+  screen, so a folded rail or a narrow window is read as the room there is.
+- **DocumentPane** fills the height it is given: `pages` as one image URL a page,
+  or `page` and `pageCount` to draw them yourself, as `PageCanvas` takes them. A
+  page that fails to load says so and keeps its place. Another document swapped
+  into the same pane opens on its first page, fitted; so does one the column
+  moves beside itself as the row crosses 1250px.
 
 ## Hand-written forms
 

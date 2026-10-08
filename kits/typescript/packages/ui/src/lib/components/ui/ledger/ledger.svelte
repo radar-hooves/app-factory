@@ -18,14 +18,32 @@
 	import { DEV } from 'esm-env';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import X from '@lucide/svelte/icons/x';
 	import Button from '../button/button.svelte';
 	import { Checkbox } from '../checkbox/index.js';
 	import EmptyState from '../empty-state/empty-state.svelte';
 	import StatusBadge from '../status-badge/status-badge.svelte';
+	import ListToolbar from '../list-toolbar/list-toolbar.svelte';
+	import type { ListAction, ListIconAction } from '../list-toolbar/types.js';
+	import HeadCell from './head-cell.svelte';
 	import LedgerColumns from './ledger-columns.svelte';
+	import {
+		CARD,
+		CELL,
+		END,
+		GROUP,
+		GROUP_LABEL,
+		HEAD,
+		HEAD_GROUND,
+		RING,
+		RING_INSET,
+		ROW_HEIGHT,
+		ROW_TEXT,
+		RULE,
+		THROUGH,
+		groupSpacing
+	} from './look.js';
 	import { AU_LOCALE } from '$lib/format.js';
 	import { cn } from '$lib/utils.js';
 	import {
@@ -58,6 +76,8 @@
 		title,
 		meta,
 		actions,
+		tools = [],
+		action,
 		selected = $bindable([]),
 		bulkActions,
 		open = $bindable(null),
@@ -89,8 +109,12 @@
 		title?: string;
 		/** Beside the title. Defaults to the row count. */
 		meta?: string;
-		/** The toolbar's own actions, after the Columns menu: export, add. */
+		/** The toolbar's own controls, after the Columns menu and before `tools`. */
 		actions?: Snippet;
+		/** The toolbar's icon actions, each named by its tooltip: export, print. */
+		tools?: ListIconAction[];
+		/** The toolbar's one labelled action, last: add. */
+		action?: ListAction;
 		/** The ticked rows' ids. Ticking needs `bulkActions`. */
 		selected?: Id[];
 		/** What the ticked rows allow, in the bar that replaces the toolbar. */
@@ -135,21 +159,6 @@
 	/** Ticking adds a checkbox to the gutter, so it widens to hold the chevron beside it. */
 	const GUTTER = '2.5rem';
 	const GUTTER_TICKS = '3.5rem';
-	const CELL = 'min-w-0 truncate px-2';
-	const END = 'pr-5 text-right';
-	/** The row's height rides the package's density ramp: 3.5rem, 3rem compact. */
-	const ROW_HEIGHT = 'min-height: calc(var(--ds-control-height-md) + 1rem);';
-	/** The house focus ring, and the same ring drawn inside a control that fills a clipped card. */
-	const RING = 'focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none';
-	const RING_INSET =
-		'focus-visible:inset-ring-ring/50 focus-visible:inset-ring-3 focus-visible:outline-none';
-	/**
-	 * A cell over an openable row lets a click through to the row beneath it, and
-	 * gives one back to any control a module's cell renders, so a link or a button
-	 * in a cell is never silently inert.
-	 */
-	const THROUGH =
-		'pointer-events-none [&_:is(a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=checkbox],[tabindex])]:pointer-events-auto';
 
 	// ── Columns: the ledger's own three, the module's, the balance last ──
 	const resolved = $derived.by(() => {
@@ -177,7 +186,9 @@
 	});
 
 	const defaults = $derived<LedgerPreferences>({
-		columns: resolved.filter((c) => !c.locked && c.on).map((c) => c.key),
+		columns: resolved
+			.filter((c) => !c.locked && (c.on === true || (c.on === 'wide' && WIDE)))
+			.map((c) => c.key),
 		period: 'month'
 	});
 	/** What the consumer kept, read field by field: a stale or foreign key falls back. */
@@ -638,7 +649,7 @@
 		<div
 			class={cn(
 				'relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2 text-sm',
-				!first && 'border-border/60 border-t',
+				!first && RULE,
 				openable && 'hover:bg-accent/40'
 			)}
 			style={ROW_HEIGHT}
@@ -677,8 +688,9 @@
 	{:else}
 		<div
 			class={cn(
-				'relative grid items-stretch text-[0.8125rem]',
-				!first && 'border-border/60 border-t',
+				'relative grid items-stretch',
+				ROW_TEXT,
+				!first && RULE,
 				on && 'bg-primary/9',
 				openable && !on && 'hover:bg-accent/40'
 			)}
@@ -726,12 +738,13 @@
 	{@const net = single ? '' : money(t.net)}
 	{@const netTone = t.net > 0 ? 'text-status-success' : 'text-muted-foreground'}
 	{@const klass = cn(
-		'text-muted-foreground h-6.5 w-full text-left text-xs',
+		GROUP,
+		'w-full text-left',
 		PHONE ? 'flex items-center gap-2 px-0.5' : 'grid items-center px-px'
 	)}
 	<!-- The spacing is padding, not margin, so the measured height is the height it takes. -->
 	<div
-		class={cn('pb-1.5', gi > 0 && 'pt-4.5')}
+		class={groupSpacing(gi)}
 		{@attach measure(`h:${key}`, gi > 0 ? 'head' : undefined)}
 	>
 		<!-- A day heads its rows and does not close; any other period's label opens and closes it. -->
@@ -770,7 +783,7 @@
 		{#if !BY_DAY}<ChevronRight
 				class={cn('size-3.5 flex-none transition-transform', isOpen && 'rotate-90')}
 			/>{/if}
-		<span class="text-[0.8125rem] font-semibold whitespace-nowrap">{label}</span>
+		<span class={cn(GROUP_LABEL, 'whitespace-nowrap')}>{label}</span>
 		<span class="min-w-0 flex-1 truncate">{metaText}</span>
 		<span class={cn('tabular-nums', netTone)}>{net}</span>
 	{:else}
@@ -786,7 +799,7 @@
 			class="flex min-w-0 items-baseline gap-3 overflow-hidden px-2 whitespace-nowrap"
 			style="grid-column: 2 / {cAmount};"
 		>
-			<span class="text-[0.8125rem] font-semibold">{label}</span>
+			<span class={GROUP_LABEL}>{label}</span>
 			<span class="min-w-0 truncate">{metaText}</span>
 		</span>
 		<span class={cn(CELL, END, 'tabular-nums', netTone)} style="grid-column: {cAmount};">{net}</span
@@ -835,18 +848,15 @@
 			</Button>
 		</div>
 	{:else}
-		<div
-			role="toolbar"
-			aria-label="This ledger"
-			class="flex min-h-11 flex-none items-center gap-2 px-2 pb-2"
-			style:padding-right={edge}
+		<ListToolbar
+			{title}
+			meta={meta ?? count(rows.length)}
+			{tools}
+			{action}
+			label="This ledger"
+			style="padding-right: {edge};"
 			data-slot="ledger-toolbar"
 		>
-			<span class="flex min-w-0 items-baseline gap-2.5 overflow-hidden whitespace-nowrap">
-				{#if title}<span class="text-body flex-none font-semibold">{title}</span>{/if}
-				<span class="text-muted-foreground truncate text-sm">{meta ?? count(rows.length)}</span>
-			</span>
-			<span class="min-w-0 flex-1"></span>
 			<LedgerColumns
 				offered={resolved.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))}
 				preferences={prefs}
@@ -855,7 +865,7 @@
 				onreset={() => setPreferences(defaults)}
 			/>
 			{@render actions?.()}
-		</div>
+		</ListToolbar>
 	{/if}
 
 	<div
@@ -868,9 +878,9 @@
 		data-slot="ledger-rows"
 	>
 		{#if !PHONE}
-			<div class="bg-background sticky top-0 z-3 pb-3" bind:offsetHeight={headHeight}>
+			<div class={HEAD_GROUND} bind:offsetHeight={headHeight}>
 				<div
-					class="bg-card border-border grid h-9 items-center rounded-lg border"
+					class={HEAD}
 					style:grid-template-columns={template}
 					data-slot="ledger-head"
 				>
@@ -905,46 +915,16 @@
 						{/if}
 					</span>
 					{#each shown as c (c.key)}
-						{@const sortable = !!sorter(c)}
 						{@const mine = activeSort?.key === c.key ? activeSort : null}
-						{@const label = c.head ?? c.label}
-						{@const headClass = cn(
-							CELL,
-							'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase',
-							c.align === 'end' && END
-						)}
-						{#if sortable}
-							<button
-								type="button"
-								class={cn(
-									headClass,
-									'group flex cursor-pointer items-center gap-0.5 rounded-md hover:text-foreground',
-									RING_INSET,
-									c.align === 'end' && 'justify-end',
-									mine && 'text-foreground'
-								)}
-								aria-label={mine
-									? `Sorted by ${c.label}, ${mine.dir === -1 ? 'descending' : 'ascending'}. Click ${mine.dir === -1 ? 'to reverse' : 'for the default order'}`
-									: `Sort by ${c.label}`}
-								onclick={() => sortBy(c.key)}
-								data-slot="ledger-sort"
-								data-sort={mine ? (mine.dir === -1 ? 'desc' : 'asc') : undefined}
-							>
-								<span class="truncate">{label}</span>
-								{#if mine?.dir === 1}
-									<ChevronUp class="size-3 flex-none" />
-								{:else}
-									<ChevronDown
-										class={cn(
-											'size-3 flex-none',
-											!mine && 'opacity-0 group-hover:opacity-50 group-focus-visible:opacity-50'
-										)}
-									/>
-								{/if}
-							</button>
-						{:else}
-							<span class={headClass}>{label}</span>
-						{/if}
+						<HeadCell
+							label={c.head ?? c.label}
+							name={c.label}
+							align={c.align}
+							sortable={!!sorter(c)}
+							sort={mine ? (mine.dir === -1 ? 'desc' : 'asc') : null}
+							onsort={() => sortBy(c.key)}
+							owner="ledger"
+						/>
 					{/each}
 				</div>
 			</div>
@@ -974,7 +954,7 @@
 						<!-- A card the window cuts keeps no edge at the cut, which is out of view. -->
 						<div
 							class={cn(
-								'bg-card border-border overflow-hidden rounded-lg border',
+								CARD,
 								block.cutTop && 'rounded-t-none border-t-0',
 								block.cutBottom && 'rounded-b-none border-b-0'
 							)}

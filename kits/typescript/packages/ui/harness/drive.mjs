@@ -2913,6 +2913,10 @@ for (const scheme of ['light', 'dark']) {
 	// fact, so it needs an engine: nothing about the markup says which won.
 	{
 		const { context, page } = await open('surface=palette&density=compact');
+		// The button animates its height (`transition-all`), which raced the wait
+		// below: 39px at 200ms on a loaded runner. The fact is a cascade one, so
+		// the transition goes, as SETTLE says, rather than being waited out.
+		await page.addStyleTag({ content: SETTLE });
 		await page.waitForSelector('[data-probe="buttons"]');
 		const before = await page.evaluate(() =>
 			Math.round(
@@ -4301,6 +4305,250 @@ for (const density of ['comfortable', 'compact']) {
 		`layout ${m.layout}, date track ${m.dateTrack.toFixed(1)}px`
 	);
 	check('Ledger at 3360px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
+// ── The ledger's look for lists that are not money, and a record's page (radar-hooves/godswood, 08/10/2026) ──
+// RecordList wears the Ledger's look, so the same layout facts are held: the
+// head card's columns on the rows' to the pixel, nothing sideways at a phone's
+// width, the wide-only columns arriving at the operator's 3360px desk. A
+// record page's column holds one opened item that is as tall as what it holds
+// up to the column and then scrolls inside itself; its document takes the
+// column's place and stands beside it as a third pane once the page's row is
+// 1250px wide, a 1600px screen with the rail open.
+{
+	const measureRecords = (page) =>
+		page.evaluate(() => {
+			const list = document.querySelector('[data-slot="record-list"]');
+			const head = document.querySelector('[data-slot="record-head"]');
+			const row = document.querySelector('[data-slot="record-row"]');
+			const cells = (el) =>
+				[...el.children].filter((c) => !c.matches('[data-slot="record-open"]')).map((c) => {
+					const r = c.getBoundingClientRect();
+					return [r.left, r.right];
+				});
+			const region = document.querySelector('[data-slot="app-shell-content"]');
+			return {
+				layout: list?.dataset.layout,
+				heads: head ? [...head.children].map((c) => c.textContent.trim()) : null,
+				headEdges: head ? cells(head) : [],
+				rowEdges: row && head ? cells(row) : [],
+				overflow: region.scrollWidth - region.clientWidth,
+				docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+			};
+		});
+
+	let { context, page, errors } = await open('surface=records', { width: 1440, height: 900 }, 'light');
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-row"]');
+	let m = await measureRecords(page);
+	check(
+		'RecordList at 1440px: the head card’s columns on the rows’, the wide-only columns held back',
+		m.layout === 'narrow' &&
+			JSON.stringify(m.heads) === JSON.stringify(['Property', 'Value', 'LVR', 'Rent / wk']) &&
+			m.headEdges.length === m.rowEdges.length &&
+			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5),
+		`layout ${m.layout}, heads ${JSON.stringify(m.heads)}, head ${JSON.stringify(m.headEdges)} vs row ${JSON.stringify(m.rowEdges)}`
+	);
+	check('RecordList at 1440px: nothing sideways', m.overflow <= 0 && m.docOverflow <= 0, `${m.overflow}px, document ${m.docOverflow}px`);
+	// A row is a link; a module's control in a cell is its own.
+	const target = await page.evaluate(() => {
+		const row = document.querySelector('[data-slot="record-row"]');
+		const r = row.getBoundingClientRect();
+		return document.elementFromPoint(r.left + r.width * 0.6, (r.top + r.bottom) / 2)?.closest('a')?.getAttribute('href') ?? 'none';
+	});
+	check('RecordList: a click on a row’s cells reaches its link', target === '#/property/3', target);
+	check('RecordList at 1440px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	({ context, page, errors } = await open('surface=records&list=tools', { width: 1440, height: 900 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-probe="tool-run"]');
+	await page.getByRole('button', { name: 'Open', exact: true }).click({ timeout: 3000 });
+	check(
+		'RecordList: a control in a module’s cell takes its own click',
+		(await page.locator('[data-probe="tool-ran"]').textContent()) === 'split',
+		await page.locator('[data-probe="tool-ran"]').textContent()
+	);
+	await context.close();
+
+	({ context, page, errors } = await open('surface=records&list=managers', { width: 1440, height: 700 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-group"]');
+	const held = await page.evaluate(() => {
+		const rows = document.querySelector('[data-slot="record-rows"]');
+		const head = document.querySelector('[data-slot="record-head"]');
+		const before = head.getBoundingClientRect().top;
+		rows.scrollTop = 200;
+		const label = document.querySelector('[data-slot="record-group"]');
+		const card = label.parentElement.nextElementSibling;
+		return {
+			scrolls: rows.scrollHeight > rows.clientHeight,
+			drift: Math.abs(head.getBoundingClientRect().top - before),
+			labelOutside: !label.closest('[data-slot="record-card"]') && card?.matches('[data-slot="record-card"]')
+		};
+	});
+	check(
+		'RecordList, grouped: its rows scroll under a head that stays, each label on the ground above its card',
+		held.scrolls && held.drift < 0.5 && held.labelOutside,
+		JSON.stringify(held)
+	);
+	check('RecordList, grouped: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	({ context, page, errors } = await open('surface=records', { width: 390, height: 844 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-row"]');
+	m = await measureRecords(page);
+	check(
+		'RecordList at 390px: the phone’s list, with nothing sideways',
+		m.layout === 'phone' && m.heads === null && m.overflow <= 0 && m.docOverflow <= 0,
+		`layout ${m.layout}, overflow ${m.overflow}px, document ${m.docOverflow}px`
+	);
+	await context.close();
+
+	({ context, page, errors } = await open('surface=records', { width: 3360, height: 1400 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-row"]');
+	m = await measureRecords(page);
+	check(
+		'RecordList at 3360px: the wide columns arrive, the heads still on the rows',
+		m.layout === 'wide' &&
+			m.heads.includes('Loan') &&
+			m.heads.includes('Manager') &&
+			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5),
+		`layout ${m.layout}, heads ${JSON.stringify(m.heads)}`
+	);
+	await context.close();
+
+	// The record page.
+	const measureRecord = (page) =>
+		page.evaluate(() => {
+			const box = (el) => {
+				if (!el) return null;
+				const r = el.getBoundingClientRect();
+				return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+			};
+			const aside = document.querySelector('aside[data-slot="context-column"]');
+			const item = aside?.querySelector('[data-slot="context-column-item"]');
+			const body = item?.querySelector('[data-slot="panel-body"]');
+			const third = document.querySelector('[data-slot="context-column-document"]');
+			const pane = document.querySelector('[data-slot="document-pane"]');
+			const pageImg = pane?.querySelector('img');
+			const primary = aside?.previousElementSibling;
+			const region = document.querySelector('[data-slot="app-shell-content"]');
+			return {
+				aside: box(aside),
+				item: box(item),
+				bodyScrolls: body ? body.scrollHeight > body.clientHeight + 1 : null,
+				third: box(third),
+				pane: box(pane),
+				paneInAside: !!(pane && aside?.contains(pane)),
+				page: box(pageImg),
+				primary: box(primary),
+				overflow: region.scrollWidth - region.clientWidth
+			};
+		});
+
+	({ context, page, errors } = await open('surface=record', { width: 1440, height: 1100 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="context-column-item"]');
+	let r = await measureRecord(page);
+	check(
+		'Record page, tall: the opened item is as tall as what it holds, short of the column',
+		r.item && r.aside && r.item.height < r.aside.height - 20 && r.bodyScrolls === false,
+		`item ${r.item?.height}px in a ${r.aside?.height}px column, scrolls ${r.bodyScrolls}`
+	);
+	await context.close();
+
+	({ context, page, errors } = await open('surface=record', { width: 1440, height: 600 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="context-column-item"]');
+	r = await measureRecord(page);
+	check(
+		'Record page, short: the opened item stops at the column and scrolls inside itself',
+		r.item && r.aside && r.item.bottom <= r.aside.bottom + 0.5 && r.bodyScrolls === true,
+		`item bottom ${r.item?.bottom} vs column ${r.aside?.bottom}, scrolls ${r.bodyScrolls}`
+	);
+	// A click on another section swaps the item; nothing in the left pane moves.
+	const before = await page.evaluate(() => document.querySelector('[data-probe="sections"]').getBoundingClientRect().top);
+	await page.getByRole('button', { name: 'Open Insurance' }).click();
+	const swapped = await page.evaluate(() => ({
+		title: document.querySelector('[data-slot="context-column-item"] h2')?.textContent?.trim(),
+		top: document.querySelector('[data-probe="sections"]').getBoundingClientRect().top,
+		current: document.querySelector('[data-slot="record-open"][aria-current="true"]')?.getAttribute('aria-label')
+	}));
+	check(
+		'Record page: a click on a section swaps the column, marks the line, moves nothing else',
+		swapped.title === 'Insurance' && swapped.current === 'Open Insurance' && Math.abs(swapped.top - before) < 0.5,
+		JSON.stringify(swapped)
+	);
+	check('Record page: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	({ context, page, errors } = await open('surface=record&doc=1', { width: 1440, height: 900 }, 'dark'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="document-pane"] img');
+	await page.waitForFunction(() => document.querySelector('[data-slot="document-pane"] img')?.getBoundingClientRect().width > 0);
+	r = await measureRecord(page);
+	check(
+		'Record page at 1440px: the document takes the column’s place, fills it, its page fitted inside',
+		r.paneInAside &&
+			!r.third &&
+			Math.abs(r.pane.height - r.aside.height) < 1 &&
+			r.page.width > 0 &&
+			r.page.left >= r.pane.left &&
+			r.page.right <= r.pane.right &&
+			r.page.bottom <= r.pane.bottom,
+		JSON.stringify({ pane: r.pane, aside: r.aside, page: r.page })
+	);
+	await context.close();
+
+	({ context, page, errors } = await open('surface=record&doc=1', { width: 1920, height: 1080 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="context-column-document"] img');
+	r = await measureRecord(page);
+	check(
+		'Record page, a 1920px screen: the document is a third pane beside the column, the item kept',
+		!r.paneInAside &&
+			r.third &&
+			r.item &&
+			r.primary.right <= r.aside.left &&
+			r.aside.right <= r.third.left &&
+			r.third.width > r.aside.width &&
+			r.overflow <= 0,
+		JSON.stringify({ primary: r.primary, aside: r.aside, third: r.third, overflow: r.overflow })
+	);
+	check('Record page at 1920px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	({ context, page, errors } = await open('surface=record', { width: 1440, height: 900 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
+	const trigger = await page.evaluate(() => {
+		const t = document.querySelector('[data-slot="record-switcher-trigger"]');
+		const s = getComputedStyle(t);
+		return { border: s.borderTopWidth, chevronInside: !!t.querySelector('svg') && t.querySelector('svg').getBoundingClientRect().right <= t.getBoundingClientRect().right };
+	});
+	await page.getByRole('button', { name: '4. Banksia: switch to another property' }).click();
+	await page.waitForSelector('[data-slot="record-switcher-item"]');
+	const menu = await page.evaluate(() => ({
+		highlighted: document.querySelector('[data-slot="record-switcher-item"][aria-selected="true"]')?.textContent?.trim(),
+		thumbs: document.querySelectorAll('[data-slot="record-switcher-item"] [data-slot="record-thumbnail"]').length,
+		focused: document.activeElement?.getAttribute('role')
+	}));
+	check(
+		'RecordSwitcher: a raised control with its chevron inside, opening on the open record with the search focused',
+		trigger.border !== '0px' && trigger.chevronInside && menu.highlighted?.startsWith('4. Banksia') && menu.thumbs === 5 && menu.focused === 'combobox',
+		JSON.stringify({ trigger, menu })
+	);
+	await page.keyboard.type('eum');
+	await page.keyboard.press('Enter');
+	const went = await page
+		.waitForFunction(() => location.hash === '#/property/1', null, { timeout: 3000 })
+		.then(() => true, () => false);
+	check('RecordSwitcher: typed and chosen by keyboard, it goes to that record', went, await page.evaluate(() => location.hash));
+	check('RecordSwitcher: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }
 

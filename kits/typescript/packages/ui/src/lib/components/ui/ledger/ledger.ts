@@ -152,7 +152,20 @@ export function sortRows<R extends LedgerRow>(
 	value: (row: R) => number | string | null | undefined,
 	dir: 1 | -1
 ): R[] {
-	const keyed = (groupRows(rows, 'none')[0]?.rows ?? []).map((row) => ({ row, v: value(row) }));
+	return orderBy(groupRows(rows, 'none')[0]?.rows ?? [], value, dir);
+}
+
+/**
+ * Any list's rows ordered by a value, `dir` 1 ascending and -1 descending:
+ * numbers as numbers, text with its numerals read as numbers. Rows without a
+ * value come last either way, and equal values keep the order they came in.
+ */
+export function orderBy<R>(
+	rows: readonly R[],
+	value: (row: R) => number | string | null | undefined,
+	dir: 1 | -1
+): R[] {
+	const keyed = rows.map((row) => ({ row, v: value(row) }));
 	const missing = (v: unknown) => v === null || v === undefined || v === '';
 	keyed.sort((a, b) => {
 		if (missing(a.v) || missing(b.v)) return Number(missing(a.v)) - Number(missing(b.v));

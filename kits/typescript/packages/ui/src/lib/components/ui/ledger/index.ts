@@ -7,5 +7,6 @@ export type {
 	LedgerOrigin,
 	LedgerPeriod,
 	LedgerPreferences,
-	LedgerRow
+	LedgerRow,
+	ListColumn
 } from './types.js';

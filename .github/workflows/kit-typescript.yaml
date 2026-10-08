@@ -114,8 +114,9 @@ jobs:
         run: |
           set -e
           for c in alert alert-dialog app-shell badge button card checkbox command \
-            command-palette data-table dialog dropdown-menu input input-group label \
-            password-input popover progress schema-form select separator skeleton sonner \
+            command-palette context-column data-table dialog document-pane dropdown-menu \
+            input input-group label ledger list-toolbar password-input popover progress \
+            record-list record-switcher schema-form select separator skeleton sonner \
             switch table tabs textarea tooltip; do
             f="packages/ui/dist/components/ui/$c/index.js"
             test -f "$f" || { echo "missing built component: $f" >&2; exit 1; }

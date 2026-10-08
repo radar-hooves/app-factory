@@ -72,6 +72,7 @@
 	import ListShell from '../dist/components/ui/list-shell/list-shell.svelte';
 	import { ReportWidget } from '../dist/components/feedback/index.js';
 	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
+	import Records from './Records.svelte';
 	import type {
 		LedgerColumn,
 		LedgerPeriod,
@@ -1652,6 +1653,8 @@
 		/>
 	</div>
 	<div data-probe="row-tap-selected">{tapSelectedId ?? 'none'}</div>
+{:else if surface === 'records' || surface === 'record'}
+	<Records {surface} {params} />
 {:else if surface === 'ledger'}
 	<div class="bg-background flex h-screen flex-col p-4">
 		<Ledger

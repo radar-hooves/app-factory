@@ -1335,3 +1335,25 @@ every head column 1px off its row column, and a title block set to
 pointer events taken away opens the row instead, and a row button stripped of
 its shadow shows no ring; all four fail. Unwindowed, the same 5,000 rows mounted
 65,000 nodes and painted their first row in 7.6s.
+
+## Lists that are not money, and a record's page (`?surface=records`, `?surface=record`) — radar-hooves/godswood, 08/10/2026
+
+The RecordList wears the ledger's look and the record page holds one opened item
+beside its document; `src/test/record-list.test.ts` and
+`src/test/context-column-record.test.ts` hold the behaviour, this the layout.
+The data is invented (this repo is public). Query: `list=<properties|managers|pnl|tools>`
+on `records`; `doc=1` opens a lease, `open=<section>` a section, `switcher=1`
+the switcher's menu, on `record`.
+
+| Claim | Observed (Chromium 149, 08/10/2026) |
+| --- | --- |
+| At 1440px the head card's columns sit on the rows', the wide-only columns held back | edges equal to the pixel; heads Property, Value, LVR, Rent / wk |
+| At 3360px the wide columns arrive, heads still on the rows | 11 heads; edges equal |
+| 390px: the phone's list, nothing sideways | layout `phone`, 0px overflow |
+| A click on a row's cells reaches its link; a control in a cell takes its own | `#/property/3`; the tool's own handler ran |
+| Grouped, the rows scroll under a head that stays, each label on the ground above its card | head drift 0px after a 200px scroll |
+| The opened item is as tall as what it holds, and in a short window stops at the column and scrolls inside | 698px in a 988px column; bottom 572 on 572, scrolling |
+| A section's click swaps the column and marks its line, and nothing in the left pane moves | title Insurance, the line `aria-current`, top unmoved |
+| With no room for three panes the document fills the column's place, its page inside it | pane 788px in a 788px column |
+| With a 1576px row (1920px screen) the document is a third pane beside the column, nothing sideways | primary, column, document left to right; 0px overflow |
+| The switcher is raised with its chevron inside, opens on the open record with its search focused, and goes where the keyboard chooses | border 1px; highlighted 4. Banksia; `eum` then Enter reached `#/property/1` |

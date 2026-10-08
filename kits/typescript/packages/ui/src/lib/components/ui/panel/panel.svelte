@@ -25,6 +25,7 @@
 		tone = 'default',
 		children,
 		pad = true,
+		scroll = false,
 		class: klass = '',
 		ref = $bindable(null),
 		...restProps
@@ -70,6 +71,12 @@
 		tone?: 'default' | 'destructive';
 		children: Snippet;
 		pad?: boolean;
+		/**
+		 * The body scrolls inside the card, under a header that stays: the card
+		 * is as tall as what it holds up to the height its container gives it,
+		 * and the full height when given one (`h-full`).
+		 */
+		scroll?: boolean;
 	} = $props();
 
 	const destructive = $derived(tone === 'destructive');
@@ -124,7 +131,7 @@
 			{/if}
 		</header>
 	{/if}
-	<div class={pad ? 'p-4' : ''}>
+	<div class={cn(pad && 'p-4', scroll && 'min-h-0 flex-1 overflow-y-auto')} data-slot="panel-body">
 		{@render children()}
 	</div>
 	{#if footer}

@@ -46,27 +46,28 @@ export interface LedgerRow {
 }
 
 /**
- * A column the module offers. The keys `date`, `title`, `amount` and `balance`
- * are the ledger's own cells: list one to rename or resize it (and, for
- * `balance`, to offer the running balance at all, with `text` saying what it
- * counts). Date, title and amount always show, first and in that order; the
- * balance is always last. Every other key is the module's, in its order.
+ * A column a module offers a list in the ledger's look: the Ledger, and the
+ * RecordList for rows that are not money.
  */
-export interface LedgerColumn<R extends LedgerRow = LedgerRow> {
+export interface ListColumn<R> {
 	key: string;
 	/** Its name in the Columns menu, and its head unless `head` is shorter. */
 	label: string;
 	head?: string;
-	/** A grid track, or one for a narrow ledger and one for a wide one. */
+	/** A grid track, or one for a narrow list and one for a wide one (1200px and up). */
 	width?: string | { narrow: string; wide: string };
 	align?: 'start' | 'end';
-	/** Ticked until the viewer chooses. Defaults to true, and to false for `balance`. */
-	on?: boolean;
+	/**
+	 * Ticked until the viewer chooses. Defaults to true. `'wide'` is ticked
+	 * only on a wide list, so extra width shows more columns and the viewer
+	 * can still tick it back on a narrow one.
+	 */
+	on?: boolean | 'wide';
 	/**
 	 * What a click on the head sorts this column by: the real value, a number
 	 * rather than its display text. Without it a column with `text` sorts by
-	 * that text and a `cell`-only column does not sort. The running balance
-	 * never sorts, since it depends on the order.
+	 * that text and a `cell`-only column does not sort. The ledger's running
+	 * balance never sorts, since it depends on the order.
 	 */
 	sort?: (row: R) => number | string | null | undefined;
 	/** A plain cell. */
@@ -77,6 +78,16 @@ export interface LedgerColumn<R extends LedgerRow = LedgerRow> {
 	 */
 	cell?: Snippet<[R]>;
 }
+
+/**
+ * A column the module offers the ledger. The keys `date`, `title`, `amount`
+ * and `balance` are the ledger's own cells: list one to rename or resize it
+ * (and, for `balance`, to offer the running balance at all, with `text` saying
+ * what it counts). Date, title and amount always show, first and in that
+ * order; the balance is always last, and off until ticked. Every other key is
+ * the module's, in its order.
+ */
+export type LedgerColumn<R extends LedgerRow = LedgerRow> = ListColumn<R>;
 
 /** The viewer's own choices, which the consumer persists. */
 export interface LedgerPreferences {

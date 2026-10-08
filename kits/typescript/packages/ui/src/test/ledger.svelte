@@ -9,6 +9,7 @@
 		LedgerPreferences,
 		LedgerRow
 	} from '$lib/components/ui/ledger';
+	import type { ListAction, ListIconAction } from '$lib/components/ui/list-toolbar';
 
 	type Row = LedgerRow & { category?: string };
 
@@ -21,7 +22,9 @@
 		withEditor = true,
 		fyStart,
 		locale,
-		onAttachment
+		onAttachment,
+		tools,
+		action
 	}: {
 		rows: Row[];
 		columns?: LedgerColumn<Row>[];
@@ -32,6 +35,8 @@
 		fyStart?: number;
 		locale?: string;
 		onAttachment?: (row: Row) => void;
+		tools?: ListIconAction[];
+		action?: ListAction;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -68,6 +73,8 @@
 	{fyStart}
 	{locale}
 	{onAttachment}
+	{tools}
+	{action}
 	onOpenChange={(id) => openChanges.push(id)}
 	title="Transactions"
 	bind:preferences={prefs}

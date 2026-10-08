@@ -12,6 +12,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
+import Download from '@lucide/svelte/icons/download';
+import Plus from '@lucide/svelte/icons/plus';
 import Harness from './ledger.svelte';
 import {
 	blocksOf,
@@ -734,5 +736,32 @@ describe('Ledger: a conversion inside the account', () => {
 		expect(screen.getByRole('toolbar', { name: 'Act on the ticked rows' })).toHaveTextContent(
 			'net $100.00'
 		);
+	});
+});
+
+describe('Ledger: its bar is the ListToolbar, and wide columns wait for width', () => {
+	it('carries the module’s icon actions and its one labelled action after the Columns menu', () => {
+		mount({
+			tools: [{ label: 'Download as CSV', icon: Download }],
+			action: { label: 'Add', icon: Plus }
+		});
+		const bar = screen.getByRole('toolbar', { name: 'This ledger' });
+		const names = [...bar.querySelectorAll('button, a')].map(
+			(el) => el.getAttribute('aria-label') ?? el.textContent?.trim()
+		);
+		expect(names).toEqual(['Columns, balance and grouping', 'Download as CSV', 'Add']);
+		expect(within(bar).getByRole('heading', { name: 'Transactions' })).toBeInTheDocument();
+	});
+
+	it('ticks a wide-only column on a wide ledger and not on a narrow one', () => {
+		const columns: LedgerColumn<Row>[] = [
+			...COLUMNS,
+			{ key: 'dwelling', label: 'Dwelling', on: 'wide', text: () => 'House' }
+		];
+		const narrow = mount({ columns, layout: 'narrow' });
+		expect(narrow.heads()).not.toContain('Dwelling');
+		narrow.unmount();
+		const wide = mount({ columns, layout: 'wide' });
+		expect(wide.heads()).toContain('Dwelling');
 	});
 });

@@ -101,6 +101,16 @@
       "description": "An index of many peer items — a responsive tile wall, or a sortable/filterable table of records.",
       "components": [
         {
+          "name": "RecordList",
+          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, tools?, action?, group?, totalLabel?, icon?, href?, onOpen?, open?",
+          "insteadOf": "a DataTableTanstack, or a boxed Table, for a module's own records (properties, managers, tools, a P&L's lines): the ledger's look (head card, row cards, group labels on the ground) for rows that are not money, so every list in an app reads one way"
+        },
+        {
+          "name": "ListToolbar",
+          "props": "title?, meta?, leading?, children?, tools?, action?",
+          "insteadOf": "a hand-built title, count and button row above a list; the Ledger and the RecordList draw theirs with it"
+        },
+        {
           "name": "TileGrid",
           "props": "children, min?, gap?, tag?",
           "insteadOf": "a grid with fixed sm:grid-cols-* breakpoints you maintain per page"
@@ -124,7 +134,7 @@
       "components": [
         {
           "name": "Ledger",
-          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, actions?, selected?, bulkActions?, open?, editor?",
+          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, actions?, tools?, action?, selected?, bulkActions?, open?, editor?",
           "insteadOf": "a DataTableTanstack of transactions, or a hand-built grouped list with its own period headers and column picker"
         }
       ]
@@ -136,7 +146,7 @@
       "components": [
         {
           "name": "Panel",
-          "props": "children, title?, subtitle?, description?, icon?, action?, footer?, tone?, pad?",
+          "props": "children, title?, subtitle?, description?, icon?, action?, footer?, tone?, pad?, scroll?",
           "insteadOf": "raw Card + CardHeader + CardTitle assembled by hand on every route; also the settings section — there is no separate SettingsSection, `description` wraps, `footer` carries Save/Cancel, `tone=\"destructive\"` is the danger zone"
         }
       ]
@@ -241,6 +251,11 @@
           "name": "PageCanvas",
           "props": "pageCount, page, currentPage?, regions?, lookedRegions?, activeRegionId?, focusedRegionId?, zoom?",
           "insteadOf": "a hand-built page viewer per app (godswood's DocumentViewer, pebblestone's PdfViewer) each re-deriving fit/zoom/pan, now with no way to outline what was read (#839)"
+        },
+        {
+          "name": "DocumentPane",
+          "props": "title, subtitle?, pages?, pageCount?, page?, currentPage?, zoom?, actions?, onClose?",
+          "insteadOf": "a PageCanvas framed by hand with its own title row, download and close; the pane the record page opens a document in, beside the column or in its place"
         }
       ]
     },
@@ -270,9 +285,14 @@
           "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
         },
         {
+          "name": "RecordSwitcher",
+          "props": "name, groups, current?, noun?, placeholder?, icon?, all?, pages?, separator?",
+          "insteadOf": "a bare record name beside a small chevrons button in the top bar, and a dropdown of names with no search, groups or thumbnails; the record's own page tabs come with it"
+        },
+        {
           "name": "ContextColumn",
-          "props": "stats, statsTitle?, statsInfo?, detail?, ariaLabel?",
-          "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane"
+          "props": "stats?, statsTitle?, statsInfo?, detail?, title?, subtitle?, onClose?, children?, documentPane?, ariaLabel?",
+          "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane; on a record page, the one opened item (title, close, an inner scroll) and its DocumentPane, in the column's place or beside it once the page's row has room"
         },
         {
           "name": "ListShell",
