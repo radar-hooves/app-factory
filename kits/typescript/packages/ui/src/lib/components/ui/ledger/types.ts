@@ -87,7 +87,15 @@ export interface ListColumn<R> {
  * order; the balance is always last, and off until ticked. Every other key is
  * the module's, in its order.
  */
-export type LedgerColumn<R extends LedgerRow = LedgerRow> = ListColumn<R>;
+export interface LedgerColumn<R extends LedgerRow = LedgerRow> extends ListColumn<R> {
+	/**
+	 * Controls after the column's value in each row, the ledger's own cells
+	 * included: a payee's "Show only / Hide". Drawn `pointer-events-auto`, so
+	 * a click lands on a control and not on the row; on a phone, only the
+	 * title's are drawn, after its chips.
+	 */
+	actions?: Snippet<[R]>;
+}
 
 /** The viewer's own choices, which the consumer persists. */
 export interface LedgerPreferences {

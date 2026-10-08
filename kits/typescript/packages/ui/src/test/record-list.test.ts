@@ -210,3 +210,39 @@ describe('list layout by the list’s own width', () => {
 		expect(listLayout(0)).toBe('narrow');
 	});
 });
+
+describe('RecordList: a cell follows its row', () => {
+	const figures = (c: HTMLElement) =>
+		[...c.querySelectorAll<HTMLElement>('[data-probe="figure"]')].map((s) => s.textContent);
+
+	it('redraws a cell of the consumer’s own markup when the rows are replaced by new objects', async () => {
+		const { container, rerender } = render(Harness, { props: { rows: ROWS, figureCell: true } });
+		expect(figures(container)).toEqual(['812000', '575000', '430000', '698000']);
+		await rerender({ rows: ROWS.map((r) => ({ ...r, value: r.value + 1 })), figureCell: true });
+		expect(figures(container)).toEqual(['812001', '575001', '430001', '698001']);
+	});
+
+	it('redraws a cell when a row’s figure is changed in place', async () => {
+		const { container } = render(Harness, { props: { rows: ROWS, figureCell: true, mutable: true } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Bump' }));
+		expect(figures(container)).toEqual(['812001', '575001', '430001', '698001']);
+	});
+
+	it.each(['phone', 'narrow', 'wide'] as const)('redraws a grouped, sorted %s list, text and cell alike', async (layout) => {
+		const props = { figureCell: true, grouped: true, layout, totalLabel: 'All' };
+		const { container, rerender } = render(Harness, { props: { rows: ROWS, ...props } });
+		const next = ROWS.map((r) => ({ ...r, value: r.value + 1 }));
+		await rerender({ rows: next, ...props });
+		expect(container.textContent).toContain('$812,001');
+		if (layout !== 'phone') expect(figures(container)).toContain('812001');
+		expect(container.textContent).not.toContain('$812,000');
+	});
+
+	it('redraws under a sort the viewer chose, rows reordered by the new figures', async () => {
+		const props = { figureCell: true };
+		const { container, rerender } = render(Harness, { props: { rows: ROWS, ...props } });
+		await fireEvent.click(screen.getByRole('button', { name: /Value/ }));
+		await rerender({ rows: ROWS.map((r) => ({ ...r, value: 1_000_000 - r.value })), ...props });
+		expect(figures(container)).toEqual(['570000', '425000', '302000', '188000']);
+	});
+});

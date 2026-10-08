@@ -22,6 +22,8 @@
 		linked = false,
 		opening = false,
 		withCell = false,
+		figureCell = false,
+		mutable = false,
 		title = 'Owned properties'
 	}: {
 		rows: Row[];
@@ -34,9 +36,13 @@
 		linked?: boolean;
 		opening?: boolean;
 		withCell?: boolean;
+		figureCell?: boolean;
+		mutable?: boolean;
 		title?: string;
 	} = $props();
 
+	// svelte-ignore state_referenced_locally
+	let live = $state(mutable ? rows : []);
 	let prefs = $state<Partial<RecordListPreferences>>();
 	let emitted = $state<RecordListPreferences[]>([]);
 	let open = $state<Row['id'] | null>(null);
@@ -57,13 +63,21 @@
 	];
 </script>
 
+{#snippet figure(r: Row)}
+	<span data-probe="figure">{r.value}</span>
+{/snippet}
+
 {#snippet run(r: Row)}
 	<button type="button" onclick={() => (ran = String(r.id))}>Run {r.title}</button>
 {/snippet}
 
 <RecordList
-	{rows}
-	columns={withCell ? [...DEFAULT, { key: 'run', label: 'Run', cell: run }] : (columns ?? DEFAULT)}
+	rows={mutable ? live : rows}
+	columns={figureCell
+		? [...DEFAULT, { key: 'figure', label: 'Figure', cell: figure }]
+		: withCell
+			? [...DEFAULT, { key: 'run', label: 'Run', cell: run }]
+			: (columns ?? DEFAULT)}
 	{layout}
 	{head}
 	{totalLabel}
@@ -77,5 +91,6 @@
 	bind:preferences={prefs}
 	onPreferencesChange={(next) => emitted.push(next)}
 />
+<button type="button" onclick={() => live.forEach((r) => r.value++)}>Bump</button>
 <output data-probe="emitted">{JSON.stringify(emitted)}</output>
 <output data-probe="ran">{ran}</output>

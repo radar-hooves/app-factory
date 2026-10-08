@@ -427,6 +427,7 @@
 
 	const money = (value: number | string) => ledgerMoney(value, currency, locale);
 	const number = (n: number) => n.toLocaleString(locale);
+	const titleColumn = $derived(resolved.find((c) => c.key === 'title'));
 	const count = (n: number) => `${number(n)} ${n === 1 ? noun[0] : noun[1]}`;
 	const income = (value: number | string | null | undefined) => cents(value) > 0;
 	/** Green for money in; a conversion is neither in nor out, so plain. */
@@ -500,6 +501,7 @@
 		{#if c.key === 'date'}
 			<span class={cn(CELL, through, 'text-muted-foreground self-center tabular-nums')} {style}>
 				{ledgerDate(r.date, WIDE)}
+				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 			</span>
 		{:else if c.key === 'title'}
 			<span
@@ -514,6 +516,7 @@
 					<span class="min-w-0 truncate">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
 					{@render chip(r)}
+					{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 				</span>
 				{#if r.note || r.origins}
 					<span class="text-muted-foreground flex min-w-0 items-center gap-2 text-xs font-normal">
@@ -535,18 +538,22 @@
 				data-slot="ledger-amount"
 			>
 				{money(r.amount)}
+				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 			</span>
 		{:else if c.key === 'balance'}
 			<span class={cn(CELL, END, through, 'self-center tabular-nums')} {style}
-				>{balanceText(r)}</span
+				>{balanceText(r)}
+				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}</span
 			>
 		{:else if c.cell}
 			<span class={cn(CELL, through, 'flex items-center self-center')} {style}
-				>{@render c.cell(r)}</span
+				>{@render c.cell(r)}
+				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}</span
 			>
 		{:else}
 			<span class={cn(CELL, through, 'self-center', c.align === 'end' && END)} {style}>
 				{c.text?.(r) ?? ''}
+				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 			</span>
 		{/if}
 	{/each}
@@ -661,6 +668,7 @@
 					<span class="min-w-0 truncate font-medium">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
 					{@render chip(r)}
+					{#if titleColumn?.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render titleColumn.actions(r)}</span>{/if}
 				</span>
 				{#if two || r.origins}
 					<span class="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">

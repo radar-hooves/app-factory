@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.8] - 2026-10-08
+
+### Added
+
+- `LedgerColumn.actions`: a snippet of controls drawn after the column's value in every row, the ledger's own title, date, amount and balance cells included (on a phone, the title's). Controls take the click, not the row. For per-value filter actions such as a payee's "Show only / Hide". Asked for by godswood, via the master-project orchestrator.
+
+### Tests
+
+- `RecordList` cells are held to follow their row: replaced rows, in-place changes, grouped, sorted, every layout. The stale cell godswood met was not reproduced here (a cell reads its row through the keyed each and redraws), so no change was made to the list.
+
 ## [2026.10.7] - 2026-10-08
 
 ### Added

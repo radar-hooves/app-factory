@@ -20,6 +20,7 @@
 		layout = 'narrow',
 		withBulk = true,
 		withEditor = true,
+		withActions = false,
 		fyStart,
 		locale,
 		onAttachment,
@@ -32,6 +33,7 @@
 		layout?: 'phone' | 'narrow' | 'wide';
 		withBulk?: boolean;
 		withEditor?: boolean;
+		withActions?: boolean;
 		fyStart?: number;
 		locale?: string;
 		onAttachment?: (row: Row) => void;
@@ -66,9 +68,13 @@
 	<button type="button" onclick={() => (acted = `undo ${row.id}`)}>Undo</button>
 {/snippet}
 
+{#snippet only(row: Row)}
+	<button type="button" onclick={() => (acted = `only ${row.title}`)}>Only {row.title}</button>
+{/snippet}
+
 <Ledger
 	{rows}
-	{columns}
+	columns={withActions ? [...columns, { key: 'title', label: 'Payee', actions: only }] : columns}
 	{layout}
 	{fyStart}
 	{locale}

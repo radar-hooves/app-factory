@@ -765,3 +765,17 @@ describe('Ledger: its bar is the ListToolbar, and wide columns wait for width', 
 		expect(wide.heads()).toContain('Dwelling');
 	});
 });
+
+describe('Ledger: a column’s actions', () => {
+	it.each(['narrow', 'phone'] as const)('draws a title column’s actions on each row on a %s list', (layout) => {
+		render(Harness, { props: { rows: ROWS, layout, withActions: true } });
+		expect(screen.getAllByRole('button', { name: /^Only / })).toHaveLength(ROWS.length);
+	});
+
+	it('acts without opening the row', async () => {
+		const { container } = render(Harness, { props: { rows: ROWS, withActions: true } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Only Ray White' }));
+		expect(container.querySelector('[data-probe="acted"]')!.textContent).toBe('only Ray White');
+		expect(container.querySelector('[data-probe="open"]')!.textContent).toBe('');
+	});
+});
