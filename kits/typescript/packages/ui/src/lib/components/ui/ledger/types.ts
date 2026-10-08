@@ -75,8 +75,12 @@ export interface ListColumn<R> {
 	/**
 	 * A cell of the module's own markup. On a row that opens, a click passes
 	 * through the cell to the row; a control inside takes `pointer-events-auto`.
+	 * It gets the column too, so one snippet can serve columns built at runtime,
+	 * telling them apart by `key`. Read the row's figures in the snippet's
+	 * markup, which follows the row when it changes; a `createRawSnippet` draws
+	 * once at mount and goes stale.
 	 */
-	cell?: Snippet<[R]>;
+	cell?: Snippet<[R, ListColumn<R>]>;
 }
 
 /**

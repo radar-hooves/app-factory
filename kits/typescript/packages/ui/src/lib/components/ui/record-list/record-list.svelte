@@ -220,7 +220,7 @@
 </script>
 
 {#snippet value(c: (typeof shown)[number], r: R)}
-	{#if c.cell}{@render c.cell(r)}{:else}{c.text?.(r) ?? ''}{/if}
+	{#if c.cell}{@render c.cell(r, c)}{:else}{c.text?.(r) ?? ''}{/if}
 {/snippet}
 
 {#snippet flags(r: R, all: boolean)}

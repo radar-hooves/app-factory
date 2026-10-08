@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.10] - 2026-10-08
+
+### Changed
+
+- **`ListColumn.cell` now gets the column as well as the row**: `Snippet<[R, ListColumn<R>]>`, in both the Ledger and the RecordList. One markup snippet can serve columns built at runtime (per year, per deduction), telling them apart by `column.key`, and it follows the row when its figures change. A `createRawSnippet` cell draws once at mount and stays stale (Svelte calls its `render` once; only `setup` reacts), so a runtime column uses the markup form. Existing one-argument cells are unchanged. Asked for by godswood, via the master-project orchestrator.
+
 ## [2026.10.9] - 2026-10-08
 
 ### Added

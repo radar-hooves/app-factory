@@ -547,7 +547,7 @@
 			>
 		{:else if c.cell}
 			<span class={cn(CELL, through, 'flex items-center self-center')} {style}
-				>{@render c.cell(r)}
+				>{@render c.cell(r, c)}
 				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}</span
 			>
 		{:else}
