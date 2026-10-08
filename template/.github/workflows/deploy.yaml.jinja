@@ -6,8 +6,10 @@ name: Deploy
 #
 #   checks  python-ci and frontend-ci, every deploy: neither runs on a push or
 #           a PR, so a branch is untested unless someone dispatched it by hand.
-#   build   Buildx on the runner's persistent builder cache
-#           (radar-hooves/master-project docker-image-simple.yaml).
+#   build   image-verify builds, scans and smoke-probes beside the checks;
+#           deploy rebuilds from the runner's warm Buildx layer cache and
+#           pushes (radar-hooves/master-project docker-image-simple.yaml,
+#           mode verify then push).
 #   smoke   `.github/image-smoke.sh`, the app-owned probe.
 #   deploy  Watchtower pulls `:latest`; the image migrates its database as it
 #           starts.
@@ -42,8 +44,39 @@ jobs:
     permissions:
       contents: read
 
+  # Build, scan and smoke-probe beside the checks, pushing nothing; `deploy`
+  # then rebuilds from the runner's warm layer cache and pushes. Runs on any
+  # ref, so a workflow_dispatch from a branch proves the image before a merge.
+  image-verify:
+    uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
+    # packages: write because the golden workflow asks for it (its default
+    # registry is ghcr.io); a caller granting less fails to start.
+    permissions:
+      contents: read
+      packages: write
+    with:
+      image-name: {{ project_name }}
+      # JSON array of labels, as the reusable's own `runner` input takes it.
+      runner: '{{ runner_labels }}'
+      # The household registry, not the reusable's ghcr.io default; the push
+      # credential stays on the runner host.
+      registry: {{ registry_host }}
+      registry-credential-file: {{ registry_credential_file }}
+      # The commit is the version: no git tag, no pyproject version.
+      tag: {% raw %}${{ github.sha }}{% endraw %}
+      # The household private-index read credential, mounted into the build as a
+      # BuildKit secret (never a build arg) so it stays out of image history.
+      # Passed by every app: the Dockerfile's mount is optional, so an app with
+      # only public dependencies mounts a file `uv` never reads.
+      build-secret-files: |
+        netrc=/run/github-runner/devpi-read.netrc
+      # The app-owned probe (canonical-app-shape.md §Sanctioned per-app files);
+      # $IMAGE is the local tag of the image just built.
+      smoke-command: bash .github/image-smoke.sh
+      mode: verify
+
   deploy:
-    needs: [python-ci, frontend-ci]
+    needs: [python-ci, frontend-ci, image-verify]
     if: {% raw %}${{ success() && github.ref == 'refs/heads/main' }}{% endraw %}
     uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     # packages: write because the golden workflow asks for it (its default
@@ -73,3 +106,4 @@ jobs:
       # The go-live: Watchtower pulls the :latest just pushed now, not at its
       # scheduled poll; the token stays on the runner host.
       watchtower-url: {{ watchtower_url }}
+      mode: push
