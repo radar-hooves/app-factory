@@ -33,7 +33,8 @@ const STAMPED_ROUTES = [
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {
-	test(`the factory's ${path} renders inside the app's shell${path === '/workspace' ? ' @smoke' : ''}`, async ({ page }) => {
+	const smoke = path === '/workspace' ? ' @smoke' : '';
+	test(`the factory's ${path} renders inside the app's shell${smoke}`, async ({ page }) => {
 		await page.goto(path);
 
 		await expect(

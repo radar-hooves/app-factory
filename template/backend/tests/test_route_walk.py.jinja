@@ -122,7 +122,6 @@ async def test_an_account_admitted_only_to_a_room_reaches_its_own_record_and_not
     assert (await client.get("/api/users/", headers=admitted)).status_code == 200
 
 
-
 async def test_an_account_holding_no_entitlement_is_refused_the_people(client: AsyncClient) -> None:
     """Refused, so an account the identity provider admitted without a grant (an invited reviewer, an outpost forwarding no header) never lists everyone. The picker's people hold a non-room entitlement."""
     bare = {"x-authentik-uid": "no-grants", "x-authentik-username": "no-grants", "x-authentik-entitlements": ""}

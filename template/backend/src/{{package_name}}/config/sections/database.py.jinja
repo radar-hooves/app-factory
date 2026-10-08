@@ -72,9 +72,15 @@ class DatabaseSettings(VendedSettings):
     # Set per app as `<APP>_DB_POOL_SIZE` and `<APP>_DB_MAX_OVERFLOW` (the only
     # names these answer to), in the deployment's environment block in its
     # committed compose file, like the app's other settings.
-    pool_size: int = Field(default=5, ge=1, validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_POOL_SIZE")
+    pool_size: int = Field(
+        default=5,
+        ge=1,
+        validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_POOL_SIZE",
+    )
     max_overflow: int = Field(
-        default=10, ge=0, validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_MAX_OVERFLOW"
+        default=10,
+        ge=0,
+        validation_alias="{{ project_name | upper | replace('-', '_') }}_DB_MAX_OVERFLOW",
     )
 
     @property
