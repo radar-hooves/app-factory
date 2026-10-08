@@ -2,6 +2,18 @@
   "_note": "SEED — the ONLY hand-authored input to the component map. It carries the one thing a machine cannot derive from source: which SITUATION each composed component is the answer to (you cannot read 'a share of a bounded whole' out of arc-gauge.svelte). Everything else — the export name, the import path, the real prop list, and whether every shipped component is accounted for — is derived from source by generate-registry.mjs, which regenerates registry/component-map.{md,json} on every build (the outputs are gitignored like dist/ and shipped via package.json 'files'). The build FAILS if any shipped component is left out of this file, so a new component cannot ship unmapped: classify it under a situation, or name it a primitive, or the build is red. Props here are validated against the component's real $props(); a trailing '?' just marks a prop optional for the reader and is stripped before validation. A component that spreads ...rest onto another component of this package accepts that component's props too, and they validate the same way — FormButton is Button with the type fixed.",
   "situations": [
     {
+      "key": "resizable-panel",
+      "title": "A side panel the user can widen or narrow",
+      "description": "An app's own sidebar or list pane that needs a drag edge: pointer, arrow keys, double-click reset, remembered width. AppShell's rail already has it.",
+      "components": [
+        {
+          "name": "ResizeHandle",
+          "props": "width?, dragging?, min?, max?, minContent?, step?, snap?, onsnap?, storageKey?, label?",
+          "insteadOf": "a hand-written pointer-drag and localStorage width on your own <aside>"
+        }
+      ]
+    },
+    {
       "key": "single-figure",
       "title": "A single labelled figure",
       "description": "One headline metric that earns a tile — a figure with a label, an optional unit, and the state of the thing it measures.",

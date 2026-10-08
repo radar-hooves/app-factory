@@ -968,6 +968,7 @@
 		top: 0;
 		height: 100dvh;
 		width: var(--ds-shell-rail-width);
+		max-width: 50%;
 		transition: width 200ms ease;
 	}
 
@@ -1038,28 +1039,23 @@
 		transition: none;
 	}
 
-	/* The resize handle: a 6px grab strip astride the rail's right edge, md+
-	   only, showing the border colour under the pointer and keyboard focus. */
-	.ds-shell-rail-handle {
-		display: none;
+	/* The resize handle (<ResizeHandle>): a 6px grab strip astride the right
+	   edge of the panel it is the last child of, showing the primary colour
+	   under the pointer and keyboard focus. The panel must be positioned. */
+	.ds-resize-handle {
+		position: absolute;
+		inset-block: 0;
+		right: -3px;
+		width: 6px;
+		cursor: col-resize;
+		z-index: 1;
+		touch-action: none;
 	}
-	@media (min-width: 48rem) {
-		.ds-shell-rail-handle {
-			display: block;
-			position: absolute;
-			inset-block: 0;
-			right: -3px;
-			width: 6px;
-			cursor: col-resize;
-			z-index: 1;
-			touch-action: none;
-		}
-		.ds-shell-rail-handle:hover,
-		.ds-shell-rail-handle:focus-visible {
-			background: var(--ds-color-primary);
-			opacity: 0.4;
-			outline: none;
-		}
+	.ds-resize-handle:hover,
+	.ds-resize-handle:focus-visible {
+		background: var(--ds-color-primary);
+		opacity: 0.4;
+		outline: none;
 	}
 
 	/* The content measure: the shell's content box is ONE element in four

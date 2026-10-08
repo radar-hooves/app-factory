@@ -4680,6 +4680,53 @@ for (const [label, viewport, theme, scale, rtl] of [
 	await context.close();
 }
 
+// Resizable sidebars (ResizeHandle): a drag moves the edge, the width survives
+// a reload, a double-click resets, and the ceiling is the content beside the
+// panel, so it holds at 1280 and at 1920. jsdom has no layout; only an engine
+// proves the edge actually lands under the pointer.
+for (const [label, viewport] of [['1280', { width: 1280, height: 800 }], ['1920', { width: 1920, height: 1080 }]]) {
+	for (const [surface, panel, handle, key] of [
+		['resize', '[data-probe="side"]', '[role="separator"]', 'harness-side-width'],
+		['overflow', '.ds-shell-rail', '[data-testid="ds-rail-resize"]', 'ds-shell-rail-width']
+	]) {
+		const { context, page, errors } = await open(`surface=${surface}`, viewport);
+		// The rail transitions its width over 200ms; read it settled.
+		const width = async () => (await page.waitForTimeout(300), page.locator(panel).evaluate((el) => Math.round(el.getBoundingClientRect().width)));
+		const contentWidth = () =>
+			page.evaluate(() => {
+				const c = document.querySelector('[data-probe="content"], [data-slot="app-shell-content"]');
+				return Math.round(c.getBoundingClientRect().width);
+			});
+		const drag = async (dx) => {
+			const box = await page.locator(handle).boundingBox();
+			const y = box.y + box.height / 2;
+			const x = box.x + box.width / 2;
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x + dx, y, { steps: 6 });
+			await page.mouse.up();
+		};
+		const at = `${surface} @${label}`;
+		const start = await width();
+		await drag(60);
+		const wider = await width();
+		check(`resize: drag widens the panel (${at})`, wider === start + 60, `${start} → ${wider}`);
+		await drag(2000);
+		const widest = await width();
+		check(`resize: ceiling holds (${at})`, widest === 420 && (await contentWidth()) >= 480, `panel ${widest}, content ${await contentWidth()}`);
+		await page.reload({ waitUntil: 'load' });
+		check(`resize: width survives a reload (${at})`, (await width()) === widest, `${await width()} after reload`);
+		check(`resize: aria-valuenow tracks (${at})`, (await page.locator(handle).getAttribute('aria-valuenow')) === String(widest), 'separator reports the width');
+		await page.locator(handle).dblclick();
+		check(`resize: double-click resets (${at})`, (await width()) === start && (await page.evaluate((k) => localStorage.getItem(k), key)) === null, `${await width()} vs ${start}, key cleared`);
+		await page.locator(handle).focus();
+		await page.keyboard.press('ArrowRight');
+		check(`resize: arrow key nudges (${at})`, (await width()) === start + 16, `${await width()} vs ${start + 16}`);
+		check(`resize: no page errors (${at})`, errors.length === 0, `${errors.length}`);
+		await context.close();
+	}
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();

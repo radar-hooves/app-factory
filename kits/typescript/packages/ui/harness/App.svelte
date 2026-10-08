@@ -21,7 +21,10 @@
 	import Toaster from '../dist/components/ui/sonner/sonner.svelte';
 	import { toast } from 'svelte-sonner';
 	let hostClipboard = $state('');
+	let sideWidth = $state<number | null>(null);
+	let sideDragging = $state(false);
 	import AppShell from '../dist/components/ui/app-shell/app-shell.svelte';
+	import ResizeHandle from '../dist/components/ui/resize-handle/resize-handle.svelte';
 	import AppNav from '../dist/components/ui/app-shell/app-nav.svelte';
 	import CommandPalette from '../dist/components/ui/command-palette/command-palette.svelte';
 	import LoadingState from '../dist/components/ui/loading-state/loading-state.svelte';
@@ -1091,6 +1094,19 @@
 				</Command.Group>
 			</Command.List>
 		</Command.Dialog>
+	</div>
+{:else if surface === 'resize'}
+	<!-- An app's own sidebar (Bragi's shape), not AppShell: the handle is the
+	     last child of a positioned aside, the row is the aside's parent. -->
+	<div style="display:flex;height:100vh">
+		<aside
+			data-probe="side"
+			style="position:relative;flex:none;width:{sideWidth ?? 248}px"
+		>
+			Sidebar
+			<ResizeHandle bind:width={sideWidth} bind:dragging={sideDragging} storageKey="harness-side-width" />
+		</aside>
+		<main data-probe="content" style="flex:1;min-width:0">Content</main>
 	</div>
 {:else if surface === 'avatar'}
 	<div class="flex items-center gap-4 p-8">

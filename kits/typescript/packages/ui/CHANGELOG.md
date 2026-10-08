@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.9] - 2026-10-08
+
+### Added
+
+- **`ResizeHandle`** (`@poodle64/ui/resize-handle`): the rail's drag edge for an app whose sidebar is its own element (Bragi). Last child of a positioned panel; `bind:width` (px, `null` = the panel's default) and `bind:dragging`, `min`/`max` (200/420), `minContent` (480: the ceiling is the row width minus this, so the content beside the panel never breaks), `step`, `snap` + `onsnap`, `storageKey` (localStorage, try/catch; omit it to store nothing), `label`. A focusable `role="separator"` with `aria-valuenow/min/max`; arrows nudge, Home or double-click resets, End takes the maximum. Asked for by Bragi, via the master-project orchestrator.
+
+### Changed
+
+- AppShell's rail uses `ResizeHandle` instead of its own copy (same behaviour and storage key), is capped at half its row, and its ceiling now follows the content beside it.
+
 ## [2026.10.8] - 2026-10-08
 
 ### Added
