@@ -32,6 +32,12 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 
 The owned set is what the skeleton renders minus copier's `_skip_if_exists`. An app customises by mounting (calling a kit where its own setup wants it), configuring (its answers: `frontend_port`, `bundle_identifier`, `linux_cargo_args`, `dark_first`) and adding (its own modules, routes, workflows, and a `.gitignore` inside any directory only it has).
 
+## Signing verification — 08/10/2026
+
+The 70-line signing runner's ten contract tests pass. The factory self-test's full Python kit suites, rendered backend and frontend gates pass with CI's installs. A committed skeleton compiled on huginn in its devShell using Bragi's existing lockfile inputs; fresh input downloads were blocked by Nix cache transport failures. Native signing then returned `errSecInternalComponent` for the existing certificate and the runner stopped the build: no `.app` bundle was produced. A successful signature/Authority and stable designated requirement across rebuilds remain unproved until huginn authorises use of that signing key. Privacy-grant survival needs the apps' two-version drive test.
+
+The proposed shared desktop layer is `desktop-layer.md`; no app adoption is included here.
+
 ## Not built, and why
 
 - **Release and the updater.** The two pipelines disagree on the one thing that matters: Thoth builds on GitHub's runners with apt and ships a Linux AppImage that self-updates; Bragi builds on huginn and atlas inside its flake, where linuxdeploy cannot bundle an AppImage, and has no updater. One reusable release workflow means choosing one, and Bragi's updater needs a signing key the operator mints.
