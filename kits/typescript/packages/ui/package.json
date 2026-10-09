@@ -124,5 +124,5 @@
 		"harness:build": "vite build --config harness/vite.config.ts && tailwindcss -i harness/harness.css -o harness/dist/app.css --minify",
 		"harness:serve": "python3 -m http.server 4180 --directory harness/dist"
 	},
-	"packageManager": "pnpm@10.28.0"
+	"packageManager": "pnpm@10.34.6"
 }

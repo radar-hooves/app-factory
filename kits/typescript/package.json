@@ -10,12 +10,12 @@
 		"dev": "pnpm --filter @poodle64/console run dev",
 		"test": "pnpm -r run test"
 	},
-	"packageManager": "pnpm@10.28.0",
+	"packageManager": "pnpm@10.34.6",
 	"pnpm": {
 		"overrides": {
 			"devalue": "5.9.4",
 			"fast-uri": "3.1.8",
-			"nanoid": "3.3.18",
+			"nanoid": "3.3.20",
 			"source-map-js": "1.2.2"
 		},
 		"//overrides": "fast-uri (transitive via ajv): CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172, CVE-2026-84292, CVE-2026-84394. nanoid (transitive via postcss): CVE-2026-67213. devalue (transitive via svelte, @sveltejs/kit): fixed in 5.9.3. source-map-js (transitive via postcss, css-tree, @tailwindcss/node): CVE-2026-93749."

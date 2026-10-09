@@ -62,7 +62,7 @@
 	},
 	"peerDependencies": {
 		"svelte": "^5.54.0",
-		"@poodle64/design-tokens": "^2026.8.1",
+		"@poodle64/design-tokens": "^2026.9.2",
 		"@lucide/svelte": "^1.7.0",
 		"marked": "^18.0.11",
 		"isomorphic-dompurify": "^3.23.0",
@@ -96,5 +96,5 @@
 		"prepublishOnly": "pnpm run build",
 		"screenshots": "node scripts/screenshots.mjs"
 	},
-	"packageManager": "pnpm@10.28.0"
+	"packageManager": "pnpm@10.34.6"
 }
