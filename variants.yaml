@@ -27,5 +27,5 @@ eight:
   root-inventory:GOAL.md: "the trading programme's charter, the app's own deliverable"
 earworm:
   root-inventory:plugins: "a C# Jellyfin server plugin, a language the factory does not model"
-cadmus:
+caspo:
   root-inventory:scripts: "Python domain tooling the app's pre-commit tail runs"

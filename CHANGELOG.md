@@ -6,8 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.14] - 2026-10-10
+
+An app's display name can be an acronym. Need: cadmus, renamed CASPO, via master-project's orchestrator (the Cadmus-to-CASPO rename programme), 10/10/2026.
+
 ### Changed
 
+- **`project_title` is now an asked question, defaulting to the derived title.** `caspo` rendered "Caspo" in the browser tab and the shell brand, and a slug cannot say an acronym. As a hidden `when: false` question the value ignored the app's answers file and was re-derived on every `copier update`, so a hand correction was undone by the next update (measured on a scratch stamp: an answer of `CASPO` came back "Caspo"). Asked, copier keeps the app's answer across updates. Every other app's title is unchanged: its first update records the derived value in `.copier-answers.yml`. An app that needs another spelling sets `project_title: CASPO` there, or passes `--data project_title=CASPO` at the first stamp.
+- **`variants.yaml` and the console lab's profile name the app `caspo` / CASPO.**
 - **A fresh stamp is already in the shape the app's own formatters leave it.** `database.py` (explicit trailing commas, so ruff-format keeps the layout whatever the app's name length), `test_route_walk.py` (a stray blank line) and `shell.spec.ts` (the `@smoke` title built outside the call) no longer change under the app's pre-commit, so a re-stamp commits clean. The factory self-test now runs `ruff format --check` and `prettier --check` on its scratch render and fails if either would change a file. Need: godswood via master-project's orchestrator.
 - **The stamped `deploy.yaml` splits the image build in two.** An `image-verify` job (`mode: verify`: build, Trivy, smoke-probe, no push) runs beside python-ci and frontend-ci with no `needs`; `deploy` (`mode: push`, `needs` gains `image-verify`) rebuilds from the runner's warm layer cache and pushes. Merge to live on godswood: 15 minutes against about 38. An app takes it on its next re-stamp; godswood's `.canonical-exceptions` line for `deploy.yaml` can then go. Need: master-project's orchestrator; operator ruling 08/10/2026.
 - **A stamped app's browser specs carry `@smoke`, and the config's port is movable.** `shell.spec.ts` tags home (the search affordance) and `/workspace` rendering inside the shell, and `workspaces.spec.ts` tags its seat-chooser flow, so sign-in and home are always in the smoke set: `playwright test --grep @smoke` runs those three. `@playwright/test` is pinned exactly (`1.58.2`), the form a CI caller's `playwright-version` must equal. `<APP>_E2E_PORT` moves the config's Vite port off the stamped default for a second suite on one host. Need: godswood, whose 273-test suite took 32 minutes a push; operator ruling 08/10/2026.

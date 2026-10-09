@@ -320,13 +320,13 @@ export const PROFILES: AppProfile[] = [
 	{
 		// Every section bare — the app with nothing contextual anywhere, which is
 		// what a rail zone has to disappear cleanly for.
-		id: 'cadmus',
+		id: 'caspo',
 		identity: { username: 'poodle64', display_name: 'Operator', email: null, workspace: 'Defence', role: 'member', entitlements: [] },
-		name: 'Cadmus',
+		name: 'CASPO',
 		mark: '✦',
 		hue: 250,
 		who: 'Operator',
-		searchLabel: 'Search Cadmus',
+		searchLabel: 'Search CASPO',
 		sections: [
 			{ label: 'Workbench', icon: '▦', crumb: ['Workbench'], content: 'tiles' },
 			{ label: 'Library', icon: '▥', crumb: ['Library'], content: 'table' },
