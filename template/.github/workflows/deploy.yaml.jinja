@@ -20,7 +20,7 @@ on:
   push:
     branches: [main]
     # No path filter: an app's Dockerfile tail copies in paths the factory
-    # cannot enumerate (cadmus's docs/modules), so any list here silently
+    # cannot enumerate (an app's docs/modules, say), so any list here silently
     # misses one (app-factory#16). Queues behind the concurrency group below
     # rather than racing, so the cost is an extra build, never a missed one.
   workflow_dispatch:

@@ -174,7 +174,7 @@ on it fires once and never again.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The ask route            | `ask({ endpoint })`: a room's `/api/rooms/{id}/ask`, a caller's `/api/caller/ask`                                                                                                           |
 | Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collections[]`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
-| Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (cadmus: `GET /api/sources/documents/{id}/content`) |
+| Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (caspo: `GET /api/sources/documents/{id}/content`) |
 | Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                         |
 | Asking a follow-up       | `onsuggest(question)`: ask it as a NEW turn. Without the handler the chips do not render at all — a chip that does nothing is worse than no chip                                            |
 | The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
@@ -277,7 +277,7 @@ and `outcome.costUsd` into the ONE line that already showed the duration:
 `Quick · 56 s · about A$0.34`. Both are opt-in the same way: pass `depth` to
 `Conversation`/`AgentTranscript` (it already has it, from `Turn.depth`) and a
 `formatCost(usd) => string` to price it in the host's own currency and words
-("about A$0.34"; cadmus converts USD to AUD with its own setting). Without
+("about A$0.34"; caspo converts USD to AUD with its own setting). Without
 `depth` the line renders exactly as before (`56.3s`). Without `formatCost`,
 or where `costUsd` is `0` (a local model), it shows depth and duration only,
 never a raw USD figure and never which model answered.
@@ -558,7 +558,7 @@ it was asked this afternoon.
 
 ### The system preamble
 
-A host prepends its own instruction to every question (cadmus sends
+A host prepends its own instruction to every question (caspo sends
 `{room.preamble}\n\n{question}`). `readerQuestion()` strips leading
 paragraphs addressed to the model before the question renders, so a
 colleague never sees it. Pass the question as it went on the wire; the
@@ -572,7 +572,7 @@ inside an app:
 ```ts
 import { createHistory, titleFrom } from '@poodle64/librarian/history';
 
-const history = createHistory('cadmus.rooms.defence-personnel');
+const history = createHistory('caspo.rooms.defence-personnel');
 history.load();
 ```
 

@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.15] - 2026-10-10
+
+The renamed app (cadmus is now caspo) is named as such in the design docs and the librarian README, and the stamped `deploy.yaml` no longer names a single app in its path-filter comment. Need: caspo, via master-project's orchestrator.
+
 ## [2026.10.14] - 2026-10-10
 
 An app's display name can be an acronym. Need: cadmus, renamed CASPO, via master-project's orchestrator (the Cadmus-to-CASPO rename programme), 10/10/2026.

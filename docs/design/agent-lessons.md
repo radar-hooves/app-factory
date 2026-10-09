@@ -2,7 +2,7 @@
 
 Status: **design, 30/09/2026.** Consumer: radar-hooves/godswood#840, on
 behalf of every app that runs a persona job (`docs/design/agent-jobs.md`) —
-Milton, Penny, cadmus's models, and a coming Taxpert.
+Milton, Penny, caspo's models, and a coming Taxpert.
 
 ## The need
 
