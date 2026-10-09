@@ -6,7 +6,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-## [2026.10.16] - 2026-10-10
+## [2026.10.17] - 2026-10-10
+
+The 2026.10.16 tag's verify step carried a stray `done` and failed on syntax; the wheels it uploaded are served, and 2026.10.17 is the tag that publishes green.
 
 ### Fixed
 

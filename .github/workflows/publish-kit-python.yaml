@@ -125,10 +125,3 @@ jobs:
               exit 1
             fi
           done
-            if curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}"; then
-              echo "verified: ${name} ${STAMP} served from poodle64/prod"
-            else
-              echo "::error::${name} ${STAMP} is not on poodle64/prod"
-              exit 1
-            fi
-          done
