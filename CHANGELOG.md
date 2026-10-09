@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.16] - 2026-10-10
+
+### Fixed
+
+- **"Publish kits/python" no longer reports a served wheel as missing.** Its verify step ran `curl | grep -q` under `pipefail`: grep exits on the first match, curl takes SIGPIPE, and the pipeline fails on a match, about one run in three against the live page (30 trials: 20 pass, 10 false failures). It now reads the page into a variable, then greps it, polling for up to 30s.
+- `agent-console.md` names `caspo` as the library's actor link.
+
 ## [2026.10.15] - 2026-10-10
 
 The renamed app (cadmus is now caspo) is named as such in the design docs and the librarian README, and the stamped `deploy.yaml` no longer names a single app in its path-filter comment. Need: caspo, via master-project's orchestrator.

@@ -108,11 +108,23 @@ jobs:
           set -euo pipefail
           for pkg in kits/python/*/; do
             name="$(basename "${pkg}")"
-            # devpi lists an upload on its simple page a moment after the POST returns.
+            # Read the page whole, then grep it: `curl | grep -q` under pipefail
+            # fails on a match whenever grep exits before curl finishes writing
+            # (SIGPIPE), about one run in three on this page. devpi also lists an
+            # upload a moment after the POST returns, hence the poll.
+            served=false
             for _ in $(seq 1 15); do
-              curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}" && break
+              page="$(curl -s "${INDEX_URL}+simple/${name}/")"
+              if grep -q "${name//-/_}-${STAMP}" <<<"${page}"; then served=true; break; fi
               sleep 2
             done
+            if "${served}"; then
+              echo "verified: ${name} ${STAMP} served from poodle64/prod"
+            else
+              echo "::error::${name} ${STAMP} is not on poodle64/prod"
+              exit 1
+            fi
+          done
             if curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}"; then
               echo "verified: ${name} ${STAMP} served from poodle64/prod"
             else
