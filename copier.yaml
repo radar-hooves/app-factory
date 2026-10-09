@@ -140,17 +140,10 @@ package_name:
   when: false
   default: "{{ project_name | replace('-', '_') }}"
 
-# The app's HUMAN name, for the two surfaces a person reads it on — the browser
-# tab and the shell's brand. Both once stamped `project_name`, so every app
-# shipped its kebab-case slug and four of nine were hand-corrected in one
-# surface but not the other. The default is derived (`mission-command` becomes
-# `Mission Command` in both places or in neither) and is right for nearly every
-# app. An acronym (`caspo` is CASPO) cannot be derived from a slug, so the
-# question is asked, which is the only way copier keeps an app's own answer
-# across `copier update`: a `when: false` question ignores the answers file and
-# re-derives, which is what reverted a hand correction. An app that needs
-# another spelling sets `project_title: CASPO` in its .copier-answers.yml, or
-# passes `--data project_title=CASPO` at the first stamp.
+# The display name for the browser tab and the shell brand. The default is
+# derived from project_name. It is asked because copier keeps only an asked
+# answer across `copier update`; set project_title (in .copier-answers.yml, or
+# `--data` at the first stamp) for an acronym, e.g. `CASPO`.
 project_title:
   type: str
   default: "{{ project_name | replace('-', ' ') | title }}"

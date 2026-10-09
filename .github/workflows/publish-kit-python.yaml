@@ -108,6 +108,11 @@ jobs:
           set -euo pipefail
           for pkg in kits/python/*/; do
             name="$(basename "${pkg}")"
+            # devpi lists an upload on its simple page a moment after the POST returns.
+            for _ in $(seq 1 15); do
+              curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}" && break
+              sleep 2
+            done
             if curl -s "${INDEX_URL}+simple/${name}/" | grep -q "${name//-/_}-${STAMP}"; then
               echo "verified: ${name} ${STAMP} served from poodle64/prod"
             else
