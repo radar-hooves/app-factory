@@ -10,10 +10,6 @@ name: kits/typescript
 # a push or a same-repo PR runs on atlas. This repo is PUBLIC and takes fork
 # PRs, so a fork's own code runs on a GitHub-hosted runner instead, as in
 # kit-rust.yaml.
-#
-# by-exception (2026-10-06): no ntfy-failure step. GitHub lends a private
-# repo's actions to private repos only, so this public one cannot load
-# master-project's; the red-CI digest reports a failed run on main.
 
 on:
   pull_request:

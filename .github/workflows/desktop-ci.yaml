@@ -14,10 +14,6 @@ name: desktop CI
 # A public app takes fork pull requests, and fork code never runs on the
 # household runner: a fork's jobs run on a GitHub-hosted runner instead, which
 # installs Nix first.
-#
-# by-exception (2026-10-06): no ntfy-failure step. GitHub lends a private
-# repo's actions to private repos only, and this public workflow runs for a
-# public app (Thoth); the red-CI digest reports a failed run on main.
 on:
   workflow_call:
     inputs:
