@@ -12,7 +12,8 @@
 # path is touched into an empty context under this app's own .dockerignore and
 # copied out of a FROM-scratch build, and any that arrive are image inputs. A
 # path list here would be a second .dockerignore, and an app's tail re-includes
-# paths no factory list can name (app-factory#16).
+# paths no factory list can name (app-factory#16). The Dockerfile, the ignore
+# file and deploy.yaml (what is built, how, and where it goes) ship on any change.
 #
 # Anything it cannot establish is a change: a wrong "true" costs one deploy, a
 # wrong "false" a change that never ships.
@@ -27,7 +28,7 @@ decide() {
 [ "$GITHUB_EVENT_NAME" = push ] || decide true "A ${GITHUB_EVENT_NAME} run always ships."
 
 # Re-running an old run moves its start, not its place in the list.
-base=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yaml/runs?branch=main&status=success&per_page=30" \
+base=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yaml/runs?branch=main&status=success&per_page=100" \
   --jq '[.workflow_runs[]] | max_by(.run_started_at) | .head_sha // empty') || base=
 [ -n "$base" ] || decide true "No earlier successful Deploy run on main to compare with."
 
@@ -43,7 +44,9 @@ ignore=.dockerignore
 [ ! -f Dockerfile.dockerignore ] || ignore=Dockerfile.dockerignore
 [ ! -f "$ignore" ] || cp "$ignore" "$probe/context/.dockerignore"
 for path in "${paths[@]}"; do
-  case "$path" in Dockerfile | .dockerignore | Dockerfile.dockerignore) decide true "$path changed." ;; esac
+  case "$path" in
+    Dockerfile | .dockerignore | Dockerfile.dockerignore | .github/workflows/deploy.yaml) decide true "$path changed." ;;
+  esac
   { mkdir -p "$probe/context/$(dirname -- "$path")" && : >"$probe/context/$path"; } 2>/dev/null ||
     decide true "$path cannot be laid out to probe."
 done

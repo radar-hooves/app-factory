@@ -88,7 +88,7 @@ def decide(repo: Path, live: str, event: str = "push") -> str:
                 "README.md": "more",
                 "CHANGELOG.md": "more",
                 ".claude/handoff.md": "next",
-                ".github/workflows/deploy.yaml": "on: push",
+                ".github/workflows/security.yaml": "on: push",
             },
             "false",
         ),
@@ -97,8 +97,9 @@ def decide(repo: Path, live: str, event: str = "push") -> str:
         ({"backend/src/app.py": None}, "true"),
         ({"Dockerfile": "FROM scratch\nCOPY . /\n"}, "true"),
         ({".dockerignore": TAIL}, "true"),
+        ({".github/workflows/deploy.yaml": "on: push"}, "true"),
     ],
-    ids=["docs-and-ci", "code", "app-re-include", "deletion", "dockerfile", "dockerignore"],
+    ids=["docs-and-ci", "code", "app-re-include", "deletion", "dockerfile", "dockerignore", "deploy-workflow"],
 )
 def test_a_push_ships_only_when_an_image_input_changed(
     app: tuple[Path, str], files: dict[str, str | None], changed: str
