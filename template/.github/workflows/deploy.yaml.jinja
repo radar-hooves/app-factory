@@ -4,6 +4,10 @@ name: Deploy
 # smoke-tests it, pushes `<commit sha>` and `:latest`, and asks Watchtower to
 # pull it. A rollback is a revert merged to main.
 #
+#   inputs  `.github/image-inputs.sh` asks BuildKit whether anything this push
+#           changed is in the image's build context; a push that changes
+#           nothing the image is built from skips everything below, and the
+#           run reads green with its jobs skipped. A dispatch always ships.
 #   checks  python-ci and frontend-ci, every deploy: neither runs on a push or
 #           a PR, so a branch is untested unless someone dispatched it by hand.
 #   build   image-verify builds, scans and smoke-probes beside the checks;
@@ -12,7 +16,8 @@ name: Deploy
 #           mode verify then push).
 #   smoke   `.github/image-smoke.sh`, the app-owned probe.
 #   deploy  Watchtower pulls `:latest`; the image migrates its database as it
-#           starts.
+#           starts. /api/system/health's `revision` is the last commit that
+#           changed the image, not necessarily main's head.
 #
 # security.yaml runs the security battery weekly and on a dependency PR, not
 # here.
@@ -20,9 +25,8 @@ on:
   push:
     branches: [main]
     # No path filter: an app's Dockerfile tail copies in paths the factory
-    # cannot enumerate (an app's docs/modules, say), so any list here silently
-    # misses one (app-factory#16). Queues behind the concurrency group below
-    # rather than racing, so the cost is an extra build, never a missed one.
+    # cannot enumerate, so any list here silently misses one (app-factory#16).
+    # The image-inputs job decides from the build context instead.
   workflow_dispatch:
 
 # A deploy is never cancelled mid-push; a newer merge queues behind it.
@@ -34,12 +38,37 @@ permissions:
   contents: read
 
 jobs:
+  image-inputs:
+    runs-on: {{ runner_labels }}
+    # actions: read to find the last successful run of this workflow.
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      changed: {% raw %}${{ steps.decide.outputs.changed }}{% endraw %}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every commit and tree, no blobs: the diff against the last live
+          # commit reads trees alone.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - id: decide
+        env:
+          GH_TOKEN: {% raw %}${{ github.token }}{% endraw %}
+        run: bash .github/image-inputs.sh
+
   python-ci:
+    needs: image-inputs
+    if: {% raw %}${{ needs.image-inputs.outputs.changed == 'true' }}{% endraw %}
     uses: ./.github/workflows/python-ci.yaml
     permissions:
       contents: read
 
   frontend-ci:
+    needs: image-inputs
+    if: {% raw %}${{ needs.image-inputs.outputs.changed == 'true' }}{% endraw %}
     uses: ./.github/workflows/frontend-ci.yaml
     permissions:
       contents: read
@@ -48,6 +77,8 @@ jobs:
   # then rebuilds from the runner's warm layer cache and pushes. Runs on any
   # ref, so a workflow_dispatch from a branch proves the image before a merge.
   image-verify:
+    needs: image-inputs
+    if: {% raw %}${{ needs.image-inputs.outputs.changed == 'true' }}{% endraw %}
     uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     # packages: write because the golden workflow asks for it (its default
     # registry is ghcr.io); a caller granting less fails to start.
@@ -76,8 +107,8 @@ jobs:
       mode: verify
 
   deploy:
-    needs: [python-ci, frontend-ci, image-verify]
-    if: {% raw %}${{ success() && github.ref == 'refs/heads/main' }}{% endraw %}
+    needs: [image-inputs, python-ci, frontend-ci, image-verify]
+    if: {% raw %}${{ success() && needs.image-inputs.outputs.changed == 'true' && github.ref == 'refs/heads/main' }}{% endraw %}
     uses: radar-hooves/master-project/.github/workflows/docker-image-simple.yaml@main
     # packages: write because the golden workflow asks for it (its default
     # registry is ghcr.io); a caller granting less fails to start.

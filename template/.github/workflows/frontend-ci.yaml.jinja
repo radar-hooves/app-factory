@@ -1,21 +1,8 @@
 name: Frontend CI
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
-#
-# A committed OpenAPI contract is a frontend input as much as any file under
-# frontend/. An app that checks its spec in and gates the generated TS types
-# against it does that gating HERE, in the unit suite — so a spec-only change,
-# where the backend contract is regenerated and docs/development/openapi.json is
-# touched but no file under frontend/ is, must still trigger this workflow or
-# stale types slip past on that PR. The path is inert for an app that commits no
-# such file: it simply never matches, which is why this is factory content
-# rather than the per-app exception an app was carrying for it. No app NAME in
-# this comment, deliberately: the parity gate rewrites an app's own name wherever
-# it appears, so naming one here hashes differently in that app than in every
-# other and the file reads as drift on an otherwise identical copy.
-#
-# On every feature branch, never on main, as python-ci.yaml says why.
-# Called by deploy.yaml once per go-live, or run by hand; never per push.
+# Called by deploy.yaml when a push to main changes an image input, or run by
+# hand; never per push.
 on:
   workflow_dispatch:
   workflow_call:

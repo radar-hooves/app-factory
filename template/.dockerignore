@@ -1,13 +1,12 @@
-# Git
+# Git, and CI: the runner reads .github/ from the checkout, never the build.
 .git
 .gitignore
 .gitattributes
+.github/
 
 # Documentation (not needed in image)
 docs/
-DESIGN.md
 *.md
-!README.md
 
 # IDE / Editor
 .idea/

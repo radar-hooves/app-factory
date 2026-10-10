@@ -34,6 +34,10 @@ export default defineConfig({
 	// vault, a container, a temp data root — names its teardown module in
 	// tests/e2e/app-web-server.ts, and `undefined` here is Playwright's "none".
 	globalTeardown: APP_WEB_SERVER.globalTeardown,
+	// A pull request runs the specs tagged @smoke; the nightly run and a dispatch
+	// run them all, and so does any run off CI. Read from the trigger, so an app's
+	// own E2E workflow needs no switch. A `--grep` on the command line overrides it.
+	grep: process.env.GITHUB_EVENT_NAME === 'pull_request' ? /@smoke/ : undefined,
 	timeout: CI ? 90_000 : 30_000,
 	expect: { timeout: CI ? 20_000 : 5_000 },
 	// Deliberately no CI retry: a retry turns a real intermittent failure into a green build.

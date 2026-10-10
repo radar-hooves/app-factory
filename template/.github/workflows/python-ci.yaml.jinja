@@ -1,10 +1,8 @@
 name: Python CI
 
 # Thin caller of the golden reusable (rules-library/core/ci-workflow-standard.md).
-# On every feature branch, never on main: a merge to main is the go-live, and
-# deploy.yaml runs this there only for a commit whose checked paths never passed
-# on a branch. It reads the `paths` below to decide, so they are the one list.
-# Called by deploy.yaml once per go-live, or run by hand; never per push.
+# Called by deploy.yaml when a push to main changes an image input, or run by
+# hand; never per push.
 on:
   workflow_dispatch:
   workflow_call:

@@ -6,6 +6,21 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.19] - 2026-10-10
+
+A push to main that changes nothing the image is built from no longer deploys, and a pull request's E2E run is the smoke set. Need: the operator (poodle64), via master-project's CI right-sizing lane: deploys became the estate's largest CI cost at the go-live, and about 600 PR E2E runs in 30 days found no product bug. Rulings of 08/10/2026 and 10/10/2026.
+
+### Changed
+
+- **The stamped `deploy.yaml` asks BuildKit whether the push changed an image input before anything else runs.** A new `image-inputs` job runs `.github/image-inputs.sh`, which diffs this commit against the last successful Deploy run on main, touches each changed path into an empty context under the app's own `.dockerignore` (its tail included), and copies them out of a `FROM scratch` build. Any path that arrives is an image input. If none arrives, python-ci, frontend-ci, image-verify and deploy are skipped and the run reads green. A changed `Dockerfile` or `.dockerignore`, a dispatch, no earlier successful run, or any step it cannot complete all ship. There is still no path list, so #16's miss stays closed. Replayed over the last 7 days of real runs: eight skips 79 of 169 deploys (about 160 runner-minutes a day), caspo 29 of 113 (about 55), godswood 13 of 79 (about 40). `/api/system/health`'s `revision` is now the last commit that changed the image, not necessarily main's head.
+- **`.dockerignore` excludes `.github/` and no longer re-includes the root `README.md`.** The build reads neither, so a push that changes only CI or the README ships nothing.
+- **`playwright.config.ts` runs only the `@smoke` specs when the run's trigger is a pull request.** The nightly run, a dispatch and a local run take the whole suite. Every app's own E2E workflow already triggers on pull request and nightly, so no app file changes; a `--grep` on an app's command line still wins. The factory's specs carry three `@smoke` tests, so a PR run is never empty.
+- python-ci's and frontend-ci's headers say when deploy.yaml calls them.
+
+### Added
+
+- `tests/deploy/` runs the gate against real BuildKit in the factory self-test.
+
 ## [2026.10.18] - 2026-10-10
 
 An agent job can be followed token by token. Need: godswood, via master-project's orchestrator (the Fat Controller run view rendered nothing for about a minute, then everything at once), 10/10/2026.

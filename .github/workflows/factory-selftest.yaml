@@ -41,6 +41,7 @@ on:
       - 'variants.yaml'
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
+      - 'tests/deploy/**'
       - 'kits/python/**'
       - 'kits/typescript/packages/ui/**'
       - 'pyproject.toml'
@@ -124,6 +125,9 @@ jobs:
 
       - name: Desktop signing runner — full contract suite
         run: nix shell nixpkgs#jq --command uv run --frozen pytest -q tests/desktop
+
+      - name: Stamped deploy — the image-input gate against BuildKit
+        run: uv run --frozen pytest -q tests/deploy
 
       - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike
