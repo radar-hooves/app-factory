@@ -120,6 +120,10 @@ shutdown a worker kills its own runs and settles them `failed`. An app that
 starts long jobs sets `GUNICORN_MAX_REQUESTS=0` (`gunicorn.conf.py`), or a
 worker recycle ends its runs every thousand requests.
 
+## Streaming
+
+`jobs.start(stream=True)` runs the CLI with `--include-partial-messages` (a column on the job, so every resume streams too) and a watcher sees text, thinking and tool-input deltas as they are written instead of whole messages. The deltas ride the same event log, not a process-local relay, because the watcher is usually on another worker (§Any worker). To keep that cheap, `jobs._Deltas` folds them into about four `stream_event` rows a second (consecutive deltas of one block concatenated; block starts kept, since they name a tool; signatures, empty thinking and message framing dropped), and the finished `assistant` message deletes the job's `stream_event` rows in the commit that records it. A job read after the fact holds whole messages only; a watcher renders each `stream_event` into the message in progress and replaces it when the `assistant` event lands. Off by default: a batch job nobody follows writes no deltas.
+
 ## Tenancy
 
 `AgentJob`/`AgentJobEvent` are `WorkspaceScoped` — a document belongs to a

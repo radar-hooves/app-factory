@@ -370,8 +370,26 @@ def stream_json_session(argv: list[str]) -> None:
             answer = _image_turn(session_id, text.removeprefix(IMAGE_TRIGGER))
         else:
             answer = _echo(text, argv)
+        if "--include-partial-messages" in argv:
+            _stream_text(session_id, answer)
         _emit(_assistant(session_id, [{"type": "text", "text": answer}]))
         _emit(_result(session_id, answer, argv))
+
+
+def _stream_text(session_id: str, answer: str) -> None:
+    """The deltas `--include-partial-messages` prints before a whole message: a word each, a
+    signature and an empty thinking delta among them (both ignorable), then the block's stop."""
+
+    def emit(inner: dict[str, object]) -> None:
+        _emit({"type": "stream_event", "event": inner, "session_id": session_id})
+
+    emit({"type": "message_start"})
+    emit({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+    emit({"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig"}})
+    emit({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": ""}})
+    for word in re.findall(r"\S+\s*", answer):
+        emit({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": word}})
+    emit({"type": "content_block_stop", "index": 0})
 
 
 def main() -> None:

@@ -49,6 +49,7 @@ import json
 import logging
 import re
 import shutil
+import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -62,7 +63,7 @@ from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import jobs_models, lessons
 from {{ package_name }}.api.agent import persona as persona_module
-from {{ package_name }}.api.agent.jobs_models import AgentJob, JobOutcome, RunSpec
+from {{ package_name }}.api.agent.jobs_models import STREAM_EVENT, AgentJob, JobOutcome, RunSpec
 from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -237,6 +238,7 @@ async def start(
     append_system_prompt: str | None = None,
     mcp_config: dict[str, object] | None = None,
     model: str | None = None,
+    stream: bool = False,
 ) -> str:
     """Start a persona session with no asker, and return its job id at once.
 
@@ -260,7 +262,11 @@ async def start(
     command, never a literal header (`_refuse_literal_mcp_credentials`).
     `model` is `--model` for this job, on every run
     including a resume; omitted, the persona's `settings.json` decides.
-    All four are persisted on the job row and replayed on every resumed run,
+    `stream=True` has the CLI print token deltas and records them, coalesced,
+    as `stream_event` rows a watcher follows live (`_Deltas`); the finished
+    message replaces them in the log, so a job read after the fact holds
+    whole messages only.
+    All five are persisted on the job row and replayed on every resumed run,
     so a later `send_message()` from any worker reaches the same servers
     under the same identity on the same model without knowing any of it.
 
@@ -298,6 +304,7 @@ async def start(
         append_system_prompt=append_system_prompt,
         mcp_config=mcp_config,
         model=model,
+        stream=stream,
     )
 
     def _create() -> None:
@@ -462,6 +469,63 @@ async def _control(
             process.stdin.close()
 
 
+#: How long deltas gather before they are written as one row.
+_DELTA_SECONDS = 0.25
+#: The text each kind of delta carries; any other (a signature) is dropped.
+_DELTA_FIELDS = {"text_delta": "text", "thinking_delta": "thinking", "input_json_delta": "partial_json"}
+
+
+class _Deltas:
+    """Folds a CLI's token-level `stream_event`s into a few rows a second.
+
+    A delta is a few characters; a row each would be thousands per message.
+    Consecutive deltas of one block are concatenated and written at most every
+    `_DELTA_SECONDS`, and at a block's end. A block start is kept (it names a
+    tool); everything else in the stream is dropped. Nothing is written for a
+    message that finishes first: the whole message supersedes its deltas.
+    """
+
+    def __init__(self) -> None:
+        self._held: dict[str, Any] | None = None
+        self._since = 0.0
+
+    def fold(self, event: dict[str, Any]) -> list[dict[str, Any]]:
+        inner = event.get("event") or {}
+        kind = inner.get("type")
+        if kind == "content_block_delta":
+            delta = inner.get("delta") or {}
+            field = _DELTA_FIELDS.get(delta.get("type"))
+            if field is None or not delta.get(field):
+                return []
+            held = self._held
+            if (
+                held is not None
+                and held["event"]["index"] == inner.get("index")
+                and held["event"]["delta"]["type"] == delta["type"]
+            ):
+                held["event"]["delta"][field] += delta[field]
+                return self._flush() if time.monotonic() - self._since >= _DELTA_SECONDS else []
+            out = self._flush()
+            self._held = {
+                "type": STREAM_EVENT,
+                "event": {"type": kind, "index": inner.get("index"), "delta": dict(delta)},
+            }
+            self._since = time.monotonic()
+            return out
+        if kind == "content_block_start":
+            return [*self._flush(), {"type": STREAM_EVENT, "event": inner}]
+        if kind == "content_block_stop":
+            return self._flush()
+        return []
+
+    def drop(self) -> None:
+        self._held = None
+
+    def _flush(self) -> list[dict[str, Any]]:
+        held, self._held = self._held, None
+        return [held] if held is not None else []
+
+
 async def _run(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
@@ -501,19 +565,21 @@ async def _run(
         json_schema=spec.json_schema,
         input_format="stream-json",
         model=spec.model,
-        partial_messages=False,
+        partial_messages=spec.stream,
     )
 
     def _bound(db: Session) -> Session:
         bind_session(db, workspace_id=spec.workspace_id, created_by_id=spec.created_by_id)
         return db
 
-    async def _record(event: dict[str, Any]) -> dict[str, Any] | None:
+    async def _record(event: dict[str, Any], *, whole_message: bool = False) -> dict[str, Any] | None:
         def _write() -> dict[str, Any] | None:
             rewritten = redact_event(persona.name, event)
             if rewritten is not None:
                 with db_session_factory() as db:
-                    jobs_models.record_event(_bound(db), spec.job_id, _without_bytes(rewritten))
+                    jobs_models.record_event(
+                        _bound(db), spec.job_id, _without_bytes(rewritten), whole_message=whole_message
+                    )
             return rewritten
 
         return await run_in_threadpool(_write)
@@ -537,6 +603,7 @@ async def _run(
             cli.kill(process)
         assert process.stderr is not None
         turns = _Turns()
+        deltas = _Deltas()
         stderr_task = asyncio.create_task(cli.drain(process.stderr))
         delivered = await _write_frames(process, turns, messages)
         turns.written += len(messages) - delivered  # a frame it never got is a turn it never answered
@@ -544,7 +611,12 @@ async def _run(
         beat_task = asyncio.create_task(_beat(db_session_factory, spec))
         try:
             async for event in cli.events(process, driver.timeout_seconds):
-                recorded = await _record(event)
+                if event.get("type") == STREAM_EVENT:
+                    for delta in deltas.fold(event) if spec.stream else []:
+                        await _record(delta)
+                    continue
+                deltas.drop()
+                recorded = await _record(event, whole_message=event.get("type") == "assistant")
                 if event.get("type") == "user" and event.get("isReplay"):
                     turns.echoed += 1
                 elif event.get("type") == "result":

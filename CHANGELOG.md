@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.18] - 2026-10-10
+
+An agent job can be followed token by token. Need: godswood, via master-project's orchestrator (the Fat Controller run view rendered nothing for about a minute, then everything at once), 10/10/2026.
+
+### Added
+
+- **`jobs.start(stream=True)` streams a job's text, thinking and tool input as they are written.** The CLI runs with `--include-partial-messages`; `watch()` and the SSE route serve the deltas as `stream_event` rows beside the finished messages. They are folded to about four rows a second and deleted when the whole `assistant` message lands, so the log keeps only finished messages. The flag is a new `agent_jobs.stream` column, so every resumed run streams too; default `False`, nothing changes for an existing job.
+- **Migration `b7e4a2c9d1f3` adds that column.** An app taking this by `copier update` repoints its `down_revision` at its own head, as the previous revisions' docstrings say.
+
 ## [2026.10.17] - 2026-10-10
 
 The 2026.10.16 tag's verify step carried a stray `done` and failed on syntax; the wheels it uploaded are served, and 2026.10.17 is the tag that publishes green.

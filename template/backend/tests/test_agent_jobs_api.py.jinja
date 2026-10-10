@@ -787,6 +787,50 @@ async def test_a_job_asks_for_whole_messages_and_keeps_every_one(
     assert _echo_field(_answers(job_id, workspace_id)[0], "partial") == "False"
 
 
+def test_deltas_fold_into_few_rows_and_drop_what_a_watcher_cannot_show(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(jobs_module, "_DELTA_SECONDS", 3600.0)
+
+    def delta(kind: str, **fields: str) -> dict[str, Any]:
+        return {
+            "type": "stream_event",
+            "event": {"type": "content_block_delta", "index": 0, "delta": {"type": kind, **fields}},
+        }
+
+    folded = jobs_module._Deltas()
+    out: list[dict[str, Any]] = []
+    for event in [
+        {"type": "stream_event", "event": {"type": "message_start"}},
+        {
+            "type": "stream_event",
+            "event": {"type": "content_block_start", "index": 0, "content_block": {"type": "text"}},
+        },
+        delta("signature_delta", signature="sig"),
+        delta("thinking_delta", thinking=""),
+        delta("text_delta", text="Hello "),
+        delta("text_delta", text="world"),
+        {"type": "stream_event", "event": {"type": "content_block_stop", "index": 0}},
+    ]:
+        out += folded.fold(event)
+    assert [e["event"]["type"] for e in out] == ["content_block_start", "content_block_delta"]
+    assert out[1]["event"]["delta"] == {"type": "text_delta", "text": "Hello world"}
+
+
+async def test_a_streaming_job_keeps_only_whole_messages_and_streams_every_run(
+    agent_settings: AgentSettings, persona: Persona, identity: tuple[uuid.UUID, int]
+) -> None:
+    """`stream=True` asks the CLI for token deltas; the finished message supersedes them in the
+    log, and the flag rides the job row so a resume streams too."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi", stream=True)
+    await _wait_until_settled(job_id, workspace_id)
+    assert _job(job_id, workspace_id).stream is True
+    assert [e for e in _events(job_id, workspace_id) if e.get("type") == "stream_event"] == []
+    assert _echo_field(_answers(job_id, workspace_id)[0], "partial") == "True"
+    await _message(agent_settings, persona, job_id, workspace_id, "again")
+    await _wait_until(lambda: len(_answers(job_id, workspace_id)) == 2)
+    assert _echo_field(_answers(job_id, workspace_id)[1], "partial") == "True"
+
+
 async def test_a_stderr_read_error_does_not_strand_the_job(
     agent_settings: AgentSettings,
     persona: Persona,

@@ -34,7 +34,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, false, func, or_, select, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, delete, false, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
@@ -50,6 +50,9 @@ RUNNING, COMPLETED, FAILED, CANCELLED = "running", "completed", "failed", "cance
 
 #: `enqueue_or_reopen`'s two answers that start no run.
 QUEUED, STOPPING = "queued", "stopping"
+
+#: The type of the coalesced token deltas a streaming job keeps while a message is written.
+STREAM_EVENT = "stream_event"
 
 
 class AgentJob(Base, TimestampMixin, WorkspaceScoped):
@@ -83,6 +86,9 @@ class AgentJob(Base, TimestampMixin, WorkspaceScoped):
     #: it for this job, and a resume from anywhere runs on the same one.
     #: `None` leaves the persona's own `settings.json` to decide.
     model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: Whether a watcher follows this job token by token (`jobs.start(stream=True)`),
+    #: held for the same reason as `json_schema`: a resumed run streams too.
+    stream: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     #: The final turn's structured answer, set once `status` leaves `running`
     #: and only when a `json_schema` was given.
     structured_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -270,6 +276,7 @@ class RunSpec:
     append_system_prompt: str | None
     mcp_config: dict[str, Any] | None
     model: str | None
+    stream: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +303,7 @@ def _spec(job: AgentJob) -> RunSpec:
         append_system_prompt=job.append_system_prompt,
         mcp_config=job.mcp_config,
         model=job.model,
+        stream=job.stream,
     )
 
 
@@ -346,6 +354,7 @@ def create_job(db: Session, spec: RunSpec) -> None:
             append_system_prompt=spec.append_system_prompt,
             mcp_config=spec.mcp_config,
             model=spec.model,
+            stream=spec.stream,
             run_id=spec.run_id,
             heartbeat_at=func.now(),
             stop_requested=False,
@@ -374,9 +383,20 @@ def get_job_unscoped(db: Session, job_id: str) -> AgentJob | None:
         return db.get(AgentJob, job_id)
 
 
-def record_event(db: Session, job_id: str, event: dict[str, Any]) -> int:
+def record_event(db: Session, job_id: str, event: dict[str, Any], *, whole_message: bool = False) -> int:
     """Append one event and commit. Returns its `id` — the monotonic `seq`
-    `jobs.watch()` reads forward from."""
+    `jobs.watch()` reads forward from.
+
+    `whole_message` is a finished `assistant` message: it supersedes the
+    `stream_event` rows a streaming job kept while it was being written, which
+    go in the same commit, so the log keeps only finished messages.
+    """
+    if whole_message:
+        db.execute(
+            delete(AgentJobEvent).where(
+                AgentJobEvent.job_id == job_id, AgentJobEvent.event["type"].astext == STREAM_EVENT
+            )
+        )
     row = AgentJobEvent(job_id=job_id, event=event)
     db.add(row)
     db.commit()
