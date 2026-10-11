@@ -494,7 +494,8 @@ class _Deltas:
         kind = inner.get("type")
         if kind == "content_block_delta":
             delta = inner.get("delta") or {}
-            field = _DELTA_FIELDS.get(delta.get("type"))
+            delta_type = delta.get("type")
+            field = _DELTA_FIELDS.get(delta_type) if isinstance(delta_type, str) else None
             if field is None or not delta.get(field):
                 return []
             held = self._held
