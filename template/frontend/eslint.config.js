@@ -20,8 +20,10 @@ import debt from './eslint.debt.js';
 //
 // No eslint-plugin-tailwindcss: no-arbitrary-value blocked every arbitrary
 // value, including layout no design token can express (grid-cols-[auto_1fr],
-// h-[calc(...)]). The change.yaml grep gate is the single mechanism — it
-// scans *.svelte and *.ts for colour and size literals. master-project#309.
+// h-[calc(...)]). The pre-commit hook `design-arbitrary-values`
+// (@poodle64/design-tokens' `ds-check-arbitrary-values`) is the single
+// mechanism — it scans src for colour and size literals; the change pipeline
+// does not run it. master-project#309.
 export default ts.config(
 	...ts.configs.recommended,
 	...svelte.configs.recommended,

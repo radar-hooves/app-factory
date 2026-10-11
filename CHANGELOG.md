@@ -16,13 +16,15 @@ The web template's CI is the estate's one change-pipeline caller. Need: master-p
 - **The smoke probe cannot reach a live service.** `image-smoke.sh` runs the app and its throwaway Postgres on a `docker network create --internal` network (no route out, no host, no live database) and names that Postgres in the app's `POSTGRES_*` settings. Measured 11/10/2026: caspo's smoke container on the default bridge reached atlas's live Postgres and ran its orphan-job sweeper against it.
 - **`--dist loadfile` lives in the backend's pytest `addopts`,** since the pipeline runs `pytest -n 4` with no flags of its own. The self-test runs `-n 4`.
 
+- **The design-token gate runs at commit.** A `design-arbitrary-values` hook runs `ds-check-arbitrary-values src` (the colour/size-literal block, master-project#309) beside the stamped eslint and stylelint hooks, since the change pipeline runs only `check` and `test`. `eslint.config.js` names it as the mechanism.
+
 ### Removed
 
 - The factory's `tests/deploy` suite for `image-inputs.sh`, and its self-test step.
 
 ### Converging an existing app
 
-`image-smoke.sh` is app-owned (copier skips it on update): copy the new network lines by hand. Delete the four old callers if copier leaves them, and add `--dist loadfile` to `addopts` if the app's pyproject diverges. A stamped app that kept its own `deploy.yaml` tweaks (`runner_labels`, path filters) loses them: the pipeline owns that now.
+`image-smoke.sh` is app-owned (copier skips it on update): copy the new network lines by hand. Delete the four old callers if copier leaves them, and run `pnpm install` in `frontend/` so the hook's bin exists, and add `--dist loadfile` to `addopts` if the app's pyproject diverges. A stamped app that kept its own `deploy.yaml` tweaks (`runner_labels`, path filters) loses them: the pipeline owns that now.
 
 ## [2026.10.20] - 2026-10-11
 

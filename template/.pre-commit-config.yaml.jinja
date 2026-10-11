@@ -210,6 +210,20 @@ repos:
         language: system
         files: '^frontend/.*\.(svelte|ts|js|mjs|cjs)$'
 
+  # The colour/size-literal block (`text-[#ff0000]`, `h-[12px]`): @poodle64/
+  # design-tokens' own bin, master-project#309. The change pipeline runs only
+  # check and test, so this hook is the one place the gate runs. Whole `src`,
+  # as the bin's default, since a literal's breach is per tree, not per file;
+  # `files` still gates WHETHER it runs.
+  - repo: local
+    hooks:
+      - id: design-arbitrary-values
+        name: 'design - No colour/size literal in an arbitrary Tailwind value'
+        entry: bash -c 'cd frontend && exec node_modules/.bin/ds-check-arbitrary-values src'
+        language: system
+        files: '^frontend/src/.*\.(svelte|ts|js|css)$'
+        pass_filenames: false
+
   # Catches craft defects every other gate is blind to — a nested card, a
   # side-tab accent border, gradient-text on a heading, decorative slop. It
   # compiles, renders, type-checks and passes its tests; it is only wrong once
