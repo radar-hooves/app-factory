@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.23] - 2026-10-11
+
+### Fixed
+
+- **A stamped app passes plain `mypy`.** `api/agent/jobs.py` looked up `_DELTA_FIELDS` with a key that may be `None`; it now narrows with `isinstance(…, str)`. CASPO had silenced it with a local `disable_error_code`.
+
 ## [2026.10.21] - 2026-10-11
 
 The web template's CI is the estate's one change-pipeline caller. Need: master-project's estate CI cut-over (operator's rulings of 11/10/2026): every repo runs master's reusable `change.yaml` through one identical caller, so a change tests, builds and deploys only what it touches.
