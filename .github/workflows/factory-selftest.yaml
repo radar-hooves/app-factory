@@ -15,8 +15,8 @@ name: Factory self-test
 # and @poodle64/ui from THIS checkout rather than the index or npm, so a change
 # to kit and stamp is proven together before either is released.
 #
-# Never on the golden reusable callers (python-ci.yaml/frontend-ci.yaml under
-# template/.github): those are what copier stamps INTO an app, and inlining
+# Never on the stamped caller (change.yaml under template/.github/workflows):
+# that is what copier stamps INTO an app, and inlining
 # this job there would ship the factory's own self-test into every app's CI,
 # exactly the drift this closes. This workflow lives at THIS repo's own root,
 # beside kit-rust.yaml and security.yaml, which is this repo's first-party CI.
@@ -41,7 +41,6 @@ on:
       - 'variants.yaml'
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
-      - 'tests/deploy/**'
       - 'kits/python/**'
       - 'kits/typescript/packages/ui/**'
       - 'pyproject.toml'
@@ -122,9 +121,6 @@ jobs:
       - name: Desktop signing runner — full contract suite
         run: nix shell nixpkgs#jq --command uv run --frozen pytest -q tests/desktop
 
-      - name: Stamped deploy — the image-input gate against BuildKit
-        run: uv run --frozen pytest -q tests/deploy
-
       - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike
         # the scratch app below. One layer only for each gate: nothing in
@@ -150,7 +146,7 @@ jobs:
         # network. postgres_host/port are never connected to — backend tests run
         # on their own ephemeral testcontainers Postgres (canonical-app-shape.md),
         # not the dev-server address a real app would give. registry_host/
-        # registry_credential_file/watchtower_url gate deploy.yaml only, which
+        # registry_credential_file/watchtower_url gate the deploy only, which
         # this job never runs.
         run: |
           set -euo pipefail
@@ -171,8 +167,7 @@ jobs:
         # real app answers it from its fleet's own declaration.
 
       - name: Backend — install and test
-        # Same sync-args as every real app's python-ci.yaml caller
-        # (template/.github/workflows/python-ci.yaml.jinja): base + dev only, so CI
+        # Same sync-args as every real app's change.yaml pipeline: base + dev only, so CI
         # resolves the same packages a real app's CI does, off the household
         # index rather than an editable sibling path — all but the kits, which
         # `uv add --frozen` repoints at this checkout first, in the scratch
@@ -186,7 +181,7 @@ jobs:
           # The stamp must already be in the shape the app's own ruff-format
           # hook leaves it, or a re-stamp can never commit clean.
           uv run ruff format --check .
-          uv run pytest -q -n 8 --dist loadfile
+          uv run pytest -q -n 4
 
       - name: Set up pnpm
         # Same pin as master-project's frontend-ci.yaml reusable.

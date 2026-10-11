@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# THE extension point for deploy.yaml's boot check (canonical-app-shape.md
+# THE extension point for change.yaml's boot check (canonical-app-shape.md
 # §Extension points), app-owned: proves THIS app's image boots and is healthy.
 # `$IMAGE` is the image just built; non-zero stops the deploy. The server runs
 # directly, bypassing entrypoint.sh, beside a throwaway Postgres, and must
 # answer /api/system/health 200 with status "healthy" — the route that pings the
 # database; a one-shot gate may touch it, the container healthcheck may not.
 # A redirect is never a pass: the probe does not follow one.
+# Both containers run on an --internal network (no route out, no host, no live
+# database), and the app's database settings name the throwaway Postgres
+# explicitly: nothing in the image can reach anything but that one container.
 set -eu
 
 name="smoke-{{ project_name }}-$$"
 net="$name"
 pgname="$name-db"
 pgpass="smoke$$"
-docker network create "$net" >/dev/null
+docker network create --internal "$net" >/dev/null
 docker run -d --name "$pgname" --network "$net" -e POSTGRES_PASSWORD="$pgpass" postgres:17-alpine >/dev/null
 # {{ package_name | upper }}_VEND=off: this container has no software identity
 # key and nothing else here names a Vended field, so the broker is never asked

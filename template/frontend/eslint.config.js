@@ -20,7 +20,7 @@ import debt from './eslint.debt.js';
 //
 // No eslint-plugin-tailwindcss: no-arbitrary-value blocked every arbitrary
 // value, including layout no design token can express (grid-cols-[auto_1fr],
-// h-[calc(...)]). The frontend-ci.yaml grep gate is the single mechanism — it
+// h-[calc(...)]). The change.yaml grep gate is the single mechanism — it
 // scans *.svelte and *.ts for colour and size literals. master-project#309.
 export default ts.config(
 	...ts.configs.recommended,
