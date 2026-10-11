@@ -34,8 +34,8 @@ from typing import Any
 
 #: A session id is used as a FILENAME, so it is checked as one before it
 #: reaches a glob. Claude Code mints a UUID; this is the shape that stays a
-#: single path segment whatever the CLI mints next.
-SESSION_ID = re.compile(r"\A[A-Za-z0-9._-]{1,128}\Z")
+#: single path segment, never `.` or `..`, whatever the CLI mints next.
+SESSION_ID = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 
 #: Where Claude Code files its own transcripts, under its config directory.
 PROJECTS = "projects"
@@ -66,7 +66,9 @@ def transcript_file(home: Path, session_id: str) -> Path | None:
     """
     if not SESSION_ID.match(session_id):
         return None
-    found = [path for path in (home / PROJECTS).glob(f"*/{session_id}.jsonl") if path.is_file()]
+    found = [
+        path for path in (home / PROJECTS).glob(f"*/{session_id}.jsonl") if path.is_file() and not path.is_symlink()
+    ]
     if not found:
         return None
     return max(found, key=lambda path: path.stat().st_mtime)

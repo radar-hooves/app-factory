@@ -552,7 +552,6 @@ async def _run(
     folder = job_dir(spec.job_id)
     if spec.mcp_config is not None:
         await run_in_threadpool(_write_mcp_config, folder, spec.mcp_config)
-    mcp_config_path = folder / ".mcp.json"
     driver = settings.driver()
     argv = cli.argv(
         driver,
@@ -560,7 +559,9 @@ async def _run(
         None,
         resume=spec.job_id if resume else None,
         session_id=None if resume else spec.job_id,
-        mcp_config=mcp_config_path if mcp_config_path.is_file() else None,
+        # Only a file the app wrote this run: the job can write its own folder,
+        # and the ports its session may reach are read from the file it names.
+        mcp_config=folder / ".mcp.json" if spec.mcp_config is not None else None,
         append_system_prompt=spec.append_system_prompt,
         json_schema=spec.json_schema,
         input_format="stream-json",

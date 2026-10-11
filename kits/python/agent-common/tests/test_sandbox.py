@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from agent_common import cli, sandbox, transcript
+from agent_common.agent import ATTACHMENTS, CHATS, LocalAgent
 from agent_common.persona import Persona
 
 pytestmark = pytest.mark.skipif(not sandbox.supported(), reason="this kernel's Landlock is below the sandbox's floor")
@@ -151,3 +152,28 @@ def test_a_multi_call_binary_is_still_called_by_the_name_it_was_given(tmp_path: 
     called = command[command.index("--") + 1 :]
     assert [Path(called[0]).name, *called[1:]] == ["true", "--version"]
     assert subprocess.run(command, capture_output=True, timeout=30).returncode == 0
+
+
+async def test_one_conversation_of_a_persona_cannot_read_another(
+    confined: cli.Settings, milton: Persona, tmp_path: Path
+) -> None:
+    agent = LocalAgent(confined, milton)
+    first = [event async for event in agent.ask("hello", files={"a.txt": b"first's"})]
+    mine = next(event["session_id"] for event in first if event.get("subtype") == "init")
+    theirs = [event async for event in agent.ask("hello", files={"b.txt": b"second's"})]
+    other = next(event["session_id"] for event in theirs if event.get("subtype") == "init")
+    other_file = next((milton.home / CHATS / other / ATTACHMENTS).rglob("b.txt"))
+    own_file = next((milton.home / CHATS / mine / ATTACHMENTS).rglob("a.txt"))
+    transcript_file = transcript.transcript_file(milton.home, other)
+    assert transcript_file is not None
+    paths = [own_file, other_file, transcript_file, milton.home / "settings.json"]
+
+    resumed = [event async for event in agent.ask(f"{READ} {' '.join(map(str, paths))}", resume=mine)]
+
+    result = next(event for event in resumed if event.get("type") == "result")
+    assert json.loads(result["result"]) == {
+        str(own_file): "first's",
+        str(other_file): "denied",
+        str(transcript_file): "denied",
+        str(milton.home / "settings.json"): "denied",
+    }

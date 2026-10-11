@@ -22,8 +22,12 @@ from agent_common import cli, transcript
 from agent_common.persona import Persona
 from agent_common.transcript import Turn
 
-#: Where a local persona keeps what a person attached, under its home: one
-#: folder per conversation, one per turn beneath it.
+#: Where a local persona keeps its conversations, under its home: one folder
+#: per conversation, its session's working directory, so a conversation's
+#: session reaches its own folder and no other conversation's.
+CHATS = "chats"
+
+#: What a person attached, under the conversation's folder: one folder per turn.
 ATTACHMENTS = "attachments"
 
 #: The heading of the block `LocalAgent.ask` appends to a question naming what
@@ -87,25 +91,33 @@ class LocalAgent:
         `depth` is ignored: a persona's model and behaviour are fixed in its
         own `settings.json`, so there is nothing here for it to pick between.
 
-        Attached files are written under the persona's home and named in the
+        Each conversation runs in a folder of its own under the persona's home
+        (`CHATS`), so its session reads and writes that folder and no other
+        conversation's. Attached files are written under it and named in the
         question by absolute path, the only way Claude Code's Read tool takes
-        a file. So they can be filed under their conversation, a new
-        conversation with files has its id minted here (`--session-id`);
-        without files the CLI mints it, as it always has.
+        a file. The folder is named for the session, so a new conversation has
+        its id minted here (`--session-id`).
 
         Raises:
-            ValueError: `files` came with a `resume` that is not a session id's shape.
+            ValueError: `resume` is not a session id's shape.
         """
-        session_id = None
+        session = resume or str(uuid.uuid4())
+        if not transcript.SESSION_ID.match(session):
+            raise ValueError(f"not a session id: {session!r}")
+        folder = self.persona.home / CHATS / session
         if files:
-            session = resume or str(uuid.uuid4())
-            if not transcript.SESSION_ID.match(session):
-                raise ValueError(f"not a session id: {session!r}")
-            session_id = None if resume else session
-            paths = await asyncio.to_thread(_attach, self.persona.home / ATTACHMENTS / session, files)
+            paths = await asyncio.to_thread(_attach, folder / ATTACHMENTS, files)
             question = question + _ATTACHED + "\n".join(f"- {path}" for path in paths)
+        else:
+            await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
         async for event in cli.ask(
-            self.settings, self.persona, question, resume=resume, session_id=session_id, run_env=self.run_env
+            self.settings,
+            self.persona,
+            question,
+            resume=resume,
+            session_id=None if resume else session,
+            cwd=folder,
+            run_env=self.run_env,
         ):
             yield event
 
@@ -117,7 +129,7 @@ class LocalAgent:
         return [replace(turn, question=_unattached(turn.question)) for turn in turns]
 
     async def forget(self, session: str) -> None:
-        """Delete the transcript and every file attached to the conversation."""
+        """Delete the transcript and the conversation's folder, its attachments and its scoped home."""
         await asyncio.to_thread(_forget, self.persona.home, session)
 
 
@@ -142,4 +154,6 @@ def _unattached(question: str) -> str:
 def _forget(home: Path, session: str) -> None:
     transcript.forget(home, session)
     if transcript.SESSION_ID.match(session):
-        shutil.rmtree(home / ATTACHMENTS / session, ignore_errors=True)
+        folder = home / CHATS / session
+        for gone in (cli.scope_path(home, folder), cli.transcripts_path(home, folder), folder):
+            shutil.rmtree(gone, ignore_errors=True)

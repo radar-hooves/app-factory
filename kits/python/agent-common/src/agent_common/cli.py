@@ -311,12 +311,14 @@ async def spawn(
     """
     if not settings.confine:
         return await _spawn(command, cwd, environment(settings, persona, run_env), stdin)
-    home, transcripts = scope_home(persona, cwd)
+    cwd = cwd.resolve()
+    home, transcripts = await asyncio.to_thread(scope_home, persona, cwd)
     scratch = home / "tmp"
     scratch.mkdir(exist_ok=True)
     env = environment(settings, dataclasses.replace(persona, home=home), run_env)
     env["TMPDIR"] = env["CLAUDE_CODE_TMPDIR"] = str(scratch)
     mcp = _flag_value(command, "--mcp-config")
+    mcp = str(Path(mcp).resolve()) if mcp else None
     confined = sandbox.confine(
         command,
         read=[cwd, home, *([Path(mcp)] if mcp else []), *read],
@@ -347,6 +349,11 @@ def scope_path(persona_home: Path, cwd: Path) -> Path:
     return persona_home / "scopes" / hashlib.blake2s(str(cwd.resolve()).encode(), digest_size=8).hexdigest()
 
 
+def transcripts_path(persona_home: Path, cwd: Path) -> Path:
+    """Where the CLI's transcripts for a session in `cwd` are kept, under the name it derives from `cwd`."""
+    return persona_home / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(cwd.resolve()))
+
+
 def scope_home(persona: Persona, cwd: Path) -> tuple[Path, Path]:
     """The home a session in `cwd` runs as, and its transcript directory.
 
@@ -359,7 +366,7 @@ def scope_home(persona: Persona, cwd: Path) -> tuple[Path, Path]:
     sessions share it.
     """
     home = scope_path(persona.home, cwd)
-    transcripts = persona.home / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(cwd.resolve()))
+    transcripts = transcripts_path(persona.home, cwd)
     transcripts.mkdir(parents=True, exist_ok=True)
     link = home / "projects" / transcripts.name
     link.parent.mkdir(parents=True, exist_ok=True)
@@ -377,7 +384,9 @@ def scope_home(persona: Persona, cwd: Path) -> tuple[Path, Path]:
 
 
 def _flag_value(command: Sequence[str], flag: str) -> str | None:
-    return command[command.index(flag) + 1] if flag in command else None
+    """The value after the last `flag`: the builder's own comes after a question that might spell it."""
+    at = len(command) - 1 - command[::-1].index(flag) if flag in command else None
+    return command[at + 1] if at is not None and at + 1 < len(command) else None
 
 
 def _ports(settings: Settings, env: Mapping[str, str], mcp_config: str | None) -> list[int]:
@@ -388,7 +397,11 @@ def _ports(settings: Settings, env: Mapping[str, str], mcp_config: str | None) -
             servers = json.loads(Path(mcp_config).read_text()).get("mcpServers", {})
         except OSError, ValueError, AttributeError:
             servers = {}
-        urls += [server["url"] for server in servers.values() if isinstance(server, dict) and server.get("url")]
+        urls += [
+            server["url"]
+            for server in servers.values()
+            if isinstance(server, dict) and isinstance(server.get("url"), str)
+        ]
     ports = {_port(url) for url in urls if url}
     return sorted(port for port in ports if port)
 
@@ -474,13 +487,16 @@ async def ask(
     append_system_prompt: str | None = None,
     model: str | None = None,
     run_env: Mapping[str, str] | None = None,
+    read: Sequence[Path] = (),
+    write: Sequence[Path] = (),
+    connect: Sequence[int] = (),
 ) -> AsyncIterator[dict[str, Any]]:
     """Ask `persona` one question and yield each event the session emits, in order, unaltered.
 
-    `cwd` defaults to the persona's home; `append_system_prompt` and `model`
+    `cwd` defaults to the persona's home, which a confined session then reads whole: pass a folder of its own wherever the persona serves more than one person; `append_system_prompt` and `model`
     are for a caller whose question needs more than the persona's own files
     say (a scoped reading room); `run_env` is this run's own variables
-    (`environment`). One synthetic event is added, and it is
+    (`environment`); `read`, `write` and `connect` are `spawn`'s. One synthetic event is added, and it is
     clearly the transport's own: an `ERROR_EVENT` frame if the process cannot
     start, goes silent past the idle timeout, or dies badly. Claude Code's own
     `result` event terminates a healthy stream.
@@ -495,7 +511,16 @@ async def ask(
         model=model,
     )
     try:
-        process = await spawn(settings, persona, command, cwd=cwd or persona.home, run_env=run_env)
+        process = await spawn(
+            settings,
+            persona,
+            command,
+            cwd=cwd or persona.home,
+            run_env=run_env,
+            read=read,
+            write=write,
+            connect=connect,
+        )
     except OSError as exc:
         yield {"type": ERROR_EVENT, "error": f"agent could not start: {exc}"}
         return

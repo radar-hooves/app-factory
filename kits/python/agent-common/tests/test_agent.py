@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 from agent_common import cli
-from agent_common.agent import ATTACHMENTS, Agent, LocalAgent
+from agent_common.agent import ATTACHMENTS, CHATS, Agent, LocalAgent
 from agent_common.persona import Persona
 
 
@@ -50,7 +50,7 @@ async def test_attached_files_are_filed_under_the_conversation_and_named_by_path
 
     events = await _ask(agent, "what is in these?", files={"../../report.pdf": b"%PDF", "notes.txt": b"hi"})
     session = _session(events)
-    folder = milton.home / ATTACHMENTS / session
+    folder = milton.home / CHATS / session / ATTACHMENTS
     [turn] = list(folder.iterdir())
 
     assert (turn / "report.pdf").read_bytes() == b"%PDF"
@@ -71,12 +71,15 @@ async def test_forget_takes_the_transcript_and_the_attachments(settings: cli.Set
     await agent.forget(session)
 
     assert await agent.read(session) is None
-    assert not (milton.home / ATTACHMENTS / session).exists()
+    assert not (milton.home / CHATS / session).exists()
 
 
-async def test_files_refuse_a_resume_that_is_not_a_session_id(settings: cli.Settings, milton: Persona) -> None:
+@pytest.mark.parametrize("resume", ["../x", "..", "."])
+async def test_a_resume_that_is_not_a_session_id_is_refused(
+    settings: cli.Settings, milton: Persona, resume: str
+) -> None:
     with pytest.raises(ValueError, match="not a session id"):
-        await _ask(LocalAgent(settings, milton), "hi", resume="../x", files={"a.txt": b"a"})
+        await _ask(LocalAgent(settings, milton), "hi", resume=resume)
 
 
 async def test_a_run_carries_its_askers_variables_in_its_process_and_its_repr_does_not(
