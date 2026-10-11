@@ -94,6 +94,7 @@ def agent_settings(personas_dir: Path, tmp_path: Path, library: fake_library.Fak
         personas_dir=personas_dir,
         rooms_file=rooms_file,
         executable=str(FAKE_CLI),
+        confine=False,
         timeout_seconds=10.0,
         daily_questions=3,
         library_url=f"http://127.0.0.1:{library.port}",

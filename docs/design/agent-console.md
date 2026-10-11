@@ -77,6 +77,7 @@ kit.remote -> client -> library
 A Python kit at `kits/python/agent-common/`, beside the Rust kits, in a uv workspace rooted at the repo root because the shared `publish-wheels` reusable api-common publishes with builds the workspace from there. Each release tag publishes it to the household's private index at that tag's version, so its version is the factory release that shipped it, as a Rust kit's `tag` pin is, and the stamped `pyproject.toml` pins it `>=` (`platform/common-libraries.md`). The factory self-test runs its own gates and resolves it from the checkout, so a change to kit and slice is tested together. It holds no table, no route and no import from an app: the stamp binds it, `api/agent/persona.py` to `config/personas/`, `data/agent-homes/` and `NotFoundError`, and `AgentSettings.driver()` to the deployment's knobs.
 
 - `cli`: the Claude Code driver. Argv and environment, a spawn in its own process group, the idle-timeout read loop, the stderr tail and its scrub, the kill, and the stream-json stdin turns a job uses. It authenticates with `CLAUDE_CODE_OAUTH_TOKEN` vended from the broker and talks to Anthropic directly; the gateway pair stays optional. It takes the CLI's own `--append-system-prompt`, `--model` and working directory, which jobs pass and the library's scoped Milton needs, so the library runs on this driver rather than its own.
+- `sandbox`: Landlock confinement of every session `cli.spawn` starts (below).
 - `persona`: loads a persona directory and seeds its writable home.
 - `transcript`: reads and forgets a session in a Claude Code home, as turns (the library's `api/librarian/conversation.py`).
 - `Agent`: `ask(question, resume, files)` yielding events, `read(session)` returning its turns (None once it is gone), `forget(session)`. A local persona files a person's attachments under its home by conversation and names them in the question by path. `LocalAgent` is the three above; `LibraryAgent` is the library's caller door through a `library` client in api-clients, where every household service's client lives. A library room's answer mark and cited document are `LibraryAgent`'s alone, the document refused as absent outside the room's collections.
@@ -136,6 +137,21 @@ penny:
 ```
 
 A room names exactly one of `persona` (a directory under `config/personas/`) or `library`. `room-<id>` enters it; watching a persona's jobs stays `agent-<persona>`. A library room's collections are the room's, never the browser's, and the library intersects them with the app's caller grant. A library room needs the app enrolled as a caller in the library's registry, `<APP>_AGENT_LIBRARY_URL`, and its caller credential vended through `config/vend.py`. Without the URL the app still starts, as a development backend must: it logs which room waits on it, and that room answers 503 until it is set. An app with no `config/rooms.yaml` shows no rooms, and its personas still run jobs.
+
+## Confinement
+
+A session runs `--permission-mode bypassPermissions`, so its tool lists say what it is offered and nothing says what the disk lets it reach: an absolute path from `Read` or `Bash` goes wherever the app process can, into the app's data, another workspace's transcripts and the database port. `cli.spawn` is the one place a session starts, and it runs the CLI under `sandbox`, a stdlib-only launcher that restricts itself with Landlock and execs the command. The session and its children (a shell, a hook, a stdio MCP server) then:
+
+- read the system, the CLI's own install, the persona's `.mcp.json`, its `cwd` and its scoped home;
+- write its `cwd`, its scoped home, its transcript directory and a few device nodes (never `/dev/shm`);
+- connect only to the ports it needs: its model endpoint (the gateway's, else 443), the OTLP endpoint if set, and each HTTP server in its `.mcp.json`;
+- neither trace nor signal a process outside, so the app's `/proc/<pid>/environ` is closed too.
+
+The scoped home (`cli.scope_home`) is the CLI's `HOME` and `CLAUDE_CONFIG_DIR` for one `cwd`: the persona's seeded files staged in, the transcript directory linked in from the persona's home where `transcript` reads it. A job's `cwd` is its own folder, so a job sees its folder and its own state, never another job's, another workspace's or the persona's other transcripts. A chat's `cwd` is the persona's home, so one persona's chat sessions share it, as they share its transcripts; a caller that must split them further passes a `cwd` of its own per scope, as the library's Milton does. `cleanup()` removes a job's scoped home with its folder.
+
+A kernel that cannot honour every restriction (Landlock ABI 6, Linux 6.12) refuses the turn with exit 126: a failed turn is right, an unconfined one never is. It needs no privilege or namespace, so it holds inside a container under Docker's default seccomp profile. `<APP>_AGENT_CONFINE=false` is for a host with no Landlock at all (a Mac dev box).
+
+Claude Code's own `sandbox` setting was considered and does not serve: it confines the Bash tool alone, so the Fat Controller (`Read`, no Bash) and every MCP server sit outside it, and it needs bubblewrap, which cannot create its user namespace under Docker's default seccomp (measured 11/10/2026 on atlas: `bwrap` exits 1 there, 0 with `seccomp=unconfined`). A stdio server a persona runs out of another tree, or a service on another port, is added through `spawn`'s `read`, `write` and `connect`. Need: radar-hooves/library, via godswood's sensitive-documents work, 11/10/2026.
 
 ## The persona contract
 

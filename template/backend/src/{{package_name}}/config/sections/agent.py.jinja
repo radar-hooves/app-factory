@@ -91,6 +91,12 @@ class AgentSettings(BaseSettings):
     # `claude` resolves off PATH; named here so a deployment can pin it.
     executable: str = "claude"
 
+    # Every session runs confined to its working directory, its own scoped home
+    # and the ports it needs (`agent_common.sandbox`, Landlock); a kernel
+    # without it refuses the turn. Off only on a host that has no Landlock
+    # (a Mac dev box), where sessions run unconfined.
+    confine: bool = True
+
     # One question's wall clock. The loop is bounded by the model deciding it
     # is finished; this is the backstop for one that does not.
     timeout_seconds: float = 600.0
@@ -129,6 +135,7 @@ class AgentSettings(BaseSettings):
             gateway_url=self.gateway_url,
             gateway_key=self.gateway_key.get_secret_value(),
             haiku_model=self.haiku_model,
+            confine=self.confine,
         )
 
     @model_validator(mode="after")

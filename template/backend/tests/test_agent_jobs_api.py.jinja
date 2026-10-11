@@ -120,7 +120,9 @@ def agent_settings(app: FastAPI, personas_dir: Path, monkeypatch: pytest.MonkeyP
     """
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setattr(jobs_module, "_POLL_SECONDS", 0.05)
-    agent: AgentSettings = AgentSettings(personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0)
+    agent: AgentSettings = AgentSettings(
+        personas_dir=personas_dir, executable=str(FAKE_CLI), timeout_seconds=10.0, confine=False
+    )
     configured: Settings = get_settings().model_copy(update={"agent": agent})
     app.dependency_overrides[get_settings] = lambda: configured
     yield agent

@@ -6,6 +6,25 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.20] - 2026-10-11
+
+Every agent session runs confined to what its persona needs. Need: radar-hooves/library, via godswood's sensitive-documents work and master-project's orchestrator: a session runs `bypassPermissions` with `Bash` or `Read`, and the library's Milton home now holds every reading-room view's transcripts. Elimination found no route to drop: godswood's Fat Controller, the library's Milton, pebblestone's personas and casefile's and caspo's jobs and rooms all drive this one spawn.
+
+### Added
+
+- **`agent_common.sandbox` and `cli.spawn` confine every session with Landlock.** The CLI and everything it starts read only the system, its install, its `cwd`, its scoped home and its `.mcp.json`; write only its `cwd`, scoped home and transcript directory; connect only to its model endpoint's port, the OTLP port and each HTTP MCP server's; and cannot signal or trace the app (so `/proc/<pid>/environ` is closed). Lifted from the library's `api/librarian/sandbox.py`. It needs no privilege, so it holds under Docker's default seccomp, where Claude Code's own bubblewrap `sandbox` setting cannot start and which in any case covers `Bash` alone, not `Read` or MCP servers. A kernel below Landlock ABI 6 (Linux 6.12) refuses the turn (exit 126) rather than run it unconfined. `spawn` takes `read`, `write` and `connect` for a persona that runs a stdio server out of another tree or reaches another port.
+- **`cli.scope_home(persona, cwd)`**: the `HOME` a session in `cwd` runs as, with the persona's seeded files staged in and its transcript directory linked in from the persona's home, where `transcript` reads it. A job's `cwd` is its own folder, so a job never reads another's, another workspace's, or the persona's other transcripts.
+- `AgentSettings.confine` (`<APP>_AGENT_CONFINE`, default on), for a host with no Landlock.
+
+### Changed
+
+- A session's `HOME` and `CLAUDE_CONFIG_DIR` are its scoped home under `<persona home>/scopes/`, not the persona's home. Transcripts stay in the persona's home; nothing reading them changes. `jobs.cleanup()` removes the scoped home with the job.
+- A stamped app's backend floors `agent-common` at this release. The factory's own agent tests run unconfined (`confine=False`); the kit's `test_sandbox.py` drives the real kernel, and a real `claude` 2.1.295 under the sandbox, its `Bash` tool included, reached a stub gateway, read its job folder, was refused the app's data and wrote its transcript.
+
+### Adopting
+
+A stamped app takes this on its next update (a version bump and a render); no app file changes. A deployment's host kernel must be Linux 6.12 or newer (atlas is 6.18), or a Mac dev box sets `<APP>_AGENT_CONFINE=false`. The library merges its own `sandbox.py` branch now and drops `api/librarian/sandbox.py` and `_scope_home` for `cli.spawn`'s at its next re-stamp, passing its scoped view as `cwd` as it does today.
+
 ## [2026.10.19] - 2026-10-10
 
 A push to main that changes nothing the image is built from no longer deploys, and a pull request's E2E run is the smoke set. Need: the operator (poodle64), via master-project's CI right-sizing lane: deploys became the estate's largest CI cost at the go-live, and about 600 PR E2E runs in 30 days found no product bug. Rulings of 08/10/2026 and 10/10/2026.

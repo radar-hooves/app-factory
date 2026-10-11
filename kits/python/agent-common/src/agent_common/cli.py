@@ -18,6 +18,11 @@ system-prompt addendum, JSON schema, model and working directory, so those
 stay optional parameters of `argv` rather than a second copy of it. Both
 spawn through `spawn`, read through `events` and end through `kill`.
 
+Every session runs confined (`sandbox`): it reads and writes only its working
+directory, its own scoped home and the system, and connects only to the
+ports it needs, whatever its tools are told to do. `spawn` is the one place
+that decides it, so no caller can start an unconfined one by accident.
+
 Lifted from the stamped `api/agent/session.py` and the driver inside
 `api/agent/jobs.py` (radar-hooves/app-factory), which both began as
 the library's `api/agent/session.py`. Need: radar-hooves/cadmus (Nightjar),
@@ -26,16 +31,22 @@ the library's `api/agent/session.py`. Need: radar-hooves/cadmus (Nightjar),
 
 import asyncio
 import contextlib
+import dataclasses
+import hashlib
 import json
 import os
 import re
+import shutil
 import signal
-from collections.abc import AsyncIterator, Mapping
+import tempfile
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from agent_common.persona import Persona
+from agent_common import sandbox
+from agent_common.persona import SOURCE_FILES, Persona
 
 #: The error frame's `type`. Not this driver's own vocabulary — it is
 #: `@poodle64/librarian`'s wire contract: `Transcript.apply()` in the shared
@@ -113,6 +124,7 @@ class Settings:
     names `haiku_model` as the small model Claude Code runs background work
     on, since through a gateway it can only be one the gateway serves; empty,
     the CLI authenticates with the inherited `CLAUDE_CODE_OAUTH_TOKEN`.
+    `confine` runs every session under `sandbox`.
     `timeout_seconds` is an IDLE timeout: how long the CLI may go silent while
     it still owes a line. `thinking` off sets `MAX_THINKING_TOKENS=0`, the
     only mechanism that actually disables extended thinking.
@@ -126,6 +138,9 @@ class Settings:
     gateway_url: str = ""
     gateway_key: str = field(default="", repr=False)
     haiku_model: str = ""
+    #: Off only on a host without Landlock (a Mac), where a session then runs
+    #: unconfined; every deployment leaves it on.
+    confine: bool = True
 
 
 class IdleTimeout(TimeoutError):
@@ -276,6 +291,9 @@ async def spawn(
     cwd: Path,
     stdin: bool = False,
     run_env: Mapping[str, str] | None = None,
+    read: Sequence[Path] = (),
+    write: Sequence[Path] = (),
+    connect: Sequence[int] = (),
 ) -> asyncio.subprocess.Process:
     """Start `command` as `persona`, in its own process group, reading its stdout and stderr.
 
@@ -284,13 +302,35 @@ async def spawn(
     agent answer about whatever the parent had on it rather than the question.
     `stdin=True` is a pipe for stream-json turns (`user_frame`).
 
+    Confined (`sandbox`): `read`, `write` and `connect` add to what a session
+    is given, for a caller whose persona runs a stdio MCP server out of some
+    other tree or reaches a service on another port.
+
     Raises:
         OSError: the executable could not be started.
     """
+    if not settings.confine:
+        return await _spawn(command, cwd, environment(settings, persona, run_env), stdin)
+    home, transcripts = scope_home(persona, cwd)
+    scratch = home / "tmp"
+    scratch.mkdir(exist_ok=True)
+    env = environment(settings, dataclasses.replace(persona, home=home), run_env)
+    env["TMPDIR"] = env["CLAUDE_CODE_TMPDIR"] = str(scratch)
+    mcp = _flag_value(command, "--mcp-config")
+    confined = sandbox.confine(
+        command,
+        read=[cwd, home, *([Path(mcp)] if mcp else []), *read],
+        write=[cwd, home, transcripts, *write],
+        connect=[*_ports(settings, env, mcp), *connect],
+    )
+    return await _spawn(confined, cwd, env, stdin)
+
+
+async def _spawn(command: list[str], cwd: Path, env: dict[str, str], stdin: bool) -> asyncio.subprocess.Process:
     return await asyncio.create_subprocess_exec(
         *command,
         cwd=str(cwd),
-        env=environment(settings, persona, run_env),
+        env=env,
         stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -300,6 +340,65 @@ async def spawn(
         start_new_session=True,
         limit=LINE_LIMIT,
     )
+
+
+def scope_path(persona_home: Path, cwd: Path) -> Path:
+    """Where the home of a session in `cwd` lives, whether or not one has run yet."""
+    return persona_home / "scopes" / hashlib.blake2s(str(cwd.resolve()).encode(), digest_size=8).hexdigest()
+
+
+def scope_home(persona: Persona, cwd: Path) -> tuple[Path, Path]:
+    """The home a session in `cwd` runs as, and its transcript directory.
+
+    The CLI's own state (todos, shell snapshots, history, a settings copy)
+    lives in a home of this working directory's own, so a session reaches its
+    own state and no other's. The transcript alone lives in the persona's
+    home, where `transcript` reads it, linked in under the name the CLI
+    derives from its working directory. A job's `cwd` is its own folder, so
+    one job never reads another's; a chat's is the persona's home, and its
+    sessions share it.
+    """
+    home = scope_path(persona.home, cwd)
+    transcripts = persona.home / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(cwd.resolve()))
+    transcripts.mkdir(parents=True, exist_ok=True)
+    link = home / "projects" / transcripts.name
+    link.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):  # another session in this cwd got there first
+        link.symlink_to(transcripts)
+    for name in SOURCE_FILES:
+        if (persona.home / name).is_file():
+            # Staged and renamed, as persona.py seeds a home: a CLI already
+            # running here never reads a half-copied file.
+            fd, staged = tempfile.mkstemp(prefix=f".{name}.", dir=home)
+            os.close(fd)
+            shutil.copyfile(persona.home / name, staged)
+            os.replace(staged, home / name)
+    return home, transcripts
+
+
+def _flag_value(command: Sequence[str], flag: str) -> str | None:
+    return command[command.index(flag) + 1] if flag in command else None
+
+
+def _ports(settings: Settings, env: Mapping[str, str], mcp_config: str | None) -> list[int]:
+    """The TCP ports a session needs: its model endpoint, telemetry, and each HTTP MCP server's."""
+    urls = [settings.gateway_url or "https://api.anthropic.com", env.get("OTEL_EXPORTER_OTLP_ENDPOINT", "")]
+    if mcp_config:
+        try:
+            servers = json.loads(Path(mcp_config).read_text()).get("mcpServers", {})
+        except OSError, ValueError, AttributeError:
+            servers = {}
+        urls += [server["url"] for server in servers.values() if isinstance(server, dict) and server.get("url")]
+    ports = {_port(url) for url in urls if url}
+    return sorted(port for port in ports if port)
+
+
+def _port(url: str) -> int | None:
+    try:
+        parts = urlsplit(url)
+        return parts.port or (80 if parts.scheme == "http" else 443 if parts.scheme == "https" else None)
+    except ValueError:
+        return None
 
 
 def kill(process: asyncio.subprocess.Process) -> None:

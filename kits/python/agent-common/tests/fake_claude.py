@@ -20,6 +20,7 @@ CRASH = "__crash__"
 HANG = "__hang__"
 CHATTY = "__chatty__"
 GIANT = "__giant__"
+READ = "__read__"
 GIANT_SIZE = 200_000
 ENV_NAMES = (
     "HOME",
@@ -41,6 +42,18 @@ def _emit(event: dict[str, object]) -> None:
     print(json.dumps(event), flush=True)
 
 
+def _read_each(paths: list[str]) -> str:
+    """What this process could read of each path, or `denied`: the confinement, seen from inside."""
+    seen = {}
+    for path in paths:
+        try:
+            with open(path) as handle:
+                seen[path] = handle.read()
+        except PermissionError:
+            seen[path] = "denied"
+    return json.dumps(seen)
+
+
 def main() -> None:
     argv = sys.argv[1:]
     question = _flag(argv, "-p") or ""
@@ -56,6 +69,8 @@ def main() -> None:
     text = (
         "x" * GIANT_SIZE
         if question == GIANT
+        else _read_each(question.split()[1:])
+        if question.startswith(READ)
         else json.dumps({"argv": argv, "cwd": os.getcwd(), "env": {name: os.environ.get(name) for name in ENV_NAMES}})
     )
 

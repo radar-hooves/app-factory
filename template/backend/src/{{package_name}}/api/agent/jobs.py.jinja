@@ -841,7 +841,7 @@ async def authorize(
 async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int, persona: str) -> None:
     """Remove everything `job_id` left on disk, once it is no longer resumable.
 
-    Its working folder, and what the CLI itself kept under the persona's
+    Its working folder, the home it ran as, and what the CLI itself kept under the persona's
     shared home: the session transcript (`projects/<cwd>/<job_id>.jsonl`,
     holding every string and image the agent read, for as long as it exists)
     and any other per-session artefact. Each is named by the job id — the
@@ -861,6 +861,7 @@ async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, wor
 
 
 def _remove_job_files(job_id: str, persona_home: Path) -> None:
+    shutil.rmtree(cli.scope_path(persona_home, job_dir(job_id)), ignore_errors=True)
     shutil.rmtree(job_dir(job_id), ignore_errors=True)
     for path in persona_home.glob(f"*/*{glob.escape(job_id)}*"):
         if path.is_dir():

@@ -1,5 +1,6 @@
 """A persona on disk and driver settings pointed at the fake CLI, for every test that spawns one."""
 
+import dataclasses
 import json
 import os
 import stat
@@ -7,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from agent_common import cli, persona
+from agent_common import cli, persona, sandbox
 from agent_common.persona import Persona
 
 FAKE_CLAUDE = Path(__file__).parent / "fake_claude.py"
@@ -47,4 +48,12 @@ def milton(personas_dir: Path, tmp_path: Path) -> Persona:
 def settings() -> cli.Settings:
     """The fake CLI, made executable here because a checkout does not always carry the bit."""
     os.chmod(FAKE_CLAUDE, os.stat(FAKE_CLAUDE).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    return cli.Settings(service="kit-test-agent", executable=str(FAKE_CLAUDE), timeout_seconds=10.0)
+    return cli.Settings(service="kit-test-agent", executable=str(FAKE_CLAUDE), timeout_seconds=10.0, confine=False)
+
+
+@pytest.fixture
+def confined(settings: cli.Settings) -> cli.Settings:
+    """The same fake CLI under Landlock; skipped where the kernel offers less than the sandbox's floor."""
+    if not sandbox.supported():
+        pytest.skip("this kernel's Landlock is below the sandbox's floor")
+    return dataclasses.replace(settings, confine=True)
