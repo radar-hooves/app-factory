@@ -117,6 +117,76 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
 
+# Files the template has retired and copier cannot delete. A plain update
+# removes a file the old tagged render had and the new one lacks, but not
+# (a) one `_exclude` newly hides: the old render shipped it, the new render is
+# not asked to, and the app's copy is left standing (measured 12/10/2026,
+# a scratch app updated from v2026.9.45: all 24 stayed, the opposite of what
+# 2026.9.46 claimed); nor (b) a file that was only ever in an untagged commit,
+# which neither render knows (e2e-ci.yaml, taken by hand from d61d3565).
+# Keyed on the release that retires them, run once after the update, `rm -f`
+# so an app already clean is untouched. A new retirement adds its path here at
+# its own release; tests/migrations holds this list to `_exclude`. Needs
+# `--trust`, which master's /master:update-app-template passes.
+_migrations:
+  - version: v2026.10.24
+    when: "{{ _stage == 'after' and skeleton == 'web' }}"
+    command:
+      - rm
+      - -rf
+      - --
+      - .github/image-inputs.sh
+      - .github/workflows/e2e-ci.yaml
+      - .github/workflows/canonical-shape.yaml
+      - .github/workflows/deploy.yaml
+      - .github/workflows/frontend-ci.yaml
+      - .github/workflows/python-ci.yaml
+      - .github/workflows/security.yaml
+      - backend/tests/test_admin_api.py
+      - backend/tests/test_agent_api.py
+      - backend/tests/test_agent_jobs_api.py
+      - backend/tests/test_agent_settings.py
+      - backend/tests/test_app_posture.py
+      - backend/tests/test_database_settings.py
+      - backend/tests/test_explicit_test_server_guard.py
+      - backend/tests/test_fanout.py
+      - backend/tests/test_gateway_models_check.py
+      - backend/tests/test_feedback_api.py
+      - backend/tests/test_files_settings.py
+      - backend/tests/test_logging.py
+      - backend/tests/test_mcp_auth.py
+      - backend/tests/test_mcp_stateless.py
+      - backend/tests/test_rate_limit.py
+      - backend/tests/test_settings_api.py
+      - backend/tests/test_storage.py
+      - backend/tests/test_system_health.py
+      - backend/tests/test_vend.py
+      - backend/tests/test_workspace_race.py
+      - backend/tests/test_version.py
+      - frontend/src/dev-identity.test.ts
+      - frontend/src/hooks.client.test.ts
+      - frontend/src/lib/api/client.test.ts
+      - frontend/src/lib/api/error.test.ts
+      - frontend/src/lib/api/error-toast.test.ts
+      - frontend/src/lib/auth.svelte.test.ts
+      - frontend/src/test/rooms
+      - frontend/tests/e2e/rooms.spec.ts
+      - frontend/tests/e2e/rooms
+      - frontend/src/routes/(protected)/layout.test.ts
+      - frontend/src/lib/settings/sections.test.ts
+      - frontend/src/params.test.ts
+  # A deleted scaffold slice is re-stamped file by file as the template adds to
+  # it (settings.py, 2026.10.x). The slice is gone when its router is.
+  - version: v2026.10.24
+    when: "{{ _stage == 'after' and skeleton == 'web' }}"
+    command:
+      - sh
+      - -c
+      - >-
+        d=backend/src/{{ package_name }}/api/example;
+        [ -e $d/router.py ] || rm -f $d/dependencies.py $d/models.py $d/schemas.py $d/service.py $d/settings.py;
+        rmdir $d 2>/dev/null || true
+
 # Which skeleton this app is stamped from, asked first because `_subdirectory`
 # and every question below read it. `web` is the FastAPI + SvelteKit container
 # app in template/; `desktop` the Tauri + SvelteKit app in skeletons/desktop/.

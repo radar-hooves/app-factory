@@ -6,6 +6,19 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.24] - 2026-10-12
+
+A converging app ends without the files the template retired. Need: master-project's CI cut-over session, which converged mission-command, earworm, eight and casefile to 2026.10.23 and deleted `e2e-ci.yaml` by hand in all four.
+
+### Added
+
+- **`_migrations` delete what copier cannot.** Measured 12/10/2026 on a scratch app stamped at v2026.9.45 and updated to 2026.10.23: copier removes a file the old tagged render had and the new one lacks (the four old workflow callers went), but leaves behind (a) a file `_exclude` newly hides, since the new render is simply not asked to ship it, and (b) a file only ever in an untagged commit (`e2e-ci.yaml`, `d61d3565`), which neither render knows. One version-keyed migration, run once after the update (`rm -rf`, so an app already clean is untouched), deletes `.github/image-inputs.sh`, the old and untagged workflow callers, and every `_exclude`d factory test. A second removes the scaffold `api/example/` files when the app has deleted the slice's router, since copier re-stamps each file the template adds to a slice (`settings.py`, in casefile). `tests/migrations` holds the first list to `_exclude`. `_migrations` need `--trust`, which `/master:update-app-template` already passes. Chosen over `_tasks` (which also run on a fresh stamp) and over `_exclude` (a stamp-time filter that never touches an existing file).
+
+### Fixed
+
+- **`tests/support/live_server.py` spawns the server from `backend`, not `backend/tests`.** `BACKEND` was `parents[1]`, which is `tests`; `python -m uvicorn` puts its cwd first on `sys.path`, so an app test package named like a dependency (casefile's `tests/mcp`) shadowed the library. It is `parents[2]`.
+- **The 2026.9.46 entry below was wrong about the update.** It says copier deletes the `_exclude`d test files in an existing app; it deleted none (casefile, and the scratch update above). The migration above is what deletes them.
+
 ## [2026.10.23] - 2026-10-11
 
 ### Fixed
@@ -504,7 +517,7 @@ Proven on a scratch copy of Bragi's main, 01/10/2026, on Linux: svelte-check, th
 
   `template/.pre-commit-config.yaml.jinja` gains a `template-parity` hook running `check-template-parity.py check .` (reached through the `.claude/skills` symlink `/master:setup-symlinks` gives every repo under master-project, exactly as `check-canonical-shape.py` already is) on every commit — a mechanical fence for every remaining factory-owned file, tests included, derived every run from the factory's own file list (`stamped_files()`'s `git ls-files template/`) rather than a list hand-kept in this repo. Proven on a scratch render: editing a stamped factory module reports `TEMPLATE PARITY FAILED` naming the file and exits 1; an unedited render reports `212/212` and exits 0. The gate passes through a genuine copier update because that operation re-renders the owed files and regenerates `.template-parity.json` in the same motion (`converge-to-template.py --apply`, or a plain `copier update` followed by `check-template-parity.py --generate .`); a plain `copier update` that skips the regenerate step is the one case that can still show stale drift, unchanged from before this change.
 
-  An existing app's next `copier update` (verified against a real copier 9.18.2 update, not assumed): the ~20 now-excluded test files are DELETED outright, cleanly, with no conflict marker — copier's diff-and-patch treats "the new template no longer ships this file" as an unconditional delete regardless of local edits, so an app that had tuned one of them (the exact godswood shape) loses that edit silently in the same motion, which is the point. Nothing else in the update path changes.
+  An existing app's next `copier update` does NOT delete the now-excluded test files: `_exclude` stops the new render shipping them but removes nothing already in the app (corrected 12/10/2026; the first version of this paragraph claimed a delete that never happened, in casefile or a scratch update). Since 2026.10.24 a migration deletes them, edits and all.
 
   Audited NEED 3 (a factory test's assumption — boot time, ports — should be app config, never an app edit to the factory's own test): no current hardcode was found. `AgentSettings.timeout_seconds` is already a Settings field apps override by env, and `.github/image-smoke.sh`'s 60 s total boot wait is already `_skip_if_exists`, sanctioned per-app. The specific `test_agent_jobs_api.py` assumption godswood hit is not reproducible against this commit's factory copy; whatever godswood tuned locally is erased by its next update regardless, per the deletion above.
 
