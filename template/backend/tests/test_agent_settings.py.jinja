@@ -100,3 +100,8 @@ def test_a_named_gateway_confines_the_child_to_it(monkeypatch: pytest.MonkeyPatc
     direct = cli.environment(AgentSettings().driver(), persona)
     assert direct["CLAUDE_CODE_OAUTH_TOKEN"] == "direct-path-token"
     assert "ANTHROPIC_BASE_URL" not in direct
+
+
+def test_every_session_is_confined_unless_the_deployment_says_otherwise() -> None:
+    assert AgentSettings().driver().confine is True
+    assert AgentSettings(confine=False).driver().confine is False

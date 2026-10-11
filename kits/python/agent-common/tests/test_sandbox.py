@@ -142,3 +142,12 @@ def test_a_session_connects_only_to_its_models_and_its_mcp_servers_ports(
 
     assert cli._ports(gateway, {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4318"}, str(config)) == [4000, 4318, 8123]
     assert cli._ports(confined, {}, None) == [443]
+
+
+def test_a_multi_call_binary_is_still_called_by_the_name_it_was_given(tmp_path: Path) -> None:
+    """`true` on a Nix host is a symlink to coreutils, which dispatches on argv[0]."""
+    command = sandbox.confine(["true", "--version"], read=[tmp_path], write=[], connect=[])
+
+    called = command[command.index("--") + 1 :]
+    assert [Path(called[0]).name, *called[1:]] == ["true", "--version"]
+    assert subprocess.run(command, capture_output=True, timeout=30).returncode == 0
