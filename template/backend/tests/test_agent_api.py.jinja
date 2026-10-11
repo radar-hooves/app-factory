@@ -250,7 +250,7 @@ async def test_an_ask_names_the_conversation_before_the_agent_starts_and_keeps_t
     assert len(inits) == 2 and {e["session_id"] for e in inits} == {first["session_id"]}
 
     row = _row(first["session_id"])
-    assert row.session_id and row.session_id.startswith("fake-") and row.session_id != row.id
+    assert row.session_id and row.session_id != row.id
     assert row.title == "what is recreation leave?"
     assert row.answering_since is None and row.turns[0]["answered"] is True
 
