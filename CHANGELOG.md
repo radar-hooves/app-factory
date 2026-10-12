@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.29] - 2026-10-13
+
+A stamped app's dev server gets the operator's dev identity wherever the fleet declares one, with no per-app step. Need: eight (session eight-round6) and master-project-71, 13/10/2026.
+
+### Changed
+
+- **`frontend/dev-identity.ts` no longer vends the dev uid from the broker; `vite.config.ts` reads `<APP>_DEV_UID`, else the host's `HOUSEHOLD_DEV_UID`.** The vend ran `portcullis vend-to-file --identity <slug> dev-identity` with no `--key`, so it looked for `~/.config/portcullis/<slug>.key` while atlas enrols `<slug>-dev.key`; with that key the broker answered 403 out of scope, because yggdrasil holds no `dev-identity` catalogue entry or grant. It never worked for any stamped app. A uid is an identifier, not a secret, so one per-host declaration in the fleet config replaces a catalogue entry plus a grant per app. `vendDevUid`, its `portcullis` shell-out and the `portcullis_url` dependency of the frontend are gone; the refusal names both variables. The fleet config must set `HOUSEHOLD_DEV_UID` on each host that runs dev servers (yggdrasil, not done here). An app takes this at its next converge.
+
 ## [2026.10.28] - 2026-10-13
 
 Take this, not 2026.10.27: that tag's test file was one `ruff format` away from clean, so a scratch render failed the factory self-test's format check. No other difference.
