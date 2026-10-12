@@ -161,9 +161,10 @@ async def load(settings: AgentSettings, declared: Lessons) -> tuple[str, list[st
         return str(answer["brief"]), [str(item["id"]) for item in answer["lessons"]]
     except Exception as exc:
         logger.warning(
-            "Loading lessons for %s %s failed; the job starts without them: %r",
+            "Loading lessons for %s %s failed (%s); the job starts without them: %s",
             declared.domain,
             declared.situation,
+            type(exc).__name__,
             exc,
         )
         return "", []

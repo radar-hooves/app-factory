@@ -456,7 +456,7 @@ async def test_load_accepts_an_unwrapped_payload_and_warns_with_the_cause_on_a_b
     monkeypatch.setattr(lessons, "Client", _fake_client(_odd))
     with caplog.at_level(logging.WARNING):
         assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
-    assert "KeyError('brief')" in caplog.text
+    assert "KeyError" in caplog.text and "brief" in caplog.text and "starts without them" in caplog.text
 
 
 async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict[str, Any]]]) -> None:

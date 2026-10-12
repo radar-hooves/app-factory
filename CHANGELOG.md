@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.31] - 2026-10-13
+
+### Fixed
+
+- **`lessons.load`'s fail-open warning names the exception type as its own token** (`failed (KeyError); ... without them: 'brief'`), and its test asserts the type, the key and the marker separately. 2026.10.30 logged `%r` and asserted `KeyError('brief')`, which fails in a stamped app whose logging setup stringifies the exception before the record is built. Need: godswood (radar-hooves/godswood#876).
+
 ## [2026.10.30] - 2026-10-13
 
 A job's lessons actually load against the real core-memory. Need: godswood (radar-hooves/godswood#876), 13/10/2026.
