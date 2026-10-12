@@ -24,7 +24,7 @@ Every stamped app carries its own `.template-parity.json`: the sha256 of each fa
 Two consequences:
 
 - Changing a gated file in `template/` breaks parity in every app until each takes the new copy **and** a re-stamped manifest. Both halves, or the gate lies.
-- You do not maintain the manifest by hand. `check-template-parity.py --generate` (in master's `canonical-app-migration` skill) writes it into the app from a fresh render of the tagged template, `--ref <tag>` for a release behind `main` and `--ref stamped` for the app's own `_commit`; an app takes a new factory file and regenerates its manifest in the same commit. A stale manifest is worse than none — it passes every app matching the *old* template.
+- You do not maintain the manifest by hand. `household-precommit-template-parity --generate .` (master's household PATH gate) writes it into the app from a fresh render of the tagged template, `--ref <tag>` for a release behind `main` and `--ref stamped` for the app's own `_commit`; an app takes a new factory file and regenerates its manifest in the same commit. A stale manifest is worse than none — it passes every app matching the *old* template.
 
 An app that must genuinely differ records `parity:<path>`, or `deps:<name>` for a dependency floor, in its `.canonical-exceptions`, dated, with a reason. The bar is `canonical-app-shape.md` §Sameness: a difference that is right is right for every app, so it belongs here, not there.
 

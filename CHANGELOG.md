@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.25] - 2026-10-12
+
+A repo can switch the `canonical-app-migration` skill off without losing its commits. Need: master-project.
+
+### Changed
+
+- **The template-parity hook is `household-precommit-template-parity .`, a household PATH gate like `household-precommit-pii`.** It was a `bash -c` wrapper that found `check-template-parity.py` through the `canonical-app-migration` skill symlink, so an operator who switched that skill off in a repo (by removing its link) had every commit refused. The script now lives in master at `.claude/hooks/master/precommit/template-parity.py` and the command execs it; a machine without the command fails the commit loudly. `working-on-the-template.md` names the new command for `--generate`. An app takes this with `copier update`. Need: master-project.
+
 ## [2026.10.24] - 2026-10-12
 
 A converging app ends without the files the template retired. Need: master-project's CI cut-over session, which converged mission-command, earworm, eight and casefile to 2026.10.23 and deleted `e2e-ci.yaml` by hand in all four.
