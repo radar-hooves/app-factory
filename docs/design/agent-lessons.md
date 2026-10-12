@@ -44,6 +44,20 @@ False` cannot refuse the key the brief asks for. `lessons.cited(job)` reads it b
 keeping only values shaped like a belief id (`[0-9a-f]{32}`): only ids and a person's
 corrections leave the app, never a job's content.
 
+**Bounding the load.** `Lessons(focus="", limit=None, max_chars=None)` are passed to
+`lesson load` for a job that knows its specifics before it starts (godswood's readings
+load 75 lessons, about 41,000 characters, into every prompt, covering five banks'
+layouts for a statement from one bank). `focus` is free text: lessons sharing a whole
+word with it rank first, then the more specific layer, then confidence. `limit` caps
+the count, `max_chars` caps the brief's lesson lines as a ranked prefix. Each is sent
+only when set, so unset is the unbounded load; `limit` and `max_chars` below 1 and a
+focus over 500 characters are refused at the declaration. core-memory answers `total`
+and `omitted`, and `agent_jobs.lessons` records them beside the loaded ids (no column:
+the field is JSON, and an older core-memory that reports neither leaves them out). A
+core-memory that refuses the bound arguments (a server older than its `focus`/`limit`/
+`max_chars` change) is retried once unbounded, warned, never failed. `load` returns a
+`Loaded(brief, ids, total, omitted)`.
+
 **`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None)`**, the one call
 an app makes when a person takes the result (`accepted=True`) or corrects it. It
 snapshots the job's loaded and cited ids, model (`job.model`, else the persona),

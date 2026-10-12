@@ -302,10 +302,10 @@ async def start(
     prompt = await run_in_threadpool(redact, persona.name, created_by_id, prompt)
     recorded = None
     if lessons is not None:
-        brief, loaded = await lessons_module.load(settings, lessons)
+        loaded = await lessons_module.load(settings, lessons)
         recorded = lessons_module.record(lessons, loaded)
-        if brief:
-            append_system_prompt = f"{append_system_prompt}\n\n{brief}" if append_system_prompt else brief
+        if loaded.brief:
+            append_system_prompt = f"{append_system_prompt}\n\n{loaded.brief}" if append_system_prompt else loaded.brief
         if json_schema is not None:
             json_schema = lessons_module.declare_lessons_used(json_schema)
     await run_in_threadpool(_seed_files, folder, files or {})

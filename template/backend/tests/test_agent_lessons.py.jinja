@@ -60,7 +60,7 @@ def workspace_id() -> int:
 
 
 def _declared(*, propose: bool = True, loaded: list[str] | None = None) -> dict[str, Any]:
-    return lessons.record(lessons.Lessons(DOMAIN, SITUATION, propose=propose), loaded or [])
+    return lessons.record(lessons.Lessons(DOMAIN, SITUATION, propose=propose), lessons.Loaded(ids=loaded or []))
 
 
 def _seed_job(workspace_id: int, *, lessons_used: list[str] | None, declared: dict[str, Any] | None = None) -> str:
@@ -424,9 +424,64 @@ def test_a_lease_already_held_refuses_a_second_claim(workspace_id: int) -> None:
 async def test_load_returns_the_brief_and_ids_for_the_declared_situation(
     with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
 ) -> None:
-    brief, ids = await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION))
+    loaded = await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION))
     assert calls == [("lesson", {"action": "load", "domain_name": DOMAIN, "situation": SITUATION})]
-    assert ids == [BELIEF_1] and BELIEF_1 in brief
+    assert loaded.ids == [BELIEF_1] and BELIEF_1 in loaded.brief
+    assert (loaded.total, loaded.omitted) == (None, None)
+
+
+async def test_load_passes_the_declared_bounds_and_reports_total_and_omitted(
+    with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[dict[str, Any]] = []
+
+    async def _bounded(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        seen.append(arguments)
+        return SimpleNamespace(
+            structured_content={"result": {"lessons": [{"id": BELIEF_1}], "brief": "b", "total": 75, "omitted": 74}}
+        )
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_bounded))
+    declared = lessons.Lessons(DOMAIN, SITUATION, focus=" ING bank statement ", limit=5, max_chars=4000)
+    loaded = await lessons.load(with_core_memory, declared)
+    assert seen == [
+        {
+            "action": "load",
+            "domain_name": DOMAIN,
+            "situation": SITUATION,
+            "focus": "ING bank statement",
+            "limit": 5,
+            "max_chars": 4000,
+        }
+    ]
+    assert (loaded.total, loaded.omitted) == (75, 74)
+    assert lessons.record(declared, loaded) == {
+        "domain": DOMAIN,
+        "situation": SITUATION,
+        "propose": True,
+        "loaded": [BELIEF_1],
+        "total": 75,
+        "omitted": 74,
+    }
+
+
+async def test_load_retries_unbounded_against_a_core_memory_that_refuses_the_bounds(
+    with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    seen: list[dict[str, Any]] = []
+
+    async def _old_server(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        seen.append(arguments)
+        if "limit" in arguments:
+            raise ToolError("Unexpected keyword argument: limit")
+        return SimpleNamespace(structured_content={"result": {"lessons": [{"id": BELIEF_1}], "brief": "b"}})
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_old_server))
+    with caplog.at_level(logging.WARNING):
+        loaded = await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION, limit=5))
+    assert [("limit" in call) for call in seen] == [True, False]
+    assert loaded.ids == [BELIEF_1] and loaded.total is None
+    assert "loading unbounded" in caplog.text
 
 
 async def test_load_fails_open_when_core_memory_cannot_be_reached(
@@ -437,7 +492,7 @@ async def test_load_fails_open_when_core_memory_cannot_be_reached(
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_unreachable))
     with caplog.at_level(logging.WARNING):
-        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == lessons.Loaded()
     assert "starts without them" in caplog.text
 
 
@@ -448,19 +503,19 @@ async def test_load_accepts_an_unwrapped_payload_and_warns_with_the_cause_on_a_b
         return SimpleNamespace(structured_content={"lessons": [{"id": BELIEF_1}], "brief": "b"})
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_flat))
-    assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("b", [BELIEF_1])
+    assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == lessons.Loaded("b", [BELIEF_1])
 
     async def _odd(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
         return SimpleNamespace(structured_content={"unexpected": 1})
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_odd))
     with caplog.at_level(logging.WARNING):
-        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == lessons.Loaded()
     assert "KeyError" in caplog.text and "brief" in caplog.text and "starts without them" in caplog.text
 
 
 async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict[str, Any]]]) -> None:
-    assert await lessons.load(AgentSettings(), lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+    assert await lessons.load(AgentSettings(), lessons.Lessons(DOMAIN, SITUATION)) == lessons.Loaded()
     assert calls == []
 
 
@@ -473,9 +528,12 @@ async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict
         (DOMAIN, [" "]),
         ("d" * 256, ["a"]),
         (DOMAIN, ["k" * 256]),
+        (DOMAIN, ["a"], True, "f" * 501),
+        (DOMAIN, ["a"], True, "", 0),
+        (DOMAIN, ["a"], True, "", None, 0),
     ],
 )
-def test_lessons_refuses_a_malformed_declaration(args: tuple[str, list[str]]) -> None:
+def test_lessons_refuses_a_malformed_declaration(args: tuple[Any, ...]) -> None:
     with pytest.raises(BadRequestError):
         lessons.Lessons(*args)
 

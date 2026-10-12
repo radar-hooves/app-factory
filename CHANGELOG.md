@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.32] - 2026-10-13
+
+### Added
+
+- **A job bounds its lesson load: `Lessons(focus=, limit=, max_chars=)`.** Passed to core-memory's `lesson load` (its commit 93a3ddb) only when set, so unset loads every lesson as before. `agent_jobs.lessons` also records core-memory's `total` and `omitted` beside the loaded ids (JSON, no migration; left out when the server reports neither). `lessons.load` now returns `Loaded(brief, ids, total, omitted)` instead of a tuple. A core-memory that refuses the bound arguments is retried once unbounded with a warning. Measured need: godswood's readings load 75 lessons, ~41,000 characters, per prompt. Need: godswood (radar-hooves/godswood#876).
+
 ## [2026.10.31] - 2026-10-13
 
 ### Fixed
