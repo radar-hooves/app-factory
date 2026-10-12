@@ -71,6 +71,8 @@ TypeScript:
 import { DS_COLOR_STATUS_SUCCESS_LIGHT } from '@poodle64/design-tokens';
 ```
 
+An app sets how its display face is written, once, in its palette: `--ds-font-display-transform` (e.g. `uppercase`) and `--ds-font-display-tracking` (e.g. `0.04em`). `@poodle64/ui` and `@poodle64/librarian` read both wherever they set `--ds-font-display`; unset, the face inherits as it always did. An app that brings its own face for a role drops the factory's: in the app factory it answers `factory_fonts` (copier) without that role.
+
 Fonts are self-hosted per app: add `@fontsource-variable/fraunces`, `@fontsource-variable/hanken-grotesk`, and `@fontsource-variable/jetbrains-mono` and import them in the root layout. The package declares the family stacks; the app supplies the font files. The body face leads with Avenir Next, Apple's own system font; it needs no package (never bundled, not licensable for web embedding) and simply renders on a device that already has it, falling through to the self-hosted Hanken Grotesk Variable everywhere else.
 
 ## The gate: `ds-check-arbitrary-values`

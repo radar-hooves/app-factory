@@ -81,7 +81,7 @@
 				</span>
 			{/if}
 			<div class="min-w-0 flex-1">
-				<Dialog.Title class="font-display text-lg leading-tight font-semibold tracking-tight"
+				<Dialog.Title class="font-display text-lg leading-tight font-semibold tracking-[var(--ds-font-display-tracking,-0.025em)]"
 					>{title}</Dialog.Title
 				>
 				{#if subtitle}

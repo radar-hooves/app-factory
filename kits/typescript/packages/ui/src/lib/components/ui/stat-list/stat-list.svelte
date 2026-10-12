@@ -67,7 +67,7 @@
 					{/if}
 					<span
 						class="ds-tabular text-stat font-mono leading-none font-semibold {item.muted
-							? 'text-muted-foreground/60'
+							? 'text-muted-foreground'
 							: ''}">{item.value}</span
 					>
 					{#if item.sub}

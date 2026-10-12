@@ -95,7 +95,7 @@
 			{/if}
 			{#if title}
 				<div class="flex items-center gap-2">
-					<h1 class="font-display text-display leading-tight font-semibold tracking-[-0.02em]">
+					<h1 class="font-display text-display leading-tight font-semibold tracking-[var(--ds-font-display-tracking,-0.02em)]">
 						{title}
 					</h1>
 					{#if info}

@@ -446,6 +446,19 @@
 			var(--ds-shadow-sm);
 	}
 
+	/**
+	 * How the display face is set. An app says it once in its palette
+	 * (`--ds-font-display-transform: uppercase; --ds-font-display-tracking:
+	 * 0.04em`) and every place the factory sets --ds-font-display follows: this
+	 * rule for `.font-display`, the components' own tracking, .ds-prose and the
+	 * librarian's markdown. Unset, each falls back to `inherit`, which is what the
+	 * property did before, so an app that sets neither renders as it always did.
+	 */
+	.font-display {
+		text-transform: var(--ds-font-display-transform, inherit);
+		letter-spacing: var(--ds-font-display-tracking, inherit);
+	}
+
 	/** Tabular figures, so a column of numbers aligns. */
 	.ds-tabular {
 		font-variant-numeric: tabular-nums;
@@ -737,7 +750,7 @@
 		   form. The literal keeps this rule correct on its own; the var keeps an
 		   app's override flowing through. */
 		letter-spacing: var(--tracking-eyebrow, 0.06em);
-		color: color-mix(in oklch, var(--ds-nav-ink-muted) 70%, transparent);
+		color: var(--ds-nav-ink-muted);
 	}
 
 	/* A count badge is small text on a tint, so it carries the 4.5:1 text floor
@@ -1144,6 +1157,8 @@
 	.ds-prose h3,
 	.ds-prose h4 {
 		font-family: var(--ds-font-display);
+		text-transform: var(--ds-font-display-transform, inherit);
+		letter-spacing: var(--ds-font-display-tracking, inherit);
 		font-weight: 600;
 		line-height: 1.25;
 		margin-block: var(--ds-spacing-lg) var(--ds-spacing-sm);

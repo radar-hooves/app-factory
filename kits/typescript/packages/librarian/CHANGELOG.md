@@ -4,6 +4,12 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.9.28] - 2026-10-12
+
+### Added
+
+- **Markdown headings follow `--ds-font-display-transform` and `--ds-font-display-tracking`** (design-tokens README), the same palette seam `@poodle64/ui` 2026.10.12 reads. Unset, they inherit as before. Need: caspo (the CASPO app session), 12/10/2026.
+
 ## [2026.9.27] - 2026-10-01
 
 Sharing an answer. Need: `radar-hooves/cadmus (Nightjar), 30/09/2026`.

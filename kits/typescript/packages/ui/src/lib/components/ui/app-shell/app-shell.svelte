@@ -457,7 +457,7 @@
 					slot to re-earn a behaviour the shell could give everyone is the shell
 					failing to ship something good.
 				-->
-				<span class="font-display text-body hidden font-semibold tracking-tight sm:inline"
+				<span class="font-display text-body hidden font-semibold tracking-[var(--ds-font-display-tracking,-0.025em)] sm:inline"
 					>{brandTitle}</span
 				>
 			{/if}

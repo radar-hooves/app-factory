@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.12] - 2026-10-12
+
+An app whose palette clears 4.5:1 clears it in the primitives, and sets its display face once. Need: caspo (the CASPO app session), 12/10/2026.
+
+### Changed
+
+- **StatList paints a muted value in `text-muted-foreground`, not at 60% of it.** The extra dimming measured 3.1:1 on caspo's dark ground; a zero is still text.
+- **`.ds-nav-heading` is `--ds-nav-ink-muted` itself, not 70% of it** (3.3:1 on caspo's light rail). An app that overrode the rule to the same colour deletes its override.
+
+### Added
+
+- **`--ds-font-display-transform` and `--ds-font-display-tracking`: how the display face is set.** An app says it once in its palette (`--ds-font-display-transform: uppercase`) and every place the package sets the display face follows: `.font-display`, the titles of AppDialog, AppShell, ListShell and PageHeader (whose tracking now reads the token, defaulting to the `-0.025em` / `-0.02em` they had), and `.ds-prose` headings. Unset, each is `inherit` and nothing moves. An app that hung `text-transform` on `.font-display` in its own app.css deletes it.
+
 ## [2026.10.11] - 2026-10-08
 
 ### Changed

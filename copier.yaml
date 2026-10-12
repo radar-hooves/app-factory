@@ -240,6 +240,18 @@ dark_first:
   help: >-
     Does this app rest DARK? Palette-class, like frontend/src/app.css — the one axis apps are allowed to differ on. `true` stamps a pre-hydration seed in app.html that sets mode-watcher's own storage key and class before first paint, and only when the visitor has stored no preference of their own. mode-watcher's `defaultMode` cannot express it: its setInitialMode script is injected at render time, which is late enough to flash light on a cold SPA shell, so an app that answered it by hand ended up excepting the whole file.
 
+factory_fonts:
+  type: str
+  multiselect: true
+  default: [display, body, code]
+  choices:
+    Fraunces (--ds-font-display): display
+    Hanken Grotesk (--ds-font-body): body
+    JetBrains Mono (--ds-font-code): code
+  when: "{{ skeleton == 'web' }}"
+  help: >-
+    Which of the factory's self-hosted faces this app loads. Palette-class, like app.css: an app that brings its own face for a role (its own @font-face behind --ds-font-display, say) drops that one, and neither its package nor its import ships. Leave all three for an app that uses the factory's faces.
+
 density:
   type: str
   default: comfortable

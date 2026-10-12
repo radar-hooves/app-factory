@@ -62,7 +62,7 @@
 		{...restProps}
 	>
 		<div class="flex flex-none items-center gap-2 px-5 pt-5 pb-3">
-			<h2 class="font-display text-display flex-1 truncate font-semibold tracking-tight">
+			<h2 class="font-display text-display flex-1 truncate font-semibold tracking-[var(--ds-font-display-tracking,-0.025em)]">
 				{title}
 			</h2>
 			{#if actions}{@render actions()}{/if}

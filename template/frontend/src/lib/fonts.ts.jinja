@@ -1,0 +1,8 @@
+// The design system's faces (--ds-font-display/body/mono in @poodle64/design-tokens)
+// render only where this is imported: the stock layout does, and an app that owns
+// its root layout imports it there. Only the faces this app answered `factory_fonts`
+// for are loaded; an app that brings its own @font-face loads none of the matching ones.
+{% if 'display' in factory_fonts %}import '@fontsource-variable/fraunces';
+{% endif %}{% if 'body' in factory_fonts %}import '@fontsource-variable/hanken-grotesk';
+{% endif %}{% if 'code' in factory_fonts %}import '@fontsource-variable/jetbrains-mono';
+{% endif %}export {};

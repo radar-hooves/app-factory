@@ -145,6 +145,8 @@
 	.agent-prose :global(h3),
 	.agent-prose :global(h4) {
 		font-family: var(--ds-font-display);
+		text-transform: var(--ds-font-display-transform, inherit);
+		letter-spacing: var(--ds-font-display-tracking, inherit);
 		font-weight: 600;
 		line-height: 1.3;
 		margin-block: 1.6em 0.6em;

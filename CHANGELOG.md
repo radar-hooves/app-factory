@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.26] - 2026-10-12
+
+An app that brings the CASPO-style brand (its own faces, palette and display setting) no longer fights the factory for it. Need: caspo (the CASPO app session), 12/10/2026.
+
+### Added
+
+- **`factory_fonts` (copier, multiselect, default all three): which of the factory's self-hosted faces an app loads.** `fonts.ts` is now `fonts.ts.jinja` and `package.json` declares `@fontsource-variable/fraunces` (`display`), `hanken-grotesk` (`body`) and `jetbrains-mono` (`code`) only for the roles chosen, so an app with its own `@font-face` behind `--ds-font-display` answers without `display` and the unused face neither bundles nor needs an owed-file drift. The default renders exactly as before. Answer it in `.copier-answers.yml` and run `copier update`; the layout's `import '$lib/fonts'` stays. Chosen over a runtime switch because the cost is the bundle and the dependency, both fixed at render time.
+
+### Changed
+
+- **`@poodle64/ui` ^2026.10.12 and `@poodle64/librarian` 2026.9.28**: StatList muted values and `.ds-nav-heading` no longer dim the palette's muted ink (3.1:1 and 3.3:1 on caspo), and the display face's case and tracking are the palette's to set (`--ds-font-display-transform`, `--ds-font-display-tracking`). See the packages' changelogs. Need: caspo.
+
 ## [2026.10.25] - 2026-10-12
 
 A repo can switch the `canonical-app-migration` skill off without losing its commits. Need: master-project.

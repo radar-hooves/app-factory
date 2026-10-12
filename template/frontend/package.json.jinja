@@ -29,10 +29,10 @@
 		"test:e2e:debug": "playwright test --debug"
 	},
 	"devDependencies": {
-		"@fontsource-variable/fraunces": "^5.1.0",
-		"@fontsource-variable/hanken-grotesk": "^5.1.0",
-		"@fontsource-variable/jetbrains-mono": "^5.1.0",
-		"@lucide/svelte": "^1.7.0",
+{% if 'display' in factory_fonts %}		"@fontsource-variable/fraunces": "^5.1.0",
+{% endif %}{% if 'body' in factory_fonts %}		"@fontsource-variable/hanken-grotesk": "^5.1.0",
+{% endif %}{% if 'code' in factory_fonts %}		"@fontsource-variable/jetbrains-mono": "^5.1.0",
+{% endif %}		"@lucide/svelte": "^1.7.0",
 		"@playwright/test": "1.58.2",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.57.0",
@@ -66,8 +66,8 @@
 	},
 	"dependencies": {
 		"@poodle64/design-tokens": "^2026.9.0",
-		"@poodle64/librarian": "2026.9.27",
-		"@poodle64/ui": "^2026.10.6",
+		"@poodle64/librarian": "2026.9.28",
+		"@poodle64/ui": "^2026.10.12",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
 		"mode-watcher": "^1.1.0",
