@@ -199,13 +199,17 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, dict[str,
     async def _tool_call(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
         made.append((tool, arguments))
         if arguments["action"] == "load":
+            # The live server's shape: FastMCP wraps the payload under one `result` key.
             return SimpleNamespace(
                 structured_content={
-                    "lessons": [{"id": BELIEF_1, "statement": "Zero-dollar interest lines are not rows."}],
-                    "brief": f"Lessons from earlier work.\n- [{BELIEF_1}] Zero-dollar interest lines are not rows.",
+                    "result": {
+                        "situation": SITUATION,
+                        "lessons": [{"id": BELIEF_1, "statement": "Zero-dollar interest lines are not rows."}],
+                        "brief": f"Lessons from earlier work.\n- [{BELIEF_1}] Zero-dollar interest lines are not rows.",
+                    }
                 }
             )
-        return SimpleNamespace(structured_content={"decision_id": "decision-1", "duplicate": False})
+        return SimpleNamespace(structured_content={"result": {"decision_id": "decision-1", "duplicate": False}})
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_tool_call))
     yield made
@@ -435,6 +439,24 @@ async def test_load_fails_open_when_core_memory_cannot_be_reached(
     with caplog.at_level(logging.WARNING):
         assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
     assert "starts without them" in caplog.text
+
+
+async def test_load_accepts_an_unwrapped_payload_and_warns_with_the_cause_on_a_bad_one(
+    with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def _flat(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        return SimpleNamespace(structured_content={"lessons": [{"id": BELIEF_1}], "brief": "b"})
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_flat))
+    assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("b", [BELIEF_1])
+
+    async def _odd(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        return SimpleNamespace(structured_content={"unexpected": 1})
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_odd))
+    with caplog.at_level(logging.WARNING):
+        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+    assert "KeyError('brief')" in caplog.text
 
 
 async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict[str, Any]]]) -> None:

@@ -139,7 +139,9 @@ async def _call(settings: AgentSettings, arguments: dict[str, Any], *, timeout: 
             init_timeout=_INIT_TIMEOUT_SECONDS,
         ) as memory:
             raw = await memory.call_tool("lesson", arguments)
-    return dict(raw.structured_content or {})
+    content = dict(raw.structured_content or {})
+    # FastMCP wraps a tool's non-object-schema return (`lesson` returns a dict-or-list union) under one `result` key.
+    return dict(content["result"]) if set(content) == {"result"} and isinstance(content["result"], dict) else content
 
 
 async def load(settings: AgentSettings, declared: Lessons) -> tuple[str, list[str]]:
@@ -159,7 +161,7 @@ async def load(settings: AgentSettings, declared: Lessons) -> tuple[str, list[st
         return str(answer["brief"]), [str(item["id"]) for item in answer["lessons"]]
     except Exception as exc:
         logger.warning(
-            "Loading lessons for %s %s failed; the job starts without them: %s",
+            "Loading lessons for %s %s failed; the job starts without them: %r",
             declared.domain,
             declared.situation,
             exc,
