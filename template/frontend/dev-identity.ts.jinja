@@ -24,56 +24,15 @@
  * itself drags in esbuild, which cannot run under the suite's jsdom environment.
  */
 
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-const BROKER_URL = process.env.PORTCULLIS_URL ?? '{{ portcullis_url }}';
-
-/** This app's enrolled portcullis identity — the same one the backend vends with. */
-const APP_SLUG = '{{ project_name }}';
-
 /**
- * The operator's Authentik uid, from the household broker.
+ * The operator's Authentik uid, declared once per host as `HOUSEHOLD_DEV_UID` by
+ * the fleet config, so no app carries a per-app step or a broker grant for it.
+ * A uid is an identifier, not a secret: the stable id the backend upserts a user
+ * by, readable by anyone who can read the user table.
  *
- * Nothing machine-local is needed to develop this app: the uid is the one thing
- * a checkout cannot know about the person at the keyboard, and it vends against
- * this app's enrolled portcullis identity like the backend's database password does.
- * Returns undefined rather than throwing, so a machine without portcullis still gets
- * the explicit refusal below instead of a stack trace out of a Vite config.
- *
- * `vend-to-file`, never stdout: a value on stdout reaches a shell history and
- * every log that captures the dev server's output.
+ * `<APP>_DEV_UID` still wins, for E2E and any host without the declaration.
  */
-export function vendDevUid(): string | undefined {
-	const directory = mkdtempSync(join(tmpdir(), 'dev-identity-'));
-	try {
-		const destination = join(directory, 'uid');
-		execFileSync(
-			'portcullis',
-			[
-				'vend-to-file',
-				'--broker',
-				BROKER_URL,
-				'--identity',
-				APP_SLUG,
-				'--field',
-				'uid',
-				'--mode',
-				'0600',
-				'dev-identity',
-				destination
-			],
-			{ stdio: 'pipe' }
-		);
-		return readFileSync(destination, 'utf8').trim() || undefined;
-	} catch {
-		return undefined;
-	} finally {
-		rmSync(directory, { recursive: true, force: true });
-	}
-}
+export const HOUSEHOLD_DEV_UID_ENV = 'HOUSEHOLD_DEV_UID';
 
 export interface DevIdentityEnv {
 	/** `<APP>_DEV_BEHIND_PROXY` — only the literal 'true' counts. */
@@ -108,12 +67,10 @@ export function resolveDevIdentity(env: DevIdentityEnv): DevIdentity {
 	const refusal =
 		behindProxy || env.devUid
 			? null
-			: 'No dev identity: the broker could not vend one and ' +
-				`${APP}_DEV_UID is not set. The dev server talks to the real database, so it needs a ` +
-				'real identity rather than an invented one. Check the broker is reachable and ' +
-				`unlocked and that this app's portcullis identity ('portcullis verify --broker ${BROKER_URL} ` +
-				`--credential dev-identity --identity ${APP_SLUG}') resolves — or run behind the ` +
-				`Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true).`;
+			: `No dev identity: ${APP}_DEV_UID is not set and neither is ${HOUSEHOLD_DEV_UID_ENV}, ` +
+				'which the fleet config declares per host. The dev server talks to the real database, ' +
+				'so it needs a real identity rather than an invented one. Set one of them — or run ' +
+				`behind the Authentik forward-auth proxy (${APP}_DEV_BEHIND_PROXY=true).`;
 
 	// The stable uid ONLY. Display fields are deliberately not injected: the
 	// backend updates mutable fields on every upsert, so a placeholder username

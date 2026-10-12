@@ -313,7 +313,7 @@ portcullis_url:
   type: str
   when: "{{ skeleton == 'web' }}"
   help: >-
-    Base URL of your secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py and the frontend's dev-identity.ts both resolve the database password and the operator's dev identity through it. PORTCULLIS_URL still overrides at runtime. No factory default — a fleet stamping its own apps supplies it from its own declaration (`--data-file`) rather than typing it per app; postgres_host below took the same lesson the hard way.
+    Base URL of your secrets broker. The ONE machine-local fact that cannot itself be vended, which is why it is answered rather than fetched: development holds no env file, and the backend's config/vend.py resolves the database password through it. PORTCULLIS_URL still overrides at runtime. No factory default — a fleet stamping its own apps supplies it from its own declaration (`--data-file`) rather than typing it per app; postgres_host below took the same lesson the hard way.
 
 
 private_index_name:

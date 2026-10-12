@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 import { appProxy } from './app-proxy';
-import { resolveDevIdentity, vendDevUid } from './dev-identity';
+import { HOUSEHOLD_DEV_UID_ENV, resolveDevIdentity } from './dev-identity';
 
 // The REAL path of node_modules, for Vite's serve allow-list.
 //
@@ -45,9 +45,10 @@ export default defineConfig(({ command, isPreview }) => {
 	// dev-identity.ts, which is unit-tested directly.
 	const identity = resolveDevIdentity({
 		behindProxy: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BEHIND_PROXY,
-		// The broker is the source; the env var is an override for a machine
-		// without portcullis (CI, a container-only E2E run).
-		devUid: process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? vendDevUid(),
+		// The app's own override (E2E) first, else the host's household declaration.
+		devUid:
+			process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ||
+			process.env[HOUSEHOLD_DEV_UID_ENV],
 		// Optional, and absent in most apps. Production's forward-auth proxy forwards
 		// whatever entitlements Authentik holds for the user; an app that gates modules
 		// on them needs the same header in dev or every gated module vanishes.

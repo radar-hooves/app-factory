@@ -2,9 +2,9 @@
 #
 # There is deliberately no env file here and nothing to fill in. Every fact this
 # app needs is stamped into its own config defaults (database host, port, user,
-# ports); the two values a checkout cannot know — the database password and the
-# operator's Authentik uid — are vended from the household broker at startup,
-# by the backend's config/vend.py and the frontend's dev-identity.ts.
+# ports); the database password is vended from the household broker at startup
+# by the backend's config/vend.py, and the operator's Authentik uid is the host's
+# HOUSEHOLD_DEV_UID, read by the frontend's dev-identity.ts.
 #
 # That is what makes the debugger work. Values that live only in a shell reach a
 # terminal and nothing else: `Run > Full Stack` starts VS Code's own processes,
