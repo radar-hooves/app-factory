@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.28] - 2026-10-13
+
+Take this, not 2026.10.27: that tag's test file was one `ruff format` away from clean, so a scratch render failed the factory self-test's format check. No other difference.
+
 ## [2026.10.27] - 2026-10-13
 
 A persona job's learning loop no longer depends on the model choosing to look its lessons up. Need: godswood (radar-hooves/godswood#876), 13/10/2026.
