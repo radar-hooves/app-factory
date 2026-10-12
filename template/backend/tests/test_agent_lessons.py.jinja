@@ -443,11 +443,15 @@ async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict
 
 
 @pytest.mark.parametrize(
-    "args", [("", ["a"]), (DOMAIN, []), (DOMAIN, ["a"] * 9), (DOMAIN, [" "]), ("d" * 256, ["a"]), (DOMAIN, ["k" * 256])]
+    "args", [("", ["a"]), (DOMAIN, []), (DOMAIN, [f"k{n}" for n in range(9)]), (DOMAIN, [" "]), ("d" * 256, ["a"]), (DOMAIN, ["k" * 256])]
 )
 def test_lessons_refuses_a_malformed_declaration(args: tuple[str, list[str]]) -> None:
     with pytest.raises(BadRequestError):
         lessons.Lessons(*args)
+
+
+def test_lessons_normalises_its_situation_as_core_memory_does() -> None:
+    assert lessons.Lessons(DOMAIN, [" reading ", "reading", "unit-test"]).situation == ["reading", "unit-test"]
 
 
 async def test_start_puts_the_loaded_lessons_in_the_system_prompt_and_on_the_row(

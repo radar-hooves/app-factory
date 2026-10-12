@@ -89,11 +89,14 @@ class Lessons:
     propose: bool = True
 
     def __post_init__(self) -> None:
+        # Stripped and deduped as core-memory does, so a correction's key is checked against the keys it will see.
+        keys = list(dict.fromkeys(key.strip() for key in self.situation))
+        object.__setattr__(self, "situation", keys)
         if not self.domain or len(self.domain) > _MAX_KEY:
             raise BadRequestError(f"lessons domain must be 1 to {_MAX_KEY} characters")
-        if not 0 < len(self.situation) <= _MAX_SITUATION:
+        if not 0 < len(keys) <= _MAX_SITUATION:
             raise BadRequestError(f"lessons situation must hold 1 to {_MAX_SITUATION} keys, general to specific")
-        if any(not key.strip() or len(key) > _MAX_KEY for key in self.situation):
+        if any(not key or len(key) > _MAX_KEY for key in keys):
             raise BadRequestError(f"every lessons situation key must be 1 to {_MAX_KEY} characters")
 
 
