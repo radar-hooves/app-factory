@@ -243,6 +243,15 @@ def _corrections(raw: list[dict[str, str]], situation: list[str]) -> list[dict[s
     return kept
 
 
+def _contradicts(raw: list[str], cites: list[str], *, accepted: bool) -> list[str]:
+    blamed = list(dict.fromkeys(str(item).lower() for item in raw))
+    if blamed and accepted:
+        raise BadRequestError("an accepted report cannot contradict a lesson")
+    if unknown := [item for item in blamed if item not in cites]:
+        raise BadRequestError(f"contradicts {unknown} are not lessons the job cited")
+    return blamed
+
+
 def report_outcome(
     db: Session,
     job_id: str,
@@ -250,11 +259,17 @@ def report_outcome(
     accepted: bool,
     attempts: int = 1,
     corrections: list[dict[str, str]] | None = None,
+    contradicts: list[str] | None = None,
 ) -> None:
     """Record, in `db`'s own transaction, how a person took `job_id`'s result: `accepted` as it
     stood, or corrected (`accepted=False`) with `corrections` as `[{"statement", "key"?}]`, each a
     short testable lesson the correction teaches, `key` one of the job's situation keys (default the
     most specific). Corrections are dropped when the job declared `propose=False`.
+
+    `contradicts` names the lessons the job cited that the correction showed wrong, and only those
+    are blamed: a corrected report without it moves no posterior. Refused here, as core-memory would
+    at delivery, on an accepted report or an id the job did not cite. Unlike corrections it is kept
+    under `propose=False`: it names lesson ids, never the person's words.
 
     Insert-only and synchronous: no network call, no vend, ever happens here. `db` must already be
     bound to the job's workspace; the caller commits. A no-op when this deployment names no
@@ -270,6 +285,8 @@ def report_outcome(
     if job is None or job.lessons is None:
         return
     declared = job.lessons
+    cites = cited(job)
+    blamed = _contradicts(contradicts or [], cites, accepted=accepted)
     if job.structured_output is not None and "lessons_used" not in job.structured_output:
         logger.warning("Job %s's structured answer has no lessons_used key", job_id)
     settled = job.updated_at - job.created_at if job.updated_at and job.created_at else None
@@ -281,11 +298,12 @@ def report_outcome(
         situation=declared["situation"],
         accepted=accepted,
         loaded=declared["loaded"],
-        cites=cited(job),
+        cites=cites,
         attempts=attempts,
         seconds=settled.total_seconds() if settled is not None else None,
         model=job.model or job.persona,
         corrections=_corrections(corrections or [], declared["situation"]) if declared["propose"] else [],
+        contradicts=blamed,
     )
 
 
@@ -304,6 +322,7 @@ class _Pending:
     seconds: float | None
     model: str
     corrections: list[dict[str, str]]
+    contradicts: list[str]
     created_at: datetime.datetime
 
 
@@ -375,25 +394,24 @@ async def _deliver_or_abandon(
         logger.error("Abandoned job %s's lesson report: %s", report.job_id, reason)
         return True
 
+    arguments: dict[str, Any] = {
+        "action": "report",
+        "domain_name": report.domain_name,
+        "situation": report.situation,
+        "run_ref": report.job_id,
+        "accepted": report.accepted,
+        "loaded": report.loaded,
+        "cited": report.cites,
+        "attempts": report.attempts,
+        "seconds": report.seconds,
+        "model": report.model,
+        "corrections": report.corrections,
+            }
+    if report.contradicts:
+        arguments["contradicts"] = report.contradicts
     try:
         # Idempotent on run_ref (the job id): a retry after a lost response counts once.
-        await _call(
-            settings,
-            {
-                "action": "report",
-                "domain_name": report.domain_name,
-                "situation": report.situation,
-                "run_ref": report.job_id,
-                "accepted": report.accepted,
-                "loaded": report.loaded,
-                "cited": report.cites,
-                "attempts": report.attempts,
-                "seconds": report.seconds,
-                "model": report.model,
-                "corrections": report.corrections,
-            },
-            timeout=_DELIVER_TIMEOUT_SECONDS,
-        )
+        await _call(settings, arguments, timeout=_DELIVER_TIMEOUT_SECONDS)
     except ToolError as exc:
         if _is_transient_tool_error(str(exc)):
             return await _note_transient(db_session_factory, report.job_id, report.created_at, exc)
@@ -456,6 +474,7 @@ async def retry_unsettled(
                     seconds=row.seconds,
                     model=row.model,
                     corrections=list(row.corrections),
+                    contradicts=list(row.contradicts),
                     created_at=row.created_at,
                 )
                 for row in rows

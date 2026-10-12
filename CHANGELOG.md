@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.33] - 2026-10-13
+
+### Added
+
+- **`lessons.report_outcome(..., contradicts=[ids])` names which cited lessons a correction showed wrong, and the sweep delivers them as `lesson report`'s `contradicts`.** core-memory 8e6921f blames only those ids: a corrected report without them moves no posterior (before, it contradicted every cited lesson and auto-quarantined 38 good ones in godswood). Refused at the call what core-memory refuses at delivery: `contradicts` on an accepted report, or an id the job did not cite. Omitted from the delivery when empty; kept under `propose=False`. Migration `d9e6f2a3b4c5` adds `agent_job_lesson_reports.contradicts`; an app repoints its `down_revision`. Need: godswood (radar-hooves/godswood#876).
+
 ## [2026.10.32] - 2026-10-13
 
 ### Added

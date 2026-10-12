@@ -176,6 +176,8 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
     model: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     #: `[{"statement", "key"?}]`, already empty when the job's `propose` gate is off.
     corrections: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
+    #: The cited ids the correction showed wrong (a subset of `cites`); empty on an accepted report.
+    contradicts: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     refused: Mapped[str | None] = mapped_column(Text, nullable=True)
     recorded_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: The lease `claim_lesson_report` hands out; its own value doubles as the fencing token

@@ -100,7 +100,11 @@ BELIEF_1, BELIEF_2 = "a" * 32, "b" * 32
 
 
 def _seed_report(
-    workspace_id: int, *, lessons_used: list[str], corrections: list[dict[str, str]] | None = None
+    workspace_id: int,
+    *,
+    lessons_used: list[str],
+    corrections: list[dict[str, str]] | None = None,
+    contradicts: list[str] | None = None,
 ) -> tuple[str, list[str]]:
     """A job citing `lessons_used`, and its already-inserted, still-unsettled report row."""
     job_id = _seed_job(workspace_id, lessons_used=lessons_used)
@@ -120,6 +124,7 @@ def _seed_report(
             seconds=12.5,
             model="example/deep",
             corrections=corrections or [],
+            contradicts=contradicts or [],
         )
         db.commit()
     return job_id, cites
@@ -281,6 +286,46 @@ def test_report_outcome_refuses_a_malformed_correction_at_the_call(
     with get_session_factory()() as db, pytest.raises(BadRequestError):
         bind_session(db, workspace_id=workspace_id)
         lessons.report_outcome(db, job_id, accepted=False, corrections=corrections)
+
+
+def test_report_outcome_files_the_cited_lessons_a_correction_showed_wrong(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1, BELIEF_2])
+    _file(workspace_id, job_id, accepted=False, contradicts=[BELIEF_2.upper(), BELIEF_2])
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.cites == [BELIEF_1, BELIEF_2] and report.contradicts == [BELIEF_2]
+
+
+def test_report_outcome_without_contradicts_files_none(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    _file(workspace_id, job_id, accepted=False)
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.contradicts == []
+
+
+def test_report_outcome_keeps_contradicts_for_a_job_that_must_not_propose(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1], declared=_declared(propose=False))
+    _file(workspace_id, job_id, accepted=False, contradicts=[BELIEF_1])
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.corrections == [] and report.contradicts == [BELIEF_1]
+
+
+@pytest.mark.parametrize(
+    ("accepted", "contradicts"),
+    [(True, [BELIEF_1]), (False, [BELIEF_2]), (False, ["not-an-id"])],
+    ids=["accepted", "not-cited", "malformed"],
+)
+def test_report_outcome_refuses_contradicts_core_memory_would_refuse(
+    workspace_id: int, with_core_memory: AgentSettings, accepted: bool, contradicts: list[str]
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with get_session_factory()() as db, pytest.raises(BadRequestError):
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, accepted=accepted, contradicts=contradicts)
+    assert _report(job_id, workspace_id) is None
 
 
 def test_report_outcome_rejects_zero_attempts(workspace_id: int, with_core_memory: AgentSettings) -> None:
@@ -625,6 +670,19 @@ async def test_retry_unsettled_delivers_one_idempotent_lesson_report(
     assert report is not None
     assert (report.refused, report.recorded_at is not None) == (None, True)
     assert _failing_alert() is None
+
+
+async def test_retry_unsettled_delivers_contradicts_only_when_there_are_some(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    blamed_job, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1, BELIEF_2], contradicts=[BELIEF_2])
+    plain_job, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
+
+    by_job = {arguments["run_ref"]: arguments for _, arguments in calls}
+    assert by_job[blamed_job]["contradicts"] == [BELIEF_2]
+    assert "contradicts" not in by_job[plain_job]
 
 
 async def test_retry_unsettled_settles_core_memorys_own_refusal(

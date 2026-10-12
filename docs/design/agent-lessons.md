@@ -58,7 +58,7 @@ core-memory that refuses the bound arguments (a server older than its `focus`/`l
 `max_chars` change) is retried once unbounded, warned, never failed. `load` returns a
 `Loaded(brief, ids, total, omitted)`.
 
-**`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None)`**, the one call
+**`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None, contradicts=None)`**, the one call
 an app makes when a person takes the result (`accepted=True`) or corrects it. It
 snapshots the job's loaded and cited ids, model (`job.model`, else the persona),
 seconds (the job's own run, not the review wait) and the corrections, and inserts them
@@ -70,6 +70,14 @@ without lessons is what `stats` sets the others against. A correction is `{state
 key?}`, short and testable, `key` one of the job's situation keys, validated at the
 call (statement 1 to 500 characters, at most 20, key in the situation): a malformed
 one is the caller's bug, not a refusal found days later in the sweep.
+
+`contradicts` is the ids among the job's cited lessons that the correction showed wrong
+(`agent_job_lesson_reports.contradicts`, delivered as `lesson report`'s `contradicts`
+only when non-empty). core-memory blames only those: a corrected report without it moves
+no posterior, which is the common case and valid. Refused at the call, as core-memory
+would at delivery, on an accepted report or an id the job did not cite (ids are
+lowercased and deduped). Unlike corrections it survives `propose=False`: it names
+lessons, never the person's words.
 
 **`propose=False`** is the per-job gate on proposing. The job still loads lessons and
 reports its outcome and citations, but `report_outcome` drops its corrections, so
