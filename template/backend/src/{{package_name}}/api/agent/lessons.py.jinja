@@ -406,7 +406,7 @@ async def _deliver_or_abandon(
         "seconds": report.seconds,
         "model": report.model,
         "corrections": report.corrections,
-            }
+    }
     if report.contradicts:
         arguments["contradicts"] = report.contradicts
     try:

@@ -29,7 +29,10 @@ def upgrade() -> None:
     op.add_column(
         "agent_job_lesson_reports",
         sa.Column(
-            "contradicts", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")
+            "contradicts",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
         ),
     )
     op.alter_column("agent_job_lesson_reports", "contradicts", server_default=None)

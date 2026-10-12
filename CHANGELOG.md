@@ -6,6 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.34] - 2026-10-13
+
+### Fixed
+
+- **`lessons.py` renders already in ruff-format's shape.** 2026.10.33 left the closing brace of the report `arguments` dict over-indented, so every stamped app's own `ruff format` rewrote the factory-owned file and showed drift at pre-commit. The `d9e6f2a3b4c5` migration's `add_column` is wrapped the same way.
+
 ## [2026.10.33] - 2026-10-13
 
 ### Added
