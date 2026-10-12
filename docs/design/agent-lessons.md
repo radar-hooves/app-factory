@@ -1,130 +1,107 @@
 # Agent job lessons
 
-Status: **design, 30/09/2026.** Consumer: radar-hooves/godswood#840, on
-behalf of every app that runs a persona job (`docs/design/agent-jobs.md`) —
-Milton, Penny, caspo's models, and a coming Taxpert.
+Status: **built 13/10/2026** (replaces the 30/09/2026 `report_outcome`/`retry_unsettled`
+design of radar-hooves/godswood#840). Consumer: radar-hooves/godswood#876, on behalf
+of every app that runs a persona job (`docs/design/agent-jobs.md`).
 
 ## The need
 
-core-memory carries the learning loop — beliefs, confidence, decisions,
-outcomes, calibration, promotion. What it cannot know on its own is the one
-moment a human accepts a persona's result as-is or corrects it, because only
-the app that showed the person that result sees that moment. This slice is
-the standard shape every app's persona job uses to close that loop, so it is
-built once, beside `jobs.py`, rather than hand-written per app.
+A job's learning loop must not depend on the model choosing to look its lessons up.
+Measured on godswood, 11/10/2026: 32 of 92 readings cited any lesson, and a reading
+with core-memory in hand made no core-memory call at all, then repeated the mistake an
+approved lesson covers. The loop is core-memory's `lesson` tool (`load`, `report`,
+`stats`); this slice drives both ends of it from the app, so the model's only part is
+naming which lessons it applied.
 
 ## Shape
 
-**A reserved answer key.** A persona names the belief ids it followed
-(`belief_retrieve`) under `lessons_used` in its own structured answer — a
-convention, not a schema `json_schema` enforces, EXCEPT that the persona's own
-`json_schema` must still declare the property itself (`lessons.
-declare_lessons_used(schema)`), or a schema carrying `additionalProperties:
-False` refuses the key outright and every report silently no-ops.
-`lessons.cited(job)` reads the key back, lowercased and deduped, keeping only
-values shaped like a belief id (`[0-9a-f]{32}`): only ids ever leave the app,
-never a job's content.
+```
+jobs.start(lessons=Lessons(domain, situation, propose))
+  └─ lesson load ──► brief appended to the job's system prompt; ids saved on the job row
+                     (core-memory unreachable: the job starts without lessons, warned)
+person accepts / corrects
+  └─ report_outcome(db, job_id, accepted, attempts, corrections)   one INSERT, caller's transaction
+supervise() sweep, every 60s
+  └─ retry_unsettled ──► lesson report (run_ref = job id)           lease, retry, alert
+```
 
-**`report_outcome(db, job_id, *, domain_name, context_key, result)`**, the one
-call an app makes at the moment a person accepts (`result="confirm"`) or
-corrects (`result="contradict"`) a job's result — whether that counts as
-"unchanged" is a review-form and domain question the app has already
-answered; this slice never compares values itself. It validates `result` and
-the key lengths, snapshots the job's cited ids NOW (never re-read at
-delivery — a job resumed and re-answered after filing must not change what
-an already-filed verdict cited), and inserts the intent in the CALLER'S OWN
-session, inside a SAVEPOINT (`insert_lesson_report_if_absent`) so a
-conflict — the PK, first-write-wins, or an FK if the job somehow vanished —
-rolls back only this insert, never the caller's own transaction. No network
-call, no vend, ever happens on an app's request path; a no-op when this
-deployment names no `core_memory_url` (`AgentSettings`, empty by default —
-"build nothing central") or the job cited nothing. First write wins: a
-correction filed after an earlier confirm for the same job is silently
-dropped, not merged.
+**`Lessons(domain, situation, propose=True)`**, passed to `jobs.start`. `domain` is
+core-memory's domain for this kind of job (`godswood/fat-controller`). `situation` is up
+to 8 context keys, general to specific; the run is filed under the last. A key is an
+opaque string to this slice and to core-memory, so an existing store needs **no
+mapping**: godswood's lessons stored under `bank_statement`, `utility_bill` and `filing`
+load as they stand with `situation=["reading", "bank_statement"]`. The `doc:` form in
+core-memory's tool description is an example, not a requirement. The declaration, plus the
+ids loaded, is persisted on `agent_jobs.lessons`, so a resumed run on another worker
+reports the same loop.
 
-**`retry_unsettled(db_session_factory, settings, stopping)`** is the ONLY
-thing that ever calls core-memory, run from `jobs.supervise()`'s existing 60s
-sweep (`docs/design/agent-jobs.md` §Any worker) — never a poller of its own,
-and it checks `stopping` between rows so a shutdown does not wait out a
-whole batch. Each tick it claims up to 5 unsettled rows
-(`AgentJobLessonReport.claimed_until`, a lease — `SELECT ... FOR UPDATE`
-under the row's own unclaimed condition, `jobs_models._locked`'s pattern) and
-attempts delivery over ONE vended bearer and ONE `Client`: `decision_record`
-(citing the snapshotted ids, `payload={"job_id": job_id}` so a duplicate can
-be traced) then `outcome_record`, the whole attempt inside
-`asyncio.timeout(90)` and the client itself bounded (`timeout=30,
-init_timeout=15`). Only the lease's holder ever reaches core-memory; every
-other caller — a second worker's sweep, godswood runs five — returns at
-once. The lease is left to expire on a fault rather than cleared, so its 5
-minutes (≥3× the bound) is also that report's retry backoff, and
-`set_lesson_decision`/`settle_lesson_report` both require the caller's own
-claim token still matches `claimed_until` before writing, so a write from a
-lease that has since been reclaimed by someone else lands nowhere.
+**Load before the run.** `lessons.load` calls `lesson load` over a freshly vended
+bearer (20 s bound) and `start` appends the returned brief to `append_system_prompt`.
+It fails open: a job that cannot get its lessons runs without them and is reported as
+having none, which is exactly what `lesson stats` needs to compare. `start` also adds
+`lessons_used` to the job's `json_schema`, so a schema with `additionalProperties:
+False` cannot refuse the key the brief asks for. `lessons.cited(job)` reads it back,
+keeping only values shaped like a belief id (`[0-9a-f]{32}`): only ids and a person's
+corrections leave the app, never a job's content.
 
-**Classified by WHEN, not by exception type.** A real fastmcp client (3.4.2,
-4.0.10) wraps connection refused, a DNS failure or an init timeout as a bare
-`RuntimeError`, and a read timeout on 4.0.10 as `MCPError: Request
-'tools/call' timed out` — naming exception types misses both. So anything
-raised while a call is in flight, whatever its type, is TRANSIENT —
-including a `ToolError` whose message matches FastMCP's own tool-call
-wrapper shape (`^Error calling tool '[^']*'(: .*)?$`, what wraps ANY
-unhandled server exception whether or not `mask_error_details` is on — a
-genuine core-memory refusal comes through its `_typed` path and never
-carries this prefix, masked or not) or is one of FastMCP's two literal
-actionable messages ("Rate limited by upstream API, please retry later",
-"Upstream request timed out, please retry"). A `ToolError` carrying neither
-shape is core-memory's own refusal, settled `refused`. Only a failure AFTER
-a successful response — this slice's own reading of it, e.g. `decision["id"]`
-missing — settles as unexpected, logged at ERROR: a fault this slice does not
-recognise, surfaced rather than retried for two weeks on a guess. A report
-still unsettled past 14 days is abandoned the same way — claimed, then
-settled `refused`.
+**`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None)`**, the one call
+an app makes when a person takes the result (`accepted=True`) or corrects it. It
+snapshots the job's loaded and cited ids, model (`job.model`, else the persona),
+seconds (the job's own run, not the review wait) and the corrections, and inserts them
+in the CALLER'S OWN session inside a SAVEPOINT (`insert_lesson_report_if_absent`): a
+conflict, first write wins, rolls back only this insert. No network call ever happens on
+an app's request path. A no-op when the deployment names no `core_memory_url` or the job
+declared no `lessons`. It files a report even when the job cited nothing, since a run
+without lessons is what `stats` sets the others against. A correction is `{statement,
+key?}`, short and testable, `key` one of the job's situation keys, validated at the
+call (statement 1 to 500 characters, at most 20, key in the situation): a malformed
+one is the caller's bug, not a refusal found days later in the sweep.
 
-**One alert for the whole pipeline's health**, `agent-lessons:failing`
-(`api/alerts`, upserted by key so there is never more than one), raised
-BEFORE settling on a refusal or an unexpected fault, on abandonment, on a
-transient fault stale for over a day, and on a `core_memory_url` set with no
-`core_memory_credential` — the one deployment-level misconfiguration this
-slice can recognise on its own, checked before ever attempting delivery so
-it alerts once rather than looping uselessly for 14 days. Never re-raised
-UNCHANGED, since `raise_alert` marks it unread on every call and the
-misconfiguration check runs every sweep in every worker — re-raising an
-identical reason would undo an operator's own dismissal within a minute.
-Cleared once a whole sweep settles with no failures, never by one row's own
-success mid-sweep: a refusal elsewhere in the same batch keeps the alert up.
+**`propose=False`** is the per-job gate on proposing. The job still loads lessons and
+reports its outcome and citations, but `report_outcome` drops its corrections, so
+nothing a person typed about it reaches core-memory's proposal queue. For a job whose
+pages can carry what must not enter a free-text channel other sessions read (godswood's
+catch-all `general_document` reading).
 
-**The credential is a setting, with no default.**
-`AgentSettings.core_memory_credential` names the broker credential
-`vend_envelope` mints core-memory's bearer from; empty, like
-`core_memory_url`, since no name is derivable the way
-`gateway_key_credential`'s fallback (`{{ project_name }}-gateway`) is —
-godswood sets it explicitly to its own broker's name.
+**`retry_unsettled(db_session_factory, settings, stopping)`** is the ONLY thing that
+reports to core-memory, run from `jobs.supervise()`'s 60 s sweep and checking
+`stopping` between rows. Each tick it claims up to 5 unsettled rows
+(`AgentJobLessonReport.claimed_until`, a lease, `SELECT ... FOR UPDATE`) and sends one
+`lesson report` each, inside `asyncio.timeout(90)`. `settle_lesson_report` requires the
+caller's own claim token still match, so a write from a lease since reclaimed lands
+nowhere. The lease is left to expire on a fault, so its 5 minutes is the retry backoff.
 
-## At-least-once, honestly
+**Exactly once, now.** `lesson report` is idempotent on `run_ref`, which is the job id,
+so a response lost after core-memory committed is retried and counted once. The
+at-least-once caveat of the former decision/outcome pair is gone.
 
-Claiming and fencing stop two callers of THIS app's own slice from both
-telling core-memory the same thing. They do not close every gap: a response
-lost after core-memory has already committed a call still reads as a
-transport fault here, and the retry that follows double-counts it on
-core-memory's own side, until an idempotency key there (core-memory#27)
-closes it. This slice's own claim is at-least-once, not exactly-once, and
-that is the whole of what is honest to say about it.
+**Classified by WHEN, not by exception type.** A real fastmcp client wraps connection
+refused, a DNS failure or an init timeout as a bare `RuntimeError`, and a read timeout
+as `MCPError`: naming exception types misses both. So anything raised while the call is
+in flight is TRANSIENT, including a `ToolError` matching FastMCP's own tool-call wrapper
+shape (`^Error calling tool '[^']*'(: .*)?$`) or one of its two literal actionable
+messages. A `ToolError` carrying neither is core-memory's own refusal, settled
+`refused`. A report unsettled past 14 days is abandoned the same way.
 
-## Persona wording
+**One alert for the whole pipeline's health**, `agent-lessons:failing` (`api/alerts`,
+upserted by key), raised before settling on a refusal, on abandonment, on a transient
+fault stale for over a day, and on a `core_memory_url` set with no
+`core_memory_credential`. Never re-raised UNCHANGED, since `raise_alert` marks it unread
+and that would undo an operator's dismissal every sweep. Cleared once a whole sweep
+settles with no failures, never by one row's success mid-sweep.
 
-Every persona's own `CLAUDE.md` — app-owned, never rendered by this template
-— carries this paragraph verbatim (`platform/canonical-app-shape.md`
-§Sameness extends to prose):
+**The credential is a setting, with no default.** `AgentSettings.core_memory_credential`
+names the broker credential `vend_envelope` mints core-memory's bearer from; empty, like
+`core_memory_url`.
 
-> Before you work, retrieve what this deployment already believes about the
-> task ahead of you (`belief_retrieve` on your own domain and context). As you
-> answer, if a lesson changed what you did, name what would have got it right
-> the first time. Answer with `lessons_used`: the JSON array of ids of the
-> beliefs you actually followed, `[]` when you followed none.
+## Taking it
 
-## Sequence
-
-Factory: this slice, its migration, `test_agent_lessons.py`. Tag, once
-merged (never cut from a worktree branch). Every other app takes it on its
-next copier update; nothing changes until a persona of theirs starts citing
-lessons.
+Migration `c8d5e1f2a3b4` adds `agent_jobs.lessons` and reshapes
+`agent_job_lesson_reports` (situation, accepted, loaded, attempts, seconds, model,
+corrections in place of context key, result and decision id); an unsettled row is
+converted to a one-key situation, not dropped. An app repoints its `down_revision`.
+`jobs.start(lessons=...)` replaces the persona's own retrieval, so the persona's
+`CLAUDE.md` drops the old "retrieve what this deployment believes" paragraph; the
+brief tells it to list the ids it applied in `lessons_used`, and nothing else is asked
+of it. `report_outcome` loses `domain_name`, `context_key` and `result`, which the job
+already carries.

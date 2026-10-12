@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.27] - 2026-10-13
+
+A persona job's learning loop no longer depends on the model choosing to look its lessons up. Need: godswood (radar-hooves/godswood#876), 13/10/2026.
+
+### Changed
+
+- **`jobs.start(lessons=Lessons(domain, situation, propose))` loads the situation's approved lessons from core-memory before the run and puts them in the job's system prompt.** Measured on godswood 11/10/2026: 32 of 92 readings cited any lesson, because the model had to call `belief_retrieve` itself. Load fails open (the job starts without lessons), `lessons_used` is added to the job's `json_schema`, and the declaration and loaded ids persist on `agent_jobs.lessons`. Situation keys are opaque strings, so an existing store's keys (`bank_statement`) are valid layers as they stand, no mapping. `propose=False` loads lessons but drops a person's corrections at report, for a job that must never reach the proposal queue.
+- **`lessons.report_outcome(db, job_id, *, accepted, attempts=1, corrections=None)` replaces the `domain_name`/`context_key`/`result` form, and `retry_unsettled` delivers core-memory's `lesson report` instead of `decision_record` + `outcome_record`.** One idempotent call on `run_ref` (the job id), so delivery is exactly once, not at-least-once. A report is filed for every job that declared `lessons`, cited or not, so `lesson stats` can set runs with lessons against runs without. Corrections become pending proposed lessons. Migration `c8d5e1f2a3b4` adds `agent_jobs.lessons` and reshapes `agent_job_lesson_reports`, converting unsettled rows; an app repoints its `down_revision`. See `docs/design/agent-lessons.md`.
+
 ## [2026.10.26] - 2026-10-12
 
 An app that brings the CASPO-style brand (its own faces, palette and display setting) no longer fights the factory for it. Need: caspo (the CASPO app session), 12/10/2026.

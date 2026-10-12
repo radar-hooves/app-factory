@@ -61,9 +61,11 @@ from agent_common.persona import Persona
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from {{ package_name }}.api.agent import jobs_models, lessons
+from {{ package_name }}.api.agent import jobs_models
+from {{ package_name }}.api.agent import lessons as lessons_module
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent.jobs_models import STREAM_EVENT, AgentJob, JobOutcome, RunSpec
+from {{ package_name }}.api.agent.lessons import Lessons
 from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -239,6 +241,7 @@ async def start(
     mcp_config: dict[str, object] | None = None,
     model: str | None = None,
     stream: bool = False,
+    lessons: Lessons | None = None,
 ) -> str:
     """Start a persona session with no asker, and return its job id at once.
 
@@ -266,7 +269,14 @@ async def start(
     as `stream_event` rows a watcher follows live (`_Deltas`); the finished
     message replaces them in the log, so a job read after the fact holds
     whole messages only.
-    All five are persisted on the job row and replayed on every resumed run,
+    `lessons` gives the job core-memory's learning loop (`docs/design/agent-lessons.md`):
+    the lessons stored under its situation are loaded here, before the run, and
+    appended to its system prompt, so it starts with them whether or not the
+    model would have looked; `lessons_used` is added to `json_schema`, and
+    `lessons.report_outcome()` later reports how a person took the result.
+    The declaration and the loaded ids are persisted on the row. Loading fails
+    open: if core-memory is unreachable the job starts without lessons.
+    All of these are persisted on the job row and replayed on every resumed run,
     so a later `send_message()` from any worker reaches the same servers
     under the same identity on the same model without knowing any of it.
 
@@ -290,6 +300,14 @@ async def start(
             raise BadRequestError(f"a job id must be a UUID: {job_id!r}") from exc
     folder = job_dir(job_id)
     prompt = await run_in_threadpool(redact, persona.name, created_by_id, prompt)
+    recorded = None
+    if lessons is not None:
+        brief, loaded = await lessons_module.load(settings, lessons)
+        recorded = lessons_module.record(lessons, loaded)
+        if brief:
+            append_system_prompt = f"{append_system_prompt}\n\n{brief}" if append_system_prompt else brief
+        if json_schema is not None:
+            json_schema = lessons_module.declare_lessons_used(json_schema)
     await run_in_threadpool(_seed_files, folder, files or {})
     if mcp_config is not None:
         await run_in_threadpool(_write_mcp_config, folder, mcp_config)
@@ -305,6 +323,7 @@ async def start(
         mcp_config=mcp_config,
         model=model,
         stream=stream,
+        lessons=recorded,
     )
 
     def _create() -> None:
@@ -916,7 +935,7 @@ async def supervise(
         except Exception:
             logger.exception("Sweeping for agent jobs left running failed; retrying in %.0fs", _SWEEP_SECONDS)
         try:
-            await lessons.retry_unsettled(db_session_factory, settings, stopping)
+            await lessons_module.retry_unsettled(db_session_factory, settings, stopping)
         except Exception:
             logger.exception("Retrying unsettled lesson reports failed; retrying in %.0fs", _SWEEP_SECONDS)
         with contextlib.suppress(TimeoutError):

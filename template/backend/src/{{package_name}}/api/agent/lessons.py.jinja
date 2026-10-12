@@ -1,7 +1,9 @@
-"""core-memory's learning loop needs one moment from every persona job: whether a person accepted
-or corrected its cited lessons. `report_outcome()` records that intent in the caller's own
-transaction; `retry_unsettled()`, run from `jobs.supervise()`'s sweep, is the only thing that ever
-calls core-memory. Full account: `docs/design/agent-lessons.md`.
+"""core-memory's `lesson` tool is a persona job's whole learning loop, and this module drives both ends
+of it so no job depends on the model choosing to look: `load()` puts a situation's approved lessons in the
+job's system prompt before it runs, and `report_outcome()` records, in the caller's own transaction, the
+moment a person accepted or corrected the result, which `retry_unsettled()` (run from `jobs.supervise()`'s
+sweep, the only other thing that calls core-memory) delivers as `lesson report`. Full account:
+`docs/design/agent-lessons.md`.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ import asyncio
 import datetime
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from fastmcp import Client
@@ -32,12 +35,11 @@ from {{ package_name }}.exceptions import BadRequestError
 
 logger = logging.getLogger(__name__)
 
-CONFIRM = "confirm"
-CONTRADICT = "contradict"
-
 #: The lease, and so a persistently-failing report's own retry backoff (>=3x `_DELIVER_TIMEOUT_SECONDS`).
 _LEASE_SECONDS = 300.0
 _DELIVER_TIMEOUT_SECONDS = 90
+#: `load` is on the job's start path, so a slow core-memory costs the job its lessons, never its start.
+_LOAD_TIMEOUT_SECONDS = 20
 _CALL_TIMEOUT_SECONDS = 30
 _INIT_TIMEOUT_SECONDS = 15
 _ABANDON_AFTER = datetime.timedelta(days=14)
@@ -48,7 +50,13 @@ _MAX_PER_SWEEP = 5
 #: One alert for the whole pipeline's health, upserted by key -- never one per job.
 _FAILING_ALERT_KEY = "agent-lessons:failing"
 
-#: A belief id, as `belief_retrieve` mints one — nothing else survives into `cited()`.
+#: core-memory's own bounds (`core_memory.lessons`), refused here at the call that is wrong, not days later in the sweep.
+_MAX_SITUATION = 8
+_MAX_CORRECTIONS = 20
+_MAX_KEY = 255
+_MAX_STATEMENT = 500
+
+#: A belief id, as core-memory mints one — nothing else survives into `cited()`.
 _BELIEF_ID = re.compile(r"[0-9a-f]{32}")
 #: FastMCP's own wrapper shape for an unhandled tool exception, masked or not (a genuine refusal
 #: comes through core-memory's `_typed` path and never carries this prefix) — so always transient.
@@ -64,14 +72,35 @@ def _is_transient_tool_error(message: str) -> bool:
     return bool(_WRAPPED_TOOL_ERROR.match(message)) or message in _TRANSIENT_TOOL_MESSAGES
 
 
-class _Unexpected(Exception):
-    """core-memory answered, but this slice's own reading of that answer failed."""
+@dataclass(frozen=True, slots=True)
+class Lessons:
+    """The learning loop a job declares at `jobs.start(lessons=...)`.
+
+    `domain` is core-memory's domain for this kind of job (`godswood/fat-controller`); `situation` is
+    the context keys the job's lessons are stored under, general to specific. A key is opaque to this
+    module and to core-memory, so an existing store's keys (`bank_statement`) are valid layers as they
+    stand: no `doc:` form is required. The run is filed under the last key. `propose=False` makes the
+    job load lessons but never propose one: a person's corrections to it are dropped at `report_outcome`,
+    for a job whose pages can carry what must not reach the free-text proposal queue.
+    """
+
+    domain: str
+    situation: list[str]
+    propose: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.domain or len(self.domain) > _MAX_KEY:
+            raise BadRequestError(f"lessons domain must be 1 to {_MAX_KEY} characters")
+        if not 0 < len(self.situation) <= _MAX_SITUATION:
+            raise BadRequestError(f"lessons situation must hold 1 to {_MAX_SITUATION} keys, general to specific")
+        if any(not key.strip() or len(key) > _MAX_KEY for key in self.situation):
+            raise BadRequestError(f"every lessons situation key must be 1 to {_MAX_KEY} characters")
 
 
 def declare_lessons_used(schema: dict[str, Any]) -> dict[str, Any]:
-    """`schema` with the reserved `lessons_used` property added — a persona's own `json_schema`
-    must declare it, or `additionalProperties: False` refuses the key outright and every report
-    silently no-ops."""
+    """`schema` with the reserved `lessons_used` property added — `jobs.start` does this for a job that
+    declares `lessons`, since a schema carrying `additionalProperties: False` would otherwise refuse the
+    key the brief asks for."""
     return {
         **schema,
         "properties": {**schema.get("properties", {}), "lessons_used": {"type": "array", "items": {"type": "string"}}},
@@ -94,40 +123,129 @@ def cited(job: AgentJob) -> list[str]:
     return kept
 
 
-def report_outcome(db: Session, job_id: str, *, domain_name: str, context_key: str, result: str) -> None:
-    """Record, in `db`'s own transaction, that a person accepted or corrected `job_id`'s result.
+async def _call(settings: AgentSettings, arguments: dict[str, Any], *, timeout: float) -> dict[str, Any]:
+    """One `lesson` call on a freshly vended bearer. Raises whatever the call raises: the caller
+    classifies it by when it happened, not by type."""
+    async with asyncio.timeout(timeout):
+        envelope = await run_in_threadpool(vend_envelope, settings.core_memory_credential)
+        bearer = envelope["material"]["access_token"]
+        async with Client(
+            settings.core_memory_url,
+            auth=BearerAuth(bearer),
+            timeout=_CALL_TIMEOUT_SECONDS,
+            init_timeout=_INIT_TIMEOUT_SECONDS,
+        ) as memory:
+            raw = await memory.call_tool("lesson", arguments)
+    return dict(raw.structured_content or {})
+
+
+async def load(settings: AgentSettings, declared: Lessons) -> tuple[str, list[str]]:
+    """The brief to put in the job's system prompt, and the lesson ids it carries.
+
+    Fails open: no core-memory configured, or any fault reaching it, gives `("", [])` and a warning, so a
+    job starts without its lessons rather than not at all. The job's report then says it ran with none.
+    """
+    if not settings.core_memory_url or not settings.core_memory_credential:
+        return "", []
+    try:
+        answer = await _call(
+            settings,
+            {"action": "load", "domain_name": declared.domain, "situation": declared.situation},
+            timeout=_LOAD_TIMEOUT_SECONDS,
+        )
+        return str(answer["brief"]), [str(item["id"]) for item in answer["lessons"]]
+    except Exception as exc:
+        logger.warning(
+            "Loading lessons for %s %s failed; the job starts without them: %s",
+            declared.domain,
+            declared.situation,
+            exc,
+        )
+        return "", []
+
+
+def record(declared: Lessons, loaded: list[str]) -> dict[str, Any]:
+    """The declaration as the job row holds it: what the report needs after the process that started the job is gone."""
+    return {"domain": declared.domain, "situation": declared.situation, "propose": declared.propose, "loaded": loaded}
+
+
+def _corrections(raw: list[dict[str, str]], situation: list[str]) -> list[dict[str, str]]:
+    if len(raw) > _MAX_CORRECTIONS:
+        raise BadRequestError(f"at most {_MAX_CORRECTIONS} corrections per job")
+    kept: list[dict[str, str]] = []
+    for item in raw:
+        statement = str(item.get("statement", "")).strip()
+        if not statement or len(statement) > _MAX_STATEMENT:
+            raise BadRequestError(f"a correction needs a statement of 1 to {_MAX_STATEMENT} characters")
+        key = item.get("key")
+        if key is not None and key not in situation:
+            raise BadRequestError(f"correction key {key!r} is not one of the job's situation keys {situation}")
+        kept.append({"statement": statement} if key is None else {"statement": statement, "key": key})
+    return kept
+
+
+def report_outcome(
+    db: Session,
+    job_id: str,
+    *,
+    accepted: bool,
+    attempts: int = 1,
+    corrections: list[dict[str, str]] | None = None,
+) -> None:
+    """Record, in `db`'s own transaction, how a person took `job_id`'s result: `accepted` as it
+    stood, or corrected (`accepted=False`) with `corrections` as `[{"statement", "key"?}]`, each a
+    short testable lesson the correction teaches, `key` one of the job's situation keys (default the
+    most specific). Corrections are dropped when the job declared `propose=False`.
 
     Insert-only and synchronous: no network call, no vend, ever happens here. `db` must already be
     bound to the job's workspace; the caller commits. A no-op when this deployment names no
-    core-memory or the job cited nothing.
+    core-memory or the job declared no `lessons`. Filed for every such job, citing nothing or not, so
+    core-memory's stats can set runs with lessons against runs without. First write wins: a later
+    call for the same job is silently dropped.
     """
-    if result not in (CONFIRM, CONTRADICT):
-        raise BadRequestError(f"result must be {CONFIRM!r} or {CONTRADICT!r}, not {result!r}")
-    if len(domain_name) > 255 or len(context_key) > 255:
-        raise BadRequestError("domain_name and context_key must be at most 255 characters")
+    if attempts < 1:
+        raise BadRequestError("attempts must be at least 1")
     if not get_settings().agent.core_memory_url:
         return
     job = jobs_models.get_job(db, job_id)
-    if job is None:
+    if job is None or job.lessons is None:
         return
-    if "lessons_used" not in (job.structured_output or {}):
-        logger.warning(
-            "Job %s's structured answer has no lessons_used key -- declare it on the persona's "
-            "json_schema with lessons.declare_lessons_used()",
-            job_id,
-        )
-    cites = cited(job)
-    if not cites:
-        return
+    declared = job.lessons
+    if job.structured_output is not None and "lessons_used" not in job.structured_output:
+        logger.warning("Job %s's structured answer has no lessons_used key", job_id)
+    settled = job.updated_at - job.created_at if job.updated_at and job.created_at else None
     jobs_models.insert_lesson_report_if_absent(
         db,
         job_id,
         workspace_id=job.workspace_id,
-        cites=cites,
-        domain_name=domain_name,
-        context_key=context_key,
-        result=result,
+        domain_name=declared["domain"],
+        situation=declared["situation"],
+        accepted=accepted,
+        loaded=declared["loaded"],
+        cites=cited(job),
+        attempts=attempts,
+        seconds=settled.total_seconds() if settled is not None else None,
+        model=job.model or job.persona,
+        corrections=_corrections(corrections or [], declared["situation"]) if declared["propose"] else [],
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _Pending:
+    """An unsettled report as the sweep reads it, detached from its session."""
+
+    job_id: str
+    workspace_id: int
+    domain_name: str
+    situation: list[str]
+    accepted: bool
+    loaded: list[str]
+    cites: list[str]
+    attempts: int
+    seconds: float | None
+    model: str
+    corrections: list[dict[str, str]]
+    created_at: datetime.datetime
 
 
 def _raise_failing_alert(db_session_factory: sessionmaker[Session], reason: str) -> None:
@@ -170,91 +288,63 @@ async def _note_transient(
 
 
 async def _deliver_or_abandon(
-    db_session_factory: sessionmaker[Session],
-    settings: AgentSettings,
-    job_id: str,
-    workspace_id: int,
-    domain_name: str,
-    context_key: str,
-    result: str,
-    cites: list[str],
-    created_at: datetime.datetime,
+    db_session_factory: sessionmaker[Session], settings: AgentSettings, report: _Pending
 ) -> bool:
-    """Claim `job_id`'s report, then abandon it past `_ABANDON_AFTER` or attempt one delivery.
+    """Claim `report`, then abandon it past `_ABANDON_AFTER` or attempt one delivery.
     Returns whether this report is (still) a failure, for the caller's sweep to decide whether ANY
     row failed this tick — a lone success must not clear the pipeline alert out from under a
     DIFFERENT row's refusal in the same sweep."""
 
-    def _claim() -> tuple[bool, str | None, datetime.datetime | None]:
+    def _claim() -> datetime.datetime | None:
         with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            return jobs_models.claim_lesson_report(db, job_id, lease_seconds=_LEASE_SECONDS)
+            bind_session(db, workspace_id=report.workspace_id)
+            return jobs_models.claim_lesson_report(db, report.job_id, lease_seconds=_LEASE_SECONDS)
 
-    won, decision_id, token = await run_in_threadpool(_claim)
-    if not won or token is None:
+    token = await run_in_threadpool(_claim)
+    if token is None:
         return False
 
     def _settle(refused: str | None) -> None:
         with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            jobs_models.settle_lesson_report(db, job_id, claim_token=token, refused=refused)
+            bind_session(db, workspace_id=report.workspace_id)
+            jobs_models.settle_lesson_report(db, report.job_id, claim_token=token, refused=refused)
 
-    if created_at < datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER:
+    if report.created_at < datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER:
         reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
-        logger.error("Abandoned job %s's lesson report: %s", job_id, reason)
+        logger.error("Abandoned job %s's lesson report: %s", report.job_id, reason)
         return True
-
-    def _save_decision(new_decision_id: str) -> None:
-        with db_session_factory() as db:
-            bind_session(db, workspace_id=workspace_id)
-            jobs_models.set_lesson_decision(db, job_id, new_decision_id, claim_token=token)
 
     try:
-        async with asyncio.timeout(_DELIVER_TIMEOUT_SECONDS):
-            envelope = await run_in_threadpool(vend_envelope, settings.core_memory_credential)
-            bearer = envelope["material"]["access_token"]
-            async with Client(
-                settings.core_memory_url,
-                auth=BearerAuth(bearer),
-                timeout=_CALL_TIMEOUT_SECONDS,
-                init_timeout=_INIT_TIMEOUT_SECONDS,
-            ) as memory:
-                if decision_id is None:
-                    raw = await memory.call_tool(
-                        "decision_record",
-                        {
-                            "domain_name": domain_name,
-                            "context_key": context_key,
-                            "cites": cites,
-                            "payload": {"job_id": job_id},
-                        },
-                    )
-                    try:
-                        decision_id = str(dict(raw.structured_content or {})["id"])
-                    except Exception as exc:
-                        raise _Unexpected(str(exc)) from exc
-                    await run_in_threadpool(_save_decision, decision_id)
-                await memory.call_tool(
-                    "outcome_record", {"domain_name": domain_name, "decision_id": decision_id, "result": result}
-                )
-    except _Unexpected as exc:
-        reason = f"unexpected: {exc}"[:500]
-        await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
-        await run_in_threadpool(_settle, reason)
-        logger.error("Settled job %s's lesson report as unexpected: %s", job_id, reason)
-        return True
+        # Idempotent on run_ref (the job id): a retry after a lost response counts once.
+        await _call(
+            settings,
+            {
+                "action": "report",
+                "domain_name": report.domain_name,
+                "situation": report.situation,
+                "run_ref": report.job_id,
+                "accepted": report.accepted,
+                "loaded": report.loaded,
+                "cited": report.cites,
+                "attempts": report.attempts,
+                "seconds": report.seconds,
+                "model": report.model,
+                "corrections": report.corrections,
+            },
+            timeout=_DELIVER_TIMEOUT_SECONDS,
+        )
     except ToolError as exc:
         if _is_transient_tool_error(str(exc)):
-            return await _note_transient(db_session_factory, job_id, created_at, exc)
+            return await _note_transient(db_session_factory, report.job_id, report.created_at, exc)
         reason = str(exc)[:500]
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
-        logger.warning("core-memory refused job %s's lesson report: %s", job_id, reason)
+        logger.warning("core-memory refused job %s's lesson report: %s", report.job_id, reason)
         return True
     except Exception as exc:
-        return await _note_transient(db_session_factory, job_id, created_at, exc)
+        return await _note_transient(db_session_factory, report.job_id, report.created_at, exc)
 
     await run_in_threadpool(_settle, None)
     return False
@@ -264,7 +354,7 @@ async def retry_unsettled(
     db_session_factory: sessionmaker[Session], settings: AgentSettings, stopping: asyncio.Event
 ) -> None:
     """Deliver up to `_MAX_PER_SWEEP` unsettled lesson reports to core-memory. Run from
-    `jobs.supervise()`'s sweep — the only place this slice ever calls core-memory.
+    `jobs.supervise()`'s sweep — the only place this slice ever reports to core-memory.
     """
     if not settings.core_memory_url:
         return
@@ -276,19 +366,11 @@ async def retry_unsettled(
         )
         return
 
-    def _pending() -> list[tuple[str, int, str, str, str, list[str], datetime.datetime]]:
+    def _pending() -> list[_Pending]:
         with db_session_factory() as db, unscoped(db):
             rows = (
                 db.execute(
-                    select(
-                        AgentJobLessonReport.job_id,
-                        AgentJobLessonReport.workspace_id,
-                        AgentJobLessonReport.domain_name,
-                        AgentJobLessonReport.context_key,
-                        AgentJobLessonReport.result,
-                        AgentJobLessonReport.cites,
-                        AgentJobLessonReport.created_at,
-                    )
+                    select(AgentJobLessonReport)
                     .where(
                         AgentJobLessonReport.recorded_at.is_(None),
                         or_(
@@ -299,18 +381,32 @@ async def retry_unsettled(
                     .order_by(AgentJobLessonReport.created_at)
                     .limit(_MAX_PER_SWEEP)
                 )
-                .tuples()
+                .scalars()
                 .all()
             )
-        return list(rows)
+            return [
+                _Pending(
+                    job_id=row.job_id,
+                    workspace_id=row.workspace_id,
+                    domain_name=row.domain_name,
+                    situation=list(row.situation),
+                    accepted=row.accepted,
+                    loaded=list(row.loaded),
+                    cites=list(row.cites),
+                    attempts=row.attempts,
+                    seconds=row.seconds,
+                    model=row.model,
+                    corrections=list(row.corrections),
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
 
     failed = False
-    for job_id, workspace_id, domain_name, context_key, result, cites, created_at in await run_in_threadpool(_pending):
+    for report in await run_in_threadpool(_pending):
         if stopping.is_set():
             return
-        if await _deliver_or_abandon(
-            db_session_factory, settings, job_id, workspace_id, domain_name, context_key, result, cites, created_at
-        ):
+        if await _deliver_or_abandon(db_session_factory, settings, report):
             failed = True
     if not failed:
         await run_in_threadpool(_clear_failing_alert, db_session_factory)

@@ -34,7 +34,22 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, delete, false, func, or_, select, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    delete,
+    false,
+    func,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
@@ -89,6 +104,10 @@ class AgentJob(Base, TimestampMixin, WorkspaceScoped):
     #: Whether a watcher follows this job token by token (`jobs.start(stream=True)`),
     #: held for the same reason as `json_schema`: a resumed run streams too.
     stream: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    #: The learning loop this job declared at start (`lessons.Lessons.record()`:
+    #: domain, situation, propose, and the lesson ids loaded into its prompt), held
+    #: for the same reason as `json_schema`. `None` means no loop.
+    lessons: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     #: The final turn's structured answer, set once `status` leaves `running`
     #: and only when a `json_schema` was given.
     structured_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -140,23 +159,27 @@ class AgentJobEvent(Base, WorkspaceScoped):
 
 
 class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
-    """A job's cited-lesson intent, and the sweep's progress delivering it (`docs/design/agent-lessons.md`)."""
+    """A job's outcome, filed for core-memory's `lesson report`, and the sweep's progress delivering it
+    (`docs/design/agent-lessons.md`). Every field is a snapshot taken when the person accepted or corrected."""
 
     __tablename__ = "agent_job_lesson_reports"
 
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.job_id", ondelete="CASCADE"), primary_key=True)
-    #: Snapshotted at filing time, not re-read from the job at delivery: a resumed job's later
-    #: answer must not change what an already-filed verdict cited.
-    cites: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     domain_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    context_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    #: "confirm" or "contradict" — the app's own read of accepted-unchanged vs corrected.
-    result: Mapped[str] = mapped_column(String(16), nullable=False)
-    decision_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    situation: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    #: The lesson ids loaded into the job's prompt, and the ones its answer cited as applied.
+    loaded: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    cites: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    #: `[{"statement", "key"?}]`, already empty when the job's `propose` gate is off.
+    corrections: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
     refused: Mapped[str | None] = mapped_column(Text, nullable=True)
     recorded_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: The lease `claim_lesson_report` hands out; its own value doubles as the fencing token
-    #: `set_lesson_decision`/`settle_lesson_report` require unchanged before they write.
+    #: `settle_lesson_report` requires unchanged before it writes.
     claimed_until: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -168,10 +191,8 @@ _LESSON_REPORT_PK = "agent_job_lesson_reports_pkey"
 _LESSON_REPORT_JOB_FK = "fk_agent_job_lesson_reports_job_id_agent_jobs"
 
 
-def insert_lesson_report_if_absent(
-    db: Session, job_id: str, *, workspace_id: int, cites: list[str], domain_name: str, context_key: str, result: str
-) -> None:
-    """Insert `job_id`'s report intent, or do nothing if one exists — first write wins; a later
+def insert_lesson_report_if_absent(db: Session, job_id: str, *, workspace_id: int, **fields: Any) -> None:
+    """Insert `job_id`'s report, or do nothing if one exists — first write wins; a later
     call for the same job (a correction after an earlier confirm) is silently dropped, not
     merged. A SAVEPOINT: ONLY the two known-benign conflicts (this row's own primary key, or its
     FK to `agent_jobs`) roll back just this insert, identified by constraint name so a genuinely
@@ -179,37 +200,26 @@ def insert_lesson_report_if_absent(
     than being silently swallowed. `db.flush()` first, so a violation already pending in the
     caller's OWN unflushed work surfaces there, not caught by this function's own handler.
     Explicit `workspace_id` rather than relying on the session's own auto-stamp, so the row is
-    always correct regardless of how `db` is bound.
+    always correct regardless of how `db` is bound. `fields` are `AgentJobLessonReport`'s columns.
     """
     db.flush()
     try:
         with db.begin_nested():
-            db.add(
-                AgentJobLessonReport(
-                    job_id=job_id,
-                    workspace_id=workspace_id,
-                    cites=cites,
-                    domain_name=domain_name,
-                    context_key=context_key,
-                    result=result,
-                )
-            )
+            db.add(AgentJobLessonReport(job_id=job_id, workspace_id=workspace_id, **fields))
     except IntegrityError as exc:
         constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
         if constraint not in (_LESSON_REPORT_PK, _LESSON_REPORT_JOB_FK):
             raise
 
 
-def claim_lesson_report(
-    db: Session, job_id: str, *, lease_seconds: float
-) -> tuple[bool, str | None, datetime.datetime | None]:
-    """Atomically claim `job_id`'s unsettled, unleased report for `lease_seconds`. Returns
-    `(True, its decision_id, the claim token)` on a win, `(False, None, None)` on a loss.
+def claim_lesson_report(db: Session, job_id: str, *, lease_seconds: float) -> datetime.datetime | None:
+    """Atomically claim `job_id`'s unsettled, unleased report for `lease_seconds`. Returns the claim
+    token on a win, `None` on a loss.
 
     `SELECT ... FOR UPDATE` under the win condition, `_locked`'s pattern elsewhere in this file.
     The token is `claimed_until` itself, read back after commit — pass it to
-    `set_lesson_decision`/`settle_lesson_report` so a write from a lapsed claim lands nowhere.
-    Left to expire rather than cleared on a fault: the lease doubles as retry backoff.
+    `settle_lesson_report` so a write from a lapsed claim lands nowhere. Left to expire rather
+    than cleared on a fault: the lease doubles as retry backoff.
     """
     report = db.execute(
         select(AgentJobLessonReport)
@@ -222,26 +232,11 @@ def claim_lesson_report(
     ).scalar_one_or_none()
     if report is None:
         db.rollback()
-        return False, None, None
+        return None
     report.claimed_until = func.now() + datetime.timedelta(seconds=lease_seconds)
-    decision_id = report.decision_id
     db.commit()
     db.refresh(report)
-    return True, decision_id, report.claimed_until
-
-
-def set_lesson_decision(db: Session, job_id: str, decision_id: str, *, claim_token: datetime.datetime) -> None:
-    """Record `decision_id`, only while this caller still holds the claim named by `claim_token`."""
-    report = db.execute(
-        select(AgentJobLessonReport)
-        .where(AgentJobLessonReport.job_id == job_id, AgentJobLessonReport.claimed_until == claim_token)
-        .with_for_update()
-    ).scalar_one_or_none()
-    if report is None:
-        db.rollback()
-        return
-    report.decision_id = decision_id
-    db.commit()
+    return report.claimed_until
 
 
 def settle_lesson_report(db: Session, job_id: str, *, claim_token: datetime.datetime, refused: str | None) -> None:
@@ -277,6 +272,7 @@ class RunSpec:
     mcp_config: dict[str, Any] | None
     model: str | None
     stream: bool = False
+    lessons: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +300,7 @@ def _spec(job: AgentJob) -> RunSpec:
         mcp_config=job.mcp_config,
         model=job.model,
         stream=job.stream,
+        lessons=job.lessons,
     )
 
 
@@ -355,6 +352,7 @@ def create_job(db: Session, spec: RunSpec) -> None:
             mcp_config=spec.mcp_config,
             model=spec.model,
             stream=spec.stream,
+            lessons=spec.lessons,
             run_id=spec.run_id,
             heartbeat_at=func.now(),
             stop_requested=False,

@@ -1,5 +1,5 @@
 """`api/agent/lessons.py`. `report_outcome` is a plain insert, tested against the row it leaves.
-`retry_unsettled` is where every core-memory call happens: most tests fake `lessons.Client` and
+`load` and `retry_unsettled` are where every core-memory call happens: most tests fake `lessons.Client` and
 `lessons.vend_envelope` so no real one is needed; two run against a real closed socket and a real
 server that never answers, since a real fastmcp client wraps a connection fault as a bare
 `RuntimeError` no monkeypatched exception type would ever surface.
@@ -20,7 +20,7 @@ from fastmcp.exceptions import ToolError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
-from {{ package_name }}.api.agent import jobs_models, lessons
+from {{ package_name }}.api.agent import jobs, jobs_models, lessons
 from {{ package_name }}.api.agent.jobs_models import AgentJobLessonReport, RunSpec
 from {{ package_name }}.api.alerts import service as alerts_service
 from {{ package_name }}.api.alerts.models import Alert
@@ -33,7 +33,7 @@ from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
 
 DOMAIN = "example/lessons-test"
-CONTEXT = "unit-test"
+SITUATION = ["reading", "unit-test"]
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +59,13 @@ def workspace_id() -> int:
     return _provision(f"lessons-{uuid.uuid4()}", "lessons-tester")
 
 
-def _seed_job(workspace_id: int, *, lessons_used: list[str] | None) -> str:
-    """A settled job whose structured answer cites `lessons_used` (`None` = the key is absent)."""
+def _declared(*, propose: bool = True, loaded: list[str] | None = None) -> dict[str, Any]:
+    return lessons.record(lessons.Lessons(DOMAIN, SITUATION, propose=propose), loaded or [])
+
+
+def _seed_job(workspace_id: int, *, lessons_used: list[str] | None, declared: dict[str, Any] | None = None) -> str:
+    """A settled job whose structured answer cites `lessons_used` (`None` = the key is absent) and
+    which declared `declared` as its learning loop (`None` = it declared none)."""
     job_id = str(uuid.uuid4())
     structured_output: dict[str, Any] = {"data": {}}
     if lessons_used is not None:
@@ -78,7 +83,8 @@ def _seed_job(workspace_id: int, *, lessons_used: list[str] | None) -> str:
                 json_schema=None,
                 append_system_prompt=None,
                 mcp_config=None,
-                model=None,
+                model="example/deep",
+                lessons=declared if declared is not None else _declared(),
             ),
         )
         job = jobs_models.get_job(db, job_id)
@@ -93,14 +99,27 @@ def _seed_job(workspace_id: int, *, lessons_used: list[str] | None) -> str:
 BELIEF_1, BELIEF_2 = "a" * 32, "b" * 32
 
 
-def _seed_report(workspace_id: int, *, lessons_used: list[str], result: str = lessons.CONFIRM) -> tuple[str, list[str]]:
+def _seed_report(
+    workspace_id: int, *, lessons_used: list[str], corrections: list[dict[str, str]] | None = None
+) -> tuple[str, list[str]]:
     """A job citing `lessons_used`, and its already-inserted, still-unsettled report row."""
     job_id = _seed_job(workspace_id, lessons_used=lessons_used)
     cites = lessons.cited(jobs_models.AgentJob(structured_output={"lessons_used": lessons_used}))
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
         jobs_models.insert_lesson_report_if_absent(
-            db, job_id, workspace_id=workspace_id, cites=cites, domain_name=DOMAIN, context_key=CONTEXT, result=result
+            db,
+            job_id,
+            workspace_id=workspace_id,
+            domain_name=DOMAIN,
+            situation=SITUATION,
+            accepted=True,
+            loaded=[BELIEF_1],
+            cites=cites,
+            attempts=1,
+            seconds=12.5,
+            model="example/deep",
+            corrections=corrections or [],
         )
         db.commit()
     return job_id, cites
@@ -159,7 +178,8 @@ def _fake_client(tool_call: Any) -> type:
             return False
 
         async def call_tool(self, tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
-            return await tool_call(tool, arguments)
+            result: SimpleNamespace = await tool_call(tool, arguments)
+            return result
 
     return _FakeClient
 
@@ -178,8 +198,14 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, dict[str,
 
     async def _tool_call(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
         made.append((tool, arguments))
-        content = {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
-        return SimpleNamespace(structured_content=content)
+        if arguments["action"] == "load":
+            return SimpleNamespace(
+                structured_content={
+                    "lessons": [{"id": BELIEF_1, "statement": "Zero-dollar interest lines are not rows."}],
+                    "brief": f"Lessons from earlier work.\n- [{BELIEF_1}] Zero-dollar interest lines are not rows.",
+                }
+            )
+        return SimpleNamespace(structured_content={"decision_id": "decision-1", "duplicate": False})
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_tool_call))
     yield made
@@ -188,71 +214,104 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, dict[str,
 # -- report_outcome: insert-only, atomic with the caller's own commit -------
 
 
-def test_report_outcome_inserts_the_intent_row_for_the_callers_own_commit(
-    workspace_id: int, with_core_memory: AgentSettings
-) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+def _file(workspace_id: int, job_id: str, **kwargs: Any) -> None:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        lessons.report_outcome(db, job_id, **kwargs)
         db.commit()
+
+
+def test_report_outcome_inserts_the_report_for_the_callers_own_commit(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1], declared=_declared(loaded=[BELIEF_1, BELIEF_2]))
+    corrections = [{"statement": "Zero-dollar interest lines are not rows."}, {"statement": "x", "key": "reading"}]
+    _file(workspace_id, job_id, accepted=False, attempts=2, corrections=corrections)
     report = _report(job_id, workspace_id)
     assert report is not None
-    assert (report.domain_name, report.context_key, report.result, report.cites) == (
-        DOMAIN,
-        CONTEXT,
-        lessons.CONFIRM,
+    assert (report.domain_name, report.situation, report.accepted) == (DOMAIN, SITUATION, False)
+    assert (report.loaded, report.cites, report.attempts, report.model) == (
+        [BELIEF_1, BELIEF_2],
         [BELIEF_1],
+        2,
+        "example/deep",
     )
-    assert report.decision_id is None and report.recorded_at is None and report.claimed_until is None
+    assert report.corrections == corrections
+    assert report.seconds is not None and report.seconds >= 0
+    assert report.recorded_at is None and report.claimed_until is None
 
 
-def test_report_outcome_rejects_an_unknown_result(workspace_id: int, with_core_memory: AgentSettings) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+def test_report_outcome_is_filed_even_when_the_job_cited_nothing(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    """core-memory's stats set runs with lessons against runs without: a run that cited nothing still counts."""
+    job_id = _seed_job(workspace_id, lessons_used=[])
+    _file(workspace_id, job_id, accepted=True)
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.cites == [] and report.accepted is True
+
+
+def test_report_outcome_drops_corrections_for_a_job_that_must_not_propose(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1], declared=_declared(propose=False))
+    _file(workspace_id, job_id, accepted=False, corrections=[{"statement": "A child's name is Sam."}])
+    report = _report(job_id, workspace_id)
+    assert report is not None and report.accepted is False and report.corrections == []
+    assert report.cites == [BELIEF_1]  # it still learns from the run, it only proposes nothing
+
+
+@pytest.mark.parametrize(
+    "corrections",
+    [
+        [{"statement": "  "}],
+        [{"statement": "x" * 501}],
+        [{"statement": "ok", "key": "elsewhere"}],
+        [{"statement": "ok"}] * 21,
+    ],
+)
+def test_report_outcome_refuses_a_malformed_correction_at_the_call(
+    workspace_id: int, with_core_memory: AgentSettings, corrections: list[dict[str, str]]
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[])
     with get_session_factory()() as db, pytest.raises(BadRequestError):
         bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result="maybe")
+        lessons.report_outcome(db, job_id, accepted=False, corrections=corrections)
 
 
-def test_report_outcome_rejects_an_overlong_context_key(workspace_id: int, with_core_memory: AgentSettings) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+def test_report_outcome_rejects_zero_attempts(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[])
     with get_session_factory()() as db, pytest.raises(BadRequestError):
         bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key="x" * 256, result=lessons.CONFIRM)
+        lessons.report_outcome(db, job_id, accepted=True, attempts=0)
 
 
 def test_report_outcome_is_a_no_op_without_core_memory_configured(workspace_id: int, without_core_memory: None) -> None:
     job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
-    with get_session_factory()() as db:
-        bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
-        db.commit()
+    _file(workspace_id, job_id, accepted=True)
     assert _report(job_id, workspace_id) is None
 
 
-def test_report_outcome_is_a_no_op_when_the_job_cited_nothing(
+def test_report_outcome_is_a_no_op_for_a_job_that_declared_no_lessons(
     workspace_id: int, with_core_memory: AgentSettings
 ) -> None:
-    job_id = _seed_job(workspace_id, lessons_used=[])
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        job = jobs_models.get_job(db, job_id)
+        assert job is not None
+        job.lessons = None
         db.commit()
+    _file(workspace_id, job_id, accepted=True)
     assert _report(job_id, workspace_id) is None
 
 
 def test_report_outcome_called_twice_is_first_write_wins(workspace_id: int, with_core_memory: AgentSettings) -> None:
     job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
-    with get_session_factory()() as db:
-        bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
-        db.commit()
-    with get_session_factory()() as db:
-        bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONTRADICT)
-        db.commit()
+    _file(workspace_id, job_id, accepted=True)
+    _file(workspace_id, job_id, accepted=False)
     report = _report(job_id, workspace_id)
-    assert report is not None and report.result == lessons.CONFIRM  # the later call was dropped, not merged
+    assert report is not None and report.accepted is True  # the later call was dropped, not merged
 
 
 def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_on_an_fk_violation(
@@ -271,10 +330,9 @@ def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_o
             db,
             missing_job_id,
             workspace_id=workspace_id,
-            cites=[BELIEF_1],
             domain_name=DOMAIN,
-            context_key=CONTEXT,
-            result=lessons.CONFIRM,
+            situation=SITUATION,
+            accepted=True,
         )
         db.commit()
 
@@ -296,10 +354,9 @@ def test_insert_lesson_report_if_absent_raises_on_an_unrecognised_violation(work
             db,
             job_id,
             workspace_id=999_999_999,
-            cites=[BELIEF_1],
             domain_name=DOMAIN,
-            context_key=CONTEXT,
-            result=lessons.CONFIRM,
+            situation=SITUATION,
+            accepted=True,
         )
 
 
@@ -325,7 +382,7 @@ def test_report_outcome_warns_when_the_persona_never_declared_the_key(
     job_id = _seed_job(workspace_id, lessons_used=None)
     with get_session_factory()() as db, caplog.at_level(logging.WARNING):
         bind_session(db, workspace_id=workspace_id)
-        lessons.report_outcome(db, job_id, domain_name=DOMAIN, context_key=CONTEXT, result=lessons.CONFIRM)
+        lessons.report_outcome(db, job_id, accepted=True)
     assert "lessons_used" in caplog.text
 
 
@@ -333,17 +390,15 @@ def test_a_stale_claim_tokens_writes_land_nowhere(workspace_id: int) -> None:
     job_id, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        won, _, stale_token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=-1.0)
-        assert won
+        stale_token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=-1.0)
+        assert stale_token is not None
         # The lease has already lapsed (negative, deterministic); someone else reclaims it.
-        won2, _, fresh_token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
-        assert won2 and fresh_token != stale_token
+        fresh_token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
+        assert fresh_token is not None and fresh_token != stale_token
         # The ORIGINAL holder, unaware its lease lapsed, tries to write with its now-stale token.
-        jobs_models.set_lesson_decision(db, job_id, "stale-decision", claim_token=stale_token)
         jobs_models.settle_lesson_report(db, job_id, claim_token=stale_token, refused="stale")
     report = _report(job_id, workspace_id)
     assert report is not None
-    assert report.decision_id is None
     assert report.recorded_at is None
 
 
@@ -353,47 +408,131 @@ def test_a_lease_already_held_refuses_a_second_claim(workspace_id: int) -> None:
     job_id, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        won1, _, _ = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
-        won2, decision2, token2 = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
-    assert won1 is True
-    assert (won2, decision2, token2) == (False, None, None)
+        first = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
+        second = jobs_models.claim_lesson_report(db, job_id, lease_seconds=300.0)
+    assert first is not None
+    assert second is None
+
+
+# -- load and jobs.start: the lessons are in the prompt whether or not the model looks --
+
+
+async def test_load_returns_the_brief_and_ids_for_the_declared_situation(
+    with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    brief, ids = await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION))
+    assert calls == [("lesson", {"action": "load", "domain_name": DOMAIN, "situation": SITUATION})]
+    assert ids == [BELIEF_1] and BELIEF_1 in brief
+
+
+async def test_load_fails_open_when_core_memory_cannot_be_reached(
+    with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def _unreachable(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
+        raise RuntimeError("Client failed to connect: connection refused")
+
+    monkeypatch.setattr(lessons, "Client", _fake_client(_unreachable))
+    with caplog.at_level(logging.WARNING):
+        assert await lessons.load(with_core_memory, lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+    assert "starts without them" in caplog.text
+
+
+async def test_load_does_nothing_without_core_memory(calls: list[tuple[str, dict[str, Any]]]) -> None:
+    assert await lessons.load(AgentSettings(), lessons.Lessons(DOMAIN, SITUATION)) == ("", [])
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "args", [("", ["a"]), (DOMAIN, []), (DOMAIN, ["a"] * 9), (DOMAIN, [" "]), ("d" * 256, ["a"]), (DOMAIN, ["k" * 256])]
+)
+def test_lessons_refuses_a_malformed_declaration(args: tuple[str, list[str]]) -> None:
+    with pytest.raises(BadRequestError):
+        lessons.Lessons(*args)
+
+
+async def test_start_puts_the_loaded_lessons_in_the_system_prompt_and_on_the_row(
+    workspace_id: int,
+    with_core_memory: AgentSettings,
+    calls: list[tuple[str, dict[str, Any]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(jobs, "_spawn", lambda *args, **kwargs: None)
+    job_id = await jobs.start(
+        get_session_factory(),
+        with_core_memory,
+        SimpleNamespace(name="jobagent"),  # type: ignore[arg-type]
+        workspace_id=workspace_id,
+        created_by_id=None,
+        prompt="read it",
+        json_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        append_system_prompt="Be brief.",
+        lessons=lessons.Lessons(DOMAIN, SITUATION, propose=False),
+    )
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        job = jobs_models.get_job(db, job_id)
+    assert job is not None
+    assert job.lessons == {"domain": DOMAIN, "situation": SITUATION, "propose": False, "loaded": [BELIEF_1]}
+    assert job.append_system_prompt is not None
+    assert job.append_system_prompt.startswith("Be brief.") and BELIEF_1 in job.append_system_prompt
+    assert job.json_schema is not None and "lessons_used" in job.json_schema["properties"]
+
+
+async def test_start_without_lessons_leaves_the_job_untouched(
+    workspace_id: int,
+    with_core_memory: AgentSettings,
+    calls: list[tuple[str, dict[str, Any]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(jobs, "_spawn", lambda *args, **kwargs: None)
+    job_id = await jobs.start(
+        get_session_factory(),
+        with_core_memory,
+        SimpleNamespace(name="jobagent"),  # type: ignore[arg-type]
+        workspace_id=workspace_id,
+        created_by_id=None,
+        prompt="read it",
+    )
+    with get_session_factory()() as db:
+        bind_session(db, workspace_id=workspace_id)
+        job = jobs_models.get_job(db, job_id)
+    assert job is not None and job.lessons is None and job.append_system_prompt is None
+    assert calls == []
 
 
 # -- retry_unsettled: the only thing that ever calls core-memory ------------
 
 
-async def test_retry_unsettled_records_a_decision_then_an_outcome(
+async def test_retry_unsettled_delivers_one_idempotent_lesson_report(
     workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
 ) -> None:
-    job_id, cites = _seed_report(workspace_id, lessons_used=[BELIEF_1, BELIEF_2])
+    corrections = [{"statement": "Zero-dollar interest lines are not rows."}]
+    job_id, cites = _seed_report(workspace_id, lessons_used=[BELIEF_1, BELIEF_2], corrections=corrections)
 
     await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
 
-    assert [tool for tool, _ in calls] == ["decision_record", "outcome_record"]
-    assert calls[0][1] == {"domain_name": DOMAIN, "context_key": CONTEXT, "cites": cites, "payload": {"job_id": job_id}}
-    assert calls[1][1] == {"domain_name": DOMAIN, "decision_id": "decision-1", "result": lessons.CONFIRM}
+    assert calls == [
+        (
+            "lesson",
+            {
+                "action": "report",
+                "domain_name": DOMAIN,
+                "situation": SITUATION,
+                "run_ref": job_id,
+                "accepted": True,
+                "loaded": [BELIEF_1],
+                "cited": cites,
+                "attempts": 1,
+                "seconds": 12.5,
+                "model": "example/deep",
+                "corrections": corrections,
+            },
+        )
+    ]
     report = _report(job_id, workspace_id)
     assert report is not None
-    assert (report.decision_id, report.refused, report.recorded_at is not None) == ("decision-1", None, True)
+    assert (report.refused, report.recorded_at is not None) == (None, True)
     assert _failing_alert() is None
-
-
-async def test_retry_unsettled_resumes_a_saved_decision(
-    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
-) -> None:
-    job_id, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
-    with get_session_factory()() as db:
-        bind_session(db, workspace_id=workspace_id)
-        # A negative lease is already-expired the moment it's set -- deterministic, not a sleep --
-        # so the sweep below finds this report reclaimable exactly as a lapsed real lease would.
-        won, _, token = jobs_models.claim_lesson_report(db, job_id, lease_seconds=-1.0)
-        assert won
-        jobs_models.set_lesson_decision(db, job_id, "decision-1", claim_token=token)
-
-    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
-
-    assert [tool for tool, _ in calls] == ["outcome_record"]
-    assert calls[0][1]["decision_id"] == "decision-1"
 
 
 async def test_retry_unsettled_settles_core_memorys_own_refusal(
@@ -434,26 +573,6 @@ async def test_retry_unsettled_treats_a_masked_tool_error_as_transient(
     assert _failing_alert() is None  # under a day old -- not yet worth an alert
 
 
-async def test_retry_unsettled_settles_an_unexpected_response_with_an_alert(
-    workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A response that arrived but does not parse -- core-memory answered, this slice's own
-    reading of the answer is what broke -- settles rather than retrying forever."""
-
-    async def _malformed(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
-        return SimpleNamespace(structured_content={"unexpected_shape": True})
-
-    monkeypatch.setattr(lessons, "Client", _fake_client(_malformed))
-    job_id, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
-
-    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
-
-    report = _report(job_id, workspace_id)
-    assert report is not None and report.recorded_at is not None
-    assert report.refused is not None and "unexpected" in report.refused
-    assert _failing_alert() is not None
-
-
 async def test_retry_unsettled_alerts_on_a_transient_fault_stale_for_a_day(
     workspace_id: int, with_core_memory: AgentSettings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -490,10 +609,9 @@ async def test_a_refusal_keeps_the_alert_up_despite_another_rows_success_in_the_
     success, even when a DIFFERENT row in the same sweep had just raised it."""
 
     async def _refuse_belief_2(tool: str, arguments: dict[str, Any]) -> SimpleNamespace:
-        if arguments.get("cites") == [BELIEF_2]:
+        if arguments["cited"] == [BELIEF_2]:
             raise ToolError(f"belief {BELIEF_2} is not active")
-        content = {"id": "decision-1"} if tool == "decision_record" else {"outcome": {"id": "outcome-1"}}
-        return SimpleNamespace(structured_content=content)
+        return SimpleNamespace(structured_content={"decision_id": "decision-1"})
 
     monkeypatch.setattr(lessons, "Client", _fake_client(_refuse_belief_2))
     _seed_report(workspace_id, lessons_used=[BELIEF_1])  # succeeds
