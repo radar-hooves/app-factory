@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.30] - 2026-10-13
+
+A job's lessons actually load against the real core-memory. Need: godswood (radar-hooves/godswood#876), 13/10/2026.
+
+### Fixed
+
+- **`lessons.load` unwraps the `result` key the live server wraps every `lesson` response under.** Measured in godswood's production container 13/10/2026: `structured_content == {"result": {situation, lessons, brief}}`, so `answer["brief"]` raised `KeyError`, load failed open, and 10 of 10 readings started with no lessons while the loop looked healthy. `_call` now unwraps a sole `result` key for every action; a flat payload still passes. The test fake returns the wrapped shape, and the fail-open warning logs the exception's `repr` (`KeyError('brief')`, not a bare `'brief'`). Not bounded here: core-memory's `lesson load` takes no limit (godswood's 75 lessons are a ~41k-char brief, ~10k tokens a turn), so a cap is core-memory's to offer, not a client-side rebuild of its brief.
+
 ## [2026.10.29] - 2026-10-13
 
 A stamped app's dev server gets the operator's dev identity wherever the fleet declares one, with no per-app step. Need: eight (session eight-round6) and master-project-71, 13/10/2026.
