@@ -7,12 +7,16 @@ broker's port open, and granting either hands both to the session. So the app
 starts the server instead. The session's `.mcp.json` names a relay, a stdlib
 process that joins its stdin and stdout to a loopback port the app listens on;
 each connection there starts one server, the socket its stdin and stdout, as
-the CLI would have started it: in its `cwd`, with the CLI's environment under
-the server's own `env`, `${VAR}` and `${VAR:-default}` expanded (measured on
-Claude Code 2.1.296). The port is admitted to that session alone, and the relay
-presents a token from its environment, which no other session can read, so a
-port reused once the session ends starts nothing for anyone else. The session
-gains the server's tools and nothing the server holds, not even its `env`.
+the app starts its own processes: in the app's working directory, under the
+app's environment and this run's own variables, the server's own `env` over
+them and `${VAR}` or `${VAR:-default}` expanded from the same. Never the
+session's working directory, home or scratch, which the session writes: a
+server reading a module, a `.env` or a config from one would run, unconfined,
+whatever the session left there. The port is admitted to that session alone,
+and the relay presents a token from its environment, which no other session
+can read, so a port reused once the session ends starts nothing for anyone
+else; a token starts one server at a time. The session gains the server's
+tools and nothing the server holds, not even its `env`.
 """
 
 import asyncio
@@ -26,7 +30,6 @@ import signal
 import socket
 import sys
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,8 @@ _TOKEN_BYTES = 32
 _HANDSHAKE_SECONDS = 5.0
 #: How long a server has to exit on its own once its session has, before it is killed.
 _GRACE_SECONDS = 5.0
+#: The keys of a server entry the bridge itself acts on, so never the relay's.
+_SERVERS_OWN = ("command", "args", "env", "cwd")
 _REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 #: Run as `python -I -c RELAY <port>` inside the session: stdlib only, nothing read off disk.
@@ -59,7 +64,7 @@ while chunk := link.recv(65536):
 class Bridge:
     """A session's relayed servers: the config its CLI reads, the port its relays reach."""
 
-    def __init__(self, mcp: Mapping[str, Any], *, cwd: Path, env: Mapping[str, str]) -> None:
+    def __init__(self, mcp: Mapping[str, Any], *, run_env: Mapping[str, str]) -> None:
         servers = mcp.get("mcpServers")
         servers = servers if isinstance(servers, dict) else {}
         stdio = {
@@ -67,13 +72,14 @@ class Bridge:
             for name, server in servers.items()
             if isinstance(server, dict) and isinstance(server.get("command"), str)
         }
-        self._cwd, self._env = cwd, env
-        self._started: list[asyncio.subprocess.Process] = []
+        self._env = {**os.environ, **run_env}
+        self._servers: dict[bytes, tuple[str, dict[str, Any]]] = {}
+        self._running: dict[bytes, asyncio.subprocess.Process] = {}
+        self._connections: set[asyncio.Task[None]] = set()
         self._accepting: asyncio.Task[None] | None = None
         self._listener: socket.socket | None = None
         self.port: int | None = None
         self.config: dict[str, Any] = dict(mcp)
-        self._servers: dict[bytes, tuple[str, dict[str, Any]]] = {}
         if not stdio:
             return
         self._listener = socket.create_server(("127.0.0.1", 0))
@@ -84,7 +90,7 @@ class Bridge:
             token = secrets.token_hex(_TOKEN_BYTES // 2)
             self._servers[f"{token}\n".encode()] = (name, server)
             relays[name] = {
-                **{key: value for key, value in server.items() if key not in ("command", "args", "env")},
+                **{key: value for key, value in server.items() if key not in _SERVERS_OWN},
                 "command": sys.executable,
                 "args": ["-I", "-c", RELAY, str(self.port)],
                 "env": {TOKEN_VARIABLE: token},
@@ -94,13 +100,13 @@ class Bridge:
 
     async def close(self) -> None:
         """Stop listening, and end every server it started, given a grace to exit on its own first."""
-        if self._accepting is not None:
-            self._accepting.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._accepting
+        for task in [*([self._accepting] if self._accepting else []), *self._connections]:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
         if self._listener is not None:
             self._listener.close()
-        running = [process for process in self._started if process.returncode is None]
+        running = [process for process in self._running.values() if process.returncode is None]
         if running:
             await asyncio.wait([asyncio.create_task(process.wait()) for process in running], timeout=_GRACE_SECONDS)
         for process in running:
@@ -113,12 +119,22 @@ class Bridge:
         loop = asyncio.get_running_loop()
         assert self._listener is not None
         while True:
-            connection, _ = await loop.sock_accept(self._listener)
-            with connection:
-                try:
-                    await self._start(loop, connection)
-                except Exception:
-                    logger.exception("A relayed MCP server could not start")
+            try:
+                connection, _ = await loop.sock_accept(self._listener)
+            except OSError:
+                logger.exception("MCP bridge %d could not accept a connection; retrying", self.port)
+                await asyncio.sleep(1)
+                continue
+            task = asyncio.create_task(self._serve(loop, connection))
+            self._connections.add(task)
+            task.add_done_callback(self._connections.discard)
+
+    async def _serve(self, loop: asyncio.AbstractEventLoop, connection: socket.socket) -> None:
+        with connection:
+            try:
+                await self._start(loop, connection)
+            except Exception:
+                logger.exception("A relayed MCP server could not start")
 
     async def _start(self, loop: asyncio.AbstractEventLoop, connection: socket.socket) -> None:
         """Start the server whose token `connection` presents, the socket its stdin and stdout."""
@@ -129,30 +145,31 @@ class Bridge:
                 if not chunk:
                     return
                 presented += chunk
-        name, server = next(
-            (named for token, named in self._servers.items() if hmac.compare_digest(token, presented)), ("", None)
-        )
-        if server is None:
+        token = next((token for token in self._servers if hmac.compare_digest(token, presented)), None)
+        if token is None:
             logger.warning("A connection to MCP bridge %d presented no server's token", self.port)
             return
-        args, own = server.get("args"), server.get("env")
+        name, server = self._servers[token]
+        if (running := self._running.get(token)) is not None and running.returncode is None:
+            logger.warning("MCP server %r is already running for its session; refused a second", name)
+            return
+        args, own, cwd = server.get("args"), server.get("env"), server.get("cwd")
         env = {
             **self._env,
             **{k: _expand(str(v), self._env) for k, v in (own if isinstance(own, dict) else {}).items()},
         }
         connection.setblocking(True)
-        process = await asyncio.create_subprocess_exec(
+        self._running[token] = await asyncio.create_subprocess_exec(
             _expand(server["command"], self._env),
             *(_expand(str(arg), self._env) for arg in (args if isinstance(args, list) else [])),
             stdin=connection.fileno(),
             stdout=connection.fileno(),
-            cwd=self._cwd,
+            cwd=_expand(cwd, self._env) if isinstance(cwd, str) else None,
             env=env,
             # Its own process group, as the CLI is, so `close` ends whatever it started too.
             start_new_session=True,
         )
-        self._started.append(process)
-        logger.info("Started MCP server %r outside its session, pid %d", name, process.pid)
+        logger.info("Started MCP server %r outside its session, pid %d", name, self._running[token].pid)
 
 
 def _expand(value: str, env: Mapping[str, str]) -> str:

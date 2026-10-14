@@ -25,7 +25,7 @@ import json, os, sys
 request = json.loads(sys.stdin.readline())
 with open(os.environ["APP_KEY_FILE"]) as handle:
     key = handle.read()
-answer = {"key": key, "argv": sys.argv[1:], "cwd": os.getcwd()}
+answer = {"key": key, "argv": sys.argv[1:], "cwd": os.getcwd(), "home": os.environ["HOME"]}
 print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": answer}), flush=True)
 """
 
@@ -161,12 +161,17 @@ def test_a_session_connects_only_to_its_models_and_its_mcp_servers_ports(
 async def test_the_apps_own_stdio_server_runs_outside_the_session_it_serves(
     confined: cli.Settings, milton: Persona, tmp_path: Path
 ) -> None:
-    """The server reads the key it vends with; the session is refused it, and never learns where it is."""
+    """The server reads the key it vends with, as the app; the session is refused it, and never learns where it is.
+
+    It runs where the app does, never in a folder the session writes, and a link
+    the session left at the config's name is replaced rather than written through.
+    """
     job = tmp_path / "jobs" / "one"
     job.mkdir(parents=True)
     key = tmp_path / "secrets" / "app.key"
     key.parent.mkdir()
     key.write_text("the app's identity")
+    (job / ".mcp.json").symlink_to(key)
     server = tmp_path / "server.py"
     server.write_text(_SERVER)
     entry = {"command": sys.executable, "args": [str(server), "${KIT_TEST_MARKER}"], "env": {"APP_KEY_FILE": str(key)}}
@@ -181,9 +186,11 @@ async def test_the_apps_own_stdio_server_runs_outside_the_session_it_serves(
     assert answered["servers"]["app"]["result"] == {
         "key": "the app's identity",
         "argv": ["this run's"],
-        "cwd": str(job),
+        "cwd": os.getcwd(),
+        "home": os.environ["HOME"],
     }
     assert answered["read"] == {str(key): "denied"}
+    assert key.read_text() == "the app's identity"
     relay = json.loads((job / ".mcp.json").read_text())["mcpServers"]["app"]
     assert str(key) not in json.dumps(relay)
     assert relay["type"] == "stdio" and relay["timeout"] == 60000

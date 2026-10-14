@@ -309,22 +309,24 @@ async def spawn(
     service on another port.
 
     `mcp` is the app's own MCP config for this session, written here to the
-    file `command`'s `--mcp-config` names and never read back off it, since
-    that file sits where the session writes. Confined, each stdio server in it
-    runs as the app, outside the session's confinement (`bridge`), so a server
-    that vends its own credentials needs nothing of its key or its ports
-    admitted to the session. Without it, the ports are read from the file.
+    file `command`'s `--mcp-config` names, which must sit in `cwd`, and never
+    read back: the session writes that folder, so the file is staged and
+    renamed, replacing a link left at its name rather than writing through it.
+    Confined, each stdio server in it runs as the app, outside the session's
+    confinement (`bridge`), so a server that vends its own credentials needs
+    nothing of its key or its ports admitted to the session. Without `mcp`,
+    the ports are read from the file, which the session must not write.
 
     Raises:
         OSError: the executable could not be started.
-        ValueError: `mcp` is given and `command` names no `--mcp-config`.
+        ValueError: `mcp` is given and `command` names no `--mcp-config` in `cwd`.
     """
     path = _flag_value(command, "--mcp-config")
-    if mcp is not None and path is None:
-        raise ValueError("`mcp` is written to the command's --mcp-config, and it names none")
+    if mcp is not None and (path is None or Path(path).parent.resolve() != cwd.resolve()):
+        raise ValueError("`mcp` is written to the command's --mcp-config, which must name a file in `cwd`")
     if not settings.confine:
         if mcp is not None and path is not None:
-            await asyncio.to_thread(Path(path).write_text, json.dumps(mcp))
+            await asyncio.to_thread(_write_config, Path(path), mcp)
         return await _spawn(command, cwd, environment(settings, persona, run_env), stdin)
     cwd = cwd.resolve()
     home, transcripts = await asyncio.to_thread(scope_home, persona, cwd)
@@ -332,15 +334,18 @@ async def spawn(
     scratch.mkdir(exist_ok=True)
     env = environment(settings, dataclasses.replace(persona, home=home), run_env)
     env["TMPDIR"] = env["CLAUDE_CODE_TMPDIR"] = str(scratch)
-    path = str(Path(path).resolve()) if path else None
-    relayed = bridge.Bridge(mcp, cwd=cwd, env=env) if mcp is not None else None
+    relayed = bridge.Bridge(mcp, run_env=run_env or {}) if mcp is not None else None
     try:
         if relayed is not None and path is not None:
-            await asyncio.to_thread(Path(path).write_text, json.dumps(relayed.config))
-        servers = relayed.config.get("mcpServers") if relayed is not None else _servers(path)
+            await asyncio.to_thread(_write_config, Path(path), relayed.config)
+            # In `cwd`, so read already; never resolved, as a link left there would be.
+            servers, config = relayed.config.get("mcpServers"), []
+        else:
+            path = str(Path(path).resolve()) if path else None
+            servers, config = _servers(path), [Path(path)] if path else []
         confined = sandbox.confine(
             command,
-            read=[cwd, home, *([Path(path)] if path else []), *read],
+            read=[cwd, home, *config, *read],
             write=[cwd, home, transcripts, *write],
             connect=[*_ports(settings, env, servers), *([relayed.port] if relayed and relayed.port else []), *connect],
         )
@@ -354,6 +359,19 @@ async def spawn(
         _closing.add(closing)
         closing.add_done_callback(_closing.discard)
     return process
+
+
+def _write_config(path: Path, config: Mapping[str, Any]) -> None:
+    """Write `config` to `path` by renaming a staged copy over it: a link at `path` is replaced, never followed."""
+    fd, staged = tempfile.mkstemp(prefix=".mcp.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(config, handle)
+        os.replace(staged, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(staged)
+        raise
 
 
 #: Held so a bridge's closing task is never garbage-collected before its session ends.
