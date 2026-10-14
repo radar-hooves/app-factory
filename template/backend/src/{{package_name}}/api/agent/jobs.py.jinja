@@ -260,7 +260,9 @@ async def start(
     command, never a literal header (`_refuse_literal_mcp_credentials`). Each
     stdio server in it runs as the app, outside the session's confinement
     (`agent_common.bridge`): one that vends its own credentials reaches its
-    key and the broker, and the session reaches neither.
+    key and the broker, and the session reaches neither. So `mcp_config` is
+    the app's own, never a value a caller sent: its commands run with the
+    app's authority.
     `model` is `--model` for this job, on every run
     including a resume; omitted, the persona's `settings.json` decides.
     `stream=True` has the CLI print token deltas and records them, coalesced,

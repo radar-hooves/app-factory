@@ -33,7 +33,7 @@ async def test_a_connection_without_a_servers_token_starts_nothing(tmp_path: Pat
 
 
 async def test_a_token_starts_one_server_at_a_time(tmp_path: Path) -> None:
-    """A second connection presenting a running server's token is closed, and starts nothing."""
+    """Two connections presenting one token at once start one server; the other is closed."""
     starts = tmp_path / "starts"
     server = tmp_path / "server.py"
     server.write_text(f"import sys\nopen({str(starts)!r}, 'a').write('started\\n')\nsys.stdin.read()")
@@ -41,21 +41,20 @@ async def test_a_token_starts_one_server_at_a_time(tmp_path: Path) -> None:
     token = relayed.config["mcpServers"]["app"]["env"][bridge.TOKEN_VARIABLE]
     assert relayed.port is not None
     try:
-        _, first = await asyncio.open_connection("127.0.0.1", relayed.port)
-        first.write(f"{token}\n".encode())
-        await first.drain()
-        for _ in range(100):
-            if starts.exists():
-                break
-            await asyncio.sleep(0.05)
-        second_reader, second = await asyncio.open_connection("127.0.0.1", relayed.port)
-        second.write(f"{token}\n".encode())
-        await second.drain()
+        connections = [await asyncio.open_connection("127.0.0.1", relayed.port) for _ in range(2)]
+        for _, writer in connections:
+            writer.write(f"{token}\n".encode())
+        await asyncio.gather(*(writer.drain() for _, writer in connections))
 
-        assert await asyncio.wait_for(second_reader.read(), 10) == b""
+        reads = [asyncio.create_task(reader.read()) for reader, _ in connections]
+        done, pending = await asyncio.wait(reads, timeout=10, return_when=asyncio.FIRST_COMPLETED)
+        assert [task.result() for task in done] == [b""]
+        await asyncio.sleep(0.5)
         assert starts.read_text() == "started\n"
-        first.close()
-        second.close()
+        for task in pending:
+            task.cancel()
+        for _, writer in connections:
+            writer.close()
     finally:
         await relayed.close()
 

@@ -76,6 +76,7 @@ class Bridge:
         self._servers: dict[bytes, tuple[str, dict[str, Any]]] = {}
         self._running: dict[bytes, asyncio.subprocess.Process] = {}
         self._connections: set[asyncio.Task[None]] = set()
+        self._starting = asyncio.Lock()
         self._accepting: asyncio.Task[None] | None = None
         self._listener: socket.socket | None = None
         self.port: int | None = None
@@ -100,10 +101,12 @@ class Bridge:
 
     async def close(self) -> None:
         """Stop listening, and end every server it started, given a grace to exit on its own first."""
-        for task in [*([self._accepting] if self._accepting else []), *self._connections]:
+        tasks = [*([self._accepting] if self._accepting else []), *self._connections]
+        for task in tasks:
             task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
+        if tasks:
+            # A start cancelled mid-spawn kills its child (asyncio's own transport close).
+            await asyncio.wait(tasks)
         if self._listener is not None:
             self._listener.close()
         running = [process for process in self._running.values() if process.returncode is None]
@@ -150,25 +153,27 @@ class Bridge:
             logger.warning("A connection to MCP bridge %d presented no server's token", self.port)
             return
         name, server = self._servers[token]
-        if (running := self._running.get(token)) is not None and running.returncode is None:
-            logger.warning("MCP server %r is already running for its session; refused a second", name)
-            return
         args, own, cwd = server.get("args"), server.get("env"), server.get("cwd")
         env = {
             **self._env,
             **{k: _expand(str(v), self._env) for k, v in (own if isinstance(own, dict) else {}).items()},
         }
         connection.setblocking(True)
-        self._running[token] = await asyncio.create_subprocess_exec(
-            _expand(server["command"], self._env),
-            *(_expand(str(arg), self._env) for arg in (args if isinstance(args, list) else [])),
-            stdin=connection.fileno(),
-            stdout=connection.fileno(),
-            cwd=_expand(cwd, self._env) if isinstance(cwd, str) else None,
-            env=env,
-            # Its own process group, as the CLI is, so `close` ends whatever it started too.
-            start_new_session=True,
-        )
+        # Held across the check and the start, so two connections presenting one token start one server.
+        async with self._starting:
+            if (running := self._running.get(token)) is not None and running.returncode is None:
+                logger.warning("MCP server %r is already running for its session; refused a second", name)
+                return
+            self._running[token] = await asyncio.create_subprocess_exec(
+                _expand(server["command"], self._env),
+                *(_expand(str(arg), self._env) for arg in (args if isinstance(args, list) else [])),
+                stdin=connection.fileno(),
+                stdout=connection.fileno(),
+                cwd=_expand(cwd, self._env) if isinstance(cwd, str) else None,
+                env=env,
+                # Its own process group, as the CLI is, so `close` ends whatever it started too.
+                start_new_session=True,
+            )
         logger.info("Started MCP server %r outside its session, pid %d", name, self._running[token].pid)
 
 
