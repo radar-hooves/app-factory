@@ -1,3 +1,19 @@
+<script lang="ts" module>
+	import type { IconComponent } from '../app-shell/types.js';
+
+	/** A section of a single-route app: identified by `id`, switched by state. */
+	export interface SettingsSection {
+		id: string;
+		label: string;
+		icon?: IconComponent;
+		badge?: string | number;
+	}
+	export interface SettingsSectionGroup {
+		heading?: string;
+		items: SettingsSection[];
+	}
+</script>
+
 <script lang="ts">
 	/**
 	 * The settings destination: a grouped section list beside the section you are
@@ -59,32 +75,67 @@
 	import type { NavSource } from '../app-shell/types.js';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 
+	type Shared = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+		/** The list's accessible name. */
+		listLabel?: string;
+		children: Snippet;
+	};
+
 	let {
 		sections,
 		currentPath,
+		selected,
+		onSelect,
 		listLabel = 'Settings sections',
 		children,
 		ref = $bindable(null),
 		class: className,
 		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
-		/**
-		 * The sections, as the package's own navigation vocabulary: groups of
-		 * `NavItem` (`{ heading, items }`), bare items, or a mix. The same type the
-		 * rail takes, so a row is the same row everywhere in the household and an
-		 * app types its settings list against something it already has.
-		 *
-		 * A row at the settings ROOT (`/settings`) needs `exact: true`, or its
-		 * prefix match keeps it lit on every section beneath it alongside the
-		 * section's own row.
-		 */
-		sections: NavSource;
-		/** The active path. Apps pass `page.url.pathname`, as they do to AppShell. */
-		currentPath?: string;
-		/** The list's accessible name. */
-		listLabel?: string;
-		children: Snippet;
-	} = $props();
+	}: Shared &
+		(
+			| {
+					/**
+					 * ROUTED: the sections, as the package's own navigation vocabulary:
+					 * groups of `NavItem` (`{ heading, items }`), bare items, or a mix.
+					 * The same type the rail takes, so a row is the same row everywhere
+					 * in the household.
+					 *
+					 * A row at the settings ROOT (`/settings`) needs `exact: true`, or
+					 * its prefix match keeps it lit on every section beneath it.
+					 */
+					sections: NavSource;
+					/** The active path. Apps pass `page.url.pathname`, as to AppShell. */
+					currentPath?: string;
+					selected?: undefined;
+					onSelect?: undefined;
+			  }
+			| {
+					/**
+					 * STATE-DRIVEN, for a single-route app whose sections swap in place
+					 * (canonical-app-shape §Applicability): groups of `SettingsSection`
+					 * (`{ id, label, icon? }`) rather than `NavItem`, since nothing is
+					 * navigated to. Rows are buttons; `selected` is the current `id` and
+					 * `onSelect` fires with the `id` that was chosen. The app owns the
+					 * state, so a deep link or a failure that opens a section just sets
+					 * `selected`.
+					 */
+					sections: readonly (SettingsSection | SettingsSectionGroup)[];
+					selected: string;
+					onSelect: (id: string) => void;
+					currentPath?: undefined;
+			  }
+		) = $props();
+
+	/** The state-driven sections as the rail's vocabulary, the `id` standing as the key. */
+	const nav = $derived<NavSource>(
+		onSelect
+			? (sections as readonly (SettingsSection | SettingsSectionGroup)[]).map((entry) =>
+					'items' in entry
+						? { heading: entry.heading, items: entry.items.map(({ id, ...rest }) => ({ ...rest, href: id })) }
+						: (({ id, ...rest }) => ({ ...rest, href: id }))(entry)
+				)
+			: (sections as NavSource)
+	);
 </script>
 
 <div bind:this={ref} class={cn('ds-settings', className)} {...restProps}>
@@ -100,8 +151,10 @@
 		one line beside its icon at comfortable density.
 	-->
 	<AppNav
-		nav={sections}
+		{nav}
 		{currentPath}
+		{selected}
+		{onSelect}
 		label={listLabel}
 		class="border-border bg-muted/30 flex-none border-b md:w-60 md:border-b-0 md:border-e"
 	/>

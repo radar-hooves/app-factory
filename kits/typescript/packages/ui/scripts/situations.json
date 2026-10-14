@@ -325,8 +325,13 @@
       "components": [
         {
           "name": "SettingsShell",
-          "props": "sections, children, currentPath?, listLabel?",
+          "props": "sections, children, currentPath?, selected?, onSelect?, listLabel?",
           "insteadOf": "a hand-built two-pane settings layout, or a card of tab links in a grid, per app"
+        },
+        {
+          "name": "SettingsRow",
+          "props": "label, description?, controlId?, children",
+          "insteadOf": "a hand-built label + description + control row inside a settings Panel (use Panel pad={false})"
         },
         {
           "name": "About",

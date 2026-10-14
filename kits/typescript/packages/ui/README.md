@@ -357,6 +357,19 @@ section you are reading, both panes scrolling independently from `md`.
 | `sections`    | Groups of `NavItem`, bare items, or a mix: the rail's own vocabulary.         |
 | `currentPath` | Which row is the page. Prefix-matched on the segment boundary, as the rail is. |
 | `listLabel`   | The list's accessible name. Defaults to `Settings sections`.                   |
+| `selected`, `onSelect` | A single-route app (no `/settings/*` routes): instead of `currentPath`, pass sections as `{ id, label, icon? }`, the current `id` and a callback. Rows become buttons; the app owns the state. |
+
+A setting inside a section is a `SettingsRow`: `label`, optional `description`, the control as children (a Switch, a Select, a Button), and `controlId` to tie the label to the control. Use it in `<Panel pad={false}>`; the row carries its own padding and the rule between rows.
+
+```svelte
+<SettingsShell sections={[{ items: [{ id: 'library', label: 'Library' }] }]} selected={active} onSelect={(id) => (active = id)}>
+	<Panel title="Library" pad={false}>
+		<SettingsRow label="Rescan on start" description="Look for new files at launch." controlId="rescan">
+			<Switch id="rescan" bind:checked={rescan} />
+		</SettingsRow>
+	</Panel>
+</SettingsShell>
+```
 
 A row at the settings ROOT (`/settings`) needs `exact: true`, or its prefix match
 keeps it lit on every section beneath it alongside the section's own row.

@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.13] - 2026-10-15
+
+A single-route app can drive the settings list by state, and a setting is one row. Need: bragi (and thoth), via the master-project orchestrator, 15/10/2026.
+
+### Added
+
+- **SettingsShell `selected` + `onSelect`.** Pass sections as `{ id, label, icon?, badge? }` (groups as before), the current `id` and a callback; rows render as buttons (`aria-current="true"` on the current one) and nothing is navigated to. `currentPath` and routed `NavItem` sections are unchanged. AppNav takes the same pair for its own use.
+- **SettingsRow**: `label`, `description?`, `controlId?`, the control as children. Padding, gap, rule and alignment are the package's; use it in `<Panel pad={false}>`.
+
 ## [2026.10.12] - 2026-10-12
 
 An app whose palette clears 4.5:1 clears it in the primitives, and sets its display face once. Need: caspo (the CASPO app session), 12/10/2026.

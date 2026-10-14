@@ -35,6 +35,8 @@
 		collapsed = false,
 		label = 'Primary',
 		onNavigate,
+		selected,
+		onSelect,
 		firstLink = $bindable(null),
 		class: className
 	}: {
@@ -47,6 +49,15 @@
 		label?: string;
 		/** Fired after any nav link activates — AppShell uses it to shut the drawer. */
 		onNavigate?: () => void;
+		/**
+		 * State-driven mode, for a single-route app whose sections swap in place.
+		 * With `onSelect` set each row is a BUTTON that calls it with the item's
+		 * `href` (the key; it is never navigated to), and the row whose key equals
+		 * `selected` is the current one. Children are not disclosed in this mode.
+		 * SettingsShell is the caller; an app passes `id`s there, not hrefs.
+		 */
+		selected?: string;
+		onSelect?: (key: string) => void;
 		/**
 		 * The first rendered link, bound out. AppShell moves focus here when this
 		 * list is the content of an overlay, so a keyboard user lands inside the
@@ -167,28 +178,10 @@
 		still the active row. A childless item never reaches this at all —
 		`hasActiveNavChild` is false for it — so the flat case is untouched.
 	-->
-	{@const within = hasActiveNavChild(item, currentPath)}
-	{@const active = !within && isNavItemActive(item, currentPath)}
-	<a
-		bind:this={
-			() => firstLink,
-			(node) => {
-				if (opts.first) firstLink = node;
-			}
-		}
-		id={opts.labelId}
-		href={item.href}
-		class="ds-nav-item"
-		data-active={active ? 'true' : undefined}
-		data-within={within ? 'true' : undefined}
-		data-child={opts.child ? 'true' : undefined}
-		aria-current={active ? 'page' : undefined}
-		title={collapsed ? item.label : undefined}
-		target={item.external ? '_blank' : undefined}
-		rel={item.external ? 'noreferrer noopener' : undefined}
-		onclick={onNavigate}
-		onkeydown={onNavKeydown}
-	>
+	{@const stateful = onSelect !== undefined}
+	{@const within = !stateful && hasActiveNavChild(item, currentPath)}
+	{@const active = stateful ? item.href === selected : !within && isNavItemActive(item, currentPath)}
+	{#snippet body()}
 		{#if active}
 			<span class="ds-nav-indicator"></span>
 		{/if}
@@ -205,7 +198,51 @@
 		{#if item.badge !== undefined && !collapsed}
 			<span class="ds-nav-badge">{item.badge}</span>
 		{/if}
-	</a>
+	{/snippet}
+	{#if stateful}
+		<button
+			bind:this={
+				() => firstLink,
+				(node) => {
+					if (opts.first) firstLink = node;
+				}
+			}
+			type="button"
+			class="ds-nav-item w-full text-start"
+			data-active={active ? 'true' : undefined}
+			aria-current={active ? 'true' : undefined}
+			title={collapsed ? item.label : undefined}
+			onclick={() => {
+				onSelect(item.href);
+				onNavigate?.();
+			}}
+		>
+			{@render body()}
+		</button>
+	{:else}
+		<a
+			bind:this={
+				() => firstLink,
+				(node) => {
+					if (opts.first) firstLink = node;
+				}
+			}
+			id={opts.labelId}
+			href={item.href}
+			class="ds-nav-item"
+			data-active={active ? 'true' : undefined}
+			data-within={within ? 'true' : undefined}
+			data-child={opts.child ? 'true' : undefined}
+			aria-current={active ? 'page' : undefined}
+			title={collapsed ? item.label : undefined}
+			target={item.external ? '_blank' : undefined}
+			rel={item.external ? 'noreferrer noopener' : undefined}
+			onclick={onNavigate}
+			onkeydown={onNavKeydown}
+		>
+			{@render body()}
+		</a>
+	{/if}
 {/snippet}
 
 <nav
