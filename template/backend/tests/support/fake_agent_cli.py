@@ -41,7 +41,9 @@ HTTP GET at the server's `url` with those headers. This is what proves a
 persona's `.mcp.json` actually presents the bearer its own MCP server
 demands, without depending on the real `claude` binary's own headersHelper
 implementation (verified separately, out of this fake CLI's reach, against
-the pinned Dockerfile version's own bundled schema).
+the pinned Dockerfile version's own bundled schema). A stdio entry is started
+instead, as the real CLI starts one (this process's environment under the
+entry's own `env`), and asked to `initialize`; its answer is reported.
 
 Every `assistant` frame carries `stop_reason: null`, as every one stream-json
 prints does (measured on 2.1.283), and the result line carries
@@ -134,6 +136,20 @@ def _probe_mcp(argv: list[str]) -> dict[str, object]:
     with open(config_path or "") as handle:
         servers = json.load(handle)["mcpServers"]
     name, server = next(iter(servers.items()))
+    if "command" in server:
+        started = subprocess.Popen(
+            [server["command"], *server.get("args", [])],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env={**os.environ, **server.get("env", {})},
+        )
+        assert started.stdin is not None and started.stdout is not None
+        started.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode() + b"\n")
+        started.stdin.flush()
+        answer = json.loads(started.stdout.readline() or "null")
+        started.stdin.close()
+        started.wait(timeout=10)
+        return {"server": name, "answer": answer}
 
     headers: dict[str, str] = dict(server.get("headers") or {})
     helper = server.get("headersHelper")

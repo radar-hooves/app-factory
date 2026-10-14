@@ -34,6 +34,7 @@ import json
 import os
 import shutil
 import stat
+import sys
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -42,7 +43,7 @@ from typing import Any
 
 import httpx
 import pytest
-from agent_common import cli
+from agent_common import cli, sandbox
 from agent_common.persona import Persona
 from fastapi import FastAPI
 from httpx import AsyncClient
@@ -1350,6 +1351,46 @@ async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
     await _message(agent_settings, persona, job_id, workspace_id, fake_agent_cli.MCP_PROBE_TRIGGER)
     await _wait_until_settled(job_id, workspace_id)
     assert json.loads(_answers(job_id, workspace_id)[-1])["status_code"] == 200
+
+
+#: A stdio server that, asked to `initialize`, answers with the key it vends with.
+_KEYED_SERVER = """
+import json, os, sys
+request = json.loads(sys.stdin.readline())
+with open(os.environ["PORTCULLIS_KEY_FILE"]) as handle:
+    answer = {"key": handle.read()}
+print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": answer}), flush=True)
+"""
+
+
+@pytest.mark.skipif(not sandbox.supported(), reason="this kernel's Landlock is below the sandbox's floor")
+async def test_a_confined_jobs_stdio_server_reads_the_key_its_session_cannot_on_every_run(
+    agent_settings: AgentSettings,
+    persona: Persona,
+    identity: tuple[uuid.UUID, int],
+    tmp_path: Path,
+) -> None:
+    """The server runs as the app, outside the session's confinement, on the first run and on a resume."""
+    _, workspace_id = identity
+    key = tmp_path / "secrets" / "app.key"
+    key.parent.mkdir()
+    key.write_text("the app's identity")
+    server = tmp_path / "server.py"
+    server.write_text(_KEYED_SERVER)
+    entry = {"command": sys.executable, "args": [str(server)], "env": {"PORTCULLIS_KEY_FILE": str(key)}}
+    mcp_config = {"mcpServers": {"app": entry}}
+    confined = agent_settings.model_copy(update={"confine": True})
+
+    job_id = await _start(
+        confined, persona, workspace_id, prompt=fake_agent_cli.MCP_PROBE_TRIGGER, mcp_config=mcp_config
+    )
+    await _wait_until_settled(job_id, workspace_id)
+    assert json.loads(_answers(job_id, workspace_id)[0])["answer"]["result"] == {"key": "the app's identity"}
+
+    await _message(confined, persona, job_id, workspace_id, fake_agent_cli.MCP_PROBE_TRIGGER)
+    await _wait_until_settled(job_id, workspace_id)
+    assert json.loads(_answers(job_id, workspace_id)[-1])["answer"]["result"] == {"key": "the app's identity"}
+    assert str(key) not in (jobs_module.job_dir(job_id) / ".mcp.json").read_text()
 
 
 @pytest.mark.parametrize(

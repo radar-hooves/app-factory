@@ -21,7 +21,8 @@ spawn through `spawn`, read through `events` and end through `kill`.
 Every session runs confined (`sandbox`): it reads and writes only its working
 directory, its own scoped home and the system, and connects only to the
 ports it needs, whatever its tools are told to do. `spawn` is the one place
-that decides it, so no caller can start an unconfined one by accident.
+that decides it, so no caller can start an unconfined one by accident. The
+app's own stdio MCP servers for a session run outside it (`bridge`).
 
 Lifted from the stamped `api/agent/session.py` and the driver inside
 `api/agent/jobs.py` (radar-hooves/app-factory), which both began as
@@ -45,7 +46,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from agent_common import sandbox
+from agent_common import bridge, sandbox
 from agent_common.persona import SOURCE_FILES, Persona
 
 #: The error frame's `type`. Not this driver's own vocabulary — it is
@@ -294,6 +295,7 @@ async def spawn(
     read: Sequence[Path] = (),
     write: Sequence[Path] = (),
     connect: Sequence[int] = (),
+    mcp: Mapping[str, Any] | None = None,
 ) -> asyncio.subprocess.Process:
     """Start `command` as `persona`, in its own process group, reading its stdout and stderr.
 
@@ -303,13 +305,26 @@ async def spawn(
     `stdin=True` is a pipe for stream-json turns (`user_frame`).
 
     Confined (`sandbox`): `read`, `write` and `connect` add to what a session
-    is given, for a caller whose persona runs a stdio MCP server out of some
-    other tree or reaches a service on another port.
+    is given, for a caller whose session reads another tree or reaches a
+    service on another port.
+
+    `mcp` is the app's own MCP config for this session, written here to the
+    file `command`'s `--mcp-config` names and never read back off it, since
+    that file sits where the session writes. Confined, each stdio server in it
+    runs as the app, outside the session's confinement (`bridge`), so a server
+    that vends its own credentials needs nothing of its key or its ports
+    admitted to the session. Without it, the ports are read from the file.
 
     Raises:
         OSError: the executable could not be started.
+        ValueError: `mcp` is given and `command` names no `--mcp-config`.
     """
+    path = _flag_value(command, "--mcp-config")
+    if mcp is not None and path is None:
+        raise ValueError("`mcp` is written to the command's --mcp-config, and it names none")
     if not settings.confine:
+        if mcp is not None and path is not None:
+            await asyncio.to_thread(Path(path).write_text, json.dumps(mcp))
         return await _spawn(command, cwd, environment(settings, persona, run_env), stdin)
     cwd = cwd.resolve()
     home, transcripts = await asyncio.to_thread(scope_home, persona, cwd)
@@ -317,15 +332,39 @@ async def spawn(
     scratch.mkdir(exist_ok=True)
     env = environment(settings, dataclasses.replace(persona, home=home), run_env)
     env["TMPDIR"] = env["CLAUDE_CODE_TMPDIR"] = str(scratch)
-    mcp = _flag_value(command, "--mcp-config")
-    mcp = str(Path(mcp).resolve()) if mcp else None
-    confined = sandbox.confine(
-        command,
-        read=[cwd, home, *([Path(mcp)] if mcp else []), *read],
-        write=[cwd, home, transcripts, *write],
-        connect=[*_ports(settings, env, mcp), *connect],
-    )
-    return await _spawn(confined, cwd, env, stdin)
+    path = str(Path(path).resolve()) if path else None
+    relayed = bridge.Bridge(mcp, cwd=cwd, env=env) if mcp is not None else None
+    try:
+        if relayed is not None and path is not None:
+            await asyncio.to_thread(Path(path).write_text, json.dumps(relayed.config))
+        servers = relayed.config.get("mcpServers") if relayed is not None else _servers(path)
+        confined = sandbox.confine(
+            command,
+            read=[cwd, home, *([Path(path)] if path else []), *read],
+            write=[cwd, home, transcripts, *write],
+            connect=[*_ports(settings, env, servers), *([relayed.port] if relayed and relayed.port else []), *connect],
+        )
+        process = await _spawn(confined, cwd, env, stdin)
+    except BaseException:
+        if relayed is not None:
+            await relayed.close()
+        raise
+    if relayed is not None:
+        closing = asyncio.create_task(_close_after(process, relayed))
+        _closing.add(closing)
+        closing.add_done_callback(_closing.discard)
+    return process
+
+
+#: Held so a bridge's closing task is never garbage-collected before its session ends.
+_closing: set[asyncio.Task[None]] = set()
+
+
+async def _close_after(process: asyncio.subprocess.Process, relayed: bridge.Bridge) -> None:
+    try:
+        await process.wait()
+    finally:
+        await relayed.close()
 
 
 async def _spawn(command: list[str], cwd: Path, env: dict[str, str], stdin: bool) -> asyncio.subprocess.Process:
@@ -389,14 +428,20 @@ def _flag_value(command: Sequence[str], flag: str) -> str | None:
     return command[at + 1] if at is not None and at + 1 < len(command) else None
 
 
-def _ports(settings: Settings, env: Mapping[str, str], mcp_config: str | None) -> list[int]:
+def _servers(mcp_config: str | None) -> object:
+    """The `mcpServers` of the config file the CLI is told to read; nothing, if it cannot be read."""
+    if not mcp_config:
+        return None
+    try:
+        return json.loads(Path(mcp_config).read_text()).get("mcpServers")
+    except OSError, ValueError, AttributeError:
+        return None
+
+
+def _ports(settings: Settings, env: Mapping[str, str], servers: object) -> list[int]:
     """The TCP ports a session needs: its model endpoint, telemetry, and each HTTP MCP server's."""
     urls = [settings.gateway_url or "https://api.anthropic.com", env.get("OTEL_EXPORTER_OTLP_ENDPOINT", "")]
-    if mcp_config:
-        try:
-            servers = json.loads(Path(mcp_config).read_text()).get("mcpServers", {})
-        except OSError, ValueError, AttributeError:
-            servers = {}
+    if isinstance(servers, dict):
         urls += [
             server["url"]
             for server in servers.values()

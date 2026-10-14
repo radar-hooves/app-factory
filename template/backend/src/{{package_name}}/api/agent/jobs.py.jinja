@@ -45,7 +45,6 @@ deciding whether to trust and the second spans every workspace.
 import asyncio
 import contextlib
 import glob
-import json
 import logging
 import re
 import shutil
@@ -134,10 +133,6 @@ def job_dir(job_id: str) -> Path:
     that wants it gone removes it.
     """
     return data_dir() / "agent-jobs" / job_id
-
-
-def _write_mcp_config(folder: Path, mcp_config: dict[str, object]) -> None:
-    (folder / ".mcp.json").write_text(json.dumps(mcp_config))
 
 
 #: Header names a credential is ever named under, matched case-insensitively.
@@ -262,7 +257,10 @@ async def start(
     (`--strict-mcp-config`'d exactly as a persona's own is,
     `agent_common.cli.argv`) — how a caller binds the job's own identity into the
     MCP servers it reaches, with any credential minted by a `headersHelper`
-    command, never a literal header (`_refuse_literal_mcp_credentials`).
+    command, never a literal header (`_refuse_literal_mcp_credentials`). Each
+    stdio server in it runs as the app, outside the session's confinement
+    (`agent_common.bridge`): one that vends its own credentials reaches its
+    key and the broker, and the session reaches neither.
     `model` is `--model` for this job, on every run
     including a resume; omitted, the persona's `settings.json` decides.
     `stream=True` has the CLI print token deltas and records them, coalesced,
@@ -309,8 +307,6 @@ async def start(
         if json_schema is not None:
             json_schema = lessons_module.declare_lessons_used(json_schema)
     await run_in_threadpool(_seed_files, folder, files or {})
-    if mcp_config is not None:
-        await run_in_threadpool(_write_mcp_config, folder, mcp_config)
 
     spec = RunSpec(
         job_id=job_id,
@@ -570,8 +566,6 @@ async def _run(
     `job.error` and `job.structured_output` carry nothing the log does not.
     """
     folder = job_dir(spec.job_id)
-    if spec.mcp_config is not None:
-        await run_in_threadpool(_write_mcp_config, folder, spec.mcp_config)
     driver = settings.driver()
     argv = cli.argv(
         driver,
@@ -579,8 +573,7 @@ async def _run(
         None,
         resume=spec.job_id if resume else None,
         session_id=None if resume else spec.job_id,
-        # Only a file the app wrote this run: the job can write its own folder,
-        # and the ports its session may reach are read from the file it names.
+        # Written by `spawn` from the row and never read back: the job writes its own folder.
         mcp_config=folder / ".mcp.json" if spec.mcp_config is not None else None,
         append_system_prompt=spec.append_system_prompt,
         json_schema=spec.json_schema,
@@ -615,7 +608,7 @@ async def _run(
         # A stdin pipe: every turn is a frame on stdin, the prompt included
         # (`--input-format stream-json` ignores one on the command line), and
         # a message sent while it works is another.
-        process = await cli.spawn(driver, persona, argv, cwd=folder, stdin=True)
+        process = await cli.spawn(driver, persona, argv, cwd=folder, stdin=True, mcp=spec.mcp_config)
     except OSError as exc:
         status, error = jobs_models.FAILED, await _failure(f"agent could not start: {exc}")
     else:

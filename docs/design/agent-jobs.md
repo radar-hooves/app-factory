@@ -158,12 +158,14 @@ the carve-out `platform/tenancy.md` gives a job whose job is the whole estate.
   otherwise blocks before its next stdout line. A read error there loses the
   tail, never the run's settling.
 - **A job's own MCP identity, with no credential persisted.** `mcp_config` is a
-  parsed `.mcp.json` object, kept on the row and rewritten to the job's folder
-  on every run: how a caller binds the job's own identity into the servers it
-  reaches. A credential in it is minted by a `headersHelper` command at spawn,
-  the contract a persona's own `.mcp.json` is held to;
+  parsed `.mcp.json` object, kept on the row and handed to `cli.spawn` on
+  every run, which writes it to the job's folder and never reads it back: how
+  a caller binds the job's own identity into the servers it reaches. A
+  credential in it is minted by a `headersHelper` command at spawn, the
+  contract a persona's own `.mcp.json` is held to;
   `_refuse_literal_mcp_credentials()` refuses a credential-shaped header set
-  directly.
+  directly. A stdio server in it vends its own from the broker and runs as the
+  app, outside the session's confinement (`agent-console.md` §Confinement).
 - **The gateway.** `AgentSettings.gateway_url` is deployment configuration;
   `gateway_key` is vended from the broker (`<app>-gateway`, field `value`)
   only while a URL is set, under the name in `gateway_key_credential` when

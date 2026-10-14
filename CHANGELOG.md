@@ -6,6 +6,19 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.35] - 2026-10-14
+
+A job's own stdio MCP server starts under confinement again. Need: godswood (radar-hooves/godswood#877), 14/10/2026: since this confinement went live there (2026.10.22), every Fat Controller session reported its godswood server `failed` (995 session starts from 11/10 20:15 AEST), because the server could not read the identity key it vends with.
+
+### Fixed
+
+- **A job's stdio MCP servers run as the app, outside the session's Landlock confinement, reached through a relay (`agent_common.bridge`).** One Landlock domain covers the CLI and everything it starts, so admitting the server's key file and the broker's and database's ports would admit them to the session's own `Read` too, and godswood's key vends every credential the app holds. Instead `cli.spawn(..., mcp=<the job's config>)` listens on a loopback port, writes the session's `.mcp.json` with a stdlib relay in each stdio server's place, and starts the server itself for each relay presenting that server's token, as the CLI would (its `cwd`, the session's environment under the server's own `env`, `${VAR}` expanded; measured on Claude Code 2.1.296). The port is admitted to that session alone, and the token sits in the relay's environment, which another session cannot read. The session gains the server's tools and never its key, its `env` or its ports. Measured with the real `claude` 2.1.296 under the sandbox: the same stdio server reports `failed` started inside and `connected` through the bridge.
+- `jobs._run` hands the job's `mcp_config` from its row to `spawn` on every run, a resume included, and no longer writes `.mcp.json` itself; `spawn` writes it and never reads it back. A persona's own `.mcp.json` (a chat or a room) is unchanged.
+
+### Upgrading
+
+Take both halves together: `copier update` for the job slice, and `agent-common>=2026.10.35` in `backend/pyproject.toml` with `uv lock --upgrade-package agent-common`, since the stamped `jobs.py` now calls `spawn(mcp=)`, which no earlier kit has. Nothing in an app's own code changes: a job's stdio server is declared as before, with non-secret coordinates and a `_FILE` path in its `env`.
+
 ## [2026.10.34] - 2026-10-13
 
 ### Fixed

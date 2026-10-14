@@ -7,11 +7,16 @@ this process's own argv and the environment names the driver decides, and a
 in the persisted transcript's own shape, as the real CLI does. `--resume` and
 `--session-id` both name the session it reports. A question that is one of
 the triggers below misbehaves instead, the way a real CLI sometimes does.
+`__mcp__ <path>...` starts each stdio server its `--mcp-config` names, as the
+real CLI does (its environment under the server's own `env`, in its `cwd`),
+asks each to `initialize`, and reports their answers beside what this process
+could read of each path.
 """
 
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import uuid
@@ -21,6 +26,7 @@ HANG = "__hang__"
 CHATTY = "__chatty__"
 GIANT = "__giant__"
 READ = "__read__"
+MCP = "__mcp__"
 GIANT_SIZE = 200_000
 ENV_NAMES = (
     "HOME",
@@ -54,6 +60,27 @@ def _read_each(paths: list[str]) -> str:
     return json.dumps(seen)
 
 
+def _initialize_each(argv: list[str]) -> dict[str, object]:
+    """Each stdio server's answer to `initialize`, started as the real CLI starts one."""
+    with open(_flag(argv, "--mcp-config") or "") as handle:
+        servers = json.load(handle)["mcpServers"]
+    answers = {}
+    for name, server in servers.items():
+        started = subprocess.Popen(
+            [server["command"], *server.get("args", [])],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env={**os.environ, **server.get("env", {})},
+        )
+        assert started.stdin is not None and started.stdout is not None
+        started.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode() + b"\n")
+        started.stdin.flush()
+        answers[name] = json.loads(started.stdout.readline() or "null")
+        started.stdin.close()
+        started.wait(timeout=10)
+    return answers
+
+
 def main() -> None:
     argv = sys.argv[1:]
     question = _flag(argv, "-p") or ""
@@ -71,6 +98,8 @@ def main() -> None:
         if question == GIANT
         else _read_each(question.split()[1:])
         if question.startswith(READ)
+        else json.dumps({"servers": _initialize_each(argv), "read": json.loads(_read_each(question.split()[1:]))})
+        if question.startswith(MCP)
         else json.dumps({"argv": argv, "cwd": os.getcwd(), "env": {name: os.environ.get(name) for name in ENV_NAMES}})
     )
 

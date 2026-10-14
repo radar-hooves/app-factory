@@ -1,5 +1,6 @@
 """The sandbox, through a probe run inside it and the spawn every session takes."""
 
+import asyncio
 import dataclasses
 import json
 import os
@@ -15,7 +16,18 @@ from agent_common.persona import Persona
 
 pytestmark = pytest.mark.skipif(not sandbox.supported(), reason="this kernel's Landlock is below the sandbox's floor")
 
-READ = "__read__"  # fake_claude.py's trigger
+READ = "__read__"  # fake_claude.py's triggers
+MCP = "__mcp__"
+
+#: A stdio server that, asked to `initialize`, answers with the key it was told where to find.
+_SERVER = """
+import json, os, sys
+request = json.loads(sys.stdin.readline())
+with open(os.environ["APP_KEY_FILE"]) as handle:
+    key = handle.read()
+answer = {"key": key, "argv": sys.argv[1:], "cwd": os.getcwd()}
+print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": answer}), flush=True)
+"""
 
 _PROBE = """
 import json, os, socket, sys
@@ -141,8 +153,49 @@ def test_a_session_connects_only_to_its_models_and_its_mcp_servers_ports(
     )
     gateway = dataclasses.replace(confined, gateway_url="http://gateway.example:4000")
 
-    assert cli._ports(gateway, {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4318"}, str(config)) == [4000, 4318, 8123]
+    servers = cli._servers(str(config))
+    assert cli._ports(gateway, {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4318"}, servers) == [4000, 4318, 8123]
     assert cli._ports(confined, {}, None) == [443]
+
+
+async def test_the_apps_own_stdio_server_runs_outside_the_session_it_serves(
+    confined: cli.Settings, milton: Persona, tmp_path: Path
+) -> None:
+    """The server reads the key it vends with; the session is refused it, and never learns where it is."""
+    job = tmp_path / "jobs" / "one"
+    job.mkdir(parents=True)
+    key = tmp_path / "secrets" / "app.key"
+    key.parent.mkdir()
+    key.write_text("the app's identity")
+    server = tmp_path / "server.py"
+    server.write_text(_SERVER)
+    entry = {"command": sys.executable, "args": [str(server), "${KIT_TEST_MARKER}"], "env": {"APP_KEY_FILE": str(key)}}
+    mcp = {"mcpServers": {"app": {"type": "stdio", **entry, "timeout": 60000}}}
+    command = cli.argv(confined, milton, f"{MCP} {key}", mcp_config=job / ".mcp.json")
+
+    process = await cli.spawn(confined, milton, command, cwd=job, run_env={"KIT_TEST_MARKER": "this run's"}, mcp=mcp)
+    events = [event async for event in cli.events(process, 30)]
+    await process.wait()
+
+    answered = json.loads(next(event for event in events if event.get("type") == "result")["result"])
+    assert answered["servers"]["app"]["result"] == {
+        "key": "the app's identity",
+        "argv": ["this run's"],
+        "cwd": str(job),
+    }
+    assert answered["read"] == {str(key): "denied"}
+    relay = json.loads((job / ".mcp.json").read_text())["mcpServers"]["app"]
+    assert str(key) not in json.dumps(relay)
+    assert relay["type"] == "stdio" and relay["timeout"] == 60000
+    port = int(relay["args"][-1])
+    for _ in range(50):  # the bridge closes once the session has ended
+        try:
+            socket.create_connection(("127.0.0.1", port), 1).close()
+        except ConnectionRefusedError:
+            break
+        await asyncio.sleep(0.1)
+    else:
+        raise AssertionError("the bridge outlived its session")
 
 
 def test_a_multi_call_binary_is_still_called_by_the_name_it_was_given(tmp_path: Path) -> None:
