@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.14] - 2026-10-15
+
+Need: bragi, 15/10/2026.
+
+### Added
+
+- **Alert `variant="warning"`**: the status-warning token as border, tint and icon, in light and dark; body text keeps the card ink for contrast.
+
 ## [2026.10.13] - 2026-10-15
 
 A single-route app can drive the settings list by state, and a setting is one row. Need: bragi (and thoth), via the master-project orchestrator, 15/10/2026.
