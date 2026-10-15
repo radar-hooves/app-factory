@@ -9,7 +9,7 @@ copier.yaml                 one config; `skeleton` picks the tree (default web)
 template/                   the web skeleton, where master's parity, converge and fleet tools read it
 skeletons/desktop/          the desktop skeleton; a symlink into template/ where web and desktop share a file
 kits/rust/desktop-shell     traffic lights and the tray guard
-skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness (desktop-pitfalls.md)
+skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness and per-app view sweep (desktop-pitfalls.md)
 .github/workflows/desktop-ci.yaml   the desktop CI, called by each app @main
 ```
 

@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.38] - 2026-10-15
+
+The desktop layout harness sweeps every view for overlap, overflow and clipping. Need: bragi (radar-hooves/bragi#243), 15/10/2026, whose own sweep found 282 real layout faults by hand-built detection; `@poodle64/ui` 2026.10.15 ships with it.
+
+### Added
+
+- **`skeletons/desktop/scripts/webkit-layout/sweep.py` + `detect.js`.** One run drives every view of a Tauri app at every window size and UI zoom, and reports `overlap` (two in-flow siblings' text, buttons or pictures intersect), `overflow` (a leaf leaves its container or the window with nothing scrolling it) and `clipping` (an `overflow: hidden` ancestor cuts a leaf without an ellipsis or line clamp). A view with findings is screenshotted with the offenders outlined; a view whose action raises is `unreachable`. Zoom-aware: `detect.js` divides the window by the root's CSS zoom. The app supplies a Python file (`--app`): `views(variant)`, and optionally `VARIANTS`, `SIZES`, `IGNORE` (CSS selectors of deliberate overlays), `INVOKE`, `init_script`, `ready`, `set_zoom`. Taken from bragi's sweep; nothing of bragi's stays. Documented in `docs/design/desktop-pitfalls.md`.
+
+### Upgrading
+
+`copier update`. Nothing runs until an app writes its `--app` file.
+
 ## [2026.10.37] - 2026-10-15
 
 Bragi's hard-won desktop lessons land in the factory. Need: bragi (radar-hooves/bragi#243), 15/10/2026, before its history is dropped.

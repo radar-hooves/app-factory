@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.15] - 2026-10-15
+
+Need: bragi (radar-hooves/bragi#243), 15/10/2026.
+
+### Fixed
+
+- **SettingsRow's control cell no longer overflows a narrow card.** It was `flex-none` with no cap, so a text input, a URL field, or a Disconnect button beside a badge pushed past the card at 900px and 130% zoom. The cell is now `min-w-0 max-w-full` and wraps its children, and each child is held to `max-w-full`: the cell drops under the label when it does not fit, then wraps or shrinks within the row. Wide widths are unchanged.
+
 ## [2026.10.14] - 2026-10-15
 
 Need: bragi, 15/10/2026.

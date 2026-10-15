@@ -44,3 +44,27 @@ $ nix shell --impure --expr 'with import (builtins.getFlake "nixpkgs") {}; pytho
 ```
 
 `check.js` is one expression returning JSON; `{ok: false}` or `false` exits 1. Rule: reproduce a known failure before trusting a pass. Break the layout on purpose and see the harness say so. It refuses a URL that answers non-2xx, so a wrong server on the port cannot pass.
+
+### Layout sweep
+
+`sweep.py` runs the harness over every view of the app at every window size and UI zoom, and `detect.js` reports what a person would see: `overlap` (text, buttons or pictures of two in-flow siblings intersect), `overflow` (a leaf outside its container or the window with nothing scrolling it) and `clipping` (an `overflow: hidden` ancestor cuts a leaf with no ellipsis or line clamp). A failing view is screenshotted with the offenders outlined. Exits 1 on any finding.
+
+```console
+$ nix shell ... python scripts/webkit-layout/sweep.py --app scripts/layout-sweep.py \
+    --serve "pnpm exec vite dev --port {port} --strictPort" --sizes 900x600 --zoom 100,130
+```
+
+The app writes `scripts/layout-sweep.py`; only `views` is required:
+
+```python
+VARIANTS = ["grid", "list"]   # states swept, each a fresh page
+SIZES = [(520, 400), (900, 600)]
+IGNORE = ".search-popup"      # deliberate overlays; or data-sweep-ignore on the element
+INVOKE = {"get_albums": []}   # mocked Tauri commands
+def init_script(variant, zoom): ...   # JS before load: seed data and settings
+def ready(page, variant): ...         # after load: emit events
+def views(variant): return [("albums", lambda page: page.get_by_role("button", name="Albums").click())]
+def set_zoom(page, zoom): ...         # only if the app owns zoom; default is CSS zoom on <html>
+```
+
+UI zoom is CSS zoom on the root, and WebKit compares px media and container queries against the unzoomed window: write breakpoints in rem so they follow zoom. Seed stress data (very long, very short, unbroken, accented names) in `INVOKE`; the sweep finds nothing a fixture does not provoke.

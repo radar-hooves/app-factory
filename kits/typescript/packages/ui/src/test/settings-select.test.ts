@@ -35,4 +35,12 @@ describe('SettingsRow', () => {
 		expect(rows[0].className).toContain('first:border-t-0');
 		expect(rows[1].className).toContain('border-t');
 	});
+
+	it('lets a wide control shrink or wrap inside the card instead of overflowing it', () => {
+		render(Harness);
+		const cell = document.getElementById('rescan')!.parentElement!;
+		expect(cell.className).toContain('max-w-full');
+		expect(cell.className).toContain('min-w-0');
+		expect(cell.className).toContain('flex-wrap');
+	});
 });

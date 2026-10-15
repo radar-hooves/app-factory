@@ -48,5 +48,5 @@
 			<p class="text-muted-foreground mt-1 text-sm">{description}</p>
 		{/if}
 	</div>
-	<div class="flex flex-none items-center gap-2">{@render children()}</div>
+	<div class="flex max-w-full min-w-0 flex-none flex-wrap items-center gap-2 *:max-w-full">{@render children()}</div>
 </div>
