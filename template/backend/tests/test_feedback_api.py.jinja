@@ -19,6 +19,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.feedback import service
@@ -152,6 +153,34 @@ async def test_a_report_files_as_a_redacted_github_issue(
     assert body["error"] is None
     # The STORED message is untouched — only the outgoing issue body redacts.
     assert body["message"] == payload["message"]
+
+
+async def test_a_pre_vended_token_is_used_without_calling_vend(
+    client: AsyncClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A host-supplied `github_token` wins over the broker: `vend()` is never reached."""
+    configured: Settings = get_settings().model_copy(
+        update={"feedback": FeedbackSettings(github_repo="acme/reports", github_token=SecretStr("pre-vended"))}
+    )
+    app.dependency_overrides[get_settings] = lambda: configured
+    posted: list[dict[str, str]] = []
+
+    def _fake_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> httpx.Response:
+        posted.append(headers)
+        return _github_response(201, html_url="https://github.com/acme/reports/issues/7")
+
+    def _no_vend(credential: str, field: str) -> str:
+        raise AssertionError("vend() must not be called when a token is supplied")
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    monkeypatch.setattr(service, "vend", _no_vend)
+    try:
+        created = await client.post("/api/feedback/", json=_report_payload())
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert created.status_code == 201
+    assert posted[0]["Authorization"] == "Bearer pre-vended"
 
 
 # ── Filing fails ─────────────────────────────────────────────────────────────

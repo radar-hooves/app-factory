@@ -2,14 +2,17 @@
 
 Filing is opt-in: an app with no repo configured leaves every report at
 `status="received"` and never calls out (`api/feedback/service.py`). The
-bearer is a broker credential, vended the same way the database password is
-(`config/vend.py`) — never an environment variable.
+bearer is a broker credential (`config/vend.py`), vended per use. A host whose
+secrets unit pre-vends it into the container (the app's own identity not being
+granted it) supplies it as ``github_token``, read before any vend.
 
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_GITHUB_REPO
     {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN_CREDENTIAL
+    {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN
 """
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,3 +35,9 @@ class FeedbackSettings(BaseSettings):
     # broker outage then fails one report's filing rather than the app's boot.
     # Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN_CREDENTIAL
     github_token_credential: str = "github-feedback"
+
+    # A token the host already vended into the environment. When set, filing
+    # uses it and never calls `vend()`; when empty, filing vends the credential
+    # above live. For an app whose own broker identity is not granted that
+    # credential. Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN
+    github_token: SecretStr = SecretStr("")

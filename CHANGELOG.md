@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.36] - 2026-10-15
+
+The feedback slice reads a host-supplied GitHub token before it vends. Need: caspo (radar-hooves/app-factory#40), 15/10/2026: a deployed app's own broker identity is not always granted `github-feedback`, so a live vend fails there; the host's secrets unit pre-vends the token into the container instead.
+
+### Added
+
+- `FeedbackSettings.github_token` (env `<APP>_GITHUB_TOKEN`, e.g. `CASPO_GITHUB_TOKEN`): when set, `file_issue` uses it and never calls `vend()`; when empty it vends `github_token_credential` as before.
+
+### Upgrading
+
+`copier update`. Nothing changes for an app that leaves `<APP>_GITHUB_TOKEN` unset. An app carrying its own env read in `api/feedback/service.py` drops it. The feedback report's commit-before-filing fix needs no change here: `SessionDep`'s `scope="function"` (2026.9.x) already commits before the response, covered by `test_db_session_commit_ordering`.
+
 ## [2026.10.35] - 2026-10-14
 
 A job's own stdio MCP server starts under confinement again. Need: godswood (radar-hooves/godswood#877), 14/10/2026: since this confinement went live there (2026.10.22), every Fat Controller session reported its godswood server `failed` (995 session starts from 11/10 20:15 AEST), because the server could not read the identity key it vends with.
