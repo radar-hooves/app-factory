@@ -9,6 +9,7 @@ copier.yaml                 one config; `skeleton` picks the tree (default web)
 template/                   the web skeleton, where master's parity, converge and fleet tools read it
 skeletons/desktop/          the desktop skeleton; a symlink into template/ where web and desktop share a file
 kits/rust/desktop-shell     traffic lights and the tray guard
+skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness (desktop-pitfalls.md)
 .github/workflows/desktop-ci.yaml   the desktop CI, called by each app @main
 ```
 
@@ -20,17 +21,19 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 
 | | Kit (versioned, pinned per app) | Skeleton-owned (stamped, converged) | App-owned (first stamp, then the app's) |
 | --- | --- | --- | --- |
-| Rust shell | `desktop-shell`: `traffic_lights::setup`, `guard_tray`; `telemetry` and `tauri-plugin-telemetry` | `src-tauri/src/main.rs` | `lib.rs` and every module; `Cargo.toml`; `build.rs` |
+| Rust shell | `desktop-shell`: `traffic_lights::setup(window)`, `guard_tray`; `telemetry` and `tauri-plugin-telemetry` | `src-tauri/src/main.rs` | `lib.rs` and every module; `Cargo.toml`; `build.rs` |
 | Tauri config | | | `tauri.conf.json` (windows, CSP, bundle, updater key), `capabilities/` |
 | Frontend shell | `@poodle64/ui`, `@poodle64/design-tokens` | `svelte.config.js`, `vite.config.ts` (port from answers), `vitest.config.ts`, `tsconfig.json`, `components.json`, `.npmrc`, `src/app.html`, `src/routes/+layout.ts`, `src/lib/utils.ts`, `src/test/setup.ts` | `package.json`, `src/app.css` (palette), routes and components |
 | Settings pane | the telemetry section: next, into `@poodle64/ui` once `@poodle64/ui/settings` lands | | the pane's other sections |
-| CI | `desktop-ci.yaml`: fmt, clippy, tests on atlas and huginn in the app's devShell; the frontend gates on atlas; `flake.nix`'s `pnpmDeps` hash corrected on a pull request's branch, where the flake packages pnpm dependencies | `.github/workflows/ci.yaml` (the caller, granting that one job its write), `security.yaml`, `scripts/update-pnpm-deps-hash.sh` | a workflow of its own for checks only it needs |
+| CI | `desktop-ci.yaml`: fmt, clippy, tests on atlas and huginn in the app's devShell; the frontend gates on atlas (any desktop app, public or private, calls it on `pull_request` and push to main; a fork's jobs run on GitHub-hosted runners);  `flake.nix`'s `pnpmDeps` hash corrected on a pull request's branch, where the flake packages pnpm dependencies | `.github/workflows/ci.yaml` (the caller, granting that one job its write), `security.yaml`, `scripts/update-pnpm-deps-hash.sh` | a workflow of its own for checks only it needs |
 | macOS signing | | `scripts/cargo-codesign.sh`: build/sign/verify; read-only final bundle verification; explicit local ad-hoc mode; releases/configured signing fail closed; execute the signed dev binary | `tauri.conf.json`: runner and local `signingIdentity: "-"`; build host declares `APPLE_SIGNING_IDENTITY` for both signers; `flake.nix`: `jq` |
 | Release and updater | not built; see below | | `release.yaml`, the updater wiring |
 | Lints and formatters | | `stylelint.config.js`, the drift and craft lints, `.pre-commit-config.yaml` | the lints' baselines |
 | Repo | | `.gitignore`, `.gitattributes`, `.envrc`, `renovate.json`, `.vscode/extensions.json` | `flake.nix`, `README.md`, `CHANGELOG.md`, `docs/`, `.claude/` |
 
 The owned set is what the skeleton renders minus copier's `_skip_if_exists`. An app customises by mounting (calling a kit where its own setup wants it), configuring (its answers: `frontend_port`, `bundle_identifier`, `linux_cargo_args`, `dark_first`) and adding (its own modules, routes, workflows, and a `.gitignore` inside any directory only it has).
+
+Known traps and their fixes: `desktop-pitfalls.md`.
 
 ## Signing verification — 08/10/2026
 

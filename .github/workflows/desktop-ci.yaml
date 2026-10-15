@@ -11,6 +11,11 @@ name: desktop CI
 # pnpmDeps hash: where the app's flake packages its pnpm dependencies, a pull
 # request that changes them gets flake.nix's hash corrected on its own branch.
 #
+# Callable from any desktop app, public or private, on pull_request and push to
+# main; the app needs `test:run`, `check`, `lint:css`, `lint:drift`, `lint:design`
+# and `build` scripts in package.json, and a flake devShell with its Rust toolchain
+# and system libraries. The caller grants `contents: write` for the hash job.
+#
 # A public app takes fork pull requests, and fork code never runs on the
 # household runner: a fork's jobs run on a GitHub-hosted runner instead, which
 # installs Nix first.
@@ -135,6 +140,11 @@ jobs:
         run: |
           set -euo pipefail
           script=scripts/update-pnpm-deps-hash.sh
+          # An app whose flake does not package its pnpm dependencies has no script.
+          if [ ! -x "$script" ]; then
+            echo "No $script: this app's flake does not package pnpm dependencies."
+            exit 0
+          fi
           # Run by hand: verify the branch as it stands.
           if [ -z "$BASE_SHA" ]; then exec "$script" --check; fi
           if git diff --quiet "$BASE_SHA" HEAD -- flake.nix flake.lock package.json pnpm-lock.yaml; then

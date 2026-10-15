@@ -27,6 +27,14 @@ repos:
       - id: detect-private-key
         name: 'security - Detect private keys'
 
+  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
+  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: 'ci - Lint GitHub Actions workflows'
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:

@@ -5,6 +5,14 @@ default_language_version:
 default_install_hook_types: [pre-commit, pre-merge-commit]
 
 repos:
+  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
+  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: 'ci - Lint GitHub Actions workflows'
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
@@ -183,11 +191,19 @@ repos:
   # resolves its config's plugins against its own CWD.
   - repo: local
     hooks:
+      # --fix on *.css only: on a .svelte file it corrupts an inline
+      # `style="...{x}"` attribute (a bare property appended after a terminated
+      # declaration) and the next check reads clean. Svelte files are checked, never fixed.
       - id: stylelint
         name: 'frontend - Lint CSS with stylelint'
         entry: bash -c 'cd frontend && exec node_modules/.bin/stylelint --fix "${@#frontend/}"' --
         language: system
-        files: '^frontend/.*\.(css|svelte)$'
+        files: '^frontend/.*\.css$'
+      - id: stylelint-svelte
+        name: 'frontend - Lint Svelte styles with stylelint'
+        entry: bash -c 'cd frontend && exec node_modules/.bin/stylelint "${@#frontend/}"' --
+        language: system
+        files: '^frontend/.*\.svelte$'
 
   # ESLint is the third instance of the lesson stylelint's comment records, and
   # it was simply missed. Measured 2026-09-01: `no-this-alias` in a userscript

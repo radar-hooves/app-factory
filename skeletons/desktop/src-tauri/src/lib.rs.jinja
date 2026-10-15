@@ -3,9 +3,6 @@ use tauri::Manager;
 /// Telemetry targets this app allows beyond the ones the kit always does.
 const TELEMETRY_TARGETS: &[&str] = &[];
 
-/// The app header's height, which the macOS traffic lights centre in.
-const HEADER_HEIGHT: f64 = 54.0;
-
 /// Where the Settings pane keeps the telemetry exporter. This app keeps no
 /// settings yet, so the fleet environment is the only source; implement both
 /// over the app's own store once it has one.
@@ -32,7 +29,7 @@ pub fn run() {
         ))
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
-                desktop_shell::traffic_lights::setup(&window, 12.0, HEADER_HEIGHT);
+                desktop_shell::traffic_lights::setup(&window);
             }
             Ok(())
         })

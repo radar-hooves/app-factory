@@ -6,6 +6,26 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.37] - 2026-10-15
+
+Bragi's hard-won desktop lessons land in the factory. Need: bragi (radar-hooves/bragi#243), 15/10/2026, before its history is dropped.
+
+### Changed
+
+- **`desktop-shell` 0.2.0: the traffic lights are AppKit's to place.** `traffic_lights::setup(&window)` gives the window an empty unified `NSToolbar` (a 52-point title bar, buttons centred by AppKit on every frame, native fullscreen handled) instead of repositioning the buttons on `Resized` and `Focused`, which made them jump to the top during a live resize and snap back on mouse-up. The `x` and `header_height` arguments and `position` go; the app's header is 52 points. Checked with clippy for `aarch64-apple-darwin` from atlas; not run on a Mac.
+- **`lint:css:fix` and the web template's stylelint hook fix `*.css` only.** `--fix` over a `.svelte` file appended a bare property after the terminated declaration of an inline `style="...{x}"`; `.svelte` files are checked, never fixed.
+- **`desktop-ci.yaml` runs for an app that does not package pnpm dependencies in its flake** (no `scripts/update-pnpm-deps-hash.sh`), so a public app without one can call it on push and pull request.
+
+### Added
+
+- **A Renovate group `tauri`** (`@tauri-apps/api`, `@tauri-apps/cli`, `tauri`, `tauri-build`) in the desktop skeleton, since `tauri build` refuses mismatched minors.
+- **`actionlint` in the desktop skeleton's and web template's pre-commit**, for the empty `env:` key GitHub rejects without a log.
+- **`docs/design/desktop-pitfalls.md`** and **`skeletons/desktop/scripts/webkit-layout/`**, a headless WebKit layout harness with a mocked Tauri runtime.
+
+### Upgrading
+
+`copier update`. An app calling `desktop_shell::traffic_lights::setup(&window, x, height)` or `position` calls `setup(&window)`, keeps `"titleBarStyle": "Overlay"`, makes its header 52 points, refreshes the `"desktop-shell-0.2.0"` `outputHashes` entry, and drops any copy of `traffic_lights.rs`.
+
 ## [2026.10.36] - 2026-10-15
 
 The feedback slice reads a host-supplied GitHub token before it vends. Need: caspo (radar-hooves/app-factory#40), 15/10/2026: a deployed app's own broker identity is not always granted `github-feedback`, so a live vend fails there; the host's secrets unit pre-vends the token into the container instead.
