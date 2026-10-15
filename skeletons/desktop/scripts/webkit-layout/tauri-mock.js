@@ -31,7 +31,13 @@
 				listeners.set(args.event, ids);
 				return args.handler;
 			}
-			if (cmd === 'plugin:event|unlisten') return null;
+			if (cmd === 'plugin:event|unlisten') {
+				for (const ids of listeners.values()) {
+					const at = ids.indexOf(args.eventId);
+					if (at >= 0) ids.splice(at, 1);
+				}
+				return null;
+			}
 			const mocked = (window.__MOCK_INVOKE__ ?? {})[cmd];
 			return typeof mocked === 'function' ? mocked(args) : (mocked ?? null);
 		}

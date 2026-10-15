@@ -29,6 +29,7 @@ pub fn run() {
         ))
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
+                // AppKit centres the buttons in a 52-point title bar: keep the header 52 points.
                 desktop_shell::traffic_lights::setup(&window);
             }
             Ok(())

@@ -43,8 +43,8 @@ jobs:
           - os: macos
             runner: '["self-hosted", "huginn"]'
             hosted: macos-latest
-    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
-    runs-on: ${{ github.event.pull_request.head.repo.fork && matrix.hosted || fromJSON(matrix.runner) }}
+    # by-exception (2026-10-01), fail-closed on a deleted fork (null head repo): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && matrix.hosted || fromJSON(matrix.runner) }}
     # Bounds a hang once the job runs; an offline huginn leaves it queued instead.
     timeout-minutes: 75
     steps:
@@ -72,8 +72,8 @@ jobs:
 
   frontend:
     name: Frontend
-    # by-exception (2026-10-01): a fork PR's code runs on a GitHub-hosted runner, never the household's
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "atlas"]') }}
+    # by-exception (2026-10-01), fail-closed on a deleted fork (null head repo): a fork PR's code runs on a GitHub-hosted runner, never the household's
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('["self-hosted", "atlas"]') }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -116,7 +116,7 @@ jobs:
   pnpm-deps-hash:
     name: pnpmDeps hash
     # A fork's pull request never gets a write token, nor a household runner.
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ['self-hosted', 'atlas']
     timeout-minutes: 20
     # The one job that writes: the caller grants contents: write, and the jobs

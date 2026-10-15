@@ -14,12 +14,13 @@ Bragi's hard-won desktop lessons land in the factory. Need: bragi (radar-hooves/
 
 - **`desktop-shell` 0.2.0: the traffic lights are AppKit's to place.** `traffic_lights::setup(&window)` gives the window an empty unified `NSToolbar` (a 52-point title bar, buttons centred by AppKit on every frame, native fullscreen handled) instead of repositioning the buttons on `Resized` and `Focused`, which made them jump to the top during a live resize and snap back on mouse-up. The `x` and `header_height` arguments and `position` go; the app's header is 52 points. Checked with clippy for `aarch64-apple-darwin` from atlas; not run on a Mac.
 - **`lint:css:fix` and the web template's stylelint hook fix `*.css` only.** `--fix` over a `.svelte` file appended a bare property after the terminated declaration of an inline `style="...{x}"`; `.svelte` files are checked, never fixed.
-- **`desktop-ci.yaml` runs for an app that does not package pnpm dependencies in its flake** (no `scripts/update-pnpm-deps-hash.sh`), so a public app without one can call it on push and pull request.
+- **`desktop-ci.yaml` runs for an app that does not package pnpm dependencies in its flake** (no `scripts/update-pnpm-deps-hash.sh`), so a public app without one can call it on push and pull request. Its fork test fails closed: a pull request whose head repo is not this repository, or is gone, runs on GitHub-hosted runners.
 
 ### Added
 
 - **A Renovate group `tauri`** (`@tauri-apps/api`, `@tauri-apps/cli`, `tauri`, `tauri-build`) in the desktop skeleton, since `tauri build` refuses mismatched minors.
-- **`actionlint` in the desktop skeleton's and web template's pre-commit**, for the empty `env:` key GitHub rejects without a log.
+- **`actionlint` in the desktop skeleton's and web template's pre-commit**, for the empty `env:` key GitHub rejects without a log, with `.github/actionlint.yaml` declaring the `atlas` and `huginn` runner labels.
+- **`minimumSystemVersion: "11.0"`** in the desktop skeleton's macOS bundle config, which the toolbar title bar's selectors need.
 - **`docs/design/desktop-pitfalls.md`** and **`skeletons/desktop/scripts/webkit-layout/`**, a headless WebKit layout harness with a mocked Tauri runtime.
 
 ### Upgrading
