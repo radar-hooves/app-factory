@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.39] - 2026-10-15
+
+Need: bragi (radar-hooves/bragi#243), 15/10/2026.
+
+### Fixed
+
+- **`sweep.py` waits on `localhost`, as the browser does.** It probed `127.0.0.1`, so a dev server bound only to `[::1]` (Vite on NixOS) never answered and `--serve "pnpm exec vite dev --port {port} --strictPort"` timed out. The probe now resolves both families; the documented command works unchanged.
+
+### Upgrading
+
+`copier update`. An app that added `--host 127.0.0.1` to its serve command may drop it.
+
 ## [2026.10.38] - 2026-10-15
 
 The desktop layout harness sweeps every view for overlap, overflow and clipping. Need: bragi (radar-hooves/bragi#243), 15/10/2026, whose own sweep found 282 real layout faults by hand-built detection; `@poodle64/ui` 2026.10.15 ships with it.

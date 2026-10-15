@@ -209,7 +209,7 @@ def main() -> int:
         if server:
             for _ in range(120):
                 try:
-                    socket.create_connection(("127.0.0.1", port), 1).close()
+                    socket.create_connection(("localhost", port), 1).close()
                     break
                 except OSError:
                     time.sleep(0.5)
