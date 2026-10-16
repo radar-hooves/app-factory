@@ -58,12 +58,15 @@ core-memory that refuses the bound arguments (a server older than its `focus`/`l
 `max_chars` change) is retried once unbounded, warned, never failed. `load` returns a
 `Loaded(brief, ids, total, omitted)`.
 
-**`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None, contradicts=None)`**, the one call
+**`report_outcome(db, job_id, *, accepted, attempts=1, corrections=None, contradicts=None, revision=0)`**, the one call
 an app makes when a person takes the result (`accepted=True`) or corrects it. It
 snapshots the job's loaded and cited ids, model (`job.model`, else the persona),
 seconds (the job's own run, not the review wait) and the corrections, and inserts them
 in the CALLER'S OWN session inside a SAVEPOINT (`insert_lesson_report_if_absent`): a
-conflict, first write wins, rolls back only this insert. No network call ever happens on
+conflict on `(job_id, revision)`, first write wins, rolls back only this insert. `revision` numbers
+the time round a result was taken: an app that reopens a settled job passes its own count so the
+later accept or correction is its own report (delivered as `run_ref` `<job id>#<revision>`; the
+job id itself for revision 0). No network call ever happens on
 an app's request path. A no-op when the deployment names no `core_memory_url` or the job
 declared no `lessons`. It files a report even when the job cited nothing, since a run
 without lessons is what `stats` sets the others against. A correction is `{statement,

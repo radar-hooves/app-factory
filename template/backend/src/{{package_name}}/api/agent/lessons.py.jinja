@@ -260,6 +260,7 @@ def report_outcome(
     attempts: int = 1,
     corrections: list[dict[str, str]] | None = None,
     contradicts: list[str] | None = None,
+    revision: int = 0,
 ) -> None:
     """Record, in `db`'s own transaction, how a person took `job_id`'s result: `accepted` as it
     stood, or corrected (`accepted=False`) with `corrections` as `[{"statement", "key"?}]`, each a
@@ -274,11 +275,17 @@ def report_outcome(
     Insert-only and synchronous: no network call, no vend, ever happens here. `db` must already be
     bound to the job's workspace; the caller commits. A no-op when this deployment names no
     core-memory or the job declared no `lessons`. Filed for every such job, citing nothing or not, so
-    core-memory's stats can set runs with lessons against runs without. First write wins: a later
-    call for the same job is silently dropped.
+    core-memory's stats can set runs with lessons against runs without.
+
+    `revision` numbers the time round a job's result was taken: 0 the first, and an app that reopens
+    a settled job (a confirmed result sent back for correction) passes its own count, so the later
+    accept or correction is its own report and teaches. First write wins per `(job_id, revision)`: a
+    repeat call for the same revision is silently dropped, so a retried confirm counts once.
     """
     if attempts < 1:
         raise BadRequestError("attempts must be at least 1")
+    if revision < 0:
+        raise BadRequestError("revision must not be negative")
     if not get_settings().agent.core_memory_url:
         return
     job = jobs_models.get_job(db, job_id)
@@ -294,6 +301,7 @@ def report_outcome(
         db,
         job_id,
         workspace_id=job.workspace_id,
+        revision=revision,
         domain_name=declared["domain"],
         situation=declared["situation"],
         accepted=accepted,
@@ -312,6 +320,7 @@ class _Pending:
     """An unsettled report as the sweep reads it, detached from its session."""
 
     job_id: str
+    revision: int
     workspace_id: int
     domain_name: str
     situation: list[str]
@@ -324,6 +333,11 @@ class _Pending:
     corrections: list[dict[str, str]]
     contradicts: list[str]
     created_at: datetime.datetime
+
+    @property
+    def run_ref(self) -> str:
+        """core-memory's idempotency key: the job id for revision 0 (as ever), `<job id>#<revision>` after."""
+        return self.job_id if self.revision == 0 else f"{self.job_id}#{self.revision}"
 
 
 def _raise_failing_alert(db_session_factory: sessionmaker[Session], reason: str) -> None:
@@ -376,7 +390,9 @@ async def _deliver_or_abandon(
     def _claim() -> datetime.datetime | None:
         with db_session_factory() as db:
             bind_session(db, workspace_id=report.workspace_id)
-            return jobs_models.claim_lesson_report(db, report.job_id, lease_seconds=_LEASE_SECONDS)
+            return jobs_models.claim_lesson_report(
+                db, report.job_id, lease_seconds=_LEASE_SECONDS, revision=report.revision
+            )
 
     token = await run_in_threadpool(_claim)
     if token is None:
@@ -385,7 +401,9 @@ async def _deliver_or_abandon(
     def _settle(refused: str | None) -> None:
         with db_session_factory() as db:
             bind_session(db, workspace_id=report.workspace_id)
-            jobs_models.settle_lesson_report(db, report.job_id, claim_token=token, refused=refused)
+            jobs_models.settle_lesson_report(
+                db, report.job_id, claim_token=token, refused=refused, revision=report.revision
+            )
 
     if report.created_at < datetime.datetime.now(datetime.UTC) - _ABANDON_AFTER:
         reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
@@ -398,7 +416,7 @@ async def _deliver_or_abandon(
         "action": "report",
         "domain_name": report.domain_name,
         "situation": report.situation,
-        "run_ref": report.job_id,
+        "run_ref": report.run_ref,
         "accepted": report.accepted,
         "loaded": report.loaded,
         "cited": report.cites,
@@ -410,7 +428,7 @@ async def _deliver_or_abandon(
     if report.contradicts:
         arguments["contradicts"] = report.contradicts
     try:
-        # Idempotent on run_ref (the job id): a retry after a lost response counts once.
+        # Idempotent on run_ref (the job id, with the revision after the first): a retry after a lost response counts once.
         await _call(settings, arguments, timeout=_DELIVER_TIMEOUT_SECONDS)
     except ToolError as exc:
         if _is_transient_tool_error(str(exc)):
@@ -464,6 +482,7 @@ async def retry_unsettled(
             return [
                 _Pending(
                     job_id=row.job_id,
+                    revision=row.revision,
                     workspace_id=row.workspace_id,
                     domain_name=row.domain_name,
                     situation=list(row.situation),

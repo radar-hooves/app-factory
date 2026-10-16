@@ -130,10 +130,10 @@ def _seed_report(
     return job_id, cites
 
 
-def _report(job_id: str, workspace_id: int) -> AgentJobLessonReport | None:
+def _report(job_id: str, workspace_id: int, revision: int = 0) -> AgentJobLessonReport | None:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
-        return db.get(AgentJobLessonReport, job_id)
+        return db.get(AgentJobLessonReport, (job_id, revision))
 
 
 def _backdate(job_id: str, workspace_id: int, age: datetime.timedelta) -> None:
@@ -361,6 +361,24 @@ def test_report_outcome_called_twice_is_first_write_wins(workspace_id: int, with
     _file(workspace_id, job_id, accepted=False)
     report = _report(job_id, workspace_id)
     assert report is not None and report.accepted is True  # the later call was dropped, not merged
+
+
+def test_report_outcome_files_a_later_revision_as_its_own_report(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    _file(workspace_id, job_id, accepted=True)
+    _file(workspace_id, job_id, accepted=False, revision=1)
+    _file(workspace_id, job_id, accepted=True, revision=1)  # a retried confirm of revision 1 counts once
+    first, second = _report(job_id, workspace_id), _report(job_id, workspace_id, 1)
+    assert first is not None and first.accepted is True
+    assert second is not None and second.accepted is False
+
+
+def test_report_outcome_rejects_a_negative_revision(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[BELIEF_1])
+    with pytest.raises(BadRequestError):
+        _file(workspace_id, job_id, accepted=True, revision=-1)
 
 
 def test_insert_lesson_report_if_absent_leaves_the_callers_other_writes_intact_on_an_fk_violation(
@@ -670,6 +688,20 @@ async def test_retry_unsettled_delivers_one_idempotent_lesson_report(
     assert report is not None
     assert (report.refused, report.recorded_at is not None) == (None, True)
     assert _failing_alert() is None
+
+
+async def test_retry_unsettled_delivers_a_later_revision_under_its_own_run_ref(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    job_id, _ = _seed_report(workspace_id, lessons_used=[BELIEF_1])
+    _file(workspace_id, job_id, accepted=False, revision=1)
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
+
+    assert sorted(arguments["run_ref"] for _, arguments in calls) == [job_id, f"{job_id}#1"]
+    for revision in (0, 1):
+        report = _report(job_id, workspace_id, revision)
+        assert report is not None and report.recorded_at is not None
 
 
 async def test_retry_unsettled_delivers_contradicts_only_when_there_are_some(

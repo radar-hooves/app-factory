@@ -165,6 +165,9 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
     __tablename__ = "agent_job_lesson_reports"
 
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.job_id", ondelete="CASCADE"), primary_key=True)
+    #: Which time round the job's result was taken: 0 the first, then one per later accept or correction
+    #: (an app that reopens a settled job passes its own count). One report per `(job_id, revision)`.
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True, default=0)
     domain_name: Mapped[str] = mapped_column(String(255), nullable=False)
     situation: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -186,7 +189,7 @@ class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
 
 
 #: Postgres's own default name for an unnamed primary key constraint (`<table>_pkey`) — a second
-#: `report_outcome` for the same job, first-write-wins.
+#: `report_outcome` for the same job and revision, first-write-wins.
 _LESSON_REPORT_PK = "agent_job_lesson_reports_pkey"
 #: This table's own explicitly-named FK to `agent_jobs` (the migration's own name) — the job
 #: vanished between `report_outcome`'s own lookup and this insert.
@@ -194,9 +197,9 @@ _LESSON_REPORT_JOB_FK = "fk_agent_job_lesson_reports_job_id_agent_jobs"
 
 
 def insert_lesson_report_if_absent(db: Session, job_id: str, *, workspace_id: int, **fields: Any) -> None:
-    """Insert `job_id`'s report, or do nothing if one exists — first write wins; a later
-    call for the same job (a correction after an earlier confirm) is silently dropped, not
-    merged. A SAVEPOINT: ONLY the two known-benign conflicts (this row's own primary key, or its
+    """Insert `job_id`'s report, or do nothing if one exists for the same `revision` (a field,
+    default 0) — first write wins per revision; a repeat call is silently dropped, not merged, and
+    a later revision is its own report. A SAVEPOINT: ONLY the two known-benign conflicts (this row's own primary key, or its
     FK to `agent_jobs`) roll back just this insert, identified by constraint name so a genuinely
     unexpected violation (the wrong `workspace_id`, an `unscoped()` caller) still raises rather
     than being silently swallowed. `db.flush()` first, so a violation already pending in the
@@ -214,7 +217,9 @@ def insert_lesson_report_if_absent(db: Session, job_id: str, *, workspace_id: in
             raise
 
 
-def claim_lesson_report(db: Session, job_id: str, *, lease_seconds: float) -> datetime.datetime | None:
+def claim_lesson_report(
+    db: Session, job_id: str, *, lease_seconds: float, revision: int = 0
+) -> datetime.datetime | None:
     """Atomically claim `job_id`'s unsettled, unleased report for `lease_seconds`. Returns the claim
     token on a win, `None` on a loss.
 
@@ -227,6 +232,7 @@ def claim_lesson_report(db: Session, job_id: str, *, lease_seconds: float) -> da
         select(AgentJobLessonReport)
         .where(
             AgentJobLessonReport.job_id == job_id,
+            AgentJobLessonReport.revision == revision,
             AgentJobLessonReport.recorded_at.is_(None),
             or_(AgentJobLessonReport.claimed_until.is_(None), AgentJobLessonReport.claimed_until < func.now()),
         )
@@ -241,11 +247,17 @@ def claim_lesson_report(db: Session, job_id: str, *, lease_seconds: float) -> da
     return report.claimed_until
 
 
-def settle_lesson_report(db: Session, job_id: str, *, claim_token: datetime.datetime, refused: str | None) -> None:
+def settle_lesson_report(
+    db: Session, job_id: str, *, claim_token: datetime.datetime, refused: str | None, revision: int = 0
+) -> None:
     """End `job_id`'s report — recorded (`refused=None`) or refused/abandoned — while `claim_token` still holds."""
     report = db.execute(
         select(AgentJobLessonReport)
-        .where(AgentJobLessonReport.job_id == job_id, AgentJobLessonReport.claimed_until == claim_token)
+        .where(
+            AgentJobLessonReport.job_id == job_id,
+            AgentJobLessonReport.revision == revision,
+            AgentJobLessonReport.claimed_until == claim_token,
+        )
         .with_for_update()
     ).scalar_one_or_none()
     if report is None:
