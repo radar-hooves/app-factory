@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.1] - 2026-10-16
+
+### Added
+
+- **`palettes.resolver.json`** (`@poodle64/design-tokens/palettes.resolver.json`):
+  the 20 palettes as a W3C DTCG 2025.10 resolver. `tokens.tokens.json` is the
+  base set; the `palette` modifier has one context per palette carrying the
+  `semantic.colour.<x>.{light,dark}` values `palettes.css` declares, computed by
+  the same build. Consumer: penpot-mcp `token import` (master-project#378).
+
 ## [2026.9.2] - 2026-09-30
 
 ### Changed

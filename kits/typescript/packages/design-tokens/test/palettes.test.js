@@ -266,3 +266,21 @@ for (const mode of ['light', 'dark']) {
 		);
 	});
 }
+
+test('the DTCG resolver carries exactly the values palettes.css declares', () => {
+	const resolver = JSON.parse(readFileSync(join(repoRoot, 'dist', 'palettes.resolver.json'), 'utf8'));
+	assert.equal(resolver.version, '2025.10');
+	assert.deepEqual(Object.keys(resolver.modifiers.palette.contexts), NAMES);
+	assert.deepEqual(resolver.sets.base.sources, [{ $ref: '../tokens/tokens.tokens.json' }]);
+	for (const name of NAMES) {
+		const { colour } = resolver.modifiers.palette.contexts[name][0].semantic;
+		for (const mode of ['light', 'dark']) {
+			const css = block(name, mode);
+			assert.deepEqual(Object.keys(colour).sort(), Object.keys(css).sort());
+			for (const [key, value] of Object.entries(css)) {
+				assert.equal(colour[key][mode].$value, value, `${name} ${mode} ${key}`);
+				assert.equal(colour[key][mode].$type, 'color');
+			}
+		}
+	}
+});

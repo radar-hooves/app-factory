@@ -321,18 +321,25 @@ function accentForeground(primary) {
 	return contrastRatio(primary, onPaper) >= contrastRatio(primary, onInk) ? onPaper : onInk;
 }
 
-/** Every `--ds-color-*` declaration one palette makes, in one mode. */
-function paletteDeclarations(tokens, palette, mode) {
-	const lines = [];
+/** Every colour one palette sets in one mode, keyed by `--ds-color-` suffix. */
+function paletteValues(tokens, palette, mode) {
+	const values = {};
 	for (const [name, ref] of Object.entries(NEUTRAL_SURFACES[mode])) {
-		lines.push(`  --ds-color-${name}: ${retone(ladderStep(tokens, ref), palette.tone, mode)};`);
+		values[name] = retone(ladderStep(tokens, ref), palette.tone, mode);
 	}
 	const { primary } = palette.accent[mode];
-	lines.push(`  --ds-color-primary: ${primary};`);
-	lines.push(`  --ds-color-primary-foreground: ${accentForeground(primary)};`);
+	values.primary = primary;
+	values['primary-foreground'] = accentForeground(primary);
 	// `ring` follows primary in the token source; a palette must not split them.
-	lines.push(`  --ds-color-ring: ${primary};`);
-	return lines.join('\n');
+	values.ring = primary;
+	return values;
+}
+
+/** Every `--ds-color-*` declaration one palette makes, in one mode. */
+function paletteDeclarations(tokens, palette, mode) {
+	return Object.entries(paletteValues(tokens, palette, mode))
+		.map(([name, value]) => `  --ds-color-${name}: ${value};`)
+		.join('\n');
 }
 
 StyleDictionary.registerFormat({
@@ -361,6 +368,45 @@ StyleDictionary.registerFormat({
 		}
 
 		return `${header}${blocks.join('\n\n')}\n`;
+	}
+});
+
+/**
+ * The catalogue as a W3C DTCG 2025.10 resolver: the base token file is the one
+ * set, and `palette` is a modifier with a context per palette carrying the
+ * `semantic.colour.<x>.{light,dark}` values that palette sets, the same values
+ * palettes.css declares. For a DTCG reader that cannot run the two knobs.
+ * Values stay oklch strings; no `default`, so a consumer chooses.
+ */
+StyleDictionary.registerFormat({
+	name: 'json/ds-palettes-resolver',
+	format: ({ dictionary }) => {
+		const contexts = {};
+		for (const [name, palette] of Object.entries(PALETTES.palettes)) {
+			const light = paletteValues(dictionary.tokens, palette, 'light');
+			const dark = paletteValues(dictionary.tokens, palette, 'dark');
+			const colour = {};
+			for (const key of Object.keys(light)) {
+				colour[key] = {
+					light: { $value: light[key], $type: 'color' },
+					dark: { $value: dark[key], $type: 'color' }
+				};
+			}
+			contexts[name] = [{ semantic: { colour } }];
+		}
+		return `${JSON.stringify(
+			{
+				$schema: 'https://www.designtokens.org/schemas/2025.10/resolver.json',
+				name: '@poodle64/design-tokens palettes',
+				version: '2025.10',
+				description: 'Generated from tokens/palettes.json by sd.config.js; do not edit.',
+				sets: { base: { sources: [{ $ref: '../tokens/tokens.tokens.json' }] } },
+				modifiers: { palette: { contexts } },
+				resolutionOrder: [{ $ref: '#/sets/base' }, { $ref: '#/modifiers/palette' }]
+			},
+			null,
+			2
+		)}\n`;
 	}
 });
 
@@ -413,7 +459,8 @@ export default {
 				{ destination: 'tokens.css', format: 'css/ds-variables' },
 				// Projected through the same ladder this platform emits, so the
 				// catalogue cannot drift from it (design-system#25).
-				{ destination: 'palettes.css', format: 'css/ds-palettes' }
+				{ destination: 'palettes.css', format: 'css/ds-palettes' },
+				{ destination: 'palettes.resolver.json', format: 'json/ds-palettes-resolver' }
 			]
 		},
 

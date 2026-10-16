@@ -18,6 +18,7 @@ dist/                   Generated — run `pnpm build`; never edit by hand
   tokens.js             JS constants (DS_*)
   tokens.d.ts           Type declarations for tokens.js
   palettes.css          One :root[data-ds-palette='…'] block per catalogued palette
+  palettes.resolver.json  The catalogue as a DTCG 2025.10 resolver (base set + `palette` modifier)
   palettes.js           The catalogue as data (DS_PALETTES, DS_PALETTE_NAMES)
   palettes.d.ts         Type declarations for palettes.js
 ```

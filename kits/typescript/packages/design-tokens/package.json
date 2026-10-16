@@ -1,6 +1,6 @@
 {
   "name": "@poodle64/design-tokens",
-  "version": "2026.9.2",
+  "version": "2026.10.1",
   "description": "Household canonical design tokens \u2014 DTCG source, Style Dictionary build, --ds-* CSS custom properties, Tailwind v4 @theme block, JS constants.",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,7 @@
     "./tokens.json": "./tokens/tokens.tokens.json",
     "./palettes.css": "./dist/palettes.css",
     "./palettes.json": "./tokens/palettes.json",
+    "./palettes.resolver.json": "./dist/palettes.resolver.json",
     "./palettes": {
       "types": "./dist/palettes.d.ts",
       "default": "./dist/palettes.js"
