@@ -12,7 +12,7 @@ The kit holds no credential. The consumer vends the app's caller bearer
 refreshed bearer reaches the next request.
 
 A room's preamble rides in the question as `{preamble}\\n\\n{question}` until
-the library takes it as a field of its own (`docs/design/agent-console.md`
+the library takes it as a field of its own (`app-factory docs/design/agent-console.md`
 §Needs): `ask` adds it and `read` takes it back off by exact prefix, the same
 contract `LocalAgent` keeps for its attachment list and the library keeps for
 its own.

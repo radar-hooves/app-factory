@@ -17,7 +17,7 @@ kit owns its routes, and this file hands them this app's session, caller and
 admin gate, the same dependencies the admin router uses.
 
 ``agent`` is the factory's too: rooms, a person's conversations with a
-persona or with Milton (`docs/design/agent-console.md`), and app-started
+persona or with Milton (`app-factory docs/design/agent-console.md`), and app-started
 jobs. It offers nothing until this app writes `config/rooms.yaml`, so taking
 it costs a fresh stamp nothing until the app actually uses it.
 

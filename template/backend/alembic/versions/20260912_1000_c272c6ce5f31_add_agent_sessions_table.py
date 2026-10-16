@@ -4,7 +4,7 @@ Revision ID: c272c6ce5f31
 Revises: 1c3b08a0ec2e
 Create Date: 2026-09-12 10:00:00.000000+00:00
 
-Adds the factory's agent slice (`docs/design/agent-console.md`): one row per
+Adds the factory's agent slice (`app-factory docs/design/agent-console.md`): one row per
 issued Claude Code session, recording which local user it was issued to, so a
 `--resume` presented by a different identity is refused rather than honoured
 (`api/agent/ownership.py`, lifted from radar-hooves/library#125's own fix).

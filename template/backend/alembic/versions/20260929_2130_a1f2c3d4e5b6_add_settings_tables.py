@@ -4,7 +4,7 @@ Revision ID: a1f2c3d4e5b6
 Revises: 082172624b6d
 Create Date: 2026-09-29 21:30:00.000000+00:00
 
-Adds the factory's settings slice (`docs/design/settings.md`): a typed default
+Adds the factory's settings slice (`app-factory docs/design/settings.md`): a typed default
 declared in code, an operator override held in `setting_overrides` (one row
 per overridden key — a key with no row runs its code default), and an
 append-only audit trail in `setting_changes`.

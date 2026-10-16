@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.40] - 2026-10-16
+
+Need: eight (radar-hooves/eight), 16/10/2026.
+
+### Fixed
+
+- **A stamped app's comments no longer point at documents the app does not hold.** Its code cited `docs/design/{agent-console,agent-jobs,agent-lessons,alerts,settings}.md` and `docs/research/2026-10-11-estate-ci-design.md`, which live in this repo and in master-project, never in the stamp. Each citation now names its repo (`app-factory docs/design/...`, `master-project docs/research/...`). The kits' own comments follow. Comments only: no behaviour changes, and the documents are not copied into apps, where they would drift.
+
+### Upgrading
+
+`copier update`. Touches comments and docstrings in owned files only.
+
 ## [2026.10.39] - 2026-10-15
 
 Need: bragi (radar-hooves/bragi#243), 15/10/2026.

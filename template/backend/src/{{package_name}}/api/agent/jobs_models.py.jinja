@@ -3,7 +3,7 @@
 `api/agent/conversations.py`'s ``AgentConversation`` is a private CONVERSATION
 of one asker, personal-subject and exempt from workspace scoping; a job is
 different in kind. It is started by the app itself, usually on behalf of a
-workspace rather than an asker (`docs/design/agent-jobs.md`) — a document
+workspace rather than an asker (`app-factory docs/design/agent-jobs.md`) — a document
 belongs to a workspace, so a job reading one does too. Both models are
 `WorkspaceScoped`: shared data any member of that workspace may watch,
 message or stop (subject to holding the persona's own entitlement as well),
@@ -14,7 +14,7 @@ job's writes happen outside any one request's own `CurrentWorkspace`-bound
 session (`jobs.py`'s own module docstring has the fuller account of why).
 
 The job row is also the one place every worker process of a deployment
-agrees on (`docs/design/agent-jobs.md` §Any worker): the process running a
+agrees on (`app-factory docs/design/agent-jobs.md` §Any worker): the process running a
 job holds it by ``run_id`` and keeps ``heartbeat_at`` fresh, and any other
 process asks it to do something by writing ``pending_messages`` or
 ``stop_requested`` under the row's own lock. Every transition below is one
@@ -160,7 +160,7 @@ class AgentJobEvent(Base, WorkspaceScoped):
 
 class AgentJobLessonReport(Base, TimestampMixin, WorkspaceScoped):
     """A job's outcome, filed for core-memory's `lesson report`, and the sweep's progress delivering it
-    (`docs/design/agent-lessons.md`). Every field is a snapshot taken when the person accepted or corrected."""
+    (`app-factory docs/design/agent-lessons.md`). Every field is a snapshot taken when the person accepted or corrected."""
 
     __tablename__ = "agent_job_lesson_reports"
 

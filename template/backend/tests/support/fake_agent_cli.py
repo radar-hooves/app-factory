@@ -5,7 +5,7 @@ Run as a REAL subprocess by test_agent_api.py (via `AgentSettings.executable`
 pointed at this file), so that test exercises the `agent_common` driver's
 actual argv and environment construction rather than a mock standing in for it — the "drives
 a fake CLI through argv, env, ownership and SSE framing" proof
-`docs/design/agent-console.md` asks chunk 1 for.
+`app-factory docs/design/agent-console.md` asks chunk 1 for.
 
 Speaks just enough of the wire format: one `system`/`init` event carrying a
 session id, one `assistant` event whose text ECHOES what this process was

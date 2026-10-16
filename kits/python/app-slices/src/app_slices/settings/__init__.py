@@ -3,7 +3,7 @@
 Mount: include `router(...)` in the app's API router and import `models` in
 `db/registry.py`. Configure: `router`'s arguments. Add: `declare_setting` in an
 `api/<domain>/settings.py`, read back with `get_value`. Design:
-`docs/design/settings.md`.
+`app-factory docs/design/settings.md`.
 """
 
 from app_slices.settings.declare import Setting, SettingType, declare_setting

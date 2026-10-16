@@ -1,4 +1,4 @@
-"""HTTP routes for runtime settings: the operator's page (`docs/design/settings.md`).
+"""HTTP routes for runtime settings: the operator's page (`app-factory docs/design/settings.md`).
 
 An app mounts them with its own session, actor and gates, the same dependencies
 its own routes use, so this slice holds no second gate and no identity of its

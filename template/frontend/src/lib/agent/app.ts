@@ -1,6 +1,6 @@
 /**
  * THIS app's room pages: the extension point for `routes/(protected)/rooms/[room]`,
- * which the factory owns (`docs/design/agent-console.md` §Stamped:
+ * which the factory owns (`app-factory docs/design/agent-console.md` §Stamped:
  * `api/agent/`). App-owned: copier never overwrites it.
  *
  * Export any of `RoomExtensions`' members (`$lib/agent/rooms`) by name:

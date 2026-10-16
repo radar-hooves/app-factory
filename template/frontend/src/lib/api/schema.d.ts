@@ -1342,7 +1342,7 @@ export interface components {
          * @description What `<SchemaForm>` needs to render the whole page: a JSON Schema and a value.
          *
          *     No UI Schema travels alongside it — `@poodle64/ui/schema-form` generates
-         *     its own layout from the JSON Schema alone (`docs/design/settings.md`
+         *     its own layout from the JSON Schema alone (`app-factory docs/design/settings.md`
          *     §The page), which is the only mode in which a declared setting cannot be
          *     missing from the rendered form.
          */

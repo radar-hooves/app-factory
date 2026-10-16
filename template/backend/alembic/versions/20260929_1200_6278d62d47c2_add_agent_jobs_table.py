@@ -4,7 +4,7 @@ Revision ID: 6278d62d47c2
 Revises: c272c6ce5f31
 Create Date: 2026-09-29 12:00:00.000000+00:00
 
-Adds the factory's agent JOB slice (`docs/design/agent-jobs.md`): a persona
+Adds the factory's agent JOB slice (`app-factory docs/design/agent-jobs.md`): a persona
 session the app itself starts, with no asker, that keeps running once the
 request that started it has returned. `agent_jobs` is one row per job,
 keyed on Claude Code's own session id (minted by this slice before the CLI

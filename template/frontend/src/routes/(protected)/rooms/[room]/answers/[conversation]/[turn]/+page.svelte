@@ -1,6 +1,6 @@
 <!--
 	One answer a colleague shared from a room, read-only: the question, the
-	answer and its sources (docs/design/agent-console.md). Anyone who may enter
+	answer and its sources (app-factory docs/design/agent-console.md). Anyone who may enter
 	the room reads it; anyone else is refused as the room itself refuses them.
 	It is the package's own `Conversation` over the one stored turn, with no
 	handlers and no composer, so the app's own `Turn` and citations read here

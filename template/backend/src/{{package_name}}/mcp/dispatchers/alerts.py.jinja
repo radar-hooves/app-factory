@@ -1,6 +1,6 @@
 """MCP tool over the alerts slice — how a machine raises an alert.
 
-This is the producer's door (`docs/design/alerts.md`): n8n or another estate
+This is the producer's door (`app-factory docs/design/alerts.md`): n8n or another estate
 service holds an Authentik bearer and is listed in `config/actors.yaml`, and
 `ActorGateMiddleware` (`mcp/auth.py`) has refused every other caller before this
 tool runs. Every registered actor may raise and clear any key; reading the

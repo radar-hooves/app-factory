@@ -5,7 +5,7 @@ Revises: b7e4a2c9d1f3
 Create Date: 2026-10-13 01:00:00.000000+00:00
 
 A job declares its lessons (`agent_jobs.lessons`) and the report becomes core-memory's
-`lesson report` (`docs/design/agent-lessons.md`): the report row holds the situation, the
+`lesson report` (`app-factory docs/design/agent-lessons.md`): the report row holds the situation, the
 accepted flag, what was loaded and cited, and the person's corrections instead of a
 decision/outcome pair. A report still unsettled is converted, not dropped: its context key
 becomes a one-key situation and its result the accepted flag. A job row from before has no
