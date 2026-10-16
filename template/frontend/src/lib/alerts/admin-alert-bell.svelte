@@ -1,5 +1,5 @@
 <!--
-	What machines told this deployment's operator (docs/design/alerts.md), for
+	What machines told this deployment's operator (app-factory docs/design/alerts.md), for
 	whoever holds admin: the server gates the routes, and this only spares
 	everyone else a bell whose every call would 403. Renders nothing while no
 	alert is open and nothing for a caller without admin.

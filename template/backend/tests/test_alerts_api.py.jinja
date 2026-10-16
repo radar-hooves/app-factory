@@ -190,7 +190,7 @@ async def test_the_tool_refuses_a_raise_it_cannot_show(arguments: dict[str, obje
 async def test_one_stateless_tools_call_is_the_whole_producer_contract(
     monkeypatch: pytest.MonkeyPatch, client: AsyncClient
 ) -> None:
-    """What `docs/design/alerts.md` tells n8n to send: one POST, no initialize first.
+    """What `app-factory docs/design/alerts.md` tells n8n to send: one POST, no initialize first.
 
     Over the real mounted `/mcp`, behind the bearer gate and the actor allow-list,
     as a registered identity from the shipped `config/actors.yaml`.

@@ -4,7 +4,7 @@ Revision ID: d63b309b1239
 Revises: f3a9c1d8e2b4
 Create Date: 2026-09-30 14:00:00.000000+00:00
 
-Rooms (`docs/design/agent-console.md`): a person's conversation in a room,
+Rooms (`app-factory docs/design/agent-console.md`): a person's conversation in a room,
 its title, whether an answer is being written, the slice's record of every
 question asked and which answers are shared read-only
 (`api/agent/conversations.py`); and one person's daily

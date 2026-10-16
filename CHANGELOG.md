@@ -6,13 +6,25 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-## [2026.10.40] - 2026-10-16
+## [2026.10.41] - 2026-10-16
 
 Need: godswood (dispatched by godswood-0f), 16/10/2026.
 
 ### Changed
 
 - **A job's lesson report is one per `(job_id, revision)`, so a reopened job's later accept or correction teaches.** `lessons.report_outcome(..., revision=0)`: an app that sends a settled job back for correction (godswood's `reopen`) passes its own count on the next confirm, and that report is filed and delivered beside the first instead of being dropped. First write still wins within one revision, so a retried confirm counts once. core-memory's `run_ref` stays the job id for revision 0 and is `<job id>#<revision>` after, so existing deliveries are untouched. `claim_lesson_report` and `settle_lesson_report` take `revision` (default 0). Migration `e1f7a3b4c5d6` adds `agent_job_lesson_reports.revision` and makes the primary key `(job_id, revision)`; an app repoints its `down_revision`. Every app takes the migration and repoints its `down_revision`; `db.get(AgentJobLessonReport, job_id)` now raises, so read it as `db.get(AgentJobLessonReport, (job_id, revision))`. An app that never reopens files only revision 0 and its deliveries are unchanged.
+
+## [2026.10.40] - 2026-10-16
+
+Need: eight (radar-hooves/eight), 16/10/2026.
+
+### Fixed
+
+- **A stamped app's comments no longer point at documents the app does not hold.** Its code cited `docs/design/{agent-console,agent-jobs,agent-lessons,alerts,settings}.md` and `docs/research/2026-10-11-estate-ci-design.md`, which live in this repo and in master-project, never in the stamp. Each citation now names its repo (`app-factory docs/design/...`, `master-project docs/research/...`). The kits' own comments follow. Comments only: no behaviour changes, and the documents are not copied into apps, where they would drift.
+
+### Upgrading
+
+`copier update`. Touches comments and docstrings in owned files only.
 
 ## [2026.10.39] - 2026-10-15
 

@@ -1,7 +1,7 @@
 <!--
 	One room: a person's conversations with its agent, a persona or Milton,
 	built from @poodle64/librarian's own `Chat` and components
-	(docs/design/agent-console.md). The address names the room and the
+	(app-factory docs/design/agent-console.md). The address names the room and the
 	conversation (`?c=<id>`), so a link reopens it on any device, mid-answer
 	included, and a question another page hands over (`?q=`) waits in the box.
 	What differs per app arrives through `$lib/agent/app`, never an edit here.

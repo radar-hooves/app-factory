@@ -8,7 +8,7 @@ the database and needs no migration of its own; only the slice's two tables
 (``setting_overrides``, ``setting_changes``) do.
 
 Call ``declare_setting`` at IMPORT time, in the domain module the setting
-governs (`docs/design/settings.md` §Shape), not in a per-app settings.py that
+governs (`app-factory docs/design/settings.md` §Shape), not in a per-app settings.py that
 also holds unrelated ones. That module is the domain's ``api/<domain>/settings.py``,
 which ``discover`` imports by that name: the slice's job is knowing what
 exists, never declaring anything itself.
@@ -63,7 +63,7 @@ class SettingType(StrEnum):
     string = "string"
     # A LiteLLM-style alias (`<peer>/<what>`), stored as a bare string — never
     # a pinned model version. `list_models`/`narrow` below are what make this
-    # more than a plain string (`docs/design/settings.md` §Model alias).
+    # more than a plain string (`app-factory docs/design/settings.md` §Model alias).
     model_alias = "model_alias"
 
 

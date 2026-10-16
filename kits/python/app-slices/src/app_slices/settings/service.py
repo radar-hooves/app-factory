@@ -1,7 +1,7 @@
 """Business logic for the settings slice.
 
 The one rule everything else follows: read the effective value FRESH, on the
-session passed in, every time (`docs/design/settings.md` §Shape). No
+session passed in, every time (`app-factory docs/design/settings.md` §Shape). No
 module-level cache and no read-at-import — a deployment running several
 worker processes must see a write the instant it commits, with no restart.
 """

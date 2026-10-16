@@ -22,7 +22,7 @@ class Alert(Base, TimestampMixin):
 
     Not WorkspaceScoped: a producer names no workspace, and the reader is whoever
     holds the reserved `admin` entitlement. The exemption is recorded in
-    `db/registry.py` (`docs/design/alerts.md` §Tenancy).
+    `db/registry.py` (`app-factory docs/design/alerts.md` §Tenancy).
     """
 
     __tablename__ = "alerts"

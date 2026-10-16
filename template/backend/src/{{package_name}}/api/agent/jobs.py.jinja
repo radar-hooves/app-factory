@@ -4,13 +4,13 @@ A chat turn (`agent_common.cli.ask`) is one HTTP request, one subprocess, one
 stream: the request handler owns the whole thing, and the process dies when the handler returns
 or the client disconnects. That is wrong for a session the APP starts — a
 document arrives and a persona starts reading it — because nothing asked a
-question and nobody is necessarily watching (`docs/design/agent-jobs.md`).
+question and nobody is necessarily watching (`app-factory docs/design/agent-jobs.md`).
 This module is that other shape: an `asyncio.Task`, independent of any
 request, whose every event is persisted as it lands (`jobs_models.py`), so a
 caller can open the job at any time and read it from the start, then follow
 it until its run settles.
 
-The job row is the bus (`docs/design/agent-jobs.md` §Any worker). A
+The job row is the bus (`app-factory docs/design/agent-jobs.md` §Any worker). A
 deployment runs several worker processes and a job's CLI is a child of
 exactly one of them, so nothing process-local can answer a request that
 lands on another: `watch()` reads the event log forward from the database,
@@ -31,7 +31,7 @@ conversation — and `_control` closes stdin once a `result` has arrived and
 every frame written has been echoed.
 
 A job belongs to a workspace (`AgentJob`/`AgentJobEvent` are
-`WorkspaceScoped`, `docs/design/agent-jobs.md` §Tenancy). Every session this
+`WorkspaceScoped`, `app-factory docs/design/agent-jobs.md` §Tenancy). Every session this
 module opens is created OUTSIDE a request — `db_session_factory()` is the
 app's plain, engine-bound sessionmaker, never `SessionDep`'s request-scoped
 one, because a job's writes must outlive the one request that triggered them
@@ -269,7 +269,7 @@ async def start(
     as `stream_event` rows a watcher follows live (`_Deltas`); the finished
     message replaces them in the log, so a job read after the fact holds
     whole messages only.
-    `lessons` gives the job core-memory's learning loop (`docs/design/agent-lessons.md`):
+    `lessons` gives the job core-memory's learning loop (`app-factory docs/design/agent-lessons.md`):
     the lessons stored under its situation are loaded here, before the run, and
     appended to its system prompt, so it starts with them whether or not the
     model would have looked; `lessons_used` is added to `json_schema`, and
@@ -922,7 +922,7 @@ async def supervise(
     rather than cancelled, so a sweep in flight finishes on its database
     thread before the lifespan disposes the engine under it.
 
-    `lessons.retry_unsettled` rides the same sweep (`docs/design/agent-lessons.md`).
+    `lessons.retry_unsettled` rides the same sweep (`app-factory docs/design/agent-lessons.md`).
     """
     while not stopping.is_set():
         try:

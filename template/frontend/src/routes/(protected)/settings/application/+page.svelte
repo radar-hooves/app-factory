@@ -1,6 +1,6 @@
 <!--
 	The settings page is the app-slices kit's, mounted here: every Setting a
-	domain declares renders on it with no code in this app (docs/design/settings.md).
+	domain declares renders on it with no code in this app (app-factory docs/design/settings.md).
 	A 401 goes to this app's own re-authentication, as its API client's does.
 -->
 <script lang="ts">

@@ -6,7 +6,7 @@ import { appSettingsSections } from './app';
 /**
  * Everything the settings destination lists: this app's own groups (`./app`),
  * then the factory's "This deployment", the operator-facing runtime settings
- * any declared Setting joins (docs/design/settings.md). That group is shown
+ * any declared Setting joins (app-factory docs/design/settings.md). That group is shown
  * only to whoever holds the admin entitlement; a caller without it sees the
  * app's groups alone, rather than a 403 page, since the rail's own Settings row
  * is what sent them here.

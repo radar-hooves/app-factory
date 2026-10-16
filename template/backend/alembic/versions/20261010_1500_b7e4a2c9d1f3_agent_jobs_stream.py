@@ -5,7 +5,7 @@ Revises: d63b309b1239
 Create Date: 2026-10-10 15:00:00.000000+00:00
 
 Whether a job's watchers follow it token by token (`jobs.start(stream=True)`,
-`docs/design/agent-jobs.md` §Streaming).
+`app-factory docs/design/agent-jobs.md` §Streaming).
 
 An app taking this by `copier update` must repoint ``down_revision`` at its own
 current head, exactly as the previous revision's docstring says.

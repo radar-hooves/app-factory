@@ -1,7 +1,7 @@
 """The turn: a question answered by a task in this worker, not by the request that asked it.
 
 Milton takes 30 to 260 s on one GPU, so a refresh, a locked phone or a closed
-tab must not end an answer (`docs/design/agent-console.md` §The turn). The
+tab must not end an answer (`app-factory docs/design/agent-console.md` §The turn). The
 asking request streams the turn while it listens; the task goes on without
 it, and the answer lands in the agent's transcript either way.
 

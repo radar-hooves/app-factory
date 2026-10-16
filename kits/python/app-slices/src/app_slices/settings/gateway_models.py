@@ -26,7 +26,7 @@ def list_gateway_models(base_url: str, api_key: str, *, timeout: float = 3.0) ->
     """Return the model IDs `base_url` answers for `api_key`, or `[]` on failure.
 
     Never raises: a `model_alias` setting must degrade when its gateway is
-    unreachable, not refuse a read or a write (`docs/design/settings.md`
+    unreachable, not refuse a read or a write (`app-factory docs/design/settings.md`
     §Model alias). The caller decides what an empty list means.
     """
     cache_key = (base_url, api_key)

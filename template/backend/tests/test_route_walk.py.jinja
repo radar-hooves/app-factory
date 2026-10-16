@@ -1,7 +1,7 @@
 """A person admitted to this app for one thing reaches nothing else.
 
 A colleague invited to a room holds `room-<id>` and no other entitlement,
-and signs in like anyone else (`docs/design/agent-console.md`). So every
+and signs in like anyone else (`app-factory docs/design/agent-console.md`). So every
 route outside the person-facing set below must declare a module gate:
 `require_module`, or a gate that reads its module off the path (a room, a
 persona), marked by `entitlements.gate`. A route this app adds without one

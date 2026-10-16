@@ -4,7 +4,7 @@ Revision ID: 082172624b6d
 Revises: 64bff75fdf44
 Create Date: 2026-09-29 16:00:00.000000+00:00
 
-Five columns on `agent_jobs` (`docs/design/agent-jobs.md` §Any worker). A
+Five columns on `agent_jobs` (`app-factory docs/design/agent-jobs.md` §Any worker). A
 job's CLI is a child of one worker process, and a deployment runs several:
 `run_id` is the run that process holds, `heartbeat_at` is how every other
 worker tells it is still alive, and `stop_requested`/`pending_messages` are

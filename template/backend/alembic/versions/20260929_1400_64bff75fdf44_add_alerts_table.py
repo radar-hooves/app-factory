@@ -4,7 +4,7 @@ Revision ID: 64bff75fdf44
 Revises: 6278d62d47c2
 Create Date: 2026-09-29 14:00:00.000000+00:00
 
-Adds the factory's alerts slice (`docs/design/alerts.md`): what a machine told
+Adds the factory's alerts slice (`app-factory docs/design/alerts.md`): what a machine told
 this deployment's operator, one row per producer-chosen key. The UNIQUE on
 `key` is load-bearing — `service.raise_alert`'s INSERT … ON CONFLICT (key) is
 what turns a repeat raise into an update rather than a second alert.

@@ -5,7 +5,7 @@ Revises: a1f2c3d4e5b6
 Create Date: 2026-09-29 22:00:00.000000+00:00
 
 The agent-jobs slice's report of a job's cited lessons to core-memory
-(`docs/design/agent-lessons.md`). `WorkspaceScoped` like its parent
+(`app-factory docs/design/agent-lessons.md`). `WorkspaceScoped` like its parent
 `agent_jobs`, `workspace_id`/`created_by_id` denormalised down the same way
 `agent_job_events`' already are.
 

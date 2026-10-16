@@ -1,6 +1,6 @@
 """Load a persona from its directory, and seed its writable home.
 
-The persona contract (app-factory `docs/design/agent-console.md`
+The persona contract (app-factory `app-factory docs/design/agent-console.md`
 §The persona contract): a directory shaped as a Claude Code home — `CLAUDE.md`
 (who it is), `settings.json` (`model`, `permissions.allow`, `permissions.deny`,
 hooks) and `.mcp.json` (the servers it holds). Nothing here caches a persona

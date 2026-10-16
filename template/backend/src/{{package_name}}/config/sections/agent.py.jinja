@@ -46,7 +46,7 @@ class AgentSettings(BaseSettings):
     # carries — which is the contract this slice is built on:
     # CLAUDE_CODE_OAUTH_TOKEN vended onto the app process authenticates the
     # CLI against Anthropic directly, with no gateway in the path
-    # (`docs/design/agent-console.md` §Decision). The gateway pair stays for a
+    # (`app-factory docs/design/agent-console.md` §Decision). The gateway pair stays for a
     # genuinely Anthropic-compatible one; unlike the library's own default,
     # this factory names no household gateway, because a stamped app has no
     # standing opinion on one. The URL is deployment configuration; the key

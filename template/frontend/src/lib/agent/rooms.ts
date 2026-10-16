@@ -1,6 +1,6 @@
 /**
  * A room's routes as `@poodle64/librarian`'s `Chat` reaches them
- * (`docs/design/agent-console.md` §Stamped: `api/agent/`).
+ * (`app-factory docs/design/agent-console.md` §Stamped: `api/agent/`).
  *
  * The routes return the package's own shapes, so every body passes through
  * untranslated; `data` only turns a refusal into the rejection `Chat` reads

@@ -3,7 +3,7 @@ of it so no job depends on the model choosing to look: `load()` puts a situation
 job's system prompt before it runs, and `report_outcome()` records, in the caller's own transaction, the
 moment a person accepted or corrected the result, which `retry_unsettled()` (run from `jobs.supervise()`'s
 sweep, the only other thing that calls core-memory) delivers as `lesson report`. Full account:
-`docs/design/agent-lessons.md`.
+`app-factory docs/design/agent-lessons.md`.
 """
 
 from __future__ import annotations
