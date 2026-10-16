@@ -281,6 +281,9 @@ def report_outcome(
     a settled job (a confirmed result sent back for correction) passes its own count, so the later
     accept or correction is its own report and teaches. First write wins per `(job_id, revision)`: a
     repeat call for the same revision is silently dropped, so a retried confirm counts once.
+
+    `attempts` is the running count: a reopened job's later report passes the total attempts so far,
+    not one more.
     """
     if attempts < 1:
         raise BadRequestError("attempts must be at least 1")
@@ -409,7 +412,7 @@ async def _deliver_or_abandon(
         reason = f"abandoned: unsettled for over {_ABANDON_AFTER.days} days"
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
-        logger.error("Abandoned job %s's lesson report: %s", report.job_id, reason)
+        logger.error("Abandoned job %s's lesson report: %s", report.run_ref, reason)
         return True
 
     arguments: dict[str, Any] = {
@@ -432,14 +435,14 @@ async def _deliver_or_abandon(
         await _call(settings, arguments, timeout=_DELIVER_TIMEOUT_SECONDS)
     except ToolError as exc:
         if _is_transient_tool_error(str(exc)):
-            return await _note_transient(db_session_factory, report.job_id, report.created_at, exc)
+            return await _note_transient(db_session_factory, report.run_ref, report.created_at, exc)
         reason = str(exc)[:500]
         await run_in_threadpool(_raise_failing_alert, db_session_factory, reason)
         await run_in_threadpool(_settle, reason)
-        logger.warning("core-memory refused job %s's lesson report: %s", report.job_id, reason)
+        logger.warning("core-memory refused job %s's lesson report: %s", report.run_ref, reason)
         return True
     except Exception as exc:
-        return await _note_transient(db_session_factory, report.job_id, report.created_at, exc)
+        return await _note_transient(db_session_factory, report.run_ref, report.created_at, exc)
 
     await run_in_threadpool(_settle, None)
     return False

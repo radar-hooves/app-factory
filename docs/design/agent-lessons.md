@@ -22,7 +22,7 @@ jobs.start(lessons=Lessons(domain, situation, propose))
 person accepts / corrects
   └─ report_outcome(db, job_id, accepted, attempts, corrections)   one INSERT, caller's transaction
 supervise() sweep, every 60s
-  └─ retry_unsettled ──► lesson report (run_ref = job id)           lease, retry, alert
+  └─ retry_unsettled ──► lesson report (run_ref = job id[#revision])         lease, retry, alert
 ```
 
 **`Lessons(domain, situation, propose=True)`**, passed to `jobs.start`. `domain` is
@@ -96,7 +96,7 @@ reports to core-memory, run from `jobs.supervise()`'s 60 s sweep and checking
 caller's own claim token still match, so a write from a lease since reclaimed lands
 nowhere. The lease is left to expire on a fault, so its 5 minutes is the retry backoff.
 
-**Exactly once, now.** `lesson report` is idempotent on `run_ref`, which is the job id,
+**Exactly once, now.** `lesson report` is idempotent on `run_ref`, which is the job id (`<job id>#<revision>` after the first),
 so a response lost after core-memory committed is retried and counted once. The
 at-least-once caveat of the former decision/outcome pair is gone.
 
