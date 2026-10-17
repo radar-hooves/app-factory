@@ -825,11 +825,12 @@
 				-->
 				<!--
 					`measure` caps and centres this box, through `.ds-shell-measure`
-					in styles.css rather than a utility here — an arbitrary
-					`max-w-[var(…)]` only exists if the consumer's Tailwind build
-					scanned the file spelling it, and a cap that silently does not
-					compile is the failure mode this package gates against everywhere
-					else.
+					in styles.css rather than a utility here — an arbitrary max-width
+					utility only exists if the consumer's Tailwind build scanned the
+					file spelling it, and a cap that silently does not compile is the
+					failure mode this package gates against everywhere else. (Never
+					write the utility's class name in a comment: Tailwind scans
+					comments too, and compiles the placeholder it finds there.)
 
 					At `full` the class and the attribute are both ABSENT, not set to
 					a no-op value. That is what makes the prop additive: a consumer

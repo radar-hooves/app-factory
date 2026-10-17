@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.16] - 2026-10-18
+
+Need: casefile, through the elements capability (radar-hooves/master-project#380).
+
+### Fixed
+
+- **A consumer's Tailwind build no longer warns `Unexpected token Ident("…")` on `max-width: var(…)`.** AppShell's source carried the class name of an arbitrary max-width utility in a comment, Tailwind scans comments, and it compiled the placeholder it found there into a rule no browser reads. The comment names the thing in words.
+
 ## [2026.10.15] - 2026-10-15
 
 Need: bragi (radar-hooves/bragi#243), 15/10/2026.
