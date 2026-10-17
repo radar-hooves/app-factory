@@ -6,6 +6,20 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.43] - 2026-10-17
+
+Need: the library for eight (#43); the operator's ruling of 17/10/2026 on master-project#380, through master-project.
+
+### Added
+
+- **An app serves its views to other apps' pages as custom elements, drawn from the kit.** A component in `frontend/src/elements/` that names its tag and `extend: element` (from `$lib/elements`) builds into `/elements.js` with `pnpm build`. Each element adopts the kit's compiled stylesheet into its shadow root and takes the `--ds-*` tokens of whichever page placed it, so `@poodle64/ui` components render in that page's palette, faces and mode. It reads its own app's API as the viewer through `api`, an openapi-fetch client over the app's schema. A signed-out read makes one top-level sign-in hop through `/elements/session`, which returns only to an origin in `CORS_ORIGINS`; a second within a minute is final. `docs/design/elements.md` has the shape and the adoption steps.
+- **An app places another app's elements with one declaration.** `ELEMENT_ORIGINS` loads each origin's elements on every page, through `/elements/placed.js` in `app.html`. The app's own elements load the same way, so a service's home page places them unscoped. `pnpm generate:elements` types their attributes from each origin's `/elements.d.ts`. Every app gets `settings.element_origins_list` for its own CSP.
+- **`tests/elements/proof.sh` in the factory self-test** stamps a service and a placing app in another palette, and drives both pages in Chromium, light and dark.
+
+### Upgrading
+
+`copier update`. Nothing loads until an app has an element or sets `ELEMENT_ORIGINS`. `frontend/package.json` is the app's own, so take two scripts by hand: `"build": "vite build && vite build --config vite.elements.config.ts"` and `"generate:elements": "node scripts/generate-elements.mjs"`. A service also needs its front door to pass `/elements.js` and `/elements.d.ts` without forward-auth.
+
 ## [2026.10.42] - 2026-10-17
 
 Need: pebblestone (DiegoSeagull/pebblestone, RevoGrid Pro from `https://npm.rv-grid.com`), #39.
