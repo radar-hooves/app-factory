@@ -8,7 +8,8 @@
 @import '@poodle64/design-tokens/tokens.tw.css';
 @import '@poodle64/ui/styles.css';
 
-@source '../../../node_modules/@poodle64/ui/dist';
+/* The kit components the elements reach, one `@source` each (vite.elements.config.ts). */
+/* @kit-sources */
 @source '../../elements';
 
 /* `.dark *` cannot reach into a shadow root; index.ts mirrors the page's mode onto the host. */

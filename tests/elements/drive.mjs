@@ -71,6 +71,48 @@ for (const { name, url, scope, count } of placements) {
 		check(`${at}: reads its own app's API as the viewer`, seen.read === read, seen.read);
 		check(`${at}: no page or console error`, errors.length === 0, errors);
 		primaries[at] = seen.primary;
+
+		// The display face: the token names a family the page's own @font-face
+		// registered, and the browser has loaded it for the element's heading.
+		const face = await page.evaluate(async () => {
+			const heading = document.querySelector('selftest-card').shadowRoot.querySelector('[data-testid=display]');
+			await document.fonts.ready;
+			const loaded = [...document.fonts].filter((font) => font.status === 'loaded').map((font) => font.family);
+			return { stack: getComputedStyle(heading).fontFamily, loaded };
+		});
+		check(
+			`${at}: the display face names the family the page registered, and it loaded`,
+			face.stack.includes('Fraunces Variable') && face.loaded.some((family) => family.includes('Fraunces')),
+			face
+		);
+
+		// A pop-over: opened inside the shadow root, so it keeps the kit's stylesheet,
+		// and drawn in the page's surface, not the browser's default.
+		await page.locator('selftest-card [data-testid=open]').click();
+		await page.locator('[data-testid=popover]').waitFor();
+		const popover = await page.evaluate(() => {
+			const host = document.querySelector('selftest-card');
+			const pop = document.querySelector('[data-testid=popover]') ?? host.shadowRoot.querySelector('[data-testid=popover]');
+			const probe = document.createElement('div');
+			probe.style.backgroundColor = 'var(--ds-color-surface-3)';
+			document.body.append(probe);
+			const surface = getComputedStyle(probe).backgroundColor;
+			probe.remove();
+			const style = getComputedStyle(pop);
+			return {
+				background: style.backgroundColor,
+				surface,
+				radius: style.borderTopLeftRadius,
+				border: style.borderTopStyle,
+				inShadow: pop.getRootNode() === host.shadowRoot,
+				width: pop.getBoundingClientRect().width
+			};
+		});
+		check(
+			`${at}: a pop-over opens inside the shadow root, in the page's surface`,
+			popover.inShadow && popover.background === popover.surface && popover.radius !== '0px' && popover.border === 'solid',
+			popover
+		);
 		if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}-${colorScheme}.png` });
 		await page.close();
 	}
@@ -135,5 +177,40 @@ check(
 	registered[0] !== 'none' && registered[1] === 'solid',
 	registered
 );
+
+// The kit's control sizes are declared at :root, which a shadow root does not
+// match. A bare page declares none, so the element must carry the default
+// (a 2.5rem button); a page that sets its own, here the compact ramp's, still wins.
+for (const [density, height] of [[null, 40], ['compact', 32]]) {
+	const page = await browser.newPage();
+	await page.route(`${SERVICE_URL}/bare`, (route) =>
+		route.fulfill({
+			contentType: 'text/html',
+			body: `<!doctype html>${density ? '<style>:root{--ds-control-height-md:2rem}</style>' : ''}<selftest-card></selftest-card><script type="module" src="/elements.js"></script>`
+		})
+	);
+	await page.goto(`${SERVICE_URL}/bare`);
+	await page.locator('selftest-card [data-testid=primary]').waitFor({ timeout: 15_000 });
+	const sized = await page.evaluate(() => {
+		const button = document.querySelector('selftest-card').shadowRoot.querySelector('[data-testid=primary]');
+		return getComputedStyle(button).height;
+	});
+	check(`a bare page${density ? ` in ${density} density` : ''}: the kit's button is ${height}px tall`, sized === `${height}px`, sized);
+	if (!density) {
+		// A pop-over on a page with none of the kit's CSS: only a layer inside the shadow root has it.
+		await page.locator('selftest-card [data-testid=open]').click();
+		await page.locator('[data-testid=popover]').waitFor();
+		const pop = await page.evaluate(() => {
+			const popover =
+				document.querySelector('[data-testid=popover]') ??
+				document.querySelector('selftest-card').shadowRoot.querySelector('[data-testid=popover]');
+			const style = getComputedStyle(popover);
+			return { padding: style.paddingTop, inShadow: popover.getRootNode() instanceof ShadowRoot };
+		});
+		check('a bare page: a pop-over keeps the kit stylesheet', pop.inShadow && pop.padding === '16px', pop);
+	}
+	if (SHOTS) await page.screenshot({ path: `${SHOTS}/bare-${density ?? 'default'}.png` });
+	await page.close();
+}
 await browser.close();
 process.exit(failures ? 1 : 0);

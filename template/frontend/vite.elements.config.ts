@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { parse } from 'svelte/compiler';
-import { defineConfig, type Plugin } from 'vite';
+import { build, defineConfig, type Plugin } from 'vite';
 import svelteConfig from './svelte.config.js';
 
 // The second half of `pnpm build`: every component in src/elements/ as one
@@ -21,27 +21,81 @@ const elements = (() => {
 	}
 })();
 
+// SvelteKit's own aliases, which this build runs without.
+const resolve = {
+	alias: Object.fromEntries(
+		Object.entries({ $lib: 'src/lib', ...svelteConfig.kit.alias }).map(([name, path]) => [
+			name,
+			join(root, path)
+		])
+	)
+};
+const input = 'src/lib/elements/bundle.ts';
+const stylesheet = 'src/lib/elements/elements.css';
+
 export default defineConfig({
-	plugins: [tailwindcss(), svelte({ compilerOptions: { customElement: true } }), declarations()],
-	// SvelteKit's own aliases, which this build runs without.
-	resolve: {
-		alias: Object.fromEntries(
-			Object.entries({ $lib: 'src/lib', ...svelteConfig.kit.alias }).map(([name, path]) => [
-				name,
-				join(root, path)
-			])
-		)
-	},
+	plugins: [
+		kitSources(),
+		tailwindcss(),
+		svelte({ compilerOptions: { customElement: true } }),
+		declarations()
+	],
+	resolve,
 	build: {
 		outDir: 'build',
 		emptyOutDir: false,
 		write: elements.length > 0,
-		rollupOptions: {
-			input: 'src/lib/elements/bundle.ts',
-			output: { entryFileNames: 'elements.js', inlineDynamicImports: true }
-		}
+		rollupOptions: { input, output: { entryFileNames: 'elements.js', inlineDynamicImports: true } }
 	}
 });
+
+/**
+ * Tailwind compiles utilities for the kit components the elements import, not
+ * for all of `@poodle64/ui/dist`, which roughly doubled the stylesheet. It
+ * cannot read Vite's module graph, so the elements are bundled once without
+ * the stylesheet to learn which component directories they reach, and each
+ * becomes an `@source` where `elements.css` has its marker.
+ */
+function kitSources(): Plugin {
+	const KIT = /[\\/]@poodle64[\\/]ui[\\/]dist[\\/]components[\\/]/;
+	let sources: Promise<string> | undefined;
+	const reached = async () => {
+		const directories = new Set<string>();
+		await build({
+			configFile: false,
+			logLevel: 'silent',
+			resolve,
+			plugins: [
+				{
+					name: 'no-stylesheet',
+					enforce: 'pre',
+					load: (id) => (id.includes('elements.css') ? 'export default ""' : undefined)
+				},
+				svelte({ compilerOptions: { customElement: true } }),
+				{
+					name: 'collect',
+					buildEnd() {
+						for (const id of this.getModuleIds()) {
+							const file = id.split('?')[0] ?? id;
+							if (KIT.test(file)) directories.add(dirname(file));
+						}
+					}
+				}
+			],
+			build: { write: false, rollupOptions: { input, output: { inlineDynamicImports: true } } }
+		});
+		return [...directories].map((directory) => `@source '${directory}';`).join('\n');
+	};
+	return {
+		name: 'element-kit-sources',
+		enforce: 'pre',
+		async transform(code, id) {
+			if (!id.split('?')[0]?.endsWith(stylesheet) || elements.length === 0) return;
+			sources ??= reached();
+			return code.replace('/* @kit-sources */', await sources);
+		}
+	};
+}
 
 // An attribute arrives as a string unless the element declares Svelte's own
 // `customElement.props` type for it, so that declaration decides; a written

@@ -55,7 +55,12 @@ serve() { # <app dir> <package> <port> [VAR=value...]
 	timeout 60 sh -c "until curl -sf -o /dev/null http://127.0.0.1:$port/openapi.json; do sleep 1; done"
 }
 
-(cd "$service/frontend" && pnpm build)
+# The build's own warnings fail the proof: a rule the kit emits that CSS cannot read.
+(cd "$service/frontend" && pnpm build) 2>&1 | tee "$service/build.log"
+if grep -q 'warning.* while optimizing generated CSS' "$service/build.log"; then
+	echo 'FAIL the elements build warns while optimising its CSS' >&2
+	exit 1
+fi
 serve "$service" factory_selftest "$service_port" CORS_ORIGINS=$placer_url
 
 # The kits as the self-test render took them, from this checkout, not the indexes.

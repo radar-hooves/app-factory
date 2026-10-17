@@ -6,7 +6,9 @@
  *     <svelte:options customElement={{ tag: 'library-catalogue', extend: element }} />
  *
  * It renders the kit inside its shadow root, in the palette of whichever page
- * placed it, and reads this app's API as the viewer through `api`.
+ * placed it, and reads this app's API as the viewer through `api`. Its markup
+ * sits in `<Overlays>`, so the kit's dialogue, popover, select and tooltip open
+ * inside the shadow root too.
  *
  * Self-contained: it runs on another app's origin, so the console's own client
  * (`$lib/api`, its session and workspace) cannot serve it.
@@ -14,6 +16,8 @@
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths } from '$api/schema';
 import css from './elements.css?inline';
+
+export { default as Overlays } from './overlays.svelte';
 
 /** The app that served this bundle, wherever the element is placed. */
 export const origin = new URL(import.meta.url).origin;
@@ -30,6 +34,41 @@ const shade = (host: HTMLElement) =>
 	host.toggleAttribute('data-dark', page.classList.contains('dark'));
 new MutationObserver(() => placed.forEach(shade)).observe(page, { attributeFilter: ['class'] });
 
+/**
+ * The kit declares its defaults (control sizes, the shadcn aliases, the shell
+ * geometry) at `:root`, which matches nothing in a shadow root. A default that
+ * is a plain value is registered on the page as an inherited property with that
+ * initial value: an element on a bare page gets the default, and a page that
+ * sets its own (a compact density) still wins. One that reads another token is
+ * declared on the host, so its `var()` resolves in the page's context.
+ */
+function reachHost(sheet: CSSStyleSheet): void {
+	const onHost: string[] = [];
+	const walk = (rules: CSSRuleList) => {
+		for (const rule of rules) {
+			if (rule instanceof CSSStyleRule) {
+				const selectors = rule.selectorText.split(',').map((selector) => selector.trim());
+				// Tailwind's own `:root, :host` blocks already reach the host.
+				if (!selectors.includes(':root') || selectors.includes(':host')) continue;
+				for (const name of rule.style) {
+					if (!name.startsWith('--')) continue;
+					const value = rule.style.getPropertyValue(name).trim();
+					if (value.includes('var(')) onHost.push(`${name}:${value}`);
+					else {
+						try {
+							CSS.registerProperty({ name, syntax: '*', inherits: true, initialValue: value });
+						} catch {
+							// Registered already, by the page or an earlier bundle: its value stands.
+						}
+					}
+				}
+			} else if ('cssRules' in rule) walk(rule.cssRules as CSSRuleList);
+		}
+	};
+	walk(sheet.cssRules);
+	if (onHost.length) sheet.insertRule(`:host{${onHost.join(';')}}`);
+}
+
 function adopt(root: ShadowRoot): void {
 	if (!kit) {
 		kit = new CSSStyleSheet();
@@ -44,6 +83,7 @@ function adopt(root: ShadowRoot): void {
 			}
 		}
 		document.adoptedStyleSheets = [...document.adoptedStyleSheets, registered];
+		reachHost(kit);
 	}
 	root.adoptedStyleSheets = [...root.adoptedStyleSheets, kit];
 }

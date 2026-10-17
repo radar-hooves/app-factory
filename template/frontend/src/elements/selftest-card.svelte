@@ -11,7 +11,8 @@
 	import { Badge } from '@poodle64/ui/badge';
 	import { Button } from '@poodle64/ui/button';
 	import * as Card from '@poodle64/ui/card';
-	import { api, signInUrl, signingIn } from '$lib/elements';
+	import * as Popover from '@poodle64/ui/popover';
+	import { Overlays, api, signInUrl, signingIn } from '$lib/elements';
 
 	interface Props {
 		/** The app this card is placed in; empty on the service's own page. */
@@ -31,21 +32,33 @@
 	});
 </script>
 
-<Card.Root class="max-w-sm">
-	<Card.Header>
-		<Card.Title>Self-test element</Card.Title>
-		<Card.Description>{app ? `Placed in ${app}` : 'On its own page'}</Card.Description>
-	</Card.Header>
-	<Card.Content class="flex flex-col items-start gap-3">
-		<p data-testid="read">
-			{read}
-			{#if read === 'Not signed in'}<a href={signInUrl()}>Sign in</a>{/if}
-		</p>
-		<div class="flex items-center gap-3">
-			<Button data-testid="primary">Primary</Button>
-			<Badge variant="outline">{count}</Badge>
-		</div>
-		<!-- Shown only by the kit's `dark:` variant, which the page's mode drives. -->
-		<span data-testid="dark" class="hidden dark:block"></span>
-	</Card.Content>
-</Card.Root>
+<Overlays>
+	<Card.Root class="max-w-sm">
+		<Card.Header>
+			<Card.Title>Self-test element</Card.Title>
+			<Card.Description>{app ? `Placed in ${app}` : 'On its own page'}</Card.Description>
+		</Card.Header>
+		<Card.Content class="flex flex-col items-start gap-3">
+			<p data-testid="read">
+				{read}
+				{#if read === 'Not signed in'}<a href={signInUrl()}>Sign in</a>{/if}
+			</p>
+			<p class="font-display text-lg" data-testid="display">Display face</p>
+			<div class="flex items-center gap-3">
+				<Button data-testid="primary">Primary</Button>
+				<Badge variant="outline">{count}</Badge>
+				<!-- The kit portals this to the body unless the element gives it a layer. -->
+				<Popover.Root>
+					<Popover.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" data-testid="open">Open</Button>
+						{/snippet}
+					</Popover.Trigger>
+					<Popover.Content data-testid="popover">A pop-over in the page's palette</Popover.Content>
+				</Popover.Root>
+			</div>
+			<!-- Shown only by the kit's `dark:` variant, which the page's mode drives. -->
+			<span data-testid="dark" class="hidden dark:block"></span>
+		</Card.Content>
+	</Card.Root>
+</Overlays>

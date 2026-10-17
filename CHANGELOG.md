@@ -6,6 +6,25 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.45] - 2026-10-18
+
+Need: the first three services' gaps in the element capability (radar-hooves/master-project#380; consumers: library, casefile, core-memory).
+
+### Added
+
+- **`<Overlays>` (from `$lib/elements`) is the root of an element's markup.** The kit's dialogue, popover, select and tooltip now open inside the shadow root, with the kit's stylesheet and the page's tokens, in place of `<body>`, where they had neither.
+
+### Fixed
+
+- **The kit's control sizes and shadcn aliases reach the shadow root.** They were declared at `:root`, which a shadow root does not match, so a button on a page that did not declare them was 22px tall. The runtime registers each plain value on the page as an inherited property with the kit's default, so a page's own density still wins, and declares the ones that read another token on the host.
+- **The display font loads.** The template's floor on `@poodle64/design-tokens` is `^2026.10.1`. A lockfile on 2026.9.0 (the library, casefile) names only `'Fraunces'`, which matches no `@font-face`; 2026.9.1 on names `'Fraunces Variable'` too.
+- **The elements build no longer warns `Unexpected token Ident("…")` on `max-width: var(…)`.** The cause was a comment in `@poodle64/ui`'s AppShell that Tailwind scanned; the template takes `@poodle64/ui` `^2026.10.16`, which words it differently.
+- **`elements.js` is smaller.** Tailwind compiled utilities for every component in `@poodle64/ui/dist`. It now scans only the component directories the elements import. The library's bundle goes from 582,704 to 547,345 bytes (gzip 160.5 to 155.2 kB), and a bare card, button and badge from 356 to 291 kB with a popover. What remains is what the elements use: bits-ui's menu, tooltip and popper layers about 150 kB in the library, and its own markdown and sanitiser about 72 kB.
+
+### Upgrading
+
+`copier update`, then `pnpm up @poodle64/ui @poodle64/design-tokens`. A service deletes its own `BitsConfig` and layer `<div>` and wraps its markup in `<Overlays>`, and any `:root` copy of the control sizes it made for an element. `tests/elements/proof.sh` now places a pop-over, reads the display face and measures a bare page.
+
 ## [2026.10.44] - 2026-10-17
 
 Need: the operator's ruling of 17/10/2026 on radar-hooves/master-project#380, through master-project's design session.
