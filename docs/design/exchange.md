@@ -54,8 +54,8 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
 
 **An app.**
 
-1. Broker: mint `<app>-exchange` (field `value`, a random 64 characters) by the credential-lifecycle skill's path B, never typed. Grant it to the app's consumer identity, and to the identity that runs step 2 (yggdrasil `portcullis-identities.nix`).
-2. Authentik: run the program, with `EXCHANGE_SIGNIN` the slug of the application people sign in to and `EXCHANGE_CONSUMERS` empty:
+1. Broker: mint the vault item `<app>-exchange` (field `value`, a random 64 characters) by the credential-lifecycle skill's path B, never typed, with the catalogue entry `<app>-api-exchange` (the broker's `<vendor>-<surface>` rule refuses `<app>-exchange` as a catalogue name; the app vends the catalogue name). Grant it to the identity that runs step 2 (`front-door` on atlas, `atlas-claude` on titan's and mimir's brokers; yggdrasil `portcullis-identities.nix`). A service that only verifies tokens holds no secret of its own and is granted nothing else; an app that asks as a person also grants it to its own consumer identity.
+2. Authentik: run the program, with `EXCHANGE_SIGNIN` the slug of the application people sign in to (it differs per estate: the library's is `library` on atlas, `pebblestone-library` on titan and mimir) and `EXCHANGE_CONSUMERS` empty:
 
    ```bash
    portcullis exec --broker <url> --vend EXCHANGE_CLIENT_SECRET=<app>-exchange.value -- \

@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.46] - 2026-10-18
+
+Need: the library's provisioning on atlas, titan and mimir found the broker refuses `<app>-exchange` as a catalogue name (radar-hooves/master-project#380).
+
+### Fixed
+
+- **The exchange client secret is vended under the catalogue name `<app>-api-exchange`,** field `value`; the broker's `<vendor>-<surface>` rule refuses `<app>-exchange`. The vault item stays `<app>-exchange`. An app that took 2026.10.44 or .45 mints the catalogue entry and takes this release; `docs/design/exchange.md` §Adopting it says how, and that the provisioning identity (`front-door` on atlas, `atlas-claude` on titan and mimir) is the one granted the item, and that the sign-in slug differs per estate.
+
 ## [2026.10.45] - 2026-10-18
 
 Need: the first three services' gaps in the element capability (radar-hooves/master-project#380; consumers: library, casefile, core-memory).

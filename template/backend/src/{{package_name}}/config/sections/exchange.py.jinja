@@ -11,7 +11,7 @@ no asker, and a library room answers 503.
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_EXCHANGE_``):
     ISSUER         e.g. https://auth.example.org/application/o/{{ project_name }}-exchange/
     CLIENT_ID      this app's name unless the estate named its client otherwise
-    CLIENT_SECRET  empty means vend `{{ project_name }}-exchange`, only while ISSUER is set
+    CLIENT_SECRET  empty means vend `{{ project_name }}-api-exchange`, only while ISSUER is set
 """
 
 from typing import Annotated, Self
@@ -35,7 +35,7 @@ class ExchangeSettings(BaseSettings):
     # a slash. The token endpoint and the JWKS are read off it.
     issuer: str = ""
     client_id: str = "{{ project_name }}"
-    client_secret: Annotated[SecretStr, Vended("{{ project_name }}-exchange", "value")] = SecretStr("")
+    client_secret: Annotated[SecretStr, Vended("{{ project_name }}-api-exchange", "value")] = SecretStr("")
 
     @field_validator("issuer")
     @classmethod
