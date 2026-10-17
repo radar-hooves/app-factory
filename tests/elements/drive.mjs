@@ -36,6 +36,8 @@ for (const { name, url, scope, count } of placements) {
 		const errors = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
+		// The page's own browser telemetry, which the front door collects in production.
+		await page.route('**/faro/collect', (route) => route.fulfill({ status: 204 }));
 		await page.goto(`${url}/proof`);
 		await page.getByTestId('read').filter({ hasText: 'Read from' }).waitFor({ timeout: 15_000 });
 		if (colorScheme === 'dark') await page.locator('selftest-card[data-dark]').waitFor();
