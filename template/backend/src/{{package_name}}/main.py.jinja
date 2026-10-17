@@ -46,6 +46,7 @@ from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.paths import frontend_build_dir
 from {{ package_name }}.db.session import get_engine, get_session_factory
+from {{ package_name }}.elements import register_elements
 from {{ package_name }}.exceptions import register_exception_handlers
 from {{ package_name }}.logging import app_version, configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
@@ -299,6 +300,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # sub-apps, not router routes, and are gated on their own terms rather than
     # by this limit.
     app.include_router(api_router, prefix=_API_PREFIX, dependencies=[Depends(enforce_default_rate_limit)])
+
+    # The elements this app serves to other apps' pages, and places on its own.
+    register_elements(app, settings)
 
     # This app's own middleware and exception handlers. Last, so anything added
     # wraps outermost and runs first — a Host-header or body-size guard has to

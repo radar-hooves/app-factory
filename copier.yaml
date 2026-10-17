@@ -116,6 +116,10 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_elements.py{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/lib/elements/index.test.ts{% endif %}"
+  # Not a test, the element those tests and tests/elements/ prove the capability on.
+  - "{% if not factory_selftest %}frontend/src/elements/selftest-card.svelte{% endif %}"
 
 # Files the template has retired and copier cannot delete. A plain update
 # removes a file the old tagged render had and the new one lacks, but not
@@ -175,6 +179,9 @@ _migrations:
       - frontend/src/routes/(protected)/layout.test.ts
       - frontend/src/lib/settings/sections.test.ts
       - frontend/src/params.test.ts
+      - backend/tests/test_elements.py
+      - frontend/src/lib/elements/index.test.ts
+      - frontend/src/elements/selftest-card.svelte
   # A deleted scaffold slice is re-stamped file by file as the template adds to
   # it (settings.py, 2026.10.x). The slice is gone when its router is.
   - version: v2026.10.24

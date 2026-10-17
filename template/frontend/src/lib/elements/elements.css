@@ -1,0 +1,21 @@
+/*
+  The stylesheet every element this app serves adopts into its shadow root
+  (index.ts). The kit's components and utilities, compiled from this app's
+  elements and the kit alone, and no palette: a shadow root matches no :root,
+  so the --ds-* tokens come from the page the element is placed on.
+*/
+@import 'tailwindcss' source(none);
+@import '@poodle64/design-tokens/tokens.tw.css';
+@import '@poodle64/ui/styles.css';
+
+@source '../../../node_modules/@poodle64/ui/dist';
+@source '../../elements';
+
+/* `.dark *` cannot reach into a shadow root; index.ts mirrors the page's mode onto the host. */
+@custom-variant dark (:host([data-dark]) &);
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+}

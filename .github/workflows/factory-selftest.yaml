@@ -42,6 +42,7 @@ on:
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
+      - 'tests/elements/**'
       - 'kits/python/**'
       - 'kits/typescript/packages/ui/**'
       - 'pyproject.toml'
@@ -226,6 +227,12 @@ jobs:
           pnpm test -- --run
           pnpm check
 
-      - name: Clean up the scratch render
+      - name: Elements — one element, two placements, in a real browser
+        # The scratch app serves <selftest-card>; the proof stamps a second app in
+        # another palette that places it, and drives both pages in Chromium (the
+        # host's own, NixOS running no downloaded browser: host-browser.ts).
+        run: tests/elements/proof.sh "$SCRATCH"
+
+      - name: Clean up the scratch renders
         if: always()
-        run: rm -rf "$SCRATCH"
+        run: rm -rf "$SCRATCH" "$SCRATCH-placer"

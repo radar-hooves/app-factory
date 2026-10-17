@@ -1,0 +1,80 @@
+"""The element routes (`elements.py`): what an app serves to other apps' pages, and what its own pages place."""
+
+from pathlib import Path
+
+import pytest
+from httpx import ASGITransport, AsyncClient, Response
+
+from {{ package_name }} import elements
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.main import create_app
+
+PLACER = "https://placer.example.org"
+
+
+def _app(**overrides):
+    return create_app(settings=get_settings().model_copy(update=overrides))
+
+
+async def _get(app, path: str, **kwargs) -> Response:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.get(path, **kwargs)
+
+
+@pytest.fixture
+def build(monkeypatch, tmp_path: Path) -> Path:
+    """An empty frontend build; a test writes the element files it needs into it."""
+    monkeypatch.setattr(elements, "frontend_build_dir", lambda: tmp_path)
+    return tmp_path
+
+
+async def test_the_hop_returns_to_a_page_on_an_origin_that_places_this_apps_elements():
+    page = f"{PLACER}/study?unit=4"
+    response = await _get(_app(cors_origins=PLACER), "/elements/session", params={"return": page})
+    assert response.status_code == 303
+    assert response.headers["location"] == page
+    assert response.headers["cache-control"] == "no-store"
+
+
+async def test_the_hop_never_redirects_anywhere_else():
+    app = _app(cors_origins=PLACER)
+    for target in (
+        "https://elsewhere.example.org/",
+        f"{PLACER}.elsewhere.example.org/",
+        "https://placer.example.org@elsewhere.example.org/",
+        "//elsewhere.example.org/",
+        "javascript:alert(1)",
+        "",
+    ):
+        response = await _get(app, "/elements/session", params={"return": target})
+        assert response.status_code == 200, target
+        assert "location" not in response.headers, target
+
+
+async def test_a_page_places_this_apps_own_elements_then_each_declared_origins(build):
+    (build / "elements.js").write_text("")
+    response = await _get(_app(element_origins=f"{PLACER}/, https://library.example.org"), "/elements/placed.js")
+    assert response.headers["content-type"].startswith("text/javascript")
+    assert response.text.splitlines() == [
+        'import("/elements.js").catch(console.error);',
+        f'import("{PLACER}/elements.js").catch(console.error);',
+        'import("https://library.example.org/elements.js").catch(console.error);',
+    ]
+
+
+async def test_an_app_with_no_element_serves_none_and_places_none_of_its_own(build):
+    app = _app()
+    assert (await _get(app, "/elements/placed.js")).text == ""
+    assert (await _get(app, "/elements.js")).status_code == 404
+    assert (await _get(app, "/elements.d.ts")).status_code == 404
+
+
+async def test_the_built_elements_reach_an_origin_that_may_place_them(build):
+    (build / "elements.js").write_text("export {};")
+    (build / "elements.d.ts").write_text("export {};")
+    app = _app(cors_origins=PLACER)
+    script = await _get(app, "/elements.js", headers={"Origin": PLACER})
+    assert script.status_code == 200
+    assert script.headers["content-type"].startswith("text/javascript")
+    assert script.headers["access-control-allow-origin"] == PLACER
+    assert (await _get(app, "/elements.d.ts")).text == "export {};"

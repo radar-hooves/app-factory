@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # middleware at all (main.py): the console is same-origin.
     cors_origins: str = ""
 
+    # Comma-separated origins whose elements this app's pages place: each one's
+    # /elements.js loads on every page (elements.py). Each of those apps names
+    # this one's origin in its own CORS_ORIGINS.
+    element_origins: str = ""
+
     # Whether /docs, /redoc and /openapi.json are served (main.py). True,
     # because the shared ingress shell 404-guards all three for an app behind
     # it. An app whose port is reachable WITHOUT traversing that proxy sets
@@ -122,6 +127,12 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         """Allowed CORS origins, split from the comma-separated env value."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def element_origins_list(self) -> list[str]:
+        """Origins whose elements this app places, split from the comma-separated env value."""
+        return [origin.strip().rstrip("/") for origin in self.element_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)

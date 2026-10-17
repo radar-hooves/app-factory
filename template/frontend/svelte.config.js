@@ -3,6 +3,12 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 const config = {
 	preprocess: vitePreprocess(),
+	compilerOptions: {
+		// An element in src/elements/ names its tag for its own build
+		// (vite.elements.config.ts), which compiles it as a custom element; the SPA
+		// never imports one, so the warning svelte-check raises there is noise.
+		warningFilter: (warning) => warning.code !== 'options_missing_custom_element'
+	},
 	kit: {
 		adapter: adapter({
 			pages: 'build',

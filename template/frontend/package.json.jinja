@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev --port {{ frontend_port }}",
-		"build": "vite build",
+		"build": "vite build && vite build --config vite.elements.config.ts",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -22,6 +22,7 @@
 		"lint:colour": "node scripts/check-colour-surface.mjs",
 		"lint:drift": "node scripts/check-ui-drift.mjs",
 		"generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
+		"generate:elements": "node scripts/generate-elements.mjs",
 		"test": "vitest",
 		"test:run": "vitest run",
 		"test:e2e": "playwright test",

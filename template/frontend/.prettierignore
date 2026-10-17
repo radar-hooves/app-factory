@@ -13,6 +13,8 @@ pnpm-lock.yaml
 # others — ignoring it everywhere costs nothing and stops it drifting back.
 src/lib/api/openapi.json
 src/lib/api/schema.d.ts
+# Generated the same way by `pnpm generate:elements`, from the apps it places.
+src/lib/elements/placed.d.ts
 
 # The design gates rewrite these with their own JSON layout on `--baseline`.
 # Reformatting them turns every banked finding into a two-tool diff.

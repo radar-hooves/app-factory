@@ -123,6 +123,9 @@ export default defineConfig(({ command, isPreview }) => {
 					// the request and this object would overwrite them — Vite merges it last.
 					headers: identity.proxyHeaders
 				},
+				// The element routes (backend elements.py), which `app.html` loads
+				// on every page. Built elements come from `pnpm build`.
+				'^/elements(\\.js|\\.d\\.ts|/)': backendTarget,
 				// This app's own prefixes, from frontend/app-proxy.ts — the one seam
 				// on this file, and the reason the file itself stays byte-identical.
 				// Declared AFTER `^/api/` so the factory's entry keeps routing

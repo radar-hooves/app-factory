@@ -1,0 +1,66 @@
+"""The elements this app serves and the ones it places (`frontend/vite.elements.config.ts`).
+
+Registered ahead of the SPA, so none of these falls through to `index.html`:
+
+- `/elements.js`, this app's elements, and `/elements.d.ts`, their attribute
+  types. Both must pass the front door without forward-auth: a cross-origin
+  `<script type="module">` sends no cookie and cannot follow a sign-in
+  redirect. Every call an element makes stays behind forward-auth and CORS.
+- `/elements/session`, reached top-level by an element whose first fetch came
+  back signed out (`frontend/src/lib/elements/index.ts`). Forward-auth's walk
+  leaves this app's session cookie, and the browser goes straight back, to a
+  page on an origin in `CORS_ORIGINS` only. A hidden frame cannot make this
+  walk: Authentik's sign-in pages refuse every frame.
+- `/elements/placed.js`, which every page of this app loads (`app.html`): this
+  app's own elements, then those of each origin in `ELEMENT_ORIGINS`.
+"""
+
+import json
+from urllib.parse import urlsplit
+
+from fastapi import FastAPI, Request
+from starlette.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+
+from {{ package_name }}.config import Settings
+from {{ package_name }}.config.paths import frontend_build_dir
+from {{ package_name }}.exceptions import NotFoundError
+
+# Short: the URL never changes across a release.
+_CACHE_CONTROL = "public, max-age=300"
+_SIGNED_IN = "<!doctype html><title>Signed in</title><p>Signed in. You can close this page.</p>"
+
+
+def register_elements(app: FastAPI, settings: Settings) -> None:
+    """Add the element routes. HEAD is listed because FastAPI does not add it."""
+
+    def built(name: str, media_type: str) -> FileResponse:
+        path = frontend_build_dir() / name
+        if not path.is_file():
+            raise NotFoundError("This app serves no elements.")
+        return FileResponse(path, media_type=media_type, headers={"Cache-Control": _CACHE_CONTROL})
+
+    @app.api_route("/elements.js", methods=["GET", "HEAD"], include_in_schema=False)
+    def elements_script() -> FileResponse:
+        return built("elements.js", "text/javascript")
+
+    @app.api_route("/elements.d.ts", methods=["GET", "HEAD"], include_in_schema=False)
+    def elements_types() -> FileResponse:
+        return built("elements.d.ts", "text/plain")
+
+    @app.get("/elements/session", include_in_schema=False)
+    def elements_session(request: Request) -> Response:
+        # no-store: a cached answer would skip the proxy and sign nobody in.
+        headers = {"Cache-Control": "no-store"}
+        back = request.query_params.get("return", "")
+        parts = urlsplit(back)
+        if parts.scheme in ("http", "https") and f"{parts.scheme}://{parts.netloc}" in settings.cors_origins_list:
+            return RedirectResponse(back, status_code=303, headers=headers)
+        return HTMLResponse(_SIGNED_IN, headers=headers)
+
+    @app.get("/elements/placed.js", include_in_schema=False)
+    def elements_placed() -> Response:
+        own = ["/elements.js"] if (frontend_build_dir() / "elements.js").is_file() else []
+        scripts = own + [f"{origin}/elements.js" for origin in settings.element_origins_list]
+        # One import each, so a service that is down costs only its own elements.
+        body = "".join(f"import({json.dumps(script)}).catch(console.error);\n" for script in scripts)
+        return Response(body, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
