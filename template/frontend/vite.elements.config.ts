@@ -4,6 +4,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { parse } from 'svelte/compiler';
 import { defineConfig, type Plugin } from 'vite';
+import svelteConfig from './svelte.config.js';
 
 // The second half of `pnpm build`: every component in src/elements/ as one
 // script, build/elements.js, which a page loads to place them (backend
@@ -22,7 +23,15 @@ const elements = (() => {
 
 export default defineConfig({
 	plugins: [tailwindcss(), svelte({ compilerOptions: { customElement: true } }), declarations()],
-	resolve: { alias: { $lib: join(root, 'src/lib') } },
+	// SvelteKit's own aliases, which this build runs without.
+	resolve: {
+		alias: Object.fromEntries(
+			Object.entries({ $lib: 'src/lib', ...svelteConfig.kit.alias }).map(([name, path]) => [
+				name,
+				join(root, path)
+			])
+		)
+	},
 	build: {
 		outDir: 'build',
 		emptyOutDir: false,

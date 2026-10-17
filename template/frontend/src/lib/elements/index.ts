@@ -6,11 +6,13 @@
  *     <svelte:options customElement={{ tag: 'library-catalogue', extend: element }} />
  *
  * It renders the kit inside its shadow root, in the palette of whichever page
- * placed it, and reads this app's API as the viewer through `request`.
+ * placed it, and reads this app's API as the viewer through `api`.
  *
- * Self-contained: it runs on another app's origin, so nothing in the console's
- * own graph (`$lib/api`, the session) can reach it.
+ * Self-contained: it runs on another app's origin, so the console's own client
+ * (`$lib/api`, its session and workspace) cannot serve it.
  */
+import createClient, { type Middleware } from 'openapi-fetch';
+import type { paths } from '$api/schema';
 import css from './elements.css?inline';
 
 /** The app that served this bundle, wherever the element is placed. */
@@ -43,13 +45,13 @@ function adopt(root: ShadowRoot): void {
 	root.adoptedStyleSheets = [...root.adoptedStyleSheets, kit];
 }
 
-type Element = new () => HTMLElement & {
+type ElementClass = new () => HTMLElement & {
 	connectedCallback?(): unknown;
 	disconnectedCallback?(): unknown;
 };
 
 /** The `extend` every element names: the kit's stylesheet, and the page's mode. */
-export function element(Base: Element): Element {
+export function element(Base: ElementClass): ElementClass {
 	return class extends Base {
 		constructor() {
 			super();
@@ -67,13 +69,6 @@ export function element(Base: Element): Element {
 	};
 }
 
-export type Result<T> =
-	| { ok: true; data: T }
-	| { ok: false; kind: 'signing-in' | 'signed-out' | 'refused' | 'not-found' }
-	| { ok: false; kind: 'error'; status: number };
-
-const SIGNING_IN = { ok: false, kind: 'signing-in' } as const;
-
 /** When this tab last made the hop. Signed out again within the window means it did not take. */
 const HOPPED_AT = `elements:${origin}:signed-in-at`;
 const HOP_WINDOW_MS = 60_000;
@@ -81,52 +76,51 @@ const HOP_WINDOW_MS = 60_000;
 /** Set once a hop has begun, so every element on the page waits for it rather than starting another. */
 let hopping = false;
 
-/**
- * GET one of this app's routes as the viewer. Signed out (a 401, a throw from
- * forward-auth's uncredentialed redirect, a 200 that is not JSON) is what a
- * browser that has never visited this app gives, so the page makes the
- * sign-in hop once and comes back to retry. Signed out again within a minute
- * of a hop is final, so it never loops. A hidden frame cannot do this:
- * Authentik's sign-in pages refuse every frame.
- */
-export async function request<T>(path: string): Promise<Result<T>> {
-	if (hopping) return SIGNING_IN;
-	const result = await attempt<T>(path);
-	if (result.ok || result.kind !== 'signed-out') return result;
-	if (hopping) return SIGNING_IN;
+const signedOut = () => new Response(null, { status: 401 });
+
+function hop(): void {
+	if (hopping) return;
 	try {
-		if (Date.now() - Number(sessionStorage.getItem(HOPPED_AT) ?? 0) < HOP_WINDOW_MS) return result;
+		if (Date.now() - Number(sessionStorage.getItem(HOPPED_AT) ?? 0) < HOP_WINDOW_MS) return;
 		sessionStorage.setItem(HOPPED_AT, String(Date.now()));
 	} catch {
-		return result;
+		return;
 	}
 	hopping = true;
 	location.assign(signInUrl());
-	return SIGNING_IN;
 }
 
-/** The hop by hand, for an element's own "sign in" link once `request` has given up. */
+/**
+ * Signed out (a 401, a throw from forward-auth's redirect, which carries no
+ * CORS headers, or a sign-in page answering in the API's place) is what a
+ * browser that has never visited this app gives, so the page makes the
+ * sign-in hop once and comes back to ask again. Signed out again within a
+ * minute of a hop is final, so it never loops. Every signed-out answer reaches
+ * the element as a 401.
+ */
+const signIn: Middleware = {
+	onRequest: () => (hopping ? signedOut() : undefined),
+	onError: signedOut,
+	onResponse({ response }) {
+		const page = response.ok && (response.headers.get('content-type') ?? '').includes('text/html');
+		if (response.status !== 401 && !page) return undefined;
+		hop();
+		return signedOut();
+	}
+};
+
+/** This app's API, as the viewer, from whichever page placed the element. */
+export const api = createClient<paths>({
+	baseUrl: origin,
+	credentials: 'include',
+	headers: { Accept: 'application/json' }
+});
+api.use(signIn);
+
+/** Whether the page is on its way to sign in: a 401 then means "signing you in", not "signed out". */
+export const signingIn = () => hopping;
+
+/** The hop by hand, for an element's own "sign in" link once a 401 is final. */
 export function signInUrl(): string {
 	return `${origin}${SIGN_IN_PATH}?return=${encodeURIComponent(location.href)}`;
-}
-
-async function attempt<T>(path: string): Promise<Result<T>> {
-	let response: Response;
-	try {
-		response = await fetch(`${origin}${path}`, {
-			credentials: 'include',
-			headers: { Accept: 'application/json' }
-		});
-	} catch {
-		return { ok: false, kind: 'signed-out' };
-	}
-	if (response.status === 401) return { ok: false, kind: 'signed-out' };
-	// A refusal (the sign-in's own policy, or this app's), never a missing session.
-	if (response.status === 403) return { ok: false, kind: 'refused' };
-	if (response.status === 404) return { ok: false, kind: 'not-found' };
-	if (!response.ok) return { ok: false, kind: 'error', status: response.status };
-	if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
-		return { ok: false, kind: 'signed-out' };
-	}
-	return { ok: true, data: (await response.json()) as T };
 }
