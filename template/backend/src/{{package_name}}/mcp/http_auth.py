@@ -19,6 +19,13 @@ A short-lived in-memory cache (keyed on a sha256 of the token, never the
 plaintext) avoids a userinfo round trip on every request from an
 already-validated caller.
 
+A bearer this app's own token exchange issued (``asker``, the stamped
+``exchange.Exchange``) is not a machine's: it names a person, a persona's asker
+or one another app asked for. The gate routes it by its issuer, verifies it
+from the issuer's JWKS with no userinfo call and no fallback, and hands the
+verified person to the tool layer on the request scope (``scope["asker"]``),
+where no client can write. No ``x-client-id`` is written for it.
+
 The stdio transport never enters this ASGI app, so in-process / local stdio
 access is unaffected.
 """
@@ -30,7 +37,7 @@ import json
 import logging
 import time
 from collections.abc import Mapping
-from typing import cast
+from typing import Protocol, cast
 
 import httpx
 
@@ -39,6 +46,18 @@ logger = logging.getLogger(__name__)
 _CACHE_TTL_SECONDS = 60.0
 _CACHE_MAX_ENTRIES = 256
 _USERINFO_TIMEOUT_SECONDS = 5.0
+
+
+class AskerTokens(Protocol):
+    """The tokens this app's own exchange issued: which ones they are, and the person each names."""
+
+    def issued_here(self, token: str) -> bool:
+        """Whether ``token`` claims this app's issuer, read unverified."""
+        ...
+
+    async def verified(self, token: str) -> object | None:
+        """The person ``token`` names, or None; raises ``ConnectionError`` while the keys are unreachable."""
+        ...
 
 
 class _TokenCache:
@@ -78,6 +97,7 @@ def require_bearer_auth(
     userinfo_url: str,
     identity_claim: str = "preferred_username",
     resource_metadata_url: str = "",
+    asker: AskerTokens | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> object:
     """Wrap an ASGI app so every HTTP request must carry a valid OAuth2 Bearer token.
@@ -95,6 +115,8 @@ def require_bearer_auth(
             falls back to ``sub`` when the claim is absent.
         resource_metadata_url: Protected-resource metadata URL advertised in
             the 401 ``WWW-Authenticate`` header (RFC 9728); omitted when empty.
+        asker: This app's exchange; a bearer it issued is verified by it and
+            never by userinfo.
         transport: Optional httpx transport override (tests inject a
             ``httpx.MockTransport`` here); production leaves this as None for
             a real network client.
@@ -111,6 +133,9 @@ def require_bearer_auth(
             return
 
         token = _extract_bearer_token(scope)
+        if token is not None and asker is not None and asker.issued_here(token):
+            await _admit_asker(app, asker, token, scope, receive, send, resource_metadata_url)
+            return
         if token is None or not userinfo_url:
             await _drain_body(receive)
             await _send_unauthorized(send, resource_metadata_url)
@@ -149,13 +174,8 @@ def require_bearer_auth(
 
         # Copy scope and rewrite headers: remove any client-supplied x-client-id,
         # then append the server-resolved value. Do not mutate the caller's scope.
-        new_scope = dict(scope)
-        existing: list[tuple[bytes, bytes]] = cast("list[tuple[bytes, bytes]]", scope.get("headers") or [])
-        raw_headers: list[tuple[bytes, bytes]] = [
-            (name, value) for name, value in existing if name.lower() != b"x-client-id"
-        ]
-        raw_headers.append((b"x-client-id", client_id_header))
-        new_scope["headers"] = raw_headers
+        new_scope = _without_client_id(scope)
+        cast("list[tuple[bytes, bytes]]", new_scope["headers"]).append((b"x-client-id", client_id_header))
 
         await app(new_scope, receive, send)  # type: ignore[operator]
 
@@ -164,6 +184,41 @@ def require_bearer_auth(
     # calls (tests, hot-reload, multi-instance tooling).
     gated_app.aclose = client.aclose  # type: ignore[attr-defined]
     return gated_app
+
+
+async def _admit_asker(
+    app: object,
+    asker: AskerTokens,
+    token: str,
+    scope: dict[str, object],
+    receive: object,
+    send: object,
+    resource_metadata_url: str,
+) -> None:
+    """Admit the person a bearer from this app's own exchange names, or refuse it; never ask userinfo."""
+    try:
+        person = await asker.verified(token)
+    except ConnectionError:
+        logger.warning("MCP HTTP request held: the identity provider's signing keys are unreachable")
+        await _drain_body(receive)
+        await _send_unavailable(send)
+        return
+    if person is None:
+        logger.warning("MCP HTTP request rejected: an asker's bearer did not verify")
+        await _drain_body(receive)
+        await _send_unauthorized(send, resource_metadata_url)
+        return
+    new_scope = _without_client_id(scope)
+    new_scope["asker"] = person
+    await app(new_scope, receive, send)  # type: ignore[operator]
+
+
+def _without_client_id(scope: dict[str, object]) -> dict[str, object]:
+    """A copy of ``scope`` with any client-supplied ``x-client-id`` removed; the gate is its sole writer."""
+    existing: list[tuple[bytes, bytes]] = cast("list[tuple[bytes, bytes]]", scope.get("headers") or [])
+    new_scope = dict(scope)
+    new_scope["headers"] = [(name, value) for name, value in existing if name.lower() != b"x-client-id"]
+    return new_scope
 
 
 def _extract_bearer_token(scope: dict[str, object]) -> str | None:

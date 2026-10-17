@@ -113,16 +113,11 @@ class AgentSettings(BaseSettings):
     support_url: str = ""
 
     # The library's caller mount (`https://library.example/api/caller`), for
-    # a library room. Its bearer is this app's caller credential, vended only
-    # while a URL is set, as the gateway key is.
+    # a library room. Milton is asked as the person in the room: each call
+    # carries a token the exchange mints for them with the library's client
+    # id as its audience (exchange.py), so this app holds no library secret.
     library_url: str = ""
-    library_token: Annotated[
-        SecretStr,
-        Vended("{{ project_name }}-library", "value", credential_field="library_token_credential"),
-    ] = SecretStr("")
-    # The broker credential holding it, when the library named it rather than
-    # this app. Empty means `{{ project_name }}-library`.
-    library_token_credential: str = ""
+    library_audience: str = "library"
 
     def driver(self) -> cli.Settings:
         """These settings as the kit's driver takes them; each session reports as `{{ project_name }}-agent-<persona>`."""
@@ -139,14 +134,13 @@ class AgentSettings(BaseSettings):
         )
 
     @model_validator(mode="after")
-    def _resolve_keys_when_configured(self) -> Self:
-        """Vend the gateway key and the library bearer only for a deployment that names their URLs.
+    def _resolve_key_when_configured(self) -> Self:
+        """Vend the gateway key only for a deployment that names a gateway.
 
         Not `VendedSettings`, which vends unconditionally at construction —
         `config/sections/files.py` gates its own credential on its URL the
         same way, for the same reason.
         """
-        named = {"gateway_key": self.gateway_url, "library_token": self.library_url}
-        if any(named.values()):
-            resolve_vended_fields(self, only=[field for field, url in named.items() if url])
+        if self.gateway_url:
+            resolve_vended_fields(self, only=["gateway_key"])
         return self

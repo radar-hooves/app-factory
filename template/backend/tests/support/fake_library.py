@@ -21,7 +21,8 @@ agent and the real client rather than a mock standing in for either.
   carries `DOCUMENTS_TO`, `ELSEWHERE` an earlier date, as the caller's whole
   grant -- wider than any one room -- would).
 
-Every call needs a bearer, as the caller door does. Run by hand for the
+Every call needs a bearer, as the caller door does, and each is kept in
+`bearers`. Run by hand for the
 E2E: `python fake_library.py --port 18766 --pace 0.05`.
 """
 
@@ -50,6 +51,8 @@ class FakeLibrary:
         self.conversations: dict[str, list[dict[str, Any]]] = {}
         self.marks: list[dict[str, Any]] = []
         self.asked: list[dict[str, Any]] = []
+        #: Every call's bearer, in order, as the caller door received it.
+        self.bearers: list[str] = []
         self.lock = threading.Lock()
         self.port = 0
 
@@ -115,6 +118,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _authorised(self) -> bool:
         if (self.headers.get("Authorization") or "").startswith("Bearer ") and len(self.headers["Authorization"]) > 7:
+            with self.fake.lock:
+                self.fake.bearers.append(self.headers["Authorization"][7:])
             return True
         self._send(401, {"error": "unauthorized", "message": "no bearer"})
         return False

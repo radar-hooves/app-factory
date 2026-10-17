@@ -1,0 +1,211 @@
+"""The token exchange, both sides, over real HTTP: an app carries a person, a service verifies them.
+
+`tests/support/fake_authentik.py` stands in for Authentik's token endpoint
+and JWKS, minting what the live exchange minted on atlas
+(app-factory `docs/research/2026-10-17-token-exchange-proof.md`), so every case
+drives this app's real client and verifier rather than a mock of either.
+"""
+
+import logging
+from collections.abc import AsyncIterator, Iterator
+
+import jwt
+import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
+
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
+from {{ package_name }}.exceptions import AuthenticationError, ServiceUnavailableError, register_exception_handlers
+from {{ package_name }}.exchange import Asker, Asking, CurrentAsker, Exchange
+from tests.support.fake_authentik import FakeAuthentik
+
+APP = "{{ project_name }}"
+SECRET = "fake-exchange-secret-long-enough-for-hs256"
+PERSON = "uid-asker-0001"
+
+
+@pytest.fixture
+def authentik() -> Iterator[FakeAuthentik]:
+    fake = FakeAuthentik()
+    server = fake.serve()
+    fake.provider(APP, secret=SECRET)
+    fake.provider("library", federates=(APP,))
+    fake.provider("elsewhere")
+    fake.groups[PERSON] = ["household"]
+    fake.entitlements[(PERSON, APP)] = ["room-helper", "notes:write"]
+    fake.entitlements[(PERSON, "library")] = ["collection-manual"]
+    yield fake
+    server.shutdown()
+
+
+def _settings(authentik: FakeAuthentik, client_id: str = APP, secret: str = SECRET) -> ExchangeSettings:
+    return ExchangeSettings(issuer=authentik.issuer(client_id), client_id=client_id, client_secret=SecretStr(secret))
+
+
+@pytest.fixture
+async def app_side(authentik: FakeAuthentik) -> AsyncIterator[Exchange]:
+    exchange = Exchange(_settings(authentik))
+    yield exchange
+    await exchange.aclose()
+
+
+@pytest.fixture
+async def library_side(authentik: FakeAuthentik) -> AsyncIterator[Exchange]:
+    exchange = Exchange(_settings(authentik, "library", ""))
+    yield exchange
+    await exchange.aclose()
+
+
+async def test_an_app_carries_a_person_to_a_service_that_verifies_them(
+    app_side: Exchange, library_side: Exchange
+) -> None:
+    token = await app_side.token(f"as:{PERSON}", "library")
+    assert await library_side.verified(token) == Asker(
+        sub=PERSON, app=APP, username=PERSON, groups=("household",), entitlements=("collection-manual",)
+    )
+
+
+async def test_with_no_audience_the_token_is_for_this_app_and_carries_its_own_entitlements(
+    app_side: Exchange, library_side: Exchange
+) -> None:
+    token = await app_side.token(f"as:{PERSON}")
+    asker = await app_side.verified(token)
+    assert asker is not None
+    assert (asker.sub, asker.app, asker.entitlements) == (PERSON, APP, ("room-helper", "notes:write"))
+    assert await library_side.verified(token) is None, "a token for this app is not the library's"
+
+
+async def test_a_token_for_another_audience_is_refused(app_side: Exchange, library_side: Exchange) -> None:
+    for_the_library = await app_side.token(f"as:{PERSON}", "library")
+    assert await app_side.verified(for_the_library) is None
+
+
+async def test_a_forged_token_is_refused(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    assert await app_side.verified(authentik.mint(APP, PERSON, key=other_key)) is None
+    genuine = authentik.mint(APP, PERSON)
+    head, _, signature = genuine.split(".")
+    tampered = authentik.mint(APP, "uid-someone-else").split(".")[1]
+    assert await app_side.verified(f"{head}.{tampered}.{signature}") is None
+    assert await app_side.verified(genuine) is not None
+
+
+async def test_an_expired_token_is_refused(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    assert await app_side.verified(authentik.mint(APP, PERSON, lifetime=-1)) is None
+
+
+async def test_a_token_signed_with_the_client_secret_is_refused(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    claims = jwt.decode(authentik.mint(APP, PERSON), options={"verify_signature": False})
+    assert await app_side.verified(jwt.encode(claims, SECRET, algorithm="HS256", headers={"kid": "x"})) is None
+
+
+async def test_a_token_that_names_no_asking_app_is_refused(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    assert await app_side.verified(authentik.mint(APP, PERSON, asker_claim=None)) is None
+
+
+async def test_a_token_from_another_issuer_is_routed_elsewhere(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    assert app_side.issued_here(authentik.mint(APP, PERSON))
+    assert not app_side.issued_here(authentik.mint("elsewhere", PERSON))
+    assert not app_side.issued_here("an-opaque-machine-token")
+
+
+async def test_a_person_whose_sign_in_ended_is_refused_as_a_401(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    authentik.signed_out.add(PERSON)
+    with pytest.raises(AuthenticationError):
+        await app_side.token(f"as:{PERSON}", "library")
+
+
+async def test_a_service_that_does_not_federate_this_app_is_a_503(app_side: Exchange) -> None:
+    with pytest.raises(ServiceUnavailableError) as refused:
+        await app_side.token(f"as:{PERSON}", "elsewhere")
+    assert refused.value.context["error"] == "invalid_target"
+
+
+async def test_a_wrong_client_secret_is_a_503(authentik: FakeAuthentik) -> None:
+    exchange = Exchange(_settings(authentik, secret="not-the-secret"))
+    try:
+        with pytest.raises(ServiceUnavailableError) as refused:
+            await exchange.token(f"as:{PERSON}")
+        assert refused.value.context["error"] == "invalid_client"
+    finally:
+        await exchange.aclose()
+
+
+async def test_an_unreachable_authentik_is_a_503_and_unreachable_keys_a_connection_error(
+    authentik: FakeAuthentik,
+) -> None:
+    token = authentik.mint(APP, PERSON)
+    exchange = Exchange(
+        ExchangeSettings(issuer="http://127.0.0.1:9/application/o/x/", client_id=APP, client_secret=SecretStr(SECRET))
+    )
+    try:
+        with pytest.raises(ServiceUnavailableError):
+            await exchange.token(f"as:{PERSON}")
+        with pytest.raises(ConnectionError):
+            await exchange.verified(token)
+    finally:
+        await exchange.aclose()
+
+
+async def test_unknown_keys_refetch_the_jwks_at_most_once_a_minute(
+    authentik: FakeAuthentik, app_side: Exchange
+) -> None:
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    for _ in range(5):
+        forged = jwt.encode(
+            jwt.decode(authentik.mint(APP, PERSON), options={"verify_signature": False}),
+            other_key,
+            algorithm="RS256",
+            headers={"kid": "a-kid-nobody-published"},
+        )
+        assert await app_side.verified(forged) is None
+    assert authentik.jwks_reads == 1
+
+
+async def test_a_request_with_no_forwarded_token_or_no_exchange_cannot_be_carried(
+    app_side: Exchange,
+) -> None:
+    with pytest.raises(ServiceUnavailableError) as absent:
+        await Asking(app_side, "").token("library")
+    assert absent.value.context == {"absent": "X-authentik-jwt"}
+    off = Exchange(ExchangeSettings())
+    try:
+        with pytest.raises(ServiceUnavailableError):
+            await Asking(off, f"as:{PERSON}").token("library")
+        assert await off.verified("anything") is None
+    finally:
+        await off.aclose()
+
+
+async def test_no_token_or_secret_reaches_a_log_line(
+    authentik: FakeAuthentik, app_side: Exchange, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    issued = await app_side.token(f"as:{PERSON}", "library")
+    authentik.signed_out.add(PERSON)
+    with pytest.raises(AuthenticationError):
+        await app_side.token(f"as:{PERSON}", "library")
+    logged = "\n".join(f"{record.getMessage()} {record.__dict__}" for record in caplog.records)
+    assert issued not in logged and SECRET not in logged and f"as:{PERSON}" not in logged
+
+
+async def test_a_service_route_hands_its_handler_the_asker(authentik: FakeAuthentik, library_side: Exchange) -> None:
+    """`CurrentAsker` on a route: the person another app asked for, from its bearer alone."""
+    service = FastAPI()
+    register_exception_handlers(service)
+    service.state.exchange = library_side
+
+    @service.get("/caller/whoami")
+    def whoami(asker: CurrentAsker) -> dict[str, object]:
+        return {"sub": asker.sub, "app": asker.app, "entitlements": list(asker.entitlements)}
+
+    minted = authentik.mint("library", PERSON, asked_by=APP)
+    async with AsyncClient(transport=ASGITransport(app=service), base_url="http://localhost") as client:
+        answered = await client.get("/caller/whoami", headers={"Authorization": f"Bearer {minted}"})
+        refused = await client.get("/caller/whoami", headers={"Authorization": f"Bearer {authentik.mint(APP, PERSON)}"})
+        missing = await client.get("/caller/whoami")
+    assert answered.status_code == 200
+    assert answered.json() == {"sub": PERSON, "app": APP, "entitlements": ["collection-manual"]}
+    assert (refused.status_code, missing.status_code) == (401, 401)

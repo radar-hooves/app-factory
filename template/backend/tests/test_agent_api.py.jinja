@@ -5,7 +5,9 @@ kit's driver spawns a genuine child exactly as it would spawn `claude`, and
 this suite asserts on the argv and environment the kit builds for this app
 rather than on a mock. A library room's `LibraryAgent` asks
 `tests/support/fake_library.py` over the api-clients `library` client, the
-library's caller door faked at its routes.
+library's caller door faked at its routes, as the person in the room: each
+request carries their `X-authentik-jwt`, which this app's exchange trades at
+`tests/support/fake_authentik.py` for a token for the library.
 
 A turn is a task that outlives its request, writing on its own connection,
 so this suite commits for real: its `client` overrides nothing, and every
@@ -25,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
+import jwt
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -38,10 +41,14 @@ from {{ package_name }}.api.agent.conversations import AgentConversation
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.db.session import get_session_factory
-from tests.support import fake_agent_cli, fake_library
+from {{ package_name }}.exchange import Asker, Asking, Exchange
+from tests.support import fake_agent_cli, fake_authentik, fake_library
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
+APP = "{{ project_name }}"
+EXCHANGE_SECRET = "fake-exchange-secret"
 ROOMS = """
 helper:
   title: The Helper
@@ -87,6 +94,21 @@ def library() -> Iterator[fake_library.FakeLibrary]:
 
 
 @pytest.fixture
+def authentik() -> Iterator[fake_authentik.FakeAuthentik]:
+    fake = fake_authentik.FakeAuthentik()
+    server = fake.serve()
+    fake.provider(APP, secret=EXCHANGE_SECRET)
+    fake.provider("library", federates=(APP,))
+    yield fake
+    server.shutdown()
+
+
+@pytest.fixture
+def exchange_settings(authentik: fake_authentik.FakeAuthentik) -> ExchangeSettings:
+    return ExchangeSettings(issuer=authentik.issuer(APP), client_id=APP, client_secret=SecretStr(EXCHANGE_SECRET))
+
+
+@pytest.fixture
 def agent_settings(personas_dir: Path, tmp_path: Path, library: fake_library.FakeLibrary) -> AgentSettings:
     rooms_file = tmp_path / "rooms.yaml"
     rooms_file.write_text(ROOMS)
@@ -98,17 +120,21 @@ def agent_settings(personas_dir: Path, tmp_path: Path, library: fake_library.Fak
         timeout_seconds=10.0,
         daily_questions=3,
         library_url=f"http://127.0.0.1:{library.port}",
-        library_token=SecretStr("caller-bearer"),
     )
 
 
 @pytest.fixture(autouse=True)
-def _configured(app: FastAPI, agent_settings: AgentSettings, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+async def _configured(
+    app: FastAPI, agent_settings: AgentSettings, exchange_settings: ExchangeSettings, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[None]:
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setattr(ask_module, "STOP_POLL_SECONDS", 0.05)
-    configured: Settings = get_settings().model_copy(update={"agent": agent_settings})
+    configured: Settings = get_settings().model_copy(update={"agent": agent_settings, "exchange": exchange_settings})
     app.dependency_overrides[get_settings] = lambda: configured
+    unconfigured, app.state.exchange = app.state.exchange, Exchange(exchange_settings)
     yield
+    await app.state.exchange.aclose()
+    app.state.exchange = unconfigured
     app.dependency_overrides.pop(get_settings, None)
 
 
@@ -128,8 +154,14 @@ async def _settled(timeout: float = 15.0) -> None:
 
 
 def _person(*grants: str) -> dict[str, str]:
+    """A fresh person's forward-auth headers, their `X-authentik-jwt` the subject the fake Authentik accepts."""
     uid = f"asker-{uuid.uuid4().hex[:12]}"
-    return {"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "|".join(grants)}
+    return {
+        "x-authentik-uid": uid,
+        "x-authentik-username": uid,
+        "x-authentik-entitlements": "|".join(grants),
+        "x-authentik-jwt": f"as:{uid}",
+    }
 
 
 def _events(body: str) -> list[dict[str, Any]]:
@@ -395,11 +427,11 @@ async def test_the_list_is_this_persons_own_in_this_room_most_recent_first(clien
     assert [(c["id"], c["title"]) for c in listed] == [(newer, "newer"), (older, "older")]
 
 
-async def test_rename_download_and_delete(client: AsyncClient, agent_settings: AgentSettings) -> None:
+async def test_rename_download_and_delete(client: AsyncClient, agent_settings: AgentSettings, app: FastAPI) -> None:
     who = _person("room-helper")
     conversation = _events((await _ask(client, "helper", "what is leave?", who)).text)[0]["session_id"]
     session = str(_row(conversation).session_id)
-    agent = rooms.agent(agent_settings, rooms.get(agent_settings, "helper"))
+    agent = await rooms.agent(agent_settings, rooms.get(agent_settings, "helper"), Asking(app.state.exchange, ""))
 
     renamed = await client.patch(f"/api/agent/conversations/{conversation}", json={"title": "Leave"}, headers=who)
     assert renamed.json()["title"] == "Leave"
@@ -483,6 +515,50 @@ async def test_a_library_room_asks_milton_with_its_preamble_and_reads_back_witho
     read = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
     assert read["turns"][0]["question"] == "How much leave?"
     assert read["turns"][0]["citations"][0]["document_id"] == fake_library.DOCUMENT_ID
+
+
+async def test_milton_is_asked_as_the_person_with_a_token_minted_for_the_library(
+    client: AsyncClient, library: fake_library.FakeLibrary, authentik: fake_authentik.FakeAuthentik
+) -> None:
+    """Every library call carries a token for the library naming this person and this app, never a secret of the app's."""
+    who = _person("room-manual")
+    conversation = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
+    await client.get(f"/api/agent/conversations/{conversation}", headers=who)
+    public = authentik.key.public_key()
+    issuer = authentik.issuer("library")
+    named = {
+        (claims["sub"], claims["client_id"])
+        for claims in (
+            jwt.decode(bearer, public, algorithms=["RS256"], audience="library", issuer=issuer)
+            for bearer in library.bearers
+        )
+    }
+    assert named == {(who["x-authentik-uid"], APP)}
+    assert (APP, "library") in authentik.exchanged
+
+
+async def test_a_library_room_without_the_persons_token_is_503_and_a_refused_person_401(
+    client: AsyncClient, authentik: fake_authentik.FakeAuthentik
+) -> None:
+    """A route nginx forwards no `X-authentik-jwt` to cannot carry anyone; an ended sign-in sends the page to sign in again."""
+    who = _person("room-manual")
+    unforwarded = {name: value for name, value in who.items() if name != "x-authentik-jwt"}
+    assert (await _ask(client, "manual", "leave?", unforwarded)).status_code == 503
+    authentik.signed_out.add(who["x-authentik-uid"])
+    assert (await _ask(client, "manual", "leave?", who)).status_code == 401
+    assert (await client.get("/api/agent/rooms", headers=who)).status_code == 401
+
+
+async def test_with_no_exchange_a_persona_answers_and_a_library_room_waits(client: AsyncClient, app: FastAPI) -> None:
+    """An app that has not set up its exchange still runs its personas, with no asker to present."""
+    configured, app.state.exchange = app.state.exchange, Exchange(ExchangeSettings())
+    try:
+        who = _person("room-helper", "room-manual")
+        assert "question=hello" in _said(_events((await _ask(client, "helper", "hello", who)).text))
+        assert (await _ask(client, "manual", "leave?", who)).status_code == 503
+    finally:
+        await app.state.exchange.aclose()
+        app.state.exchange = configured
 
 
 async def test_a_librarys_depth_reaches_milton(client: AsyncClient, library: fake_library.FakeLibrary) -> None:
@@ -711,3 +787,44 @@ async def test_the_headers_helper_presents_the_bearer_the_mcp_server_requires(
         assert (json.loads(ok)["status_code"], json.loads(refused)["status_code"]) == (200, 401)
     finally:
         server.shutdown()
+
+
+# ── A persona carries the asker to this app's own /mcp ─────────────────────
+
+
+class _Recording(BaseHTTPRequestHandler):
+    presented: list[str]
+
+    def do_GET(self) -> None:
+        self.presented.append(self.headers.get("Authorization") or "")
+        self.send_response(200)
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Silence: the default logs every request to stderr."""
+
+
+async def test_a_persona_turn_presents_a_token_naming_the_person_who_asked(
+    client: AsyncClient, personas_dir: Path, app: FastAPI
+) -> None:
+    """`ASKER_TOKEN` reaches the turn's environment alone, and its `.mcp.json` presents it: the asker, verified here."""
+    presented: list[str] = []
+    server = HTTPServer(("127.0.0.1", 0), type("_Recorder", (_Recording,), {"presented": presented}))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/mcp/"
+        mcp = {"app": {"type": "http", "url": url, "headers": {"Authorization": "Bearer ${ASKER_TOKEN}"}}}
+        (personas_dir / "helper" / ".mcp.json").write_text(json.dumps({"mcpServers": mcp}))
+        who = _person("room-helper")
+        answered = _said(_events((await _ask(client, "helper", fake_agent_cli.MCP_PROBE_TRIGGER, who)).text))
+        assert json.loads(answered)["status_code"] == 200
+    finally:
+        server.shutdown()
+    [bearer] = presented
+    assert bearer.startswith("Bearer ")
+    asker = await app.state.exchange.verified(bearer.removeprefix("Bearer "))
+    assert asker == Asker(
+        sub=who["x-authentik-uid"], app=APP, username=who["x-authentik-uid"], groups=(), entitlements=()
+    )

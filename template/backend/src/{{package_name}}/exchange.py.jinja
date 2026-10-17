@@ -1,0 +1,254 @@
+"""Who is asking, carried from this app to a household service and to its own tools.
+
+The factory's one way to carry a person is an Authentik token exchange (RFC
+8693; the operator's ruling of 17/10/2026, radar-hooves/master-project#380). A
+signed-in person's forward-auth answer carries `X-authentik-jwt`, this app's
+proxy provider's access token for them, which nginx forwards on the routes
+that exchange. That token opens the whole website, so it never leaves this
+process. `Asking.token` trades it in one back-channel POST, authenticated as
+this app's exchange client (`client_id` this app's name, its secret vended),
+for a short-lived token naming one household service as its `audience`. With
+no audience the token is for this app itself, and a persona's tools present
+it to `/mcp`.
+
+`Exchange.verified` is the other side, the one a service runs. It checks a
+token minted for THIS app, by whichever app asked, against this app's own
+issuer and JWKS, and returns the `Asker`: the person, the app that asked, and
+the person's groups and entitlements on this app. Those are the entitlements
+its pages gate on, so a page and a persona share one vocabulary. The service
+decides what that admits.
+
+Authentik derives `iss` from the host a request reached it on, so every app
+exchanges at the issuer's own origin. Design: app-factory
+`docs/design/exchange.md`.
+"""
+
+import logging
+import time
+import urllib.parse
+from dataclasses import dataclass
+from typing import Annotated, Any
+
+import httpx
+import jwt
+from fastapi import Depends
+from starlette.requests import Request
+
+from {{ package_name }}.config import Settings, get_settings
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
+from {{ package_name }}.exceptions import AuthenticationError, ServiceUnavailableError
+
+logger = logging.getLogger(__name__)
+
+GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
+_SUBJECT_TYPE = "urn:ietf:params:oauth:token-type:access_token"
+#: `asker` is the estate's one scope mapping (app-factory `authentik/exchange.py`):
+#: the person's entitlements on the app a token is for, and the app that asked.
+SCOPE = "openid profile asker"
+#: The variable a persona's `.mcp.json` presents: `"Authorization": "Bearer ${ASKER_TOKEN}"`.
+ASKER_TOKEN = "ASKER_TOKEN"
+#: Without these a token names no asker.
+_REQUIRED = ["exp", "iat", "iss", "aud", "sub", "client_id"]
+#: An unknown `kid` refetches the JWKS at most this often, so a stream of
+#: forged tokens costs Authentik one request a minute.
+_JWKS_REFRESH_SECONDS = 60.0
+_TIMEOUT_SECONDS = 5.0
+_ISSUER_ENV = "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER"
+_NOT_CARRIED = "This app cannot carry you to that service yet"
+
+
+@dataclass(frozen=True, slots=True)
+class Asker:
+    """A person, as a token minted for this app vouches for them.
+
+    `sub` is their `X-authentik-uid` (`users.authentik_uid`). `app` is the
+    client that asked: this app's own name for its own persona.
+    `entitlements` are theirs on this app's application, read as a route
+    reads `Identity.entitlements` (`entitlements.has_module`).
+    """
+
+    sub: str
+    app: str
+    username: str
+    groups: tuple[str, ...]
+    entitlements: tuple[str, ...]
+
+
+class Exchange:
+    """This app's exchange client and verifier: one per app, on `app.state.exchange`."""
+
+    def __init__(self, settings: ExchangeSettings, transport: httpx.AsyncBaseTransport | None = None) -> None:
+        self.issuer = settings.issuer
+        self.client_id = settings.client_id
+        self._secret = settings.client_secret.get_secret_value()
+        self._token_url = urllib.parse.urljoin(self.issuer, "../token/")
+        self._jwks_url = urllib.parse.urljoin(self.issuer, "jwks/")
+        self._client = httpx.AsyncClient(transport=transport, timeout=_TIMEOUT_SECONDS)
+        self._keys: dict[str, Any] = {}
+        self._fetch_after = 0.0
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.issuer)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def token(self, subject: str, audience: str | None = None) -> str:
+        """Trade a person's `X-authentik-jwt` for a token for `audience`, or for this app with none.
+
+        Raises:
+            AuthenticationError: Authentik refused the person (`invalid_grant`):
+                their sign-in has ended, or a policy turned them away.
+            ServiceUnavailableError: Authentik is unreachable, or refused this
+                app itself (its secret, or a service that does not federate it).
+        """
+        target = audience or self.client_id
+        form = {
+            "grant_type": GRANT,
+            "client_id": self.client_id,
+            "client_secret": self._secret,
+            "subject_token": subject,
+            "subject_token_type": _SUBJECT_TYPE,
+            "scope": SCOPE,
+        }
+        if audience:
+            form["audience"] = audience
+        try:
+            response = await self._client.post(self._token_url, data=form)
+        except httpx.HTTPError as exc:
+            raise ServiceUnavailableError("The identity provider is unreachable", context={"audience": target}) from exc
+        answer = _json(response)
+        issued = answer.get("access_token")
+        if response.status_code == 200 and isinstance(issued, str) and issued:
+            return issued
+        error = str(answer.get("error") or response.status_code)
+        if error == "invalid_grant":
+            raise AuthenticationError(
+                "Your sign-in does not reach that service; sign in again", context={"audience": target}
+            )
+        raise ServiceUnavailableError(_NOT_CARRIED, context={"audience": target, "error": error})
+
+    def issued_here(self, token: str) -> bool:
+        """Whether `token` names this app's issuer, read unverified: which check it gets, never whether it passes."""
+        if not self.configured:
+            return False
+        try:
+            return bool(jwt.decode(token, options={"verify_signature": False}).get("iss") == self.issuer)
+        except jwt.PyJWTError:
+            return False
+
+    async def verified(self, token: str) -> Asker | None:
+        """The asker `token` names if it is genuinely this app's; None for any other token.
+
+        RS256 from this app's own JWKS alone. A token signed with a client
+        secret, minted for another audience or by another issuer, expired, or
+        missing a claim that names the asker is refused.
+
+        Raises:
+            ConnectionError: the JWKS could not be fetched.
+        """
+        if not self.configured:
+            return None
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.PyJWTError:
+            return None
+        if header.get("alg") != "RS256" or not header.get("kid"):
+            return None
+        key = await self._key(str(header["kid"]))
+        if key is None:
+            return None
+        try:
+            claims = jwt.decode(
+                token,
+                key,
+                algorithms=["RS256"],
+                audience=self.client_id,
+                issuer=self.issuer,
+                options={"require": _REQUIRED},
+            )
+        except jwt.PyJWTError:
+            return None
+        return Asker(
+            sub=str(claims["sub"]),
+            app=str(claims["client_id"]),
+            username=str(claims.get("preferred_username") or ""),
+            groups=_names(claims.get("groups")),
+            entitlements=_names(claims.get("entitlements")),
+        )
+
+    async def _key(self, kid: str) -> Any:
+        if kid not in self._keys and time.monotonic() >= self._fetch_after:
+            try:
+                response = await self._client.get(self._jwks_url)
+                response.raise_for_status()
+                keys = jwt.PyJWKSet.from_dict(response.json()).keys
+            except (httpx.HTTPError, ValueError, jwt.PyJWTError) as exc:
+                raise ConnectionError("The identity provider's signing keys are unreachable") from exc
+            self._keys = {key.key_id: key.key for key in keys if key.key_id}
+            self._fetch_after = time.monotonic() + _JWKS_REFRESH_SECONDS
+        return self._keys.get(kid)
+
+
+@dataclass(frozen=True, slots=True)
+class Asking:
+    """The person on this request, and the exchange that carries them to a service or to this app's tools."""
+
+    exchange: Exchange
+    #: Their `X-authentik-jwt`; empty where this route's nginx location forwards none.
+    subject: str
+
+    async def token(self, audience: str | None = None) -> str:
+        """A short-lived token naming this person, for `audience` or for this app with none.
+
+        Raises:
+            ServiceUnavailableError: no exchange is configured, or this route's
+                location forwards no `X-authentik-jwt`; as `Exchange.token` otherwise.
+            AuthenticationError: as `Exchange.token`.
+        """
+        if not self.exchange.configured:
+            raise ServiceUnavailableError(_NOT_CARRIED, context={"unset": _ISSUER_ENV})
+        if not self.subject:
+            raise ServiceUnavailableError(_NOT_CARRIED, context={"absent": "X-authentik-jwt"})
+        return await self.exchange.token(self.subject, audience)
+
+
+def get_asking(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> Asking:
+    """The person on this request, ready to be carried."""
+    exchange: Exchange = request.app.state.exchange
+    return Asking(exchange, request.headers.get(settings.identity.authentik_jwt_header, ""))
+
+
+async def get_asker(request: Request) -> Asker:
+    """The asker a service route's bearer names, for a token minted for this app.
+
+    Raises:
+        AuthenticationError: no bearer, or one this app did not mint for itself.
+        ServiceUnavailableError: Authentik's signing keys are out of reach.
+    """
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    exchange: Exchange = request.app.state.exchange
+    try:
+        asker = await exchange.verified(token.strip()) if scheme.lower() == "bearer" and token.strip() else None
+    except ConnectionError as exc:
+        raise ServiceUnavailableError("The identity provider is unreachable") from exc
+    if asker is None:
+        raise AuthenticationError("A bearer minted for this app is required")
+    return asker
+
+
+CurrentAsking = Annotated[Asking, Depends(get_asking)]
+CurrentAsker = Annotated[Asker, Depends(get_asker)]
+
+
+def _json(response: httpx.Response) -> dict[str, Any]:
+    try:
+        body = response.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _names(value: object) -> tuple[str, ...]:
+    return tuple(str(name) for name in value) if isinstance(value, list) else ()

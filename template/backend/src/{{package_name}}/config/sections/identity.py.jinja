@@ -25,6 +25,7 @@ Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_GROUPS_HEADER
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_MACHINE_GROUP
     {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_ACTS_AS_HEADER
+    {{ project_name | upper | replace('-', '_') }}_AUTHENTIK_JWT_HEADER
 """
 
 from __future__ import annotations
@@ -93,3 +94,9 @@ class IdentitySettings(BaseSettings):
     # person signing in for the first time" from "a machine that should have
     # been refused" — see deps.py and master-project#291.
     authentik_acts_as_header: str = "x-authentik-acts-as"
+
+    # The person's forward-auth token, this app's proxy provider's access token
+    # for them. It opens the whole website, so nginx forwards it only on the
+    # routes that trade it for a service's token (exchange.py), and nothing
+    # here sends it on.
+    authentik_jwt_header: str = "x-authentik-jwt"

@@ -13,6 +13,10 @@ The three layers a request passes through, each answering exactly ONE question
 Conflating any two of them is how an app comes to define "person" as "tenant" and
 a second household member signs in to an empty app.
 
+Carrying a person across apps (exchange.py): CurrentAsking is this request's
+person, to trade for a service's token; CurrentAsker is the person a service
+route's bearer names, minted for this app by whichever app asked.
+
 The identity and workspace dependencies are DEFINED in their own slices and
 re-exported here, so routes have one import while the dependency graph still
 flows one way (slices never import this module).
@@ -37,6 +41,7 @@ from {{ package_name }}.api.workspaces.dependencies import (
 )
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.db.session import get_session
+from {{ package_name }}.exchange import Asker, Asking, CurrentAsker, CurrentAsking
 
 # scope="function": FastAPI's default for a yield dependency ("request" scope)
 # runs the code after `yield` -- get_session's commit -- AFTER the response
@@ -50,6 +55,10 @@ SessionDep = Annotated[Session, Depends(get_session, scope="function")]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 __all__ = [
+    "Asker",
+    "Asking",
+    "CurrentAsker",
+    "CurrentAsking",
     "CurrentIdentity",
     "CurrentUser",
     "CurrentWorkspace",

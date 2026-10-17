@@ -14,8 +14,12 @@ dependencies = [
     "sqlalchemy>=2.0.50",
     "alembic>=1.18.4",
     "psycopg[binary]>=3.3.4",
-    # httpx: the MCP bearer gate's userinfo client (mcp/http_auth.py).
+    # httpx: the MCP bearer gate's userinfo client (mcp/http_auth.py), and the
+    # token exchange's client (exchange.py).
     "httpx>=0.28.1",
+    # pyjwt: exchange.py verifies a token minted for this app against its JWKS
+    # (RS256, through cryptography below).
+    "pyjwt>=2.13.0",
     # cryptography: config/vend.py's in-process P-256 attest signer -- this
     # app's own software identity key, never portcullis.
     "cryptography>=42.0.0",

@@ -16,6 +16,9 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
     app-side and resolves it against an actors.yaml allow-list. It does NOT
     trust a forwarded identity header: a machine caller does not traverse the
     human proxy, so header trust there would be a bypass. See mcp/http_auth.py.
+    A bearer this app's own exchange issued names a person instead (a
+    persona's asker, or another app asking for one), verified from the JWKS
+    with no allow-list row. See exchange.py.
     An app that is itself an authority for machine identity gates it through
     `app_hooks.mcp_auth` instead; everything else here is unchanged.
 """
@@ -48,6 +51,7 @@ from {{ package_name }}.config.paths import frontend_build_dir
 from {{ package_name }}.db.session import get_engine, get_session_factory
 from {{ package_name }}.elements import register_elements
 from {{ package_name }}.exceptions import register_exception_handlers
+from {{ package_name }}.exchange import Exchange
 from {{ package_name }}.logging import app_version, configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from {{ package_name }}.mcp.server import create_mcp_server
@@ -190,6 +194,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # request/response tool surface: no cross-request session state, no
     # server-initiated streaming. (In-request progress still works.)
     raw_mcp_app = mcp.http_app(path="/", stateless_http=True)
+    # This app's exchange client and verifier (exchange.py): the routes that
+    # carry a person to a service read it off app.state, and the /mcp gate
+    # admits the people it verifies.
+    exchange = Exchange(settings.exchange)
+    if not exchange.configured:
+        _log.warning(
+            "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER is unset: library rooms answer 503 "
+            "and personas reach /mcp as no one. Set it to this app's exchange provider's issuer."
+        )
     # app_hooks.mcp_auth gates /mcp for an app that is its own machine-identity
     # authority; every other app gets the Authentik bearer gate.
     app_mcp_auth = getattr(app_hooks, "mcp_auth", None)
@@ -202,11 +215,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             userinfo_url=settings.mcp.oidc_userinfo_url,
             identity_claim=settings.mcp.oidc_identity_claim,
             resource_metadata_url=settings.mcp.oidc_resource_metadata_url,
+            asker=exchange,
         )
         if not settings.mcp.oidc_userinfo_url:
             _log.warning(
                 "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset: the /mcp surface is closed "
-                "(every HTTP request 401s). Set it to your Authentik userinfo endpoint to open it."
+                "to machine callers (each one 401s). Set it to your Authentik userinfo endpoint to open it."
             )
 
     @asynccontextmanager
@@ -233,6 +247,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await aclose()
                 except Exception:
                     _log.exception("Failed to close the MCP bearer gate's userinfo client")
+            try:
+                await exchange.aclose()
+            except Exception:
+                _log.exception("Failed to close the exchange's client")
 
     app = FastAPI(
         title="{{ project_title }}",
@@ -255,6 +273,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # through configure_logging() above.
         debug=False,
     )
+    app.state.exchange = exchange
     # FastAPI server spans, whenever OTEL_EXPORTER_OTLP_ENDPOINT is set; a no-op otherwise.
     instrument_app(app)
     register_exception_handlers(app)

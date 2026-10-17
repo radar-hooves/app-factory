@@ -26,6 +26,7 @@ from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.entitlements import ROOM_PREFIX
 from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
+from {{ package_name }}.exchange import ASKER_TOKEN, Asking
 
 logger = logging.getLogger(__name__)
 
@@ -91,18 +92,26 @@ def get(settings: AgentSettings, room_id: str) -> Room:
     return room
 
 
-def agent(settings: AgentSettings, room: Room) -> Agent:
-    """The agent that answers in `room`: its persona, or Milton over its collections.
+async def agent(settings: AgentSettings, room: Room, asking: Asking, *, turn: bool = False) -> Agent:
+    """The agent that answers in `room` for the person `asking` names: its persona, or Milton.
+
+    Milton is asked with a token the exchange mints for this person, with the
+    library as its audience. A persona's `turn` carries one minted for this
+    app in its environment as `ASKER_TOKEN`, which its `.mcp.json` presents
+    to this app's `/mcp`. A deployment with no exchange runs its personas
+    without one.
 
     Raises:
-        ServiceUnavailableError: a library room, and this deployment names no library.
+        ServiceUnavailableError: a library room, and this deployment names no
+            library or cannot carry the person to it.
+        AuthenticationError: Authentik refused the person.
     """
     if room.library is not None:
         if not settings.library_url:
             raise ServiceUnavailableError(
                 "Milton is not available here yet", context={"room": room.id, "unset": _LIBRARY_URL}
             )
-        token = settings.library_token.get_secret_value()
+        token = await asking.token(settings.library_audience)
 
         async def bearer() -> str:
             return token
@@ -115,7 +124,8 @@ def agent(settings: AgentSettings, room: Room) -> Agent:
             timeout_seconds=settings.timeout_seconds,
         )
     assert room.persona is not None
-    return LocalAgent(settings.driver(), persona_module.load(settings, room.persona))
+    run_env = {ASKER_TOKEN: await asking.token()} if turn and asking.exchange.configured else {}
+    return LocalAgent(settings.driver(), persona_module.load(settings, room.persona), run_env=run_env)
 
 
 @functools.lru_cache(maxsize=8)

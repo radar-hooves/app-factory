@@ -19,6 +19,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.config.sections.feedback import FeedbackSettings
 from {{ package_name }}.config.sections.files import FilesSettings
 from {{ package_name }}.config.sections.identity import IdentitySettings
@@ -107,6 +108,8 @@ class Settings(BaseSettings):
     agent: AgentSettings = Field(default_factory=AgentSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     example: ExampleSettings = Field(default_factory=ExampleSettings)
+    # This app's exchange client (exchange.py). No issuer turns it off.
+    exchange: ExchangeSettings = Field(default_factory=ExchangeSettings)
     # Where a reported feedback issue is filed. Empty repo disables filing.
     feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
     # This app's Nextcloud-backed file store. Empty NEXTCLOUD_URL disables
@@ -142,6 +145,7 @@ def get_settings() -> Settings:
         return Settings(
             database=DatabaseSettings(),
             example=ExampleSettings(),
+            exchange=ExchangeSettings(),
             feedback=FeedbackSettings(),
             files=FilesSettings(),
             identity=IdentitySettings(),

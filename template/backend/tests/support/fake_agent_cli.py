@@ -33,8 +33,9 @@ rows; this fakes the size, not the frame shape, since the size is the whole
 defect.
 
 A question of exactly `__mcp_probe__` does something else again: it reads
-the `--mcp-config` file this process was handed, runs the one server
-entry's `headersHelper` command exactly as the real CLI's own
+the `--mcp-config` file this process was handed, expands `${VAR}` in the one
+server entry's `headers` from this process's environment, runs its
+`headersHelper` command exactly as the real CLI's own
 (Zod-validated) `headersHelper` field is described -- a shell command whose
 stdout is a JSON object of header key/value strings -- and makes one real
 HTTP GET at the server's `url` with those headers. This is what proves a
@@ -151,7 +152,9 @@ def _probe_mcp(argv: list[str]) -> dict[str, object]:
         started.wait(timeout=10)
         return {"server": name, "answer": answer}
 
-    headers: dict[str, str] = dict(server.get("headers") or {})
+    # Claude Code expands `${VAR}` in a header from its own environment
+    # (measured on 2.1.283: a persona's `Bearer ${ASKER_TOKEN}`).
+    headers: dict[str, str] = {name: os.path.expandvars(value) for name, value in (server.get("headers") or {}).items()}
     helper = server.get("headersHelper")
     if helper:
         completed = subprocess.run(helper, shell=True, capture_output=True, text=True, check=True)

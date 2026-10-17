@@ -5,7 +5,8 @@ builds, type-checks, and renders perfectly. Only driving a request at it proves
 it refuses. Every case here asserts the OUTCOME of a real request through the
 gate, never that the module imports.
 
-The userinfo endpoint is faked with httpx.MockTransport, so no identity
+The userinfo endpoint is faked with httpx.MockTransport, and the token
+exchange's issuer by `tests/support/fake_authentik.py`, so no identity
 provider is needed to run these.
 
 The tool these drive is registered by THIS FILE (`_probe_tool`), never by the
@@ -16,12 +17,17 @@ and the test punished it for that.
 """
 
 import json
+from collections.abc import Iterator
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from pydantic import SecretStr
 
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
+from tests.support.fake_authentik import FakeAuthentik
 
 USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
 
@@ -42,6 +48,43 @@ async def _inner_app(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+async def _asker_echo(scope, receive, send):
+    """A stand-in for the FastMCP app: echoes the person and the x-client-id the gate handed on."""
+    headers = {name.decode(): value.decode() for name, value in scope.get("headers", [])}
+    body = json.dumps({"asker": scope.get("asker"), "client_id": headers.get("x-client-id")}).encode()
+    await send(
+        {"type": "http.response.start", "status": 200, "headers": [(b"content-length", str(len(body)).encode())]}
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+class _Askers:
+    """This app's exchange as the gate sees it: `asker.*` bearers are its own, and only `asker.good` verifies."""
+
+    def __init__(self, *, unreachable: bool = False) -> None:
+        self.unreachable = unreachable
+
+    def issued_here(self, token: str) -> bool:
+        return token.startswith("asker.")
+
+    async def verified(self, token: str) -> object | None:
+        if self.unreachable:
+            raise ConnectionError("keys unreachable")
+        return "the person" if token == "asker.good" else None
+
+
+def _bearer(token: str) -> str:
+    return "Bearer " + token
+
+
+def _recording_userinfo(asked: list[str]) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        return httpx.Response(200, json={"preferred_username": "mcp-service"})
+
+    return httpx.MockTransport(handler)
 
 
 def _userinfo_transport(claims: dict[str, object] | None, status: int = 200) -> httpx.MockTransport:
@@ -145,6 +188,48 @@ async def test_unreachable_provider_is_503_not_open():
 
 
 @pytest.mark.unit
+async def test_an_askers_bearer_reaches_the_app_as_its_person_without_asking_userinfo():
+    """A bearer this app's exchange issued is verified by it alone, and hands the app a person, not a client id."""
+    asked: list[str] = []
+    gated = require_bearer_auth(
+        _asker_echo, userinfo_url=USERINFO_URL, asker=_Askers(), transport=_recording_userinfo(asked)
+    )
+    response = await _call(gated, {"Authorization": _bearer("asker.good"), "x-client-id": "local-console"})
+    assert response.status_code == 200
+    assert response.json() == {"asker": "the person", "client_id": None}
+    assert asked == []
+
+
+@pytest.mark.unit
+async def test_an_askers_bearer_that_does_not_verify_is_refused_never_tried_at_userinfo():
+    """A forged, expired or misaddressed asker's bearer is a 401, not a second chance as a machine."""
+    asked: list[str] = []
+    gated = require_bearer_auth(
+        _asker_echo, userinfo_url=USERINFO_URL, asker=_Askers(), transport=_recording_userinfo(asked)
+    )
+    response = await _call(gated, {"Authorization": _bearer("asker.forged")})
+    assert response.status_code == 401
+    assert asked == []
+
+
+@pytest.mark.unit
+async def test_unreachable_signing_keys_are_503_not_open():
+    gated = require_bearer_auth(_asker_echo, userinfo_url="", asker=_Askers(unreachable=True))
+    response = await _call(gated, {"Authorization": _bearer("asker.good")})
+    assert response.status_code == 503
+
+
+@pytest.mark.unit
+async def test_a_machines_bearer_still_goes_to_userinfo_beside_the_exchange():
+    asked: list[str] = []
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, asker=_Askers(), transport=_recording_userinfo(asked)
+    )
+    response = await _call(gated, {"Authorization": _bearer("a-machine-token")})
+    assert (response.status_code, response.text, asked) == (200, "mcp-service", [USERINFO_URL])
+
+
+@pytest.mark.unit
 def test_actor_registry_refuses_unregistered_identity(tmp_path):
     """The allow-list is load-bearing: an unregistered identity raises."""
     config = tmp_path / "actors.yaml"
@@ -222,7 +307,14 @@ def _probe_tool(monkeypatch):
             """Echo the identity the bearer gate injected. Authorises nothing."""
             from fastmcp.server.dependencies import get_http_headers
 
-            return {"client_id": get_http_headers().get("x-client-id", "<absent>")}
+            from {{ package_name }}.mcp.auth import current_asker, resolve_actor
+
+            asker = current_asker()
+            return {
+                "client_id": get_http_headers().get("x-client-id", "<absent>"),
+                "asker": f"{asker.sub} via {asker.app}: {'|'.join(asker.entitlements)}" if asker else "<none>",
+                "actor": f"{resolve_actor().type} {resolve_actor().id}" if asker else "<machine>",
+            }
 
         return server
 
@@ -431,3 +523,79 @@ async def test_proxy_headers_do_not_open_the_mcp_surface():
             json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         )
     assert response.status_code == 401
+
+
+# ── A persona presents its asker's token: the tool sees the person ─────────
+
+APP = "{{ project_name }}"
+PERSON = "uid-asker-0001"
+
+
+@pytest.fixture
+def _configured_exchange(monkeypatch, _probe_tool) -> Iterator[FakeAuthentik]:
+    """Point the app's exchange at a fake Authentik; no userinfo URL, so no machine bearer passes."""
+    fake = FakeAuthentik()
+    server = fake.serve()
+    fake.provider(APP, secret="fake-exchange-secret")
+    fake.provider("another-app", secret="another-secret")
+    fake.entitlements[(PERSON, APP)] = ["notes:write"]
+
+    from {{ package_name }} import main as main_module
+    from {{ package_name }}.config import get_settings
+
+    configured = get_settings().model_copy(deep=True)
+    configured.exchange = ExchangeSettings(
+        issuer=fake.issuer(APP), client_id=APP, client_secret=SecretStr("fake-exchange-secret")
+    )
+    monkeypatch.setattr(main_module, "get_settings", lambda: configured)
+    yield fake
+    server.shutdown()
+
+
+@pytest.mark.integration
+async def test_a_personas_asker_token_reaches_the_tool_as_the_person_who_asked(_configured_exchange):
+    """The persona's `ASKER_TOKEN`, minted for this app, is the person at the tool: no actors.yaml row."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, _configured_exchange.mint(APP, PERSON))
+    assert result["isError"] is False, result
+    assert result["structuredContent"] == {
+        "client_id": "<absent>",
+        "asker": f"{PERSON} via {APP}: notes:write",
+        "actor": f"person {PERSON}",
+    }
+
+
+@pytest.mark.integration
+async def test_a_token_another_app_asked_for_names_that_app(_configured_exchange):
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, _configured_exchange.mint(APP, PERSON, asked_by="another-app"))
+    assert result["structuredContent"]["asker"] == f"{PERSON} via another-app: notes:write"
+
+
+@pytest.mark.integration
+async def test_a_forged_or_expired_asker_token_never_reaches_mcp(_configured_exchange):
+    from {{ package_name }}.main import create_app
+
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    app = create_app()
+    async with app.router.lifespan_context(app), _client(app) as client:
+        for token in (
+            _configured_exchange.mint(APP, PERSON, key=other_key),
+            _configured_exchange.mint(APP, PERSON, lifetime=-1),
+        ):
+            response = await client.post(
+                "/mcp/",
+                headers={
+                    "content-type": "application/json",
+                    "accept": "application/json, text/event-stream",
+                    "Authorization": f"Bearer {token}",
+                },
+                json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            )
+            assert response.status_code == 401

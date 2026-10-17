@@ -54,6 +54,7 @@ from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, Identity, SessionDep, SettingsDep
 from {{ package_name }}.entitlements import gate, has_module, require_module
 from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
+from {{ package_name }}.exchange import Asking, CurrentAsking
 
 router = APIRouter()
 
@@ -100,12 +101,12 @@ def shared(room: EnteredRoom, conversation_id: str, turn: int, db: SessionDep) -
 SharedAnswer = Annotated[Owned, Depends(shared)]
 
 
-async def _documents_to(agent_settings: AgentSettings, room: Room) -> datetime.date | None:
+async def _documents_to(agent_settings: AgentSettings, room: Room, asking: Asking) -> datetime.date | None:
     """How current `room` is, or None for a persona room or a library room this deployment has not set up yet."""
     if room.library is None:
         return None
     try:
-        agent = rooms.agent(agent_settings, room)
+        agent = await rooms.agent(agent_settings, room, asking)
     except ServiceUnavailableError:
         return None
     assert isinstance(agent, LibraryAgent)
@@ -113,7 +114,7 @@ async def _documents_to(agent_settings: AgentSettings, room: Room) -> datetime.d
 
 
 @router.get("/rooms", operation_id="listRooms")
-async def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[RoomRead]:
+async def list_rooms(identity: CurrentIdentity, settings: SettingsDep, asking: CurrentAsking) -> list[RoomRead]:
     """The rooms this app offers that this caller is granted; none when the app offers none."""
     granted = [
         room for room in rooms.load(settings.agent).values() if has_module(identity.entitlements, room.entitlement)
@@ -121,7 +122,7 @@ async def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[R
     documents_to = dict(
         zip(
             (room.id for room in granted),
-            await asyncio.gather(*(_documents_to(settings.agent, room) for room in granted)),
+            await asyncio.gather(*(_documents_to(settings.agent, room, asking) for room in granted)),
             strict=True,
         )
     )
@@ -142,7 +143,7 @@ async def list_rooms(identity: CurrentIdentity, settings: SettingsDep) -> list[R
 
 @router.post("/rooms/{room_id}/ask", operation_id="askRoom")
 async def ask(
-    room: EnteredRoom, request: Request, identity: CurrentIdentity, settings: SettingsDep
+    room: EnteredRoom, request: Request, identity: CurrentIdentity, settings: SettingsDep, asking: CurrentAsking
 ) -> StreamingResponse:
     """Ask the room's agent, streaming its events; JSON, or multipart with `files[]`.
 
@@ -156,7 +157,7 @@ async def ask(
         get_session_factory(),
         settings.agent,
         room,
-        rooms.agent(settings.agent, room),
+        await rooms.agent(settings.agent, room, asking, turn=True),
         user_id=identity.user.id,
         exempt=has_module(identity.entitlements, "admin"),
         question=body.question,
@@ -174,9 +175,9 @@ def list_conversations(room: EnteredRoom, identity: CurrentIdentity, db: Session
 
 
 @router.get("/rooms/{room_id}/documents/{document_id}", operation_id="getRoomDocument")
-async def document(room: EnteredRoom, document_id: int, settings: SettingsDep) -> DocumentRead:
+async def document(room: EnteredRoom, document_id: int, settings: SettingsDep, asking: CurrentAsking) -> DocumentRead:
     """A document a library room cited, section by section; absent outside the room's collections."""
-    agent = rooms.agent(settings.agent, room)
+    agent = await rooms.agent(settings.agent, room, asking)
     found = await agent.document(document_id) if isinstance(agent, LibraryAgent) else None
     if found is None:
         raise NotFoundError("No such document")
@@ -184,9 +185,9 @@ async def document(room: EnteredRoom, document_id: int, settings: SettingsDep) -
 
 
 @router.get("/conversations/{conversation_id}", operation_id="getConversation")
-async def read(owned: OwnedConversation, settings: SettingsDep) -> ConversationRead:
+async def read(owned: OwnedConversation, settings: SettingsDep, asking: CurrentAsking) -> ConversationRead:
     """The conversation, every question asked, each with the answer the agent holds."""
-    turns = await _turns(owned, settings)
+    turns = await _turns(owned, settings, asking)
     return ConversationRead(
         **_summary(owned.conversation).model_dump(),
         turns=[_stored(owned.conversation, turns, position) for position in range(len(turns))],
@@ -201,10 +202,10 @@ def rename(owned: OwnedConversation, body: RenameRequest, db: SessionDep) -> Con
 
 
 @router.delete("/conversations/{conversation_id}", operation_id="deleteConversation", status_code=204)
-async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep) -> None:
+async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep, asking: CurrentAsking) -> None:
     """Forget the conversation: the agent's transcript first, then the row, so a failure leaves it listed."""
     if owned.conversation.session_id:
-        await rooms.agent(settings.agent, owned.room).forget(owned.conversation.session_id)
+        await (await rooms.agent(settings.agent, owned.room, asking)).forget(owned.conversation.session_id)
 
     def forget() -> None:
         db.delete(owned.conversation)
@@ -214,12 +215,12 @@ async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep
 
 
 @router.get("/conversations/{conversation_id}/export", operation_id="exportConversation")
-async def export(owned: OwnedConversation, settings: SettingsDep) -> Response:
+async def export(owned: OwnedConversation, settings: SettingsDep, asking: CurrentAsking) -> Response:
     """The conversation as Markdown, as a file to keep."""
     text = conversations.markdown(
         owned.conversation.title,
         owned.room.title,
-        await _turns(owned, settings),
+        await _turns(owned, settings, asking),
         ZoneInfo(settings.agent.quota_timezone),
     )
     name = urllib.parse.quote(f"{owned.conversation.title[:60].strip() or 'Conversation'}.md")
@@ -237,15 +238,17 @@ def stop(owned: OwnedConversation, db: SessionDep) -> None:
 
 
 @router.put("/conversations/{conversation_id}/turns/{turn}/mark", operation_id="markAnswer", status_code=204)
-async def mark(owned: OwnedConversation, turn: int, body: MarkRequest, settings: SettingsDep) -> None:
+async def mark(
+    owned: OwnedConversation, turn: int, body: MarkRequest, settings: SettingsDep, asking: CurrentAsking
+) -> None:
     """Mark answer `turn` (its place in the conversation as read) helpful or not, in a library room.
 
     The page counts every question asked; the library counts the answers it
     holds. This maps one onto the other, so a question stopped before the
     agent took it does not shift the mark onto a neighbour.
     """
-    agent = rooms.agent(settings.agent, owned.room)
-    turns = await _turns(owned, settings)
+    agent = await rooms.agent(settings.agent, owned.room, asking)
+    turns = await _turns(owned, settings, asking)
     index = turns[turn].agent_index if 0 <= turn < len(turns) else None
     session = owned.conversation.session_id
     if not isinstance(agent, LibraryAgent) or index is None or session is None:
@@ -255,13 +258,15 @@ async def mark(owned: OwnedConversation, turn: int, body: MarkRequest, settings:
 
 
 @router.put("/conversations/{conversation_id}/turns/{turn}/share", operation_id="shareAnswer")
-async def share(owned: OwnedConversation, turn: int, settings: SettingsDep, db: SessionDep) -> StoredTurn:
+async def share(
+    owned: OwnedConversation, turn: int, settings: SettingsDep, db: SessionDep, asking: CurrentAsking
+) -> StoredTurn:
     """Share answer `turn` read-only with whoever may enter this room; nothing is shared until asked.
 
     A settled answer only: one the agent holds, and not the one still being
     written. Its `shared` is the page that reads it.
     """
-    turns = await _turns(owned, settings)
+    turns = await _turns(owned, settings, asking)
     writing = turn == len(turns) - 1 and conversations.answering(owned.conversation) is not None
     if not 0 <= turn < len(turns) or turns[turn].agent_index is None or writing:
         raise NotFoundError("No such answer")
@@ -276,9 +281,9 @@ def unshare(owned: OwnedConversation, turn: int, db: SessionDep) -> None:
 
 
 @router.get("/rooms/{room_id}/answers/{conversation_id}/{turn}", operation_id="readSharedAnswer")
-async def read_shared(answer: SharedAnswer, turn: int, settings: SettingsDep) -> StoredTurn:
+async def read_shared(answer: SharedAnswer, turn: int, settings: SettingsDep, asking: CurrentAsking) -> StoredTurn:
     """A shared answer, read-only: the question, the answer and its sources."""
-    turns = await _turns(answer, settings)
+    turns = await _turns(answer, settings, asking)
     if turn >= len(turns) or turns[turn].agent_index is None:
         raise NotFoundError("That answer is not shared")
     return _stored(answer.conversation, turns, turn)
@@ -375,9 +380,9 @@ def _stored(conversation: AgentConversation, turns: list[conversations.Turn], po
     )
 
 
-async def _turns(owned: Owned, settings: SettingsDep) -> list[conversations.Turn]:
+async def _turns(owned: Owned, settings: SettingsDep, asking: Asking) -> list[conversations.Turn]:
     session = owned.conversation.session_id
-    held = await rooms.agent(settings.agent, owned.room).read(session) if session else None
+    held = await (await rooms.agent(settings.agent, owned.room, asking)).read(session) if session else None
     return conversations.merged(owned.conversation, held or [])
 
 
