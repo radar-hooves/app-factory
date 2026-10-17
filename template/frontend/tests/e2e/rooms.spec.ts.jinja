@@ -8,12 +8,16 @@ import { ok, readJson } from './api';
 //
 //   {{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS='example|room-helper|room-manual' pnpm exec playwright test rooms
 //
+// Every request carries the person's `x-authentik-jwt` as nginx forwards it,
+// the subject the fake Authentik trades for the library's token.
+//
 // The tests run in order and share one person's conversations and allowance.
 // With ROOMS_SCREENSHOTS set to a directory, the last one photographs the pages
 // at 1440 and 390 wide in both themes.
 
 const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? 'http://127.0.0.1:{{ backend_port }}';
 const SHOTS = process.env.ROOMS_SCREENSHOTS;
+const DEV_UID = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'e2e';
 /** What any signed-in person may reach; everything else, the people list included, needs a module
  *  (tests/test_route_walk.py). */
 const PERSON_FACING = [
@@ -39,6 +43,7 @@ type Conversation = {
 };
 
 test.describe.configure({ mode: 'serial' });
+test.use({ extraHTTPHeaders: { 'x-authentik-jwt': `as:${DEV_UID}` } });
 
 function composer(page: Page) {
 	return page.getByPlaceholder(/^Ask /);
@@ -202,7 +207,8 @@ test('a shared answer opens read-only in the room it was asked in, until it is w
 			extraHTTPHeaders: {
 				'x-authentik-uid': `e2e-${entitlements}`,
 				'x-authentik-username': `e2e-${entitlements}`,
-				'x-authentik-entitlements': entitlements
+				'x-authentik-entitlements': entitlements,
+				'x-authentik-jwt': `as:e2e-${entitlements}`
 			}
 		});
 	const colleague = await person('room-manual');
