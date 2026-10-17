@@ -6,6 +6,24 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.44] - 2026-10-17
+
+Need: the operator's ruling of 17/10/2026 on radar-hooves/master-project#380, through master-project's design session.
+
+### Added
+
+- **An app carries the signed-in person to a household service, and a persona to its own `/mcp`, through an Authentik token exchange.** `exchange.py`'s `Asking.token(audience)` (dependency `CurrentAsking`) trades the person's `X-authentik-jwt` for a ten-minute token naming them and this app, for the service or for the app itself. A persona's turn carries one as `ASKER_TOKEN`, which its `.mcp.json` presents as `Bearer ${ASKER_TOKEN}`.
+- **A service verifies who is asking itself.** `CurrentAsker` on a route, and the `/mcp` gate for a bearer from the app's own issuer, check RS256 against the app's own JWKS, `iss`, `aud`, `exp` and `client_id`. They hand the handler the `Asker`: the person, the app that asked, and their groups and entitlements on this app. Those are the entitlements its pages gate on. `/mcp`'s tools read the person through `mcp.auth.current_asker()`, with no `actors.yaml` row.
+- **`authentik/exchange.py` provisions an app's exchange provider and the estate's one `asker` mapping,** run by Authentik's own `ak shell` with the client secret vended into its environment. Every estate runs the same program, and a second run changes nothing.
+
+### Changed
+
+- **A library room asks Milton as the person.** Each library call carries a token minted for the library (`<APP>_AGENT_LIBRARY_AUDIENCE`, default `library`). The app's library caller credential is gone: `<APP>_AGENT_LIBRARY_TOKEN`, `<APP>_AGENT_LIBRARY_TOKEN_CREDENTIAL` and the `<app>-library` vend.
+
+### Upgrading
+
+`docs/design/exchange.md` §Adopting it. In short: mint `<app>-exchange` in the broker, run the program, set `<APP>_EXCHANGE_ISSUER`, and forward `X-authentik-jwt` on `/api/agent/` in the vhost. Then `copier update` and add `"pyjwt>=2.13.0"` to `backend/pyproject.toml`. Until the issuer is set, personas run as before and a library room answers 503. An app with a library room takes this release only once the library verifies these tokens at `/api/caller`.
+
 ## [2026.10.43] - 2026-10-17
 
 Need: the library for eight (#43); the operator's ruling of 17/10/2026 on master-project#380, through master-project.

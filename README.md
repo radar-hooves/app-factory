@@ -35,6 +35,7 @@ Written for the next agent working here, not for onboarding.
 | [Agent console](docs/design/agent-console.md) | Design: rooms, the one chat product every app gets for a local persona or Milton; the imported `agent-common` kit, the stamped slice, what `@poodle64/librarian` gains, what each app keeps, and the convergence order. |
 | [Agent jobs](docs/design/agent-jobs.md) | Design: the app-started persona session beside the chat one, its start/watch/message/stop API, and why `--bg` was rejected |
 | [Alerts](docs/design/alerts.md) | Design: what a machine raises over `/mcp` and the operator reads in the top-bar bell; the producer contract, and why not ntfy |
+| [The token exchange](docs/design/exchange.md) | Design: how an app carries the signed-in person to a household service and a persona to its own `/mcp`, and how a service verifies them; the provider per app, the estate's one mapping, the ten-minute lifetime, and the adoption steps for an app, a service and an estate. |
 | [Elements](docs/design/elements.md) | Design: an app serving its views to other apps' pages as custom elements drawn from the kit, and placing another app's with one declaration; the sign-in hop, and the steps a service and a placing app take. |
 | [Desktop skeleton](docs/design/desktop-skeleton.md) | Design: the Tauri + SvelteKit skeleton Thoth and Bragi stamp from (`copier copy --data skeleton=desktop`), what is a kit, what the skeleton owns and what each app keeps. |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
