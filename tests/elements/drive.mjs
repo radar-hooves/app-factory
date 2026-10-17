@@ -26,7 +26,9 @@ const placements = [
 	{ name: 'placer', url: PLACER_URL, scope: 'Placed in factory-placer', count: 3 }
 ];
 const primaries = {};
-const browser = await chromium.launch({ executablePath: hostChromium() });
+// No zygote: the runner's unit forbids capset, which the zygote calls, and the
+// browser dies on its first page (measured 17/10/2026).
+const browser = await chromium.launch({ executablePath: hostChromium(), args: ['--no-zygote'] });
 for (const { name, url, scope, count } of placements) {
 	for (const colorScheme of ['light', 'dark']) {
 		const at = `${name} ${colorScheme}`;
