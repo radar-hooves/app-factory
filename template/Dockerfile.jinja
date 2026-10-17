@@ -14,12 +14,18 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./
 # step; bare `corepack enable` alone lets a floating pnpm break the build.
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
-# No registry configuration and no build secret: @poodle64/design-tokens and
-# @poodle64/ui are public on registry.npmjs.org, which serves them to an
-# anonymous install. Do not reintroduce a scope registry or a token mount —
-# that was the GitHub Packages arrangement, which required an authenticated
-# read for a public package and 404'd every unconfigured install.
-RUN pnpm install --frozen-lockfile
+# The factory's own packages (@poodle64/design-tokens, @poodle64/ui) are public
+# on registry.npmjs.org and need no credential. Do not reintroduce a scope
+# registry or a token mount for them: the GitHub Packages arrangement required
+# an authenticated read for a public package and 404'd every unconfigured install.
+#
+# An app with its own private, token-authenticated scope passes an `npmrc`
+# BuildKit secret (a user-level .npmrc: the scope's registry line and its
+# _authToken), which pnpm merges with frontend/.npmrc. The mount is optional, so
+# an app that passes none builds exactly as before, and the credential exists only
+# for this RUN, never in a layer, build arg or committed file.
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    pnpm install --frozen-lockfile
 
 COPY frontend/ ./
 

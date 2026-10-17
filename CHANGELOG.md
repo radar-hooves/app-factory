@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.42] - 2026-10-17
+
+Need: pebblestone (DiegoSeagull/pebblestone, RevoGrid Pro from `https://npm.rv-grid.com`), #39.
+
+### Added
+
+- **The frontend image build accepts an optional `npmrc` BuildKit secret, so an app can install from a private token-authenticated npm scope without editing a factory-owned file.** The frontend `pnpm install` mounts it at `/root/.npmrc` (`required=false`); pnpm merges that user-level file with `frontend/.npmrc`. The credential exists only for that RUN, never in a layer, build arg or committed file, and an app that passes no secret builds exactly as before. The factory ships no consumer's scope or registry.
+
+### Upgrading
+
+Nothing to do unless the app has a private scope. To use one, the app's own build workflow writes a user-level `.npmrc` (the scope's registry line and its auth token line) from its repo secret to a temp file, passes `--secret id=npmrc,src=<that file>` to `docker buildx build`, then deletes the file.
+
 ## [2026.10.41] - 2026-10-16
 
 Need: godswood (dispatched by godswood-0f), 16/10/2026.
