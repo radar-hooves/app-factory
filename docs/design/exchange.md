@@ -50,11 +50,11 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
 
 ## Adopting it
 
-**An estate** (atlas, titan, mimir, CASPO's own). Authentik 2026.8 or later, with the default implicit-consent and invalidation flows and a signing key. The first app's run creates the `app-factory: asker` mapping.
+**An estate** (atlas, titan, mimir, CASPO's own). Authentik 2026.8 or later, with the default implicit-consent and invalidation flows and a signing key. Whichever app's run comes first creates the `app-factory: asker` mapping, a service's or not.
 
 **An app.**
 
-1. Broker: mint the vault item `<app>-exchange` (field `value`, a random 64 characters) by the credential-lifecycle skill's path B, never typed, with the catalogue entry `<app>-api-exchange` (the broker's `<vendor>-<surface>` rule refuses `<app>-exchange` as a catalogue name; the app vends the catalogue name). Grant it to the identity that runs step 2 (`front-door` on atlas, `atlas-claude` on titan's and mimir's brokers; yggdrasil `portcullis-identities.nix`). A service that only verifies tokens holds no secret of its own and is granted nothing else; an app that asks as a person also grants it to its own consumer identity.
+1. Broker: mint the vault item `<app>-exchange` (field `value`, a random 64 characters) by the credential-lifecycle skill's path D (the broker generates it; path B needs an issuer), never typed, with the catalogue entry `<app>-api-exchange` (the broker's `<vendor>-<surface>` rule refuses `<app>-exchange` as a catalogue name; the app vends the catalogue name). Grant it to the identity that runs step 2 (`front-door` on atlas, `atlas-claude` on titan's and mimir's brokers), in yggdrasil `hosts/poodle64/atlas/modules/services/portcullis-identities.nix` for atlas. A service that only verifies tokens holds no secret of its own and is granted nothing else; an app that asks as a person also grants it to its own consumer identity.
 2. Authentik: run the program, with `EXCHANGE_SIGNIN` the slug of the application people sign in to (it differs per estate: the library's is `library` on atlas, `pebblestone-library` on titan and mimir) and `EXCHANGE_CONSUMERS` empty:
 
    ```bash
@@ -64,7 +64,7 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
        shell -c "import sys; exec(sys.stdin.read())" < authentik/exchange.py
    ```
 
-   On atlas the entrypoint is the compose file's own list (`portcullis exec --identity front-door … -- dumb-init -- ak`), which vends Authentik's own secret key.
+   On atlas the host has no identity that may vend the secret, so run it inside the container with front-door's identity and three vends: `docker exec -i -e EXCHANGE_APP=… -e EXCHANGE_SIGNIN=… authentik-server portcullis exec --identity front-door --key /secrets/front-door.key --broker http://portcullis:8311 --vend AUTHENTIK_SECRET_KEY=authentik-secret-key.value --vend AUTHENTIK_POSTGRESQL__PASSWORD=authentik-db.password --vend EXCHANGE_CLIENT_SECRET=<app>-api-exchange.value -- dumb-init -- ak shell -c "import sys; exec(sys.stdin.read())" < authentik/exchange.py`.
 3. Deployment: `<APP>_EXCHANGE_ISSUER=https://auth.<estate>/application/o/<app>-exchange/` in the host's `.env`. The app must reach the token endpoint at that origin, because Authentik derives `iss` from the host a request reached it on.
 4. nginx, in the app's own vhost, never the shared snippet: a `location /api/agent/` (and any other route that calls a service as the person) carrying both lines.
 
