@@ -14,8 +14,14 @@ set -euo pipefail
 factory=$(cd "$(dirname "$0")/../.." && pwd)
 service=$(realpath "$1")
 placer="${service}-placer"
-service_url=http://127.0.0.1:8398
-placer_url=http://127.0.0.1:8397
+# Two ports the host has free now: a run beside this one on a shared runner holds others.
+read -r service_port placer_port < <(python3 -c '
+import socket
+held = [socket.socket() for _ in range(2)]
+for s in held: s.bind(("127.0.0.1", 0))
+print(*(s.getsockname()[1] for s in held))')
+service_url=http://127.0.0.1:$service_port
+placer_url=http://127.0.0.1:$placer_port
 
 rm -rf "$placer"
 uvx copier copy --defaults --trust --vcs-ref=HEAD --quiet \
@@ -50,11 +56,16 @@ serve() { # <app dir> <package> <port> [VAR=value...]
 }
 
 (cd "$service/frontend" && pnpm build)
-serve "$service" factory_selftest 8398 CORS_ORIGINS=$placer_url
+serve "$service" factory_selftest "$service_port" CORS_ORIGINS=$placer_url
 
-(cd "$placer/backend" && uv sync --no-default-groups)
+# The kits as the self-test render took them, from this checkout, not the indexes.
+(
+	cd "$placer/backend"
+	for kit in "$factory"/kits/python/*/; do uv add --frozen --editable "$kit"; done
+	uv sync --no-default-groups
+)
 cd "$placer/frontend"
-pnpm install
+pnpm add "@poodle64/ui@$(node -p "require('$service/frontend/package.json').dependencies['@poodle64/ui']")"
 pnpm exec svelte-kit sync
 ELEMENT_ORIGINS=$service_url pnpm generate:elements
 # The derived types bind: a word where the element declares a number fails the check.
@@ -68,6 +79,6 @@ grep -q 'proof/wrong/+page.svelte' <<<"$refused" || { echo "$refused" >&2; exit 
 rm -r src/routes/proof/wrong
 pnpm check
 pnpm build
-serve "$placer" factory_placer 8397 ELEMENT_ORIGINS=$service_url
+serve "$placer" factory_placer "$placer_port" ELEMENT_ORIGINS=$service_url
 
 SERVICE_URL=$service_url PLACER_URL=$placer_url FRONTEND="$service/frontend" node "$factory/tests/elements/drive.mjs"

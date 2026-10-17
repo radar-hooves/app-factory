@@ -36,9 +36,12 @@ function adopt(root: ShadowRoot): void {
 		kit.replaceSync(css);
 		// A shadow root ignores @property, and Tailwind's borders, rings and
 		// shadows read the initial values it registers, so the page holds them.
+		// A browser without @property takes Tailwind's own fallback instead.
 		const registered = new CSSStyleSheet();
 		for (const rule of kit.cssRules) {
-			if (rule instanceof CSSPropertyRule) registered.insertRule(rule.cssText);
+			if ('CSSPropertyRule' in window && rule instanceof CSSPropertyRule) {
+				registered.insertRule(rule.cssText);
+			}
 		}
 		document.adoptedStyleSheets = [...document.adoptedStyleSheets, registered];
 	}
@@ -96,11 +99,14 @@ function hop(): void {
  * browser that has never visited this app gives, so the page makes the
  * sign-in hop once and comes back to ask again. Signed out again within a
  * minute of a hop is final, so it never loops. Every signed-out answer reaches
- * the element as a 401.
+ * the element as a 401. A request the element aborted throws, as it would anywhere.
  */
 const signIn: Middleware = {
 	onRequest: () => (hopping ? signedOut() : undefined),
-	onError: signedOut,
+	onError: ({ error }) =>
+		typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
+			? undefined
+			: signedOut(),
 	onResponse({ response }) {
 		const page = response.ok && (response.headers.get('content-type') ?? '').includes('text/html');
 		if (response.status !== 401 && !page) return undefined;

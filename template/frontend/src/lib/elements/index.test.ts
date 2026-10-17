@@ -84,4 +84,12 @@ describe('the element API client', () => {
 			expect(assign).not.toHaveBeenCalled();
 		}
 	);
+
+	it('lets a request the element aborted throw, and stays on the page', async () => {
+		const { api, signingIn } = await runtime();
+		const fetch = vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError'));
+		await expect(api.GET('/api/system/health', { ...SERVICE, fetch })).rejects.toThrow('aborted');
+		expect(signingIn()).toBe(false);
+		expect(assign).not.toHaveBeenCalled();
+	});
 });
