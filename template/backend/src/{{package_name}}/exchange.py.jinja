@@ -23,10 +23,11 @@ exchanges at the issuer's own origin. Design: app-factory
 `docs/design/exchange.md`.
 """
 
+import asyncio
 import logging
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any
 
 import httpx
@@ -52,6 +53,11 @@ _REQUIRED = ["exp", "iat", "iss", "aud", "sub", "client_id"]
 #: An unknown `kid` refetches the JWKS at most this often, so a stream of
 #: forged tokens costs Authentik one request a minute.
 _JWKS_REFRESH_SECONDS = 60.0
+#: Keys are re-read at least this often, so a key Authentik rotated out stops verifying.
+_JWKS_MAX_AGE_SECONDS = 600.0
+#: After a failed read, every caller is told 503 until a retry is due, rather than each waiting on its own.
+_JWKS_RETRY_SECONDS = 5.0
+_KEYS_UNREACHABLE = "The identity provider's signing keys are unreachable"
 _TIMEOUT_SECONDS = 5.0
 _ISSUER_ENV = "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER"
 _NOT_CARRIED = "This app cannot carry you to that service yet"
@@ -85,7 +91,10 @@ class Exchange:
         self._jwks_url = urllib.parse.urljoin(self.issuer, "jwks/")
         self._client = httpx.AsyncClient(transport=transport, timeout=_TIMEOUT_SECONDS)
         self._keys: dict[str, Any] = {}
+        self._lock = asyncio.Lock()
+        self._fetched_at = float("-inf")
         self._fetch_after = 0.0
+        self._unreachable = False
 
     @property
     def configured(self) -> bool:
@@ -125,7 +134,8 @@ class Exchange:
         error = str(answer.get("error") or response.status_code)
         if error == "invalid_grant":
             raise AuthenticationError(
-                "Your sign-in does not reach that service; sign in again", context={"audience": target}
+                "Your sign-in does not reach that service; sign in again",
+                context={"audience": target, "cause": str(answer.get("error_description") or "")},
             )
         raise ServiceUnavailableError(_NOT_CARRIED, context={"audience": target, "error": error})
 
@@ -179,16 +189,32 @@ class Exchange:
         )
 
     async def _key(self, kid: str) -> Any:
-        if kid not in self._keys and time.monotonic() >= self._fetch_after:
-            try:
-                response = await self._client.get(self._jwks_url)
-                response.raise_for_status()
-                keys = jwt.PyJWKSet.from_dict(response.json()).keys
-            except (httpx.HTTPError, ValueError, jwt.PyJWTError) as exc:
-                raise ConnectionError("The identity provider's signing keys are unreachable") from exc
-            self._keys = {key.key_id: key.key for key in keys if key.key_id}
-            self._fetch_after = time.monotonic() + _JWKS_REFRESH_SECONDS
-        return self._keys.get(kid)
+        """The key `kid` names, re-reading the JWKS when it names no such key or is stale; one read at a time.
+
+        A key already held keeps answering while Authentik is out.
+
+        Raises:
+            ConnectionError: the JWKS is unreachable and holds no `kid` yet.
+        """
+        async with self._lock:
+            now = time.monotonic()
+            wanted = kid not in self._keys or now - self._fetched_at >= _JWKS_MAX_AGE_SECONDS
+            if wanted and now >= self._fetch_after:
+                try:
+                    response = await self._client.get(self._jwks_url)
+                    response.raise_for_status()
+                    keys = jwt.PyJWKSet.from_dict(response.json()).keys
+                except (httpx.HTTPError, ValueError, jwt.PyJWTError) as exc:
+                    self._unreachable, self._fetch_after = True, now + _JWKS_RETRY_SECONDS
+                    if kid not in self._keys:
+                        raise ConnectionError(_KEYS_UNREACHABLE) from exc
+                else:
+                    self._keys = {key.key_id: key.key for key in keys if key.key_id}
+                    self._unreachable, self._fetched_at = False, now
+                    self._fetch_after = now + _JWKS_REFRESH_SECONDS
+            elif kid not in self._keys and self._unreachable:
+                raise ConnectionError(_KEYS_UNREACHABLE)
+            return self._keys.get(kid)
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,26 +224,42 @@ class Asking:
     exchange: Exchange
     #: Their `X-authentik-jwt`; empty where this route's nginx location forwards none.
     subject: str
+    #: Their `X-authentik-uid`, which every token minted for them must name.
+    uid: str
+    _minted: dict[str | None, str] = field(default_factory=dict, repr=False)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     async def token(self, audience: str | None = None) -> str:
-        """A short-lived token naming this person, for `audience` or for this app with none.
+        """A short-lived token naming this person, for `audience` or for this app with none; one per audience per request.
 
         Raises:
             ServiceUnavailableError: no exchange is configured, or this route's
                 location forwards no `X-authentik-jwt`; as `Exchange.token` otherwise.
-            AuthenticationError: as `Exchange.token`.
+            AuthenticationError: as `Exchange.token`, or the token names
+                someone other than this request's person.
         """
         if not self.exchange.configured:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"unset": _ISSUER_ENV})
         if not self.subject:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"absent": "X-authentik-jwt"})
-        return await self.exchange.token(self.subject, audience)
+        async with self._lock:
+            if audience not in self._minted:
+                issued = await self.exchange.token(self.subject, audience)
+                if _subject(issued) != self.uid:
+                    raise AuthenticationError(
+                        "Your sign-in does not match this request; sign in again", context={"audience": audience}
+                    )
+                self._minted[audience] = issued
+            return self._minted[audience]
 
 
 def get_asking(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> Asking:
     """The person on this request, ready to be carried."""
     exchange: Exchange = request.app.state.exchange
-    return Asking(exchange, request.headers.get(settings.identity.authentik_jwt_header, ""))
+    headers, identity = request.headers, settings.identity
+    return Asking(
+        exchange, headers.get(identity.authentik_jwt_header, ""), headers.get(identity.authentik_uid_header, "")
+    )
 
 
 async def get_asker(request: Request) -> Asker:
@@ -248,6 +290,14 @@ def _json(response: httpx.Response) -> dict[str, Any]:
     except ValueError:
         return {}
     return body if isinstance(body, dict) else {}
+
+
+def _subject(token: str) -> str:
+    """The `sub` of a token Authentik just handed this app over TLS, read unverified."""
+    try:
+        return str(jwt.decode(token, options={"verify_signature": False}).get("sub") or "")
+    except jwt.PyJWTError:
+        return ""
 
 
 def _names(value: object) -> tuple[str, ...]:

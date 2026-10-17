@@ -168,15 +168,54 @@ async def test_a_request_with_no_forwarded_token_or_no_exchange_cannot_be_carrie
     app_side: Exchange,
 ) -> None:
     with pytest.raises(ServiceUnavailableError) as absent:
-        await Asking(app_side, "").token("library")
+        await Asking(app_side, "", PERSON).token("library")
     assert absent.value.context == {"absent": "X-authentik-jwt"}
     off = Exchange(ExchangeSettings())
     try:
         with pytest.raises(ServiceUnavailableError):
-            await Asking(off, f"as:{PERSON}").token("library")
+            await Asking(off, f"as:{PERSON}", PERSON).token("library")
         assert await off.verified("anything") is None
     finally:
         await off.aclose()
+
+
+async def test_one_request_mints_once_per_audience_and_only_for_its_own_person(
+    authentik: FakeAuthentik, app_side: Exchange
+) -> None:
+    asking = Asking(app_side, f"as:{PERSON}", PERSON)
+    assert await asking.token("library") == await asking.token("library")
+    assert authentik.exchanged.count((APP, "library")) == 1
+    with pytest.raises(AuthenticationError):
+        await Asking(app_side, f"as:{PERSON}", "uid-someone-else").token("library")
+
+
+async def test_an_unreachable_jwks_is_one_read_and_a_503_for_every_caller_until_a_retry(
+    authentik: FakeAuthentik, app_side: Exchange
+) -> None:
+    authentik.jwks_up = False
+    genuine = authentik.mint(APP, PERSON)
+    for _ in range(3):
+        with pytest.raises(ConnectionError):
+            await app_side.verified(genuine)
+    authentik.jwks_up = True
+    with pytest.raises(ConnectionError):
+        await app_side.verified(genuine)
+    assert authentik.jwks_reads == 1
+
+
+async def test_a_held_key_answers_through_an_outage_and_a_rotated_out_one_stops(
+    authentik: FakeAuthentik, app_side: Exchange
+) -> None:
+    genuine = authentik.mint(APP, PERSON)
+    assert await app_side.verified(genuine) is not None
+    authentik.jwks_up = False
+    app_side._fetched_at -= 601
+    assert await app_side.verified(genuine) is not None, "a stale key still held answers while Authentik is out"
+    authentik.jwks_up = True
+    authentik.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    app_side._fetched_at -= 601
+    app_side._fetch_after = 0.0
+    assert await app_side.verified(genuine) is None, "a key the JWKS no longer publishes stops verifying"
 
 
 async def test_no_token_or_secret_reaches_a_log_line(

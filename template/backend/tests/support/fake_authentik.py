@@ -63,6 +63,8 @@ class FakeAuthentik:
         #: Every exchange asked for: client id and audience, never a secret or a token.
         self.exchanged: list[tuple[str, str | None]] = []
         self.jwks_reads = 0
+        #: False answers every JWKS read 503, as an Authentik that is down would.
+        self.jwks_up = True
         self.lock = threading.Lock()
         self.port = 0
 
@@ -160,7 +162,10 @@ class _Handler(BaseHTTPRequestHandler):
         if len(parts) == 4 and parts[:2] == ["application", "o"] and parts[2] in slugs and parts[3] == "jwks":
             with fake.lock:
                 fake.jwks_reads += 1
-            self._send(200, fake.jwks())
+            if fake.jwks_up:
+                self._send(200, fake.jwks())
+            else:
+                self._send(503, {"detail": "Service unavailable."})
             return
         self._send(404, {"detail": "Not found."})
 

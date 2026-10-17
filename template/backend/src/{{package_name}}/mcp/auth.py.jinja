@@ -16,7 +16,9 @@ A bearer this app's own exchange issued names a person, not a machine: the
 gate verifies it and puts the :class:`~{{ package_name }}.exchange.Asker` on the request,
 :func:`current_asker` reads it, and :func:`resolve_actor` answers that person
 (``actor_type`` ``person``, ``actor_id`` their ``sub``) with no
-``config/actors.yaml`` row, since Authentik vouched for them.
+``config/actors.yaml`` row, since Authentik vouched for them. A person admitted
+to this app's rooms alone reaches none of its tools, as its HTTP routes refuse
+them (``entitlements.admitted``).
 
 Authentik authenticates; this app authorises. Map ``actor_id`` / ``actor_type``
 onto your own server-side authorisation (roles, grants, tenancy) as the domain
@@ -36,6 +38,7 @@ from fastmcp.server.dependencies import get_context, get_http_headers, get_http_
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
+from {{ package_name }}.entitlements import admitted
 from {{ package_name }}.exceptions import AuthenticationError
 from {{ package_name }}.exchange import Asker
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
@@ -103,11 +106,16 @@ def resolve_actor() -> Actor:
     A person the gate verified (:func:`current_asker`) resolves to themselves.
 
     Raises:
-        AuthenticationError: no client identity was presented, or the
-            presented identity is not registered in ``config/actors.yaml``.
+        AuthenticationError: no client identity was presented, the presented
+            identity is not registered in ``config/actors.yaml``, or a person
+            holds no entitlement on this app beyond a room's.
     """
     asker = current_asker()
     if asker is not None:
+        if not admitted(asker.entitlements):
+            raise AuthenticationError(
+                "This person is admitted to this app's rooms alone, not its tools", context={"app": asker.app}
+            )
         return Actor(id=asker.sub, type="person", display=asker.username)
     http_headers = get_http_headers()
     try:

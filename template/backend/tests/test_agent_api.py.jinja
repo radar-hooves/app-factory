@@ -431,7 +431,7 @@ async def test_rename_download_and_delete(client: AsyncClient, agent_settings: A
     who = _person("room-helper")
     conversation = _events((await _ask(client, "helper", "what is leave?", who)).text)[0]["session_id"]
     session = str(_row(conversation).session_id)
-    agent = await rooms.agent(agent_settings, rooms.get(agent_settings, "helper"), Asking(app.state.exchange, ""))
+    agent = await rooms.agent(agent_settings, rooms.get(agent_settings, "helper"), Asking(app.state.exchange, "", ""))
 
     renamed = await client.patch(f"/api/agent/conversations/{conversation}", json={"title": "Leave"}, headers=who)
     assert renamed.json()["title"] == "Leave"

@@ -128,9 +128,14 @@ def require_app_module(identity: CurrentIdentity) -> Identity:
     seen first. Workspace ownership cannot draw that line: every account is made
     owner of a personal workspace the first time it signs in.
     """
-    if any(not grant.startswith(ROOM_PREFIX) for grant in identity.entitlements):
+    if admitted(identity.entitlements):
         return identity
     raise ForbiddenError("You do not have access to the people in this app")
+
+
+def admitted(entitlements: tuple[str, ...]) -> bool:
+    """Whether these entitlements admit an account to this app itself: any but a room's, ``admin`` included."""
+    return any(not grant.startswith(ROOM_PREFIX) for grant in entitlements)
 
 
 gate(require_app_module, "any module but a room")

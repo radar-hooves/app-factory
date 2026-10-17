@@ -599,3 +599,15 @@ async def test_a_forged_or_expired_asker_token_never_reaches_mcp(_configured_exc
                 json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
             )
             assert response.status_code == 401
+
+
+@pytest.mark.integration
+async def test_a_person_admitted_to_rooms_alone_reaches_no_tool(_configured_exchange):
+    """A colleague invited to a room is refused the app's tools, as its HTTP routes refuse them."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    async with app.router.lifespan_context(app), _client(app) as client:
+        result = await _drive_probe(client, _configured_exchange.mint(APP, PERSON, entitlements=["room-helper"]))
+    assert result["isError"] is True, result
+    assert "rooms alone" in str(result["content"])
