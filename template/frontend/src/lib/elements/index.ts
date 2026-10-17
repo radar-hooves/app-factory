@@ -43,7 +43,9 @@ new MutationObserver(() => placed.forEach(shade)).observe(page, { attributeFilte
  * declared on the host, so its `var()` resolves in the page's context.
  */
 function reachHost(sheet: CSSStyleSheet): void {
+	const plain = new Map<string, string>();
 	const onHost: string[] = [];
+	const defined = getComputedStyle(page);
 	const walk = (rules: CSSRuleList) => {
 		for (const rule of rules) {
 			if (rule instanceof CSSStyleRule) {
@@ -53,19 +55,23 @@ function reachHost(sheet: CSSStyleSheet): void {
 				for (const name of rule.style) {
 					if (!name.startsWith('--')) continue;
 					const value = rule.style.getPropertyValue(name).trim();
-					if (value.includes('var(')) onHost.push(`${name}:${value}`);
-					else {
-						try {
-							CSS.registerProperty({ name, syntax: '*', inherits: true, initialValue: value });
-						} catch {
-							// Registered already, by the page or an earlier bundle: its value stands.
-						}
-					}
+					if (!value.includes('var(')) plain.set(name, value);
+					// A page that declares it already hands it down; the host's own would override that.
+					else if (!defined.getPropertyValue(name).trim()) onHost.push(`${name}:${value}`);
 				}
-			} else if ('cssRules' in rule) walk(rule.cssRules as CSSRuleList);
+			} else if (rule instanceof CSSSupportsRule || rule instanceof CSSLayerBlockRule) {
+				walk(rule.cssRules);
+			}
 		}
 	};
 	walk(sheet.cssRules);
+	for (const [name, initialValue] of plain) {
+		try {
+			CSS.registerProperty({ name, syntax: '*', inherits: true, initialValue });
+		} catch {
+			// Registered already, by the page or an earlier bundle: its value stands.
+		}
+	}
 	if (onHost.length) sheet.insertRule(`:host{${onHost.join(';')}}`);
 }
 

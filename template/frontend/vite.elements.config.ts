@@ -57,10 +57,11 @@ export default defineConfig({
  * becomes an `@source` where `elements.css` has its marker.
  */
 function kitSources(): Plugin {
-	const KIT = /[\\/]@poodle64[\\/]ui[\\/]dist[\\/]components[\\/]/;
-	let sources: Promise<string> | undefined;
+	const KIT = /[\\/]@poodle64[\\/]ui[\\/]dist[\\/]/;
+	const COMPONENTS = /[\\/]components[\\/]/;
+	let reachedSources: Promise<string> | undefined;
 	const reached = async () => {
-		const directories = new Set<string>();
+		const sources = new Set<string>();
 		await build({
 			configFile: false,
 			logLevel: 'silent',
@@ -69,7 +70,7 @@ function kitSources(): Plugin {
 				{
 					name: 'no-stylesheet',
 					enforce: 'pre',
-					load: (id) => (id.includes('elements.css') ? 'export default ""' : undefined)
+					load: (id) => (id.split('?')[0]?.endsWith(stylesheet) ? 'export default ""' : undefined)
 				},
 				svelte({ compilerOptions: { customElement: true } }),
 				{
@@ -77,22 +78,26 @@ function kitSources(): Plugin {
 					buildEnd() {
 						for (const id of this.getModuleIds()) {
 							const file = id.split('?')[0] ?? id;
-							if (KIT.test(file)) directories.add(dirname(file));
+							if (KIT.test(file)) {
+								// A file beside the components (a shared util) stands alone: its directory is all of dist.
+								const directory = dirname(file);
+								sources.add(COMPONENTS.test(directory) ? directory : file);
+							}
 						}
 					}
 				}
 			],
 			build: { write: false, rollupOptions: { input, output: { inlineDynamicImports: true } } }
 		});
-		return [...directories].map((directory) => `@source '${directory}';`).join('\n');
+		return [...sources].map((source) => `@source '${source}';`).join('\n');
 	};
 	return {
 		name: 'element-kit-sources',
 		enforce: 'pre',
 		async transform(code, id) {
 			if (!id.split('?')[0]?.endsWith(stylesheet) || elements.length === 0) return;
-			sources ??= reached();
-			return code.replace('/* @kit-sources */', await sources);
+			reachedSources ??= reached();
+			return code.replace('/* @kit-sources */', await reachedSources);
 		}
 	};
 }

@@ -16,10 +16,10 @@ Need: the first three services' gaps in the element capability (radar-hooves/mas
 
 ### Fixed
 
-- **The kit's control sizes and shadcn aliases reach the shadow root.** They were declared at `:root`, which a shadow root does not match, so a button on a page that did not declare them was 22px tall. The runtime registers each plain value on the page as an inherited property with the kit's default, so a page's own density still wins, and declares the ones that read another token on the host.
+- **The kit's control sizes and shadcn aliases reach the shadow root.** They were declared at `:root`, which a shadow root does not match, so a button on a page that did not declare them was 22px tall. The runtime registers each plain value on the page as an inherited property with the kit's default, so a page's own density still wins, and declares the ones that read another token on the host, unless the page declares them itself.
 - **The display font loads.** The template's floor on `@poodle64/design-tokens` is `^2026.10.1`. A lockfile on 2026.9.0 (the library, casefile) names only `'Fraunces'`, which matches no `@font-face`; 2026.9.1 on names `'Fraunces Variable'` too.
 - **The elements build no longer warns `Unexpected token Ident("…")` on `max-width: var(…)`.** The cause was a comment in `@poodle64/ui`'s AppShell that Tailwind scanned; the template takes `@poodle64/ui` `^2026.10.16`, which words it differently.
-- **`elements.js` is smaller.** Tailwind compiled utilities for every component in `@poodle64/ui/dist`. It now scans only the component directories the elements import. The library's bundle goes from 582,704 to 547,345 bytes (gzip 160.5 to 155.2 kB), and a bare card, button and badge from 356 to 291 kB with a popover. What remains is what the elements use: bits-ui's menu, tooltip and popper layers about 150 kB in the library, and its own markdown and sanitiser about 72 kB.
+- **`elements.js` is smaller.** Tailwind compiled utilities for every component in `@poodle64/ui/dist`. It now scans only the component directories the elements import. The library's bundle goes from 582,704 to 547,477 bytes (gzip 160.5 to 155.3 kB), and a bare card, button and badge from 356 to 291 kB with a popover. What remains is what the elements use: bits-ui's menu, tooltip and popper layers about 150 kB in the library, and its own markdown and sanitiser about 72 kB.
 
 ### Upgrading
 
