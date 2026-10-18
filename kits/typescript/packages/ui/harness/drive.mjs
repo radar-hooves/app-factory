@@ -4757,6 +4757,53 @@ for (const [label, viewport] of [['1280', { width: 1280, height: 800 }], ['1920'
 	}
 }
 
+// The page kit and the document reader (PageContainer, PageSection,
+// ContentSkeleton, Sheet, Breadcrumbs, DocumentReader). Every claim here is a
+// layout fact: sideways overflow of the shell's content region, whether the
+// reader's side column is laid out, the reader's measure in characters, and a
+// section heading's resolved size. jsdom resolves none of them.
+for (const surface of ['page-kit', 'document-reader']) {
+	for (const [label, viewport] of [['360', { width: 360, height: 800 }], ['1440', { width: 1440, height: 900 }]]) {
+		const { context, page, errors } = await open(`surface=${surface}`, viewport);
+		const at = `${surface} @${label}`;
+		const m = await page.evaluate(() => {
+			const content = document.querySelector('[data-slot="app-shell-content"]');
+			const article = document.querySelector('[data-slot="document-reader"] article');
+			const aside = document.querySelector('[data-slot="document-reader"] aside');
+			const h2 = document.querySelector('[data-slot="page-section"] h2');
+			let chars = null;
+			if (article) {
+				const cs = getComputedStyle(article);
+				const ctx = document.createElement('canvas').getContext('2d');
+				ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+				chars = article.getBoundingClientRect().width / ctx.measureText('0').width;
+			}
+			return {
+				overflow: content.scrollWidth - content.clientWidth,
+				asideDisplay: aside ? getComputedStyle(aside).display : null,
+				chars,
+				h2Size: h2 ? getComputedStyle(h2).fontSize : null
+			};
+		});
+		check(`page kit: no sideways overflow (${at})`, m.overflow === 0, `${m.overflow}px`);
+		if (surface === 'document-reader') {
+			const shown = m.asideDisplay !== null && m.asideDisplay !== 'none';
+			check(
+				`reader: side contents ${label === '1440' ? 'beside the body' : 'folded away'} (${at})`,
+				shown === (label === '1440'),
+				`display ${m.asideDisplay}`
+			);
+			if (label === '1440') {
+				check(`reader: measure is 45-90 characters (${at})`, m.chars >= 45 && m.chars <= 90, `${m.chars?.toFixed(1)} characters`);
+			}
+		} else {
+			check(`page kit: PageSection h2 is 20px (${at})`, m.h2Size === '20px', m.h2Size);
+		}
+		check(`page kit: no page errors (${at})`, errors.length === 0, `${errors.length}`);
+		await context.close();
+	}
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();

@@ -14,8 +14,9 @@
 	 * package with no router of its own can still render the app's routes, as
 	 * AppNav does for `NavItem.href`.
 	 *
-	 * The trail never wraps. Each step truncates instead, ancestors at a ceiling
-	 * so one long collection name cannot push the current step off a phone.
+	 * The trail never wraps. Each step truncates instead, ancestors twice as
+	 * readily as where you are, so one long collection name gives way first on
+	 * a phone and shows in full wherever there is room.
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -44,7 +45,7 @@
 	<ol class="flex min-w-0 items-center gap-1.5">
 		{#each items as item, i (i)}
 			{@const last = i === items.length - 1}
-			<li class={cn('flex min-w-0 items-center gap-1.5', !last && 'max-w-48 shrink-[2]')}>
+			<li class={cn('flex min-w-0 items-center gap-1.5', !last && 'shrink-[2]')}>
 				{#if i > 0}
 					<ChevronRight class="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
 				{/if}

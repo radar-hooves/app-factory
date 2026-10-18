@@ -2,6 +2,28 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Need: caspo, the public entrance that goes before colleagues, from its fleet-shell survey (caspo `03ab580a`, radar-hooves/master-project#380). One pattern per problem: what caspo, godswood and eight each hand-rolled for a page.
+
+### Added
+
+- **`Breadcrumbs`** (`@poodle64/ui/breadcrumbs`): the trail as `items` of `{ label, href? }`, a `<nav aria-label="Breadcrumb">` (none of the three hand-written copies named it), chevrons, and each step truncating rather than wrapping. A step with `href` is a way back; the last without one is `aria-current="page"`.
+- **`PageContainer`**: a route's page at one rhythm, 1.5rem between header, sections and panels, filling the content box. It replaces per-page wrappers (`space-y-6` to `gap-10` in one app, a local `PageContainer` with 56 uses in another).
+- **`PageSection`** and the `text-section` step (1.25rem): a section's heading at `level` 2 (display face) or 3 (body face at a Panel title's size), with `description`, `count` and `actions`, and its content at one distance below. It has no uppercase-kicker form. The README states the type scale by role.
+- **`ContentSkeleton`**: a region loading, shaped like what replaces it: `rows` (a RecordList row), `tiles` (a StatCard) or `prose`. The page draws its header for real. A whole page still waiting on everything is `LoadingState`, as `sveltekit-ui-patterns.md` §Loading has it.
+- **`Sheet`** (`@poodle64/ui/sheet`): shadcn's sheet on the kit's dialogue, plus `Sheet.Body` for the scrolling middle. It is a panel over the page, never a second navigation column, and it portals into an element's shadow root through `<Overlays>`.
+- **`DocumentReader`**: a document to read. It holds PageHeader, the body in `.ds-prose` at the reading measure (`html` the app sanitised, or `children`), and a contents list built from the body's `h2`/`h3`. Headings get ids from their text when they have none. The list stands beside the body from 64rem of reader (a container query) and folds into a disclosure narrower. A contents link scrolls and moves focus without the URL fragment, so it works inside a shadow root. `aside`, `footer`, `loading` (header kept, body as a `prose` skeleton) and `error` round it out.
+
+### Changed
+
+- **PageHeader's `breadcrumbs` takes the trail's items** (`breadcrumbs={[{ label: 'Library', href: '/library' }, { label: name }]}`). A snippet still renders as before. The root carries `data-slot="page-header"`.
+- **`Skeleton` holds still under `prefers-reduced-motion`.**
+
+### Fixed
+
+- **`texture.ts` names `grid` as the default**, which it has been since 2026.8.8.
+
 ## [2026.10.17] - 2026-10-18
 
 Need: caspo, its OSINT rebuild (radar-hooves/master-project#380). Godswood's tapestry graph is where it was learned.
@@ -10,6 +32,7 @@ Need: caspo, its OSINT rebuild (radar-hooves/master-project#380). Godswood's tap
 
 - **`GraphCanvas`** (`@poodle64/ui/graph-canvas`): a live force-directed graph of entities and relations on one canvas, d3-force for the layout. Pan, wheel and pinch zoom, drag a node, find, a legend that filters by kind, hover or select to light a neighbourhood, Focus to frame it, and a card listing the connections by relation. Colours resolve against the component's own element, so it themes the same in a page and in an element's shadow root. `nodes`, `edges`, `kinds`, bindable `selected` and `hiddenKinds`, `directed`, `onselect`, `onactivate`, a `detail` snippet; `fit()`, `focus(id)`, `locate(id)`, `relayout()`.
 
+||||||| parent of c8f4de4e (test(ui): the page kit's behaviour in jsdom, its stories and geometry in the harness; the trail gives way only for want of room, the contents disclosure is a surface (consumer: caspo, master-project#380))
 ## [2026.10.16] - 2026-10-18
 
 Need: casefile, through the elements capability (radar-hooves/master-project#380).

@@ -57,6 +57,12 @@
 	import { SHELL_MEASURES, type ShellMeasure } from '../dist/components/ui/app-shell/measure.js';
 	import { SHELL_TEXTURES, type ShellTexture } from '../dist/components/ui/app-shell/texture.js';
 	import Button from '../dist/components/ui/button/button.svelte';
+	import PageContainer from '../dist/components/ui/page-container/page-container.svelte';
+	import PageSection from '../dist/components/ui/page-section/page-section.svelte';
+	import PageHeader from '../dist/components/ui/page-header/page-header.svelte';
+	import ContentSkeleton from '../dist/components/ui/content-skeleton/content-skeleton.svelte';
+	import DocumentReader from '../dist/components/ui/document-reader/document-reader.svelte';
+	import * as Sheet from '../dist/components/ui/sheet/index.js';
 	import Badge from '../dist/components/ui/badge/badge.svelte';
 	import Input from '../dist/components/ui/input/input.svelte';
 	import Label from '../dist/components/ui/label/label.svelte';
@@ -217,6 +223,77 @@
 	// whether the same markup stacks below md instead of crushing the content pane
 	// into a sliver. `?settings=path` moves the current row.
 	const surface = params.get('surface') ?? 'shell';
+
+	// `?surface=page-kit` and `?surface=document-reader` show the page kit and the
+	// reader. `?sheet=open&side=right|left|bottom` opens the sheet on load, so a
+	// capture needs no click; `?state=loading|error` drives the reader's states.
+	const kitNav: NavSource = [
+		{ label: 'Overview', href: '#/overview', icon: LayoutDashboard },
+		{ label: 'Reports', href: '#/reports', icon: ScrollText },
+		{
+			label: 'Policy library',
+			href: '#/policy',
+			icon: BookOpen,
+			children: [
+				{ label: 'Allowances', href: '#/policy/allowances' },
+				{ label: 'Leave', href: '#/policy/leave' }
+			]
+		},
+		{ label: 'People', href: '#/people', icon: Users },
+		{ label: 'Rulings', href: '#/rulings', icon: Gavel },
+		{ label: 'Receipts', href: '#/receipts', icon: Receipt },
+		{ label: 'Credentials', href: '#/credentials', icon: KeySquare }
+	];
+	const sideParam = params.get('side');
+	const sheetSide = (['left', 'bottom', 'right'] as const).find((x) => x === sideParam) ?? 'right';
+	let sheetOpen = $state(params.get('sheet') === 'open');
+	const readerState = params.get('state');
+	const sheetLines = Array.from(
+		{ length: 30 },
+		(_, i) => `Line ${i + 1}: a row of text in the sheet body, long enough to be a sentence.`
+	);
+	const readerLead = (n: number) =>
+		`<p>Paragraph ${n}. A member posted away from the home locality is paid an allowance that depends on the posting, the dependants who travel and the length of the deployment. The rates below are indexed each July, and a member who is part-way through a period keeps the rate that applied on the day it began.</p>`;
+	const readerHtml = [
+		'<h2>Overview</h2>',
+		readerLead(1),
+		'<ul><li>Separation allowance</li><li>Field allowance</li><li>Overseas living allowance</li></ul>',
+		'<h2>Who is eligible</h2>',
+		readerLead(2),
+		'<h3>Members with dependants</h3>',
+		readerLead(3),
+		'<blockquote>A member is not to be worse off for being deployed than for staying at home.</blockquote>',
+		'<h3 id="explicit-id-heading">Members without dependants</h3>',
+		readerLead(4),
+		'<h2>Rates</h2>',
+		readerLead(5),
+		'<table><thead><tr>' +
+			Array.from({ length: 12 }, (_, i) => `<th>Rate band ${i + 1}</th>`).join('') +
+			'</tr></thead><tbody>' +
+			Array.from(
+				{ length: 3 },
+				(_, r) =>
+					'<tr>' +
+					Array.from({ length: 12 }, (_, c) => `<td>$${(r + 1) * 100 + c} per fortnight</td>`).join('') +
+					'</tr>'
+			).join('') +
+			'</tbody></table>',
+		'<h3>Worked example</h3>',
+		readerLead(6),
+		'<pre><code>allowance = base_rate * days_deployed / 14\npaid      = allowance - tax_withheld</code></pre>',
+		'<h2>Claims</h2>',
+		readerLead(7),
+		readerLead(8),
+		'<h3>Evidence</h3>',
+		readerLead(9),
+		'<h2>Claims</h2>',
+		readerLead(10),
+		'<h3>Evidence</h3>',
+		readerLead(11),
+		'<h2>Review and appeal</h2>',
+		readerLead(12),
+		readerLead(13)
+	].join('\n');
 	const wrapper = params.get('wrapper') ?? 'plain';
 	// `?identity=bare` — see the mobile-audit fixture below.
 	const identityParam = params.get('identity');
@@ -1678,6 +1755,97 @@
 		nav={auditNav}
 		onNavigate={(href) => (location.hash = href.slice(1))}
 	/>
+{:else if surface === 'page-kit'}
+	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness" measure="wide">
+		<PageContainer>
+			<PageHeader
+				title="Allowances"
+				breadcrumbs={[
+					{ label: 'Policy', href: '#/policy' },
+					{ label: 'Australian Defence Force Pay and Conditions Manual', href: '#/policy/manual' },
+					{ label: 'Allowances' }
+				]}
+			>
+				{#snippet meta()}
+					<span>Updated 18/10/2026</span>
+					<span>Owner: Pay policy</span>
+				{/snippet}
+				{#snippet actions()}
+					<Button variant="outline">Export</Button>
+				{/snippet}
+			</PageHeader>
+
+			<PageSection
+				title="Recent claims"
+				count={12}
+				description="Claims lodged in the last 30 days, newest first. A claim leaves this list once it has been paid."
+			>
+				{#snippet actions()}
+					<Button size="sm" variant="outline">Filter</Button>
+				{/snippet}
+				<ContentSkeleton shape="rows" />
+			</PageSection>
+
+			<PageSection title="Figures">
+				<ContentSkeleton shape="tiles" />
+			</PageSection>
+
+			<PageSection title="Reference">
+				<PageSection level={3} title="Rates">
+					<p class="text-muted-foreground text-sm">Rates are indexed each July.</p>
+				</PageSection>
+				<ContentSkeleton shape="prose" />
+			</PageSection>
+
+			<div>
+				<Button onclick={() => (sheetOpen = true)}>Open sheet</Button>
+			</div>
+		</PageContainer>
+	</AppShell>
+
+	<Sheet.Root bind:open={sheetOpen}>
+		<Sheet.Content side={sheetSide}>
+			<Sheet.Header>
+				<Sheet.Title>Filter claims</Sheet.Title>
+				<Sheet.Description>Narrow the list by status, member and date.</Sheet.Description>
+			</Sheet.Header>
+			<Sheet.Body>
+				{#each sheetLines as line (line)}
+					<p class="py-1">{line}</p>
+				{/each}
+			</Sheet.Body>
+			<Sheet.Footer>
+				<Button variant="outline" onclick={() => (sheetOpen = false)}>Cancel</Button>
+				<Button onclick={() => (sheetOpen = false)}>Apply</Button>
+			</Sheet.Footer>
+		</Sheet.Content>
+	</Sheet.Root>
+{:else if surface === 'document-reader'}
+	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness" measure="page">
+		<DocumentReader
+			title="Allowances while deployed"
+			breadcrumbs={[{ label: 'Policy', href: '#/policy' }, { label: 'Allowances while deployed' }]}
+			html={readerHtml}
+			loading={readerState === 'loading'}
+			error={readerState === 'error' ? 'The document could not be loaded.' : null}
+			onRetry={() => {}}
+		>
+			{#snippet meta()}
+				<span>12 min read</span>
+				<span>18/10/2026</span>
+			{/snippet}
+			{#snippet aside()}
+				<dl class="flex flex-col gap-3 text-sm">
+					<div><dt class="text-muted-foreground text-xs">Owner</dt><dd>Pay policy</dd></div>
+					<div><dt class="text-muted-foreground text-xs">Version</dt><dd>4.2</dd></div>
+					<div><dt class="text-muted-foreground text-xs">Status</dt><dd>Current</dd></div>
+				</dl>
+			{/snippet}
+			{#snippet footer()}
+				<a href="#/policy/leave" class="text-primary text-sm font-medium">Next: Leave entitlements</a>
+			{/snippet}
+		</DocumentReader>
+	</AppShell>
 {:else if surface === 'row-tap'}
 	<div style="width: 375px; height: 320px;" data-probe="row-tap-wrap">
 		<DataTableTanstack
