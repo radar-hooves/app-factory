@@ -13,3 +13,7 @@ export const page = {
 	params: {} as Record<string, string>,
 	url: new URL('http://localhost/')
 };
+
+export const navigating = {
+	to: null as { url: URL } | null
+};

@@ -8,6 +8,13 @@ import Page from './+page.svelte';
 // router dropped (a navigation or invalidation that took its token mid-load)
 // leaves this page shown, so it asks again; one that landed unmounts it.
 
+const router = vi.hoisted(() => ({
+	page: { url: new URL('http://localhost/settings') },
+	navigating: { to: null as { url: URL } | null }
+}));
+
+vi.mock('$app/state', () => router);
+
 vi.mock('$lib/settings/sections', () => ({
 	settingsSections: () => [],
 	firstSettingsHref: () => '/settings/account'
@@ -16,7 +23,11 @@ vi.mock('$lib/settings/sections', () => ({
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the settings index', () => {
-	beforeEach(() => vi.mocked(goto).mockReset());
+	beforeEach(() => {
+		vi.mocked(goto).mockReset();
+		router.navigating.to = null;
+		router.page.url = new URL('http://localhost/settings');
+	});
 
 	it('asks again while a dropped redirect leaves it shown, a bounded number of times', async () => {
 		vi.mocked(goto).mockResolvedValue(undefined);
@@ -37,6 +48,24 @@ describe('the settings index', () => {
 		});
 		const { unmount } = render(Page);
 		leave = unmount;
+		await settle();
+
+		expect(goto).toHaveBeenCalledTimes(1);
+	});
+
+	it('leaves a navigation the reader started meanwhile alone', async () => {
+		vi.mocked(goto).mockImplementation(async () => {
+			router.navigating.to = { url: new URL('http://localhost/workspace') };
+		});
+		render(Page);
+		await settle();
+
+		expect(goto).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops when the redirect is cancelled', async () => {
+		vi.mocked(goto).mockRejectedValue(new Error('navigation cancelled'));
+		render(Page);
 		await settle();
 
 		expect(goto).toHaveBeenCalledTimes(1);

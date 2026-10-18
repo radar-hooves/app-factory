@@ -50,7 +50,7 @@ Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hoo
 ### Fixed
 
 - **A name the identity provider repeats is held once.** Authentik holds one entitlement object per name per application binding, so the forwarded header repeats a name for every binding that grants it (caspo's operator: 15 names, five repeats). `_parse_entitlements` keeps the first of each, in order, so `/api/users/me` and every module gate see each name once.
-- **`/settings` lands on the first settings page even when its redirect is dropped.** A navigation or invalidation that takes SvelteKit's token while the redirect loads aborts it, and the page stayed on `/settings` (caspo's E2E, two runs in three). While the index is still shown it asks again, up to three times.
+- **`/settings` lands on the first settings page even when its redirect is dropped.** A navigation or invalidation that takes SvelteKit's token while the redirect loads aborts it, and the page stayed on `/settings` (caspo's E2E, two runs in three). While the index is still shown at its own path and nothing else is navigating, it asks again, up to three times; a link the reader followed meanwhile wins, and a cancelled redirect stays cancelled.
 
 ### An app taking these
 

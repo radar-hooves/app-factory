@@ -16,6 +16,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import DocumentReader, { slugify } from '$lib/components/ui/document-reader/document-reader.svelte';
+import { createRawSnippet } from 'svelte';
+
+const asideFacts = createRawSnippet(() => ({ render: () => '<p>Owner: Pay policy</p>' }));
 
 const scrollSpy = vi.fn();
 beforeEach(() => {
@@ -189,5 +192,50 @@ describe('DocumentReader — loading and error', () => {
 	it('offers no Retry button without onRetry', () => {
 		render(DocumentReader, { props: { error: 'Could not load it' } });
 		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	});
+});
+
+describe('DocumentReader — the side column and the disclosure', () => {
+	const side = (container: HTMLElement) =>
+		container.querySelector('[data-slot="document-reader-side"]');
+
+	it('gives the column back once a body proves to have fewer than two headings', async () => {
+		const { container } = render(DocumentReader, {
+			props: { title: 'Short', html: '<p>Just a paragraph.</p>' }
+		});
+		await waitFor(() => expect(side(container)).toBeNull());
+	});
+
+	it('keeps the column while the body loads, and for a structured body', async () => {
+		const { container, rerender } = render(DocumentReader, {
+			props: { title: 'The guide', loading: true }
+		});
+		await rerender({ title: 'The guide', loading: false, html: body });
+		await waitFor(() => expect(side(container)).not.toBeNull());
+	});
+
+	it('renders `aside` once, whatever the width', () => {
+		render(DocumentReader, {
+			props: { title: 'Short', html: '<p>Just a paragraph.</p>', aside: asideFacts }
+		});
+		expect(screen.getAllByText('Owner: Pay policy')).toHaveLength(1);
+	});
+
+	it('survives a fragment that is not valid percent-encoding', async () => {
+		window.location.hash = '#%E0%A4%A';
+		render(DocumentReader, { props: { title: 'The guide', html: body } });
+		await waitFor(() => expect(contentsNavs().length).toBeGreaterThan(0));
+	});
+
+	it('folds the disclosure away when one of its links is followed', async () => {
+		const { container } = render(DocumentReader, { props: { title: 'The guide', html: body } });
+		const details = await waitFor(() => {
+			const el = container.querySelector('details');
+			if (!el) throw new Error('no disclosure yet');
+			return el;
+		});
+		details.open = true;
+		await fireEvent.click(within(details).getByRole('link', { name: 'Install it' }));
+		expect(details.open).toBe(false);
 	});
 });

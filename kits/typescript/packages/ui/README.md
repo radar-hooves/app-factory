@@ -637,9 +637,12 @@ disclosure above it. That is a container query on the reader, so a route at
 to its heading and moves focus there, without the URL fragment, which cannot
 reach into a shadow root.
 
-`aside` adds to that column, under the contents: a library document's catalogue
-facts belong there, and DocumentDetail stays the record for a document with no
-body to read. With a `title`, `loading` keeps the header and draws the body as a
+`aside` adds to that column, under the contents, and follows the body on a
+narrower reader: a library document's catalogue facts belong there, and
+DocumentDetail stays the record for a document with no body to read. The column
+is held while the body loads, so a structured document does not move sideways
+as it arrives; a body with fewer than two headings and no `aside` gives the room
+back. With a `title`, `loading` keeps the header and draws the body as a
 `prose` ContentSkeleton; without one it is LoadingState.
 
 ### The content texture
