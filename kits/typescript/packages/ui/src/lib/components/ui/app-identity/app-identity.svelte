@@ -143,6 +143,11 @@
 		if (onSwitchTheme) onSwitchTheme();
 		else toggleMode();
 	}
+
+	// Each name once: the identity provider repeats a name for every binding
+	// that grants it, and a repeated key throws in the list below, which took
+	// one app's whole account menu down with it.
+	const held = $derived([...new Set(entitlements)]);
 </script>
 
 <DropdownMenu.Root>
@@ -193,9 +198,9 @@
 					</span>
 				{/if}
 			</div>
-			{#if entitlements.length}
+			{#if held.length}
 				<div class="flex flex-wrap gap-1 px-2 pb-2">
-					{#each entitlements as e (e)}
+					{#each held as e (e)}
 						<span class="bg-surface-2 text-muted-foreground font-mono rounded px-1.5 py-px text-[10px]">
 							{e}
 						</span>

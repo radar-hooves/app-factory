@@ -94,6 +94,27 @@ describe('AppIdentity — Members reachability with no switcher', () => {
 	});
 });
 
+describe('AppIdentity — entitlements', () => {
+	it('lists a name the identity provider repeated once, without throwing', async () => {
+		// Authentik repeats a name for every binding that grants it; keyed on the
+		// name, the list threw each_key_duplicate and the menu never opened.
+		render(AppIdentity, {
+			props: {
+				user: { username: 'jdoe', display_name: null, email: null },
+				workspace: 'Household',
+				entitlements: ['room-pacman', 'admin', 'room-pacman', 'admin'],
+				onSignOut: () => {}
+			}
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+		await waitFor(() => expect(screen.getByText('room-pacman')).toBeInTheDocument());
+
+		expect(screen.getAllByText('room-pacman')).toHaveLength(1);
+		expect(screen.getAllByText('admin')).toHaveLength(1);
+	});
+});
+
 /**
  * `links` — the app-supplied destinations group (cadmus: an Admin route and a
  * support link that had nowhere to go but AppShell's `actions` slot).

@@ -54,6 +54,14 @@ async def test_a_read_admin_can_look_but_not_act(client: AsyncClient, session: S
     assert refused.json()["details"] == {"module": "admin", "grade": "write"}
 
 
+async def test_a_name_granted_by_two_bindings_is_held_once(client: AsyncClient) -> None:
+    """Authentik repeats a name once per binding that grants it; the caller holds it once, in order."""
+    granted = "admin|reports|admin|reports:write|reports"
+    me = await client.get("/api/users/me", headers=_headers("twice-bound", granted))
+    assert me.status_code == 200
+    assert me.json()["entitlements"] == ["admin", "reports", "reports:write"]
+
+
 # ── The list ─────────────────────────────────────────────────────────────────
 
 
