@@ -1,0 +1,15 @@
+# The personas the chat spec drives (chat.spec.ts): one answered by the suites'
+# fake CLI alone, and one that first reads the collections the fake library
+# lists for the person.
+helper:
+  name: The Helper
+  blurb: Ask the helper about leave, slowly enough to refresh or stop it.
+  examples:
+    - How is recreation leave accrued?
+outrider:
+  name: Outrider
+  blurb: Ask about pay, leave and conditions of service.
+  examples:
+    - How much recreation leave does a member accrue?
+  not_held: your own leave balance
+  collections: true

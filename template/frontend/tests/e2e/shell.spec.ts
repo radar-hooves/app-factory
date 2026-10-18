@@ -29,7 +29,7 @@ test('the top bar search affordance opens the command palette @smoke', async ({ 
 const STAMPED_ROUTES = [
 	{ path: '/workspace', heading: 'Members' },
 	{ path: '/settings/application', heading: 'Application' },
-	{ path: '/rooms', heading: 'Ask' }
+	{ path: '/chat', heading: 'Ask' }
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {
@@ -46,7 +46,7 @@ for (const { path, heading } of STAMPED_ROUTES) {
 
 // The shell's chrome sits on none of the app's controls, asked of this app's own
 // frame on a phone and a desktop. It did three ways: the report button on a
-// room's Send at 390x844 (app-factory#29) and on earworm's last control, and a
+// persona page's Send at 390x844 (app-factory#29) and on earworm's last control, and a
 // crowded top bar over mission-command's workspace menu. A control's trial click
 // fails naming whatever would take the click instead. The household's E2E widths
 // (stacks/sveltekit-testing.md), and 1280, where a crowded bar overlapped.
@@ -86,7 +86,7 @@ for (const viewport of VIEWPORTS) {
 
 	// A page's last control, a Button's height at its right edge below more page
 	// than the window holds, is where the report button floats; the padded page
-	// ends with room to scroll it clear.
+	// ends with space to scroll it clear.
 	test(`a page's last control scrolls clear of the report button at ${size}`, async ({ page }) => {
 		await page.setViewportSize(viewport);
 		await page.goto('/workspace');

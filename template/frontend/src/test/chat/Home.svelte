@@ -1,12 +1,12 @@
 <!--
-	A test app's room home (`RoomExtensions.Home`): what happened lately, a list
+	A test app's persona home (`ChatExtensions.Home`): what happened lately, a list
 	tall enough that on a phone it has to scroll with the conversation rather
 	than take its height.
 -->
 <script lang="ts">
-	import type { Room } from '$lib/agent/rooms';
+	import type { Persona } from '$lib/agent/chat';
 
-	let { room }: { room: Room } = $props();
+	let { persona }: { persona: Persona } = $props();
 
 	const lately = [
 		['1 Jun 2026', 'The leave chapter of the Manual was reissued.'],
@@ -18,7 +18,7 @@
 
 <section aria-label="Lately" data-testid="app-home" class="flex flex-col gap-2">
 	<h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-		Lately in {room.title}
+		Lately in {persona.name}
 	</h2>
 	<ul class="border-border divide-border flex flex-col divide-y border-y">
 		{#each lately as [when, what] (when)}
