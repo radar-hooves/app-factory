@@ -4,6 +4,49 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [2026.10.0] - 2026-10-18
+
+Chat with a persona over collections. Need: master for caspo, godswood, eight
+and pebblestone, master-project#380. The npm name stays `@poodle64/librarian`.
+
+### Changed
+
+- **`RoomTransport` is `ChatTransport`**, `LibrarianCopy` is `ChatCopy`, and
+  every word a person sees says persona and collection, never room, reading
+  room or shelf. The default persona name is a neutral "Assistant", not one
+  app's. A consumer renames the two type imports.
+- **`client.ask()` takes `collection?: string`**, sent as JSON `collection` and
+  as the multipart field `collection`, in place of `collections` and `subtree`.
+  `endpoint` is required: the persona's `/api/agent/{persona}/ask`. A consumer
+  passes `collection` and an `endpoint`, and drops `subtree`.
+- **`Chat.ask(question?, kind?, collection?)`**, `AskRequest.collection`,
+  `Turn.collection` and `StoredTurn.collection` carry the narrowed collection;
+  `again()` asks the same one.
+- **The synthesised stream failure is `agent_error`**, once `library_error`
+  (`status`, `dropped` as before): a refusal (404, 409, 429, 503), a stream
+  that would not open, one that died. A host that matched the old type matches
+  the new one, and the app's own error frame must carry the same type.
+- **`Composer`'s scope chips are the collection picker**: `collections`
+  (`{ name, summary }[]`), `collection` (the chosen name; undefined is all) and
+  `oncollection(name | undefined)`, from two collections up, each shown by its
+  summary and "All your collections", never by its name. `Scope`,
+  `documentName`, `collectionName`, `scope` and `onscope` are gone.
+  `CollectionChoice` is exported from `./composer`.
+- **`outcomeLine(outcome, formatCost?)`**: the duration, then the host's priced
+  cost when it can price one.
+
+### Removed
+
+- **Depth**: `Depth`, `client.ask()`'s `depth`, `Chat.ask`'s depth argument,
+  `Turn.depth`, `StoredTurn.depth`, `Composer`'s `depth` switch and its
+  `depth*` copy. A consumer drops `bind:depth`.
+- **Frames no sender emits**: `queued` (`isQueued`, `QueuedEvent`,
+  `Chat.waiting`, the `waiting` props, `copy.waiting`) and `suggestions`
+  (`Transcript.suggestions`, `Turn.suggestions`, the follow-up chips,
+  `onsuggest`, `copy.suggestions`). `citations` folds as before.
+- **`./history`** (`createHistory`, `titleFrom`): the browser-held conversation
+  list, which no page read.
+
 ## [2026.9.28] - 2026-10-12
 
 ### Added

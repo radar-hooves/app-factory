@@ -12,7 +12,7 @@
 <script lang="ts">
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import type { Artefact } from '../../transcript.svelte';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		artefact: Artefact;
@@ -21,7 +21,7 @@
 		/** Omit and the card informs but does not open: a host with nowhere
 		 *  to show the artefact offers no action rather than a dead one. */
 		onopen?: () => void;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { artefact, open = false, onopen, copy }: Props = $props();

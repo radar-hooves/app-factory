@@ -12,7 +12,7 @@
  * Every Claude Code event carries a `uuid`, and one already folded is
  * skipped: a watch route replays from the first event, so opening it again
  * after the session moves on folds only what is new. A frame the server adds
- * itself (an error, the library's citations) carries none, and is known by
+ * itself (an error, the citations) carries none, and is known by
  * the event it follows.
  */
 
@@ -23,10 +23,10 @@ import { contentOf, fold, foldState, type FoldState, type Turn } from './transcr
  *  next run, whether or not its prompt was echoed. */
 const RUN = new Set(['stream_event', 'assistant', 'user', 'result']);
 
-/** Everything else that lands on a turn: the library's trailing frames, and
- *  a stream that broke. Anything else (`system`, rate limits) is the CLI
+/** Everything else that lands on a turn: the citations, and a stream that
+ *  broke. Anything else (`system`, rate limits) is the CLI
  *  talking about itself. */
-const FOLDED = new Set([...RUN, 'library_error', 'citations', 'suggestions']);
+const FOLDED = new Set([...RUN, 'agent_error', 'citations']);
 
 export class Session {
 	/** One per run, in order: plain objects, so a host may spread one to add
@@ -70,7 +70,7 @@ export class Session {
 		const last = this.turns.at(-1);
 		const settled = last?.outcome != null && !last.outcome.unreachable;
 		// The watch broke while nothing was running, and no run failed.
-		if (event.type === 'library_error' && settled) return;
+		if (event.type === 'agent_error' && settled) return;
 		// A run whose prompt was never echoed — a session started without the
 		// replay flag, or one that failed before it said anything — still has
 		// an answer to show; its question is simply not on the wire.
@@ -91,8 +91,7 @@ export class Session {
 			at,
 			blocks: [],
 			outcome: null,
-			citations: [],
-			suggestions: []
+			citations: []
 		});
 		this.#folds.push(foldState());
 	}

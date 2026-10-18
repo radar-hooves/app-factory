@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * The librarian lab.
+	 * The chat lab.
 	 *
 	 * Every state @poodle64/librarian can be in, on one route, driven by
 	 * `?state=` so a screenshot grid across three widths and two themes is one
@@ -10,29 +10,30 @@
 	 *
 	 * The composer is live: typing, growing, attaching and sending all work,
 	 * and sending appends a turn from the fixtures. What it cannot do is reach
-	 * a real model, which is the point — see librarian-fixtures.ts.
+	 * a real model, which is the point — see chat-fixtures.ts.
 	 */
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
 	import Conversation from '@poodle64/librarian/conversation';
-	import Composer, { type Depth, type Scope } from '@poodle64/librarian/composer';
+	import Composer from '@poodle64/librarian/composer';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 	import { Chat, type ConversationSummary, type Quota } from '@poodle64/librarian/chat';
 	import type { Turn } from '@poodle64/librarian/transcript';
 	import type { Citation } from '@poodle64/librarian/citations';
+	import type { CollectionChoice } from '@poodle64/librarian/composer';
 	import {
 		EXAMPLES,
 		JOB_COPY,
 		JOB_NOTE,
 		JOB_READING,
 		JOB_WORDS,
-		labRoom,
+		labChat,
 		loadDocument,
 		scene,
 		SCOPE,
 		type LabState
-	} from '$lib/librarian-fixtures';
+	} from '$lib/chat-fixtures';
 
 	const STATES: LabState[] = [
 		'empty',
@@ -52,14 +53,14 @@
 		'job-showing',
 		'job-live',
 		'job-schema',
-		'waiting',
 		'answering',
 		'mark',
 		'fair-use',
 		'limit',
 		'past',
-		'room',
-		'depth'
+		'live',
+		'cost',
+		'collections'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -71,30 +72,27 @@
 	let version = $state(0);
 	// Whose surface this is. Only the `persona` scene renames it, and renaming
 	// it is the whole test: every word the package says has to follow.
-	let name = $state('Milton');
+	let name = $state('Outrider');
 	// Bumping `version` from an effect that also READ it would re-trigger the
 	// effect; the counter it is set from is a plain variable for that reason.
 	let bump = 0;
-	let scope = $state<Scope>('library');
+	let collection = $state<string | undefined>(undefined);
+	let collections = $state<CollectionChoice[]>([]);
 	// A job surface: the host keeps its own column for the artefact and its
 	// own page viewer, and the package only hands it the taps.
 	let job = $state(false);
 	let showing = $state<string | undefined>(undefined);
 	let viewing = $state<Citation | null>(null);
-	let waiting = $state(false);
 	let answering = $state<number | null>(null);
 	let mark = $state(false);
 	let quota = $state<Quota | null>(null);
 	let past = $state<ConversationSummary[] | null>(null);
 	let current = $state<string | undefined>(undefined);
-	// The depth switch: bound only on the `depth` scene, which is also the
-	// one with a turn behind it long enough to price and a banner to show.
-	let depth = $state<Depth>('quick');
 	const formatCost = (usd: number) => `about A$${(usd * 1.5).toFixed(2)}`;
-	// `room` is the package's own controller over a fake of the rooms slice's
-	// routes, driven rather than seeded: every other scene is a picture.
+	// `live` is the package's own controller over a fake of the chat routes,
+	// driven rather than seeded: every other scene is a picture.
 	let live = $state(false);
-	const chat = new Chat(labRoom(), { pollMs: 1500 });
+	const chat = new Chat(labChat(), { pollMs: 1500 });
 
 	// Re-seeding on the query parameter rather than on a click keeps the driver
 	// and the eye on exactly the same code path.
@@ -108,7 +106,8 @@
 		job = next.job ?? false;
 		showing = next.showing;
 		viewing = null;
-		waiting = next.waiting ?? false;
+		collections = next.collections ?? [];
+		collection = undefined;
 		answering = next.answeringFor === undefined ? null : Date.now() - next.answeringFor;
 		mark = next.mark ?? false;
 		quota = next.quota ?? null;
@@ -140,10 +139,10 @@
 	<header
 		class="border-border flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-2 text-xs"
 	>
-		<span class="text-muted-foreground pr-1 font-medium">librarian</span>
+		<span class="text-muted-foreground pr-1 font-medium">chat</span>
 		{#each STATES as state (state)}
 			<a
-				href="/librarian?state={state}"
+				href="/chat?state={state}"
 				class="rounded-full border px-2 py-0.5 transition-colors {requested === state
 					? 'border-primary/40 bg-primary/15 text-foreground'
 					: 'text-muted-foreground hover:text-foreground border-transparent'}"
@@ -198,12 +197,11 @@
 				turns={chat.turns}
 				running={chat.busy}
 				version={chat.version}
-				waiting={chat.waiting}
+				{name}
 				answering={chat.answering}
 				examples={['What is the total on this receipt?']}
 				onexample={(question) => (chat.draft = question)}
 				onregenerate={() => void chat.again()}
-				onsuggest={(question) => void chat.ask(question)}
 				onmark={(turn, verdict) => chat.mark(turn, verdict)}
 				{loadDocument}
 			>
@@ -213,6 +211,7 @@
 						bind:value={chat.draft}
 						bind:files={chat.files}
 						running={chat.busy}
+						{name}
 						onsubmit={() => void chat.ask()}
 						onstop={() => void chat.stop()}
 					/>
@@ -243,26 +242,21 @@
 				? (turn) => (showing = showing === turn.id ? undefined : turn.id)
 				: undefined}
 			{showing}
-			{waiting}
 			{answering}
 			onmark={mark ? async () => true : undefined}
 			oncite={job ? (citation) => (viewing = citation) : undefined}
-			welcome={name === 'Milton'
-				? 'Ask Milton about ADF pay, allowances, leave and conditions of service.'
+			welcome={name === 'Outrider'
+				? 'Ask Outrider about ADF pay, allowances, leave and conditions of service.'
 				: undefined}
 			onexample={(question) => {
 				value = question;
-			}}
-			onsuggest={(followUp) => {
-				value = followUp;
-				send();
 			}}
 			onregenerate={() => {
 				running = true;
 				version = ++bump;
 			}}
 			{loadDocument}
-			formatCost={requested === 'depth' ? formatCost : undefined}
+			formatCost={requested === 'cost' ? formatCost : undefined}
 		>
 			{#snippet composer()}
 				{#if job}
@@ -283,14 +277,14 @@
 						bind:value
 						bind:files
 						{running}
-						{scope}
+						{collections}
+						{collection}
 						{name}
-						onscope={(next) => (scope = next)}
+						oncollection={(next) => (collection = next)}
 						onsubmit={send}
 						onstop={() => (running = false)}
-						depth={requested === 'depth' ? depth : undefined}
-						turnCount={requested === 'depth' ? 9 : undefined}
-						onnewquestion={requested === 'depth' ? () => (turns = []) : undefined}
+						turnCount={requested === 'cost' ? 9 : undefined}
+						onnewquestion={requested === 'cost' ? () => (turns = []) : undefined}
 					/>
 				{/if}
 			{/snippet}

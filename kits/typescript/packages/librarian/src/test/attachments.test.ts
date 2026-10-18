@@ -1,6 +1,6 @@
 /**
  * The limits are the wire's, so they are enforced before the wire: ten files,
- * 20 MB each, and only what Milton can actually read.
+ * 20 MB each, and only what the persona can actually read.
  */
 import { describe, it, expect } from 'vitest';
 import { acceptFiles, formatSize, MAX_BYTES } from '$lib/attachments';
@@ -14,7 +14,7 @@ function file(name: string, type: string, size = 1024): File {
 }
 
 describe('acceptFiles()', () => {
-	it('takes the types Milton can read', () => {
+	it('takes the types the persona can read', () => {
 		const { accepted, rejected } = acceptFiles(
 			[],
 			[file('brief.pdf', 'application/pdf'), file('shot.png', 'image/png')]

@@ -1,62 +1,77 @@
 /**
- * The scope chip renders only when there is a genuine pick between two or
- * more scopes (design-system, the fixed-scope Composer defect). A room with
- * one shelf set passes neither `documentName` nor `collectionName`, leaving
- * "The whole library" as the sole entry — and a sole entry is console
- * furniture, not a control.
+ * The collection picker renders only when there is a genuine pick: two or
+ * more collections the person may read. With one, or none, there is nothing
+ * to choose and the row is not there. A collection is shown by its summary,
+ * never by its name.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
-describe('Composer scope chip', () => {
-	it('renders nothing when the caller has fixed the scope', () => {
-		render(Composer, {
-			props: {
-				value: '',
-				running: false,
-				scope: 'library',
-				onscope: () => {},
-				onsubmit: () => {},
-				onstop: () => {}
-			}
-		});
+const COLLECTIONS = [
+	{ name: 'adf-pay', summary: 'ADF pay and conditions' },
+	{ name: 'housing', summary: 'Defence housing and relocation' }
+];
 
-		expect(screen.queryByText('The whole library')).not.toBeInTheDocument();
+function base(props: Record<string, unknown> = {}) {
+	return { value: '', running: false, onsubmit: () => {}, onstop: () => {}, ...props };
+}
+
+describe('Composer collection picker', () => {
+	it('renders nothing when the person has no collection to choose between', () => {
+		render(Composer, { props: base({ collections: [COLLECTIONS[0]] }) });
+		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
 	});
 
-	it('renders chips once a narrower scope is offered', () => {
-		render(Composer, {
-			props: {
-				value: '',
-				running: false,
-				scope: 'library',
-				collectionName: 'household-legal',
-				onscope: () => {},
-				onsubmit: () => {},
-				onstop: () => {}
-			}
-		});
+	it('renders nothing when the host passes none', () => {
+		render(Composer, { props: base() });
+		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
+	});
 
-		expect(screen.getByText('The whole library')).toBeInTheDocument();
-		expect(screen.getByText('household-legal')).toBeInTheDocument();
+	it('offers all of them, then each by its summary and never its name', () => {
+		render(Composer, { props: base({ collections: COLLECTIONS }) });
+		expect(screen.getByRole('button', { name: 'All your collections' })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		expect(screen.getByRole('button', { name: 'ADF pay and conditions' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Defence housing and relocation' })).toBeInTheDocument();
+		expect(screen.queryByText('adf-pay')).not.toBeInTheDocument();
+	});
+
+	it('marks the chosen collection and hands the host its name on a tap', async () => {
+		const oncollection = vi.fn();
+		render(Composer, {
+			props: base({ collections: COLLECTIONS, collection: 'housing', oncollection })
+		});
+		expect(
+			screen.getByRole('button', { name: 'Defence housing and relocation' })
+		).toHaveAttribute('aria-pressed', 'true');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'ADF pay and conditions' }));
+		expect(oncollection).toHaveBeenLastCalledWith('adf-pay');
+		await fireEvent.click(screen.getByRole('button', { name: 'All your collections' }));
+		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+	});
+
+	it('is named for the persona it asks', () => {
+		render(Composer, { props: base({ collections: COLLECTIONS, name: 'Outrider' }) });
+		expect(screen.getByRole('group', { name: 'Where Outrider looks' })).toBeInTheDocument();
 	});
 });
 
 describe('Composer placeholder', () => {
-	it('asks Milton by name, never a bare "ask anything"', () => {
+	it('asks the persona by name, never a bare "ask anything"', () => {
 		render(Composer, {
 			props: {
 				value: '',
 				running: false,
-				scope: 'library',
-				onscope: () => {},
 				onsubmit: () => {},
 				onstop: () => {}
 			}
 		});
 
-		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
+		expect(screen.getByPlaceholderText('Ask Assistant…')).toBeInTheDocument();
 	});
 
 	it("takes the host's own persona name in both states", () => {
@@ -64,8 +79,6 @@ describe('Composer placeholder', () => {
 			props: {
 				value: '',
 				running: false,
-				scope: 'library',
-				onscope: () => {},
 				onsubmit: () => {},
 				onstop: () => {},
 				name: 'Penny'
@@ -76,8 +89,6 @@ describe('Composer placeholder', () => {
 		rerender({
 			value: '',
 			running: true,
-			scope: 'library',
-			onscope: () => {},
 			onsubmit: () => {},
 			onstop: () => {},
 			name: 'Penny'
@@ -92,8 +103,6 @@ describe('Composer placeholder', () => {
 			props: {
 				value: '',
 				running: false,
-				scope: 'library',
-				onscope: () => {},
 				onsubmit: () => {},
 				onstop: () => {},
 				...props
@@ -101,9 +110,9 @@ describe('Composer placeholder', () => {
 		});
 	}
 
-	it('asks for the library persona by default', () => {
+	it('asks for the neutral default persona', () => {
 		composer();
-		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
+		expect(screen.getByPlaceholderText('Ask Assistant…')).toBeInTheDocument();
 	});
 
 	it('asks for the host persona, capitalised from its slug', () => {
@@ -114,61 +123,6 @@ describe('Composer placeholder', () => {
 	it('says who is answering while the box is disabled', () => {
 		composer({ name: 'penny', running: true });
 		expect(screen.getByPlaceholderText('Penny is answering…')).toBeInTheDocument();
-	});
-});
-
-describe('Composer depth switch', () => {
-	function composer(props: Record<string, unknown> = {}) {
-		return render(Composer, {
-			props: {
-				value: '',
-				running: false,
-				onsubmit: () => {},
-				onstop: () => {},
-				...props
-			}
-		});
-	}
-
-	it('renders nothing when the host never offers a depth, exactly like today', () => {
-		composer();
-		expect(screen.queryByRole('group', { name: 'How hard Milton works' })).not.toBeInTheDocument();
-		expect(screen.queryByText('Quick')).not.toBeInTheDocument();
-	});
-
-	it('renders both sides, Quick pressed, once the host binds a depth', () => {
-		composer({ depth: 'quick' });
-		const group = screen.getByRole('group', { name: 'How hard Milton works' });
-		expect(group).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Quick' })).toHaveAttribute('aria-pressed', 'true');
-		expect(screen.getByRole('button', { name: 'Thorough' })).toHaveAttribute(
-			'aria-pressed',
-			'false'
-		);
-		expect(screen.getByText('Fast, for looking something up')).toBeInTheDocument();
-	});
-
-	it('never disables or hides either side, whichever is picked', () => {
-		composer({ depth: 'thorough' });
-		expect(screen.getByRole('button', { name: 'Quick' })).toBeEnabled();
-		expect(screen.getByRole('button', { name: 'Thorough' })).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
-		expect(
-			screen.getByText('Slower, reads more, for questions of interpretation')
-		).toBeInTheDocument();
-	});
-
-	it('switches on a tap, bindable back to the host', async () => {
-		composer({ depth: 'quick' });
-		await fireEvent.click(screen.getByRole('button', { name: 'Thorough' }));
-		expect(screen.getByRole('button', { name: 'Thorough' })).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
-		expect(screen.getByRole('button', { name: 'Quick' })).toHaveAttribute('aria-pressed', 'false');
-		expect(screen.getByText('Slower, reads more, for questions of interpretation')).toBeInTheDocument();
 	});
 });
 
@@ -204,7 +158,7 @@ describe('Composer long-conversation banner', () => {
 		const onnewquestion = vi.fn();
 		composer({ turnCount: 9, onnewquestion });
 		expect(
-			screen.getByText('This conversation is getting long. A new question keeps Milton quick.')
+			screen.getByText('This conversation is getting long. A new question keeps Assistant quick.')
 		).toBeInTheDocument();
 		await fireEvent.click(screen.getByRole('button', { name: 'New question' }));
 		expect(onnewquestion).toHaveBeenCalledTimes(1);
@@ -237,7 +191,7 @@ describe('Composer while a session works', () => {
 	it('takes a message and offers Stop beside Send, for a session that reads one', async () => {
 		const { onsubmit, onstop } = composer({ sendWhileRunning: true });
 		expect(screen.getByRole('textbox')).toBeEnabled();
-		expect(screen.getByPlaceholderText('Ask Milton…')).toBeInTheDocument();
+		expect(screen.getByPlaceholderText('Ask Assistant…')).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 		expect(onsubmit).toHaveBeenCalledTimes(1);

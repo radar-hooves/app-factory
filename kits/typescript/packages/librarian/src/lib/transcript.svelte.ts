@@ -7,11 +7,8 @@
  * verbatim under `other`, so nothing is silently dropped.
  */
 
-import type { AgentEvent, Depth } from './client';
+import type { AgentEvent } from './client';
 import type { Citation } from './citations';
-import type { LibrarianCopy } from './copy';
-
-export type { Depth };
 
 export interface TextBlock {
 	kind: 'text';
@@ -58,9 +55,9 @@ export interface Outcome {
 /**
  * The question as the READER asked it.
  *
- * A host prepends a system preamble to every question before it goes to the
- * library — cadmus sends `{room.preamble}\n\n{question}` — and echoing that
- * back into the transcript shows a colleague the machine room. Leading
+ * A host may prepend a system preamble to every question before it goes to
+ * the persona, and echoing that back into the transcript shows a colleague
+ * the machinery. Leading
  * blank-line-separated paragraphs addressed to the model are dropped.
  *
  * The LAST paragraph is never dropped, whatever it starts with: someone whose
@@ -101,12 +98,12 @@ export interface ToolWords {
  *  `describe()`, the package's own. */
 export type DescribeTool = (block: ToolBlock) => ToolWords | undefined;
 
-/** What Milton DID, in a reader's own words — never the tool's name or the
+/** What the persona DID, in a reader's own words — never the tool's name or the
  * raw command it ran.
  *
  * The collapsed row is read by someone asking a question about documents, not
  * by an engineer: `Bash ls -1 .` tells them nothing and looks like a leak from
- * the machine room. Milton never narrates how he searched, so a tool this
+ * the machinery. The persona never narrates how it searched, so a tool this
  * does not recognise falls back to something that names no mechanism at all.
  * A persona with tools of its own brings a `DescribeTool` in front of this.
  */
@@ -233,10 +230,8 @@ export class Transcript {
 	sessionId = $state<string | null>(null);
 	model = $state<string | null>(null);
 	outcome = $state<Outcome | null>(null);
-	/** Sources for the answer, from the library's own `citations` frame. */
+	/** Sources for the answer, from the app's `citations` frame. */
 	citations = $state<Citation[]>([]);
-	/** Follow-ups the librarian named, from the `suggestions` frame after it. */
-	suggestions = $state<string[]>([]);
 	other = $state<AgentEvent[]>([]);
 
 	#fold = foldState();
@@ -245,7 +240,6 @@ export class Transcript {
 		this.blocks = [];
 		this.outcome = null;
 		this.citations = [];
-		this.suggestions = [];
 		this.other = [];
 		this.#fold = foldState();
 	}
@@ -266,7 +260,6 @@ export interface FoldTarget {
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];
-	suggestions?: string[];
 }
 
 /** Where one turn's fold keeps its place between events. */
@@ -308,23 +301,11 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 		return true;
 	}
 
-	// Emitted after the final assistant text, so it lands on a turn that is
-	// otherwise complete. Both frames put their payload on `items`, so each
-	// keeps only what its own shape admits: a `citations` frame carrying
-	// strings, or a `suggestions` frame carrying objects, is the library
-	// having changed under us, and rendering it would be worse than
-	// rendering nothing.
+	// The app emits this before the persona's answer, from the passages it
+	// retrieved for the question.
 	if (event.type === 'citations') {
 		into.citations = (event.items ?? []).filter(
-			(item): item is Citation => typeof item === 'object' && item !== null
-		);
-		return true;
-	}
-
-	// Last of the two, and only when the librarian named any.
-	if (event.type === 'suggestions') {
-		into.suggestions = (event.items ?? []).filter(
-			(item): item is string => typeof item === 'string' && item.trim().length > 0
+			(item) => typeof item === 'object' && item !== null
 		);
 		return true;
 	}
@@ -332,7 +313,7 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 	// No persona and no sentence at this layer: `client.ts` raises this for a
 	// stream that would not open or died half-way, and the turn renders the
 	// unreachable line in whichever persona's voice the host named.
-	if (event.type === 'library_error') {
+	if (event.type === 'agent_error') {
 		into.outcome = { isError: true, unreachable: true, error: event.error };
 		return true;
 	}
@@ -490,18 +471,15 @@ export interface Turn {
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];
-	/** Follow-ups offered after this answer. Absent on a turn read back from
-	 *  history: they belonged to the moment it was asked. */
-	suggestions?: string[];
 	/** Something this turn produced for the reader to open, carded under the
 	 *  answer once the turn settles. */
 	artefact?: Artefact;
 	/** What the host asked for when this was not a plain question
 	 *  (`'briefing'`), in its own word, as `client.ask()` sent it. */
 	kind?: string;
-	/** How hard the persona worked on this one, as `client.ask()` sent it.
-	 *  Absent, a host that never offers the choice. */
-	depth?: Depth;
+	/** The collection this question was narrowed to, by name, as `client.ask()`
+	 *  sent it. Absent asked across every collection the person may read. */
+	collection?: string;
 	/** Where this answer's read-only view lives while it is shared, as the
 	 *  host's own address. Absent while it is not. */
 	shared?: string;
@@ -530,7 +508,7 @@ export interface Artefact {
  * 2. "Reading pspf guidelines 2026" appeared five times in a row — five pages
  *    of one document, which is one act of reading to a human. Consecutive
  *    steps with the same label collapse to one row carrying a count.
- * 3. Milton's between-tool narration was rendering unfolded, as answer prose.
+ * 3. The persona's between-tool narration was rendering unfolded, as answer prose.
  *    The caller stream carries no `thinking` blocks at all — measured on
  *    production 11/09/2026 — so "Let me also check whether…" arrives as an
  *    ordinary `text` block, indistinguishable from the answer except by
@@ -545,8 +523,8 @@ export interface Artefact {
  * and re-derived on every event, so re-homing is just the next call returning
  * a different shape.
  *
- * The cost of the rule is a real answer that Milton interrupts to go back to
- * the shelf: its first half folds away. That is the trade taken knowingly —
+ * The cost of the rule is a real answer that the persona interrupts to go back to
+ * its tools: its first half folds away. That is the trade taken knowingly —
  * the position of a block is the only signal the stream gives, and a rule read
  * off the prose itself would be unexplainable the first time it misfired.
  */
@@ -602,7 +580,7 @@ function isStep(block: Block): boolean {
 function sameStep(last: ActivityStep, block: Block, words: ToolWords | undefined): boolean {
 	if (last.block.kind !== block.kind) return false;
 	if (block.kind === 'thinking') return true;
-	// Two narration sentences are two things Milton said; collapsing them to
+	// Two narration sentences are two things the persona said; collapsing them to
 	// one row with a count would lose the second one entirely.
 	if (block.kind === 'text') return false;
 	return last.words?.verb === words?.verb && last.words?.object === words?.object;
@@ -617,7 +595,7 @@ function count(group: ActivityGroup, [one, many]: [string, string]): void {
 /** One line describing a whole investigation, for the collapsed state.
  *
  * Counts of what the persona did are fine ("1 search · 2 documents read"); how
- * it organises what it knows is not — no collection count, no shelf, no corpus.
+ * it organises what it knows is not — no collection count, no corpus.
  */
 export function summariseActivity(group: ActivityGroup): string {
 	const parts = group.tallies.map((t) => `${t.count} ${t.count === 1 ? t.one : t.many}`);
@@ -625,30 +603,17 @@ export function summariseActivity(group: ActivityGroup): string {
 }
 
 /**
- * What a settled answer took, as one quiet line: `Quick · 56 s · about
- * A$0.34`. Depth first (absent on a turn the host never asked one for, or
- * one read back before the feature shipped), then the duration, then what it
- * cost — only when the host can price it (`formatCost`) and the run actually
+ * What a settled answer took, as one quiet line: `56.3s`, then what it cost
+ * — only when the host can price it (`formatCost`) and the run actually
  * spent something, since a zero-cost run (a local model) has nothing worth
- * saying about money.
+ * saying about money: `56.3s · about A$0.34`.
  *
  * The host prices `outcome.costUsd`, never this package: the currency and
  * the rate are the app's own setting, not something a shared component
  * should be converting.
- *
- * A turn asked with no depth at all renders exactly what this line always
- * has (`56.3s`, one decimal, no gap) — a host that never wires depth sees no
- * change here either.
  */
-export function outcomeLine(
-	outcome: Outcome,
-	depth: Depth | undefined,
-	words: Pick<LibrarianCopy, 'depthQuick' | 'depthThorough'>,
-	formatCost?: (usd: number) => string
-): string {
-	const seconds = (outcome.durationMs ?? 0) / 1000;
-	if (!depth) return `${seconds.toFixed(1)}s`;
-	const parts = [depth === 'quick' ? words.depthQuick : words.depthThorough, `${Math.round(seconds)} s`];
+export function outcomeLine(outcome: Outcome, formatCost?: (usd: number) => string): string {
+	const parts = [`${((outcome.durationMs ?? 0) / 1000).toFixed(1)}s`];
 	if (formatCost && outcome.costUsd) parts.push(formatCost(outcome.costUsd));
 	return parts.join(' · ');
 }

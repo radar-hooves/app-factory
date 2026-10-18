@@ -6,11 +6,11 @@ rebuilding: the transcript with its own follow-scroll, the composer with
 attachments, citation chips and the source pane they open.
 
 The persona is an argument. Name it once — `name="penny"` — and every word the
-package says is composed from it. Milton is the library's own persona and the
-default; no string in this package names him.
+package says is composed from it. The default name is a neutral
+"Assistant"; no string in this package names one app's persona.
 
-Owned by the library. Design-system is its press: change it here, consume it
-there.
+The npm name `@poodle64/librarian` is the package's identity and stays; what a
+person sees never says it.
 
 ## What is here
 
@@ -19,24 +19,23 @@ src/lib/
   client.ts                ask() and watch(): Claude Code's OWN events, unaltered
   transcript.svelte.ts     Transcript state, the fold/segment/describe helpers
   session.svelte.ts        Session: a whole stream of runs, as turns
-  chat.svelte.ts           Chat: the page's controller, over a room's routes or a job's
+  chat.svelte.ts           Chat: the page's controller, over a persona's chat routes or a job's
   citations.ts             the Citation shape, `[n]` markers, the trust mark
   copy.ts                  every word this package says, and the host's overrides
   attachments.ts           what a reader may attach, and the limits
   follow-scroll.svelte.ts  follow the stream until the reader disagrees
-  history.svelte.ts        the browser-held conversation list, per caller
   components/
     conversation/          the whole reading surface: scroll, pill, pane, composer slot
     conversation-list/     past conversations, newest first: reopen, rename, download, delete
     answer-mark/           helpful or not, with a note, on the last answer
     answer-share/          share an answer read-only, and stop sharing it
     fair-use-notice/       today's allowance, beside the composer
-    scope-statement/       what this room answers from, and what it does not hold
-    agent-transcript/      one question and everything Milton did answering it
+    scope-statement/       what a persona answers from, and what it does not hold
+    agent-transcript/      one question and everything the persona did answering it
     document-pane/         the cited document, open at the cited passage
     artefact-card/         an artefact's card, in the host's words
     artefact-pane/         an artefact that is its answer's prose, in the column
-    composer/              the input box: attachments, scope chips, a note, send/stop
+    composer/              the input box: attachments, collection picker, a note, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        a whole investigation, as one quiet line
     tool-row/              one tool call
@@ -113,7 +112,7 @@ gives it a height and a composer and nothing else:
 			for await (const event of ask({
 				question: text,
 				files: attached,
-				endpoint: '/api/caller/ask',
+				endpoint: '/api/agent/outrider/ask',
 				signal: controller.signal
 			})) {
 				transcript.apply(event);
@@ -122,7 +121,6 @@ gives it a height and a composer and nothing else:
 					live.blocks = transcript.blocks;
 					live.outcome = transcript.outcome;
 					live.citations = transcript.citations;
-					live.suggestions = transcript.suggestions;
 				}
 			}
 		} finally {
@@ -143,12 +141,12 @@ gives it a height and a composer and nothing else:
 		{turns}
 		{running}
 		version={transcript.version}
-		welcome="Ask Milton about pay, allowances, leave and conditions of service."
+		name="Outrider"
+		welcome="Ask Outrider about pay, allowances, leave and conditions of service."
 		examples={['How much recreation leave do I get?']}
 		onexample={(q) => (question = q)}
 		onregenerate={() => run(asked, [])}
-		onsuggest={(q) => run(q, [])}
-		scope="Milton answers from the ADF Pay and Conditions Manual (PACMAN). He does not hold your own pay records or anything about your individual case."
+		scope="Outrider answers from the ADF Pay and Conditions Manual (PACMAN). It does not hold your own pay records or anything about your individual case."
 		{loadDocument}
 	>
 		{#snippet composer()}
@@ -172,25 +170,25 @@ on it fires once and never again.
 
 | Concern                  | How                                                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The ask route            | `ask({ endpoint })`: a room's `/api/rooms/{id}/ask`, a caller's `/api/caller/ask`                                                                                                           |
-| Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collections[]`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
+| The ask route            | `ask({ endpoint, collection? })`: the persona's `/api/agent/{persona}/ask`, `endpoint` required. `collection` narrows the question to one collection by name; absent asks across every collection the person may read |
+| Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collection`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
 | Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (caspo: `GET /api/sources/documents/{id}/content`) |
 | Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                         |
-| Asking a follow-up       | `onsuggest(question)`: ask it as a NEW turn. Without the handler the chips do not render at all — a chip that does nothing is worse than no chip                                            |
+| Choosing a collection    | `Composer`'s `collections` (`{ name, summary }[]`, the ones the person may read) and `collection` (the chosen name; undefined is all of them), with `oncollection(name \| undefined)`. It renders from two collections up, each by its summary, never its name |
 | The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
-| What this surface covers | `scope`: one statement per room, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
-| The words themselves     | `copy`: a partial of `LibrarianCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                           |
+| What this surface covers | `scope`: one statement per persona, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
+| The words themselves     | `copy`: a partial of `ChatCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                           |
 | An answer its own way    | `turn`: a snippet given each turn's `AgentTranscriptProps` in place of `AgentTranscript`. Render your own from the parts, or `AgentTranscript` inside your own to add to it               |
 | What leads a conversation | `lead`: a snippet inside the scroll, under the opening and the scope, so a tall one scrolls with the conversation instead of taking its height                                            |
 
-Nothing here fetches on its own behalf. The library's document read is
+Nothing here fetches on its own behalf. The document read is
 authenticated, and a package that called it directly would be reaching past
 the app's proxy with a session it has no business holding.
 
-### A room's page, whole: `Chat`
+### A persona's page, whole: `Chat`
 
-The hand-wired page above is the parts. A stamped room page is `Chat` over
-the room's routes, and the components bound to it:
+The hand-wired page above is the parts. A stamped chat page is `Chat` over
+the persona's routes, and the components bound to it:
 
 ```svelte
 <script lang="ts">
@@ -200,7 +198,7 @@ the room's routes, and the components bound to it:
 	import Composer from '@poodle64/librarian/composer';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 
-	const chat = new Chat(roomTransport(room)); // the app's own client, below
+	const chat = new Chat(chatTransport(persona, collection)); // the app's own client, below
 	const wanted = $derived(page.url.searchParams.get('c'));
 
 	// The address names the conversation; `open` and `new` are safe here.
@@ -224,10 +222,8 @@ the room's routes, and the components bound to it:
 	turns={chat.turns}
 	running={chat.busy}
 	version={chat.version}
-	waiting={chat.waiting}
 	answering={chat.answering}
 	onregenerate={() => chat.again()}
-	onsuggest={(question) => chat.ask(question)}
 	onmark={(turn, verdict) => chat.mark(turn, verdict)}
 >
 	{#snippet composer()}
@@ -236,6 +232,9 @@ the room's routes, and the components bound to it:
 			bind:value={chat.draft}
 			bind:files={chat.files}
 			running={chat.busy}
+			{collections}
+			{collection}
+			oncollection={(next) => (collection = next)}
 			sendWhileRunning={chat.sendWhileRunning}
 			onsubmit={() => chat.ask()}
 			onstop={() => chat.stop()}
@@ -253,58 +252,39 @@ artefact })` says that kind opens, on a live turn and a reopened one alike:
 `{ title: 'Briefing', isAnswer: true }` cards it and opens its prose in the
 column. `again()` asks it as the same kind.
 
-### Depth: Quick or Thorough, and what it cost
+### Asking one collection, and what it cost
 
-`Composer`'s `depth` is optional and bindable, and entirely opt-in: omit it
-and the composer renders exactly as it always has. Bind it, the host's own
-`$state<Depth>('quick')`, and the switch always renders, both sides always
-enabled. The operator's ruling (30/09/2026) is that once a room offers the
-choice, it is never disabled, hidden, greyed out, or explained by naming a
-model. `depth` is `'quick' | 'thorough'`, exported from
-`@poodle64/librarian/composer` and `@poodle64/librarian/client`.
+`chat.ask(question?, kind?, collection?)` carries the collection to
+`client.ask()`'s `collection`, `StoredTurn.collection` reads it back, and
+`again()` asks the same one: the same shape as `kind`, alongside it. The host
+holds the chosen name and the list the person may read (the app's
+`listCollections`); `Composer` shows the choice and the host passes it on.
 
-```svelte
-<Composer bind:value={chat.draft} bind:depth onsubmit={() => chat.ask(undefined, undefined, depth)} ... />
-```
-
-`chat.ask(question?, kind?, depth?)` carries it to `client.ask()`'s `depth`,
-`StoredTurn.depth` reads it back, and `again()` keeps it: the same shape as
-`kind`, alongside it rather than replacing it. A host whose route does not
-read `depth` yet is unaffected, since the field rides along and is ignored.
-
-Under a settled answer, `AgentTranscript`'s footer folds the turn's `depth`
-and `outcome.costUsd` into the ONE line that already showed the duration:
-`Quick · 56 s · about A$0.34`. Both are opt-in the same way: pass `depth` to
-`Conversation`/`AgentTranscript` (it already has it, from `Turn.depth`) and a
-`formatCost(usd) => string` to price it in the host's own currency and words
-("about A$0.34"; caspo converts USD to AUD with its own setting). Without
-`depth` the line renders exactly as before (`56.3s`). Without `formatCost`,
-or where `costUsd` is `0` (a local model), it shows depth and duration only,
-never a raw USD figure and never which model answered.
+Under a settled answer, `AgentTranscript`'s footer shows the duration, and
+`formatCost(usd) => string` folds what the host can price into the same line
+in its own currency and words (`56.3s · about A$0.34`). Without `formatCost`,
+or where `costUsd` is `0` (a local model), it is the duration alone, never a
+raw USD figure and never which model answered.
 
 Past `turnLimit` turns (`Composer`'s prop, 8 by default), a quiet banner
 appears above the box, "This conversation is getting long. A new question
-keeps Milton quick." with a "New question" button, because a follow-up
+keeps Outrider quick." with a "New question" button, because a follow-up
 re-reads the whole conversation, so each one costs more than the last.
 `turnCount` and `onnewquestion` are both required for it to render; either
 missing and the composer stays as it is today.
-
-None of this prices anything before asking, and none of it names a model.
-That is the operator's ruling on what a colleague sees, and the package
-never puts a control in front of it.
 
 The transport is the app's own client over its routes, and the shapes are
 the routes' own bodies (`ConversationSummary`, `ConversationRead`,
 `StoredTurn`, `Quota`), so the stamped slice returns them as they are and
 the transport passes them through:
 
-| `RoomTransport` | Route                                                 |
+| `ChatTransport` | Route                                                 |
 | --------------- | ----------------------------------------------------- |
-| `ask`           | `POST rooms/{room}/ask`, through `client.ask()`       |
+| `ask`           | `POST {persona}/ask`, through `client.ask()`          |
 | `read`          | `GET conversations/{id}`                              |
 | `stop`          | `POST conversations/{id}/stop`                        |
 | `quota`         | `GET quota`                                           |
-| `list`          | this person's conversations in the room               |
+| `list`          | this person's conversations with the persona          |
 | `rename`        | `PATCH conversations/{id}`                            |
 | `remove`        | `DELETE conversations/{id}`                           |
 | `download`      | `GET conversations/{id}/export`, as `{ name, body }`  |
@@ -315,16 +295,11 @@ What the controller relies on the routes to say:
 
 | The route says                                                             | The page                                                                                                   |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| a `queued` frame, repeated while the ask waits                             | `waiting`, by the frame's type alone, until the agent starts: "Milton is answering another question first", beside the clock |
 | `system/init` with `session_id`                                            | `conversationId`, which the host puts in the address                                                       |
 | 429 on the ask                                                             | drops the turn, puts the words and files back in the box, reads the allowance                              |
 | 409 on the ask: the conversation is already being answered                 | drops the turn, keeps the words, shows it still answering                                                  |
 | `answering_since` on a read                                                | `answering`: the question in flight with "still answering" and its clock, read again every 5 s till it clears |
-| a stream that dropped (`library_error` with `dropped`) on a named conversation | reads it rather than failing the turn: a locked phone loses the connection, not the answer              |
-
-The library's `queued` frame is `{ type: 'queued', message }`, `message` its
-own sentence; `isQueued(event)` from `./client` narrows an event to it
-(`QueuedEvent`) for a host that reads it.
+| a stream that dropped (`agent_error` with `dropped`) on a named conversation | reads it rather than failing the turn: a locked phone loses the connection, not the answer              |
 
 A turn belongs to the server. Leaving a conversation, or the page, leaves
 its answer being written; `stop()` asks the server to end it, and before the
@@ -342,8 +317,8 @@ the job may go on by itself; `sendWhileRunning` is true.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | The answer mark          | `onmark(turn, verdict)` on `Conversation`: resolve true once recorded. Offered on the last settled answer only; without it no mark renders       |
 | Sharing an answer        | `onshare(turn, share)` on `Conversation`, over `chat.share`: every settled answer offers Share, which copies the link `StoredTurn.shared` names; a shared one offers Copy link and Stop sharing. Nothing is shared unless the reader asks. A host's own `turn` places `AnswerShare` (`./answer-share`) with the `onshare` and `shared` it is handed |
-| A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the room |
-| Waiting, still answering | `waiting` and `answering` on `Conversation`, from the controller                                                                                 |
+| A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the chat |
+| Still answering          | `answering` on `Conversation`, from the controller                                                                                               |
 | The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |
 | Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first        |
 
@@ -421,12 +396,13 @@ end that way.
 | What an answer read    | `ToolWords.source` lists under the answer, under `copy.sources`; tapping one calls `oncite`. Nothing checked it, so it carries no trust mark                          |
 | An artefact            | `turn.artefact = { title, summary }` cards under the prose once the turn settles; `isAnswer: true` is an artefact that IS the prose, and replaces it                  |
 | Opening it             | `onopenartefact(turn)` and `showing` (the turn id the host shows). Without a handler, an `isAnswer` artefact opens in `ArtefactPane` and any other offers no action |
-| "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no shelf                                                                                                     |
+| "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no sources                                                                                                     |
 | Saying something mid-run | `Composer`'s `sendWhileRunning`: while the session works the box stays open and Send sits beside Stop. For a route that reads a message while the run works; a chat leaves it off and waits for its answer |
 
 ### Citations
 
-The library emits one SSE frame after the final assistant text:
+The app emits one SSE frame before the persona's answer, from the passages
+it retrieved for the question:
 
 ```json
 {
@@ -447,14 +423,14 @@ The library emits one SSE frame after the final assistant text:
 
 `Transcript.apply()` puts it on `transcript.citations`; inline `[n]` markers
 in the prose become chips, and the chip opens `DocumentPane` at the cited
-section. Until that frame ships everywhere, the same chips are DERIVED from
-a trailing "## Sources" block in the answer: those render and read, and are
-inert, because a title and a section are not an id.
+section. Without that frame, the same chips are DERIVED from a trailing
+"## Sources" block in the answer: those render and read, and are inert,
+because a title and a section are not an id.
 
 ### The trust mark
 
 `verified_at` is the date the last recheck found the document unchanged at
-its publisher, `YYYY-MM-DD`, resolved by the library from its own catalogue —
+its publisher, `YYYY-MM-DD`, resolved by the app from its own catalogue —
 never from what the model wrote, because a trust mark a model can author is
 not a trust mark. Null means nothing has ever confirmed it.
 
@@ -469,25 +445,11 @@ behind it, so "not verified" would be a claim about a record nothing here
 ever read.
 
 An answer that settles having cited nothing says so, once, under the prose:
-"Milton answered this one without a source. There may be no document here that
+"Outrider answered this one without a source. There may be no document here that
 covers it." Only on a turn whose stream this surface actually watched finish
-— a turn read back out of `createHistory()` has no citations because history
-stores none, and labelling it as holding nothing would be a lie about an
+— a turn read back out of a conversation whose record holds no citations shows
+none, and labelling it as holding nothing would be a lie about an
 answer that may have cited three documents.
-
-### Follow-ups
-
-One more frame follows the citations, and only when the librarian named any:
-
-```json
-{ "type": "suggestions", "items": ["Can I carry leave over when I post?"] }
-```
-
-At most three, each short enough to fit a chip. `Transcript.suggestions`
-carries them; `Conversation` offers them under the LAST answer, and clicking
-one asks it through `onsuggest` and takes the whole row with it — the moment
-between the click and the new turn arriving is otherwise long enough to ask a
-second question by mistake.
 
 ### Where the answer starts
 
@@ -502,7 +464,7 @@ is currently last renders as prose, and a tool call arriving after it
 re-homes it — which is why `segment()` is pure and re-derived per event
 rather than deciding once.
 
-The cost is an answer the persona interrupts to go back to the shelf: its first
+The cost is an answer the persona interrupts to go back to its tools: its first
 half folds away. Position is the only signal the stream gives, and a rule
 read off the prose itself would be unexplainable the first time it misfired.
 
@@ -513,12 +475,12 @@ of them is composed from the persona's name:
 
 ```svelte
 <Conversation {turns} {running} name="penny" />
-<Composer bind:value {running} name="penny" {scope} {onscope} {onsubmit} {onstop} />
+<Composer bind:value {running} name="penny" {collections} {collection} {oncollection} {onsubmit} {onstop} />
 ```
 
 That one prop carries the working line ("Penny is looking…"), both composer
 placeholders, the uncited-answer note, both failure sentences, the scope
-label, the opening line, the name signed on every answer card and the
+label, the collection picker's label, the opening line, the name signed on every answer card and the
 accessible name of the scroll region. A slug is fine: `penny` renders as
 "Penny", `chief-engineer` as "Chief Engineer", and a name the host already
 capitalised is left exactly as written.
@@ -538,7 +500,7 @@ loaded — is ignored rather than rendering nothing where a word belongs.
 `ask()` never throws. A refused route, a `fetch` the browser blocks on CORS
 after an expired session redirects it, a 200 that turns out to be a login
 page, a connection that dies mid-answer and a stream that simply stops
-without a terminal frame all arrive as one `library_error` event and a
+without a terminal frame all arrive as one `agent_error` event and a
 finished iteration. That matters because the host's `for await` loop is what
 re-enables its Send button: a thrown generator left Pebblestone's console
 disabled, silent and waiting indefinitely every time a session expired.
@@ -553,28 +515,16 @@ settles, offering "Ask again".
 card, which is a different fact from the duration badge beside the actions. A
 host that persists conversations sets it; a host that does not gets one
 stamped when the turn first appears, and a turn already on screen at mount —
-one read back out of history — deliberately shows none rather than claiming
+one read back out of a stored conversation — deliberately shows none rather than claiming
 it was asked this afternoon.
 
 ### The system preamble
 
-A host prepends its own instruction to every question (caspo sends
-`{room.preamble}\n\n{question}`). `readerQuestion()` strips leading
+A host may prepend its own instruction to every question
+(`{preamble}\n\n{question}`). `readerQuestion()` strips leading
 paragraphs addressed to the model before the question renders, so a
 colleague never sees it. Pass the question as it went on the wire; the
 transcript shows what they asked.
-
-`createHistory(namespace)` from `@poodle64/librarian/history` keeps a
-browser-only list for a page with no server-side one (a page on `Chat` reads
-the server's), under its own `localStorage` key for each app, or each room
-inside an app:
-
-```ts
-import { createHistory, titleFrom } from '@poodle64/librarian/history';
-
-const history = createHistory('caspo.rooms.defence-personnel');
-history.load();
-```
 
 ## Verifying a change
 
@@ -586,19 +536,19 @@ pnpm run screenshots  # the state grid, real engine (see below)
 ```
 
 `docs/screenshots/` is twenty-three states x three widths x both themes, taken by
-`scripts/screenshots.mjs` against the console's `/librarian` lab route
+`scripts/screenshots.mjs` against the console's `/chat` lab route
 running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
 opens and closes from the keyboard with focus returning to the chip and is
 really draggable, that the scope statement folds once there is a
-conversation over it and reopens from that line, that a follow-up chip asks
-its question and takes the rest of the row with it, that the persona's
+conversation over it and reopens from that line, that the collection picker
+starts on all of them and marks the one tapped by its summary, that the persona's
 between-tool narration is nowhere in the answer prose before the activity
 line is opened, that a job's artefact and the pages it read open in the
 host's own columns and never in a pane of the package's, and that the reading
-column holds its 46rem measure and stays centred at every width. Its `room`
-scene is `Chat` itself over a fake of the room's routes, driven: a question
-waits behind another, streams, counts against the allowance and takes a mark;
+column holds its 46rem measure and stays centred at every width. Its `live`
+scene is `Chat` itself over a fake of the chat routes, driven: a question
+streams, counts against the allowance and takes a mark;
 one asked again is stopped; a conversation reopened mid-answer says so and
 settles; one is renamed and the open one deleted. It exits non-zero on any of
 them. The job states fold a stream captured from the real CLI

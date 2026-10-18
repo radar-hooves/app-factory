@@ -12,7 +12,7 @@
   `copy`, which the host's `name` composed, so this component knows no persona.
 -->
 <script lang="ts">
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		/** Shown instead of the cycling word once real work is identifiable. */
@@ -21,7 +21,7 @@
 		 *  the clock counts from it rather than from the moment it appeared. */
 		since?: number;
 		/** The persona's words. Resolved from `name` upstream. */
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { label, since, copy }: Props = $props();

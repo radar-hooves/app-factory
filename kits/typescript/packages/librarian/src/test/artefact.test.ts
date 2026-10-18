@@ -99,8 +99,8 @@ describe('Conversation and a host that opens artefacts itself', () => {
 	});
 });
 
-describe('Composer on a surface with one scope', () => {
-	it('takes no scope, offers no choice, and says what sending does', () => {
+describe('Composer on a surface with nothing to choose', () => {
+	it('offers no collection choice, and says what sending does', () => {
 		render(Composer, {
 			props: {
 				value: '',
@@ -113,7 +113,7 @@ describe('Composer on a surface with one scope', () => {
 		});
 		expect(screen.getByPlaceholderText('Tell it something…')).toBeInTheDocument();
 		expect(screen.getByText('It carries on from where it stopped.')).toBeInTheDocument();
-		expect(screen.queryByText('The whole library')).not.toBeInTheDocument();
+		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
 	});
 
 	it('offers Stop while the session works', () => {

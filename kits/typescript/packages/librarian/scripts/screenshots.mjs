@@ -54,12 +54,12 @@ const STATES = [
 	'job-showing',
 	'job-live',
 	'job-schema',
-	'waiting',
 	'answering',
 	'mark',
 	'fair-use',
 	'limit',
-	'past'
+	'past',
+	'collections'
 ];
 
 /** The measure the package guarantees in its OWN stylesheet: `--ds-lib-measure`,
@@ -112,7 +112,7 @@ for (const theme of THEMES) {
 			// `citations` is the `answer` turn with the source pane opened, which
 			// is a click rather than a state of its own.
 			const query = state === 'citations' ? 'answer' : state;
-			await page.goto(`http://localhost:${PORT}/librarian?state=${query}`, {
+			await page.goto(`http://localhost:${PORT}/chat?state=${query}`, {
 				waitUntil: 'domcontentloaded'
 			});
 			await page.waitForSelector('textarea');
@@ -140,7 +140,7 @@ for (const theme of THEMES) {
 
 			// A fold photographs as an absence, so this shot is taken open: the
 			// activity line, then the "Thought" row inside it, which is where
-			// Milton's between-tool sentence now lives. The claim the shot cannot
+			// The persona's between-tool sentence now lives. The claim the shot cannot
 			// make — that it is not ALSO sitting in the answer — is asserted first,
 			// on the closed state, at every width and both themes.
 			if (state === 'narration') {
@@ -235,7 +235,7 @@ for (const theme of THEMES) {
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=answer`, {
+	await page.goto(`http://localhost:${PORT}/chat?state=answer`, {
 		waitUntil: 'domcontentloaded'
 	});
 	await page.waitForSelector('sup[data-cite="1"]');
@@ -274,7 +274,7 @@ for (const theme of THEMES) {
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=job`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`http://localhost:${PORT}/chat?state=job`, { waitUntil: 'domcontentloaded' });
 	const log = page.locator('[role="log"]');
 	await page.getByRole('button', { name: '2 slices read · 1 sum checked' }).waitFor();
 
@@ -308,15 +308,15 @@ for (const theme of THEMES) {
 		failures.push('job: a page it read wears a trust mark nothing checked');
 	}
 
-	await page.goto(`http://localhost:${PORT}/librarian?state=job-live`, {
+	await page.goto(`http://localhost:${PORT}/chat?state=job-live`, {
 		waitUntil: 'domcontentloaded'
 	});
 	await page.getByRole('button', { name: 'Stop' }).waitFor();
 	if (!(await page.getByText('It carries on from where it stopped.').count())) {
 		failures.push('job-live: the composer lost its note');
 	}
-	if (await page.getByText('The whole library').count()) {
-		failures.push('job-live: a surface with one scope offers a scope choice');
+	if (await page.getByText('All your collections').count()) {
+		failures.push('job-live: a job offers a collection choice');
 	}
 	if (!(await page.getByRole('button', { name: 'Working…' }).count())) {
 		failures.push('job-live: the run in flight does not read as working');
@@ -344,7 +344,7 @@ for (const theme of THEMES) {
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=job-schema`, {
+	await page.goto(`http://localhost:${PORT}/chat?state=job-schema`, {
 		waitUntil: 'domcontentloaded'
 	});
 	await page.locator('article').nth(1).waitFor();
@@ -363,20 +363,17 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
-// The states a room adds, as words on screen: the question waiting its turn,
-// an answer begun elsewhere and clocked from then, the allowance both ways,
-// and the list newest first with the open one marked.
+// The states a chat adds, as words on screen: an answer begun elsewhere and
+// clocked from then, the allowance both ways, and the list newest first with
+// the open one marked.
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
 	const visit = (state) =>
-		page.goto(`http://localhost:${PORT}/librarian?state=${state}`, { waitUntil: 'domcontentloaded' });
-
-	await visit('waiting');
-	await page.getByText('Milton is answering another question first…').waitFor();
+		page.goto(`http://localhost:${PORT}/chat?state=${state}`, { waitUntil: 'domcontentloaded' });
 
 	await visit('answering');
-	await page.getByText('Milton is still answering…').waitFor();
+	await page.getByText('Outrider is still answering…').waitFor();
 	const clock = Number((await page.locator('article').last().getByText(/^\d+s$/).innerText()).slice(0, -1));
 	if (clock < 95) failures.push(`answering: the clock reads ${clock}s, not from when the answer began`);
 
@@ -402,26 +399,22 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
-// The package's own controller, driven over a fake of the rooms routes in a
-// real engine: a question that waits, streams, counts against the allowance
+// The package's own controller, driven over a fake of the chat routes in a
+// real engine: a question that streams, counts against the allowance
 // and takes a mark; one asked again and stopped; one reopened while its answer
 // is still being written, which then settles; and a rename and a delete.
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=room`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`http://localhost:${PORT}/chat?state=live`, { waitUntil: 'domcontentloaded' });
 	const list = page.getByRole('region', { name: 'Past questions' });
 	await list.getByText('Recreation leave each year').waitFor();
 	await page.getByText('40 of 40 questions left today.', { exact: false }).waitFor();
 
 	await page.locator('textarea').fill('What is the total?');
 	await page.locator('textarea').press('Enter');
-	await page.getByText('Milton is answering another question first…').waitFor();
 	await page.getByText('The total is $4.95.').first().waitFor({ timeout: 15_000 });
 	await page.getByText('39 of 40 questions left today.', { exact: false }).waitFor();
-	if (await page.getByText('Milton is answering another question first…').count()) {
-		failures.push('room: still says it waits after the answer arrived');
-	}
 
 	await page.getByRole('button', { name: 'Helpful', exact: true }).click();
 	const note = page.getByRole('textbox', { name: 'Anything to add? (optional)' });
@@ -432,17 +425,17 @@ for (const theme of THEMES) {
 	await page.getByRole('button', { name: 'Ask again' }).click();
 	await page.getByRole('button', { name: 'Stop' }).click();
 	await page.getByRole('button', { name: 'Send' }).waitFor();
-	if ((await page.locator('article').count()) !== 2) failures.push('room: asking again made no second turn');
-	if (await page.getByRole('button', { name: 'Stop' }).count()) failures.push('room: Stop outlived the answer it stopped');
+	if ((await page.locator('article').count()) !== 2) failures.push('live: asking again made no second turn');
+	if (await page.getByRole('button', { name: 'Stop' }).count()) failures.push('live: Stop outlived the answer it stopped');
 
 	await list.getByRole('button', { name: 'Field allowance while deployed', exact: true }).click();
-	await page.getByText('Milton is still answering…').waitFor();
+	await page.getByText('Outrider is still answering…').waitFor();
 	if (!(await page.getByText('And while I am in transit?').count())) {
-		failures.push('room: a reopened answer in flight lost its question');
+		failures.push('live: a reopened answer in flight lost its question');
 	}
 	await page.getByText('Leave is administered under the one manual').waitFor({ timeout: 10_000 });
-	if (await page.getByText('Milton is still answering…').count()) {
-		failures.push('room: still answering after the answer settled');
+	if (await page.getByText('Outrider is still answering…').count()) {
+		failures.push('live: still answering after the answer settled');
 	}
 
 	await list.getByRole('button', { name: 'More: Field allowance while deployed' }).click();
@@ -456,7 +449,7 @@ for (const theme of THEMES) {
 	await list.getByRole('button', { name: 'Delete' }).click();
 	await list.getByRole('group', { name: 'Delete' }).getByRole('button', { name: 'Delete' }).click();
 	await list.getByRole('button', { name: /^Field allowance$/ }).waitFor({ state: 'detached' });
-	if (await page.locator('article').count()) failures.push('room: deleting the open conversation left it on screen');
+	if (await page.locator('article').count()) failures.push('live: deleting the open conversation left it on screen');
 	await context.close();
 }
 
@@ -467,10 +460,10 @@ for (const theme of THEMES) {
 {
 	const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=answer`, {
+	await page.goto(`http://localhost:${PORT}/chat?state=answer`, {
 		waitUntil: 'domcontentloaded'
 	});
-	const toggle = page.getByRole('button', { name: /what milton answers from/i });
+	const toggle = page.getByRole('button', { name: /what outrider answers from/i });
 	await toggle.waitFor();
 	if ((await toggle.getAttribute('aria-expanded')) !== 'false') {
 		failures.push('the scope statement did not fold once the conversation had a turn');
@@ -483,24 +476,27 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
-// A follow-up chip asks its question and takes the row with it. Two claims in
-// one gesture, and neither survives a screenshot.
+// The collection picker: all of them to start, a tap narrows to one by the
+// words it is known by, and the choice is the pressed one. Neither survives a
+// screenshot.
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
-	await page.goto(`http://localhost:${PORT}/librarian?state=answer`, {
+	await page.goto(`http://localhost:${PORT}/chat?state=collections`, {
 		waitUntil: 'domcontentloaded'
 	});
-	const chip = page.getByRole('button', { name: 'Can I carry leave over when I post?' });
-	await chip.waitFor();
-	const before = await page.locator('article').count();
-	await chip.click();
-	await page.waitForFunction(
-		(had) => document.querySelectorAll('article').length > had,
-		before
-	);
-	if (await page.getByRole('button', { name: 'How is long service leave different?' }).count()) {
-		failures.push('a used follow-up row was still offering its other questions');
+	const all = page.getByRole('button', { name: 'All your collections' });
+	await all.waitFor();
+	if ((await all.getAttribute('aria-pressed')) !== 'true') {
+		failures.push('collections: asking across all of them is not the starting choice');
+	}
+	const one = page.getByRole('button', { name: 'Defence housing and relocation' });
+	await one.click();
+	if ((await one.getAttribute('aria-pressed')) !== 'true') {
+		failures.push('collections: a tapped collection is not the chosen one');
+	}
+	if (await page.getByText('defence-housing').count()) {
+		failures.push('collections: a collection is shown by its name, not its summary');
 	}
 	await context.close();
 }
@@ -513,5 +509,5 @@ if (failures.length) {
 	process.exit(1);
 }
 console.log(
-	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close; a job opens its artefact and pages in the host; a room waits, streams, counts, takes a mark, stops, reopens mid-answer, renames and deletes'
+	'the column holds its measure and stays centred at every width; nothing clips; the source pane opens from the keyboard, resizes, and returns focus on close; a job opens its artefact and pages in the host; a chat streams, counts, takes a mark, stops, reopens mid-answer, renames and deletes'
 );

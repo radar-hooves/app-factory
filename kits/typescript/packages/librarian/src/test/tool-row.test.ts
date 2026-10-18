@@ -4,7 +4,7 @@ import ToolRow from '$lib/components/tool-row/tool-row.svelte';
 import type { ToolBlock } from '$lib/transcript.svelte';
 
 describe('ToolRow', () => {
-	it('says what Milton did, never the tool name or the raw path — even expanded', async () => {
+	it('says what the persona did, never the tool name or the raw path — even expanded', async () => {
 		const block: ToolBlock = {
 			kind: 'tool',
 			index: 0,

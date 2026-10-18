@@ -1,9 +1,9 @@
 <!--
-  What this room answers from, and what it does not hold.
+  What a persona answers from, and what it does not hold.
 
-  A colleague's first question about a room is not the one they type — it is
+  A colleague's first question about a persona is not the one they type — it is
   whether the answer they are about to read covers their case at all. Saying it
-  once, in the room's own words, is cheaper than every answer hedging.
+  once, in the persona's own words, is cheaper than every answer hedging.
 
   It leads while there is nothing else on the surface, and folds to one line as
   soon as there is: a boundary a reader has already read is a banner in the way
@@ -15,14 +15,14 @@
 	import { untrack } from 'svelte';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import InfoIcon from '@lucide/svelte/icons/info';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		/** The statement itself, in the host's own words. */
 		statement: string;
 		/** Open on arrival. Goes false once the conversation has a first turn. */
 		expanded?: boolean;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { statement, expanded = true, copy }: Props = $props();

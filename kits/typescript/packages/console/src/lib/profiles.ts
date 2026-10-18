@@ -286,7 +286,7 @@ export const PROFILES: AppProfile[] = [
 		who: 'Operator',
 		searchLabel: 'Search…',
 		sections: [
-			{ label: 'Reading Room', icon: '▤', crumb: ['Reading Room'], content: 'prose' },
+			{ label: 'Chat', icon: '▤', crumb: ['Chat'], content: 'prose' },
 			{
 				label: 'Library',
 				icon: '▥',

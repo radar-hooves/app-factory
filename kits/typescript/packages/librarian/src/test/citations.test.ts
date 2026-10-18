@@ -77,7 +77,7 @@ describe('splitSources()', () => {
 			'Answer.\n\n## Sources\n\n- One document\n\n## Notes\n\n- Not a source'
 		);
 		expect(citations.map((c) => c.title)).toEqual(['One document']);
-		// Anything Milton wrote AFTER his sources is his answer, not his sources,
+		// Anything the persona wrote AFTER its sources is its answer, not its sources,
 		// and dropping it is the worst kind of loss: silent.
 		expect(body).toBe('Answer.\n\n## Notes\n\n- Not a source');
 	});

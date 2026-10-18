@@ -18,7 +18,7 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import type { ConversationSummary } from '../../chat.svelte';
-	import { DEFAULT_PERSONA, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		/** Null while it is still being read. */
@@ -39,7 +39,7 @@
 		ondelete?: (id: string) => Promise<boolean>;
 		/** Who is answering, for the line on a conversation still being answered. */
 		name?: string;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let {

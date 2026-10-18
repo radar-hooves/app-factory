@@ -1,20 +1,20 @@
 /**
- * A colleague never sees the instruction the host wrote for the model. cadmus
- * sends `{room.preamble}\n\n{question}`, and the preamble opens "You are
- * Milton, the librarian for…".
+ * A colleague never sees the instruction the host wrote for the model. A host
+ * may send `{preamble}\n\n{question}`, and the preamble opens "You are
+ * Outrider, the assistant for…".
  */
 import { describe, it, expect } from 'vitest';
 import { readerQuestion } from '$lib/transcript.svelte';
 
 const PREAMBLE =
-	'You are Milton, the librarian for the ADF Pay and Conditions room. Answer a Defence ' +
+	'You are Outrider, the assistant for ADF pay and conditions. Answer a Defence ' +
 	"colleague's question about pay, allowances, leave and conditions of service.";
 
 describe('readerQuestion()', () => {
 	it('drops the system preamble a host prepends', () => {
 		const shown = readerQuestion(`${PREAMBLE}\n\nHow much recreation leave do I get?`);
 		expect(shown).toBe('How much recreation leave do I get?');
-		expect(shown).not.toContain('Milton');
+		expect(shown).not.toContain('Outrider');
 	});
 
 	it('keeps a multi-paragraph question intact', () => {

@@ -5,10 +5,10 @@
  * sentence it renders from it — the working line, the failure sentences, the
  * scope label, the opening line and the accessible name of the scroll region.
  * The defect this file exists for shipped for a fortnight: Pebblestone's Penny
- * introduced herself as Milton, because the package's strings named him.
+ * introduced herself as another app's persona, because the package's strings named it.
  *
- * The library's own console still passes nothing and still reads as Milton,
- * which is the difference between a default and a hardcoding.
+ * A host that passes nothing still reads as the neutral default, which is the
+ * difference between a default and a hardcoding.
  */
 import { describe, it, expect } from 'vitest';
 import { createRawSnippet } from 'svelte';
@@ -26,10 +26,10 @@ const UNREACHED: Turn[] = [
 ];
 
 describe('Conversation name', () => {
-	it('defaults to Milton everywhere', () => {
+	it('defaults to Assistant everywhere', () => {
 		conversation();
-		expect(screen.getByRole('log', { name: 'Conversation with Milton' })).toBeInTheDocument();
-		expect(screen.getByText('Ask Milton a question.')).toBeInTheDocument();
+		expect(screen.getByRole('log', { name: 'Conversation with Assistant' })).toBeInTheDocument();
+		expect(screen.getByText('Ask Assistant a question.')).toBeInTheDocument();
 	});
 
 	it("takes the host's own persona name in the aria-label and the welcome", () => {
@@ -45,7 +45,7 @@ describe('Conversation name', () => {
 		expect(screen.getByText('Ask Penny a question.')).toBeInTheDocument();
 	});
 
-	it('names the persona in the unreachable alert, not just Milton', () => {
+	it('names the persona in the unreachable alert, not just Assistant', () => {
 		conversation({ turns: UNREACHED, name: 'penny' });
 		expect(screen.getByText("Penny can't be reached right now.")).toBeInTheDocument();
 	});
@@ -127,7 +127,7 @@ describe("Conversation in the host's own words", () => {
 		});
 		const formatCost = (usd: number) => `about A$${usd}`;
 		conversation({
-			turns: [{ ...ANSWERED[0], depth: 'quick' }],
+			turns: [{ ...ANSWERED[0], collection: 'adf-pay' }],
 			turn,
 			name: 'penny',
 			oncite: () => undefined,
@@ -139,36 +139,33 @@ describe("Conversation in the host's own words", () => {
 		expect(seen[0]).toMatchObject({ question: 'How much leave?', name: 'Penny', running: false });
 		expect(seen[0].citations?.[0]?.title).toBe('The Manual');
 		expect(seen[0].oncite).toBeTypeOf('function');
-		expect(seen[0].depth).toBe('quick');
 		expect(seen[0].formatCost).toBe(formatCost);
 	});
 
-	it("folds a turn's depth and the host's own priced cost into the one footer line", () => {
+	it("folds the duration and the host's own priced cost into the one footer line", () => {
 		const turns: Turn[] = [
 			{
 				id: '1',
 				question: 'Can a reservist claim recreation leave?',
 				blocks: [{ kind: 'text', index: 0, text: 'Yes, on continuous full-time service.' }],
-				outcome: { turns: 3, durationMs: 56_000, costUsd: 0.23 },
-				depth: 'thorough'
+				outcome: { turns: 3, durationMs: 56_000, costUsd: 0.23 }
 			}
 		];
 		conversation({ turns, formatCost: (usd: number) => `about A$${(usd * 1.5).toFixed(2)}` });
-		expect(screen.getByText('Thorough · 56 s · about A$0.35')).toBeInTheDocument();
+		expect(screen.getByText('56.0s · about A$0.35')).toBeInTheDocument();
 	});
 
-	it('shows depth and duration alone when the run cost nothing', () => {
+	it('shows the duration alone when the run cost nothing', () => {
 		const turns: Turn[] = [
 			{
 				id: '1',
 				question: 'q',
 				blocks: [{ kind: 'text', index: 0, text: 'a' }],
-				outcome: { turns: 1, durationMs: 4_000, costUsd: 0 },
-				depth: 'quick'
+				outcome: { turns: 1, durationMs: 4_000, costUsd: 0 }
 			}
 		];
 		conversation({ turns, formatCost: (usd: number) => `about A$${usd}` });
-		expect(screen.getByText('Quick · 4 s')).toBeInTheDocument();
+		expect(screen.getByText('4.0s')).toBeInTheDocument();
 	});
 
 	it('shows what leads the conversation inside its scroll, under the opening', () => {

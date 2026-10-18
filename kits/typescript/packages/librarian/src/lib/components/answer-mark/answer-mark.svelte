@@ -18,13 +18,13 @@
 	import ThumbsDownIcon from '@lucide/svelte/icons/thumbs-down';
 	import ThumbsUpIcon from '@lucide/svelte/icons/thumbs-up';
 	import type { Verdict } from '../../chat.svelte';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		/** Records a verdict, replacing any before it. Resolves true once it is
 		 *  recorded. */
 		onmark: (verdict: Verdict) => Promise<boolean>;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { onmark, copy }: Props = $props();

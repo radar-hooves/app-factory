@@ -6,7 +6,7 @@
   The empty→typing transition lives almost entirely in that control — the box
   chrome grows with the text and nothing else moves.
 
-  While Milton is answering the box is disabled and the send button becomes a
+  While the persona is answering the box is disabled and the send button becomes a
   stop button: an ask route takes one question per request, and a box that
   takes typing it will then discard is worse than one that plainly waits. A
   host whose session reads messages while it works (`sendWhileRunning`) keeps
@@ -26,30 +26,35 @@
 		MAX_FILES,
 		rejectionMessage
 	} from '../../attachments';
-	import type { Depth } from '../../client';
-	import { DEFAULT_PERSONA, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, resolveCopy, type ChatCopy } from '../../copy';
 
 	/** Past this many turns, the long-conversation banner offers to start
 	 *  over: a follow-up re-reads the whole conversation, so each one costs
 	 *  more than the last (measured — the longest ran 2.05M cached tokens). */
 	const DEFAULT_TURN_LIMIT = 8;
 
-	export type Scope = 'document' | 'collection' | 'library';
+	/** A collection a person may read, as the app lists it: `name` is what a
+	 *  question is narrowed to, `summary` is what the picker shows. */
+	export interface CollectionChoice {
+		name: string;
+		summary: string;
+	}
 
 	interface Props {
 		value: string;
 		running: boolean;
-		/** What the next message is about. A surface with one scope — a
-		 *  session over one document — passes none and offers no choice. */
-		scope?: Scope;
+		/** The collections this person may read. The picker renders when there
+		 *  are two or more: with one, or none, there is nothing to choose. */
+		collections?: CollectionChoice[];
+		/** The collection the next question is narrowed to, by name; undefined
+		 *  asks across all of them. */
+		collection?: string;
 		/** Files to send with the next question. Cleared by the caller on send. */
 		files?: File[];
-		/** Names for the two narrower scopes; absent means that scope is unavailable. */
-		documentName?: string;
-		collectionName?: string;
 		/** Hides the paperclip for a host whose ask route takes no files. */
 		attachments?: boolean;
-		onscope?: (scope: Scope) => void;
+		/** The person picked a collection by name, or all of them (undefined). */
+		oncollection?: (collection: string | undefined) => void;
 		onsubmit: () => void;
 		onstop: () => void;
 		/** Asks for a study artefact instead of an ordinary answer. Omit and no
@@ -60,21 +65,16 @@
 		 *  both placeholders are composed from it. */
 		name?: string;
 		/** Overrides for the package's own words. */
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 		/** The session reads a message sent while it works — a job whose
 		 *  route writes it onto the running process — so the box stays open
 		 *  and Send sits beside Stop. Words only: the paperclip still waits for
 		 *  the run. Absent, a chat waits for its answer. */
 		sendWhileRunning?: boolean;
-		/** One quiet line in the box's footer, where a scope choice would
+		/** One quiet line in the box's footer, where the collection picker would
 		 *  sit, in the host's words: what sending does here ("It carries on
 		 *  from where it stopped."). */
 		note?: string;
-		/** Quick or Thorough for the next question, as a two-way switch with a
-		 *  one-line hint. Bind it and pass it to `ask()`; omit it and nothing
-		 *  renders. Once shown it is never disabled or hidden, and never names
-		 *  the model behind it. */
-		depth?: Depth;
 		/** How many turns are in the conversation so far. Past `turnLimit`
 		 *  (8 by default), a quiet banner appears above the box offering to
 		 *  start over. Omit and no banner ever renders — a host that does not
@@ -90,12 +90,11 @@
 	let {
 		value = $bindable(),
 		running,
-		scope,
+		collections = [],
+		collection,
 		files = $bindable([]),
-		documentName,
-		collectionName,
 		attachments = true,
-		onscope,
+		oncollection,
 		onsubmit,
 		onstop,
 		onbriefing,
@@ -103,7 +102,6 @@
 		copy,
 		note,
 		sendWhileRunning = false,
-		depth = $bindable(),
 		turnCount,
 		turnLimit = DEFAULT_TURN_LIMIT,
 		onnewquestion
@@ -120,24 +118,11 @@
 		turnCount !== undefined && turnCount > turnLimit && Boolean(onnewquestion)
 	);
 
-	// What Milton is being asked about — this document, this collection, or
-	// the whole library. Callers that have no narrower scope pass neither
-	// name, leaving "The whole library" the sole entry — and a sole entry is
-	// not a choice, so `hasChoice` below hides it rather than rendering a
-	// chip with nothing to switch to.
-	const choices = $derived(
-		[
-			documentName ? { id: 'document' as const, label: documentName } : null,
-			collectionName ? { id: 'collection' as const, label: collectionName } : null,
-			{ id: 'library' as const, label: 'The whole library' }
-		].filter((c) => c !== null)
-	);
-
-	// A room with one shelf set has one scope, fixed by the caller never
-	// passing a name — no pick to make, so the row renders nothing rather
-	// than a chip that only ever reselects itself (design-system, the
-	// fixed-scope Composer defect).
-	const hasChoice = $derived(scope !== undefined && choices.length > 1);
+	// Who the question is put to: every collection the person may read, or one
+	// of them. A person with one collection (or none) has nothing to pick, so
+	// the row renders nothing rather than a chip that only reselects itself.
+	// A collection is shown by its summary, the words a reader knows it by.
+	const hasChoice = $derived(collections.length > 1);
 
 	// Three chips in a narrow column clipped all three to fragments
 	// ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
@@ -166,7 +151,7 @@
 		grow();
 	});
 
-	// Focus comes back once Milton is done, so a reader can keep going without
+	// Focus comes back once the persona is done, so a reader can keep going without
 	// reaching for the mouse. It has to be the transition OUT of `waiting`: a
 	// disabled element cannot hold focus, so the focus call in `submit()` below
 	// survives only for a box that never disables — measured, focus lands on
@@ -321,41 +306,26 @@
 				</button>
 			{/if}
 
-			{#if depth !== undefined}
-				<div role="group" aria-label={words.depthGroupLabel} class="ds-lib-depth">
-					<button
-						type="button"
-						aria-pressed={depth === 'quick'}
-						class="ds-lib-depth-side"
-						class:is-chosen={depth === 'quick'}
-						onclick={() => (depth = 'quick')}
-					>
-						{words.depthQuick}
-					</button>
-					<button
-						type="button"
-						aria-pressed={depth === 'thorough'}
-						class="ds-lib-depth-side"
-						class:is-chosen={depth === 'thorough'}
-						onclick={() => (depth = 'thorough')}
-					>
-						{words.depthThorough}
-					</button>
-				</div>
-				<span class="ds-lib-note">
-					{depth === 'quick' ? words.depthQuickHint : words.depthThoroughHint}
-				</span>
-			{/if}
 			{#if hasChoice}
-				<div class="ds-lib-scopes">
-					{#each choices as choice (choice.id)}
+				<div role="group" aria-label={words.collectionsLabel} class="ds-lib-scopes">
+					<button
+						type="button"
+						class="ds-lib-scope-chip"
+						aria-pressed={collection === undefined}
+						class:is-chosen={collection === undefined}
+						onclick={() => oncollection?.(undefined)}
+					>
+						{words.allCollections}
+					</button>
+					{#each collections as choice (choice.name)}
 						<button
 							type="button"
 							class="ds-lib-scope-chip"
-							class:is-chosen={scope === choice.id}
-							onclick={() => onscope?.(choice.id)}
+							aria-pressed={collection === choice.name}
+							class:is-chosen={collection === choice.name}
+							onclick={() => oncollection?.(choice.name)}
 						>
-							{choice.label}
+							{choice.summary || choice.name}
 						</button>
 					{/each}
 				</div>
@@ -605,49 +575,6 @@
 		padding: 0.375rem 0.25rem 0;
 		color: var(--ds-color-status-error);
 		font-size: var(--ds-text-2xs);
-	}
-
-	/* A labelled button group, never a select: two states a reader compares
-	   at a glance, not a list to open. 44px touch targets throughout — the
-	   one row here a colleague reaches for on every single question. */
-	.ds-lib-depth {
-		display: flex;
-		flex: none;
-		gap: 0.125rem;
-		border-radius: var(--ds-radius-lg);
-		background: var(--ds-color-surface-3);
-		padding: 0.1875rem;
-	}
-
-	.ds-lib-depth-side {
-		min-width: 2.75rem;
-		min-height: 2.75rem;
-		border: 0;
-		border-radius: var(--ds-radius-md);
-		background: none;
-		padding: 0 0.75rem;
-		color: var(--ds-color-muted-foreground);
-		font: inherit;
-		font-size: var(--ds-text-2xs);
-		cursor: pointer;
-		transition:
-			color 150ms ease,
-			background-color 150ms ease;
-	}
-
-	.ds-lib-depth-side:hover {
-		color: var(--ds-color-foreground);
-	}
-
-	.ds-lib-depth-side.is-chosen {
-		background: var(--ds-color-primary);
-		color: var(--ds-color-primary-foreground);
-		font-weight: 600;
-	}
-
-	.ds-lib-depth-side:focus-visible {
-		outline: 2px solid var(--ds-color-ring);
-		outline-offset: 2px;
 	}
 
 	/* Above the box, never inside it: it is about the conversation so far,

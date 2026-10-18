@@ -3,26 +3,25 @@
  *
  * Here rather than inline in each component because these sentences are the
  * package's opinion about how an agent talks to a colleague, and an app that
- * needs a different register — a room whose boundary is worded by its own
+ * needs a different register — a persona whose boundary is worded by its own
  * subject-matter owner — must be able to change one string without forking a
  * component.
  *
  * NO STRING HERE NAMES A PERSONA. The name is an argument: a consuming app
  * says who is speaking once, and every sentence the package renders is built
- * from that. Milton is the library's own persona and therefore the default,
- * which is a different thing from being baked in — a package that hardcodes
- * one app's persona is a package that lies in every other app, and did:
- * Pebblestone's Penny introduced herself as Milton for a fortnight.
+ * from that. The default is a neutral name, never one app's persona: a
+ * package that hardcodes one app's persona is a package that lies in every
+ * other app.
  *
  * Every component takes `copy` as a PARTIAL and resolves it itself, so a host
  * overriding one line does not have to restate the others, and a component
  * used directly behaves the same as one reached through `Conversation`.
  */
 
-/** The library's own persona: the default wherever a consumer names none. */
-export const DEFAULT_PERSONA = 'Milton';
+/** The name used wherever a consumer names no persona. */
+export const DEFAULT_PERSONA = 'Assistant';
 
-export interface LibrarianCopy {
+export interface ChatCopy {
 	/** Prefixes the date on a verified source: "verified 23 Jun 2026". */
 	verified: string;
 	/** A source the catalogue has never confirmed against its publisher. */
@@ -37,8 +36,6 @@ export interface LibrarianCopy {
 	noAnswer: string;
 	/** Heading over the list of what an answer cited. */
 	sources: string;
-	/** Heading over the follow-up questions the persona offered. */
-	suggestions: string;
 	/** The collapsed scope statement's own label. */
 	scope: string;
 	/** The empty transcript's opening line. */
@@ -46,14 +43,11 @@ export interface LibrarianCopy {
 	/** The composer's placeholder, idle and while an answer streams. */
 	askPlaceholder: string;
 	answeringPlaceholder: string;
-	/** The depth switch: its group's accessible name, each side's label, and
-	 *  the one-line hint beside it saying what the picked side is for. Never
-	 *  which model sits behind it — that is never the colleague's concern. */
-	depthGroupLabel: string;
-	depthQuick: string;
-	depthThorough: string;
-	depthQuickHint: string;
-	depthThoroughHint: string;
+	/** The composer's collection picker: its group's accessible name, and the
+	 *  choice that asks across everything the person may read. A collection is
+	 *  shown by its own summary, supplied by the app. */
+	collectionsLabel: string;
+	allCollections: string;
 	/** Past a few turns, the quiet line above the composer that offers to
 	 *  start over — a follow-up re-reads the whole conversation, so each one
 	 *  costs more than the last. */
@@ -71,8 +65,6 @@ export interface LibrarianCopy {
 	/** An artefact card's action, and the same action while it is open. */
 	openArtefact: string;
 	showingArtefact: string;
-	/** Beside the clock while the question waits behind someone else's. */
-	waiting: string;
 	/** Beside the clock on an answer this page did not start. */
 	stillAnswering: string;
 	/** The answer mark: the two verdicts, the optional note, and after. */
@@ -140,14 +132,14 @@ export function personaName(name: string): string {
  * Deliberately free of pronouns: the persona is whoever the consuming app
  * says it is, and a sentence that guesses is wrong for half of them.
  */
-export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
+export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 	const who = personaName(name);
 	return {
 		verified: 'verified',
 		notVerified: 'not verified',
 		// Two sentences, both plain: what happened, and the likeliest reason. It
 		// says nothing about collections, indexes or retrieval — a colleague
-		// reading it has no model of any of those, and the room's own
+		// reading it has no model of any of those, and the persona's own
 		// instruction forbids naming them either.
 		notHeld: `${who} answered this one without a source. There may be no document here that covers it.`,
 		// A run can end `is_error` carrying no message at all, and a turn that
@@ -156,16 +148,12 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		unreachable: `${who} can't be reached right now.`,
 		noAnswer: 'Stopped before an answer came.',
 		sources: 'Sources',
-		suggestions: 'Ask next',
 		scope: `What ${who} answers from`,
 		welcome: `Ask ${who} a question.`,
 		askPlaceholder: `Ask ${who}…`,
 		answeringPlaceholder: `${who} is answering…`,
-		depthGroupLabel: `How hard ${who} works`,
-		depthQuick: 'Quick',
-		depthThorough: 'Thorough',
-		depthQuickHint: 'Fast, for looking something up',
-		depthThoroughHint: 'Slower, reads more, for questions of interpretation',
+		collectionsLabel: `Where ${who} looks`,
+		allCollections: 'All your collections',
 		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
 		working: [`${who} is looking`, `${who} is reading`],
 		conversationLabel: `Conversation with ${who}`,
@@ -177,7 +165,6 @@ export function copyFor(name: string = DEFAULT_PERSONA): LibrarianCopy {
 		documentUnavailable: "That document can't be opened right now.",
 		openArtefact: 'Open',
 		showingArtefact: 'Showing',
-		waiting: `${who} is answering another question first`,
 		stillAnswering: `${who} is still answering`,
 		markHelpful: 'Helpful',
 		markNotHelpful: 'Not helpful',
@@ -223,8 +210,8 @@ export function fill(template: string, values: Record<string, string | number>):
 	);
 }
 
-/** The library's own words, for a host that names no persona. */
-export const DEFAULT_COPY: LibrarianCopy = copyFor();
+/** The package's own words, for a host that names no persona. */
+export const DEFAULT_COPY: ChatCopy = copyFor();
 
 /**
  * One persona's words with a host's overrides on top.
@@ -234,7 +221,7 @@ export const DEFAULT_COPY: LibrarianCopy = copyFor();
  * nothing at all — and that is exactly the shape a host produces by passing a
  * value it computed from state that has not loaded yet.
  */
-export function resolveCopy(overrides?: Partial<LibrarianCopy>, name?: string): LibrarianCopy {
+export function resolveCopy(overrides?: Partial<ChatCopy>, name?: string): ChatCopy {
 	const base = name === undefined ? DEFAULT_COPY : copyFor(name);
 	if (!overrides) return base;
 	const given = Object.fromEntries(

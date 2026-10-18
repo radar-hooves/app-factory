@@ -14,13 +14,13 @@
 <script lang="ts">
 	import InfoIcon from '@lucide/svelte/icons/info';
 	import type { Quota } from '../../chat.svelte';
-	import { fill, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { fill, resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		quota: Quota | null;
 		/** Where to ask about the limit. Absent takes the allowance's own. */
 		supportHref?: string;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { quota, supportHref, copy }: Props = $props();

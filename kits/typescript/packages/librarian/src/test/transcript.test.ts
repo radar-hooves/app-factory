@@ -1,5 +1,5 @@
 /**
- * Milton is a person, not a place: `describe()` and `summariseActivity()`
+ * A persona is a person, not a place: `describe()` and `summariseActivity()`
  * feed the tool row and the activity summary, and neither may leak a tool
  * name, a raw path, or a collection count into what a reader sees.
  */
@@ -84,26 +84,19 @@ vdescribe('summariseActivity()', () => {
 vdescribe('outcomeLine()', () => {
 	const outcome: Outcome = { durationMs: 56_400, costUsd: 0.34 };
 
-	it('renders exactly as before when the host never asked a depth', () => {
-		expect(outcomeLine(outcome, undefined, DEFAULT_COPY)).toBe('56.4s');
-	});
-
-	it('names the depth and rounds the seconds once a host offers one', () => {
-		expect(outcomeLine(outcome, 'quick', DEFAULT_COPY)).toBe('Quick · 56 s');
-		expect(outcomeLine(outcome, 'thorough', DEFAULT_COPY)).toBe('Thorough · 56 s');
+	it('is the duration alone when the host cannot price it', () => {
+		expect(outcomeLine(outcome)).toBe('56.4s');
 	});
 
 	it("prices it in the host's own words once the host can price it", () => {
 		const formatCost = (usd: number) => `about A$${(usd * 1.5).toFixed(2)}`;
-		expect(outcomeLine(outcome, 'quick', DEFAULT_COPY, formatCost)).toBe(
-			'Quick · 56 s · about A$0.51'
-		);
+		expect(outcomeLine(outcome, formatCost)).toBe('56.4s · about A$0.51');
 	});
 
 	it('never shows a cost for a local model that spent nothing', () => {
 		const free: Outcome = { durationMs: 12_000, costUsd: 0 };
 		const formatCost = (usd: number) => `about A$${usd}`;
-		expect(outcomeLine(free, 'thorough', DEFAULT_COPY, formatCost)).toBe('Thorough · 12 s');
+		expect(outcomeLine(free, formatCost)).toBe('12.0s');
 	});
 });
 
@@ -112,13 +105,13 @@ vdescribe('Transcript error frame', () => {
 		// The sentence names a persona; this layer does not know which one, so
 		// it carries the fact and the rendering layer says it in the right voice.
 		const transcript = new Transcript();
-		transcript.apply({ type: 'library_error' });
+		transcript.apply({ type: 'agent_error' });
 		expect(transcript.outcome).toEqual({ isError: true, unreachable: true, error: undefined });
 	});
 
 	it('keeps a message the failure did carry', () => {
 		const transcript = new Transcript();
-		transcript.apply({ type: 'library_error', error: 'The room is closed for maintenance.' });
-		expect(transcript.outcome?.error).toBe('The room is closed for maintenance.');
+		transcript.apply({ type: 'agent_error', error: 'The archive is closed for maintenance.' });
+		expect(transcript.outcome?.error).toBe('The archive is closed for maintenance.');
 	});
 });

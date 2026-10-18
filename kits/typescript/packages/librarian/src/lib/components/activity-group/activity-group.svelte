@@ -2,7 +2,7 @@
   A whole investigation, as ONE line the reader can open.
 
   Not a stack. Fifteen tool rows between the question and the first word of the
-  answer is the machine room on show, and a running commentary of "Let me
+  answer is the machinery on show, and a running commentary of "Let me
   check…" is worse: it narrates a mechanism the persona is under instruction
   never to mention. So there is exactly one row in every state — "Working…"
   while it runs, a count of what was done once it settles — and the steps are
