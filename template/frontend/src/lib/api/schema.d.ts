@@ -983,8 +983,16 @@ export interface components {
         CollectionRead: {
             /** Name */
             name: string;
-            /** Summary */
-            summary: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
             /** Documents To */
             documents_to?: string | null;
         };

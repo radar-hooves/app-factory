@@ -45,7 +45,7 @@ export interface ChatCopy {
 	answeringPlaceholder: string;
 	/** The composer's collection picker: its group's accessible name, and the
 	 *  choice that asks across everything the person may read. A collection is
-	 *  shown by its own summary, supplied by the app. */
+	 *  shown by its own title, supplied by the app. */
 	collectionsLabel: string;
 	allCollections: string;
 	/** Past a few turns, the quiet line above the composer that offers to

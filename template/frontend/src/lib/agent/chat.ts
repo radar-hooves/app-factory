@@ -39,8 +39,10 @@ export interface Persona {
 /** A collection the person may read, as `GET /api/agent/{persona}/collections` lists it. */
 export interface Collection {
 	name: string;
-	/** What the collection holds, in the reader's words. */
-	summary: string;
+	/** How a reader knows it; empty where the library has none, and the composer falls back to the name. */
+	title: string;
+	/** One line on what it holds, empty where the library has none. */
+	description: string;
 	/** When the library last confirmed its documents current. Null until it says. */
 	documents_to?: string | null;
 }

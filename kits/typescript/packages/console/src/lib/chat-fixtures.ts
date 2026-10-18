@@ -398,9 +398,9 @@ const QUOTA: Quota = {
 
 /** The collections the person may read, as the app lists them. */
 export const COLLECTIONS: CollectionChoice[] = [
-	{ name: 'adf-pay', summary: 'ADF pay and conditions' },
-	{ name: 'defence-housing', summary: 'Defence housing and relocation' },
-	{ name: 'travel', summary: 'Travel and allowances' }
+	{ name: 'adf-pay', title: 'ADF pay and conditions', description: 'Rates, allowances and leave' },
+	{ name: 'defence-housing', title: 'Defence housing and relocation' },
+	{ name: 'travel' }
 ];
 
 const at = (n: number) => new Date(minutes(n)).toISOString();
