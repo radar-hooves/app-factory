@@ -22,6 +22,7 @@ Need: caspo, the public entrance that goes before colleagues, from its fleet-she
 
 ### Fixed
 
+- **AppIdentity no longer throws on a repeated entitlement.** It keyed its chips on the name, and the identity provider repeats a name once per binding that grants it, so the `each_key_duplicate` it threw stopped one app's account menu from opening. It lists each name once.
 - **`texture.ts` names `grid` as the default**, which it has been since 2026.8.8.
 
 ## [2026.10.17] - 2026-10-18
