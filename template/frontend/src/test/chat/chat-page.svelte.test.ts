@@ -43,8 +43,18 @@ const PERSONA = {
 	collections: true
 };
 const COLLECTIONS = [
-	{ name: 'manual', summary: 'Pay, allowances and leave.', documents_to: '2026-09-29' },
-	{ name: 'conditions', summary: 'Conditions of service.', documents_to: '2026-09-20' }
+	{
+		name: 'manual',
+		title: 'Pay and leave',
+		description: 'Pay, allowances and leave.',
+		documents_to: '2026-09-29'
+	},
+	{
+		name: 'conditions',
+		title: 'Conditions of service',
+		description: 'Conditions of service.',
+		documents_to: '2026-09-20'
+	}
 ];
 const CITATION = {
 	n: 1,
@@ -187,7 +197,7 @@ describe('A persona page, through the app extension points', () => {
 });
 
 describe('Choosing where a persona looks', () => {
-	it('offers every collection the person may read, by what it holds, and asks across all of them', async () => {
+	it('offers every collection the person may read, by its title, and asks across all of them', async () => {
 		const asked = answering('c3', 'Four weeks.');
 		at('/chat/outrider');
 		const group = await screen.findByRole('group', { name: /Where Outrider looks/ });
@@ -195,8 +205,8 @@ describe('Choosing where a persona looks', () => {
 			'aria-pressed',
 			'true'
 		);
-		expect(within(group).getByRole('button', { name: 'Pay, allowances and leave.' })).toBeTruthy();
-		expect(within(group).getByRole('button', { name: 'Conditions of service.' })).toBeTruthy();
+		expect(within(group).getByRole('button', { name: 'Pay and leave' })).toBeTruthy();
+		expect(within(group).getByRole('button', { name: 'Conditions of service' })).toBeTruthy();
 		expect(screen.queryByText('manual')).toBeNull();
 
 		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });
@@ -208,7 +218,7 @@ describe('Choosing where a persona looks', () => {
 
 	it('puts the picked collection in the address', async () => {
 		at('/chat/outrider');
-		await fireEvent.click(await screen.findByRole('button', { name: 'Conditions of service.' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Conditions of service' }));
 		expect(fake.goto).toHaveBeenCalledWith(
 			'?collection=conditions',
 			expect.objectContaining({ replaceState: true })
@@ -218,7 +228,7 @@ describe('Choosing where a persona looks', () => {
 	it('narrows the question to the collection a link names', async () => {
 		const asked = answering('c4', 'Four weeks.');
 		at('/chat/outrider?collection=conditions');
-		const picked = await screen.findByRole('button', { name: 'Conditions of service.' });
+		const picked = await screen.findByRole('button', { name: 'Conditions of service' });
 		expect(picked).toHaveAttribute('aria-pressed', 'true');
 
 		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });

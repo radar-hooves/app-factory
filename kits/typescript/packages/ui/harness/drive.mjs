@@ -4337,7 +4337,7 @@ for (const density of ['comfortable', 'compact']) {
 	check(
 		'Ledger at 3360px: the wide tracks, and the head on the rows',
 		m.layout === 'wide' &&
-			Math.abs(m.dateTrack - 112) < 1 &&
+			Math.abs(m.dateTrack - 7 * 21) < 1 && // 7rem on a root grown to 21px (3360 / 160)
 			m.headEdges.every(([l, r], i) => Math.abs(l - m.rowEdges[i][0]) < 0.5 && Math.abs(r - m.rowEdges[i][1]) < 0.5),
 		`layout ${m.layout}, date track ${m.dateTrack.toFixed(1)}px`
 	);

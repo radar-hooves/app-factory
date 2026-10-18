@@ -272,10 +272,10 @@ test('a person narrows a question to one collection, and a link can too', async 
 		'aria-pressed',
 		'true'
 	);
-	// A collection is shown by what it holds, never by its name.
+	// A collection is shown by its title, made readable, never its raw name.
 	await expect(group.getByText('manual', { exact: true })).toHaveCount(0);
 
-	await group.getByRole('button', { name: 'Conditions of service.' }).click();
+	await group.getByRole('button', { name: 'Conditions' }).click();
 	await expect(page).toHaveURL(/[?&]collection=conditions\b/);
 	await ask(page, 'What about long service leave, in detail?');
 	await expect(page.getByText(/long service leave, in detail/).first()).toBeVisible();
@@ -290,7 +290,7 @@ test('a person narrows a question to one collection, and a link can too', async 
 	await page.goto('/chat/outrider?collection=manual');
 	await expect(
 		page.getByRole('group', { name: /Where Outrider looks/ }).getByRole('button', {
-			name: 'Pay, allowances and leave.'
+			name: 'Manual'
 		})
 	).toHaveAttribute('aria-pressed', 'true');
 
