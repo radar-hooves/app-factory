@@ -101,7 +101,10 @@
 	let active = $state<string | null>(null);
 
 	const showContents = $derived(contents && headings.length >= 2);
-	const side = $derived(showContents || !!aside);
+	// The column is held whenever contents may show, not once headings are
+	// read, so the body does not move sideways when it finishes loading. A
+	// document without structure passes `contents={false}`.
+	const side = $derived(contents || !!aside);
 
 	/** Give every h2 and h3 an id, and read the list. */
 	function readHeadings(root: HTMLElement): DocumentReaderHeading[] {
@@ -282,9 +285,7 @@
 						>
 							{#if showContents}
 								<div class="flex flex-col gap-2">
-									<p class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase" aria-hidden="true">
-										{contentsLabel}
-									</p>
+									<p class="text-sm font-medium" aria-hidden="true">{contentsLabel}</p>
 									{@render contentsList()}
 								</div>
 							{/if}

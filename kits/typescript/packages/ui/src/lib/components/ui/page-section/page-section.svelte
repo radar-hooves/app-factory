@@ -56,13 +56,10 @@
 	class={cn('flex min-w-0 flex-col', level === 2 ? 'gap-4' : 'gap-3', className)}
 	{...restProps}
 >
-	<header
-		class={cn(
-			'flex min-w-0 flex-wrap justify-between gap-x-4 gap-y-2',
-			description ? 'items-start' : 'items-center'
-		)}
-	>
-		<div class="min-w-0">
+	<!-- Actions share the heading's row, so on a phone they stay beside the
+	     heading rather than dropping under the description. -->
+	<header class="flex min-w-0 flex-col gap-1">
+		<div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
 			<svelte:element
 				this={`h${level}`}
 				id={headingId}
@@ -81,12 +78,14 @@
 					>
 				{/if}
 			</svelte:element>
-			{#if description}
-				<p class="text-muted-foreground ds-measure mt-1 text-sm" data-measure="prose">{description}</p>
+			{#if actions}
+				<div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+					{@render actions()}
+				</div>
 			{/if}
 		</div>
-		{#if actions}
-			<div class="flex min-w-0 flex-wrap items-center justify-end gap-2">{@render actions()}</div>
+		{#if description}
+			<p class="text-muted-foreground ds-measure text-sm" data-measure="prose">{description}</p>
 		{/if}
 	</header>
 	{@render children?.()}
