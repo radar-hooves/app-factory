@@ -15,3 +15,5 @@ factory:               ╲─ depends_on ── f001 ── f002   ← factory h
 - `tests/migrations/test_migration_branch.py` holds the rule: no factory revision after `e1f7a3b4c5d6` chains onto anything but the factory, and an app's own migration on top still upgrades to exactly two heads.
 
 An app with its own code reading `get_current_head()` (a version page, a custom e2e server) reads `get_heads()` the first time a factory branch migration arrives.
+
+The same goes for `MigrationContext.get_current_revision()` (an admin migration status page): it raises once `alembic_version` holds two rows, so read `get_current_heads()`.
