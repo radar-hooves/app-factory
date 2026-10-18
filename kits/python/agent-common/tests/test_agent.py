@@ -1,11 +1,12 @@
 """A local persona asked, read back and forgotten through the one `Agent` interface."""
 
+import asyncio
 import json
 from typing import Any
 
 import pytest
 from agent_common import cli
-from agent_common.agent import ATTACHMENTS, CHATS, Agent, LocalAgent
+from agent_common.agent import ATTACHMENTS, CHATS, PASSAGES_START, Agent, LocalAgent
 from agent_common.persona import Persona
 
 
@@ -17,10 +18,14 @@ def _session(events: list[dict[str, Any]]) -> str:
     return str(next(event for event in events if event.get("subtype") == "init")["session_id"])
 
 
-def _question_sent(events: list[dict[str, Any]]) -> str:
+def _reported(events: list[dict[str, Any]]) -> dict[str, Any]:
     assistant = next(event for event in events if event.get("type") == "assistant")
-    argv: list[str] = json.loads(assistant["message"]["content"][0]["text"])["argv"]
-    return argv[argv.index("-p") + 1]
+    reported: dict[str, Any] = json.loads(assistant["message"]["content"][0]["text"])
+    return reported
+
+
+def _question_sent(events: list[dict[str, Any]]) -> str:
+    return str(_reported(events)["question"])
 
 
 async def test_a_conversation_is_asked_resumed_and_read_back(settings: cli.Settings, milton: Persona) -> None:
@@ -34,13 +39,67 @@ async def test_a_conversation_is_asked_resumed_and_read_back(settings: cli.Setti
     assert [turn.question for turn in turns] == ["one", "two"]
 
 
-async def test_depth_is_accepted_and_ignored_a_persona_has_no_reading_budget_to_pick(
+async def test_passages_follow_the_question_and_are_taken_back_off_when_it_is_read(
     settings: cli.Settings, milton: Persona
 ) -> None:
-    agent: Agent = LocalAgent(settings, milton)
-    with_depth = _question_sent(await _ask(agent, "one", depth="thorough"))
-    without_depth = _question_sent(await _ask(agent, "one"))
-    assert with_depth == without_depth == "one"
+    agent = LocalAgent(settings, milton)
+    block = f"{PASSAGES_START}, retrieved for this question:\n\n[1] Pay manual — page 12 (adf-pay)\nRecreation leave accrues."
+
+    events = await _ask(agent, "How much leave?", passages=block)
+
+    sent = _question_sent(events)
+    assert sent == f"How much leave?\n\n---\n\n{block}"
+    turns = await agent.read(_session(events))
+    assert turns is not None
+    assert [turn.question for turn in turns] == ["How much leave?"]
+
+
+async def test_passages_and_attachments_both_come_off_a_question_that_quotes_their_headings(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    asked = f"Explain this heading: {PASSAGES_START}"
+
+    events = await _ask(agent, asked, passages=f"{PASSAGES_START}: none were found.", files={"a.txt": b"a"})
+
+    sent = _question_sent(events)
+    assert sent.index("none were found") < sent.index("Attached to this question")
+    turns = await agent.read(_session(events))
+    assert turns is not None
+    assert [turn.question for turn in turns] == [asked]
+
+
+async def test_passages_still_being_retrieved_reach_a_cli_already_started_on_stdin(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    block = f"{PASSAGES_START}, retrieved for this question:\n\n[1] Pay manual (adf-pay)\nRecreation leave accrues."
+    retrieved: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    asking = asyncio.create_task(_ask(agent, "How much leave?", passages=retrieved))
+    await asyncio.sleep(0.2)
+    retrieved.set_result(block)
+
+    events = await asking
+
+    argv = _reported(events)["argv"]
+    assert argv[argv.index("--input-format") + 1] == "stream-json"
+    assert "--replay-user-messages" not in argv
+    assert _question_sent(events) == f"How much leave?\n\n---\n\n{block}"
+    turns = await agent.read(_session(events))
+    assert turns is not None
+    assert [turn.question for turn in turns] == ["How much leave?"]
+
+
+async def test_passages_that_fail_end_the_turn_unasked(settings: cli.Settings, milton: Persona) -> None:
+    async def unreadable() -> str:
+        raise ConnectionError("the library is down")
+
+    with pytest.raises(ConnectionError):
+        await _ask(LocalAgent(settings, milton), "How much leave?", passages=unreadable())
+
+
+async def test_no_passages_asks_the_question_as_it_is(settings: cli.Settings, milton: Persona) -> None:
+    assert _question_sent(await _ask(LocalAgent(settings, milton), "one")) == "one"
 
 
 async def test_attached_files_are_filed_under_the_conversation_and_named_by_path(

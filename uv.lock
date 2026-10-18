@@ -34,7 +34,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "library", specifier = ">=2026.10.374", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" }]
+requires-dist = [{ name = "library", specifier = ">=2026.10.18124341", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" }]
 
 [[package]]
 name = "annotated-doc"
@@ -363,7 +363,7 @@ wheels = [
 
 [[package]]
 name = "library"
-version = "2026.10.374"
+version = "2026.10.18124341"
 source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "api-common" },
@@ -374,7 +374,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "http://172.21.0.2:3141/poodle64/prod/+f/52a/2ae2f407ba60c/library-2026.10.374-py3-none-any.whl", hash = "sha256:52a2ae2f407ba60c54f86016d9db9ac10890659dcc9a8e7181ce75e25155d6f7" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/6fc/07f594fe2feb6/library-2026.10.18124341-py3-none-any.whl", hash = "sha256:6fc07f594fe2feb6d70ad10a6c1a85879adea50fe4d9d00261da629070d35334" },
 ]
 
 [[package]]

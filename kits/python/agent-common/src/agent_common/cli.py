@@ -10,9 +10,12 @@ and the frontend renders the real thing.
 CLI rather than the Agent SDK: the SDK hands back typed Python objects that
 would have to be re-serialised, and re-serialising is translating.
 
-Two kinds of turn share it. A chat turn (`ask`) is one question on the command
-line, one process, one stream: CLAUDE.md in the persona's home is its system
-prompt and settings.json its model. An app-started job writes every turn to
+Two kinds of turn share it. A chat turn (`ask`) is one question, one process,
+one stream: CLAUDE.md in the persona's home is its system prompt and
+settings.json its model. A question known at once goes on the command line;
+one still being put together (passages the app is retrieving) is written to
+stdin once it is ready, so the CLI's start-up, a second or two, runs while
+the question is assembled. An app-started job writes every turn to
 stdin as a stream-json `user` frame (`user_frame`) and carries its own
 system-prompt addendum, JSON schema, model and working directory, so those
 stay optional parameters of `argv` rather than a second copy of it. Both
@@ -34,13 +37,14 @@ import asyncio
 import contextlib
 import dataclasses
 import hashlib
+import inspect
 import json
 import os
 import re
 import shutil
 import signal
 import tempfile
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,10 +55,10 @@ from agent_common.persona import SOURCE_FILES, Persona
 
 #: The error frame's `type`. Not this driver's own vocabulary — it is
 #: `@poodle64/librarian`'s wire contract: `Transcript.apply()` in the shared
-#: frontend package special-cases the literal string `library_error` to set
+#: frontend package special-cases the literal string `agent_error` to set
 #: `outcome.isError`, and nothing else recognises a failed turn. Renaming it
 #: here would compile, look correct, and render nothing at all.
-ERROR_EVENT = "library_error"
+ERROR_EVENT = "agent_error"
 
 #: asyncio's own default (64 KiB) is a StreamReader buffer limit, not a CLI or
 #: protocol one: `readline()` raises `ValueError` the moment one stream-json
@@ -219,19 +223,22 @@ def argv(
     input_format: str | None = None,
     model: str | None = None,
     partial_messages: bool = True,
+    replay: bool = True,
 ) -> list[str]:
     """The exact command line. Split out so a test can assert it without a subprocess.
 
-    A chat turn passes only `question` and `resume`, and gets the argv it has
-    always had. `session_id` and `resume` are mutually exclusive the way the
-    CLI's own `--session-id`/`--resume` are: the former MINTS an id before the
-    CLI has run at all, the latter continues one already minted.
+    A chat turn passes only `question` and `resume`. `session_id` and `resume`
+    are mutually exclusive the way the CLI's own `--session-id`/`--resume`
+    are: the former MINTS an id before the CLI has run at all, the latter
+    continues one already minted.
 
     `input_format="stream-json"` takes every turn from stdin, so `question`
     is `None` there: the CLI ignores a prompt on the command line in that
-    mode (measured, 2.1.283 — it exits having answered nothing). It also adds
-    `--replay-user-messages`, which echoes each stdin frame back as the turn
-    that consumes it starts: the only record of what the agent was sent.
+    mode (measured, 2.1.283 — it exits having answered nothing). With
+    `replay` it also adds `--replay-user-messages`, which echoes each stdin
+    frame back as the turn that consumes it starts: a job's only record of
+    what the agent was sent. A chat turn already knows what it sent, and its
+    stream goes to a person, so it does not replay.
     """
     command = [settings.executable, "-p"]
     if question is not None:
@@ -275,7 +282,7 @@ def argv(
         command += ["--model", model]
     if input_format:
         command += ["--input-format", input_format]
-        if input_format == "stream-json":
+        if input_format == "stream-json" and replay:
             command.append("--replay-user-messages")
     if session_id:
         command += ["--session-id", session_id]
@@ -533,6 +540,16 @@ async def events(process: asyncio.subprocess.Process, timeout: float) -> AsyncIt
             yield event
 
 
+async def _write_turn(process: asyncio.subprocess.Process, text: str) -> None:
+    """Write the one turn and close stdin, so the CLI answers it and exits; a CLI already gone is left to say why."""
+    assert process.stdin is not None
+    with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+        process.stdin.write(user_frame(text))
+        await process.stdin.drain()
+        process.stdin.close()
+        await process.stdin.wait_closed()
+
+
 def user_frame(text: str) -> bytes:
     """One user turn, as `--input-format stream-json` reads it off stdin."""
     message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
@@ -542,7 +559,7 @@ def user_frame(text: str) -> bytes:
 async def ask(
     settings: Settings,
     persona: Persona,
-    question: str,
+    question: str | Awaitable[str],
     *,
     resume: str | None = None,
     session_id: str | None = None,
@@ -556,22 +573,31 @@ async def ask(
 ) -> AsyncIterator[dict[str, Any]]:
     """Ask `persona` one question and yield each event the session emits, in order, unaltered.
 
-    `cwd` defaults to the persona's home, which a confined session then reads whole: pass a folder of its own wherever the persona serves more than one person; `append_system_prompt` and `model`
+    `question` is the question, or an awaitable of it: the CLI then starts at
+    once, taking its turn from stdin, and the question is written there when
+    it resolves, so the CLI's start-up runs while the caller puts it together.
+    An awaitable that raises ends the turn before the CLI is asked anything,
+    and the error propagates. `cwd` defaults to the persona's home, which a
+    confined session then reads whole: pass a folder of its own wherever the
+    persona serves more than one person; `append_system_prompt` and `model`
     are for a caller whose question needs more than the persona's own files
-    say (a scoped reading room); `run_env` is this run's own variables
-    (`environment`); `read`, `write` and `connect` are `spawn`'s. One synthetic event is added, and it is
-    clearly the transport's own: an `ERROR_EVENT` frame if the process cannot
-    start, goes silent past the idle timeout, or dies badly. Claude Code's own
-    `result` event terminates a healthy stream.
+    say; `run_env` is this run's own variables (`environment`); `read`,
+    `write` and `connect` are `spawn`'s. One synthetic event is added, and it
+    is clearly the transport's own: an `ERROR_EVENT` frame if the process
+    cannot start, goes silent past the idle timeout, or dies badly. Claude
+    Code's own `result` event terminates a healthy stream.
     """
+    later = None if isinstance(question, str) else question
     command = argv(
         settings,
         persona,
-        question,
+        question if isinstance(question, str) else None,
         resume=resume,
         session_id=session_id,
         append_system_prompt=append_system_prompt,
         model=model,
+        input_format="stream-json" if later is not None else None,
+        replay=False,
     )
     try:
         process = await spawn(
@@ -579,17 +605,22 @@ async def ask(
             persona,
             command,
             cwd=cwd or persona.home,
+            stdin=later is not None,
             run_env=run_env,
             read=read,
             write=write,
             connect=connect,
         )
     except OSError as exc:
+        if inspect.iscoroutine(later):
+            later.close()
         yield {"type": ERROR_EVENT, "error": f"agent could not start: {exc}"}
         return
     assert process.stderr is not None
     stderr = asyncio.create_task(drain(process.stderr))
     try:
+        if later is not None:
+            await _write_turn(process, await later)
         async for event in events(process, settings.timeout_seconds):
             yield event
     except IdleTimeout:

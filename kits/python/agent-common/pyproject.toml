@@ -8,10 +8,10 @@ description = "The household's Claude Code agent: the CLI driver, personas, tran
 requires-python = ">=3.14"
 dependencies = [
     # library: the api-clients client of the library's caller door, which
-    # `LibraryAgent` asks, reads and forgets through. Resolved off the private
-    # index (the workspace root's [tool.uv.sources]). 2026.10.374 is the first
-    # whose CollectionSummary carries documents_to.
-    "library>=2026.10.374",
+    # `Collections` lists, searches and opens documents through. Resolved off
+    # the private index (the workspace root's [tool.uv.sources]). The floor is
+    # the first release carrying `CallerApi.query_as_caller`.
+    "library>=2026.10.18124341",
 ]
 
 [build-system]

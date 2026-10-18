@@ -54,7 +54,6 @@ def test_a_conversation_reads_back_as_its_turns(tmp_path: Path) -> None:
     ]
     assert turns[0].at == datetime.datetime(2026, 9, 30, 2, tzinfo=datetime.UTC)
     assert turns[1].at is None
-    assert turns[0].citations == []
 
 
 def test_a_question_nobody_answered_is_not_a_turn(tmp_path: Path) -> None:
