@@ -6,7 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { Chat, type RoomTransport } from '$lib/chat.svelte';
+import { Chat, type ChatTransport } from '$lib/chat.svelte';
 
 const READ = {
 	id: 'a',
@@ -15,7 +15,7 @@ const READ = {
 	turns: [{ question: 'What is the total?', answer: '$4.95' }]
 };
 
-function transport(): RoomTransport {
+function transport(): ChatTransport {
 	return {
 		ask: async function* () {},
 		read: vi.fn(async (id: string) => ({ ...READ, id })),

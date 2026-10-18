@@ -1,10 +1,9 @@
 /**
  * The page's controller, against a fake of the routes it will be given.
  *
- * The routes do not exist yet (the factory's rooms slice is the next step), so
- * the fake is the contract: what an ask streams is the real CLI's captured
- * stream, and every refusal arrives the way `client.ask()` reports one — as a
- * `library_error` carrying its status, or saying the stream dropped.
+ * The fake is the contract: what an ask streams is the real CLI's captured
+ * stream, and every refusal arrives the way `client.ask()` reports one — as an
+ * `agent_error` carrying its status, or saying the stream dropped.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -13,7 +12,7 @@ import {
 	type ConversationRead,
 	type JobTransport,
 	type Quota,
-	type RoomTransport
+	type ChatTransport
 } from '$lib/chat.svelte';
 import type { AgentEvent } from '$lib/client';
 import type { TextBlock } from '$lib/transcript.svelte';
@@ -80,9 +79,9 @@ function conversation(overrides: Partial<ConversationRead> = {}): ConversationRe
 }
 
 /** The routes, faked. Each ask gets a `Pipe` the test drives. */
-function room(overrides: Partial<RoomTransport> = {}) {
+function persona(overrides: Partial<ChatTransport> = {}) {
 	const asks: Array<{ request: AskRequest; pipe: Pipe }> = [];
-	const transport: RoomTransport = {
+	const transport: ChatTransport = {
 		ask: (request) => {
 			const pipe = new Pipe(request.signal);
 			asks.push({ request, pipe });
@@ -110,7 +109,7 @@ const prose = (chat: Chat, index = -1) =>
 		.join('');
 
 let made: Chat[] = [];
-function chat(transport: RoomTransport | JobTransport, pollMs = 5) {
+function chat(transport: ChatTransport | JobTransport, pollMs = 5) {
 	const next = new Chat(transport, { pollMs, rewatchMs: 5 });
 	made.push(next);
 	return next;
@@ -124,7 +123,7 @@ afterEach(() => {
 
 describe('Chat asking', () => {
 	it('streams a question into a turn and takes the conversation the agent names', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		c.draft = 'What is the total?';
 		const asked = c.ask();
@@ -146,7 +145,7 @@ describe('Chat asking', () => {
 	});
 
 	it('carries the conversation on with the next question', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		const first = c.ask('What is the total?');
 		asks[0].pipe.push(...CHAT);
@@ -160,7 +159,7 @@ describe('Chat asking', () => {
 	});
 
 	it('refuses to ask over an answer still being written', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		void c.ask('first');
 		expect(await c.ask('second')).toBe(false);
@@ -169,7 +168,7 @@ describe('Chat asking', () => {
 	});
 
 	it('asks the last question again as a new turn, and nothing typed goes with it', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		const first = c.ask('What is the total?');
 		asks[0].pipe.push(...CHAT);
@@ -193,7 +192,7 @@ describe('Chat kinds of turn', () => {
 	const artefact = (kind: string) => (kind === 'briefing' ? briefing : undefined);
 
 	it('asks a kind of turn, cards it as the host says, and asks it again as the same kind', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = new Chat(transport, { pollMs: 5, artefact });
 		made.push(c);
 		const asked = c.ask('Write a briefing on the Manual.', 'briefing');
@@ -216,7 +215,7 @@ describe('Chat kinds of turn', () => {
 	});
 
 	it('cards a turn read back by the kind the server kept', async () => {
-		const { transport } = room({
+		const { transport } = persona({
 			read: vi.fn(async () =>
 				conversation({
 					turns: [
@@ -236,86 +235,49 @@ describe('Chat kinds of turn', () => {
 	});
 });
 
-describe('Chat depth of a question', () => {
-	it('asks at a depth, keeps it on the turn, and asks again at the same depth', async () => {
-		const { transport, asks } = room();
+describe('Chat collection of a question', () => {
+	it('asks one collection, keeps it on the turn, and asks again of the same one', async () => {
+		const { transport, asks } = persona();
 		const c = chat(transport);
-		const asked = c.ask('Can a reservist claim recreation leave?', undefined, 'thorough');
-		expect(asks[0].request.depth).toBe('thorough');
-		expect(c.turns[0]).toMatchObject({ depth: 'thorough' });
+		const asked = c.ask('Can a reservist claim recreation leave?', undefined, 'adf-pay');
+		expect(asks[0].request.collection).toBe('adf-pay');
+		expect(c.turns[0]).toMatchObject({ collection: 'adf-pay' });
 		asks[0].pipe.push(...CHAT);
 		asks[0].pipe.end();
 		await asked;
 
 		const again = c.again();
-		expect(asks[1].request.depth).toBe('thorough');
+		expect(asks[1].request.collection).toBe('adf-pay');
 		asks[1].pipe.end();
 		await again;
 
 		const plain = c.ask('And the tax?');
-		expect(asks[2].request.depth).toBeUndefined();
-		expect(c.turns.at(-1)?.depth).toBeUndefined();
+		expect(asks[2].request.collection).toBeUndefined();
+		expect(c.turns.at(-1)?.collection).toBeUndefined();
 		asks[2].pipe.end();
 		await plain;
 	});
 
-	it('reads a stored depth back onto the turn', async () => {
-		const { transport } = room({
+	it('reads a stored collection back onto the turn', async () => {
+		const { transport } = persona({
 			read: vi.fn(async () =>
 				conversation({
 					turns: [
-						{ question: 'What is the total?', answer: ANSWER, at: null, depth: 'quick' },
-						{ question: 'Interpret the clause.', answer: '# Answer', at: null, depth: 'thorough' }
+						{ question: 'What is the total?', answer: ANSWER, at: null, collection: 'adf-pay' },
+						{ question: 'Interpret the clause.', answer: '# Answer', at: null, collection: null }
 					]
 				})
 			)
 		});
 		const c = chat(transport);
 		await c.open(SESSION);
-		expect(c.turns.map((t) => t.depth)).toEqual(['quick', 'thorough']);
-	});
-});
-
-describe('Chat waiting', () => {
-	it('says the question waits while the stream says so, and stops once the agent starts', async () => {
-		const { transport, asks } = room();
-		const c = chat(transport);
-		const asked = c.ask('What is the total?');
-		// The library's own frames, as `api/librarian/session.py` sends them.
-		asks[0].pipe.push({
-			type: 'queued',
-			message: 'another question is being answered; waiting for it to finish'
-		});
-		await tick();
-		expect(c.waiting).toBe(true);
-		// Repeated at least every 30 s; none of it lands on the turn, and a frame
-		// that is not the agent starting does not end the wait.
-		asks[0].pipe.push(
-			{
-				type: 'queued',
-				message: 'another question is being answered; still waiting for it to finish'
-			},
-			{ type: 'system', subtype: 'status' }
-		);
-		await tick();
-		expect(c.waiting).toBe(true);
-		expect(c.turns[0].blocks).toEqual([]);
-
-		asks[0].pipe.push(...CHAT.slice(0, 3));
-		await tick();
-		expect(c.waiting).toBe(false);
-		expect(c.running).toBe(true);
-
-		asks[0].pipe.push(...CHAT.slice(3));
-		asks[0].pipe.end();
-		await asked;
-		expect(prose(c)).toContain(ANSWER);
+		expect(c.turns.map((t) => t.collection)).toEqual(['adf-pay', undefined]);
 	});
 });
 
 describe('Chat stopping', () => {
 	it('stops a named conversation by asking the server, not just by hanging up', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
 		asks[0].pipe.push(...CHAT.slice(0, 6));
@@ -331,18 +293,16 @@ describe('Chat stopping', () => {
 	});
 
 	it('stops a new conversation the moment the agent names it', async () => {
-		// Pressed while the question waits: there is nothing to address a stop
-		// to until the agent starts, so the stream is read on, unseen, until then.
-		const { transport, asks } = room();
+		// Pressed before the agent has started: there is nothing to address a
+		// stop to until it names the conversation, so the stream is read on,
+		// unseen, until then.
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
-		// Its type alone says it waits.
-		asks[0].pipe.push({ type: 'queued' });
 		await tick();
 
 		await c.stop();
 		expect(c.running).toBe(false);
-		expect(c.waiting).toBe(false);
 		expect(transport.stop).not.toHaveBeenCalled();
 
 		asks[0].pipe.push(...CHAT.slice(0, 4));
@@ -364,10 +324,10 @@ describe('Chat stopping', () => {
 
 	it('stops an answer being written out of sight, and reads it once it has', async () => {
 		const read = vi
-			.fn<RoomTransport['read']>()
+			.fn<ChatTransport['read']>()
 			.mockResolvedValueOnce(conversation({ answering_since: '2026-09-30T01:58:00Z' }))
 			.mockResolvedValue(conversation());
-		const { transport } = room({ read });
+		const { transport } = persona({ read });
 		const c = chat(transport, 60_000);
 		await c.open(SESSION);
 		expect(c.answering).not.toBeNull();
@@ -382,7 +342,7 @@ describe('Chat stopping', () => {
 
 describe('Chat reopening', () => {
 	it('reopens a conversation as the turns the agent kept', async () => {
-		const { transport } = room();
+		const { transport } = persona();
 		const c = chat(transport);
 		expect(await c.open(SESSION)).toBe(true);
 		expect(c.conversationId).toBe(SESSION);
@@ -407,11 +367,11 @@ describe('Chat reopening', () => {
 			turns: [...conversation().turns, { question: 'And the tax?', answer: 'Fifty cents.' }]
 		});
 		const read = vi
-			.fn<RoomTransport['read']>()
+			.fn<ChatTransport['read']>()
 			.mockResolvedValueOnce(inFlight)
 			.mockResolvedValueOnce(inFlight)
 			.mockResolvedValue(settled);
-		const { transport } = room({ read });
+		const { transport } = persona({ read });
 		const c = chat(transport);
 
 		await c.open(SESSION);
@@ -429,8 +389,8 @@ describe('Chat reopening', () => {
 	});
 
 	it('shows a question still waiting for the agent as an answer on its way', async () => {
-		// Queued, the question is not in the agent's transcript yet.
-		const { transport } = room({
+		// Still waiting for the agent, the question is not in its transcript yet.
+		const { transport } = persona({
 			read: vi.fn(async () => conversation({ answering_since: '2026-09-30T02:05:00Z' }))
 		});
 		const c = chat(transport, 60_000);
@@ -441,7 +401,7 @@ describe('Chat reopening', () => {
 	});
 
 	it('leaves the page on a new conversation when one cannot be read', async () => {
-		const { transport } = room({ read: vi.fn(async () => Promise.reject(new Error('404'))) });
+		const { transport } = persona({ read: vi.fn(async () => Promise.reject(new Error('404'))) });
 		const c = chat(transport);
 		expect(await c.open('gone')).toBe(false);
 		expect(c.conversationId).toBeNull();
@@ -449,7 +409,7 @@ describe('Chat reopening', () => {
 	});
 
 	it('writes nothing from a stream into a conversation opened after it', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
 		await c.open('another');
@@ -463,12 +423,12 @@ describe('Chat reopening', () => {
 
 	it('reads where the answer has got to when the stream drops under it', async () => {
 		// A locked phone: the connection dies and the turn goes on without it.
-		const { transport, asks } = room({
+		const { transport, asks } = persona({
 			read: vi.fn(async () => conversation({ answering_since: '2026-09-30T01:58:00Z' }))
 		});
 		const c = chat(transport, 60_000);
 		const asked = c.ask('What is the total?');
-		asks[0].pipe.push(...CHAT.slice(0, 6), { type: 'library_error', dropped: true });
+		asks[0].pipe.push(...CHAT.slice(0, 6), { type: 'agent_error', dropped: true });
 		asks[0].pipe.end();
 		await asked;
 		expect(transport.read).toHaveBeenCalledWith(SESSION);
@@ -478,10 +438,10 @@ describe('Chat reopening', () => {
 	});
 
 	it("says the agent can't be reached when a dropped stream cannot be read either", async () => {
-		const { transport, asks } = room({ read: vi.fn(async () => Promise.reject(new Error())) });
+		const { transport, asks } = persona({ read: vi.fn(async () => Promise.reject(new Error())) });
 		const c = chat(transport);
 		const asked = c.ask('What is the total?');
-		asks[0].pipe.push(...CHAT.slice(0, 6), { type: 'library_error', dropped: true });
+		asks[0].pipe.push(...CHAT.slice(0, 6), { type: 'agent_error', dropped: true });
 		asks[0].pipe.end();
 		await asked;
 		expect(c.turns.at(-1)?.outcome).toMatchObject({ unreachable: true });
@@ -490,7 +450,7 @@ describe('Chat reopening', () => {
 
 describe('Chat allowance', () => {
 	it('asks nothing once the allowance is spent', async () => {
-		const { transport, asks } = room({
+		const { transport, asks } = persona({
 			quota: vi.fn(async () => ({ ...QUOTA, remaining: 0, reached: true }))
 		});
 		const c = chat(transport);
@@ -503,9 +463,9 @@ describe('Chat allowance', () => {
 
 	it('puts the words in the box again when the server says the allowance is spent', async () => {
 		const quota = vi
-			.fn<RoomTransport['quota']>()
+			.fn<ChatTransport['quota']>()
 			.mockResolvedValue({ ...QUOTA, remaining: 0, reached: true });
-		const { transport, asks } = room({ quota });
+		const { transport, asks } = persona({ quota });
 		const c = chat(transport);
 		const file = new File(['x'], 'receipt.pdf');
 		c.draft = 'What is the total?';
@@ -513,7 +473,7 @@ describe('Chat allowance', () => {
 		const asked = c.ask();
 		expect(c.draft).toBe('');
 
-		asks[0].pipe.push({ type: 'library_error', status: 429 });
+		asks[0].pipe.push({ type: 'agent_error', status: 429 });
 		asks[0].pipe.end();
 		expect(await asked).toBe(false);
 		expect(c.turns).toEqual([]);
@@ -523,7 +483,7 @@ describe('Chat allowance', () => {
 	});
 
 	it('shows the conversation still answering when another device is already asking it', async () => {
-		const { transport, asks } = room({
+		const { transport, asks } = persona({
 			read: vi.fn(async () => conversation({ answering_since: '2026-09-30T01:58:00Z' }))
 		});
 		const c = chat(transport, 60_000);
@@ -532,7 +492,7 @@ describe('Chat allowance', () => {
 		c.answering = null;
 		c.draft = 'And the tax?';
 		const asked = c.ask();
-		asks[0].pipe.push({ type: 'library_error', status: 409 });
+		asks[0].pipe.push({ type: 'agent_error', status: 409 });
 		asks[0].pipe.end();
 		expect(await asked).toBe(false);
 		expect(c.draft).toBe('And the tax?');
@@ -542,7 +502,7 @@ describe('Chat allowance', () => {
 
 describe('Chat conversations', () => {
 	it('lists, renames and deletes, and a deleted open conversation leaves a new one', async () => {
-		const { transport } = room({
+		const { transport } = persona({
 			list: vi.fn(async () => [conversation(), { ...conversation(), id: 'b', title: 'Other' }])
 		});
 		const c = chat(transport);
@@ -561,7 +521,7 @@ describe('Chat conversations', () => {
 	});
 
 	it('reads the list again once an answer settles', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		await c.list();
 		const asked = c.ask('What is the total?');
@@ -572,7 +532,7 @@ describe('Chat conversations', () => {
 	});
 
 	it('says so when an act fails, and changes nothing', async () => {
-		const { transport } = room({
+		const { transport } = persona({
 			list: vi.fn(async () => [conversation()]),
 			rename: vi.fn(async () => Promise.reject(new Error())),
 			remove: vi.fn(async () => Promise.reject(new Error())),
@@ -587,7 +547,7 @@ describe('Chat conversations', () => {
 	});
 
 	it('saves a download under the name the server gave it', async () => {
-		const { transport } = room();
+		const { transport } = persona();
 		const c = chat(transport);
 		const revoked = vi.fn();
 		Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: revoked });
@@ -602,13 +562,13 @@ describe('Chat conversations', () => {
 
 describe('Chat marks', () => {
 	it('addresses an answer by its place among the answers the agent holds', async () => {
-		const { transport, asks } = room();
+		const { transport, asks } = persona();
 		const c = chat(transport);
 		await c.open(SESSION);
 
 		// A question that never reached the agent is on screen and not in its transcript.
 		const lost = c.ask('Lost?');
-		asks[0].pipe.push({ type: 'library_error' });
+		asks[0].pipe.push({ type: 'agent_error' });
 		asks[0].pipe.end();
 		await lost;
 
@@ -624,7 +584,7 @@ describe('Chat marks', () => {
 	});
 
 	it('records nothing where the agent takes no mark', async () => {
-		const { transport } = room({ mark: undefined });
+		const { transport } = persona({ mark: undefined });
 		const c = chat(transport);
 		await c.open(SESSION);
 		expect(await c.mark(c.turns[0], { helpful: true })).toBe(false);
@@ -634,9 +594,9 @@ describe('Chat marks', () => {
 describe('Chat shares', () => {
 	it('shares an answer by its place, keeps where it is read, and stops sharing it', async () => {
 		const share = vi.fn(async (_id: string, turn: number, on: boolean) =>
-			on ? `/rooms/r/answers/${SESSION}/${turn}` : null
+			on ? `/chat/outrider/answers/${SESSION}/${turn}` : null
 		);
-		const { transport, asks } = room({ share });
+		const { transport, asks } = persona({ share });
 		const c = chat(transport);
 		await c.open(SESSION);
 		const asked = c.ask('And the tax?');
@@ -647,7 +607,7 @@ describe('Chat shares', () => {
 		const last = c.turns.at(-1)!;
 		expect(await c.share(last, true)).toBe(true);
 		expect(share).toHaveBeenLastCalledWith(SESSION, 1, true);
-		expect(last.shared).toBe(`/rooms/r/answers/${SESSION}/1`);
+		expect(last.shared).toBe(`/chat/outrider/answers/${SESSION}/1`);
 		expect(await c.share(last, false)).toBe(true);
 		expect(last.shared).toBeUndefined();
 	});
@@ -655,22 +615,22 @@ describe('Chat shares', () => {
 	it('reads back which answers are shared', async () => {
 		const read = vi.fn(async () =>
 			conversation({
-				turns: [{ question: 'Total?', answer: ANSWER, shared: `/rooms/r/answers/${SESSION}/0` }]
+				turns: [{ question: 'Total?', answer: ANSWER, shared: `/chat/outrider/answers/${SESSION}/0` }]
 			})
 		);
-		const c = chat(room({ read }).transport);
+		const c = chat(persona({ read }).transport);
 		await c.open(SESSION);
-		expect(c.turns[0].shared).toBe(`/rooms/r/answers/${SESSION}/0`);
+		expect(c.turns[0].shared).toBe(`/chat/outrider/answers/${SESSION}/0`);
 	});
 
-	it('says so when a share is refused, and shares nothing where the room takes none', async () => {
-		const refusing = room({ share: vi.fn(async () => Promise.reject(new Error('HTTP 404'))) });
+	it('says so when a share is refused, and shares nothing where the persona takes none', async () => {
+		const refusing = persona({ share: vi.fn(async () => Promise.reject(new Error('HTTP 404'))) });
 		const c = chat(refusing.transport);
 		await c.open(SESSION);
 		expect(await c.share(c.turns[0], true)).toBe(false);
 		expect(c.turns[0].shared).toBeUndefined();
 
-		const none = chat(room().transport);
+		const none = chat(persona().transport);
 		await none.open(SESSION);
 		expect(await none.share(none.turns[0], true)).toBe(false);
 	});

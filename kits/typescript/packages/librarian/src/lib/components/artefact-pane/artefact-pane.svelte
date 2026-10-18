@@ -10,7 +10,7 @@
 	import XIcon from '@lucide/svelte/icons/x';
 	import { segment, type TextBlock, type Turn } from '../../transcript.svelte';
 	import { resolveCitations, splitSources, type Citation } from '../../citations';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 	import Markdown from '../markdown/markdown.svelte';
 	import SourceList from '../source-list/source-list.svelte';
 
@@ -21,7 +21,7 @@
 		 *  stacking it beside the artefact. Omit and the sources still list, but
 		 *  do not open. */
 		oncite?: (citation: Citation) => void;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { turn, onclose, oncite, copy }: Props = $props();

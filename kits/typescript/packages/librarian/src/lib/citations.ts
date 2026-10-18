@@ -1,15 +1,15 @@
 /**
  * Where an answer came from.
  *
- * Two sources, one shape. The library emits a `citations` event after the
- * final assistant text, and that is the real one — it carries a document id,
- * so a chip can open the document. Until it ships everywhere, the same chips
- * are DERIVED from the "## Sources" block Milton already writes, which names
- * a title and a section but no id: those chips render and read, and cannot
+ * Two sources, one shape. The app emits a `citations` event before the
+ * persona's answer, and that is the real one — it carries a document id,
+ * so a chip can open the document. Without one, the same chips are DERIVED
+ * from the "## Sources" block the persona writes, which names a title and a
+ * section but no id: those chips render and read, and cannot
  * open a pane. A derived citation is marked `derived` so the UI can tell.
  */
 
-import type { LibrarianCopy } from './copy';
+import type { ChatCopy } from './copy';
 
 export interface Citation {
 	n: number;
@@ -74,7 +74,7 @@ export function splitSources(markdown: string): SplitAnswer {
 	if (!heading || heading.index === undefined) return { body: markdown, citations: [] };
 
 	// The block runs to the NEXT heading, not to the end of the answer. Cutting
-	// to the end loses anything Milton wrote after his sources — a closing note,
+	// to the end loses anything the persona wrote after its sources — a closing note,
 	// a caveat — and loses it silently, which is the worst way to lose it.
 	const after = markdown.slice(heading.index + heading[0].length);
 	const next = after.search(/^[ \t]{0,3}#{1,6}[ \t]/m);
@@ -171,7 +171,7 @@ export function formatVerified(iso: string): string | null {
  * A `verified_at` that is present but not a date is treated as no date, for
  * the same reason: what is shown must be what is known.
  */
-export function trustMark(citation: Citation, copy: LibrarianCopy): string | null {
+export function trustMark(citation: Citation, copy: ChatCopy): string | null {
 	if (citation.derived) return null;
 	const when = citation.verified_at ? formatVerified(citation.verified_at) : null;
 	return when ? `${copy.verified} ${when}` : copy.notVerified;

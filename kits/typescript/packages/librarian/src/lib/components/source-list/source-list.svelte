@@ -8,11 +8,11 @@
 -->
 <script lang="ts">
 	import { trustMark, type Citation } from '../../citations';
-	import type { LibrarianCopy } from '../../copy';
+	import type { ChatCopy } from '../../copy';
 
 	interface Props {
 		sources: Citation[];
-		words: LibrarianCopy;
+		words: ChatCopy;
 		/** Opens the document. Omit and the rows list but do not open. */
 		oncite?: (citation: Citation) => void;
 		/** `h2` in a transcript turn, `h3` under the artefact's own title. */

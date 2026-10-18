@@ -80,7 +80,7 @@ describe('Session', () => {
 		const firstResult = STREAM.findIndex((e) => e.type === 'result');
 		const session = folded(STREAM.slice(0, firstResult + 1));
 		const settled = JSON.stringify(session.turns[0].outcome);
-		session.apply({ type: 'library_error' });
+		session.apply({ type: 'agent_error' });
 		expect(JSON.stringify(session.turns[0].outcome)).toBe(settled);
 		expect(session.turns).toHaveLength(1);
 	});
@@ -88,7 +88,7 @@ describe('Session', () => {
 	it('carries on a run whose watch broke and was opened again', () => {
 		const firstResult = STREAM.findIndex((e) => e.type === 'result');
 		const session = folded(STREAM.slice(0, firstResult - 2));
-		session.apply({ type: 'library_error' });
+		session.apply({ type: 'agent_error' });
 		expect(session.turns[0].outcome).toMatchObject({ unreachable: true });
 
 		for (const event of STREAM) session.apply(event);
@@ -103,7 +103,7 @@ describe('Session', () => {
 		const nextReplay = STREAM.findIndex((e, i) => i > firstResult && e.isReplay);
 		const log = [
 			...STREAM.slice(0, firstResult),
-			{ type: 'library_error', error: 'wall clock' },
+			{ type: 'agent_error', error: 'wall clock' },
 			...STREAM.slice(nextReplay, nextReplay + 3)
 		];
 		const session = folded(log);
@@ -115,7 +115,7 @@ describe('Session', () => {
 
 	it('puts a stream that failed before it began on a turn of its own', () => {
 		const session = new Session();
-		session.apply({ type: 'library_error' });
+		session.apply({ type: 'agent_error' });
 		expect(session.turns).toHaveLength(1);
 		expect(session.turns[0].outcome).toMatchObject({ unreachable: true });
 	});

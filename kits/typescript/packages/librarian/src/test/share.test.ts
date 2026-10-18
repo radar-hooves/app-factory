@@ -9,7 +9,7 @@ import Conversation from '$lib/components/conversation/conversation.svelte';
 import type { Block, Turn } from '$lib/transcript.svelte';
 
 const ANSWER: Block[] = [{ kind: 'text', index: 0, text: 'Twenty days a year.' }];
-const ADDRESS = '/rooms/manual/answers/c1/0';
+const ADDRESS = '/chat/outrider/answers/c1/0';
 
 function answer(props: Record<string, unknown> = {}) {
 	return render(AgentTranscript, {
@@ -38,7 +38,7 @@ describe('the share control', () => {
 
 		await view.rerender({ onshare, shared: ADDRESS });
 		expect(screen.getByRole('status')).toHaveTextContent(
-			'Shared: anyone who can ask Milton here can open the link.'
+			'Shared: anyone who can ask Assistant here can open the link.'
 		);
 		await fireEvent.click(screen.getByRole('button', { name: /Copy link/ }));
 		expect(writeText).toHaveBeenLastCalledWith(new URL(ADDRESS, location.href).href);

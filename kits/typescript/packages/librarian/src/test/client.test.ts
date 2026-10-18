@@ -9,7 +9,9 @@
  * and a finished iteration, because the host's loop is what re-enables Send.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ask, isQueued, watch, type AgentEvent } from '$lib/client';
+import { ask, watch } from '$lib/client';
+
+const ASK = '/api/agent/outrider/ask';
 
 function capture() {
 	const calls: Array<[string, RequestInit]> = [];
@@ -62,18 +64,23 @@ describe('ask()', () => {
 	it('sends JSON when there is nothing attached', async () => {
 		const { calls, fetch } = capture();
 		await drain(
-			ask({ question: 'How much leave?', collections: ['pacman'], endpoint: '/api/caller/ask', fetch })
+			ask({ question: 'How much leave?', collection: 'adf-pay', endpoint: ASK, fetch })
 		);
 
 		const [url, init] = calls[0];
-		expect(url).toBe('/api/caller/ask');
+		expect(url).toBe(ASK);
 		expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
 		expect(JSON.parse(init.body as string)).toEqual({
 			question: 'How much leave?',
 			resume: null,
-			subtree: '',
-			collections: ['pacman']
+			collection: 'adf-pay'
 		});
+	});
+
+	it('asks across every collection when none is named', async () => {
+		const { calls, fetch } = capture();
+		await drain(ask({ question: 'q', endpoint: ASK, fetch }));
+		expect(JSON.parse(calls[0][1].body as string)).not.toHaveProperty('collection');
 	});
 
 	it('sends multipart when files are attached', async () => {
@@ -83,9 +90,9 @@ describe('ask()', () => {
 			ask({
 				question: 'Does this change my balance?',
 				resume: 'session-1',
-				collections: ['pacman', 'air6015'],
+				collection: 'adf-pay',
 				files: [file],
-				endpoint: '/api/caller/ask',
+				endpoint: ASK,
 				fetch
 			})
 		);
@@ -95,7 +102,7 @@ describe('ask()', () => {
 		const form = init.body as FormData;
 		expect(form.get('question')).toBe('Does this change my balance?');
 		expect(form.get('resume')).toBe('session-1');
-		expect(form.getAll('collections[]')).toEqual(['pacman', 'air6015']);
+		expect(form.get('collection')).toBe('adf-pay');
 		expect((form.getAll('files[]')[0] as File).name).toBe('posting-order.pdf');
 	});
 
@@ -107,6 +114,7 @@ describe('ask()', () => {
 			ask({
 				question: 'q',
 				files: [new File(['x'], 'a.png', { type: 'image/png' })],
+				endpoint: ASK,
 				fetch
 			})
 		);
@@ -116,16 +124,24 @@ describe('ask()', () => {
 	it('omits an absent resume rather than sending an empty field', async () => {
 		const { calls, fetch } = capture();
 		await drain(
-			ask({ question: 'q', files: [new File(['x'], 'a.png', { type: 'image/png' })], fetch })
+			ask({ question: 'q', endpoint: ASK, files: [new File(['x'], 'a.png', { type: 'image/png' })], fetch })
 		);
 		expect((calls[0][1].body as FormData).has('resume')).toBe(false);
+	});
+
+	it('reports a refusal with its status', async () => {
+		const refused = (async () =>
+			({ ok: false, status: 404, body: null, headers: new Headers() }) as Response) as typeof fetch;
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: refused }))).toEqual([
+			{ type: 'agent_error', status: 404 }
+		]);
 	});
 
 	it('reports a refused route as one wordless failure', async () => {
 		// Wordless deliberately: the sentence a reader sees names a persona, and
 		// this layer has no idea which one is speaking.
 		const { fetch } = capture();
-		expect(await collect(ask({ question: 'q', fetch }))).toEqual([{ type: 'library_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch }))).toEqual([{ type: 'agent_error' }]);
 	});
 
 	it('says which status a route refused with, so a host can read a spent allowance', async () => {
@@ -135,8 +151,8 @@ describe('ask()', () => {
 			body: null,
 			headers: new Headers({ 'content-type': 'application/json' })
 		})) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
-			{ type: 'library_error', status: 429 }
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
+			{ type: 'agent_error', status: 429 }
 		]);
 	});
 
@@ -148,7 +164,7 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
 		}) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([{ type: 'library_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([{ type: 'agent_error' }]);
 	});
 
 	it('refuses a 200 that is not a stream at all', async () => {
@@ -160,15 +176,15 @@ describe('ask()', () => {
 			body: new ReadableStream(),
 			headers: new Headers({ 'content-type': 'text/html; charset=utf-8' })
 		})) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([{ type: 'library_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([{ type: 'agent_error' }]);
 	});
 
 	it('ends a stream that dies mid-answer as a failure, not a finished turn', async () => {
 		const fakeFetch = vi.fn(async () =>
 			streaming([JSON.stringify({ type: 'assistant' })], { truncate: true })
 		) as unknown as typeof globalThis.fetch;
-		const events = await collect(ask({ question: 'q', fetch: fakeFetch }));
-		expect(events.at(-1)).toEqual({ type: 'library_error', dropped: true });
+		const events = await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }));
+		expect(events.at(-1)).toEqual({ type: 'agent_error', dropped: true });
 	});
 
 	it('ends a stream that simply stops the same way', async () => {
@@ -177,9 +193,9 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () =>
 			streaming([JSON.stringify({ type: 'assistant' })])
 		) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
 			{ type: 'assistant' },
-			{ type: 'library_error', dropped: true }
+			{ type: 'agent_error', dropped: true }
 		]);
 	});
 
@@ -189,7 +205,7 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () => {
 			throw new DOMException('aborted', 'AbortError');
 		}) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch, signal: controller.signal }))).toEqual([]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch, signal: controller.signal }))).toEqual([]);
 	});
 
 	it('keeps a last frame the server sent without its blank line', async () => {
@@ -199,7 +215,7 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () =>
 			streaming([JSON.stringify({ type: 'result', is_error: false })], { unterminated: true })
 		) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
 			{ type: 'result', is_error: false }
 		]);
 	});
@@ -210,7 +226,7 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () =>
 			streaming([JSON.stringify({ type: 'result', is_error: false })], { contentType: '' })
 		) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
 			{ type: 'result', is_error: false }
 		]);
 	});
@@ -219,7 +235,7 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () =>
 			streaming([JSON.stringify({ type: 'result', is_error: false, duration_ms: 1200 })])
 		) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', fetch: fakeFetch }))).toEqual([
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
 			{ type: 'result', is_error: false, duration_ms: 1200 }
 		]);
 	});
@@ -249,7 +265,7 @@ describe('watch()', () => {
 
 	it('still says so when the stream would not open', async () => {
 		const { fetch } = capture();
-		expect(await collect(watch({ endpoint: '/w', fetch }))).toEqual([{ type: 'library_error' }]);
+		expect(await collect(watch({ endpoint: '/w', fetch }))).toEqual([{ type: 'agent_error' }]);
 	});
 
 	it('still says so when the stream breaks', async () => {
@@ -257,20 +273,6 @@ describe('watch()', () => {
 			streaming([JSON.stringify({ type: 'assistant' })], { truncate: true })
 		) as unknown as typeof globalThis.fetch;
 		const events = await collect(watch({ endpoint: '/w', fetch: fakeFetch }));
-		expect(events.at(-1)).toEqual({ type: 'library_error', dropped: true });
-	});
-});
-
-describe('isQueued()', () => {
-	it("hands a host the library's own sentence, by the frame's type alone", () => {
-		const frame: AgentEvent = {
-			type: 'queued',
-			message: 'another question is being answered; waiting for it to finish'
-		};
-		expect(isQueued(frame)).toBe(true);
-		// Narrowed: a plain string, no cast.
-		const said: string = isQueued(frame) ? frame.message : '';
-		expect(said).toMatch(/^another question/);
-		expect(isQueued({ type: 'assistant', message: { content: [] } })).toBe(false);
+		expect(events.at(-1)).toEqual({ type: 'agent_error', dropped: true });
 	});
 });

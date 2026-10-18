@@ -10,23 +10,13 @@
 
 import type { Citation } from './citations';
 
-/**
- * How hard the persona works on one question: a reading budget and a model,
- * both the operator's to set per deployment, never the colleague's concern.
- * `quick` is always the default; `thorough` always means something — a
- * bigger budget on the strongest model the room allows, even where that
- * model is a local one — so a host never has a state where the choice is
- * greyed out or explained away.
- */
-export type Depth = 'quick' | 'thorough';
-
 /** A Claude Code message, whole. `content` is a plain string only on a user frame. */
 export interface AgentMessage {
 	id?: string;
 	content?: Array<Record<string, unknown>> | string;
 }
 
-/** One Claude Code stream event, or one of the library's own frames. Typed
+/** One Claude Code stream event, or one of the app's own frames. Typed
  *  only where we branch on it, and `type` stays open: a new event type needs
  *  no change here. */
 export interface AgentEvent {
@@ -38,7 +28,7 @@ export interface AgentEvent {
 		delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
 		content_block?: { type: string; name?: string; id?: string };
 	};
-	/** A whole message; on the library's `queued` frame, its own sentence. */
+	/** A whole message. */
 	message?: AgentMessage | string;
 	/** A user frame the CLI echoed back as the turn that consumes it starts
 	 *  (`--replay-user-messages`): the reader's side of a session. */
@@ -55,62 +45,38 @@ export interface AgentEvent {
 	/** What a run returned under `--json-schema`, on its `result`. */
 	structured_output?: unknown;
 	error?: string;
-	/** On a `library_error` this layer raised: the HTTP status of a route that
+	/** On an `agent_error` this layer raised: the HTTP status of a route that
 	 *  answered and would not stream. 429 is a spent allowance. */
 	status?: number;
-	/** On a `library_error` this layer raised: a stream that opened and died
+	/** On an `agent_error` this layer raised: a stream that opened and died
 	 *  before its terminal frame. The turn may well go on without the page. */
 	dropped?: boolean;
 	detail?: string;
 	tools?: string[];
 	model?: string;
-	/**
-	 * The payload of the library's own two trailing frames, which share a key
-	 * and not a shape: `citations` carries sources, `suggestions` carries
-	 * follow-up questions as plain strings. Narrowed on `type` by whoever
-	 * reads it (`Transcript.apply`).
-	 */
-	items?: Citation[] | string[];
+	/** The sources of a `citations` frame, which the app emits before the
+	 *  persona's answer. */
+	items?: Citation[];
 	[key: string]: unknown;
-}
-
-/**
- * The library's word that an ask waits behind somebody else's: repeated at
- * least every 30 s until the agent starts, and what keeps an idle read
- * timeout from firing meanwhile. `message` is the library's own sentence
- * ("another question is being answered; waiting for it to finish"); a page
- * says it in its persona's words (`copy.waiting`).
- */
-export interface QueuedEvent extends AgentEvent {
-	type: 'queued';
-	message: string;
-}
-
-/** The frame is the library's `queued`, by its type alone. */
-export function isQueued(event: AgentEvent): event is QueuedEvent {
-	return event.type === 'queued';
 }
 
 export interface AskOptions {
 	question: string;
 	resume?: string | null;
-	subtree?: string;
-	/** Collections this question may see. Empty means all of them. */
-	collections?: string[];
-	/** Files Milton reads for this question. Switches the request to multipart. */
+	/** The one collection this question is asked of, by name. Absent asks
+	 *  across every collection the person may read. */
+	collection?: string;
+	/** Files the persona reads for this question. Switches the request to multipart. */
 	files?: File[];
 	/** What kind of turn this ask should become. Absent means an ordinary
 	 *  question; a host that offers a study artefact sends its own kind
 	 *  (`'briefing'`) and interprets what comes back accordingly — the wire
 	 *  vocabulary is the host's own, never a fixed set here. */
 	kind?: string;
-	/** How hard the persona should work on this one. Absent asks for
-	 *  whatever the route does by default, so a host that never reads
-	 *  `Composer`'s `depth` sends exactly what it always has. */
-	depth?: Depth;
 	signal?: AbortSignal;
-	/** Where the ask lands. Each app mounts its own ask route. */
-	endpoint?: string;
+	/** Where the ask lands: the persona's ask route,
+	 *  `/api/agent/{persona}/ask`. */
+	endpoint: string;
 	/** Override for the ambient `fetch`, e.g. a caller-authenticated wrapper. */
 	fetch?: typeof fetch;
 }
@@ -121,7 +87,7 @@ export interface AskOptions {
  * JSON when there are no files, multipart when there are — one endpoint, two
  * encodings, because a `File` cannot cross a JSON body and base64 would double
  * a 20 MB attachment on the wire for nothing. The multipart field names are
- * the form convention (`collections[]`, `files[]`) rather than the JSON keys.
+ * the form convention (`files[]`) rather than the JSON key.
  *
  * `Content-Type` is deliberately absent for multipart: setting it by hand
  * omits the boundary the browser generates, and the server then reads zero
@@ -136,10 +102,8 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 			body: JSON.stringify({
 				question: options.question,
 				resume: options.resume ?? null,
-				subtree: options.subtree ?? '',
-				collections: options.collections ?? [],
-				kind: options.kind,
-				depth: options.depth
+				collection: options.collection,
+				kind: options.kind
 			}),
 			signal
 		};
@@ -148,10 +112,9 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	const form = new FormData();
 	form.append('question', options.question);
 	if (options.resume) form.append('resume', options.resume);
-	for (const collection of options.collections ?? []) form.append('collections[]', collection);
+	if (options.collection) form.append('collection', options.collection);
 	for (const file of options.files) form.append('files[]', file, file.name);
 	if (options.kind) form.append('kind', options.kind);
-	if (options.depth) form.append('depth', options.depth);
 	return { method: 'POST', credentials: 'include', body: form, signal };
 }
 
@@ -161,7 +124,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
  * It never throws. Every way a stream can fail to open or die half-way through
  * — the network dropping, an expired session redirecting the POST to an
  * identity provider the browser then blocks on CORS, a server closing the
- * connection mid-answer — comes back as one `library_error` event and a
+ * connection mid-answer — comes back as one `agent_error` event and a
  * finished iteration, because a host's loop is what re-enables its Send
  * button. A thrown generator leaves that loop unfinished: Pebblestone's
  * console sat with Send disabled and no message on screen, indefinitely,
@@ -175,7 +138,7 @@ export async function* ask(options: AskOptions): AsyncGenerator<AgentEvent> {
 	yield* read(
 		() =>
 			(options.fetch ?? fetch)(
-				options.endpoint ?? '/api/agent/ask',
+				options.endpoint,
 				requestInit(options, options.signal)
 			),
 		options.signal,
@@ -198,7 +161,7 @@ export interface WatchOptions {
  * difference: a clean close with no `result` is not a failure. A run the
  * reader stopped ends exactly that way, and so does a session that is
  * waiting between runs, so only a stream that would not open, or broke,
- * yields `library_error`. Fold the events with `Session`.
+ * yields `agent_error`. Fold the events with `Session`.
  */
 export async function* watch(options: WatchOptions): AsyncGenerator<AgentEvent> {
 	yield* read(
@@ -226,7 +189,7 @@ async function* read(
 	} catch {
 		// A reader who pressed stop asked for this one; it is not a failure.
 		if (signal?.aborted) return;
-		yield { type: 'library_error' };
+		yield { type: 'agent_error' };
 		return;
 	}
 
@@ -241,11 +204,11 @@ async function* read(
 	// check at the end of this function catches it if it really says nothing.
 	const kind = (response.headers.get('content-type') ?? '').toLowerCase();
 	if (!response.ok) {
-		yield { type: 'library_error', status: response.status };
+		yield { type: 'agent_error', status: response.status };
 		return;
 	}
 	if (!response.body || (kind && !kind.includes('text/event-stream'))) {
-		yield { type: 'library_error' };
+		yield { type: 'agent_error' };
 		return;
 	}
 
@@ -282,7 +245,7 @@ async function* read(
 			chunk = await reader.read();
 		} catch {
 			if (signal?.aborted) return;
-			yield { type: 'library_error', dropped: true };
+			yield { type: 'agent_error', dropped: true };
 			return;
 		}
 		if (chunk.done) break;
@@ -294,7 +257,7 @@ async function* read(
 			boundary = buffered.indexOf('\n\n');
 			const event = parse(frame);
 			if (!event) continue;
-			if (event.type === 'result' || event.type === 'library_error') ended = true;
+			if (event.type === 'result' || event.type === 'agent_error') ended = true;
 			yield event;
 		}
 	}
@@ -305,9 +268,9 @@ async function* read(
 	// finished turn look like one that died.
 	const last = parse(buffered);
 	if (last) {
-		if (last.type === 'result' || last.type === 'library_error') ended = true;
+		if (last.type === 'result' || last.type === 'agent_error') ended = true;
 		yield last;
 	}
 
-	if (terminal && !ended && !signal?.aborted) yield { type: 'library_error', dropped: true };
+	if (terminal && !ended && !signal?.aborted) yield { type: 'agent_error', dropped: true };
 }

@@ -24,7 +24,6 @@
 		type Artefact,
 		type Block,
 		type DescribeTool,
-		type Depth,
 		type Outcome,
 		type TextBlock
 	} from '../../transcript.svelte';
@@ -34,7 +33,7 @@
 		splitSources,
 		type Citation
 	} from '../../citations';
-	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, personaName, resolveCopy, type ChatCopy } from '../../copy';
 	import type { Verdict } from '../../chat.svelte';
 	import AnswerMark from '../answer-mark/answer-mark.svelte';
 	import AnswerShare from '../answer-share/answer-share.svelte';
@@ -51,22 +50,16 @@
 		blocks: Block[];
 		outcome: Outcome | null;
 		running: boolean;
-		/** Sources from the library's `citations` frame. Absent falls back to
+		/** Sources from the app's `citations` frame. Absent falls back to
 		 *  whatever a "## Sources" block in the prose says. */
 		citations?: Citation[];
 		/** Forwarded to Markdown; omit if the caller has no collections to chip. */
 		collectionNames?: Set<string>;
-		/** Follow-ups from the library's `suggestions` frame. */
-		suggestions?: string[];
 		/** Opens the document pane. Omit and chips render but do not open. */
 		oncite?: (citation: Citation) => void;
 		/** Offered on the LAST answer only — re-asks the same question. */
 		onregenerate?: () => void;
-		/** Asks a follow-up. Offered on the LAST answer only; omit and the
-		 *  chips do not render, because a chip that does nothing is worse than
-		 *  no chip. */
-		onsuggest?: (question: string) => void;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 		/** The persona's display name, signed on the answer card. */
 		name?: string;
 		/** When the question was asked, epoch ms. Rendered as a clock time —
@@ -83,8 +76,6 @@
 		onopenartefact?: () => void;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
-		/** The question waits behind somebody else's. */
-		waiting?: boolean;
 		/** When an answer this page did not start began, epoch ms: it is still
 		 *  being written, and the clock counts from then. */
 		answering?: number;
@@ -98,10 +89,6 @@
 		 *  true once recorded. Omit and nothing about sharing renders: nothing
 		 *  is shared unless the reader asks. */
 		onshare?: (share: boolean) => Promise<boolean>;
-		/** How hard the persona worked on this one, for the footer's cost line
-		 *  (`Quick · 56 s · about A$0.34`). Absent renders the footer exactly
-		 *  as it always has: the duration alone. */
-		depth?: Depth;
 		/** Prices `outcome.costUsd` in the host's own currency and words
 		 *  ("about A$0.34"). The package never converts currency itself,
 		 *  and a zero-cost run (a local model) shows no cost regardless. */
@@ -115,10 +102,8 @@
 		running,
 		citations = [],
 		collectionNames = new Set(),
-		suggestions = [],
 		oncite,
 		onregenerate,
-		onsuggest,
 		copy,
 		name = DEFAULT_PERSONA,
 		at,
@@ -126,12 +111,10 @@
 		artefactOpen = false,
 		onopenartefact,
 		describeTool,
-		waiting = false,
 		answering,
 		onmark,
 		shared,
 		onshare,
-		depth,
 		formatCost
 	}: AgentTranscriptProps = $props();
 
@@ -214,7 +197,7 @@
 	 *
 	 * Reading none of this left a failed turn rendering as a clean, complete
 	 * answer: no banner, a duration badge, and — worse — the "answered without
-	 * a source" line, which is a claim about the shelf made off a run that
+	 * a source" line, which is a claim about the sources made off a run that
 	 * never finished looking.
 	 */
 	const failure = $derived(
@@ -247,13 +230,6 @@
 	const notHeld = $derived(
 		settled && hasAnswer && sources.length === 0 && Boolean(outcome) && !failure
 	);
-
-	// A follow-up is offered once. Clicking it asks the question, which puts a
-	// new turn below this one — and leaving the row up for the moment before
-	// that arrives invites a second click on a third suggestion, asking two
-	// questions the reader only meant to ask one of.
-	let used = $state(false);
-	const followUps = $derived(!used && onsuggest ? suggestions : []);
 
 	let copied = $state(false);
 	// Not `copy`: the prop of that name is the package's own words, and a
@@ -296,11 +272,7 @@
 		{#if running && segments.length === 0}
 			<Working
 				copy={words}
-				label={waiting
-					? words.waiting
-					: answering !== undefined
-						? words.stillAnswering
-						: undefined}
+				label={answering !== undefined ? words.stillAnswering : undefined}
 				since={answering}
 			/>
 		{/if}
@@ -332,7 +304,7 @@
 			<SourceList {sources} {words} {oncite} />
 		{/if}
 
-		<!-- An empty `notHeld` is a host whose persona answers from no shelf,
+		<!-- An empty `notHeld` is a host whose persona answers from no sources,
 		     where "without a source" would be a claim about nothing. -->
 		{#if unanswered && asked}
 			<p class="ds-lib-not-held">{words.noAnswer}</p>
@@ -340,30 +312,6 @@
 
 		{#if !isArtefact && notHeld && words.notHeld}
 			<p class="ds-lib-not-held">{words.notHeld}</p>
-		{/if}
-
-		{#if !isArtefact && followUps.length > 0}
-			<section>
-				<h2 class="ds-lib-follow-heading">{words.suggestions}</h2>
-				<!-- Wrapping, not scrolling: at 390 a question is most of a line, so
-				     a row of three would clip two of them to fragments. -->
-				<ul class="ds-lib-chips">
-					{#each followUps as followUp (followUp)}
-						<li>
-							<button
-								type="button"
-								class="ds-lib-chip"
-								onclick={() => {
-									used = true;
-									onsuggest?.(followUp);
-								}}
-							>
-								{followUp}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</section>
 		{/if}
 
 		{#if failure}
@@ -402,10 +350,10 @@
 				{/if}
 				<!-- What it took, which is not the same fact as when it was
 				     asked; both are on the card and neither stands in for the
-				     other. Depth and cost fold into the SAME line, never a
-				     second one, once the host offers either. -->
+				     other. Cost folds into the SAME line, never a
+				     second one, once the host offers it. -->
 				{#if outcome && !failure}
-					<span class="ds-lib-duration">{outcomeLine(outcome, depth, words, formatCost)}</span>
+					<span class="ds-lib-duration">{outcomeLine(outcome, formatCost)}</span>
 				{/if}
 			</div>
 		{/if}
@@ -513,55 +461,6 @@
 		margin: 0;
 		color: var(--ds-color-muted-foreground);
 		font-size: 0.875rem;
-	}
-
-	.ds-lib-follow-heading {
-		margin: 0 0 0.375rem;
-		color: var(--ds-color-muted-foreground);
-		font-family: inherit;
-		font-size: var(--ds-text-2xs);
-		font-weight: 500;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
-	}
-
-	.ds-lib-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.ds-lib-chips li {
-		max-width: 100%;
-	}
-
-	.ds-lib-chip {
-		max-width: 100%;
-		border: 1px solid var(--ds-color-border);
-		border-radius: var(--ds-radius-full);
-		background: none;
-		padding: 0.5rem 0.875rem;
-		color: var(--ds-color-foreground);
-		font: inherit;
-		font-size: 0.875rem;
-		text-align: start;
-		cursor: pointer;
-		transition:
-			background-color 150ms ease,
-			border-color 150ms ease;
-	}
-
-	.ds-lib-chip:hover {
-		border-color: var(--ds-color-border-strong);
-		background: var(--ds-color-surface-1);
-	}
-
-	.ds-lib-chip:focus-visible {
-		outline: 2px solid var(--ds-color-ring);
-		outline-offset: 2px;
 	}
 
 	.ds-lib-failure {

@@ -13,7 +13,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import Share2Icon from '@lucide/svelte/icons/share-2';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		/** Shares the answer (true) or stops sharing it (false), resolving true
@@ -22,7 +22,7 @@
 		/** Where the read-only view lives while the answer is shared, as the
 		 *  host's own address. */
 		shared?: string;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { onshare, shared, copy }: Props = $props();

@@ -1,7 +1,7 @@
 /**
  * A persona with tools of its own speaks about them in its own words.
  *
- * The package knows Milton's tools; a host whose persona reads page images or
+ * The package knows the household persona's tools; a host whose persona reads page images or
  * consults a memory store brings a `DescribeTool`, and its words reach the
  * row, the activity line and the list of what the answer read. The calls are
  * the real job stream's.

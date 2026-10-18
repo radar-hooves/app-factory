@@ -19,8 +19,8 @@ describe('personaName', () => {
 		expect(personaName('Penny')).toBe('Penny');
 	});
 
-	it('falls back to the library persona rather than rendering nothing', () => {
-		expect(personaName('   ')).toBe('Milton');
+	it('falls back to the neutral default rather than rendering nothing', () => {
+		expect(personaName('   ')).toBe('Assistant');
 	});
 });
 
@@ -28,7 +28,7 @@ describe('copyFor', () => {
 	it('names nobody but the persona it was given', () => {
 		const words = copyFor('penny');
 		const said = JSON.stringify(words);
-		expect(said).not.toContain('Milton');
+		expect(said).not.toContain('Assistant');
 		expect(words.notHeld).toContain('Penny');
 		expect(words.answerFailed).toContain('Penny');
 		expect(words.unreachable).toContain('Penny');
@@ -37,7 +37,7 @@ describe('copyFor', () => {
 		expect(words.askPlaceholder).toContain('Penny');
 		expect(words.answeringPlaceholder).toContain('Penny');
 		expect(words.conversationLabel).toContain('Penny');
-		expect(words.depthGroupLabel).toContain('Penny');
+		expect(words.collectionsLabel).toContain('Penny');
 		expect(words.longConversation).toContain('Penny');
 		for (const word of words.working) expect(word).toContain('Penny');
 	});
@@ -47,9 +47,9 @@ describe('copyFor', () => {
 		expect(said).not.toMatch(/\b(he|him|his|she|her|hers)\b/i);
 	});
 
-	it('is the library persona when nobody is named', () => {
+	it('is the neutral default when nobody is named', () => {
 		expect(copyFor()).toEqual(DEFAULT_COPY);
-		expect(DEFAULT_COPY.unreachable).toBe("Milton can't be reached right now.");
+		expect(DEFAULT_COPY.unreachable).toBe("Assistant can't be reached right now.");
 	});
 });
 

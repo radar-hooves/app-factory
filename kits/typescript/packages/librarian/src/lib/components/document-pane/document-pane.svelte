@@ -10,14 +10,14 @@
 <script lang="ts">
 	import XIcon from '@lucide/svelte/icons/x';
 	import { trustMark, type Citation, type LoadDocument, type LoadedDocument } from '../../citations';
-	import { resolveCopy, type LibrarianCopy } from '../../copy';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 	import Markdown from '../markdown/markdown.svelte';
 
 	interface Props {
 		citation: Citation;
 		loadDocument: LoadDocument;
 		onclose: () => void;
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let { citation, loadDocument, onclose, copy }: Props = $props();

@@ -45,9 +45,9 @@ describe('ConversationList', () => {
 	});
 
 	it('makes each row a link to its own address where the page keeps one', () => {
-		list({ href: (id: string) => `/rooms/pacman?c=${id}`, current: 'a' });
+		list({ href: (id: string) => `/chat/outrider?c=${id}`, current: 'a' });
 		const link = screen.getByRole('link', { name: /Leave on posting/ });
-		expect(link).toHaveAttribute('href', '/rooms/pacman?c=a');
+		expect(link).toHaveAttribute('href', '/chat/outrider?c=a');
 		expect(link).toHaveAttribute('aria-current', 'page');
 	});
 

@@ -1,8 +1,8 @@
 /**
- * The page's controller: one conversation with one agent, over a room's routes
- * or a job's watch, message and stop.
+ * The page's controller: one conversation with one agent, over a persona's
+ * chat routes or a job's watch, message and stop.
  *
- * A room is asked. Each question streams its own turn, the agent names the
+ * A persona is asked. Each question streams its own turn, the agent names the
  * conversation on its `init` event, and the conversation is read back whole
  * when it is reopened. The turn belongs to the server, not the page: a
  * refresh, a locked phone or a closed tab leaves it running, so a reopened
@@ -21,7 +21,7 @@
  */
 
 import { untrack } from 'svelte';
-import { isQueued, type AgentEvent, type Depth } from './client';
+import type { AgentEvent } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
 import { fold, foldState, type Artefact, type Turn } from './transcript.svelte';
@@ -48,8 +48,8 @@ export interface StoredTurn {
 	citations?: Citation[];
 	/** What the host asked for, when it was not a plain question. */
 	kind?: string | null;
-	/** How hard the persona worked on this one. */
-	depth?: Depth | null;
+	/** The collection this question was narrowed to, by name; null asked across them all. */
+	collection?: string | null;
 	/** Where this answer's read-only view lives while it is shared. */
 	shared?: string | null;
 }
@@ -86,18 +86,19 @@ export interface AskRequest {
 	signal: AbortSignal;
 	/** What the host asked for, when it is not a plain question: `client.ask()`'s `kind`. */
 	kind?: string;
-	/** How hard the persona should work on this one: `client.ask()`'s `depth`. */
-	depth?: Depth;
+	/** The one collection to ask, by name: `client.ask()`'s `collection`. */
+	collection?: string;
 }
 
 /**
- * A room's routes, as the host's own client reaches them. Every method but
- * `ask` may reject; the controller says what failed.
+ * A persona's chat routes, as the host's own client reaches them. Every
+ * method but `ask` may reject; the controller says what failed.
  */
-export interface RoomTransport {
-	/** `POST rooms/{room}/ask`: `client.ask()` over it, which never throws. A
-	 *  refusal arrives as `library_error` with its `status`: 429 is a spent
-	 *  allowance, 409 a conversation already being answered. */
+export interface ChatTransport {
+	/** `POST {persona}/ask`: `client.ask()` over it, which never throws. A
+	 *  refusal arrives as `agent_error` with its `status`: 429 is a spent
+	 *  allowance, 409 a conversation already being answered, 404 a collection
+	 *  the person may not read, 503 a persona that cannot answer yet. */
 	ask(request: AskRequest): AsyncIterable<AgentEvent>;
 	/** `GET conversations/{id}`. */
 	read(id: string): Promise<ConversationRead>;
@@ -105,7 +106,7 @@ export interface RoomTransport {
 	stop(id: string): Promise<void>;
 	/** `GET quota`. */
 	quota(): Promise<Quota>;
-	/** This person's conversations in this room. */
+	/** This person's conversations with this persona. */
 	list(): Promise<ConversationSummary[]>;
 	/** `PATCH conversations/{id}`. */
 	rename(id: string, title: string): Promise<void>;
@@ -116,7 +117,7 @@ export interface RoomTransport {
 	/** The answer mark, where the agent takes one. `turn` is the answer's
 	 *  zero-based position in the conversation. */
 	mark?(id: string, turn: number, verdict: Verdict): Promise<void>;
-	/** Shares answer `turn` read-only with whoever may enter the room, or
+	/** Shares answer `turn` read-only with whoever may chat with this persona, or
 	 *  stops sharing it. Resolves to where it is read while shared, null once
 	 *  it is not. */
 	share?(id: string, turn: number, share: boolean): Promise<string | null>;
@@ -161,8 +162,6 @@ export class Chat {
 	/** When an answer this page is not streaming began, epoch ms: a
 	 *  conversation reopened mid-answer. */
 	answering = $state<number | null>(null);
-	/** The agent is answering somebody else's question first. */
-	waiting = $state(false);
 	/** Today's allowance; null until read, and in a job. */
 	quota = $state<Quota | null>(null);
 	/** The open conversation, or the job; null for a new one. The host keeps
@@ -172,7 +171,7 @@ export class Chat {
 	conversations = $state<ConversationSummary[] | null>(null);
 	listFailed = $state(false);
 
-	#room: RoomTransport | null = null;
+	#chat: ChatTransport | null = null;
 	#job: JobTransport | null = null;
 	#pollMs: number;
 	#rewatchMs: number;
@@ -198,9 +197,9 @@ export class Chat {
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	#held = new Set<string>();
 
-	constructor(transport: RoomTransport | JobTransport, options: ChatOptions = {}) {
+	constructor(transport: ChatTransport | JobTransport, options: ChatOptions = {}) {
 		if ('watch' in transport) this.#job = transport;
-		else this.#room = transport;
+		else this.#chat = transport;
 		this.#pollMs = options.pollMs ?? 5000;
 		this.#rewatchMs = options.rewatchMs ?? 2000;
 		this.#artefact = options.artefact;
@@ -228,7 +227,7 @@ export class Chat {
 		return this.running || this.answering !== null;
 	}
 
-	/** A job reads what the reader says while it works; a room waits for its answer. */
+	/** A job reads what the reader says while it works; a persona waits for its answer. */
 	get sendWhileRunning(): boolean {
 		return this.#job !== null;
 	}
@@ -254,7 +253,7 @@ export class Chat {
 		void this.refreshQuota();
 		const mine = this.#generation;
 		try {
-			const read = await this.#room!.read(id);
+			const read = await this.#chat!.read(id);
 			if (mine === this.#generation) this.#show(read, mine);
 			return mine === this.#generation;
 		} catch {
@@ -281,11 +280,11 @@ export class Chat {
 
 	/**
 	 * Ask `question`, or what is in the box, as a `kind` of turn when it is not
-	 * a plain question, at a `depth` when the host offers the choice. Resolves
+	 * a plain question, narrowed to one `collection` by name when given. Resolves
 	 * once the turn settles: true if it was asked, false if it was refused,
 	 * here or by the server, in which case typed words go back into the box.
 	 */
-	async ask(question?: string, kind?: string, depth?: Depth): Promise<boolean> {
+	async ask(question?: string, kind?: string, collection?: string): Promise<boolean> {
 		const typed = question === undefined;
 		const text = (question ?? this.draft).trim();
 		if (!text) return false;
@@ -296,15 +295,15 @@ export class Chat {
 			this.draft = '';
 			this.files = [];
 		}
-		return this.#ask(text, files, typed, kind, depth);
+		return this.#ask(text, files, typed, kind, collection);
 	}
 
 	/** The last question again, as a new turn: the conversation is append-only,
-	 *  because the agent's transcript is. Same kind, same depth. */
+	 *  because the agent's transcript is. Same kind, same collection. */
 	again(): Promise<boolean> {
 		const last = this.turns.at(-1);
 		return last?.question
-			? this.ask(last.question, last.kind, last.depth)
+			? this.ask(last.question, last.kind, last.collection)
 			: Promise.resolve(false);
 	}
 
@@ -318,7 +317,6 @@ export class Chat {
 		const stream = this.#stream;
 		if (stream && this.#running) {
 			this.#running = false;
-			this.waiting = false;
 			// Before the agent has named a new conversation there is nothing to
 			// address a stop to: the stream is read on, unseen, until it does.
 			if (!id) {
@@ -326,11 +324,11 @@ export class Chat {
 				return;
 			}
 			stream.controller.abort();
-			await this.#room!.stop(id).catch(() => undefined);
+			await this.#chat!.stop(id).catch(() => undefined);
 			return;
 		}
 		if (this.answering !== null && id) {
-			await this.#room!.stop(id).catch(() => undefined);
+			await this.#chat!.stop(id).catch(() => undefined);
 			clearTimeout(this.#poll);
 			await this.#settle(id, this.#generation);
 		}
@@ -338,9 +336,9 @@ export class Chat {
 
 	/** Read today's allowance again. One that cannot be read is left as it was. */
 	async refreshQuota(): Promise<void> {
-		if (!this.#room) return;
+		if (!this.#chat) return;
 		try {
-			this.quota = await this.#room.quota();
+			this.quota = await this.#chat.quota();
 		} catch {
 			// A counter that cannot be read costs the counter, never the ask.
 		}
@@ -349,9 +347,9 @@ export class Chat {
 	/** Read this person's conversations. Read again after every answer once
 	 *  read at all, so the list follows what they ask. */
 	async list(): Promise<boolean> {
-		if (!this.#room) return false;
+		if (!this.#chat) return false;
 		try {
-			this.conversations = await this.#room.list();
+			this.conversations = await this.#chat.list();
 			this.listFailed = false;
 			return true;
 		} catch {
@@ -362,9 +360,9 @@ export class Chat {
 
 	async rename(id: string, title: string): Promise<boolean> {
 		const name = title.trim();
-		if (!name || !this.#room) return false;
+		if (!name || !this.#chat) return false;
 		try {
-			await this.#room.rename(id, name);
+			await this.#chat.rename(id, name);
 		} catch {
 			return false;
 		}
@@ -375,9 +373,9 @@ export class Chat {
 
 	/** Forget a conversation everywhere. The open one, forgotten, leaves a new one. */
 	async remove(id: string): Promise<boolean> {
-		if (!this.#room) return false;
+		if (!this.#chat) return false;
 		try {
-			await this.#room.remove(id);
+			await this.#chat.remove(id);
 		} catch {
 			return false;
 		}
@@ -391,9 +389,9 @@ export class Chat {
 	 *  navigated to, so one deleted a moment ago elsewhere is a false here,
 	 *  not the reader's page replaced by an error body. */
 	async download(id: string): Promise<boolean> {
-		if (!this.#room) return false;
+		if (!this.#chat) return false;
 		try {
-			const { name, body } = await this.#room.download(id);
+			const { name, body } = await this.#chat.download(id);
 			save(body, name);
 			return true;
 		} catch {
@@ -404,9 +402,9 @@ export class Chat {
 	/** Mark an answer the agent holds. False when it could not be recorded. */
 	async mark(turn: Turn, verdict: Verdict): Promise<boolean> {
 		const id = this.conversationId;
-		if (!id || !this.#room?.mark || !this.#held.has(turn.id)) return false;
+		if (!id || !this.#chat?.mark || !this.#held.has(turn.id)) return false;
 		try {
-			await this.#room.mark(id, this.#position(turn), verdict);
+			await this.#chat.mark(id, this.#position(turn), verdict);
 			return true;
 		} catch {
 			return false;
@@ -417,9 +415,9 @@ export class Chat {
 	 *  was not recorded. */
 	async share(turn: Turn, share: boolean): Promise<boolean> {
 		const id = this.conversationId;
-		if (!id || !this.#room?.share || !this.#held.has(turn.id)) return false;
+		if (!id || !this.#chat?.share || !this.#held.has(turn.id)) return false;
 		try {
-			turn.shared = (await this.#room.share(id, this.#position(turn), share)) ?? undefined;
+			turn.shared = (await this.#chat.share(id, this.#position(turn), share)) ?? undefined;
 			this.#version += 1;
 			return true;
 		} catch {
@@ -444,7 +442,6 @@ export class Chat {
 		this.#watching = false;
 		this.#running = false;
 		this.answering = null;
-		this.waiting = false;
 	}
 
 	async #ask(
@@ -452,9 +449,9 @@ export class Chat {
 		files: File[],
 		typed: boolean,
 		kind?: string,
-		depth?: Depth
+		collection?: string
 	): Promise<boolean> {
-		const room = this.#room!;
+		const chat = this.#chat!;
 		const mine = this.#generation;
 		const stream = { controller: new AbortController(), stopWanted: false };
 		this.#stream = stream;
@@ -465,26 +462,24 @@ export class Chat {
 			blocks: [],
 			outcome: null,
 			citations: [],
-			suggestions: [],
 			kind,
-			depth,
+			collection,
 			artefact: this.#card(kind)
 		});
 		const live = this.#turns[this.#turns.length - 1];
 		const state = foldState();
 		this.#running = true;
-		this.waiting = false;
 		this.#version += 1;
 		const current = () => mine === this.#generation && this.#stream === stream;
 
 		let ending: 'refused' | 'answering' | 'dropped' | null = null;
-		for await (const event of room.ask({
+		for await (const event of chat.ask({
 			question: text,
 			files,
 			resume: this.conversationId,
 			signal: stream.controller.signal,
 			kind,
-			depth
+			collection
 		})) {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
 			if (stream.stopWanted) {
@@ -495,25 +490,18 @@ export class Chat {
 					this.#held.add(live.id);
 				}
 				stream.controller.abort();
-				await room.stop(named).catch(() => undefined);
+				await chat.stop(named).catch(() => undefined);
 				break;
 			}
 			if (!current()) break;
-			if (isQueued(event)) {
-				this.waiting = true;
-				this.#version += 1;
-				continue;
-			}
-			// Waiting ends when the agent starts, and no other frame says so.
-			if (named || RUN.has(event.type)) this.waiting = false;
 			if (named) {
 				this.conversationId = named;
 				this.#held.add(live.id);
 				continue;
 			}
-			if (event.type === 'library_error' && event.status === 429) ending = 'refused';
-			else if (event.type === 'library_error' && event.status === 409) ending = 'answering';
-			else if (event.type === 'library_error' && event.dropped && this.conversationId)
+			if (event.type === 'agent_error' && event.status === 429) ending = 'refused';
+			else if (event.type === 'agent_error' && event.status === 409) ending = 'answering';
+			else if (event.type === 'agent_error' && event.dropped && this.conversationId)
 				ending = 'dropped';
 			if (ending) break;
 			if (RUN.has(event.type)) this.#held.add(live.id);
@@ -542,10 +530,10 @@ export class Chat {
 		if (ending === 'dropped' && id) {
 			// The page lost the stream, not the turn: read where it has got to.
 			try {
-				const read = await room.read(id);
+				const read = await chat.read(id);
 				if (current()) this.#show(read, mine);
 			} catch {
-				if (current()) fold(live, state, { type: 'library_error' });
+				if (current()) fold(live, state, { type: 'agent_error' });
 			}
 		}
 		this.#finish();
@@ -561,7 +549,6 @@ export class Chat {
 	#finish(): void {
 		this.#stream = null;
 		this.#running = false;
-		this.waiting = false;
 		this.#version += 1;
 		void this.refreshQuota();
 		if (this.conversations !== null) void this.list();
@@ -599,7 +586,7 @@ export class Chat {
 	async #settle(id: string, mine: number): Promise<void> {
 		clearTimeout(this.#poll);
 		try {
-			const read = await this.#room!.read(id);
+			const read = await this.#chat!.read(id);
 			if (mine !== this.#generation) return;
 			this.#show(read, mine);
 			if (this.answering === null) {
@@ -629,11 +616,6 @@ export class Chat {
 			this.#watching = true;
 			try {
 				for await (const event of job.watch(id, signal)) {
-					if (isQueued(event)) {
-						this.waiting = true;
-						continue;
-					}
-					if (RUN.has(event.type)) this.waiting = false;
 					session.apply(event);
 				}
 			} catch {
@@ -641,7 +623,6 @@ export class Chat {
 			}
 			if (signal.aborted) return;
 			this.#watching = false;
-			this.waiting = false;
 			await this.#idle(signal);
 		}
 	}
@@ -694,7 +675,7 @@ export function storedTurn(conversation: string, index: number, stored: StoredTu
 		outcome: null,
 		citations: stored.citations ?? [],
 		kind: stored.kind ?? undefined,
-		depth: stored.depth ?? undefined,
+		collection: stored.collection ?? undefined,
 		shared: stored.shared ?? undefined
 	};
 }

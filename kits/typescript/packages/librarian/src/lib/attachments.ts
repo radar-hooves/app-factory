@@ -1,8 +1,8 @@
 /**
- * What a reader may hand Milton with a question.
+ * What a reader may hand the persona with a question.
  *
  * Session-scoped by design: these files are read for THIS conversation and
- * never filed into a shelf, so the limits here are about what a browser can
+ * never filed into a collection, so the limits here are about what a browser can
  * post and a model can read in one turn, not about a corpus.
  */
 
@@ -79,7 +79,7 @@ export function acceptFiles(existing: File[], incoming: File[] | FileList): File
 export function rejectionMessage(rejected: RejectedFile[]): string {
 	if (rejected.length === 0) return '';
 	const reasons: Record<RejectedFile['reason'], string> = {
-		type: "isn't a file type Milton can read",
+		type: "isn't a file type that can be read",
 		size: 'is over 20 MB',
 		count: `won't fit — ${MAX_FILES} files is the limit`
 	};

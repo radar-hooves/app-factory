@@ -1,7 +1,7 @@
 /**
  * Where the answer starts.
  *
- * Milton narrates between tool calls — "Let me also check…" — and the caller
+ * The persona narrates between tool calls — "Let me also check…" — and the caller
  * stream gives that no `thinking` block to arrive in: it is a plain `text`
  * block, identical in every way to the answer except that a tool call comes
  * after it. Measured on production 11/09/2026, which is where every sentence
@@ -58,13 +58,13 @@ describe('narration, then a tool, then the answer', () => {
 	it('does not let the narration break the activity into two groups', () => {
 		// The whole point of the group is that a reader sees ONE line. A
 		// narration block that ended the group would put a second "Looked into
-		// it" line under the first every time Milton said anything.
+		// it" line under the first every time the persona said anything.
 		expect(out).toHaveLength(2);
 		expect(out[0].kind).toBe('activity');
 		expect(out[1].kind).toBe('text');
 	});
 
-	it('still counts only what Milton DID in the summary', () => {
+	it('still counts only what the persona DID in the summary', () => {
 		expect(summariseActivity(groups(out)[0])).toBe('1 search · 1 document read');
 	});
 });
@@ -102,7 +102,7 @@ describe('a turn that narrated and then failed', () => {
 		expect(out[0].kind).toBe('activity');
 	});
 
-	it('still holds what he said, behind the fold', () => {
+	it('still holds what it said, behind the fold', () => {
 		expect(stepText(groups(out)[0])).toContain(NARRATION);
 	});
 });

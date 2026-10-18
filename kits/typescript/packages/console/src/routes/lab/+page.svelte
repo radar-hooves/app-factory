@@ -114,7 +114,7 @@
 	let identityLinks = $state(false);
 	const IDENTITY_LINKS = [
 		{ label: 'Admin', icon: ShieldIcon, onSelect: () => {} },
-		{ label: 'Support Milton', onSelect: () => {} }
+		{ label: 'Support Outrider', onSelect: () => {} }
 	];
 	let glowX = $state(50);
 	let glowY = $state(50);

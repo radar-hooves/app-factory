@@ -1,5 +1,5 @@
 /**
- * Every state the librarian surface can be in, as data.
+ * Every state the chat surface can be in, as data.
  *
  * Fixtures rather than a live stream on purpose: a screenshot grid across
  * three widths and two themes has to render the SAME answer every time, and a
@@ -12,13 +12,14 @@
 import type { Artefact, Block, DescribeTool, Turn } from '@poodle64/librarian/transcript';
 import type { Citation, LoadedDocument } from '@poodle64/librarian/citations';
 import type { AgentEvent } from '@poodle64/librarian/client';
-import type { LibrarianCopy } from '@poodle64/librarian/copy';
+import type { CollectionChoice } from '@poodle64/librarian/composer';
+import type { ChatCopy } from '@poodle64/librarian/copy';
 import { Session } from '@poodle64/librarian/session';
 import type {
 	ConversationRead,
 	ConversationSummary,
 	Quota,
-	RoomTransport
+	ChatTransport
 } from '@poodle64/librarian/chat';
 // The package's own fixture, captured from the real CLI — see its
 // `captured.ts` for how, and what was sanitised.
@@ -26,10 +27,10 @@ import jobStream from '../../../librarian/src/test/fixtures/job-stream.jsonl?raw
 import schemaStream from '../../../librarian/src/test/fixtures/schema-session.jsonl?raw';
 import chatStream from '../../../librarian/src/test/fixtures/chat-stream.jsonl?raw';
 
-/** cadmus prepends this to every question before it reaches the library, and
- *  the transcript must never show it. */
+/** A host may prepend this to every question before it reaches the persona,
+ *  and the transcript must never show it. */
 const PREAMBLE =
-	'You are Milton, the librarian for the ADF Pay and Conditions room. Answer a ' +
+	'You are Outrider, the assistant for ADF pay and conditions. Answer a ' +
 	"Defence colleague's question about pay, allowances, leave and conditions of " +
 	'service, citing the document and its chapter or part in plain words.';
 
@@ -133,21 +134,13 @@ export const CITATIONS: Citation[] = [
 	}
 ];
 
-/** What the librarian offers to be asked next, at the length it really sends
- *  them — long enough to wrap a chip at 390. */
-export const SUGGESTIONS = [
-	'Can I carry leave over when I post?',
-	'What happens to my balance on leave without pay?',
-	'How is long service leave different?'
-];
-
-/** The room's own boundary, as a host writes it: what he answers from, then
- *  what he does not hold. */
+/** The persona's own boundary, as a host writes it: what it answers from,
+ *  then what it does not hold. */
 export const SCOPE =
-	'Milton answers from the ADF Pay and Conditions Manual (PACMAN) — pay, leave, allowances ' +
+	'Outrider answers from the ADF Pay and Conditions Manual (PACMAN) — pay, leave, allowances ' +
 	'and conditions of service, as the instruments themselves set them out.\n\n' +
-	'He does not hold your own pay records, your posting order, your unit’s orders, or anything ' +
-	'about your individual case. For those, your orderly room is the place to go.';
+	'It does not hold your own pay records, your posting order, your unit’s orders, or anything ' +
+	'about your individual case. For those, your unit’s administration office is the place to go.';
 
 const DOCUMENTS: Record<string, LoadedDocument> = {
 	'pacman-division-2': {
@@ -216,7 +209,7 @@ const ACTIVITY: Block[] = [
 	tool(2, 'Read', { file_path: '/data/staged/pacman-division-2/page-015.md' })
 ];
 
-/** What Milton says BETWEEN two tool calls, verbatim off production
+/** What the persona says BETWEEN two tool calls, verbatim off production
  *  (11/09/2026). It reaches the caller as a plain `text` block — the stream
  *  carries no `thinking` blocks at all — so until `segment()` learned to read
  *  its POSITION this rendered unfolded, as the first line of the answer. */
@@ -241,31 +234,29 @@ export type LabState =
 	| 'job-showing'
 	| 'job-live'
 	| 'job-schema'
-	| 'waiting'
 	| 'answering'
 	| 'mark'
 	| 'fair-use'
 	| 'limit'
 	| 'past'
-	| 'room'
-	| 'depth';
+	| 'live'
+	| 'cost'
+	| 'collections';
 
 export interface LabScene {
 	turns: Turn[];
 	running: boolean;
 	value: string;
 	files: File[];
-	/** Who is answering. Every scene but `persona` is the library's own Milton,
-	 *  which is what keeps the default honest: one scene renames the persona
-	 *  and the whole surface follows, including the words. */
+	/** Who is answering. Every scene but `persona` is Outrider, which is what
+	 *  keeps the default honest: one scene renames the persona and the whole
+	 *  surface follows, including the words. */
 	name: string;
 	/** A session the app started rather than a question the reader asked:
 	 *  the host's tool words, artefact, page viewer and composer note. */
 	job?: boolean;
 	/** The turn whose artefact the host's column is showing. */
 	showing?: string;
-	/** The question waits behind somebody else's. */
-	waiting?: boolean;
 	/** An answer this page did not see start, begun this long ago (ms). */
 	answeringFor?: number;
 	/** The host records a verdict on the last answer. */
@@ -274,7 +265,9 @@ export interface LabScene {
 	/** The conversation list beside the conversation, and the one open. */
 	past?: ConversationSummary[];
 	current?: string;
-	/** Driven by the package's own `Chat` over `labRoom()`, not seeded. */
+	/** The collections the person may read, for the composer's picker. */
+	collections?: CollectionChoice[];
+	/** Driven by the package's own `Chat` over `labChat()`, not seeded. */
 	live?: boolean;
 }
 
@@ -335,7 +328,7 @@ export const JOB_WORDS: DescribeTool = (block) => {
 	return undefined;
 };
 
-export const JOB_COPY: Partial<LibrarianCopy> = {
+export const JOB_COPY: Partial<ChatCopy> = {
 	sources: 'Read from',
 	notHeld: '',
 	askAgain: 'Run again',
@@ -367,7 +360,7 @@ function job(events: AgentEvent[]): Turn[] {
 }
 
 /** A second persona's answer, in a second app's subject matter: the package
- *  is a shape, and nothing in it is about a library. */
+ *  is a shape, and nothing in it is about one app. */
 const PENNY = `Four bills are waiting on you, worth **$18,420** in total. Two are inside their
 payment terms this week; the other two are the concrete supplier's, held since
 Friday pending a delivery docket.`;
@@ -382,7 +375,7 @@ function fakeFile(name: string, type: string, size: number): File {
 	return made;
 }
 
-/** One settled, cited answer: the short scene the room states sit on. */
+/** One settled, cited answer: the short scene the chat states sit on. */
 function settled(): Turn {
 	return {
 		id: 'turn-1',
@@ -390,7 +383,6 @@ function settled(): Turn {
 		blocks: [...ACTIVITY, text(3, SHORT)],
 		outcome: { turns: 3, durationMs: 8400 },
 		citations: CITATIONS.slice(0, 2),
-		suggestions: SUGGESTIONS,
 		at: minutes(0)
 	};
 }
@@ -404,9 +396,16 @@ const QUOTA: Quota = {
 	support_url: '/support'
 };
 
+/** The collections the person may read, as the app lists them. */
+export const COLLECTIONS: CollectionChoice[] = [
+	{ name: 'adf-pay', summary: 'ADF pay and conditions' },
+	{ name: 'defence-housing', summary: 'Defence housing and relocation' },
+	{ name: 'travel', summary: 'Travel and allowances' }
+];
+
 const at = (n: number) => new Date(minutes(n)).toISOString();
 
-/** A person's past conversations, as the rooms slice lists them. */
+/** A person's past conversations, as the chat slice lists them. */
 export const PAST: ConversationSummary[] = [
 	{ id: 'past-1', title: 'Recreation leave each year', last_activity_at: at(0) },
 	{ id: 'past-2', title: 'Field allowance while deployed', last_activity_at: at(-90) },
@@ -416,16 +415,21 @@ export const PAST: ConversationSummary[] = [
 ];
 
 export function scene(state: LabState): LabScene {
-	const base: LabScene = { turns: [], running: false, value: '', files: [], name: 'Milton' };
+	const base: LabScene = { turns: [], running: false, value: '', files: [], name: 'Outrider' };
 
 	if (state === 'empty') return base;
 
-	if (state === 'room') return { ...base, live: true };
+	if (state === 'live') return { ...base, live: true };
 
-	// The depth switch and the answer footer's cost line, together: a Quick
-	// answer that actually cost something, and enough turns behind it that
-	// the long-conversation banner is up too.
-	if (state === 'depth') {
+	// The composer's picker: every collection this person may read, by the
+	// words each is known by, never by its name.
+	if (state === 'collections') {
+		return { ...base, collections: COLLECTIONS, turns: [settled()] };
+	}
+
+	// The answer footer's cost line: an answer that actually cost something,
+	// and enough turns behind it that the long-conversation banner is up too.
+	if (state === 'cost') {
 		return {
 			...base,
 			turns: [
@@ -437,23 +441,8 @@ export function scene(state: LabState): LabScene {
 					blocks: [...ACTIVITY, text(3, SHORT)],
 					outcome: { turns: 3, durationMs: 56_000, costUsd: 0.23 },
 					citations: CITATIONS.slice(0, 2),
-					suggestions: SUGGESTIONS,
-					depth: 'quick',
 					at: minutes(0)
 				}
-			]
-		};
-	}
-
-	// Asked, and waiting behind somebody else's question on the one GPU.
-	if (state === 'waiting') {
-		return {
-			...base,
-			running: true,
-			waiting: true,
-			turns: [
-				settled(),
-				{ id: 'turn-2', question: 'Does it accrue while I am on leave without pay?', blocks: [], outcome: null }
 			]
 		};
 	}
@@ -518,7 +507,7 @@ export function scene(state: LabState): LabScene {
 		return { ...base, name: 'clerk', job: true, running: true, turns: job(JOB.slice(0, lastCall)) };
 	}
 
-	// Everything Milton did, and not one word of the answer yet: the ONE quiet
+	// Everything the persona did, and not one word of the answer yet: the ONE quiet
 	// line with a disclosure that replaced a stack of tool rows.
 	if (state === 'working') {
 		return {
@@ -550,9 +539,8 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
-	// The TAIL of a settled answer: the source list with its trust marks, and
-	// the follow-ups under it. The long answer's tail is 900px below the fold,
-	// so the shot that proves those two is its own short scene rather than a
+	// The TAIL of a settled answer: the source list with its trust marks. The long answer's tail is 900px below the fold,
+	// so the shot that proves it is its own short scene rather than a
 	// scroll position the driver has to hold.
 	if (state === 'sources') {
 		return {
@@ -564,7 +552,6 @@ export function scene(state: LabState): LabScene {
 					blocks: [...ACTIVITY, text(3, SHORT)],
 					outcome: { turns: 3, durationMs: 8400 },
 					citations: CITATIONS,
-					suggestions: SUGGESTIONS
 				}
 			]
 		};
@@ -591,8 +578,8 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
-	// An answer Milton gave without citing anything. The one state where the
-	// "he may not hold a document that covers it" line is the point of the shot.
+	// An answer the persona gave without citing anything. The one state where the
+	// "there may be no document here that covers it" line is the point of the shot.
 	if (state === 'not-held') {
 		return {
 			...base,
@@ -610,8 +597,8 @@ export function scene(state: LabState): LabScene {
 		};
 	}
 
-	// Milton goes back to the shelf part-way through, saying so as he goes. The
-	// sentence is Milton's working-out, not his answer, and the shot is of it
+	// The persona goes back to its tools part-way through, saying so as it goes. The
+	// sentence is its working-out, not its answer, and the shot is of it
 	// folded into the activity line with the answer whole underneath.
 	if (state === 'narration') {
 		return {
@@ -681,7 +668,6 @@ export function scene(state: LabState): LabScene {
 					blocks: [...ACTIVITY, text(3, splitAt(LONG, '## Carrying leave over')[0])],
 					outcome: { turns: 4, durationMs: 11_200 },
 					citations: CITATIONS,
-					suggestions: SUGGESTIONS,
 					at: minutes(5)
 				}
 			]
@@ -752,7 +738,6 @@ export function scene(state: LabState): LabScene {
 				],
 				outcome: { turns: 4, durationMs: 12_600 },
 				citations: CITATIONS,
-				suggestions: SUGGESTIONS
 			}
 		]
 	};
@@ -768,13 +753,12 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * The rooms slice's routes, faked in the browser for the `room` scene, which
- * the package's own `Chat` drives: the first question waits behind another
- * for two queued frames, every answer is the real CLI's captured stream, the
- * allowance counts down, and "Field allowance while deployed" is still being
- * answered for its first two reads.
+ * The chat routes, faked in the browser for the `live` scene, which the
+ * package's own `Chat` drives: every answer is the real CLI's captured
+ * stream, the allowance counts down, and "Field allowance while deployed" is
+ * still being answered for its first two reads.
  */
-export function labRoom(): RoomTransport {
+export function labChat(): ChatTransport {
 	let asked = 0;
 	let reads = 0;
 	const listed = PAST.map((c) => ({ ...c }));
@@ -796,15 +780,6 @@ export function labRoom(): RoomTransport {
 	return {
 		async *ask({ signal }) {
 			asked += 1;
-			if (asked === 1) {
-				for (let i = 0; i < 2; i += 1) {
-					yield {
-						type: 'queued',
-						message: 'another question is being answered; waiting for it to finish'
-					};
-					await pause(900, signal);
-				}
-			}
 			for (const event of CHAT) {
 				if (signal.aborted) return;
 				await pause(60, signal);

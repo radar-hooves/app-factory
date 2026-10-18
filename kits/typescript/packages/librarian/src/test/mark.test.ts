@@ -41,7 +41,7 @@ describe('The answer mark in a conversation', () => {
 		const view = render(Conversation, { props: { turns: TURNS, running: true, onmark } });
 		expect(screen.queryByRole('button', { name: 'Helpful' })).not.toBeInTheDocument();
 		await view.rerender({ turns: [...TURNS, failed], running: false, onmark });
-		expect(screen.getByText('Milton stopped before finishing this one.')).toBeInTheDocument();
+		expect(screen.getByText('Assistant stopped before finishing this one.')).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Helpful' })).not.toBeInTheDocument();
 	});
 });

@@ -14,7 +14,7 @@
 	import type { DescribeTool, Turn } from '../../transcript.svelte';
 	import type { Verdict } from '../../chat.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
-	import { DEFAULT_PERSONA, personaName, resolveCopy, type LibrarianCopy } from '../../copy';
+	import { DEFAULT_PERSONA, personaName, resolveCopy, type ChatCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
 	import AgentTranscript, {
 		type AgentTranscriptProps
@@ -37,8 +37,8 @@
 		/** Who is speaking. A slug is fine — `penny` renders as "Penny" — and
 		 *  every word this package says is composed from it: the working line,
 		 *  the failure sentences, the scope label, the composer's placeholder
-		 *  and the accessible name of the scroll region. Absent is the library's
-		 *  own Milton, which is a default rather than a hardcoding. */
+		 *  and the accessible name of the scroll region. Absent is a neutral
+		 *  default, never one app's persona. */
 		name?: string;
 		/** The empty state's opening line. Absent takes the persona's own. */
 		welcome?: string;
@@ -46,27 +46,22 @@
 		examples?: string[];
 		onexample?: (question: string) => void;
 		/** What this surface answers from and what it does not hold, in the
-		 *  host's own words. One statement per room, above the first turn,
+		 *  host's own words. One statement per persona, above the first turn,
 		 *  folded once the conversation starts. */
 		scope?: string;
 		/** Re-asks the last question. Offered on the last answer only. */
 		onregenerate?: () => void;
-		/** Asks a follow-up the librarian suggested. Offered on the last answer
-		 *  only; without it the suggestion chips do not render. */
-		onsuggest?: (question: string) => void;
 		/** Records a verdict on an answer. Offered on the last answer only, as
 		 *  asking again is; without it no mark renders. */
 		onmark?: (turn: Turn, verdict: Verdict) => Promise<boolean>;
 		/** Shares an answer read-only, or stops sharing it (`Chat.share`).
 		 *  Offered on every settled answer; without it nothing is shareable. */
 		onshare?: (turn: Turn, share: boolean) => Promise<boolean>;
-		/** The last question waits behind somebody else's (`Chat.waiting`). */
-		waiting?: boolean;
 		/** When the last answer began, epoch ms, where this page did not see it
 		 *  start (`Chat.answering`): it reads as still being written. */
 		answering?: number | null;
 		/** Overrides for the package's own words. */
-		copy?: Partial<LibrarianCopy>;
+		copy?: Partial<ChatCopy>;
 		/** Enables the source pane. Without it, chips render but do not open. */
 		loadDocument?: LoadDocument;
 		/** Takes every citation tap instead, for a host that shows the source
@@ -83,8 +78,8 @@
 		describeTool?: DescribeTool;
 		/** Prices a turn's `outcome.costUsd` in the host's own currency and
 		 *  words ("about A$0.34"), for the footer's cost line beside a turn's
-		 *  `depth`. The package never converts currency itself; omitted, the
-		 *  line shows depth and duration only. */
+		 *  duration. The package never converts currency itself; omitted, the
+		 *  line shows the duration only. */
 		formatCost?: (usd: number) => string;
 		collectionNames?: Set<string>;
 		/** The composer, rendered INSIDE the transcript column so the source
@@ -112,10 +107,8 @@
 		onexample,
 		scope,
 		onregenerate,
-		onsuggest,
 		onmark,
 		onshare,
-		waiting = false,
 		answering = null,
 		copy,
 		loadDocument,
@@ -309,10 +302,8 @@
 							blocks: turn.blocks,
 							outcome: turn.outcome,
 							running: running && last,
-							waiting: waiting && last,
 							answering: last ? (answering ?? undefined) : undefined,
 							citations: turn.citations ?? [],
-							suggestions: turn.suggestions ?? [],
 							collectionNames,
 							copy: words,
 							name: who,
@@ -321,11 +312,9 @@
 							artefactOpen: isShowing(turn),
 							onopenartefact: opener(turn),
 							describeTool,
-							depth: turn.depth,
 							formatCost,
 							oncite: oncite || loadDocument ? cite : undefined,
 							onregenerate: last && !running ? onregenerate : undefined,
-							onsuggest: last && !running ? onsuggest : undefined,
 							onmark:
 								last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined,
 							shared: turn.shared,
