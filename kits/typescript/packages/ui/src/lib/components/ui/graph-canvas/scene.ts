@@ -90,6 +90,10 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 	selected: SimNode<N> | null = null;
 	hovered: SimNode<N> | null = null;
 	matches = new Set<SimNode<N>>();
+	/** The highlighted route: its nodes and every edge joining consecutive ones. */
+	routeNodes = new Set<SimNode<N>>();
+	routeEdges = new Set<SimEdge<N>>();
+	private routeIds: readonly string[] = [];
 
 	readonly sim: Simulation<SimNode<N>, SimEdge<N>>;
 	private link = forceLink<SimNode<N>, SimEdge<N>>([]);
@@ -202,7 +206,19 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		if (this.selected) this.selected = byId.get(this.selected.id) ?? null;
 		if (this.hovered) this.hovered = byId.get(this.hovered.id) ?? null;
 		this.matches = new Set([...this.matches].flatMap((m) => byId.get(m.id) ?? []));
+		this.setRoute(this.routeIds);
 		return fresh.length;
+	}
+
+	/** Highlight a path given as node ids in order; ids not in the graph are skipped. */
+	setRoute(ids: readonly string[]): void {
+		this.routeIds = ids;
+		const nodes = ids.flatMap((id) => this.byId.get(id) ?? []);
+		this.routeNodes = new Set(nodes);
+		const key = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
+		const pairs = new Set<string>();
+		for (let i = 1; i < nodes.length; i++) pairs.add(key(nodes[i - 1]!.id, nodes[i]!.id));
+		this.routeEdges = new Set(this.edges.filter((e) => pairs.has(key(e.source.id, e.target.id))));
 	}
 
 	hot(): boolean {
@@ -302,9 +318,12 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		if (!P) return;
 
 		const chosen = this.selected && this.visible(this.selected) ? this.selected : null;
-		const focus = this.hovered ?? chosen;
+		// A route holds the picture until the pointer rests on a node.
+		const route = !this.hovered && this.routeNodes.size > 0;
+		const focus = route ? null : (this.hovered ?? chosen);
 		const near = focus ? this.adj.get(focus) : undefined;
-		const lit = (s: SimNode<N>) => !focus || s === focus || !!near?.has(s);
+		const dim = !!focus || route;
+		const lit = (s: SimNode<N>) => (route ? this.routeNodes.has(s) : !focus || s === focus || !!near?.has(s));
 		const margin = 40 / k;
 		const vx0 = -tx / k - margin;
 		const vy0 = -ty / k - margin;
@@ -338,44 +357,52 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 
 		// Edges: one batched path for the rest, one per colour for the lit ones.
 		const rest = new Path2D();
+		const restDashed = new Path2D();
 		const restHeads = new Path2D();
-		const litPaths = new Map<string, { line: Path2D; head: Path2D }>();
+		const litPaths = new Map<string, { line: Path2D; dashed: Path2D; head: Path2D }>();
 		const edgeLabels: SimEdge<N>[] = [];
-		const heads = this.directed && (shown.length < 500 || !!focus);
+		const heads = this.directed && (shown.length < 500 || dim);
 		// A hub's relations crowd its own spokes; past a dozen the card lists them instead.
 		const relationWords = focus ? (this.adj.get(focus)?.size ?? 0) <= 12 : shown.length < 300;
 		for (const e of shown) {
 			const a = e.source;
 			const b = e.target;
-			const hot = !!focus && (a === focus || b === focus);
-			let path = rest;
+			const hot = route ? this.routeEdges.has(e) : !!focus && (a === focus || b === focus);
+			const dashed = e.edge.style === 'dashed';
+			let path = dashed ? restDashed : rest;
 			let head = restHeads;
 			if (hot) {
-				const colour = this.colour(a === focus ? b : a);
+				const colour = route ? P.ink : this.colour(a === focus ? b : a);
 				let p = litPaths.get(colour);
-				if (!p) litPaths.set(colour, (p = { line: new Path2D(), head: new Path2D() }));
-				path = p.line;
+				if (!p) litPaths.set(colour, (p = { line: new Path2D(), dashed: new Path2D(), head: new Path2D() }));
+				path = dashed ? p.dashed : p.line;
 				head = p.head;
 			}
 			const [cx, cy] = curved || hot ? this.control(e) : [(a.x + b.x) / 2, (a.y + b.y) / 2];
 			path.moveTo(a.x, a.y);
 			if (curved || hot) path.quadraticCurveTo(cx, cy, b.x, b.y);
 			else path.lineTo(b.x, b.y);
-			if (heads && (hot || !focus)) this.arrow(head, cx, cy, b, rad(b), k);
-			if (e.edge.label && relationWords && (hot || !focus)) edgeLabels.push(e);
+			if (heads && (hot || !dim)) this.arrow(head, cx, cy, b, rad(b), k);
+			if (e.edge.label && (route ? hot : relationWords && (hot || !focus))) edgeLabels.push(e);
 		}
 		ctx.strokeStyle = P.edge;
 		ctx.fillStyle = P.edge;
-		ctx.globalAlpha = focus ? 0.07 : Math.min(0.65, 0.12 + 0.35 * k);
+		ctx.globalAlpha = dim ? 0.07 : Math.min(0.65, 0.12 + 0.35 * k);
 		ctx.lineWidth = 1 / k;
 		ctx.stroke(rest);
+		ctx.setLineDash([5 / k, 4 / k]);
+		ctx.stroke(restDashed);
+		ctx.setLineDash([]);
 		ctx.fill(restHeads);
 		ctx.globalAlpha = 0.95;
-		ctx.lineWidth = 1.75 / k;
+		ctx.lineWidth = (route ? 2.75 : 1.75) / k;
 		for (const [colour, p] of litPaths) {
 			ctx.strokeStyle = colour;
 			ctx.fillStyle = colour;
 			ctx.stroke(p.line);
+			ctx.setLineDash([6 / k, 4 / k]);
+			ctx.stroke(p.dashed);
+			ctx.setLineDash([]);
 			ctx.fill(p.head);
 		}
 
@@ -383,7 +410,7 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		// overlap its neighbour visibly skips the ground-coloured halo.
 		const halo = k >= 0.5 ? 1.4 / k : 0;
 		for (const pass of [false, true]) {
-			if (pass === false && !focus) continue;
+			if (pass === false && !dim) continue;
 			const groups = new Map<string, Path2D>();
 			for (const s of this.nodes) {
 				if (!this.visible(s) || !onScreen(s) || lit(s) !== pass) continue;
@@ -407,7 +434,8 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		for (const s of this.nodes) {
 			if (!this.visible(s) || !onScreen(s)) continue;
 			const ring = s === this.selected || s === focus;
-			if (!s.node.emphasis && !ring && !this.matches.has(s)) continue;
+			const onRoute = route && this.routeNodes.has(s);
+			if (!s.node.emphasis && !ring && !onRoute && !this.matches.has(s)) continue;
 			const r = rad(s);
 			const shape = this.shapes.get(s.node.kind) ?? 'circle';
 			ctx.globalAlpha = lit(s) ? 1 : 0.2;
@@ -422,12 +450,12 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			const p = new Path2D();
 			this.shape(p, shape, s.x, s.y, r + 3.5 / k);
 			ctx.lineWidth = (ring ? 2 : 1.4) / k;
-			ctx.strokeStyle = ring || this.matches.has(s) ? P.ink : this.colour(s);
+			ctx.strokeStyle = ring || onRoute || this.matches.has(s) ? P.ink : this.colour(s);
 			ctx.stroke(p);
 		}
 		ctx.globalAlpha = 1;
 
-		this.labels(ctx, P, focus, near, edgeLabels, onScreen, rad);
+		this.labels(ctx, P, focus, near, edgeLabels, route, onScreen, rad);
 	}
 
 	colour(s: SimNode<N>): string {
@@ -526,6 +554,7 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		focus: SimNode<N> | null,
 		near: Set<SimNode<N>> | undefined,
 		edgeLabels: SimEdge<N>[],
+		route: boolean,
 		onScreen: (s: SimNode<N>) => boolean,
 		rad: (s: SimNode<N>) => number
 	): void {
@@ -556,8 +585,9 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			order.push(...ring);
 		} else {
 			if (this.selected) order.push(this.selected);
+			if (route) order.push(...this.routeNodes);
 			order.push(...this.matches);
-			order.push(...this.ranked);
+			if (!route) order.push(...this.ranked);
 		}
 		const seen = new Set<SimNode<N>>();
 		const quota = Math.ceil((W * H) / LABEL_AREA);
@@ -571,7 +601,8 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			seen.add(s);
 			tries++;
 			const text = clip(s.node.label);
-			const prominent = s === focus || s === this.selected || !!s.node.emphasis;
+			const prominent =
+				s === focus || s === this.selected || !!s.node.emphasis || (route && this.routeNodes.has(s));
 			if (!focus && placed >= quota && rad(s) * k < 7 && !prominent && !this.matches.has(s)) continue;
 			const font = prominent ? strong : body;
 			const w = this.measure(ctx, font, text);
@@ -584,7 +615,7 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			const below = ty + s.y * k + r + 4;
 			const above = ty + s.y * k - r - 4 - h;
 			const fits = (y: number) => this.claim(sx - w / 2 - 3, y - 2, sx + w / 2 + 3, y + h + 2);
-			const sy = fits(below) ? below : fits(above) ? above : s === focus || s === this.selected ? below : null;
+			const sy = fits(below) ? below : fits(above) ? above : s === focus || s === this.selected || (route && this.routeNodes.has(s)) ? below : null;
 			if (sy === null || sy > H || sy + h < 0) continue;
 			this.text(ctx, font, text, sx, sy, 'top', P.ink, P.ground);
 			placed++;
@@ -603,7 +634,7 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			const text = clip(label);
 			const w = this.measure(ctx, small, text);
 			if (!this.claim(mx - w / 2 - 3, my - 7, mx + w / 2 + 3, my + 7)) continue;
-			const hot = !!focus && (e.source === focus || e.target === focus);
+			const hot = route || (!!focus && (e.source === focus || e.target === focus));
 			this.text(ctx, small, text, mx, my, 'middle', hot ? P.ink : P.inkSoft, P.ground);
 			edgesPlaced++;
 		}

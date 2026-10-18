@@ -15,7 +15,10 @@ export interface GraphNode {
 export interface GraphEdge {
 	source: string;
 	target: string;
+	/** The relation's verb, drawn on the line on the highlighted path or around a focused node. */
 	label?: string;
+	/** `dashed` for a weaker link, such as a claim with no citation yet. Defaults to `solid`. */
+	style?: 'solid' | 'dashed';
 }
 
 export type GraphShape = 'circle' | 'square' | 'diamond' | 'triangle';

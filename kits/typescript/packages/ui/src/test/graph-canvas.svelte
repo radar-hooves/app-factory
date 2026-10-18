@@ -10,12 +10,14 @@
 		selected: initial = null,
 		onselect,
 		onactivate,
-		activateLabel
+		activateLabel,
+		path
 	}: {
 		selected?: string | null;
 		onselect?: (node: GraphNode | null) => void;
 		onactivate?: (node: GraphNode) => void;
 		activateLabel?: string;
+		path?: string[];
 	} = $props();
 
 	let selected = $state<string | null>(null);
@@ -43,7 +45,7 @@
 		{ source: 's-report', target: 'p-mara', label: 'mentions' },
 		{ source: 'p-alice', target: 'o-acme', label: 'director of' },
 		{ source: 's-news', target: 'o-acme', label: 'mentions' },
-		{ source: 'n-stray', target: 's-news' }
+		{ source: 'n-stray', target: 's-news', style: 'dashed' }
 	];
 </script>
 
@@ -64,6 +66,7 @@
 		directed
 		label="Relations"
 		{activateLabel}
+		{path}
 		bind:selected
 		bind:hiddenKinds
 		{onselect}

@@ -34,10 +34,21 @@
 	const DEFAULT_TURN_LIMIT = 8;
 
 	/** A collection a person may read, as the app lists it: `name` is what a
-	 *  question is narrowed to, `summary` is what the picker shows. */
+	 *  question is narrowed to, `title` is what the picker shows (the name,
+	 *  made readable, where there is none) and `description` is its one-line
+	 *  hover. A retrieval summary is never a field here: it is filing history. */
 	export interface CollectionChoice {
 		name: string;
-		summary: string;
+		title?: string;
+		description?: string;
+	}
+
+	/** `defence-housing` as a reader would first read it: "Defence housing". */
+	function titleOf(choice: CollectionChoice): string {
+		const given = choice.title?.trim();
+		if (given) return given;
+		const words = choice.name.replace(/[-_]+/g, ' ').trim();
+		return words ? words[0]!.toLocaleUpperCase() + words.slice(1) : choice.name;
 	}
 
 	interface Props {
@@ -121,7 +132,7 @@
 	// Who the question is put to: every collection the person may read, or one
 	// of them. A person with one collection (or none) has nothing to pick, so
 	// the row renders nothing rather than a chip that only reselects itself.
-	// A collection is shown by its summary, the words a reader knows it by.
+	// A collection is shown by its title, the words a reader knows it by.
 	const hasChoice = $derived(collections.length > 1);
 
 	// Three chips in a narrow column clipped all three to fragments
@@ -323,9 +334,10 @@
 							class="ds-lib-scope-chip"
 							aria-pressed={collection === choice.name}
 							class:is-chosen={collection === choice.name}
+							title={choice.description || undefined}
 							onclick={() => oncollection?.(choice.name)}
 						>
-							{choice.summary || choice.name}
+							{titleOf(choice)}
 						</button>
 					{/each}
 				</div>

@@ -522,6 +522,54 @@ async function touchSuite() {
 	}
 }
 
+/** 14. Path highlight, dashed links, path edge labels and the keyboard route, with an axe pass. */
+async function routeSuite() {
+	const { context, page, errors } = await open('&route=1&n=120', { width: 1440, height: 900 });
+	try {
+		await settled(page);
+		await page.evaluate(() => window.__graph.api.fit());
+		await stable(page);
+		const route = await page.evaluate(() => window.__graph.path);
+		check('route: the fixture has a multi-hop path', route.length >= 3, `${route.length} nodes`);
+		const label = await page.locator('canvas').getAttribute('aria-label');
+		check('route: the canvas names the path', /Path: .+, then /.test(label ?? ''), (label ?? '').slice(0, 120));
+
+		const ink = await page.evaluate(() => window.__drv.colourOf('var(--ds-color-foreground)'));
+		const inked = await page.evaluate((c) => window.__drv.count(c, 12), ink);
+		check('route: the path draws in the ink colour', inked > 200, `rgb(${ink}) pixels: ${inked}`);
+		if (SHOTS) {
+			mkdirSync(SHOTS, { recursive: true });
+			await page.screenshot({ path: join(SHOTS, 'graph-route-1440.png') });
+		}
+
+		// Keyboard: Tab through the panel to the Nodes disclosure, open it, Tab to a node, Enter.
+		await page.locator('canvas').focus();
+		const toggle = page.getByRole('button', { name: /^Nodes/ });
+		await toggle.focus();
+		await page.keyboard.press('Enter');
+		check('route: the node list opens from the keyboard', (await toggle.getAttribute('aria-expanded')) === 'true', 'aria-expanded=true');
+		await page.keyboard.press('Tab');
+		const first = await page.evaluate(() => document.activeElement?.textContent?.trim().slice(0, 40));
+		await page.keyboard.press('Enter');
+		await stable(page);
+		const chosen = await page.evaluate(() => window.__graph.selected);
+		check('route: Tab then Enter on a listed node selects it', !!chosen, `${first} → ${chosen}`);
+		const card = await page.locator('section[aria-label]').count();
+		check('route: the selection card opens', card === 1, `${card} card`);
+
+		const axeSource = readFileSync(join(here, '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8');
+		await page.evaluate(axeSource);
+		const result = await page.evaluate(() =>
+			window.axe.run(document.querySelector('[data-slot=graph-canvas]'), { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'best-practice'] })
+		);
+		const bad = result.violations.map((v) => `${v.id}(${v.nodes.length})`);
+		check('route: axe finds no violations in the graph', bad.length === 0, bad.length ? bad.join(', ') : `${result.passes.length} rules pass`);
+		check('route: no page errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : '0 errors');
+	} finally {
+		await context.close();
+	}
+}
+
 /** Screenshots: settled plus 800ms (the last repaint and any chrome transition), then shot. */
 async function shoot(page, name, { dark, size, focus }) {
 	await page.setViewportSize({ width: size[0], height: size[1] });
@@ -564,6 +612,7 @@ try {
 	await suite('page');
 	await suite('shadow');
 	await attempt('pinch', touchSuite);
+	await attempt('route', routeSuite);
 	if (SHOTS) await attempt('screenshot 3840 light shadow', shadowShot);
 } finally {
 	await browser.close();

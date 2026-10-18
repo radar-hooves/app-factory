@@ -226,7 +226,9 @@ async def list_collections(
         return []
     library = await chat.collections(settings.agent, persona, asking)
     return [
-        CollectionRead(name=found.name, summary=found.summary, documents_to=found.documents_to)
+        CollectionRead(
+            name=found.name, title=found.title, description=found.description, documents_to=found.documents_to
+        )
         for found in await _read(library.list())
     ]
 

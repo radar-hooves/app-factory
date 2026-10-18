@@ -34,6 +34,8 @@
 		hiddenKinds?: string[];
 		/** Arrowheads at each edge's target. */
 		directed?: boolean;
+		/** A path to highlight: node ids in order. Its nodes and the edges between them stay lit, labelled with their verbs; the rest dims. */
+		path?: string[];
 		/** The accessible name. */
 		label?: string;
 		/** The find field. */
@@ -55,6 +57,7 @@
 		selected = $bindable(null),
 		hiddenKinds = $bindable([]),
 		directed = false,
+		path = [],
 		label = 'Graph',
 		search = true,
 		activateLabel = 'Open',
@@ -70,6 +73,7 @@
 	const NEIGHBOURS = 12;
 
 	const scene = new GraphScene<N>();
+	const nodeListId = `graph-nodes-${Math.random().toString(36).slice(2, 8)}`;
 	let root: HTMLDivElement;
 	let canvas: HTMLCanvasElement;
 	let probe: HTMLSpanElement;
@@ -80,6 +84,7 @@
 
 	let query = $state('');
 	let showAll = $state(false);
+	let listOpen = $state(false);
 	let settled = $state(false);
 	let cursor = $state('grab');
 
@@ -163,6 +168,24 @@
 		return hits.slice(0, 8).map((h) => h.node);
 	});
 
+	// The keyboard and screen-reader route to every node: a list in reading
+	// order, most connected first past the cap, the selected node always in it.
+	const NODE_LIST = 200;
+	const listed = $derived.by(() => {
+		const hidden = new Set(hiddenKinds);
+		const all = [...nodeById.values()].filter((n) => !hidden.has(n.kind));
+		const degree = new Map<string, number>();
+		for (const e of edges) {
+			degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+			degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+		}
+		const top = all.length > NODE_LIST ? [...all].sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0)).slice(0, NODE_LIST) : all;
+		if (current && !top.includes(current)) top.push(current);
+		return { rows: top.sort((a, b) => a.label.localeCompare(b.label)), total: all.length };
+	});
+
+	const routeLabels = $derived(path.flatMap((id) => nodeById.get(id)?.label ?? []));
+
 	const summary = $derived(
 		`${formatNumber(nodes.length)} ${nodes.length === 1 ? 'node' : 'nodes'} · ${formatNumber(edges.length)} ${edges.length === 1 ? 'link' : 'links'}`
 	);
@@ -171,6 +194,7 @@
 			? `${current.label}, ${kindLabel(current.kind)}, ${neighbours.length} ${neighbours.length === 1 ? 'connection' : 'connections'}`
 			: ''
 	);
+	const routeText = $derived(routeLabels.length > 1 ? `Path: ${routeLabels.join(', then ')}.` : '');
 
 	function kindLabel(id: string): string {
 		return kindOf.get(id)?.label ?? id;
@@ -400,6 +424,11 @@
 
 	$effect(() => {
 		scene.matches = new Set(matches.flatMap((n) => scene.byId.get(n.id) ?? []));
+		requestDraw();
+	});
+
+	$effect(() => {
+		scene.setRoute(path);
 		requestDraw();
 	});
 
@@ -731,7 +760,7 @@
 		style:cursor
 		tabindex="0"
 		aria-roledescription="graph canvas"
-		aria-label={`${label}: ${summary}. Arrow keys pan, plus and minus zoom, 0 fits${search ? ', slash finds' : ''}.`}
+		aria-label={`${label}: ${summary}.${routeText ? ' ' + routeText : ''} Arrow keys pan, plus and minus zoom, 0 fits${search ? ', slash finds' : ''}.`}
 		onkeydown={onCanvasKey}
 	></canvas>
 
@@ -783,6 +812,44 @@
 				<p class="text-muted-foreground -mt-1 px-2 py-1 text-sm">No match</p>
 			{/if}
 		{/if}
+
+		<div>
+			<button
+				type="button"
+				class="hover:bg-accent flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1 text-xs @2xl:text-sm"
+				aria-expanded={listOpen}
+				aria-controls={nodeListId}
+				onclick={() => (listOpen = !listOpen)}
+			>
+				<span class="text-foreground">Nodes</span>
+				<span class="text-muted-foreground tabular-nums">{formatNumber(listed.total)}</span>
+			</button>
+			<ul
+				id={nodeListId}
+				class="mt-1 max-h-48 flex-col overflow-y-auto {listOpen ? 'flex' : 'hidden'}"
+				aria-label="Nodes"
+			>
+				{#each listed.rows as n (n.id)}
+					<li>
+						<button
+							type="button"
+							class="hover:bg-accent focus-visible:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-none"
+							aria-pressed={selected === n.id}
+							onclick={() => focus(n.id)}
+						>
+							{@render swatch(n.kind)}
+							<span class="text-foreground min-w-0 flex-1 truncate">{n.label}</span>
+							<span class="text-muted-foreground shrink-0 text-xs">{kindLabel(n.kind)}</span>
+						</button>
+					</li>
+				{/each}
+				{#if listed.total > listed.rows.length}
+					<li class="text-muted-foreground px-2 py-1 text-xs">
+						Most connected {formatNumber(listed.rows.length)} of {formatNumber(listed.total)}; find narrows it.
+					</li>
+				{/if}
+			</ul>
+		</div>
 
 		{#if legendRows.length}
 			<ul
@@ -918,5 +985,5 @@
 		</section>
 	{/if}
 
-	<p class="sr-only" aria-live="polite">{announcement}</p>
+	<p class="sr-only" aria-live="polite">{[announcement, routeText].filter(Boolean).join(' ')}</p>
 </div>

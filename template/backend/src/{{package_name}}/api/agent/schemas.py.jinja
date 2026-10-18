@@ -43,8 +43,11 @@ class PersonaRead(BaseModel):
 
 class CollectionRead(BaseModel):
     name: str
-    #: What the collection holds, in the library's own words; empty where it has none.
-    summary: str
+    #: How a reader knows the collection, and one line on what it holds, both
+    #: the library's; empty where it publishes none. Never the retrieval summary,
+    #: which is filing history.
+    title: str = ""
+    description: str = ""
     #: The newest date the library confirmed one of its documents current (a
     #: recheck, or a fetch), for "Checked against the open record on …". When
     #: it was last checked, never a publication date; None where the library
