@@ -43,6 +43,8 @@ def test_a_chat_turns_argv(settings: cli.Settings, milton: Persona) -> None:
         "--mcp-config",
         str(milton.home / ".mcp.json"),
         "--strict-mcp-config",
+        "--append-system-prompt",
+        f"You are {milton.name}, the {settings.service} service's agent.",
         "--resume",
         "abc",
     ]
@@ -65,7 +67,9 @@ def test_a_jobs_argv_takes_its_turns_from_stdin(settings: cli.Settings, milton: 
     assert command[2] == "--output-format"
     assert "--include-partial-messages" not in command
     assert command[command.index("--mcp-config") + 1] == str(tmp_path / "job.json")
-    assert command[command.index("--append-system-prompt") + 1] == "Also this."
+    assert command[command.index("--append-system-prompt") + 1] == (
+        f"You are {milton.name}, the {settings.service} service's agent.\n\nAlso this."
+    )
     assert json.loads(command[command.index("--json-schema") + 1]) == {"type": "object"}
     assert command[command.index("--model") + 1] == "opus"
     assert command[command.index("--input-format") + 1] == "stream-json"
@@ -165,7 +169,7 @@ async def test_a_turn_runs_where_it_is_told_with_what_it_is_given(
 ) -> None:
     echo = _echo(await _ask(settings, milton, "hi", cwd=tmp_path, append_system_prompt="Scoped.", model="opus"))
     assert echo["cwd"] == str(tmp_path)
-    assert echo["argv"][echo["argv"].index("--append-system-prompt") + 1] == "Scoped."
+    assert echo["argv"][echo["argv"].index("--append-system-prompt") + 1].endswith("\n\nScoped.")
     assert echo["argv"][echo["argv"].index("--model") + 1] == "opus"
 
 
