@@ -611,9 +611,12 @@ async def ask(
             write=write,
             connect=connect,
         )
-    except OSError as exc:
+    except BaseException as exc:
+        # Never awaited now: closed, so it is not reported as a coroutine left unawaited.
         if inspect.iscoroutine(later):
             later.close()
+        if not isinstance(exc, OSError):
+            raise
         yield {"type": ERROR_EVENT, "error": f"agent could not start: {exc}"}
         return
     assert process.stderr is not None

@@ -26,8 +26,9 @@ class AskRequest(BaseModel):
     #: question and read back with it, never sent to the agent.
     kind: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,31}$")
     #: One of the collections the library lists for this person, to ask
-    #: across that alone; None asks across every one they may read.
-    collection: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
+    #: across that alone; None asks across every one they may read. Its name
+    #: is the library's, checked against their listing, never shaped here.
+    collection: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class PersonaRead(BaseModel):

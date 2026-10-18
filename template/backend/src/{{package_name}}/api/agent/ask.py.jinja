@@ -115,7 +115,7 @@ async def ask(
 
     Raises:
         NotFoundError: `resume` is not one of this person's conversations with
-            this persona, or `collection` is not one the library lists for them.
+            this persona, or `collection` names one for a persona that reads none.
         ConflictError: that conversation is already being answered.
         AllowanceSpentError: today's allowance is spent.
     """

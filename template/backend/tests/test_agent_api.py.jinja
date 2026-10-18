@@ -261,6 +261,7 @@ async def test_an_app_with_no_chat_file_offers_none(client: AsyncClient, agent_s
         ("- x\n", "expected a mapping"),
         ("x:\n  name: X\n", "no persona directory 'x'"),
         ("X_1:\n  name: X\n", "lowercase letters"),
+        ("quota:\n  name: X\n", "the chat's own route names"),
         ("helper:\n  blurb: X\n", "needs a name"),
         ("helper:\n  name: X\n  collections: yes please\n", "true or false"),
     ],
@@ -582,9 +583,9 @@ async def test_what_the_page_asked_for_is_read_back_with_its_question(client: As
     assert [(turn["question"], turn["kind"]) for turn in read["turns"]] == [("one", None), ("brief me", "briefing")]
     unworded = {"question": "x", "kind": "Not A Word"}
     assert (await client.post("/api/agent/helper/ask", json=unworded, headers=who)).status_code == 422
-    badly_named = {"question": "x", "collection": "Not A Name"}
+    overlong = {"question": "x", "collection": "c" * 201}
     assert (
-        await client.post("/api/agent/manual/ask", json=badly_named, headers=_person("chat-manual"))
+        await client.post("/api/agent/manual/ask", json=overlong, headers=_person("chat-manual"))
     ).status_code == 422
 
 
