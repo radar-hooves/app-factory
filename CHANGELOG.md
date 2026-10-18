@@ -6,6 +6,27 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hooves/master-project#380; consumer: caspo, from its fleet-shell survey at caspo `03ab580a`). Takes `@poodle64/ui` at the release that carries its Unreleased page kit (`Breadcrumbs`, `PageContainer`, `PageSection`, `ContentSkeleton`, `Sheet`, `DocumentReader`); the template's floor moves to it with that release.
+
+### Changed
+
+- **The stamped frame declares the app's `nav` and passes it to the rail and the palette**, so a fresh stamp has a phone drawer and palette results on day one. The declaration sits in `app-frame.svelte`, the app's own file, with the grouping convention beside it. A separate stamped `lib/config/navigation.ts` would be owed byte-identical until the sanctioned per-app list names it, so a nav that outgrows the frame moves to the app's own `$lib/config/navigation.ts` and is imported.
+- **`measure` comes from route data**: the frame renders `measure={page.data.measure ?? 'wide'}` beside `padded`, and `app.d.ts` types `PageData` (`title`, `measure`, `padded`). Settings and members declare `page`. Each app's table of path regexes in its frame retires.
+- **`DESIGN.md` says what the shell is.** It names one composition with no `variant` or `content` prop, gives the page parts table and the type scale by role, and states body type as Avenir Next, else Hanken Grotesk.
+- **The drift gate counts `sheet` a primitive**, so a surface brief need not name it, and an app's vendored `components/ui/sheet/` now fails `vendored-copy`.
+
+### An app taking these
+
+- **Nav:** pass `{nav}` to `AppShell` and `CommandPalette` in `app-frame.svelte` (eight, godswood and caspo already do).
+- **Measure:** delete the frame's regex table, render `measure={page.data.measure ?? 'wide'}`, and return `{ measure }` from each route group's `+layout.ts` (or a route's `+page.ts`) that differed. Take `app.d.ts` with the release.
+- **Breadcrumbs:** replace a hand-written trail with `breadcrumbs={[…]}` on PageHeader. godswood's `PageHeader` wrapper and `PageBreadcrumbs` go.
+- **PageContainer:** godswood's local `lib/components/PageContainer.svelte` becomes a `vendored-copy` finding on the bump, so import `@poodle64/ui/page-container`.
+- **Sections:** each hand-styled section heading becomes `PageSection`.
+- **Reader:** a hand-built markdown page becomes `DocumentReader` with the app's sanitised HTML. caspo's `MarkdownDocumentPage` (four routes) and its library document's body box go; the back row becomes the trail.
+- **Sheet:** caspo's vendored `components/ui/sheet/` becomes a `vendored-copy` finding, so import `@poodle64/ui/sheet`. Its vendored `sidebar/` serves a second navigation column the shell has no slot for. The strategy chapter's contents become DocumentReader's, and the working-papers and ID26 trees become the papers index page and the rail's `children`.
+- **Loading:** a hand-sized Skeleton region becomes `ContentSkeleton`.
+
+
 ## [2026.10.50] - 2026-10-18
 
 Need: a lesson born of a person's correction carries evidence the judge can read (radar-hooves/godswood#876, master-project#233; consumer: godswood).

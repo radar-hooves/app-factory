@@ -245,7 +245,7 @@
 				<div class="flex items-start gap-10">
 					<div class="min-w-0 flex-1">
 						{#if showContents}
-							<details class="group border-border mb-6 rounded-lg border @5xl:hidden">
+							<details class="group bg-card border-border ds-edge mb-6 rounded-lg border @5xl:hidden">
 								<summary
 									class="focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden"
 								>
