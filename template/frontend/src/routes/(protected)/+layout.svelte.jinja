@@ -1,4 +1,4 @@
-<!--
+{% raw %}<!--
 	The signed-in app: the protected layout of strategy-authentication.md
 	§Protected Layout. Every route under (protected)/ renders inside this app's
 	own frame ($lib/app-frame.svelte: the rail, the top bar, the palette) and
@@ -112,5 +112,5 @@
      /api/feedback/, and the SPA's static mount at / answers the slashless POST
      with a 405 before any redirect could add the slash (master-project#335). -->
 {#if auth.user}
-	<ReportWidget endpoint="/api/feedback/" />
-{/if}
+	<ReportWidget endpoint="/api/feedback/" team="{% endraw %}{{ team_name }}{% raw %}" />
+{/if}{% endraw %}

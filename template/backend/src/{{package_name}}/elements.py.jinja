@@ -15,6 +15,7 @@ Registered ahead of the SPA, so none of these falls through to `index.html`:
   app's own elements, then those of each origin in `ELEMENT_ORIGINS`.
 """
 
+import hashlib
 import json
 from urllib.parse import urlsplit
 
@@ -61,9 +62,15 @@ def register_elements(app: FastAPI, settings: Settings) -> None:
         return HTMLResponse(_SIGNED_IN, headers=headers)
 
     @app.get("/elements/placed.js", include_in_schema=False)
-    def elements_placed() -> Response:
+    def elements_placed(request: Request) -> Response:
         own = ["/elements.js"] if (frontend_build_dir() / "elements.js").is_file() else []
         scripts = own + [f"{origin}/elements.js" for origin in settings.element_origins_list]
         # One import each, so a service that is down costs only its own elements.
         body = "".join(f"import({json.dumps(script)}).catch(console.error);\n" for script in scripts)
-        return Response(body, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+        # Revalidated on every load, so a change to the origins reaches a browser at once;
+        # an explicit max-age=0 because an edge's default browser TTL replaces a bare no-cache.
+        etag = '"' + hashlib.sha256(body.encode()).hexdigest()[:16] + '"'
+        headers = {"Cache-Control": "no-cache, max-age=0, must-revalidate", "ETag": etag}
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        return Response(body, media_type="text/javascript", headers=headers)

@@ -33,10 +33,13 @@
 	let {
 		/** Where the report POSTs. The app's own route, defaulting to the one every household app serves. */
 		endpoint = '/api/feedback',
+		/** Who reads a report, as "the <team> team". The app's own name, never an internal one. */
+		team = 'support',
 		/** Fired with the id the endpoint returned, once, on the success leg. */
 		onSubmitted
 	}: {
 		endpoint?: string;
+		team?: string;
 		onSubmitted?: (id: string) => void;
 	} = $props();
 
@@ -129,7 +132,7 @@
 <AppDialog
 	bind:open
 	title="Report a problem"
-	subtitle="Describe what happened and the household team will take a look."
+	subtitle="Describe what happened and the {team} team will take a look."
 	size="sm"
 	onOpenChange={(next) => !next && reset()}
 >

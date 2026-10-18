@@ -74,6 +74,13 @@ describe('ReportWidget — the trigger and the dialogue', () => {
 		expect(checkbox).toBeChecked();
 	});
 
+	it("names the app's own team in the subtitle, never the household", async () => {
+		render(ReportWidget, { props: { team: 'CASPO' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Report a problem' }));
+		expect(screen.getByText(/the CASPO team will take a look/)).toBeInTheDocument();
+		expect(screen.queryByText(/household/i)).toBeNull();
+	});
+
 	it('does not offer to send while the message is empty', async () => {
 		const fetchMock = okFetch();
 		vi.stubGlobal('fetch', fetchMock);

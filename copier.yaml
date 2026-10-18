@@ -228,6 +228,11 @@ project_title:
   default: "{{ project_name | replace('-', ' ') | title }}"
   help: Display name, for the browser tab and the shell brand. Change it only for an acronym or a spelling the slug cannot give.
 
+team_name:
+  type: str
+  default: "{{ project_title }}"
+  help: Who the feedback dialog says will read a report, as "the <name> team". Set it where the app's own team is not its display name (for example "CASPO").
+
 # Hidden and never answered by an app — `when: false` keeps a real stamp's
 # rendered value at the default `false` forever, since copier persists only
 # an ASKED question's answer (package_name above is the same shape and the same

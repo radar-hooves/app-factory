@@ -6,6 +6,13 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: colleagues meet the app's own name, and a change to the element origins reaches browsers at once (master-project#380; consumer: caspo).
+
+### Changed
+
+- **The feedback dialog names the app's own team.** `ReportWidget` takes `team` (default `support`) and says "the <team> team will take a look"; "household" is gone. New copier question `team_name`, defaulting to `project_title`; the stamped `(protected)/+layout.svelte` passes it. An app sets it in `.copier-answers.yml` (caspo: `CASPO`), then `copier update`. The layout is now `+layout.svelte.jinja`.
+- **`/elements/placed.js` is revalidated on every load.** `Cache-Control: no-cache, max-age=0, must-revalidate` plus an `ETag` of the body, with `304` on a match. The factory already sent a bare `no-cache`, and the app's origin serves it so; the measured `max-age=14400` is not from the factory or the shared nginx (neither sets it) but, most likely, Cloudflare's default 4h Browser Cache TTL on a `.js` path. An app on Cloudflare that still sees it needs a Cache Rule on `/elements/placed.js` set to respect origin headers (zone setting, not code).
+
 ## [2026.10.50] - 2026-10-18
 
 Need: a lesson born of a person's correction carries evidence the judge can read (radar-hooves/godswood#876, master-project#233; consumer: godswood).
