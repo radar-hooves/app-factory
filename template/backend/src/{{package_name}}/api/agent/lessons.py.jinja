@@ -12,6 +12,7 @@ import asyncio
 import datetime
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -56,6 +57,12 @@ _MAX_CORRECTIONS = 20
 _MAX_KEY = 255
 _MAX_STATEMENT = 500
 _MAX_FOCUS = 500
+_MAX_EVIDENCE = 2000
+
+#: What `describe_change` puts before the judge: the whole text, the fields listed, each value.
+_CHANGE_MAX_CHARS = 1500
+_CHANGE_MAX_FIELDS = 12
+_CHANGE_MAX_VALUE = 80
 
 #: A belief id, as core-memory mints one — nothing else survives into `cited()`.
 _BELIEF_ID = re.compile(r"[0-9a-f]{32}")
@@ -228,7 +235,41 @@ def record(declared: Lessons, loaded: Loaded) -> dict[str, Any]:
     return row
 
 
-def _corrections(raw: list[dict[str, str]], situation: list[str]) -> list[dict[str, str]]:
+def _leaves(value: Any, path: str = "") -> dict[str, Any]:
+    if isinstance(value, dict):
+        return {
+            k: v for key, item in value.items() for k, v in _leaves(item, f"{path}.{key}" if path else str(key)).items()
+        }
+    if isinstance(value, list):
+        return {k: v for i, item in enumerate(value) for k, v in _leaves(item, f"{path}[{i}]").items()}
+    return {path: value}
+
+
+def describe_change(read: Any, filed: Any, same: Callable[[Any, Any], bool]) -> str | None:
+    """The leaf fields `filed` changed from `read`, one quoted line each (value clipped, at most
+    `_CHANGE_MAX_FIELDS` lines, `_CHANGE_MAX_CHARS` in all), as `report_outcome`'s `evidence`: core-memory's
+    judge lapses a lesson whose correction it cannot read. `same(a, b)` is the app's own test of
+    equal-after-review, so a reformatted date is not a change. None when nothing differs."""
+    before, after = _leaves(read), _leaves(filed)
+    lines = [
+        f"{path}: read {str(before.get(path))[:_CHANGE_MAX_VALUE]!r}, filed {str(after.get(path))[:_CHANGE_MAX_VALUE]!r}"
+        for path in sorted(before.keys() | after.keys())
+        if not same(before.get(path), after.get(path))
+    ]
+    if not lines:
+        return None
+    more = f"; and {len(lines) - _CHANGE_MAX_FIELDS} more fields" if len(lines) > _CHANGE_MAX_FIELDS else ""
+    return (
+        "Fields the person changed, as the reading had them and as filed: "
+        + "; ".join(lines[:_CHANGE_MAX_FIELDS])
+        + more
+    )[:_CHANGE_MAX_CHARS]
+
+
+def _corrections(raw: list[dict[str, str]], situation: list[str], evidence: str | None) -> list[dict[str, str]]:
+    evidence = (evidence or "").strip()
+    if len(evidence) > _MAX_EVIDENCE:
+        raise BadRequestError(f"evidence must be at most {_MAX_EVIDENCE} characters")
     if len(raw) > _MAX_CORRECTIONS:
         raise BadRequestError(f"at most {_MAX_CORRECTIONS} corrections per job")
     kept: list[dict[str, str]] = []
@@ -239,7 +280,8 @@ def _corrections(raw: list[dict[str, str]], situation: list[str]) -> list[dict[s
         key = item.get("key")
         if key is not None and key not in situation:
             raise BadRequestError(f"correction key {key!r} is not one of the job's situation keys {situation}")
-        kept.append({"statement": statement} if key is None else {"statement": statement, "key": key})
+        correction = {"statement": statement} if key is None else {"statement": statement, "key": key}
+        kept.append({**correction, "evidence": evidence} if evidence else correction)
     return kept
 
 
@@ -261,11 +303,16 @@ def report_outcome(
     corrections: list[dict[str, str]] | None = None,
     contradicts: list[str] | None = None,
     revision: int = 0,
+    evidence: str | None = None,
 ) -> None:
     """Record, in `db`'s own transaction, how a person took `job_id`'s result: `accepted` as it
     stood, or corrected (`accepted=False`) with `corrections` as `[{"statement", "key"?}]`, each a
     short testable lesson the correction teaches, `key` one of the job's situation keys (default the
     most specific). Corrections are dropped when the job declared `propose=False`.
+
+    `evidence` (up to 2000 characters; `describe_change` builds it) is stored with each kept correction and
+    delivered as `corrections[i]["evidence"]`: core-memory's judge lapses a proposed lesson it cannot read
+    evidence for, and a correction born of a person's edit carries none of its own.
 
     `contradicts` names the lessons the job cited that the correction showed wrong, and only those
     are blamed: a corrected report without it moves no posterior. Refused here, as core-memory would
@@ -313,7 +360,7 @@ def report_outcome(
         attempts=attempts,
         seconds=settled.total_seconds() if settled is not None else None,
         model=job.model or job.persona,
-        corrections=_corrections(corrections or [], declared["situation"]) if declared["propose"] else [],
+        corrections=_corrections(corrections or [], declared["situation"], evidence) if declared["propose"] else [],
         contradicts=blamed,
     )
 

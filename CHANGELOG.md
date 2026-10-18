@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.49] - 2026-10-18
+
+Need: a lesson born of a person's correction carries evidence the judge can read (radar-hooves/godswood#876, master-project#233; consumer: godswood).
+
+### Added
+
+- **`report_outcome(evidence=)` and `lessons.describe_change`.** `evidence` (at most 2000 characters) is stored with each kept correction and delivered to `lesson report` as `corrections[i]["evidence"]`; core-memory 2026.10.6+ lapses a proposed lesson whose evidence its judge cannot read. `describe_change(read, filed, same)` builds that text from the changed leaf fields, as read and as filed, each value clipped, bounded to 1500 characters; None when nothing differs. No migration: corrections are JSON. An app wires its own `same` and passes the text.
+
 ## [2026.10.48] - 2026-10-18
 
 Need: a placed element always loads, and the elements build survives Vite 8 (radar-hooves/master-project#380; consumer: core-memory).

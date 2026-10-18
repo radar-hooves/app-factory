@@ -270,6 +270,43 @@ def test_report_outcome_drops_corrections_for_a_job_that_must_not_propose(
     assert report.cites == [BELIEF_1]  # it still learns from the run, it only proposes nothing
 
 
+def test_report_outcome_stores_the_evidence_with_each_kept_correction(
+    workspace_id: int, with_core_memory: AgentSettings
+) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[])
+    corrections = [{"statement": "a"}, {"statement": "b", "key": "reading"}]
+    _file(workspace_id, job_id, accepted=False, corrections=corrections, evidence="  total: read '1', filed '2'  ")
+    report = _report(job_id, workspace_id)
+    assert report is not None
+    assert [c["evidence"] for c in report.corrections] == ["total: read '1', filed '2'"] * 2
+
+
+def test_report_outcome_refuses_evidence_over_the_bound(workspace_id: int, with_core_memory: AgentSettings) -> None:
+    job_id = _seed_job(workspace_id, lessons_used=[])
+    with get_session_factory()() as db, pytest.raises(BadRequestError):
+        bind_session(db, workspace_id=workspace_id)
+        lessons.report_outcome(db, job_id, accepted=False, corrections=[{"statement": "a"}], evidence="x" * 2001)
+
+
+def test_describe_change_lists_the_changed_leaves_by_the_apps_own_equality() -> None:
+    read = {"total": "10.00", "date": "2026-01-02", "lines": [{"qty": 1}, {"qty": 2}]}
+    filed = {"total": "12.00", "date": "02/01/2026", "lines": [{"qty": 1}, {"qty": 3}]}
+    text = lessons.describe_change(read, filed, lambda a, b: a == b or (a, b) == ("2026-01-02", "02/01/2026"))
+    assert text is not None
+    assert "total: read '10.00', filed '12.00'" in text and "lines[1].qty: read '2', filed '3'" in text
+    assert "date" not in text and "lines[0]" not in text
+    assert lessons.describe_change(read, read, lambda a, b: a == b) is None
+
+
+def test_describe_change_clips_each_value_and_the_whole() -> None:
+    long = "y" * 500
+    clipped = lessons.describe_change({"a": long}, {"a": "z"}, lambda a, b: a == b)
+    assert clipped is not None and long[:80] in clipped and long[:81] not in clipped
+    many = {f"f{i:02}": "a" * 80 for i in range(40)}
+    whole = lessons.describe_change(many, {k: "b" * 80 for k in many}, lambda a, b: a == b)
+    assert whole is not None and len(whole) <= 1500
+
+
 @pytest.mark.parametrize(
     "corrections",
     [
@@ -688,6 +725,17 @@ async def test_retry_unsettled_delivers_one_idempotent_lesson_report(
     assert report is not None
     assert (report.refused, report.recorded_at is not None) == (None, True)
     assert _failing_alert() is None
+
+
+async def test_retry_unsettled_delivers_the_evidence_on_each_correction(
+    workspace_id: int, with_core_memory: AgentSettings, calls: list[tuple[str, dict[str, Any]]]
+) -> None:
+    corrections = [{"statement": "a", "evidence": "total: read '1', filed '2'"}]
+    _seed_report(workspace_id, lessons_used=[BELIEF_1], corrections=corrections)
+
+    await lessons.retry_unsettled(get_session_factory(), with_core_memory, asyncio.Event())
+
+    assert calls[0][1]["corrections"] == corrections
 
 
 async def test_retry_unsettled_delivers_a_later_revision_under_its_own_run_ref(

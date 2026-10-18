@@ -66,7 +66,10 @@ in the CALLER'S OWN session inside a SAVEPOINT (`insert_lesson_report_if_absent`
 conflict on `(job_id, revision)`, first write wins, rolls back only this insert. `revision` numbers
 the time round a result was taken: an app that reopens a settled job passes its own count so the
 later accept or correction is its own report (delivered as `run_ref` `<job id>#<revision>`; the
-job id itself for revision 0). No network call ever happens on
+job id itself for revision 0). `evidence` (at most 2000 characters) is stored with each kept
+correction and delivered as `corrections[i]["evidence"]`, since core-memory's judge lapses a lesson it cannot read
+evidence for; `describe_change(read, filed, same)` builds it from the changed leaf fields (None when nothing
+differs; `same` is the app's own equal-after-review test). No network call ever happens on
 an app's request path. A no-op when the deployment names no `core_memory_url` or the job
 declared no `lessons`. It files a report even when the job cited nothing, since a run
 without lessons is what `stats` sets the others against. A correction is `{statement,
