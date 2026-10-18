@@ -60,6 +60,7 @@
 		activateLabel = 'Open',
 		onselect,
 		onactivate,
+		onkeydown,
 		detail,
 		class: className,
 		...restProps
@@ -93,8 +94,16 @@
 	let tween: { from: Camera; to: Camera; t0: number; dur: number } | null = null;
 
 	const kindOf = $derived(new Map(kinds.map((k) => [k.id, k])));
-	const nodeById = $derived(new Map(nodes.map((n) => [n.id, n])));
-	const current = $derived(selected ? (nodeById.get(selected) ?? null) : null);
+	// The first node with an id wins, as it does in the scene.
+	const nodeById = $derived.by(() => {
+		const m = new Map<string, N>();
+		for (const n of nodes) if (!m.has(n.id)) m.set(n.id, n);
+		return m;
+	});
+	const current = $derived.by(() => {
+		const n = selected ? nodeById.get(selected) : undefined;
+		return n && !hiddenKinds.includes(n.kind) ? n : null;
+	});
 
 	const legendRows = $derived.by(() => {
 		const counts = new Map<string, number>();
@@ -145,7 +154,7 @@
 		if (!q) return [];
 		const hidden = new Set(hiddenKinds);
 		const hits: { node: N; at: number }[] = [];
-		for (const n of nodes) {
+		for (const n of nodeById.values()) {
 			if (hidden.has(n.kind)) continue;
 			const at = n.label.toLocaleLowerCase().indexOf(q);
 			if (at >= 0) hits.push({ node: n, at });
@@ -327,7 +336,8 @@
 		hiddenKinds = hiddenKinds.includes(id)
 			? hiddenKinds.filter((k) => k !== id)
 			: [...hiddenKinds, id];
-		if (current && hiddenKinds.includes(current.kind)) choose(null);
+		const chosen = selected ? nodeById.get(selected) : undefined;
+		if (chosen && hiddenKinds.includes(chosen.kind)) choose(null);
 	}
 
 	function pickMatch(n: N) {
@@ -542,13 +552,16 @@
 			pointers.delete(ev.pointerId);
 			const g = gesture;
 			if (g?.type === 'pinch') {
-				if (pointers.size === 0) gesture = null;
+				if (pointers.size === 0) {
+					gesture = null;
+					cursor = 'grab';
+				}
 				return;
 			}
 			release();
 			gesture = null;
 			cursor = scene.hovered ? 'pointer' : 'grab';
-			if (!g || g.moved || ev.type === 'pointercancel') return;
+			if (!g || g.moved || ev.type !== 'pointerup') return;
 			if (g.type === 'node') choose(g.id);
 			else if (selected) choose(null);
 		}
@@ -593,6 +606,8 @@
 		canvas.addEventListener('pointermove', onMove);
 		canvas.addEventListener('pointerup', onUp);
 		canvas.addEventListener('pointercancel', onUp);
+		// A capture the browser drops without a pointerup still ends the gesture.
+		canvas.addEventListener('lostpointercapture', onUp);
 		canvas.addEventListener('pointerleave', onLeave);
 		canvas.addEventListener('dblclick', onDouble);
 		canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -621,6 +636,7 @@
 			canvas.removeEventListener('pointermove', onMove);
 			canvas.removeEventListener('pointerup', onUp);
 			canvas.removeEventListener('pointercancel', onUp);
+			canvas.removeEventListener('lostpointercapture', onUp);
 			canvas.removeEventListener('pointerleave', onLeave);
 			canvas.removeEventListener('dblclick', onDouble);
 			canvas.removeEventListener('wheel', onWheel);
@@ -629,6 +645,8 @@
 	});
 
 	function onCanvasKey(ev: KeyboardEvent) {
+		// Ctrl or Cmd with + - 0 is the browser's own zoom, never the graph's.
+		if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
 		const step = 64;
 		const pan = (dx: number, dy: number) => {
 			follow = false;
@@ -700,8 +718,11 @@
 	data-slot="graph-canvas"
 	data-layout={settled ? 'settled' : 'running'}
 	data-selected={selected ?? undefined}
-	onkeydown={onRootKey}
 	{...restProps}
+	onkeydown={(ev) => {
+		onkeydown?.(ev);
+		onRootKey(ev);
+	}}
 >
 	<span bind:this={probe} class="hidden" aria-hidden="true"></span>
 	<canvas

@@ -301,7 +301,8 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		ctx.clearRect(0, 0, W, H);
 		if (!P) return;
 
-		const focus = this.hovered ?? this.selected;
+		const chosen = this.selected && this.visible(this.selected) ? this.selected : null;
+		const focus = this.hovered ?? chosen;
 		const near = focus ? this.adj.get(focus) : undefined;
 		const lit = (s: SimNode<N>) => !focus || s === focus || !!near?.has(s);
 		const margin = 40 / k;
