@@ -2,7 +2,13 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.19] - 2026-10-19
+
+### Added
+
+- **GraphCanvas joins the dots** (consumer: caspo, master-project#380): `path` (node ids in order) lights that path's nodes and edges, labels its verbs and dims the rest; `GraphEdge.style: 'dashed'` draws a weaker link, such as an uncited claim, dashed; a **Nodes** disclosure lists every visible node as Tab-reachable buttons synced with the selection, and the canvas's label names the path for a screen reader. Edge labels already existed (shown around a focused node); they now also show on the path. `harness/graph.mjs` gains a route suite with an axe pass (`axe-core` dev dependency).
+
+## [2026.10.18] - 2026-10-18
 
 Need: caspo, the public entrance that goes before colleagues, from its fleet-shell survey (caspo `03ab580a`, radar-hooves/master-project#380). One pattern per problem: what caspo, godswood and eight each hand-rolled for a page.
 

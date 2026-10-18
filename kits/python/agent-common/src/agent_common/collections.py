@@ -20,6 +20,7 @@ import contextlib
 import datetime
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from library import CallerApi, Configuration, QueryRequest
 from library.exceptions import NotFoundException
@@ -40,19 +41,29 @@ _NO_PASSAGES = (
 )
 
 
+def _display(summary: Any, key: str) -> str:
+    """A display field of a listing row: declared on the client's model, else the undeclared key it keeps."""
+    value = getattr(summary, key, None) or getattr(summary, "additional_properties", {}).get(key)
+    return str(value or "").strip()
+
+
 @dataclass(frozen=True, slots=True)
 class Collection:
-    """A collection the person may read: its id, a reader-facing summary, and how current it is.
+    """A collection the person may read: its id, how it is shown to a reader, and how current it is.
 
-    `summary` is the library's authored description of what it holds, empty
-    where none is published. `documents_to` is when the library last confirmed
-    a document current (a recheck's `unchanged`, or a fetch), never a
+    `title` and `description` are the library's reader-facing display title
+    and one-line description, empty where it publishes none. `summary` is its
+    retrieval-pipeline summary: filing history for the model's routing, never
+    shown to a reader. `documents_to` is when the library last confirmed a
+    document current (a recheck's `unchanged`, or a fetch), never a
     publication date.
     """
 
     name: str
     summary: str
     documents_to: datetime.date | None
+    title: str = ""
+    description: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +114,8 @@ class Collections:
                 name=summary.name,
                 summary=str((summary.profile or {}).get("summary") or "").strip(),
                 documents_to=summary.documents_to,
+                title=_display(summary, "title"),
+                description=_display(summary, "description"),
             )
             for summary in summaries
         ]

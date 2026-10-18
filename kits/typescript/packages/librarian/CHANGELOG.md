@@ -2,7 +2,11 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.1] - 2026-10-19
+
+### Changed
+
+- **The collection chip shows a title, never a retrieval summary** (consumer: caspo, master-project#380). `CollectionChoice` is `{ name, title?, description? }`: the chip reads `title`, else the name made readable (`defence-housing` is "Defence housing"), with `description` as its hover. `summary` is gone from the type, since it is filing history. The template's `CollectionRead` and `Collection` follow, and `agent_common.Collection` gains `title` and `description`, read from the library's caller API once its client carries them.
 
 ## [2026.10.0] - 2026-10-18
 

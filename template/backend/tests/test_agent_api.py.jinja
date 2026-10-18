@@ -303,8 +303,9 @@ async def test_the_collections_listed_are_the_ones_the_library_lists_for_this_pe
 
     listed = (await client.get("/api/agent/manual/collections", headers=narrow)).json()
     assert listed == [
-        {"name": fake_library.COLLECTION, "summary": fake_library.SUMMARY, "documents_to": fake_library.DOCUMENTS_TO}
+        {"name": fake_library.COLLECTION, "title": "", "description": "", "documents_to": fake_library.DOCUMENTS_TO}
     ]
+    assert fake_library.SUMMARY not in json.dumps(listed)
     names = [c["name"] for c in (await client.get("/api/agent/manual/collections", headers=wide)).json()]
     assert names == [fake_library.COLLECTION, fake_library.SECOND]
     helper = await client.get("/api/agent/helper/collections", headers=_person("chat-helper"))

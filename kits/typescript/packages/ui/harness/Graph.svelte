@@ -13,7 +13,36 @@
 	const params = new URLSearchParams(location.search);
 	const total = Number(params.get('n') ?? 3000);
 	const shadow = params.get('shadow') === '1';
-	const { nodes, edges } = osint(total);
+	const fixture = osint(total);
+	const nodes = fixture.nodes;
+	// `&route=1`: every fourth link dashed, and the longest shortest path from the first node highlighted.
+	const routeMode = params.get('route') === '1';
+	const edges = routeMode
+		? fixture.edges.map((e, i) => (i % 4 === 0 ? { ...e, style: 'dashed' as const } : e))
+		: fixture.edges;
+	function farthestPath(): string[] {
+		const from = nodes[0]!.id;
+		const prev = new Map<string, string | null>([[from, null]]);
+		let queue = [from];
+		let last = from;
+		while (queue.length) {
+			const next: string[] = [];
+			for (const id of queue)
+				for (const e of edges) {
+					const other = e.source === id ? e.target : e.target === id ? e.source : null;
+					if (other && !prev.has(String(other))) {
+						prev.set(String(other), id);
+						next.push(String(other));
+						last = String(other);
+					}
+				}
+			queue = next;
+		}
+		const out: string[] = [];
+		for (let at: string | null | undefined = last; at; at = prev.get(at)) out.unshift(at);
+		return out;
+	}
+	const path = routeMode ? farthestPath() : [];
 
 	type Handle = {
 		selected: string | null;
@@ -22,6 +51,7 @@
 		nodes: number;
 		edges: number;
 		ids: string[];
+		path: string[];
 		neighbours(id: string): string[];
 		label(id: string): string | undefined;
 		api?: { fit(): void; focus(id: string): Promise<void>; locate(id: string): { x: number; y: number } | null; relayout(): void };
@@ -33,6 +63,7 @@
 		nodes: nodes.length,
 		edges: edges.length,
 		ids: nodes.map((n) => n.id),
+		path,
 		label: (id) => nodes.find((n) => n.id === id)?.label,
 		neighbours: (id) => {
 			const out = new Set<string>();
@@ -91,6 +122,7 @@
 			{edges}
 			kinds={KINDS}
 			directed
+			{path}
 			label="Network"
 			{onselect}
 			{onactivate}

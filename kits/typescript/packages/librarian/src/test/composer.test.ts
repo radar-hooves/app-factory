@@ -1,16 +1,16 @@
 /**
  * The collection picker renders only when there is a genuine pick: two or
  * more collections the person may read. With one, or none, there is nothing
- * to choose and the row is not there. A collection is shown by its summary,
- * never by its name.
+ * to choose and the row is not there. A collection is shown by its title,
+ * never by its name or a retrieval summary.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
 const COLLECTIONS = [
-	{ name: 'adf-pay', summary: 'ADF pay and conditions' },
-	{ name: 'housing', summary: 'Defence housing and relocation' }
+	{ name: 'adf-pay', title: 'ADF pay and conditions', description: 'Rates and leave' },
+	{ name: 'housing', title: 'Defence housing and relocation' }
 ];
 
 function base(props: Record<string, unknown> = {}) {
@@ -28,7 +28,7 @@ describe('Composer collection picker', () => {
 		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
 	});
 
-	it('offers all of them, then each by its summary and never its name', () => {
+	it('offers all of them, then each by its title and never its name', () => {
 		render(Composer, { props: base({ collections: COLLECTIONS }) });
 		expect(screen.getByRole('button', { name: 'All your collections' })).toHaveAttribute(
 			'aria-pressed',
@@ -37,6 +37,22 @@ describe('Composer collection picker', () => {
 		expect(screen.getByRole('button', { name: 'ADF pay and conditions' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Defence housing and relocation' })).toBeInTheDocument();
 		expect(screen.queryByText('adf-pay')).not.toBeInTheDocument();
+	});
+
+	it('reads a slug as a title where the library has none, and never shows a summary', () => {
+		const collections = [
+			{ name: 'defence-housing', summary: 'FILING: pipeline text, 4 documents' },
+			{ name: 'adf_pay' }
+		];
+		render(Composer, { props: base({ collections }) });
+		expect(screen.getByRole('button', { name: 'Defence housing' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Adf pay' })).toBeInTheDocument();
+		expect(screen.queryByText(/FILING/)).not.toBeInTheDocument();
+	});
+
+	it('carries the description as the chip’s hover', () => {
+		render(Composer, { props: base({ collections: COLLECTIONS }) });
+		expect(screen.getByRole('button', { name: 'ADF pay and conditions' })).toHaveAttribute('title', 'Rates and leave');
 	});
 
 	it('marks the chosen collection and hands the host its name on a tap', async () => {
