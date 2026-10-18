@@ -339,7 +339,7 @@ DEFAULT_IDENTITY_HEADERS = {"x-authentik-uid": "test-uid", "x-authentik-username
 def _ensure_test_database_ready() -> None:
     """Create and migrate the test database before anything can connect to it.
 
-    Runs `alembic upgrade heads` (the app's chain and the factory's branch, `docs/development/migrations.md`) — not a `create_all` + stamp — so the app's
+    Runs `alembic upgrade heads` (the app's chain and the factory's branch: two heads once a factory release carries a migration) — not a `create_all` + stamp — so the app's
     real migrations stay genuinely exercised by the suite rather than trusted
     on the strength of a matching model definition. Migrations run through
     the ordinary alembic CLI in a subprocess: alembic/env.py calls
