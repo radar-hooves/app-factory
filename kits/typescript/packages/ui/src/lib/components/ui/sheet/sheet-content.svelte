@@ -3,12 +3,14 @@
 
 	// A sheet stands on the hairline-and-ladder depth every other kit surface
 	// uses (README §Depth): an edge border against the dimmed page, no shadow.
+	// A side sheet takes a phone's whole width: a sliver of dimmed page beside
+	// it is too narrow to read and too narrow to aim at.
 	export const sheetVariants = tv({
 		base: 'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out border-border fixed z-50 flex flex-col text-sm outline-none duration-200 ease-out data-closed:duration-150',
 		variants: {
 			side: {
-				right: 'data-closed:slide-out-to-right data-open:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm',
-				left: 'data-closed:slide-out-to-left data-open:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm',
+				right: 'data-closed:slide-out-to-right data-open:slide-in-from-right inset-y-0 right-0 h-full w-full border-l sm:max-w-sm',
+				left: 'data-closed:slide-out-to-left data-open:slide-in-from-left inset-y-0 left-0 h-full w-full border-r sm:max-w-sm',
 				bottom: 'data-closed:slide-out-to-bottom data-open:slide-in-from-bottom inset-x-0 bottom-0 max-h-[85%] rounded-t-xl border-t',
 				top: 'data-closed:slide-out-to-top data-open:slide-in-from-top inset-x-0 top-0 max-h-[85%] rounded-b-xl border-b'
 			}
