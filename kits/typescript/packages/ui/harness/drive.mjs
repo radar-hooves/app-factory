@@ -4769,7 +4769,9 @@ for (const surface of ['page-kit', 'document-reader']) {
 		const m = await page.evaluate(() => {
 			const content = document.querySelector('[data-slot="app-shell-content"]');
 			const article = document.querySelector('[data-slot="document-reader"] article');
-			const aside = document.querySelector('[data-slot="document-reader"] aside');
+			// The contents block in the side column; the column itself stays below
+			// 64rem to carry `aside`, so its contents are what fold away.
+			const aside = document.querySelector('[data-slot="document-reader-side"] nav')?.parentElement;
 			const h2 = document.querySelector('[data-slot="page-section"] h2');
 			let chars = null;
 			if (article) {

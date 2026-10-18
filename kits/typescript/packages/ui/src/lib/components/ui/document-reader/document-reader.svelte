@@ -42,7 +42,7 @@
 	 * body, and the shift from beside to above is a container query on the
 	 * reader's own width, not the window's.
 	 */
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { cn, type WithElementRef } from '$lib/utils.js';
@@ -97,14 +97,16 @@
 	} = $props();
 
 	let article = $state<HTMLElement | null>(null);
+	let disclosure = $state<HTMLDetailsElement | null>(null);
 	let headings = $state<DocumentReaderHeading[]>([]);
+	let read = $state(false);
 	let active = $state<string | null>(null);
 
 	const showContents = $derived(contents && headings.length >= 2);
-	// The column is held whenever contents may show, not once headings are
-	// read, so the body does not move sideways when it finishes loading. A
-	// document without structure passes `contents={false}`.
-	const side = $derived(contents || !!aside);
+	// The column is held while the body loads and until its headings are read
+	// (before the first paint), so a structured document never moves sideways
+	// as it arrives; one with fewer than two headings gives the room back.
+	const side = $derived(!!aside || (contents && (loading || !read || headings.length >= 2)));
 
 	/** Give every h2 and h3 an id, and read the list. */
 	function readHeadings(root: HTMLElement): DocumentReaderHeading[] {
@@ -127,12 +129,23 @@
 		return found;
 	}
 
+	const same = (a: DocumentReaderHeading[], b: DocumentReaderHeading[]) =>
+		a.length === b.length &&
+		a.every((h, i) => h.id === b[i]?.id && h.text === b[i]?.text && h.level === b[i]?.level);
+
 	// A link that named a heading: the router scrolled before the body existed,
-	// so the reader scrolls once the heading does.
+	// so the reader scrolls once the heading does. A fragment that is not valid
+	// percent-encoding names nothing.
 	let hashSought = false;
 	function seekHash(root: HTMLElement) {
 		if (hashSought) return;
-		const id = decodeURIComponent(window.location.hash.slice(1));
+		let id = '';
+		try {
+			id = decodeURIComponent(window.location.hash.slice(1));
+		} catch {
+			hashSought = true;
+			return;
+		}
 		const el = id ? root.querySelector<HTMLElement>(`#${CSS.escape(id)}`) : null;
 		if (el) el.scrollIntoView({ block: 'start' });
 		hashSought = !id || !!el;
@@ -140,31 +153,41 @@
 
 	// The body changes when `html` does, or when the app's own markup does; a
 	// MutationObserver sees both. Attributes are not observed, so giving a
-	// heading its id does not re-run this.
+	// heading its id does not re-run this, and a change that leaves the
+	// headings as they were leaves the list alone.
 	$effect(() => {
 		const root = article;
 		if (!root) return;
-		const read = () => {
-			headings = readHeadings(root);
+		const update = () => {
+			const found = readHeadings(root);
+			if (!same(found, untrack(() => headings))) headings = found;
+			read = true;
 			seekHash(root);
 		};
-		read();
-		const observer = new MutationObserver(read);
+		update();
+		const observer = new MutationObserver(update);
 		observer.observe(root, { childList: true, subtree: true, characterData: true });
 		return () => observer.disconnect();
 	});
 
 	// The heading being read: the last one whose top has passed a line a little
 	// below the top of whatever scrolls. Scroll does not bubble but is captured
-	// at the window from any scroller in the page.
+	// at the window from any scroller in the page, and at the shadow root from
+	// one inside an element, which the window never hears. A link's own jump
+	// holds its heading for the length of the scroll it starts.
 	const READING_LINE = 96;
+	let heldUntil = 0;
 	$effect(() => {
 		const list = headings;
 		const root = article;
 		if (!root || list.length < 2) return;
+		const scopes: EventTarget[] = [window];
+		const shadow = root.getRootNode();
+		if (shadow instanceof ShadowRoot) scopes.push(shadow);
 		let frame = 0;
 		const update = () => {
 			frame = 0;
+			if (performance.now() < heldUntil) return;
 			let current: string | null = list[0]?.id ?? null;
 			for (const { id } of list) {
 				const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
@@ -177,9 +200,9 @@
 			if (!frame) frame = requestAnimationFrame(update);
 		};
 		update();
-		window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+		for (const scope of scopes) scope.addEventListener('scroll', onScroll, { capture: true, passive: true });
 		return () => {
-			window.removeEventListener('scroll', onScroll, { capture: true });
+			for (const scope of scopes) scope.removeEventListener('scroll', onScroll, { capture: true });
 			if (frame) cancelAnimationFrame(frame);
 		};
 	});
@@ -189,13 +212,14 @@
 		if (!el) return;
 		event.preventDefault();
 		const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+		heldUntil = performance.now() + (still ? 0 : 800);
+		if (disclosure) disclosure.open = false;
 		el.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
 		// Move focus with the view, so the next Tab continues from the heading.
 		if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
 		el.focus({ preventScroll: true });
 		active = id;
 	}
-
 </script>
 
 {#snippet contentsList()}
@@ -221,7 +245,12 @@
 	</nav>
 {/snippet}
 
-<div bind:this={ref} data-slot="document-reader" class={cn('@container w-full text-base', className)} {...restProps}>
+<div
+	bind:this={ref}
+	data-slot="document-reader"
+	class={cn('@container w-full text-base', className)}
+	{...restProps}
+>
 	{#if error}
 		<ErrorState message={error}>
 			{#snippet action()}
@@ -245,10 +274,16 @@
 			{#if loading}
 				<ContentSkeleton shape="prose" label="Loading the document…" />
 			{:else}
-				<div class="flex items-start gap-10">
+				<!-- One column, then two from 64rem of reader. The side column is
+				     rendered once: below 64rem it follows the body and shows only
+				     `aside`, since the contents fold into the disclosure above. -->
+				<div class="flex flex-col @5xl:flex-row @5xl:items-start @5xl:gap-10">
 					<div class="min-w-0 flex-1">
 						{#if showContents}
-							<details class="group bg-card border-border ds-edge mb-6 rounded-lg border @5xl:hidden">
+							<details
+								bind:this={disclosure}
+								class="group bg-card border-border ds-edge mb-6 rounded-lg border @5xl:hidden"
+							>
 								<summary
 									class="focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden"
 								>
@@ -272,27 +307,29 @@
 								{@render children?.()}
 							{/if}
 						</article>
-						{#if aside}
-							<div class="mt-10 @5xl:hidden">{@render aside()}</div>
-						{/if}
-						{#if footer}
-							<div class="border-border mt-12 border-t pt-6">{@render footer()}</div>
-						{/if}
 					</div>
 					{#if side}
-						<aside
-							class="sticky top-4 hidden max-h-[calc(100dvh-6rem)] w-56 shrink-0 flex-col gap-8 overflow-y-auto @5xl:flex"
+						<div
+							data-slot="document-reader-side"
+							class="flex flex-col gap-8 @5xl:sticky @5xl:top-4 @5xl:max-h-[calc(100dvh-6rem)] @5xl:w-56 @5xl:shrink-0 @5xl:overflow-y-auto"
 						>
 							{#if showContents}
-								<div class="flex flex-col gap-2">
+								<div class="hidden flex-col gap-2 @5xl:flex">
 									<p class="text-sm font-medium" aria-hidden="true">{contentsLabel}</p>
 									{@render contentsList()}
 								</div>
 							{/if}
-							{@render aside?.()}
-						</aside>
+							{#if aside}
+								<div class="mt-10 @5xl:mt-0">{@render aside()}</div>
+							{/if}
+						</div>
 					{/if}
 				</div>
+				{#if footer}
+					<div class="ds-measure border-border mt-12 border-t pt-6" data-measure="prose">
+						{@render footer()}
+					</div>
+				{/if}
 			{/if}
 		</div>
 	{/if}
