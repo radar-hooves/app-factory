@@ -231,6 +231,7 @@ const PRIMITIVES = new Set([
 	'progress',
 	'select',
 	'separator',
+	'sheet',
 	'skeleton',
 	'sonner',
 	'switch',

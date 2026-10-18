@@ -1,3 +1,3 @@
-export function load() {
-	return { title: 'Members' };
-}
+import type { PageLoad } from './$types';
+
+export const load: PageLoad = () => ({ title: 'Members', measure: 'page' });
