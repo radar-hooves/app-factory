@@ -296,10 +296,18 @@
 	/* Eyebrow / column-head tracking — pairs with text-2xs + uppercase. */
 	--tracking-eyebrow: 0.06em;
 
+	/* The type scale, by role (README §The type scale). An app sets none of
+	   these; a role with no key here is set in the component that owns it. */
+
 	/* Page-title and large-readout size (PageHeader, StatCard). */
 	--text-display: 1.75rem;
 	--text-display--line-height: 2.125rem;
 	--text-display--letter-spacing: -0.02em;
+
+	/* A section of a page, under its title (PageSection). */
+	--text-section: 1.25rem;
+	--text-section--line-height: 1.75rem;
+	--text-section--letter-spacing: -0.015em;
 
 	/* Panel/card heading size — one step above the sm body default. */
 	--text-body: 0.9375rem;
