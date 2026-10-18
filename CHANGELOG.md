@@ -4,11 +4,13 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.10.51] - 2026-10-18
 
 Need: the operator's rulings of 17 and 18/10/2026 on radar-hooves/master-project#380 (consumer: master for caspo, godswood, eight and pebblestone): chat leaves the library, there is no room vocabulary, a person chats with collections, and it is fast. Design: `docs/design/agent-console.md`.
 
 Need: colleagues meet the app's own name, and a change to the element origins reaches browsers at once (master-project#380; consumer: caspo).
+
+Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hooves/master-project#380; consumer: caspo, from its fleet-shell survey at caspo `03ab580a`). Takes `@poodle64/ui` at the release that carries its Unreleased page kit (`Breadcrumbs`, `PageContainer`, `PageSection`, `ContentSkeleton`, `Sheet`, `DocumentReader`); the template's floor moves to it with that release.
 
 ### Changed
 
@@ -18,10 +20,19 @@ Need: colleagues meet the app's own name, and a change to the element origins re
 - **`agent_conversations.room` is `persona`**: migration `d943d70b8845`, the first on the factory branch (`docs/development/migrations.md`).
 - **`@poodle64/librarian` 2026.10.0**: `ChatTransport` (was `RoomTransport`), `ChatCopy` (was `LibrarianCopy`), `ask({collection})`, a collection picker in `Composer`. Its npm name stays until a trusted publisher exists for a new one.
 - **`agent-common`**: `collections.Collections` (list, search, document as one person) on the `library` client 2026.10.18124341 (`query_as_caller`); the transport's failure frame is `agent_error`.
-
-Measured on atlas against the live library, caspo's six questions over `defence-personnel` and `acp-ghost-bat`: whole answers in a median of 9.2-10.2 s (all 48 under 20 s), the first word at a median of 5.5-7.1 s with the host at load 72-93 on 20 cores, of which the CLI's own start-up was 4.3-4.9 s. Before, through the library's Milton: first words at 27-114 s, whole answers at 34-160 s. The exchange was not driven live (no test user in production); `agent-console.md` §Measured says what stood in for it.
+- **The stamped frame declares the app's `nav` and passes it to the rail and the palette**, so a fresh stamp has a phone drawer and palette results on day one. The declaration sits in `app-frame.svelte`, the app's own file, with the grouping convention beside it. A separate stamped `lib/config/navigation.ts` would be owed byte-identical until the sanctioned per-app list names it, so a nav that outgrows the frame moves to the app's own `$lib/config/navigation.ts` and is imported.
+- **`measure` comes from route data**: the frame renders `measure={page.data.measure ?? 'wide'}` beside `padded`, and `app.d.ts` types `PageData` (`title`, `measure`, `padded`). Settings and members declare `page`. Each app's table of path regexes in its frame retires.
+- **`DESIGN.md` says what the shell is.** It names one composition with no `variant` or `content` prop, gives the page parts table and the type scale by role, and states body type as Avenir Next, else Hanken Grotesk.
+- **The drift gate counts `sheet` a primitive**, so a surface brief need not name it, and an app's vendored `components/ui/sheet/` now fails `vendored-copy`.
 - **The feedback dialog names the app's own team.** `ReportWidget` takes `team` (default `support`) and says "the <team> team will take a look"; "household" is gone. New copier question `team_name`, defaulting to `project_title`; the stamped `(protected)/+layout.svelte` passes it. An app sets it in `.copier-answers.yml` (caspo: `CASPO`), then `copier update`. The layout is now `+layout.svelte.jinja`.
 - **`/elements/placed.js` is revalidated on every load.** `Cache-Control: no-cache, max-age=0, must-revalidate` plus an `ETag` of the body, with `304` on a match. The factory already sent a bare `no-cache`, and the app's origin serves it so; the measured `max-age=14400` is not from the factory or the shared nginx (neither sets it) but, most likely, Cloudflare's default 4h Browser Cache TTL on a `.js` path. An app on Cloudflare that still sees it needs a Cache Rule on `/elements/placed.js` set to respect origin headers (zone setting, not code).
+
+Measured on atlas against the live library, caspo's six questions over `defence-personnel` and `acp-ghost-bat`: whole answers in a median of 9.2-10.2 s (all 48 under 20 s), the first word at a median of 5.5-7.1 s with the host at load 72-93 on 20 cores, of which the CLI's own start-up was 4.3-4.9 s. Before, through the library's Milton: first words at 27-114 s, whole answers at 34-160 s. The exchange was not driven live (no test user in production); `agent-console.md` §Measured says what stood in for it.
+
+### Fixed
+
+- **A name the identity provider repeats is held once.** Authentik holds one entitlement object per name per application binding, so the forwarded header repeats a name for every binding that grants it (caspo's operator: 15 names, five repeats). `_parse_entitlements` keeps the first of each, in order, so `/api/users/me` and every module gate see each name once.
+- **`/settings` lands on the first settings page even when its redirect is dropped.** A navigation or invalidation that takes SvelteKit's token while the redirect loads aborts it, and the page stayed on `/settings` (caspo's E2E, two runs in three). While the index is still shown at its own path and nothing else is navigating, it asks again, up to three times; a link the reader followed meanwhile wins, and a cancelled redirect stays cancelled.
 
 ### Removed
 
@@ -34,25 +45,12 @@ Measured on atlas against the live library, caspo's six questions over `defence-
 2. In its own code: `$lib/agent/rooms` is `$lib/agent/chat`, `RoomExtensions` is `ChatExtensions` (in `src/lib/agent/app.ts`: `oncite(persona, …)`, `copy(persona)`, `Home({persona})`, `briefing(persona)`), `RoomTransport` is `ChatTransport`, `LibrarianCopy` is `ChatCopy`; `depth` is gone; `app_hooks.agent_turn_settled(persona, conversation, turn)`; `entitlements.CHAT_PREFIX` replaces `ROOM_PREFIX`; a frame of type `library_error` is `agent_error`.
 3. `alembic upgrade heads` takes the migration. Code of its own reading `get_current_head()` or `get_current_revision()` moves to `get_heads()` / `get_current_heads()` first.
 4. To offer chat: `config/chat.yaml` and the persona's directory. A persona with `collections: true` also needs the exchange (`docs/design/exchange.md` §Adopting it), `<APP>_AGENT_LIBRARY_URL`, and the app enrolled as a caller at the library. A person reads the collection groups their entitlements on the library's application name, and a new grant reaches them after they sign in again.
+5. The feedback dialog's team: `copier update` asks `team_name` (default the project title); set it in `.copier-answers.yml` first if it should differ (caspo: `CASPO`).
+6. Take `@poodle64/ui` 2026.10.18 (the page kit) alongside `@poodle64/librarian` 2026.10.0, and `agent-common>=2026.10.51` (the template's floor).
 
 **caspo** deletes its old conversation rows in a migration of its own (their answers are Milton's, at the library, which Outrider can neither read nor continue), writes Outrider's `config/chat.yaml` row and persona directory, and at Authentik adds `chat-outrider` to its application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read. **godswood, eight and casefile** have no rooms, so no rows and no grants to move. **pebblestone** writes `config/chat.yaml` when it takes the slice.
 
-
-Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hooves/master-project#380; consumer: caspo, from its fleet-shell survey at caspo `03ab580a`). Takes `@poodle64/ui` at the release that carries its Unreleased page kit (`Breadcrumbs`, `PageContainer`, `PageSection`, `ContentSkeleton`, `Sheet`, `DocumentReader`); the template's floor moves to it with that release.
-
-### Changed
-
-- **The stamped frame declares the app's `nav` and passes it to the rail and the palette**, so a fresh stamp has a phone drawer and palette results on day one. The declaration sits in `app-frame.svelte`, the app's own file, with the grouping convention beside it. A separate stamped `lib/config/navigation.ts` would be owed byte-identical until the sanctioned per-app list names it, so a nav that outgrows the frame moves to the app's own `$lib/config/navigation.ts` and is imported.
-- **`measure` comes from route data**: the frame renders `measure={page.data.measure ?? 'wide'}` beside `padded`, and `app.d.ts` types `PageData` (`title`, `measure`, `padded`). Settings and members declare `page`. Each app's table of path regexes in its frame retires.
-- **`DESIGN.md` says what the shell is.** It names one composition with no `variant` or `content` prop, gives the page parts table and the type scale by role, and states body type as Avenir Next, else Hanken Grotesk.
-- **The drift gate counts `sheet` a primitive**, so a surface brief need not name it, and an app's vendored `components/ui/sheet/` now fails `vendored-copy`.
-
-### Fixed
-
-- **A name the identity provider repeats is held once.** Authentik holds one entitlement object per name per application binding, so the forwarded header repeats a name for every binding that grants it (caspo's operator: 15 names, five repeats). `_parse_entitlements` keeps the first of each, in order, so `/api/users/me` and every module gate see each name once.
-- **`/settings` lands on the first settings page even when its redirect is dropped.** A navigation or invalidation that takes SvelteKit's token while the redirect loads aborts it, and the page stayed on `/settings` (caspo's E2E, two runs in three). While the index is still shown at its own path and nothing else is navigating, it asks again, up to three times; a link the reader followed meanwhile wins, and a cancelled redirect stays cancelled.
-
-### An app taking these
+### The page kit, for an app taking it
 
 - **Nav:** pass `{nav}` to `AppShell` and `CommandPalette` in `app-frame.svelte` (eight, godswood and caspo already do).
 - **Measure:** delete the frame's regex table, render `measure={page.data.measure ?? 'wide'}`, and return `{ measure }` from each route group's `+layout.ts` (or a route's `+page.ts`) that differed. Take `app.d.ts` with the release.
@@ -63,7 +61,6 @@ Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hoo
 - **Sheet:** caspo's vendored `components/ui/sheet/` becomes a `vendored-copy` finding, so import `@poodle64/ui/sheet`. Its vendored `sidebar/` serves a second navigation column the shell has no slot for. The strategy chapter's contents become DocumentReader's, and the working-papers and ID26 trees become the papers index page and the rail's `children`.
 - **Loading:** a hand-sized Skeleton region becomes `ContentSkeleton`.
 - **Entitlements and the settings redirect:** both files are factory-owned (`api/users/dependencies.py`, `routes/(protected)/settings/+page.svelte`); take them with the release. caspo's local guard and test on its `foreman/wt-84b163ad` branch come out once it has.
-
 
 ## [2026.10.50] - 2026-10-18
 
