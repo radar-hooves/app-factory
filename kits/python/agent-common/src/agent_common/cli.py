@@ -227,7 +227,8 @@ def argv(
 ) -> list[str]:
     """The exact command line. Split out so a test can assert it without a subprocess.
 
-    A chat turn passes only `question` and `resume`. `session_id` and `resume`
+    A chat turn passes only `question` and `resume`; every command carries an
+    `--append-system-prompt` naming the persona and service, then any the caller adds. `session_id` and `resume`
     are mutually exclusive the way the CLI's own `--session-id`/`--resume`
     are: the former MINTS an id before the CLI has run at all, the latter
     continues one already minted.
@@ -274,8 +275,11 @@ def argv(
         # home. Measured: a developer's system/init listed ninety fleet
         # servers beside the persona's own two.
         command += ["--mcp-config", str(config), "--strict-mcp-config"]
-    if append_system_prompt:
-        command += ["--append-system-prompt", append_system_prompt]
+    # Always present: with it the CLI's system prompt opens "You are Claude Code
+    # ...", the identity Anthropic's subscription path (a Max seat behind the
+    # gateway) requires to serve Sonnet and Opus 5; without it that path 429s.
+    identity = f"You are {persona.name}, the {settings.service} service's agent."
+    command += ["--append-system-prompt", f"{identity}\n\n{append_system_prompt}" if append_system_prompt else identity]
     if json_schema is not None:
         command += ["--json-schema", json.dumps(json_schema)]
     if model:
