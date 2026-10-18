@@ -4,6 +4,7 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
+	import { dynamicPageTitle } from '$lib/page-title.svelte';
 
 	// What every route needs, signed in or not. The signed-in app — the shell,
 	// the session guard, the workspace — is (protected)/+layout.svelte, so a route that
@@ -11,6 +12,7 @@
 	// still gets the styles, the mode and the toasts from here.
 	let { children } = $props();
 
+	// A page titled by fetched data sets it with usePageTitle; load's title is the fallback.
 	// Page title: "Page Name — {% endraw %}{{ project_title }}{% raw %}" or bare app name. This is the
 	// title a reader actually sees; app.html's is only the pre-hydration fallback,
 	// so both take the same derived display name.
@@ -21,7 +23,7 @@
 	// failed `pnpm lint` on a fresh stamp of a short one. Ignoring the line is
 	// the only form stable at every length.
 	// prettier-ignore
-	let pageTitle = $derived(page.data.title ? `${page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
+	let pageTitle = $derived((dynamicPageTitle() ?? page.data.title) ? `${dynamicPageTitle() ?? page.data.title} — {% endraw %}{{ project_title }}{% raw %}` : '{% endraw %}{{ project_title }}{% raw %}');
 </script>
 
 <svelte:head>
