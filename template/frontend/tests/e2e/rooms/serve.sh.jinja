@@ -23,5 +23,5 @@ uv run python tests/support/fake_library.py --port 18766 --pace 0.05 &
 uv run python tests/support/fake_authentik.py --port 18767 \
   --client {{ project_name }}=fake-exchange-secret --service library={{ project_name }} &
 trap 'kill 0' EXIT
-uv run alembic upgrade head
+uv run alembic upgrade heads
 uv run uvicorn {{ package_name }}.server:app --host 127.0.0.1 --port {{ backend_port }}

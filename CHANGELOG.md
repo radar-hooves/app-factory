@@ -6,6 +6,19 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.49] - 2026-10-18
+
+Need: an app that takes a release carrying a migration gets a chain that applies, whatever its own migrations are (radar-hooves/master-project#380; consumer: caspo). caspo, godswood, eight and the library each repointed `agent_lesson_reports_revision` by hand on taking 2026.10.48.
+
+### Changed
+
+- **Factory migrations are a branch, not a link in the app's chain.** From the next factory migration, the first sets `down_revision = None`, `branch_labels = ("factory",)` and `depends_on = "e1f7a3b4c5d6"` (the last revision chained by hand); later ones chain onto the factory branch only. No factory migration names an app revision, so `copier update` needs no repointing. `docs/development/migrations.md`; `tests/migrations/test_migration_branch.py` holds the rule. Proved on a scratch app at 2026.10.48 with its own migration, updated to a release carrying a factory-branch migration: no conflict, `alembic upgrade heads` applied both on the existing and a fresh database.
+- **Everything that migrates runs `alembic upgrade heads`** (`entrypoint.sh`, `conftest.py`, the rooms e2e server, README), and `conftest.py` checks the database against `get_heads()`. A second head is normal once a factory-branch migration arrives; `upgrade head` refuses it.
+
+### Apps already on 2026.10.48
+
+Nothing to repoint: no factory-branch migration exists yet, so the chain is unchanged. Take the release for the `heads` change. An app with its own `upgrade head` (godswood's `run-from-source/run.sh`) or `get_current_head()` (godswood's admin config router, custom e2e servers) moves them to `heads` / `get_heads()` before the first factory-branch migration. New app migrations use `alembic revision --head <its head>`.
+
 ## [2026.10.48] - 2026-10-18
 
 Need: a placed element always loads, and the elements build survives Vite 8 (radar-hooves/master-project#380; consumer: core-memory).
