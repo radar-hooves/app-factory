@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.48] - 2026-10-18
+
+Need: a placed element always loads, and the elements build survives Vite 8 (radar-hooves/master-project#380; consumer: core-memory).
+
+### Fixed
+
+- **`/elements.js` and `/elements.d.ts` always send `Vary: Origin`.** The CORS middleware varied only a request that named an `Origin` (live on the library: none without one), so a browser that fetched the script for the app's own page cached a copy with no CORS header and replayed it to another app's page, whose module import then failed and the element never loaded. Measured on the library's live `/elements.js` 18/10/2026. An app takes this release to stop it; `<library-catalogue>` on eight and `<casefile-matters>` on godswood were exposed.
+- **The elements build's stylesheet stub is CSS, not JS.** Vite 8 minifies a `.css` module as CSS and failed the build on the stub's JS body; it is now an empty comment, which Vite 7 and 8 both export as an empty string. Built and checked on a scratch stamp under Vite 7.3 and 8.3; the old stub fails the build on 8.
+
 ## [2026.10.47] - 2026-10-18
 
 Need: a stamp passes its own commit gates without an exception (radar-hooves/master-project#380; consumer: casefile).

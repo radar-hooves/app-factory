@@ -25,8 +25,11 @@ from {{ package_name }}.config import Settings
 from {{ package_name }}.config.paths import frontend_build_dir
 from {{ package_name }}.exceptions import NotFoundError
 
-# Short: the URL never changes across a release.
+# Short: the URL never changes across a release. Vary: Origin always, since the
+# CORS middleware adds it only to a request that carries an Origin, and a copy
+# cached from the app's own page would otherwise be replayed, CORS-less, to another's.
 _CACHE_CONTROL = "public, max-age=300"
+_VARY = "Origin"
 _SIGNED_IN = "<!doctype html><title>Signed in</title><p>Signed in. You can close this page.</p>"
 
 
@@ -37,7 +40,7 @@ def register_elements(app: FastAPI, settings: Settings) -> None:
         path = frontend_build_dir() / name
         if not path.is_file():
             raise NotFoundError("This app serves no elements.")
-        return FileResponse(path, media_type=media_type, headers={"Cache-Control": _CACHE_CONTROL})
+        return FileResponse(path, media_type=media_type, headers={"Cache-Control": _CACHE_CONTROL, "Vary": _VARY})
 
     @app.api_route("/elements.js", methods=["GET", "HEAD"], include_in_schema=False)
     def elements_script() -> FileResponse:

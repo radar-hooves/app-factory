@@ -78,3 +78,15 @@ async def test_the_built_elements_reach_an_origin_that_may_place_them(build):
     assert script.headers["content-type"].startswith("text/javascript")
     assert script.headers["access-control-allow-origin"] == PLACER
     assert (await _get(app, "/elements.d.ts")).text == "export {};"
+
+
+async def test_the_built_elements_vary_on_origin_whatever_the_cors_middleware_does(build):
+    """The middleware varies only a request that names an Origin (older Starlette) or only when configured:
+    a copy cached from the app's own page must never be replayed, CORS-less, to a placing page."""
+    (build / "elements.js").write_text("export {};")
+    (build / "elements.d.ts").write_text("export {};")
+    for app in (_app(cors_origins=PLACER), _app(cors_origins="")):
+        for path in ("/elements.js", "/elements.d.ts"):
+            for headers in ({}, {"Origin": PLACER}):
+                response = await _get(app, path, headers=headers)
+                assert "origin" in response.headers["vary"].lower(), (path, headers)

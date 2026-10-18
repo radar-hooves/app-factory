@@ -70,7 +70,8 @@ function kitSources(): Plugin {
 				{
 					name: 'no-stylesheet',
 					enforce: 'pre',
-					load: (id) => (id.split('?')[0]?.endsWith(stylesheet) ? 'export default ""' : undefined)
+					// CSS, not JS: Vite 8 minifies a `.css` module as CSS, which a JS body breaks; `?inline` still exports it as a string.
+					load: (id) => (id.split('?')[0]?.endsWith(stylesheet) ? '/* none */' : undefined)
 				},
 				svelte({ compilerOptions: { customElement: true } }),
 				{
