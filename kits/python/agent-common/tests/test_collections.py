@@ -29,8 +29,9 @@ def library() -> Iterator[respx.MockRouter]:
         yield router
 
 
-def _summary(name: str, *, profile: dict[str, Any] | None, documents_to: str | None) -> dict[str, Any]:
+def _summary(name: str, *, profile: dict[str, Any] | None, documents_to: str | None, **display: str) -> dict[str, Any]:
     return {
+        **display,
         "id": 1,
         "name": name,
         "pipeline": "text",
@@ -82,13 +83,19 @@ async def test_the_collections_a_person_may_read_come_back_with_their_summaries_
     route = library.get("/collections").respond(
         200,
         json=[
-            _summary("adf-pay", profile={"summary": " Pay, allowances and leave. "}, documents_to="2026-09-29"),
+            _summary(
+                "adf-pay",
+                profile={"summary": " Pay, allowances and leave. "},
+                documents_to="2026-09-29",
+                title=" ADF pay ",
+                description="Rates and leave.",
+            ),
             _summary("bare", profile=None, documents_to=None),
         ],
     )
 
     assert await _collections().list() == [
-        Collection("adf-pay", "Pay, allowances and leave.", date(2026, 9, 29)),
+        Collection("adf-pay", "Pay, allowances and leave.", date(2026, 9, 29), "ADF pay", "Rates and leave."),
         Collection("bare", "", None),
     ]
     assert route.calls.last.request.headers["authorization"] == "Bearer test-bearer"

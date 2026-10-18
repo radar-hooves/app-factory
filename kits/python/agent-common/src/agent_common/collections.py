@@ -20,6 +20,7 @@ import contextlib
 import datetime
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from library import CallerApi, Configuration, QueryRequest
 from library.exceptions import NotFoundException
@@ -38,6 +39,12 @@ _NO_PASSAGES = (
     f"{PASSAGES_START}, retrieved for this question: none were found. "
     "Say plainly that the collections do not answer it, and do not answer from memory."
 )
+
+
+def _display(summary: Any, key: str) -> str:
+    """A display field of a listing row: declared on the client's model, else the undeclared key it keeps."""
+    value = getattr(summary, key, None) or getattr(summary, "additional_properties", {}).get(key)
+    return str(value or "").strip()
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,8 +114,8 @@ class Collections:
                 name=summary.name,
                 summary=str((summary.profile or {}).get("summary") or "").strip(),
                 documents_to=summary.documents_to,
-                title=str(getattr(summary, "title", None) or "").strip(),
-                description=str(getattr(summary, "description", None) or "").strip(),
+                title=_display(summary, "title"),
+                description=_display(summary, "description"),
             )
             for summary in summaries
         ]

@@ -4,9 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [2026.10.52] - 2026-10-18
+## [2026.10.52] - 2026-10-19
 
-Need: a persona turn served when the gateway routes it to a Claude Max seat (radar-hooves/caspo#183; consumer: caspo).
+Need: a persona turn served when the gateway routes it to a Claude Max seat (radar-hooves/caspo#183), and a chat page that never says "Milton" (radar-hooves/caspo#191, master-project#380); consumer: caspo.
+
+### Added
+
+- **`GraphCanvas` joins the dots**: `path` lights a route of nodes and edges, `GraphEdge.style: 'dashed'` draws a weaker link, and a Nodes disclosure lists every visible node for keyboard and screen reader. `@poodle64/ui` 2026.10.19.
+- **`usePageTitle`**: a page titled by fetched data sets the tab title for the root layout, `load`'s title the fallback.
+
+### Changed
+
+- **The scope chip shows a collection's title, with its description as the hover**, never the retrieval summary. `agent_common.Collection` gains `title` and `description` from the library's caller listing; `CollectionRead` and the chat `Collection` follow; `@poodle64/librarian` 2026.10.1 (`CollectionChoice` is `{ name, title?, description? }`, `summary` gone).
+- **Past 2560px the root size grows with the screen**, so type and the shell's measures scale on a 4K display.
 
 ### Fixed
 
