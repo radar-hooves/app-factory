@@ -1,5 +1,5 @@
 <!--
-	A test app's own turn (`RoomExtensions.Turn`): the package's own while an
+	A test app's own turn (`ChatExtensions.Turn`): the package's own while an
 	answer is written; once it settles, the question, the answer as unboxed
 	prose with its [n] marks taken out, a pill per source named by its title
 	and section, and the package's share control and answer mark. Built from
@@ -12,9 +12,9 @@
 	import AnswerShare from '@poodle64/librarian/answer-share';
 	import Markdown from '@poodle64/librarian/markdown';
 	import type { TextBlock } from '@poodle64/librarian/transcript';
-	import type { Room } from '$lib/agent/rooms';
+	import type { Persona } from '$lib/agent/chat';
 
-	let { room, ...turn }: AgentTranscriptProps & { room: Room } = $props();
+	let { persona, ...turn }: AgentTranscriptProps & { persona: Persona } = $props();
 
 	const prose = $derived(
 		turn.blocks
@@ -27,7 +27,7 @@
 </script>
 
 {#if settled}
-	<article class="flex flex-col gap-3" data-testid="app-turn" data-room={room.id}>
+	<article class="flex flex-col gap-3" data-testid="app-turn" data-persona={persona.id}>
 		<p class="bg-primary text-primary-foreground max-w-[85%] self-end rounded-xl px-4 py-2">
 			{turn.question}
 		</p>

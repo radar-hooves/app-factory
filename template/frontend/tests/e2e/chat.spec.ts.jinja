@@ -1,23 +1,23 @@
 import { expect, request, test, type Page } from '@playwright/test';
 import { ok, readJson } from './api';
 
-// Rooms, driven as a person drives them (app-factory docs/design/agent-console.md, step 4's
-// proof): a persona room answered by the suites' fake CLI and a library room
-// answered by the fake library, over the backend `tests/e2e/rooms/serve.sh`
-// starts. The browser's person holds both rooms:
+// Chat, driven as a person drives it (app-factory docs/design/agent-console.md, step 4's
+// proof): a persona answered by the suites' fake CLI alone, and one that first
+// reads collections from the fake library as the person, over the backend
+// `tests/e2e/chat/serve.sh` starts. The browser's person holds both:
 //
-//   {{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS='example|room-helper|room-manual' pnpm exec playwright test rooms
+//   {{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS='example|chat-helper|chat-outrider' pnpm exec playwright test chat
 //
 // Every request carries the person's `x-authentik-jwt` as nginx forwards it,
 // the subject the fake Authentik trades for the library's token.
 //
 // The tests run in order and share one person's conversations and allowance.
-// With ROOMS_SCREENSHOTS set to a directory, the last one photographs the pages
+// With CHAT_SCREENSHOTS set to a directory, the last one photographs the pages
 // at 1440 and 390 wide in both themes.
 
 const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_BACKEND_TARGET ?? 'http://127.0.0.1:{{ backend_port }}';
-const SHOTS = process.env.ROOMS_SCREENSHOTS;
-const DEV_UID = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'e2e';
+const SHOTS = process.env.CHAT_SCREENSHOTS;
+const DEV_UID = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_UID ?? 'e2e-uid';
 /** What any signed-in person may reach; everything else, the people list included, needs a module
  *  (tests/test_route_walk.py). */
 const PERSON_FACING = [
@@ -25,7 +25,7 @@ const PERSON_FACING = [
 	'/api/workspaces',
 	'/api/feedback',
 	'/api/system',
-	'/api/agent/rooms',
+	'/api/agent/personas',
 	'/api/agent/conversations',
 	'/api/agent/quota'
 ];
@@ -37,7 +37,9 @@ type Conversation = {
 		question: string;
 		answer: string;
 		at: string | null;
-		depth?: string | null;
+		collection?: string | null;
+		citations?: { title: string }[];
+		mark?: { helpful: boolean; note: string | null } | null;
 		shared?: string | null;
 	}[];
 };
@@ -65,22 +67,22 @@ async function read(page: Page, id: string): Promise<Conversation> {
 }
 
 let helperConversation = '';
-let manualConversation = '';
+let outriderConversation = '';
 
-test('the rooms a person holds are the ones they can ask', async ({ page }) => {
+test('the personas a person holds are the ones they can ask', async ({ page }) => {
 	// The first page a fresh dev server serves waits on its dependency optimisation.
 	test.setTimeout(120_000);
-	await page.goto('/rooms');
+	await page.goto('/chat');
 	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible({
 		timeout: 60_000
 	});
-	await expect(page.getByRole('link', { name: /^Ask Milton about The Manual/ })).toBeVisible();
+	await expect(page.getByRole('link', { name: /^Ask Outrider/ })).toBeVisible();
 });
 
 test('an ask streams its answer and names the conversation in the address and the list', async ({
 	page
 }) => {
-	await page.goto('/rooms');
+	await page.goto('/chat');
 	await page.getByRole('link', { name: /^Ask The Helper/ }).click();
 	await ask(page, 'How is recreation leave accrued?');
 
@@ -93,7 +95,7 @@ test('an ask streams its answer and names the conversation in the address and th
 });
 
 test('a refresh mid-answer shows it still being answered, then the answer', async ({ page }) => {
-	await page.goto('/rooms/helper');
+	await page.goto('/chat/helper');
 	await ask(page, 'And long service leave?');
 	await expect(page.getByText('You asked: And long service leave?')).toBeVisible();
 	await expect(page).toHaveURL(/\?c=/);
@@ -112,14 +114,14 @@ test('a refresh mid-answer shows it still being answered, then the answer', asyn
 test('a link reopens a conversation on another device', async ({ browser }) => {
 	const device = await browser.newContext();
 	const page = await device.newPage();
-	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	await page.goto(`/chat/helper?c=${helperConversation}`);
 	await expect(page.getByText('How is recreation leave accrued?').first()).toBeVisible();
 	await expect(page.getByText('You asked: How is recreation leave accrued?')).toBeVisible();
 	await device.close();
 });
 
 test('rename, download and delete a conversation', async ({ page }) => {
-	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	await page.goto(`/chat/helper?c=${helperConversation}`);
 	const past = page.getByRole('region', { name: 'Past questions' });
 
 	await past.getByRole('button', { name: 'More: How is recreation leave accrued?' }).click();
@@ -150,13 +152,13 @@ test('rename, download and delete a conversation', async ({ page }) => {
 	);
 
 	// A link to it now says so, and leaves the address.
-	await page.goto(`/rooms/helper?c=${helperConversation}`);
+	await page.goto(`/chat/helper?c=${helperConversation}`);
 	await expect(page.getByText(/That conversation can't be opened/)).toBeVisible();
 	await expect(page).not.toHaveURL(/\?c=/);
 });
 
 test('stop ends an answer being written, and the question stays', async ({ page }) => {
-	await page.goto('/rooms/helper');
+	await page.goto('/chat/helper');
 	await ask(page, 'What about leave without pay?');
 	await expect(page.getByText('You asked: What about leave without pay?')).toBeVisible();
 	const id = conversationId(page);
@@ -172,15 +174,20 @@ test('stop ends an answer being written, and the question stays', async ({ page 
 	]);
 });
 
-test('a library room cites, opens the cited document and takes a mark', async ({ page }) => {
-	await page.goto('/rooms/manual');
-	await expect(page.getByText('Ask Milton about The Manual')).toBeVisible();
+test('a persona that reads collections cites, opens the cited document and takes a mark', async ({
+	page
+}) => {
+	await page.goto('/chat/outrider');
+	await expect(page.getByText('Ask about pay, leave and conditions of service.')).toBeVisible();
 	await expect(page.getByText(/Checked against the open record on .*2026\./)).toBeVisible();
 	await ask(page, 'How much recreation leave does a member accrue?');
 
-	await expect(page.getByText(/four weeks of recreation leave/)).toBeVisible();
+	await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
-	manualConversation = conversationId(page);
+	outriderConversation = conversationId(page);
+	const stored = (await read(page, outriderConversation)).turns[0];
+	expect(stored?.collection, 'asked across every collection').toBeNull();
+	expect(stored?.citations?.length, 'the passages it answered from are kept').toBeGreaterThan(0);
 
 	await page
 		.getByRole('button', { name: /The Manual, Part 5: Leave/ })
@@ -196,9 +203,13 @@ test('a library room cites, opens the cited document and takes a mark', async ({
 	await note.fill('Clear and quick.');
 	await note.locator('xpath=ancestor::form').getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByText('Thanks, noted.')).toBeVisible();
+	expect((await read(page, outriderConversation)).turns[0]?.mark).toEqual({
+		helpful: true,
+		note: 'Clear and quick.'
+	});
 });
 
-test('a shared answer opens read-only in the room it was asked in, until it is withdrawn', async ({
+test('a shared answer opens read-only on the persona it was asked of, until it is withdrawn', async ({
 	page
 }) => {
 	const person = (entitlements: string) =>
@@ -211,30 +222,30 @@ test('a shared answer opens read-only in the room it was asked in, until it is w
 				'x-authentik-jwt': `as:e2e-${entitlements}`
 			}
 		});
-	const colleague = await person('room-manual');
-	const outsider = await person('room-helper');
-	const api = `/api/agent/rooms/manual/answers/${manualConversation}/0`;
+	const colleague = await person('chat-outrider');
+	const outsider = await person('chat-helper');
+	const api = `/api/agent/outrider/answers/${outriderConversation}/0`;
 	try {
 		expect((await colleague.get(api)).status(), 'nothing is shared by default').toBe(404);
 
-		await page.goto(`/rooms/manual?c=${manualConversation}`);
+		await page.goto(`/chat/outrider?c=${outriderConversation}`);
 		await page.getByRole('button', { name: 'Share' }).first().click();
-		await expect(page.getByText(/anyone who can ask Milton here can open the link/)).toBeVisible();
-		const link = (await read(page, manualConversation)).turns[0]?.shared;
-		expect(link).toBe(`/rooms/manual/answers/${manualConversation}/0`);
+		await expect(page.getByText(/anyone who can ask Outrider here can open the link/)).toBeVisible();
+		const link = (await read(page, outriderConversation)).turns[0]?.shared;
+		expect(link).toBe(`/chat/outrider/answers/${outriderConversation}/0`);
 
 		expect((await readJson<{ question: string }>(colleague.get(api))).question).toBe(
 			'How much recreation leave does a member accrue?'
 		);
-		expect((await outsider.get(api)).status(), 'as the room itself refuses them').toBe(403);
+		expect((await outsider.get(api)).status(), 'as the chat itself refuses them').toBe(403);
 
 		await page.goto(link as string);
-		await expect(page.getByText(/four weeks of recreation leave/)).toBeVisible();
-		await expect(page.getByRole('button', { name: /The Manual, Part 5: Leave/ })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Ask Milton about The Manual' })).toBeVisible();
+		await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
+		await expect(page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first()).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Ask Outrider' })).toBeVisible();
 		await expect(composer(page)).toHaveCount(0);
 
-		await page.goto(`/rooms/manual?c=${manualConversation}`);
+		await page.goto(`/chat/outrider?c=${outriderConversation}`);
 		await page.getByRole('button', { name: 'Stop sharing' }).first().click();
 		await expect(page.getByRole('button', { name: 'Share' }).first()).toBeVisible();
 		expect((await colleague.get(api)).status()).toBe(404);
@@ -242,38 +253,63 @@ test('a shared answer opens read-only in the room it was asked in, until it is w
 		await expect(page.getByText('This answer is not shared')).toBeVisible();
 
 		// Shared again, for the photographs.
-		await ok(page.request.put(`/api/agent/conversations/${manualConversation}/turns/0/share`));
+		await ok(page.request.put(`/api/agent/conversations/${outriderConversation}/turns/0/share`));
 	} finally {
 		await colleague.dispose();
 		await outsider.dispose();
 	}
 });
 
-test('a library room offers Quick or Thorough; a persona room offers neither', async ({ page }) => {
-	await page.goto('/rooms/manual');
-	const group = page.getByRole('group', { name: /How hard Milton works/ });
+test('a person narrows a question to one collection, and a link can too', async ({ page }) => {
+	await page.goto('/chat/outrider');
+	const group = page.getByRole('group', { name: /Where Outrider looks/ });
 	await expect(group).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Quick' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(group.getByRole('button', { name: 'All your collections' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	// A collection is shown by what it holds, never by its name.
+	await expect(group.getByText('manual', { exact: true })).toHaveCount(0);
 
-	await page.getByRole('button', { name: 'Thorough' }).click();
+	await group.getByRole('button', { name: 'Conditions of service.' }).click();
+	await expect(page).toHaveURL(/[?&]collection=conditions\b/);
 	await ask(page, 'What about long service leave, in detail?');
-	await expect(page.getByText(/long service leave after ten years/)).toBeVisible();
-	// Priced in US dollars, since the factory's app.ts declares no currency of its own.
-	await expect(page.getByText(/^Thorough · .* · about US\$0\.03$/)).toBeVisible();
-	expect((await read(page, conversationId(page))).turns.at(-1)?.depth).toBe('thorough');
+	await expect(page.getByText(/long service leave, in detail/).first()).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	expect(page.url(), 'the collection stays in the address beside the conversation').toMatch(
+		/collection=conditions/
+	);
+	const narrowed = (await read(page, conversationId(page))).turns.at(-1);
+	expect(narrowed?.collection).toBe('conditions');
 
-	await page.goto('/rooms/helper');
-	await expect(page.getByRole('group', { name: /How hard/ })).toHaveCount(0);
-	await expect(page.getByText('Quick', { exact: true })).toHaveCount(0);
+	// A link that names one narrows the next question the same way.
+	await page.goto('/chat/outrider?collection=manual');
+	await expect(
+		page.getByRole('group', { name: /Where Outrider looks/ }).getByRole('button', {
+			name: 'Pay, allowances and leave.'
+		})
+	).toHaveAttribute('aria-pressed', 'true');
+
+	// A persona that reads no collections offers no choice.
+	await page.goto('/chat/helper');
+	await expect(composer(page)).toBeVisible();
+	await expect(page.getByRole('group', { name: /Where .* looks/ })).toHaveCount(0);
+
+	// The library refuses one the person may not read, as the page cannot offer it.
+	const refused = await page.request.post('/api/agent/outrider/ask', {
+		data: { question: 'x', collection: 'restricted' }
+	});
+	expect(refused.status()).toBe(200);
+	expect(await refused.text()).toContain('that collection is not one you can read');
 });
 
-// The library room's composer is the tallest, with its Quick or Thorough row.
+// The collections persona's composer is the tallest, with its picker row.
 // On a phone the report button shares its corner with Send (app-factory#29).
 test('on a phone, Send is clear of the report button', async ({ browser }) => {
 	const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
 	const page = await phone.newPage();
 	try {
-		await page.goto('/rooms/manual');
+		await page.goto('/chat/outrider');
 		const send = page.getByRole('button', { name: 'Send' });
 		const report = page.getByRole('button', { name: 'Report a problem' });
 		await expect(send).toBeVisible();
@@ -289,40 +325,40 @@ test('on a phone, Send is clear of the report button', async ({ browser }) => {
 		expect(apart, `Send ${JSON.stringify(s)}, the report button ${JSON.stringify(r)}`).toBe(true);
 
 		await ask(page, 'And on a phone?');
-		await expect(page.getByText(/On and on a phone: a member accrues/)).toBeVisible();
+		await expect(page.getByText(/on 'And on a phone\?': a member accrues/).first()).toBeVisible();
 	} finally {
 		await phone.close();
 	}
 });
 
-test('a link to another room shows that room, not the last one', async ({ page }) => {
-	await page.goto(`/rooms/manual?c=${manualConversation}`);
+test('a link to another persona shows that persona, not the last one', async ({ page }) => {
+	await page.goto(`/chat/outrider?c=${outriderConversation}`);
 	await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
 	// A link inside the app, as its own navigation offers one: the router keeps
-	// the page and changes the room under it.
+	// the page and changes the persona under it.
 	await page.evaluate(() => {
 		const link = document.createElement('a');
-		link.href = '/rooms/helper';
+		link.href = '/chat/helper';
 		link.textContent = 'To the helper';
 		document.body.append(link);
 	});
 	await page.getByRole('link', { name: 'To the helper' }).click();
-	await expect(page).toHaveURL(/\/rooms\/helper$/);
+	await expect(page).toHaveURL(/\/chat\/helper$/);
 	await expect(page.getByText('Ask the helper about leave, slowly enough')).toBeVisible();
 	await expect(page.getByText(/four weeks of recreation leave/)).toHaveCount(0);
-	await expect(page.getByText('Ask Milton about The Manual')).toHaveCount(0);
+	await expect(page.getByText('Ask about pay, leave and conditions of service.')).toHaveCount(0);
 });
 
 test('a question handed over by a link waits in the box, unsent', async ({ page }) => {
-	await page.goto('/rooms/helper?q=What%20about%20long%20service%20leave%3F');
+	await page.goto('/chat/helper?q=What%20about%20long%20service%20leave%3F');
 	await expect(composer(page)).toHaveValue('What about long service leave?');
-	await expect(page).toHaveURL(/\/rooms\/helper$/);
+	await expect(page).toHaveURL(/\/chat\/helper$/);
 });
 
 test('a spent allowance is shown, and the next question is refused', async ({ page }) => {
 	for (let asked = 0; asked < 12; asked += 1) {
-		const response = await page.request.post('/api/agent/rooms/manual/ask', {
-			data: { question: 'One more?', resume: manualConversation }
+		const response = await page.request.post('/api/agent/outrider/ask', {
+			data: { question: 'One more?', resume: outriderConversation }
 		});
 		if (response.status() === 429) break;
 		expect(response.status()).toBe(200);
@@ -332,39 +368,40 @@ test('a spent allowance is shown, and the next question is refused', async ({ pa
 	);
 	expect(quota.reached).toBe(true);
 
-	await page.goto('/rooms/helper');
+	await page.goto('/chat/helper');
 	await expect(page.getByText(/reached today's fair-use limit/)).toBeVisible();
 	await composer(page).fill('Just one more?');
 	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByText('You asked: Just one more?')).toBeHidden();
-	const refused = await page.request.post('/api/agent/rooms/helper/ask', {
+	const refused = await page.request.post('/api/agent/helper/ask', {
 		data: { question: 'x' }
 	});
 	expect(refused.status()).toBe(429);
 	expect(Number(refused.headers()['retry-after'])).toBeGreaterThan(0);
 });
 
-test('a person granted one room is refused everything else', async () => {
+test('a person invited to chat with one persona is refused everything else', async () => {
 	const person = await request.newContext({
 		baseURL: BACKEND,
 		extraHTTPHeaders: {
-			'x-authentik-uid': 'e2e-rooms-only',
-			'x-authentik-username': 'e2e-rooms-only',
-			'x-authentik-entitlements': 'room-helper'
+			'x-authentik-uid': 'e2e-chat-only',
+			'x-authentik-username': 'e2e-chat-only',
+			'x-authentik-entitlements': 'chat-helper'
 		}
 	});
 	try {
-		const rooms = await readJson<{ id: string }[]>(person.get('/api/agent/rooms'));
-		expect(rooms.map((r) => r.id)).toEqual(['helper']);
-		await ok(person.get('/api/agent/rooms/helper/conversations'));
+		const personas = await readJson<{ id: string }[]>(person.get('/api/agent/personas'));
+		expect(personas.map((p) => p.id)).toEqual(['helper']);
+		await ok(person.get('/api/agent/helper/conversations'));
 		for (const path of [
-			'/api/agent/rooms/manual/conversations',
-			'/api/agent/rooms/manual/documents/1042'
+			'/api/agent/outrider/conversations',
+			'/api/agent/outrider/collections',
+			'/api/agent/outrider/documents/1042'
 		]) {
 			expect((await person.get(path)).status(), path).toBe(403);
 		}
 		expect(
-			(await person.post('/api/agent/rooms/manual/ask', { data: { question: 'x' } })).status()
+			(await person.post('/api/agent/outrider/ask', { data: { question: 'x' } })).status()
 		).toBe(403);
 
 		const document = await readJson<{ paths: Record<string, Record<string, unknown>> }>(
@@ -390,13 +427,13 @@ test('a person granted one room is refused everything else', async () => {
 });
 
 test('the pages, photographed', async ({ browser }) => {
-	test.skip(!SHOTS, 'set ROOMS_SCREENSHOTS to a directory to photograph the pages');
+	test.skip(!SHOTS, 'set CHAT_SCREENSHOTS to a directory to photograph the pages');
 	test.setTimeout(120_000);
 	const views: [string, string][] = [
-		['index', '/rooms'],
-		['library', `/rooms/manual?c=${manualConversation}`],
-		['shared', `/rooms/manual/answers/${manualConversation}/0`],
-		['allowance', '/rooms/helper']
+		['index', '/chat'],
+		['collections', `/chat/outrider?c=${outriderConversation}`],
+		['shared', `/chat/outrider/answers/${outriderConversation}/0`],
+		['allowance', '/chat/helper']
 	];
 	const sizes: [number, number][] = [
 		[1440, 900],

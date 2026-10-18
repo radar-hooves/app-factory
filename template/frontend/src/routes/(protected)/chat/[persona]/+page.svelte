@@ -1,10 +1,12 @@
 <!--
-	One room: a person's conversations with its agent, a persona or Milton,
-	built from @poodle64/librarian's own `Chat` and components
-	(app-factory docs/design/agent-console.md). The address names the room and the
-	conversation (`?c=<id>`), so a link reopens it on any device, mid-answer
-	included, and a question another page hands over (`?q=`) waits in the box.
-	What differs per app arrives through `$lib/agent/app`, never an edit here.
+	One persona: a person's conversations with it, built from
+	@poodle64/librarian's own `Chat` and components
+	(app-factory docs/design/agent-console.md). The address names the persona,
+	the conversation (`?c=<id>`) and the collection a question is narrowed to
+	(`?collection=<name>`), so a link reopens or narrows it on any device,
+	mid-answer included, and a question another page hands over (`?q=`) waits
+	in the box. What differs per app arrives through `$lib/agent/app`, never an
+	edit here.
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
@@ -13,7 +15,7 @@
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 	import { Chat } from '@poodle64/librarian/chat';
 	import { resolveCopy } from '@poodle64/librarian/copy';
-	import Composer, { type Depth } from '@poodle64/librarian/composer';
+	import Composer from '@poodle64/librarian/composer';
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
@@ -23,77 +25,97 @@
 	import { api } from '$lib/api';
 	import * as app from '$lib/agent/app';
 	import {
+		chatTransport,
+		collectionsOf,
 		documentsTo,
-		roomDocuments,
-		roomTransport,
-		type Room,
-		type RoomExtensions
-	} from '$lib/agent/rooms';
+		personaDocuments,
+		type Collection,
+		type ChatExtensions,
+		type Persona
+	} from '$lib/agent/chat';
 
-	const extensions: RoomExtensions = app;
+	const extensions: ChatExtensions = app;
 	/** The kind a briefing is asked as, and read back by. */
 	const BRIEFING = 'briefing';
 
-	// Currency and rate are this app's own (@poodle64/librarian README §Depth),
-	// declared in $lib/agent/app.ts; without one, the plain USD figure, which
-	// is always correct, merely unconverted.
+	// Currency and rate are this app's own, declared in $lib/agent/app.ts;
+	// without one, the plain USD figure, which is always correct, merely
+	// unconverted.
 	const formatCost = extensions.formatCost ?? ((usd: number) => `about US$${usd.toFixed(2)}`);
 
-	let room = $state<Room | null>(null);
+	let persona = $state<Persona | null>(null);
 	let chat = $state<Chat | null>(null);
+	let collections = $state<Collection[]>([]);
 	let missing = $state(false);
 	let listOpen = $state(false);
-	// undefined for a persona room, which has no reading budget or model to
-	// pick between; Quick, to start, the moment a library room is entered.
-	let depth = $state<Depth | undefined>(undefined);
 
 	// Derived, so each follows its own value: `page.params` is a new object on
 	// every navigation, a conversation named in the address included.
-	const roomId = $derived(page.params.room);
+	const personaId = $derived(page.params.persona);
 	const wanted = $derived(page.url.searchParams.get('c'));
 	const handed = $derived(page.url.searchParams.get('q')?.trim() || null);
-	const briefing = $derived(room ? extensions.briefing?.(room) : undefined);
-	const who = $derived(room?.library ? 'Milton' : (room?.title ?? ''));
-	const copy = $derived(room ? extensions.copy?.(room) : undefined);
+	// The address names a collection the library did not list for this person
+	// as no collection: the question then goes across every one they may read.
+	const collection = $derived.by(() => {
+		const named = page.url.searchParams.get('collection');
+		return collections.some((c) => c.name === named) ? (named ?? undefined) : undefined;
+	});
+	const briefing = $derived(persona ? extensions.briefing?.(persona) : undefined);
+	const who = $derived(persona?.name ?? '');
+	const copy = $derived(persona ? extensions.copy?.(persona) : undefined);
 	const words = $derived(resolveCopy(copy, who));
 	const scope = $derived.by(() => {
-		if (!room?.library) return undefined;
-		// How current, beside what: a miss on yesterday's news then reads as
-		// dated rather than broken.
-		const from = `Milton answers from ${room.sources.join(', ')}.`;
-		const held = room.not_held ? `${from} He does not hold ${room.not_held}.` : from;
-		return room.documents_to ? `${held} ${documentsTo(room.documents_to)}` : held;
+		if (!persona) return undefined;
+		// How current, beside what is not held: a miss on yesterday's news then
+		// reads as dated rather than broken. The oldest check among the
+		// collections a question reaches is the one that bounds the answer.
+		const reached = collection ? collections.filter((c) => c.name === collection) : collections;
+		const dates = reached.map((c) => c.documents_to);
+		const oldest = dates.length > 0 && dates.every(Boolean) ? dates.toSorted()[0] : null;
+		const held = persona.not_held ? `${who} does not hold ${persona.not_held}.` : '';
+		return [held, oldest ? documentsTo(oldest) : ''].filter(Boolean).join(' ') || undefined;
 	});
 
-	// SvelteKit keeps this page across `/rooms/<id>`, so the room is read from
-	// the address whenever it changes, never once: a link to another room
-	// leaves this one's conversation and starts that room's.
+	/** This page's address with the conversation named (or none), keeping the collection. */
+	function address(conversation?: string | null): string {
+		const query = new URLSearchParams();
+		if (collection) query.set('collection', collection);
+		if (conversation) query.set('c', conversation);
+		const text = query.toString();
+		return text ? `?${text}` : page.url.pathname;
+	}
+
+	// SvelteKit keeps this page across `/chat/<id>`, so the persona is read from
+	// the address whenever it changes, never once: a link to another persona
+	// leaves this one's conversation and starts that persona's.
 	$effect(() => {
-		const id = roomId;
+		const id = personaId;
 		untrack(() => void enter(id));
 	});
 
 	async function enter(id: string | undefined) {
 		chat?.new();
 		chat = null;
-		room = null;
+		persona = null;
+		collections = [];
 		missing = false;
 		listOpen = false;
-		depth = undefined;
-		const { data } = await api.GET('/api/agent/rooms');
-		if (roomId !== id) return;
-		const found = data?.find((r) => r.id === id) ?? null;
+		const { data } = await api.GET('/api/agent/personas');
+		if (personaId !== id) return;
+		const found = data?.find((p) => p.id === id) ?? null;
 		missing = found === null;
 		if (!found) return;
+		const listed = found.collections ? await collectionsOf(found).catch(() => []) : [];
+		if (personaId !== id) return;
 		const card = extensions.briefing?.(found);
-		chat = new Chat(roomTransport(found), {
+		chat = new Chat(chatTransport(found), {
 			artefact: (kind) =>
 				kind === BRIEFING && card
 					? { title: card.title, summary: card.summary, isAnswer: true }
 					: undefined
 		});
-		room = found;
-		depth = found.library ? 'quick' : undefined;
+		collections = listed;
+		persona = found;
 		void chat.list();
 	}
 
@@ -109,20 +131,26 @@
 		untrack(() => {
 			if (!want) {
 				current.new();
-				depth = room?.library ? 'quick' : undefined;
 				if (!question) return;
 				current.draft = question;
-				void goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
+				void goto(address(), { replaceState: true, keepFocus: true, noScroll: true });
 			} else if (want !== current.conversationId) void reopen(current, want);
 		});
 	});
 
-	// ...and a conversation the agent has just named goes into the address, so
+	// ...and a conversation the persona has just named goes into the address, so
 	// a refresh or a copied link finds it.
 	$effect(() => {
 		const named = chat?.conversationId;
 		if (named && named !== untrack(() => wanted)) {
-			void goto(`?c=${named}`, { replaceState: true, keepFocus: true, noScroll: true });
+			void goto(
+				untrack(() => address(named)),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			);
 		}
 	});
 
@@ -132,12 +160,20 @@
 		if (await current.open(id)) return;
 		if (page.url.searchParams.get('c') !== id) return;
 		toast.info("That conversation can't be opened. It may have been deleted.");
-		await goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
+		await goto(address(), { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
 	function fresh() {
 		listOpen = false;
-		void goto(page.url.pathname, { keepFocus: true, noScroll: true });
+		void goto(address(), { keepFocus: true, noScroll: true });
+	}
+
+	/** Narrows the next question to one collection, or to all of them, in the address. */
+	function narrow(name: string | undefined) {
+		const query = new URLSearchParams(page.url.searchParams);
+		if (name) query.set('collection', name);
+		else query.delete('collection');
+		void goto(`?${query}`, { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
 	async function remove(id: string): Promise<boolean> {
@@ -152,12 +188,12 @@
 		title="Nothing to ask here"
 		description="You have not been given access to this, or it is no longer offered."
 	/>
-{:else if !room || !chat}
+{:else if !persona || !chat}
 	<LoadingState />
 {:else}
 	{@const c = chat}
-	{@const r = room}
-	<!-- No room reserved here for the shell's report button: the composer lifts
+	{@const p = persona}
+	<!-- No space reserved here for the shell's report button: the composer lifts
 	     it clear of Send (`--ds-report-clearance`), and a reserve here as well
 	     lifts Send back under it on a phone (app-factory#29). -->
 	<div class="relative flex h-full min-h-0 flex-1">
@@ -170,7 +206,7 @@
 				conversations={c.conversations}
 				failed={c.listFailed}
 				current={c.conversationId}
-				href={(id) => `?c=${id}`}
+				href={(id) => address(id)}
 				onopen={() => (listOpen = false)}
 				onnew={fresh}
 				onrename={(id, title) => c.rename(id, title)}
@@ -195,19 +231,17 @@
 				turns={c.turns}
 				running={c.busy}
 				version={c.version}
-				waiting={c.waiting}
 				answering={c.answering}
 				name={who}
-				welcome={r.library ? `Ask Milton about ${r.title}` : r.blurb || undefined}
-				examples={r.examples}
+				welcome={p.blurb || undefined}
+				examples={p.examples}
 				onexample={(question) => (c.draft = question)}
 				{scope}
 				onregenerate={() => void c.again()}
-				onsuggest={(question) => void c.ask(question, undefined, depth)}
-				onmark={r.library ? (turn, verdict) => c.mark(turn, verdict) : undefined}
+				onmark={(turn, verdict) => c.mark(turn, verdict)}
 				onshare={(turn, share) => c.share(turn, share)}
-				loadDocument={r.library && !extensions.oncite ? roomDocuments(r) : undefined}
-				oncite={extensions.oncite ? (citation) => extensions.oncite!(r, citation) : undefined}
+				loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
+				oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
 				describeTool={extensions.describeTool}
 				turn={extensions.Turn ? presented : undefined}
 				lead={extensions.Home && !c.conversationId ? home : undefined}
@@ -223,12 +257,16 @@
 						sendWhileRunning={c.sendWhileRunning}
 						name={who}
 						{copy}
-						bind:depth
+						{collections}
+						{collection}
+						oncollection={narrow}
 						turnCount={c.turns.length}
 						onnewquestion={fresh}
-						onsubmit={() => void c.ask(undefined, undefined, depth)}
+						onsubmit={() => void c.ask(undefined, undefined, collection)}
 						onstop={() => void c.stop()}
-						onbriefing={briefing ? () => void c.ask(briefing.question, BRIEFING, depth) : undefined}
+						onbriefing={briefing
+							? () => void c.ask(briefing.question, BRIEFING, collection)
+							: undefined}
 					/>
 				{/snippet}
 			</Conversation>
@@ -237,13 +275,13 @@
 {/if}
 
 {#snippet presented(props: AgentTranscriptProps)}
-	{#if extensions.Turn && room}
-		<extensions.Turn {...props} {room} />
+	{#if extensions.Turn && persona}
+		<extensions.Turn {...props} {persona} />
 	{/if}
 {/snippet}
 
 {#snippet home()}
-	{#if extensions.Home && room}
-		<extensions.Home {room} />
+	{#if extensions.Home && persona}
+		<extensions.Home {persona} />
 	{/if}
 {/snippet}

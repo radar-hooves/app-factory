@@ -20,7 +20,7 @@ export interface paths {
          *     the projection is the three fields a picker needs. It exists because a
          *     grant names a user id (``POST /api/workspaces/{id}/members``), and an
          *     owner has to be able to find that id somewhere other than the database.
-         *     An account admitted only to a room has nobody to grant a seat to, and is
+         *     An account admitted only to chat has nobody to grant a seat to, and is
          *     refused (`entitlements.require_app_module`).
          */
         get: operations["listUsers"];
@@ -393,12 +393,7 @@ export interface paths {
         head?: never;
         /**
          * Update Setting
-         * @description Set `key`'s override to `data.value`.
-         *
-         *     Raises:
-         *         NotFoundError: nothing declared `key`.
-         *         ValidationError: the value fails the declared type, bounds, choices,
-         *             or (for `model_alias`) a reachable gateway's own alias list.
+         * @description Set `key`'s override to `data.value`: 404 if nothing declared it, 422 if the value is refused.
          */
         patch: operations["updateSetting"];
         trace?: never;
@@ -414,10 +409,7 @@ export interface paths {
         put?: never;
         /**
          * Reset Setting
-         * @description Delete `key`'s override, reverting it to its declared default.
-         *
-         *     Raises:
-         *         NotFoundError: nothing declared `key`.
+         * @description Delete `key`'s override, reverting it to its declared default: 404 if nothing declared it.
          */
         post: operations["resetSetting"];
         delete?: never;
@@ -446,7 +438,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/rooms": {
+    "/api/agent/personas": {
         parameters: {
             query?: never;
             header?: never;
@@ -454,75 +446,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Rooms
-         * @description The rooms this app offers that this caller is granted; none when the app offers none.
+         * List Personas
+         * @description The personas this app offers for chat that this caller is granted; none when the app offers none.
          */
-        get: operations["listRooms"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent/rooms/{room_id}/ask": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ask
-         * @description Ask the room's agent, streaming its events; JSON, or multipart with `files[]`.
-         *
-         *     The stream opens by naming the conversation. Refused before it opens:
-         *     404 for a `resume` that is not this person's conversation in this room,
-         *     409 while that conversation is being answered, 429 once today's
-         *     allowance is spent.
-         */
-        post: operations["askRoom"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent/rooms/{room_id}/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Conversations
-         * @description This person's conversations in the room, most recently active first.
-         */
-        get: operations["listRoomConversations"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent/rooms/{room_id}/documents/{document_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Document
-         * @description A document a library room cited, section by section; absent outside the room's collections.
-         */
-        get: operations["getRoomDocument"];
+        get: operations["listPersonas"];
         put?: never;
         post?: never;
         delete?: never;
@@ -606,11 +533,10 @@ export interface paths {
         get?: never;
         /**
          * Mark
-         * @description Mark answer `turn` (its place in the conversation as read) helpful or not, in a library room.
+         * @description Mark answer `turn` (its place in the conversation as read) helpful or not; a second mark replaces the first.
          *
-         *     The page counts every question asked; the library counts the answers it
-         *     holds. This maps one onto the other, so a question stopped before the
-         *     agent took it does not shift the mark onto a neighbour.
+         *     The app keeps the mark on the turn's own record. A settled answer only:
+         *     one the agent holds, and not the one still being written.
          */
         put: operations["markAnswer"];
         post?: never;
@@ -630,7 +556,7 @@ export interface paths {
         get?: never;
         /**
          * Share
-         * @description Share answer `turn` read-only with whoever may enter this room; nothing is shared until asked.
+         * @description Share answer `turn` read-only with whoever may chat with this persona; nothing is shared until asked.
          *
          *     A settled answer only: one the agent holds, and not the one still being
          *     written. Its `shared` is the page that reads it.
@@ -647,7 +573,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/rooms/{room_id}/answers/{conversation_id}/{turn}": {
+    "/api/agent/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quota
+         * @description Today's allowance across every persona.
+         */
+        get: operations["getAgentQuota"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collections
+         * @description The collections this person may read, as the library lists them; none for a persona that chats without any.
+         */
+        get: operations["listCollections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Ask the persona, streaming its events; JSON, or multipart with `files[]`.
+         *
+         *     The stream opens by naming the conversation. A persona that chats with
+         *     collections then retrieves first and sends a `citations` frame before
+         *     its own events. Refused before it opens: 404 for a `resume` that is not
+         *     this person's conversation with this persona, or a `collection` the
+         *     library does not list for them; 409 while that conversation is being
+         *     answered; 429 once today's allowance is spent.
+         */
+        post: operations["askPersona"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Conversations
+         * @description This person's conversations with the persona, most recently active first.
+         */
+        get: operations["listConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document
+         * @description A document the persona cited, section by section; absent when the library has none this person may read.
+         */
+        get: operations["getDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/{persona}/answers/{conversation_id}/{turn}": {
         parameters: {
             query?: never;
             header?: never;
@@ -667,26 +700,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/quota": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Quota
-         * @description Today's allowance across every room.
-         */
-        get: operations["getAgentQuota"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/agent/{persona}/jobs/{job_id}/watch": {
         parameters: {
             query?: never;
@@ -698,7 +711,7 @@ export interface paths {
          * Watch Job
          * @description Watch `job_id`'s events from the first, then follow them until its run settles, from any worker.
          *
-         *     The same frames a room's ask streams, so `@poodle64/librarian` renders
+         *     The same frames a chat's ask streams, so `@poodle64/librarian` renders
          *     either with one code path.
          *
          *     Raises:
@@ -966,6 +979,15 @@ export interface components {
             /** Read At */
             read_at: string | null;
         };
+        /** CollectionRead */
+        CollectionRead: {
+            /** Name */
+            name: string;
+            /** Summary */
+            summary: string;
+            /** Documents To */
+            documents_to?: string | null;
+        };
         /** ConversationRead */
         ConversationRead: {
             /** Id */
@@ -1171,6 +1193,13 @@ export interface components {
              */
             timestamp: string;
         };
+        /** MarkRead */
+        MarkRead: {
+            /** Helpful */
+            helpful: boolean;
+            /** Note */
+            note?: string | null;
+        };
         /** MarkRequest */
         MarkRequest: {
             /** Helpful */
@@ -1238,6 +1267,21 @@ export interface components {
             workspace: components["schemas"]["WorkspaceRead"];
             role: components["schemas"]["WorkspaceRole"];
         };
+        /** PersonaRead */
+        PersonaRead: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Blurb */
+            blurb: string;
+            /** Examples */
+            examples: string[];
+            /** Not Held */
+            not_held: string;
+            /** Collections */
+            collections: boolean;
+        };
         /** QuotaRead */
         QuotaRead: {
             /** Limit */
@@ -1260,25 +1304,6 @@ export interface components {
         RenameRequest: {
             /** Title */
             title: string;
-        };
-        /** RoomRead */
-        RoomRead: {
-            /** Id */
-            id: string;
-            /** Title */
-            title: string;
-            /** Blurb */
-            blurb: string;
-            /** Examples */
-            examples: string[];
-            /** Not Held */
-            not_held: string;
-            /** Sources */
-            sources: string[];
-            /** Library */
-            library: boolean;
-            /** Documents To */
-            documents_to?: string | null;
         };
         /**
          * SettingChangeRead
@@ -1377,8 +1402,9 @@ export interface components {
             }[];
             /** Kind */
             kind?: string | null;
-            /** Depth */
-            depth?: ("quick" | "thorough") | null;
+            /** Collection */
+            collection?: string | null;
+            mark?: components["schemas"]["MarkRead"] | null;
             /** Shared */
             shared?: string | null;
         };
@@ -2076,7 +2102,7 @@ export interface operations {
             };
         };
     };
-    listRooms: {
+    listPersonas: {
         parameters: {
             query?: never;
             header?: never;
@@ -2091,101 +2117,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoomRead"][];
-                };
-            };
-        };
-    };
-    askRoom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                room_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    listRoomConversations: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                room_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationSummary"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    getRoomDocument: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: number;
-                room_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["PersonaRead"][];
                 };
             };
         };
@@ -2441,6 +2373,151 @@ export interface operations {
             };
         };
     };
+    getAgentQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaRead"];
+                };
+            };
+        };
+    };
+    listCollections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    askPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     readSharedAnswer: {
         parameters: {
             query?: never;
@@ -2448,7 +2525,7 @@ export interface operations {
             path: {
                 turn: number;
                 conversation_id: string;
-                room_id: string;
+                persona: string;
             };
             cookie?: never;
         };
@@ -2470,26 +2547,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    getAgentQuota: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuotaRead"];
                 };
             };
         };
