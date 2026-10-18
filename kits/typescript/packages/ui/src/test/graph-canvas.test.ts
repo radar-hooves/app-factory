@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Probe from './graph-canvas.svelte';
+import { GraphScene } from '$lib/components/ui/graph-canvas/scene.js';
 
 const root = () => document.querySelector<HTMLElement>('[data-slot=graph-canvas]')!;
 const find = () => screen.getByLabelText('Find in Relations') as HTMLInputElement;
@@ -172,5 +173,71 @@ describe('GraphCanvas', () => {
 		await fireEvent.click(legend().getByRole('button', { name: /Sources/ }));
 		expect(selectedOut()).toBe('p-mara');
 		expect(card()).toBeInTheDocument();
+	});
+
+	it('reaches every node from a keyboard-focusable list, synced with the selection', async () => {
+		render(Probe);
+		const toggle = screen.getByRole('button', { name: /^Nodes/ });
+		expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		await fireEvent.click(toggle);
+		expect(toggle).toHaveAttribute('aria-expanded', 'true');
+		const list = within(screen.getByRole('list', { name: 'Nodes' }));
+		expect(list.getAllByRole('button')).toHaveLength(7);
+		await fireEvent.click(list.getByRole('button', { name: /Mara Quinn/ }));
+		expect(selectedOut()).toBe('p-mara');
+		expect(list.getByRole('button', { name: /Mara Quinn/ })).toHaveAttribute('aria-pressed', 'true');
+		expect(list.getByRole('button', { name: /Alice Marlow/ })).toHaveAttribute('aria-pressed', 'false');
+	});
+
+	it('leaves a hidden kind out of the node list', async () => {
+		render(Probe);
+		await fireEvent.click(legend().getByRole('button', { name: /People/ }));
+		const list = within(screen.getByRole('list', { name: 'Nodes', hidden: true }));
+		expect(list.queryByRole('button', { name: /Mara Quinn/, hidden: true })).not.toBeInTheDocument();
+	});
+
+	it('names the highlighted path for a screen reader, skipping unknown ids', () => {
+		render(Probe, { path: ['p-mara', 'o-marlow', 'x-missing'] });
+		const canvas = document.querySelector('canvas')!;
+		expect(canvas.getAttribute('aria-label')).toContain('Path: Mara Quinn, then Marlow Trust.');
+	});
+});
+
+describe('GraphScene route and edge style', () => {
+	const nodes = ['a', 'b', 'c', 'd'].map((id) => ({ id, label: id, kind: 'k' }));
+	const edges = [
+		{ source: 'a', target: 'b', label: 'supplies' },
+		{ source: 'c', target: 'b', style: 'dashed' as const },
+		{ source: 'c', target: 'd' }
+	];
+
+	it('lights only the edges joining consecutive path nodes, in either direction', () => {
+		const scene = new GraphScene();
+		scene.setData(nodes, edges);
+		scene.setRoute(['a', 'b', 'c']);
+		expect([...scene.routeNodes].map((n) => n.id)).toEqual(['a', 'b', 'c']);
+		expect(scene.routeEdges.size).toBe(2);
+		expect([...scene.routeEdges].some((e) => e.target.id === 'd')).toBe(false);
+		scene.setRoute([]);
+		expect(scene.routeEdges.size).toBe(0);
+	});
+
+	it('strokes dashed edges with a dash pattern and solid ones without', () => {
+		const scene = new GraphScene();
+		scene.setData(nodes, edges);
+		scene.nodes.forEach((n, i) => ((n.x = i * 40), (n.y = 0)));
+		scene.width = 400;
+		scene.height = 300;
+		scene.palette = { kinds: new Map(), fallback: '#888', ground: '#fff', ink: '#000', inkSoft: '#555', edge: '#999', font: 'sans-serif' };
+		const dashes: number[][] = [];
+		const ctx = new Proxy(
+			{ setLineDash: (d: number[]) => dashes.push(d), measureText: () => ({ width: 10 }) },
+			{ get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : () => undefined), set: () => true }
+		) as unknown as CanvasRenderingContext2D;
+		vi.stubGlobal('Path2D', class { moveTo() {} lineTo() {} quadraticCurveTo() {} closePath() {} rect() {} arc() {} });
+		scene.draw(ctx);
+		vi.unstubAllGlobals();
+		expect(dashes.some((d) => d.length === 2)).toBe(true);
+		expect(dashes.some((d) => d.length === 0)).toBe(true);
 	});
 });
