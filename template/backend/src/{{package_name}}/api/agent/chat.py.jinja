@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 #: A persona's id is a path segment and half an entitlement name.
 _ID = re.compile(r"\A[a-z0-9][a-z0-9-]{0,62}\Z")
+#: The slice's own first path segments, which a persona's routes would sit behind.
+_RESERVED = frozenset({"personas", "conversations", "quota"})
 #: What a persona that reads collections waits on.
 _LIBRARY_URL = "{{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL"
 
@@ -166,6 +168,8 @@ def _persona(persona_id: str, body: object, directories: set[str]) -> Persona:
 
     if not _ID.match(persona_id):
         raise refuse("an id is lowercase letters, digits and hyphens")
+    if persona_id in _RESERVED:
+        raise refuse(f"an id is not one of the chat's own route names ({', '.join(sorted(_RESERVED))})")
     if not isinstance(body, dict) or not str(body.get("name") or "").strip():
         raise refuse("needs a name")
     if persona_id not in directories:

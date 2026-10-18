@@ -1,6 +1,7 @@
 """A local persona asked, read back and forgotten through the one `Agent` interface."""
 
 import asyncio
+import dataclasses
 import json
 from typing import Any
 
@@ -96,6 +97,20 @@ async def test_passages_that_fail_end_the_turn_unasked(settings: cli.Settings, m
 
     with pytest.raises(ConnectionError):
         await _ask(LocalAgent(settings, milton), "How much leave?", passages=unreadable())
+
+
+async def test_a_cli_gone_before_its_question_is_written_ends_the_turn_with_one_error(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    gone = dataclasses.replace(settings, executable="false")
+    retrieved: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    asking = asyncio.create_task(_ask(LocalAgent(gone, milton), "How much leave?", passages=retrieved))
+    await asyncio.sleep(0.5)
+    retrieved.set_result(f"{PASSAGES_START}: none were found.")
+
+    events = await asking
+
+    assert [(event["type"], event["error"]) for event in events] == [(cli.ERROR_EVENT, "agent exited 1")]
 
 
 async def test_no_passages_asks_the_question_as_it_is(settings: cli.Settings, milton: Persona) -> None:

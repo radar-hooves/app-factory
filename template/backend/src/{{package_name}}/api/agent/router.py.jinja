@@ -238,11 +238,13 @@ async def ask(
     """Ask the persona, streaming its events; JSON, or multipart with `files[]`.
 
     The stream opens by naming the conversation. A persona that chats with
-    collections then retrieves first and sends a `citations` frame before
-    its own events. Refused before it opens: 404 for a `resume` that is not
-    this person's conversation with this persona, or a `collection` the
-    library does not list for them; 409 while that conversation is being
-    answered; 429 once today's allowance is spent.
+    collections then sends a `citations` frame before its own events; a
+    `collection` the library does not list for this person ends the turn
+    with an `agent_error` frame, unasked and uncharged. Refused before it
+    opens: 404 for a `resume` that is not this person's conversation with
+    this persona, or any `collection` for a persona that reads none; 409
+    while that conversation is being answered; 429 once today's allowance
+    is spent.
     """
     body, files = await _asked(request)
     agent, collections = await chat.for_turn(settings.agent, persona, asking)
