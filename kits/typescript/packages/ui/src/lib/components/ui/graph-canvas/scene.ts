@@ -128,8 +128,8 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 	/** Gravity follows the frame's shape, so a wide view lays out wide and a phone tall. */
 	setAspect(width: number, height: number): void {
 		const ratio = Math.min(Math.max(width / Math.max(height, 1), 0.4), 2.5);
-		this.gx.strength(0.05 / Math.sqrt(ratio));
-		this.gy.strength(0.05 * Math.sqrt(ratio));
+		this.gx.strength(0.05 * ratio ** -0.75);
+		this.gy.strength(0.05 * ratio ** 0.75);
 	}
 
 	/** Replace the data, keeping every surviving node where it is. */
@@ -166,7 +166,7 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			adj.get(b)?.add(a);
 		}
 		for (const s of byId.values()) {
-			s.r = s.node.size ?? Math.min(4 + 2.3 * Math.sqrt(s.degree), 24) + (s.node.emphasis ? 3 : 0);
+			s.r = s.node.size ?? Math.min(2.5 + 2.8 * Math.sqrt(s.degree), 26) + (s.node.emphasis ? 3 : 0);
 		}
 		// A newcomer starts beside the nodes it joins, so a live graph grows in
 		// place; with no placed neighbour, d3 seeds it on its phyllotaxis.
@@ -315,15 +315,8 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 		ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * tx, dpr * ty);
 		ctx.lineCap = 'butt';
 		ctx.lineJoin = 'round';
-		// Far out, a thousand curves read as straight lines and cost more to fill.
-		const curved = this.edges.length < 1500 || k >= 0.8;
 
-		// Edges: one batched path for the rest, one per colour for the lit ones.
-		const rest = new Path2D();
-		const restHeads = new Path2D();
-		const litPaths = new Map<string, { line: Path2D; head: Path2D }>();
-		const edgeLabels: SimEdge<N>[] = [];
-		const heads = this.directed && (k >= 0.9 || !!focus);
+		const shown: SimEdge<N>[] = [];
 		for (const e of this.edges) {
 			const a = e.source;
 			const b = e.target;
@@ -335,6 +328,24 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 				Math.min(a.y, b.y) > vy1
 			)
 				continue;
+			shown.push(e);
+		}
+		// Detail follows how many edges are on screen, not the zoom: past a
+		// thousand, curves read as straight lines and arrowheads as noise, and
+		// both cost more to fill than the rest of the frame.
+		const curved = shown.length < 1200;
+
+		// Edges: one batched path for the rest, one per colour for the lit ones.
+		const rest = new Path2D();
+		const restHeads = new Path2D();
+		const litPaths = new Map<string, { line: Path2D; head: Path2D }>();
+		const edgeLabels: SimEdge<N>[] = [];
+		const heads = this.directed && (shown.length < 500 || !!focus);
+		// A hub's relations crowd its own spokes; past a dozen the card lists them instead.
+		const relationWords = focus ? (this.adj.get(focus)?.size ?? 0) <= 12 : shown.length < 300;
+		for (const e of shown) {
+			const a = e.source;
+			const b = e.target;
 			const hot = !!focus && (a === focus || b === focus);
 			let path = rest;
 			let head = restHeads;
@@ -349,12 +360,12 @@ export class GraphScene<N extends GraphNode = GraphNode> {
 			path.moveTo(a.x, a.y);
 			if (curved || hot) path.quadraticCurveTo(cx, cy, b.x, b.y);
 			else path.lineTo(b.x, b.y);
-			if (heads && (hot || (!focus && k >= 0.9))) this.arrow(head, cx, cy, b, rad(b), k);
-			if (e.edge.label && (hot || (!focus && k >= 1.3))) edgeLabels.push(e);
+			if (heads && (hot || !focus)) this.arrow(head, cx, cy, b, rad(b), k);
+			if (e.edge.label && relationWords && (hot || !focus)) edgeLabels.push(e);
 		}
 		ctx.strokeStyle = P.edge;
 		ctx.fillStyle = P.edge;
-		ctx.globalAlpha = focus ? 0.07 : Math.min(0.7, 0.3 + 0.3 * k);
+		ctx.globalAlpha = focus ? 0.07 : Math.min(0.65, 0.12 + 0.35 * k);
 		ctx.lineWidth = 1 / k;
 		ctx.stroke(rest);
 		ctx.fill(restHeads);

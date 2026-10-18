@@ -74,6 +74,7 @@
 	let probe: HTMLSpanElement;
 	let panel = $state<HTMLDivElement | null>(null);
 	let card = $state<HTMLElement | null>(null);
+	let findField = $state<HTMLInputElement | null>(null);
 	let ctx: CanvasRenderingContext2D | null = null;
 
 	let query = $state('');
@@ -646,6 +647,11 @@
 	}
 
 	function onRootKey(ev: KeyboardEvent) {
+		if (ev.key === '/' && search && ev.target === canvas) {
+			ev.preventDefault();
+			findField?.focus();
+			return;
+		}
 		if (ev.key !== 'Escape') return;
 		if (query) query = '';
 		else if (selected) choose(null);
@@ -700,11 +706,11 @@
 	<span bind:this={probe} class="hidden" aria-hidden="true"></span>
 	<canvas
 		bind:this={canvas}
-		class="absolute inset-0 h-full w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+		class="absolute inset-0 h-full w-full touch-none outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
 		style:cursor
 		tabindex="0"
 		aria-roledescription="graph canvas"
-		aria-label={`${label}: ${summary}. Arrow keys pan, plus and minus zoom, 0 fits.`}
+		aria-label={`${label}: ${summary}. Arrow keys pan, plus and minus zoom, 0 fits${search ? ', slash finds' : ''}.`}
 		onkeydown={onCanvasKey}
 	></canvas>
 
@@ -721,13 +727,20 @@
 				/>
 				<Input
 					type="search"
+					bind:ref={findField}
 					bind:value={query}
 					placeholder="Find…"
 					aria-label={`Find in ${label}`}
 					autocomplete="off"
-					class="bg-background pl-8"
+					class="bg-background pr-8 pl-8"
 					onkeydown={onSearchKey}
 				/>
+				{#if !query}
+					<kbd
+						class="text-muted-foreground border-border pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded border px-1.5 font-mono text-[0.7rem] leading-4 @2xl:block"
+						aria-hidden="true">/</kbd
+					>
+				{/if}
 			</div>
 			{#if matches.length}
 				<ul class="-mt-1 flex flex-col" aria-label="Matches">
@@ -761,14 +774,14 @@
 						<button
 							type="button"
 							class={cn(
-								'hover:bg-accent flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-xs whitespace-nowrap transition-opacity @2xl:gap-2 @2xl:px-2 @2xl:text-sm',
-								off && 'opacity-50'
+								'hover:bg-accent flex w-full items-center gap-1.5 rounded-md border px-1.5 py-1 text-xs whitespace-nowrap transition-colors @2xl:gap-2 @2xl:px-2 @2xl:text-sm',
+								off ? 'text-muted-foreground border-dashed border-border [&_.ds-kind]:line-through' : 'bg-background/60 border-transparent'
 							)}
 							aria-pressed={!off}
 							onclick={() => toggleKind(row.kind.id)}
 						>
 							{@render swatch(row.kind.id, off)}
-							<span class="text-foreground">{row.kind.label}</span>
+							<span class={cn('ds-kind', !off && 'text-foreground')}>{row.kind.label}</span>
 							<span class="text-muted-foreground ml-auto pl-1 text-xs tabular-nums @2xl:pl-2">{formatNumber(row.count)}</span>
 						</button>
 					</li>

@@ -1357,3 +1357,30 @@ the switcher's menu, on `record`.
 | With no room for three panes the document fills the column's place, its page inside it | pane 788px in a 788px column |
 | With a 1576px row (1920px screen) the document is a third pane beside the column, nothing sideways | primary, column, document left to right; 0px overflow |
 | The switcher is raised with its chevron inside, opens on the open record with its search focused, and goes where the keyboard chooses | border 1px; highlighted 4. Banksia; `eum` then Enter reached `#/property/1` |
+
+## GraphCanvas (`?surface=graph`) — `harness/graph.mjs`
+
+3000 seeded nodes (`&n=` to change; people, organisations with group hubs, sources),
+on the page or, with `&shadow=1`, mounted in an open shadow root that adopts the
+compiled stylesheet as an element does. `window.__graph` is the handle: the last
+`selected` and `activated`, plus `api` (`fit`, `focus`, `locate`, `relayout`),
+`neighbours(id)` and `label(id)`.
+
+`node harness/graph.mjs` is standalone (port 4182, `GRAPH_PORT` to move it) and runs
+after `drive.mjs` in `test:browser`. Page mode and shadow mode, 1440x900, each:
+
+- the layout settles (240s ceiling; the seconds are printed) with no page errors
+- the canvas paints the person colour (computed `--ds-color-primary`, counted in the pixels)
+- a live `--ds-color-primary` change repaints in about a second; light/dark repaints
+- click selects and opens the card; Focus frames every neighbour clear of the card and find panel
+- drag pans by exactly the drag; wheel zoom holds the node under the pointer
+- find lists the match and Enter selects it; the legend hides and restores a kind
+- double-click activates; `+` zooms; Escape clears the selection
+
+Page mode only: a synthetic two-finger pinch at 390x844 with touch. Smoothness is
+reported, never asserted: the median and p95 rAF interval over 60 pan steps at
+1440x900 and 3840x2160. It is a software-raster number on whatever host runs it.
+
+`GRAPH_SHOTS=<dir>` writes rest views (390, 1440, 3840; light and dark), a focused
+node at 1440 dark and at 390 light, and a 3840 shadow-mode view, each taken
+800ms after the layout settles.

@@ -21,9 +21,28 @@
 		selections: number;
 		nodes: number;
 		edges: number;
-		api?: { fit(): void; focus(id: string): void; locate(id: string): { x: number; y: number } | null; relayout(): void };
+		ids: string[];
+		neighbours(id: string): string[];
+		label(id: string): string | undefined;
+		api?: { fit(): void; focus(id: string): Promise<void>; locate(id: string): { x: number; y: number } | null; relayout(): void };
 	};
-	const handle: Handle = { selected: null, activated: null, selections: 0, nodes: nodes.length, edges: edges.length };
+	const handle: Handle = {
+		selected: null,
+		activated: null,
+		selections: 0,
+		nodes: nodes.length,
+		edges: edges.length,
+		ids: nodes.map((n) => n.id),
+		label: (id) => nodes.find((n) => n.id === id)?.label,
+		neighbours: (id) => {
+			const out = new Set<string>();
+			for (const e of edges) {
+				if (e.source === id) out.add(String(e.target));
+				else if (e.target === id) out.add(String(e.source));
+			}
+			return [...out];
+		}
+	};
 	(window as unknown as { __graph: Handle }).__graph = handle;
 
 	const onselect = (n: GraphNode | null) => {

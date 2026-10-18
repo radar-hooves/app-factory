@@ -121,7 +121,7 @@
 		"registry:check": "node scripts/generate-registry.mjs --check",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "pnpm run build && vitest run",
-		"test:browser": "pnpm run harness:build && node harness/drive.mjs",
+		"test:browser": "pnpm run harness:build && node harness/drive.mjs && node harness/graph.mjs",
 		"prepublishOnly": "pnpm run build",
 		"harness:build": "vite build --config harness/vite.config.ts && tailwindcss -i harness/harness.css -o harness/dist/app.css --minify",
 		"harness:serve": "python3 -m http.server 4180 --directory harness/dist"
