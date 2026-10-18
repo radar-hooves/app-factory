@@ -303,7 +303,7 @@ def test_describe_change_clips_each_value_and_the_whole() -> None:
     clipped = lessons.describe_change({"a": long}, {"a": "z"}, lambda a, b: a == b)
     assert clipped is not None and long[:80] in clipped and long[:81] not in clipped
     many = {f"f{i:02}": "a" * 80 for i in range(40)}
-    whole = lessons.describe_change(many, {k: "b" * 80 for k in many}, lambda a, b: a == b)
+    whole = lessons.describe_change(many, dict.fromkeys(many, "b" * 80), lambda a, b: a == b)
     assert whole is not None and len(whole) <= 1500
 
 
