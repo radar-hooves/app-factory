@@ -12,8 +12,8 @@
  * it is a coin toss with a stylesheet.
  *
  * So it moves onto the shell, where there is exactly one place to say it and no
- * per-route decision left to get wrong. `none` is the default, so a shell that
- * never mentions it renders byte-identically.
+ * per-route decision left to get wrong. `grid` is the default: an opt-in house
+ * style measured who remembered it, not what the house looks like.
  *
  * It is one texture, not a menu. Both apps wanted the same picture, and the
  * axes they actually differed on — how dark the dots are, how the vignette is
@@ -25,10 +25,10 @@
  */
 
 /**
- * - `grid` — the house atmosphere: a dot-grid floor plus a corner vignette.
- * - `none` — no texture. The default, so omitting `texture` changes nothing.
+ * - `grid` — the house atmosphere: a dot-grid floor plus a corner vignette. The default.
+ * - `none` — no texture: the region exactly as it rendered before the feature.
  */
 export type ShellTexture = 'none' | 'grid';
 
-/** Every texture, the untextured default first — the order it is documented in. */
+/** Every texture, the untextured form first — the order it is documented in. */
 export const SHELL_TEXTURES = ['none', 'grid'] as const satisfies readonly ShellTexture[];

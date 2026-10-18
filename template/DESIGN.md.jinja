@@ -27,9 +27,9 @@ sources for any UI work in this repo:
   (`rules-library/stacks/sveltekit-frontend.md`)
 
 The package defines the binding constants for radius (`--ds-radius-lg:
-0.625rem`), typography (Fraunces / Hanken Grotesk / JetBrains Mono), status
-vocabulary (success / warning / error / info / neutral), colour space
-(oklch), and the `--ds-*` namespace.
+0.625rem`), typography (Fraunces display; Avenir Next, else Hanken Grotesk,
+body; JetBrains Mono code), status vocabulary (success / warning / error /
+info / neutral), colour space (oklch), and the `--ds-*` namespace.
 
 ## Brand primary
 
@@ -41,16 +41,54 @@ the comment inline).
 ## Shell
 
 `src/lib/app-frame.svelte` wraps every route under `routes/(protected)/` in
-`AppShell` (`variant="rail"`, the package default) with `content="standard"`. Sidebar and chart colours are the
-one surface the package leaves to each app — declared and registered in
-`app.css` alongside the primary override.
+`AppShell`: one composition in every app, a side rail (a drawer on a phone)
+and a top bar, with no variant to choose. The frame declares the app's `nav`
+and hands the same value to the rail and the command palette. A route says
+how wide its page may get, and whether it pads itself, in its load data:
+
+```ts
+// routes/(protected)/reports/+layout.ts
+import type { LayoutLoad } from './$types';
+export const load: LayoutLoad = () => ({ measure: 'page' });
+```
+
+`measure` is `prose`, `page`, `wide` (the frame's default) or `full`; `padded`
+defaults to true. The content texture is on by default. Sidebar and chart
+colours are the one surface the package leaves to each app, declared and
+registered in `app.css` alongside the primary override.
+
+## Pages
+
+Every route builds from the same parts, all from `@poodle64/ui`:
+
+| Part | Component |
+| --- | --- |
+| The page, at one rhythm | `PageContainer` |
+| Its title, trail, facts and actions | `PageHeader` (`breadcrumbs={[{ label, href }]}`) |
+| A section of it | `PageSection` |
+| A titled card | `Panel` |
+| A document to read | `DocumentReader` |
+| A region still loading | `ContentSkeleton`; a whole page waiting is `LoadingState` |
+| A panel over the page from an edge | `Sheet` |
+
+The type scale, by role:
+
+| Role | Utility | Size | Face |
+| --- | --- | --- | --- |
+| Page title | `text-display` | 1.75rem | display, semibold |
+| Section | `text-section` | 1.25rem | display, semibold |
+| Panel title, subsection | `text-body` | 0.9375rem | body, semibold |
+| Reading text | `text-base` | 1rem | body |
+| Body | `text-sm` | 0.875rem | body |
+| Facts, captions | `text-xs` | 0.75rem | body, muted |
+| Column head | `text-2xs`, uppercase | 0.6875rem | body, medium |
+
+A route sets no size of its own; it composes the component that owns the role.
 
 ## Adoption path
 
-To change the accent colour or shell variant:
+To change the accent colour:
 
 1. Edit the `--ds-color-primary` (and `--ds-color-ring`) values in
    `frontend/src/app.css`.
-2. Pass `variant="header"` to `AppShell` in `app-frame.svelte` if primary
-   navigation should live in the top bar instead of a rail.
-3. Update this file's `status` frontmatter field once the identity is settled.
+2. Update this file's `status` frontmatter field once the identity is settled.
