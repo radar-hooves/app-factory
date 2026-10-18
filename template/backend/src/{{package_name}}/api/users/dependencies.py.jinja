@@ -39,7 +39,12 @@ class Identity:
 
 
 def _parse_entitlements(request: Request, identity_settings: IdentitySettings) -> tuple[str, ...]:
-    """Split the pipe-delimited Application Entitlements header.
+    """Split the pipe-delimited Application Entitlements header, each name once.
+
+    Authentik holds one entitlement object per name per application binding, so
+    the header repeats a name once for every binding that grants it (caspo's
+    operator: 15 names, five of them repeats). The first of each is kept, in
+    order; a list with repeats breaks every consumer keyed on the name.
 
     An ABSENT header is not an empty one: it means the outpost is not sending
     entitlements at all, which closes every module gate. That is the safe reading,
@@ -47,7 +52,7 @@ def _parse_entitlements(request: Request, identity_settings: IdentitySettings) -
     outpost surfaces as a named cause rather than as an app that shows nothing.
     """
     raw = request.headers.get(identity_settings.authentik_entitlements_header, "")
-    return tuple(part.strip() for part in raw.split("|") if part.strip())
+    return tuple(dict.fromkeys(part.strip() for part in raw.split("|") if part.strip()))
 
 
 def _is_machine_principal(request: Request, identity_settings: IdentitySettings) -> bool:
