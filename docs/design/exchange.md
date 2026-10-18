@@ -34,10 +34,10 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
 ## What a stamped app gets
 
 - **`exchange.py`.** `Asking.token(audience)` (dependency `CurrentAsking`) mints for this request's person, or for the app itself when no audience is given. It mints once per audience per request, and refuses a token whose `sub` is not the request's `X-authentik-uid`. `Exchange.verified` and the `CurrentAsker` dependency verify a bearer minted for this app: RS256 from its own JWKS, its own `iss` and `aud`, unexpired, carrying `sub` and `client_id`. The JWKS is read one request at a time, again for an unknown `kid` at most once a minute, and at least every ten minutes, so a rotated-out key stops verifying. While it is unreachable a held key keeps answering, and a caller with none is told 503 until a retry is due five seconds on. A refused person (`invalid_grant`) is a 401, so the page signs in again. A refused app (its secret, or a service that does not federate it) or an unreachable Authentik is a 503 that names the cause in the log. No token or secret is logged.
-- **A library room asks as the person.** `rooms.agent` mints a token with the library as its audience (`<APP>_AGENT_LIBRARY_AUDIENCE`, default `library`) and hands it to `LibraryAgent`, so the app holds no library secret. The caller credential (`<APP>_AGENT_LIBRARY_TOKEN`, `<app>-library`) is gone.
+- **A persona that reads collections reads them as the person.** `chat.collections` mints a token with the library as its audience (`<APP>_AGENT_LIBRARY_AUDIENCE`, default `library`) and hands it to the kit's `Collections`, so the app holds no library secret and the library answers with that person's collections ([`agent-console.md`](agent-console.md) §Chat).
 - **A persona's turn carries `ASKER_TOKEN`,** minted for the app, in the run's environment and nowhere else. The persona's `.mcp.json` presents it as `"Authorization": "Bearer ${ASKER_TOKEN}"`.
-- **`/mcp` admits the person.** The bearer gate routes a token by its issuer. One from this app's own issuer is verified by the exchange alone, with no userinfo call and no fallback, and the person goes onto the request scope, where no client can write. `mcp.auth.current_asker()` returns them, and `resolve_actor()` answers them as `person <sub>` with no `actors.yaml` row. A person admitted to the app's rooms alone reaches none of its tools, as its HTTP routes refuse them (`entitlements.admitted`). A tool authorises the person as a route does: `entitlements.has_module(current_asker().entitlements, "notes", write=True)`. A machine's bearer goes to userinfo and `actors.yaml` as before.
-- **Off until configured.** With no `<APP>_EXCHANGE_ISSUER`, personas run with no token and a library room answers 503. A deployment that sets the issuer requires the forwarded token: a route reached without one answers 503 and names `X-authentik-jwt`.
+- **`/mcp` admits the person.** The bearer gate routes a token by its issuer. One from this app's own issuer is verified by the exchange alone, with no userinfo call and no fallback, and the person goes onto the request scope, where no client can write. `mcp.auth.current_asker()` returns them, and `resolve_actor()` answers them as `person <sub>` with no `actors.yaml` row. A person admitted to the app's chat alone reaches none of its tools, as its HTTP routes refuse them (`entitlements.admitted`). A tool authorises the person as a route does: `entitlements.has_module(current_asker().entitlements, "notes", write=True)`. A machine's bearer goes to userinfo and `actors.yaml` as before.
+- **Off until configured.** With no `<APP>_EXCHANGE_ISSUER`, personas run with no token and a persona that reads collections answers 503. A deployment that sets the issuer requires the forwarded token: a route reached without one answers 503 and names `X-authentik-jwt`.
 
 ## Choices
 
@@ -65,7 +65,7 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
    ```
 
    On atlas the host has no identity that may vend the secret, so run it inside the container with front-door's identity and three vends: `docker exec -i -e EXCHANGE_APP=… -e EXCHANGE_SIGNIN=… authentik-server portcullis exec --identity front-door --key /secrets/front-door.key --broker http://portcullis:8311 --vend AUTHENTIK_SECRET_KEY=authentik-secret-key.value --vend AUTHENTIK_POSTGRESQL__PASSWORD=authentik-db.password --vend EXCHANGE_CLIENT_SECRET=<app>-api-exchange.value -- dumb-init -- ak shell -c "import sys; exec(sys.stdin.read())" < authentik/exchange.py`.
-3. Deployment: `<APP>_EXCHANGE_ISSUER=https://auth.<estate>/application/o/<app>-exchange/` in the host's `.env`. The app must reach the token endpoint at that origin, because Authentik derives `iss` from the host a request reached it on.
+3. Deployment: `<APP>_EXCHANGE_ISSUER=https://auth.<estate>/application/o/<app>-exchange/` where the stack declares the app's environment: its compose file's `environment:` (godswood) or the per-host `.env` beside a shared compose file. The app must reach the token endpoint at that origin, because Authentik derives `iss` from the host a request reached it on.
 4. nginx, in the app's own vhost, never the shared snippet: a `location /api/agent/` (and any other route that calls a service as the person) carrying both lines.
 
    ```nginx
@@ -73,10 +73,12 @@ app.gate -> ak: "JWKS" {style.stroke-dash: 3}
    proxy_set_header X-authentik-jwt $authentik_jwt;
    ```
 
-5. Take the release: `copier update --vcs-ref v2026.10.44`, add `"pyjwt>=2.13.0"` to `backend/pyproject.toml`, and regenerate `.template-parity.json`. Drop `<APP>_AGENT_LIBRARY_TOKEN`.
+5. Take the release: `copier update` to 2026.10.47 or later (.44 to .46 vend the secret under a catalogue name the broker refuses, and fail a fresh stamp's stylelint), add `"pyjwt>=2.13.0"` to `backend/pyproject.toml`, and regenerate `.template-parity.json`. Drop `<APP>_AGENT_LIBRARY_TOKEN`.
 6. A persona that uses the app's tools: `"headers": {"Authorization": "Bearer ${ASKER_TOKEN}"}` on the app's own server in its `.mcp.json`. Each write tool checks `current_asker()`'s entitlements.
 
-An app with a library room takes step 5 only once the library verifies these tokens at `/api/caller`. Until then its rooms would be refused there.
+A persona that reads collections needs the app enrolled as a caller in the library's registry, keyed on the app's client id; the library verifies these tokens at `/api/caller` and cuts the app's grant to the person's entitlements on its own application.
+
+A new entitlement reaches a person only after they sign in again: the outpost's session carries what it read at sign-in, and `X-authentik-entitlements` comes from that session (godswood, 18/10/2026).
 
 **A service** is an app (steps 1 to 5) that other apps ask for people.
 

@@ -6,6 +6,33 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: the operator's rulings of 17 and 18/10/2026 on radar-hooves/master-project#380 (consumer: master for caspo, godswood, eight and pebblestone): chat leaves the library, there is no room vocabulary, a person chats with collections, and it is fast. Design: `docs/design/agent-console.md`.
+
+### Changed
+
+- **A person chats with the app's persona over the collections they may read.** `config/chat.yaml` offers a persona (a directory under `config/personas/`) by its display name; `chat-<persona>` lets a person in. With `collections: true`, each question retrieves passages from the library's `/api/caller` as the person, through the token exchange, and the persona answers from them in one model call, streaming. The library decides which collections a person reads; a question may narrow to one of them. The page shows the passages as citations the moment they arrive.
+- **The persona's CLI starts while the passages are retrieved** and takes its question on stdin (`agent_common.cli.ask` with an awaitable question), and a chat turn runs at `<APP>_AGENT_CHAT_EFFORT`, default `low`.
+- **Routes:** `GET /api/agent/personas` (listPersonas), and `/api/agent/{persona}/collections` (listCollections), `/ask` (askPersona), `/conversations` (listConversations), `/documents/{id}` (getDocument) and `/answers/{conversation}/{n}` (readSharedAnswer). Pages: `/chat`, `/chat/{persona}`, `/chat/{persona}/answers/{conversation}/{n}`. The `/conversations/{id}` routes keep their paths; an answer mark is kept on the app's own turn record, for any persona.
+- **`agent_conversations.room` is `persona`**: migration `d943d70b8845`, the first on the factory branch (`docs/development/migrations.md`).
+- **`@poodle64/librarian` 2026.10.0**: `ChatTransport` (was `RoomTransport`), `ChatCopy` (was `LibrarianCopy`), `ask({collection})`, a collection picker in `Composer`. Its npm name stays until a trusted publisher exists for a new one.
+- **`agent-common`**: `collections.Collections` (list, search, document as one person) on the `library` client 2026.10.18124341 (`query_as_caller`); the transport's failure frame is `agent_error`.
+
+Measured on atlas against the live library, caspo's six questions over `defence-personnel` and `acp-ghost-bat`: whole answers in a median of 9.2-10.2 s (all 48 under 20 s), the first word at a median of 5.5-7.1 s with the host at load 72-93 on 20 cores, of which the CLI's own start-up was 4.3-4.9 s. Before, through the library's Milton: first words at 27-114 s, whole answers at 34-160 s. The exchange was not driven live (no test user in production); `agent-console.md` §Measured says what stood in for it.
+
+### Removed
+
+- Rooms: `config/rooms.yaml`, `room-<id>`, `api/agent/rooms.py`, the `/api/agent/rooms*` routes and the `/rooms` pages.
+- `agent_common.library_agent.LibraryAgent` (the library's Milton through `/ask`), the quick and thorough `depth` and its double charge, the `queued` and `suggestions` frames, `@poodle64/librarian/history`, and the `library_error` frame name.
+
+### Every app
+
+1. `copier update` to this release; in the app's own `backend/pyproject.toml` raise `library>=2026.10.18124341` and `agent-common` to this release, and in `frontend/package.json` take `@poodle64/librarian` 2026.10.0; `uv lock`, `pnpm install`, regenerate `src/lib/api/schema.d.ts` and `.template-parity.json`.
+2. In its own code: `$lib/agent/rooms` is `$lib/agent/chat`, `RoomExtensions` is `ChatExtensions` (in `src/lib/agent/app.ts`: `oncite(persona, …)`, `copy(persona)`, `Home({persona})`, `briefing(persona)`), `RoomTransport` is `ChatTransport`, `LibrarianCopy` is `ChatCopy`; `depth` is gone; `app_hooks.agent_turn_settled(persona, conversation, turn)`; `entitlements.CHAT_PREFIX` replaces `ROOM_PREFIX`; a frame of type `library_error` is `agent_error`.
+3. `alembic upgrade heads` takes the migration. Code of its own reading `get_current_head()` or `get_current_revision()` moves to `get_heads()` / `get_current_heads()` first.
+4. To offer chat: `config/chat.yaml` and the persona's directory. A persona with `collections: true` also needs the exchange (`docs/design/exchange.md` §Adopting it), `<APP>_AGENT_LIBRARY_URL`, and the app enrolled as a caller at the library. A person reads the collection groups their entitlements on the library's application name, and a new grant reaches them after they sign in again.
+
+**caspo** deletes its old conversation rows in a migration of its own (their answers are Milton's, at the library, which Outrider can neither read nor continue), writes Outrider's `config/chat.yaml` row and persona directory, and at Authentik adds `chat-outrider` to its application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read. **godswood, eight and casefile** have no rooms, so no rows and no grants to move. **pebblestone** writes `config/chat.yaml` when it takes the slice.
+
 ## [2026.10.50] - 2026-10-18
 
 Need: a lesson born of a person's correction carries evidence the judge can read (radar-hooves/godswood#876, master-project#233; consumer: godswood).
