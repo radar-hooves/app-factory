@@ -78,10 +78,13 @@ class AgentSettings(BaseSettings):
     # so it is named rather than left to a default that resolves to nothing.
     haiku_model: str = ""
 
-    # Reasoning effort. Deployment-wide rather than per-persona: the persona
-    # contract's settings.json carries `model`, not this — an app that wants
-    # two personas at two efforts is a shape nobody has asked for yet.
+    # Reasoning effort for a job. Deployment-wide rather than per-persona: the
+    # persona contract's settings.json carries `model`, not this.
     effort: str = "high"
+    # Reasoning effort for a chat turn, where a person waits on the first word
+    # and the answer is drawn from passages already in hand. Measured on atlas
+    # 18/10/2026: `low` brings the first word about a second sooner than `high`.
+    chat_effort: str = "low"
 
     # Extended thinking OFF, via MAX_THINKING_TOKENS=0 on the child (the only
     # mechanism that actually disables it; CLAUDE_CODE_DISABLE_THINKING merely
