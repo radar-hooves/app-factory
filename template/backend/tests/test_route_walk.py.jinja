@@ -1,10 +1,10 @@
 """A person admitted to this app for one thing reaches nothing else.
 
-A colleague invited to a room holds `room-<id>` and no other entitlement,
+A colleague invited to chat holds `chat-<persona>` and no other entitlement,
 and signs in like anyone else (`app-factory docs/design/agent-console.md`). So every
 route outside the person-facing set below must declare a module gate:
-`require_module`, or a gate that reads its module off the path (a room, a
-persona), marked by `entitlements.gate`. A route this app adds without one
+`require_module`, or a gate that reads its module off the path (a persona's chat, a
+persona's jobs), marked by `entitlements.gate`. A route this app adds without one
 fails here rather than opening its data to every account the identity
 provider lets in. The people list is not person-facing: it answers only an
 account admitted to the app itself (`entitlements.require_app_module`).
@@ -33,8 +33,8 @@ PERSON_FACING = {
     "/workspaces": "the caller's own workspaces, gated by membership",
     "/feedback": "how a person reports a problem; reading reports is admin-gated",
     "/system": "health and version, which name nobody",
-    "/agent/rooms": "the rooms the caller is granted; each room's routes gate on its own",
-    "/agent/conversations": "the caller's own conversations, each gated on its room",
+    "/agent/personas": "the personas the caller is granted; each persona's routes gate on its own",
+    "/agent/conversations": "the caller's own conversations, each gated on its persona",
     "/agent/quota": "the caller's own allowance",
 }
 
@@ -101,28 +101,36 @@ def test_a_route_held_open_is_passed_whole_and_nothing_beside_it() -> None:
     ]
 
 
-def test_a_rooms_routes_gate_on_the_room_they_name(app: FastAPI) -> None:
-    rooms = [dependant for _, path, dependant in _routes(app) if "{room_id}" in path]
-    assert rooms
-    assert all("room-{room_id}" in _gates(dependant) for dependant in rooms)
+def test_a_personas_routes_gate_on_the_persona_they_name(app: FastAPI) -> None:
+    named = [(path, dependant) for _, path, dependant in _routes(app) if "{persona}" in path]
+    assert named
+    for path, dependant in named:
+        grant = "agent" if "/jobs/" in path else "chat"
+        assert grant + "-{persona}" in _gates(dependant), path
 
 
-async def test_an_account_admitted_only_to_a_room_reaches_its_own_record_and_not_the_people(
+def test_a_conversations_routes_gate_on_the_persona_it_is_with(app: FastAPI) -> None:
+    named = [(path, dependant) for _, path, dependant in _routes(app) if "/conversations/{conversation_id}" in path]
+    assert named
+    assert all("chat-{conversation.persona}" in _gates(dependant) for _, dependant in named)
+
+
+async def test_an_account_admitted_only_to_chat_reaches_its_own_record_and_not_the_people(
     client: AsyncClient,
 ) -> None:
-    """The people list is for granting a seat; a colleague invited to a room has none to grant."""
-    rooms_only = {
-        "x-authentik-uid": "rooms-only",
-        "x-authentik-username": "rooms-only",
-        "x-authentik-entitlements": "room-x",
+    """The people list is for granting a seat; a colleague invited to chat has none to grant."""
+    chat_only = {
+        "x-authentik-uid": "chat-only",
+        "x-authentik-username": "chat-only",
+        "x-authentik-entitlements": "chat-x",
     }
-    assert (await client.get("/api/users/me", headers=rooms_only)).status_code == 200
-    assert (await client.get("/api/users/", headers=rooms_only)).status_code == 403
-    admitted = {**rooms_only, "x-authentik-entitlements": "room-x|example"}
+    assert (await client.get("/api/users/me", headers=chat_only)).status_code == 200
+    assert (await client.get("/api/users/", headers=chat_only)).status_code == 403
+    admitted = {**chat_only, "x-authentik-entitlements": "chat-x|example"}
     assert (await client.get("/api/users/", headers=admitted)).status_code == 200
 
 
 async def test_an_account_holding_no_entitlement_is_refused_the_people(client: AsyncClient) -> None:
-    """Refused, so an account the identity provider admitted without a grant (an invited reviewer, an outpost forwarding no header) never lists everyone. The picker's people hold a non-room entitlement."""
+    """Refused, so an account the identity provider admitted without a grant (an invited reviewer, an outpost forwarding no header) never lists everyone. The picker's people hold a non-chat entitlement."""
     bare = {"x-authentik-uid": "no-grants", "x-authentik-username": "no-grants", "x-authentik-entitlements": ""}
     assert (await client.get("/api/users/", headers=bare)).status_code == 403

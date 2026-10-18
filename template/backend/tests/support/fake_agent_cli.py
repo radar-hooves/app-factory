@@ -71,7 +71,7 @@ to stderr. Every turn appends its frame to a transcript at
 keeps one.
 
 A one-shot turn (`-p`) keeps that transcript too, the question as it starts
-and the answer once given, as a room reads a conversation back from it.
+and the answer once given, as a chat reads a conversation back from it.
 `__hang__` names the session and then never answers, standing in for a
 turn a stop ends. With `fakeAgentPace` in the persona's settings.json
 (seconds between words; the driver passes this process no environment of
@@ -343,17 +343,12 @@ def stream_json_session(argv: list[str]) -> None:
     """The CLI under `--input-format stream-json`: one turn per stdin frame, until stdin closes."""
     session_id = _flag(argv, "--resume") or _flag(argv, "--session-id") or f"fake-{uuid.uuid4().hex[:12]}"
     replay = "--replay-user-messages" in argv
-    transcript = os.path.join(
-        os.environ.get("CLAUDE_CONFIG_DIR", "."), "projects", re.sub(r"[^A-Za-z0-9]", "-", os.getcwd())
-    )
-    os.makedirs(transcript, exist_ok=True)
     stdin = _Stdin()
     while (raw := stdin.line()) is not None:
         if not raw.strip():
             continue
         frame = json.loads(raw)
-        with open(os.path.join(transcript, f"{session_id}.jsonl"), "a") as handle:
-            handle.write(raw.decode() + "\n")
+        _keep(session_id, {"type": "user", "message": frame.get("message")})
         content = (frame.get("message") or {}).get("content") or []
         text = next((b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"), "")
         if text == CRASH_TRIGGER:
@@ -391,7 +386,9 @@ def stream_json_session(argv: list[str]) -> None:
             answer = _echo(text, argv)
         if "--include-partial-messages" in argv:
             _stream_text(session_id, answer)
-        _emit(_assistant(session_id, [{"type": "text", "text": answer}]))
+        whole = _assistant(session_id, [{"type": "text", "text": answer}])
+        _emit(whole)
+        _keep(session_id, whole)
         _emit(_result(session_id, answer, argv))
 
 

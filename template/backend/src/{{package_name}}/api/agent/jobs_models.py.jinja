@@ -25,7 +25,7 @@ at once serialise on the row rather than on anything process-local.
 (``--session-id`` on the first spawn, ``--resume`` on every one after), so a
 caller has the id to watch from the moment ``jobs.start()`` returns rather
 than waiting on an `init` event to learn it — a conversation claims its
-agent's id on `init` because a room's agent assigns it; it is not needed here
+agent's id on `init` because a chat turn's agent assigns it; it is not needed here
 because this slice assigns it.
 """
 

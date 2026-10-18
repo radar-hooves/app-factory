@@ -9,10 +9,10 @@ which reach the kit's driver as `driver()`.
 
 Lifted from the library's `api/agent/config.py` (radar-hooves/library), which
 carries the fuller version this slice split from: a `corpus_root` and a
-`permitted_collections` list that scope Milton to a directory of documents.
-The factory's own persona has no corpus — it is a chat, not a reading room —
-so neither field travels here; an app that needs one is the library's shape,
-not this one's.
+`permitted_collections` list that scope an agent to a directory of documents.
+The factory's persona has no corpus of its own — a person's collections are
+the library's to say, read as them (`library_url`) — so neither field travels
+here.
 """
 
 from pathlib import Path
@@ -101,23 +101,26 @@ class AgentSettings(BaseSettings):
     # is finished; this is the backstop for one that does not.
     timeout_seconds: float = 600.0
 
-    # `config/rooms.yaml`: the rooms this app offers (`api/agent/rooms.py`).
+    # `config/chat.yaml`: the personas this app offers for chat (`api/agent/chat.py`).
     # App-owned like the persona directory, beside it; absent, the app offers none.
-    rooms_file: Path = Field(default_factory=lambda: config_dir() / "rooms.yaml")
+    chat_file: Path = Field(default_factory=lambda: config_dir() / "chat.yaml")
 
-    # Questions one person may ask a day across every room, admins exempt;
+    # Questions one person may ask a day across every persona, admins exempt;
     # 0 turns the allowance off. The day is local to `quota_timezone`.
     daily_questions: int = 40
     quota_timezone: str = "Australia/Brisbane"
     # Where a person whose allowance is spent is pointed; empty shows none.
     support_url: str = ""
 
-    # The library's caller mount (`https://library.example/api/caller`), for
-    # a library room. Milton is asked as the person in the room: each call
+    # The library's caller mount (`https://library.example/api/caller`), read
+    # as the person for a persona that chats with collections: each call
     # carries a token the exchange mints for them with the library's client
     # id as its audience (exchange.py), so this app holds no library secret.
     library_url: str = ""
     library_audience: str = "library"
+
+    # How many passages a question retrieves from the collections.
+    passages: int = Field(default=8, ge=1, le=50)
 
     def driver(self) -> cli.Settings:
         """These settings as the kit's driver takes them; each session reports as `{{ project_name }}-agent-<persona>`."""

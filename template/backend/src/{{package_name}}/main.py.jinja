@@ -42,8 +42,8 @@ from starlette.types import Scope
 
 from {{ package_name }} import app_hooks
 from {{ package_name }}.api.agent import ask as agent_turns
+from {{ package_name }}.api.agent import chat as agent_chat
 from {{ package_name }}.api.agent import jobs as agent_jobs
-from {{ package_name }}.api.agent import rooms as agent_rooms
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
 from {{ package_name }}.config import Settings, get_settings
@@ -130,7 +130,7 @@ class _SPAMount(Mount):
 
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]:
-    """Refuse to start on a room this app cannot open, warm the database engine,
+    """Refuse to start on a persona this app cannot open, warm the database engine,
     supervise agent jobs for the life of the worker, end this worker's own
     runs and turns on shutdown, then dispose the engine.
 
@@ -144,7 +144,7 @@ async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]
     `app_hooks.py` is sanctioned-per-app and copier never overwrites it, so a
     default living there would reach nobody who already has one.
     """
-    agent_rooms.load(settings.agent)
+    agent_chat.load(settings.agent)
     engine = get_engine()
     app.state.engine = engine
     stopping = asyncio.Event()
@@ -200,7 +200,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     exchange = Exchange(settings.exchange)
     if not exchange.configured:
         _log.warning(
-            "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER is unset: library rooms answer 503 "
+            "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER is unset: personas that read collections answer 503 "
             "and personas reach /mcp as no one. Set it to this app's exchange provider's issuer."
         )
     # app_hooks.mcp_auth gates /mcp for an app that is its own machine-identity

@@ -17,27 +17,27 @@ from {{ package_name }}.config.paths import project_root
 from {{ package_name }}.config.sections.agent import AgentSettings
 
 
-def test_the_rooms_file_and_personas_default_under_the_cwds_config(
+def test_the_chat_file_and_personas_default_under_the_cwds_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`project_root()` lands in site-packages in a container; `Path.cwd()` is its WORKDIR.
 
-    The image ships `config/` at `/app/config`, and an app with rooms and no
+    The image ships `config/` at `/app/config`, and an app with a chat file and no
     personas has no `config/personas` to find it by: both defaults hang off
-    the one `config_dir()`, so `rooms.yaml` is read all the same.
+    the one `config_dir()`, so `chat.yaml` is read all the same.
     """
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "rooms.yaml").write_text("{}")
+    (tmp_path / "config" / "chat.yaml").write_text("{}")
     monkeypatch.chdir(tmp_path)
     settings = AgentSettings()
-    assert settings.rooms_file == tmp_path / "config" / "rooms.yaml"
+    assert settings.chat_file == tmp_path / "config" / "chat.yaml"
     assert settings.personas_dir == tmp_path / "config" / "personas"
 
 
 def test_the_defaults_fall_back_to_project_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No `config/` under the cwd, the source tree run from `backend/`, falls back."""
     monkeypatch.chdir(tmp_path)
-    assert AgentSettings().rooms_file == project_root() / "config" / "rooms.yaml"
+    assert AgentSettings().chat_file == project_root() / "config" / "chat.yaml"
 
 
 def test_the_gateway_key_never_appears_in_a_repr_or_a_dump() -> None:

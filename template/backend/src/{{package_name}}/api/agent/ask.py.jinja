@@ -1,20 +1,26 @@
 """The turn: a question answered by a task in this worker, not by the request that asked it.
 
-Milton takes 30 to 260 s on one GPU, so a refresh, a locked phone or a closed
-tab must not end an answer (`app-factory docs/design/agent-console.md` §The turn). The
-asking request streams the turn while it listens; the task goes on without
-it, and the answer lands in the agent's transcript either way.
+A persona can take a minute over a long answer, so a refresh, a locked phone
+or a closed tab must not end it (`app-factory docs/design/agent-console.md`
+§The turn). The asking request streams the turn while it listens; the task
+goes on without it, and the answer lands in the agent's transcript either way.
 
 The stream opens with this slice's own `system`/`init` naming the
 conversation before the agent starts, so a stop has an address from the
-first second. The agent's own `init` follows with the same address: its
-session id is the agent's to keep (`conversations.claim`), never the
-page's. Everything else is the agent's event, verbatim, through the app's
+first second. For a persona that chats with collections the turn then starts
+the persona and retrieves at once, since the CLI's start-up and the library's
+search each take a second or so: it searches the collections in scope for the
+question as the person may read them, sends the passages as a `citations`
+frame the moment they arrive, records them on the turn, and hands the persona
+the question with the passages appended. A library that cannot be read ends
+the turn with one error frame, the persona never asked and nothing charged.
+The agent's own `init` follows with the same address as this slice's: its
+session id is the agent's to keep (`conversations.claim`), never the page's.
+Everything else is the agent's event, verbatim, through the app's
 `agent_event` hook.
 
 A stop is a row flag, so it reaches the turn from any worker: the task reads
-it every second and closes the agent, which kills the local CLI or closes
-the library's stream (on which the library kills Milton's process).
+it every second and closes the agent, which kills the local CLI.
 """
 
 import asyncio
@@ -24,19 +30,20 @@ import logging
 import math
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from agent_common import cli, sse
 from agent_common.agent import Agent
+from agent_common.collections import Collections, Passage, passages_block
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import conversations, quota
+from {{ package_name }}.api.agent.chat import Persona
 from {{ package_name }}.api.agent.redact import redact, redact_event
-from {{ package_name }}.api.agent.rooms import Room
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.exceptions import AllowanceSpentError, ConflictError, NotFoundError
 
@@ -44,6 +51,18 @@ logger = logging.getLogger(__name__)
 
 #: How often the task holding a turn looks for a stop.
 STOP_POLL_SECONDS = 1.0
+
+#: The longest a citation's quoted snippet runs, in characters.
+SNIPPET_CHARACTERS = 300
+
+#: What a turn says when the library could not be read.
+COLLECTIONS_UNREAD = "the collections could not be read"
+
+#: What a persona that reads no collections says when a question names one.
+NO_COLLECTION = "No such collection"
+
+#: What a turn says when its question names a collection the library does not list for this person.
+NOT_LISTED = "that collection is not one you can read"
 
 #: One answer for a conversation that is another person's and one that never
 #: existed: telling them apart is itself a disclosure.
@@ -54,8 +73,10 @@ _turns: set[asyncio.Task[None]] = set()
 
 @dataclass(frozen=True, slots=True)
 class _Turn:
-    room: Room
+    persona: Persona
     agent: Agent
+    #: The library as the person asking, for a persona that chats with collections.
+    collections: Collections | None
     conversation_id: str
     #: The question's place in the conversation's record.
     position: int
@@ -65,15 +86,22 @@ class _Turn:
     files: dict[str, bytes]
     user_id: uuid.UUID
     charged: bool
-    #: How hard the agent was asked to work; a Thorough question is charged twice.
-    depth: Literal["quick", "thorough"] | None
+    #: The one collection the question is narrowed to; None asks across every one the person may read.
+    collection: str | None
+    #: The conversation's previous question, which a follow-up is searched with.
+    previous: str | None
+
+
+class _Unread(Exception):
+    """The collections could not be read for this turn; `str()` is what the turn says."""
 
 
 async def ask(
     db_session_factory: sessionmaker[Session],
     settings: AgentSettings,
-    room: Room,
+    persona: Persona,
     agent: Agent,
+    collections: Collections | None,
     *,
     user_id: uuid.UUID,
     exempt: bool,
@@ -81,21 +109,24 @@ async def ask(
     resume: str | None,
     files: dict[str, bytes],
     kind: str | None = None,
-    depth: Literal["quick", "thorough"] | None = None,
+    collection: str | None = None,
 ) -> StreamingResponse:
     """Stamp the conversation answering, start its turn, and stream it.
 
     Raises:
-        NotFoundError: `resume` is not one of this person's conversations in this room.
+        NotFoundError: `resume` is not one of this person's conversations with
+            this persona, or `collection` is not one the library lists for them.
         ConflictError: that conversation is already being answered.
         AllowanceSpentError: today's allowance is spent.
     """
-    question = await run_in_threadpool(redact, room.id, user_id, question)
+    if collection is not None and collections is None:
+        raise NotFoundError(NO_COLLECTION)
+    question = await run_in_threadpool(redact, persona.id, user_id, question)
 
     def begin() -> conversations.AgentConversation:
         with db_session_factory() as db:
             conversation = conversations.owned(db, resume, user_id) if resume else None
-            if resume and (conversation is None or conversation.room != room.id):
+            if resume and (conversation is None or conversation.persona != persona.id):
                 raise NotFoundError(DENIAL)
             if conversation is not None and conversations.answering(conversation) is not None:
                 raise ConflictError("That conversation is still being answered")
@@ -108,28 +139,31 @@ async def ask(
             started = conversations.begin(
                 db,
                 user_id=user_id,
-                room=room.id,
+                persona=persona.id,
                 question=question,
                 conversation=conversation,
                 kind=kind,
-                depth=depth,
+                collection=collection,
             )
             if started is None:
                 raise ConflictError("That conversation is still being answered")
             return started
 
     started = await run_in_threadpool(begin)
+    position = len(started.turns) - 1
     turn = _Turn(
-        room=room,
+        persona=persona,
         agent=agent,
+        collections=collections,
         conversation_id=started.id,
-        position=len(started.turns) - 1,
+        position=position,
         question=question,
         resume=started.session_id,
         files=files,
         user_id=user_id,
         charged=not exempt,
-        depth=depth,
+        collection=collection,
+        previous=started.turns[position - 1]["question"] if position else None,
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -195,7 +229,7 @@ async def _run(
             await answering
         await db(lambda s: conversations.settle(s, turn.conversation_id))
         emit(None)
-        await _settled(db_session_factory, turn)
+        await _settled(turn)
 
 
 async def _in_db[T](db_session_factory: sessionmaker[Session], work: Callable[[Session], T]) -> T:
@@ -218,9 +252,10 @@ async def _answer(
         await _in_db(db_session_factory, work)
 
     accepted = held = False
+    passages = asyncio.create_task(_passages(settings, turn, emit, db)) if turn.collections is not None else None
     try:
         async with contextlib.aclosing(
-            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None, depth=turn.depth)
+            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None, passages=passages)
         ) as events:
             async for event in events:
                 if event.get("type") == "system" and event.get("subtype") == "init":
@@ -231,23 +266,111 @@ async def _answer(
                 if not held and _speaks(event):
                     held = True
                     await db(lambda s: conversations.answered(s, turn.conversation_id, turn.position))
-                rewritten = redact_event(turn.room.id, event)
+                rewritten = redact_event(turn.persona.id, event)
                 if rewritten is not None:
                     emit(rewritten)
+    except _Unread as unread:
+        emit({"type": cli.ERROR_EVENT, "error": str(unread)})
     except Exception:
         logger.exception("Agent turn failed in conversation %s", turn.conversation_id)
         emit({"type": cli.ERROR_EVENT, "error": "the agent failed to answer"})
+    finally:
+        _settle(passages)
+
+
+async def _passages(
+    settings: AgentSettings,
+    turn: _Turn,
+    emit: Callable[[dict[str, Any] | None], None],
+    db: Callable[[Callable[[Session], object]], Awaitable[None]],
+) -> str:
+    """The passages block the persona answers from, once retrieved; the page has their citations first.
+
+    A task beside the agent's start-up, which takes the block when it
+    resolves (`LocalAgent.ask`). The block passes the app's `agent_turn`
+    hook, as the question does.
+
+    Raises:
+        _Unread: the collections could not be read, or the question names one this person may not read.
+    """
+    found = await _retrieve(settings, turn)
+    shown = redact_event(turn.persona.id, {"type": "citations", "items": _citations(found)})
+    if shown is not None:
+        emit(shown)
+    items = shown.get("items") if shown else None
+    await db(
+        lambda s: conversations.cite(s, turn.conversation_id, turn.position, items if isinstance(items, list) else [])
+    )
+    return await run_in_threadpool(redact, turn.persona.id, turn.user_id, passages_block(found))
+
+
+async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Passage]:
+    """The passages that answer this question from the collections in scope.
+
+    Across every collection the person may read, they are listed first and
+    named: the library's search drops the person's cut when given no names.
+    A question narrowed to one searches it while the listing confirms the
+    person may read it, so neither waits on the other. A person who can read
+    none searches nothing. A follow-up is searched with the question before
+    it, since "what about reservists?" retrieves badly alone.
+
+    Raises:
+        _Unread: as `_passages`.
+    """
+    assert turn.collections is not None
+    reader = turn.collections
+    query = f"{turn.previous}\n{turn.question}" if turn.previous else turn.question
+    searching = (
+        asyncio.create_task(reader.search(query, [turn.collection], settings.passages))
+        if turn.collection is not None
+        else None
+    )
+    try:
+        try:
+            names = [found.name for found in await reader.list()]
+            if searching is None:
+                return await reader.search(query, names, settings.passages) if names else []
+            if turn.collection not in names:
+                raise _Unread(NOT_LISTED)
+            return await searching
+        except _Unread:
+            raise
+        except Exception as exc:
+            logger.exception("Could not read the collections for conversation %s", turn.conversation_id)
+            raise _Unread(COLLECTIONS_UNREAD) from exc
+    finally:
+        _settle(searching)
+
+
+def _settle(task: asyncio.Task[Any] | None) -> None:
+    """End a helper task this turn no longer waits on, and take any error it left so none is logged as unretrieved."""
+    if task is None:
+        return
+    if not task.done():
+        task.cancel()
+    elif not task.cancelled():
+        task.exception()
+
+
+def _citations(passages: list[Passage]) -> list[dict[str, Any]]:
+    """The passages as the page cites them: a number to match `[n]` in the answer, and where it came from."""
+    return [
+        {
+            "n": passage.n,
+            "document_id": None if passage.document_id is None else str(passage.document_id),
+            "title": passage.title,
+            "section": passage.locator,
+            "snippet": " ".join(passage.text.split())[:SNIPPET_CHARACTERS],
+        }
+        for passage in passages
+    ]
 
 
 def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> None:
-    """The agent took the question: the conversation is its session's now, and the question is charged.
-
-    A Thorough question reads more and costs more, so it counts double
-    against the daily allowance.
-    """
+    """The agent took the question: the conversation is its session's now, and the question is charged."""
     conversations.claim(db, turn.conversation_id, session_id)
     if turn.charged:
-        quota.charge(db, settings, turn.user_id, weight=2 if turn.depth == "thorough" else 1)
+        quota.charge(db, settings, turn.user_id)
 
 
 def _speaks(event: dict[str, Any]) -> bool:
@@ -260,8 +383,8 @@ def _speaks(event: dict[str, Any]) -> bool:
     )
 
 
-async def _settled(db_session_factory: sessionmaker[Session], turn: _Turn) -> None:
-    """Call `app_hooks.agent_turn_settled(room, conversation, turn)`, if this app defines one.
+async def _settled(turn: _Turn) -> None:
+    """Call `app_hooks.agent_turn_settled(persona, conversation, turn)`, if this app defines one.
 
     `turn` is the question's place as the page counts it, the same number an
     answer mark is addressed by. A hook that raises is logged, never
@@ -273,13 +396,7 @@ async def _settled(db_session_factory: sessionmaker[Session], turn: _Turn) -> No
     if hook is None:
         return
     try:
-        conversation = await _in_db(
-            db_session_factory, lambda s: s.get(conversations.AgentConversation, turn.conversation_id)
-        )
-        answers = await turn.agent.read(conversation.session_id) if conversation and conversation.session_id else None
-        held = sum(1 for record in conversation.turns if record.get("answered")) if conversation else 0
-        lead = max(len(answers or []) - held, 0)
-        await run_in_threadpool(hook, turn.room.id, turn.conversation_id, lead + turn.position)
+        await run_in_threadpool(hook, turn.persona.id, turn.conversation_id, turn.position)
     except Exception:
         logger.exception("app_hooks.agent_turn_settled failed for conversation %s", turn.conversation_id)
 

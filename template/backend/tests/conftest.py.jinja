@@ -383,7 +383,8 @@ def _ensure_test_database_ready() -> None:
     from alembic.script import ScriptDirectory
 
     alembic_cfg = Config(str(backend_root / "alembic.ini"))
-    head_revisions = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head_revisions = set(script.get_heads())
 
     schema_engine = create_engine(settings.database_url)
     try:
@@ -392,7 +393,10 @@ def _ensure_test_database_ready() -> None:
     finally:
         schema_engine.dispose()
 
-    if current_revisions != head_revisions:
+    # A database holds a row per head not already beneath another by `depends_on`: the factory's
+    # first branch revision sits on the app chain's last, which then has no row of its own.
+    reached = {revision.revision for revision in script.iterate_revisions(tuple(current_revisions), "base")}
+    if not head_revisions <= reached:
         raise RuntimeError(
             f"Test database {TEST_DATABASE_NAME!r} is at alembic revisions {sorted(current_revisions)!r}, "
             f"expected heads {sorted(head_revisions)!r}. `alembic upgrade heads` did not leave the database "
