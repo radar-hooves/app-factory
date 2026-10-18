@@ -119,6 +119,7 @@ rather than rebuilding it:
 | `search-results`                                | A ranked retrieval answer: title, the matched passage with accent-tinted highlights, source chip, mapped state and a mono relevance figure per hit; plus the before-any-search and matched-nothing empties.                                                                                                                                                             |
 | `ledger`                                        | The one ledger every module draws: dated rows of money, coins or units, two lines a row, grouped by the viewer's period, the viewer's columns and running balance. See [The ledger](#the-ledger).                                                                                                                                                                       |
 | `resize-handle`                                 | The drag edge of a side panel: pointer, arrow keys, double-click reset, remembered width, ceiling measured against the content beside it. AppShell's rail uses it; an app with its own `<aside>` renders `<ResizeHandle bind:width storageKey="…" />` as the aside's last child (positioned) and sets the aside's width from `width`. |
+| `graph-canvas` | A live force-directed graph of entities and their relations: pan, zoom, pinch, find, a legend that filters, a selected node's neighbourhood lit and framed, its card. See [A graph of relations](#a-graph-of-relations). |
 
 **The application shell** (`app-shell`, `command-palette`). Page chrome is not
 what makes an app feel like an app either — the shell is. Five household
@@ -1050,6 +1051,46 @@ the page opened; that item's document stands beside it (`?surface=record`).
   page that fails to load says so and keeps its place. Another document swapped
   into the same pane opens on its first page, fitted; so does one the column
   moves beside itself as the row crosses 1250px.
+
+## A graph of relations
+
+`GraphCanvas` (`@poodle64/ui/graph-canvas`) draws people, organisations, sources, any entities, as nodes and their relations as edges, laid out live by d3-force and painted on one canvas. It fills its container, so the page gives it a height.
+
+```svelte
+<script lang="ts">
+	import GraphCanvas, { type GraphKind } from '@poodle64/ui/graph-canvas';
+	const kinds: GraphKind[] = [
+		{ id: 'person', label: 'People', color: 'var(--chart-1)' },
+		{ id: 'organisation', label: 'Organisations', color: 'var(--chart-2)', shape: 'square' },
+		{ id: 'source', label: 'Sources', color: 'var(--chart-3)', shape: 'diamond' }
+	];
+	let graph = $state.raw({ nodes: [], edges: [] });
+	let selected = $state<string | null>(null);
+</script>
+
+<div class="h-[70vh]">
+	<GraphCanvas nodes={graph.nodes} edges={graph.edges} {kinds} directed bind:selected
+		onactivate={(n) => goto(`/entities/${n.id}`)} />
+</div>
+```
+
+| Prop | |
+| --- | --- |
+| `nodes` | `{ id, label, kind, description?, emphasis?, size? }[]`. Extra fields ride along to the callbacks and the `detail` snippet, typed. |
+| `edges` | `{ source, target, label? }[]` by node id; an edge naming an unknown id is dropped. Parallel edges fan out. |
+| `kinds` | Legend order, `label`, `color` (any CSS colour; default the primary) and `shape` (`circle`, `square`, `diamond`, `triangle`). The package owns no categorical palette, as with `Sparkline`. |
+| `selected`, `hiddenKinds` | Bindable: the selected id, and the kinds the legend has switched off. |
+| `directed` | Arrowheads at each target, and the card names a relation pointing here as "Director of this". |
+| `onselect(node \| null)`, `onactivate(node)` | A click, find or card pick; a double-click, Enter or the card's `activateLabel` button. |
+| `detail` | `Snippet<[node, neighbours]>` under the card's title, for the app's own actions. |
+| `search`, `label` | The find field (default on); the accessible name. |
+
+Exports on the instance (`bind:this`): `fit()`, `focus(id)` (select and frame the neighbourhood), `locate(id)` (where it is drawn, in px) and `relayout()`.
+
+- **Live data.** Pass `$state.raw` and assign a new array to change it. Every surviving node keeps its place, a newcomer starts beside the nodes it joins, and the layout warms only as much as the change needs. A deep `$state` proxy works, but every paint then reads through it.
+- **Themed where it is placed.** Each colour is resolved against the component's own element, so inside an element's shadow root it takes the host page's palette, and it follows the mode class, an element host's `data-dark`, a palette swap and the OS scheme without a reload. Nothing portals out.
+- **Size.** The layout ticks within a time budget per frame, edges and nodes are culled and stroked as a few batched paths, and names are placed in screen space against what is already drawn, a quota by area at rest and every neighbour under a focus. A few thousand nodes is the design point; well past ten thousand, a WebGL renderer is the better tool.
+- **Load it lazily.** It brings d3-force and a canvas engine, so a route imports it with a dynamic `import()` (`sveltekit-quality.md`).
 
 ## Hand-written forms
 

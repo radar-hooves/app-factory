@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.17] - 2026-10-18
+
+Need: caspo, its OSINT rebuild (radar-hooves/master-project#380). Godswood's tapestry graph is where it was learned.
+
+### Added
+
+- **`GraphCanvas`** (`@poodle64/ui/graph-canvas`): a live force-directed graph of entities and relations on one canvas, d3-force for the layout. Pan, wheel and pinch zoom, drag a node, find, a legend that filters by kind, hover or select to light a neighbourhood, Focus to frame it, and a card listing the connections by relation. Colours resolve against the component's own element, so it themes the same in a page and in an element's shadow root. `nodes`, `edges`, `kinds`, bindable `selected` and `hiddenKinds`, `directed`, `onselect`, `onactivate`, a `detail` snippet; `fit()`, `focus(id)`, `locate(id)`, `relayout()`.
+
 ## [2026.10.16] - 2026-10-18
 
 Need: casefile, through the elements capability (radar-hooves/master-project#380).

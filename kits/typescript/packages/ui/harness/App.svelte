@@ -80,6 +80,7 @@
 	import { ReportWidget } from '../dist/components/feedback/index.js';
 	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
 	import Records from './Records.svelte';
+	import Graph from './Graph.svelte';
 	import type {
 		LedgerColumn,
 		LedgerPeriod,
@@ -826,7 +827,9 @@
 	{/each}
 {/snippet}
 
-{#if surface === 'desktop-about'}
+{#if surface === 'graph'}
+	<Graph />
+{:else if surface === 'desktop-about'}
 	<div class="p-8">
 		<About name="Desktop fixture" version="2026.10.11" description="One shared About surface."
 			links={[{ label: 'Project', href: 'https://example.test/project' }, { label: 'Source', href: 'https://example.test/project' }]}

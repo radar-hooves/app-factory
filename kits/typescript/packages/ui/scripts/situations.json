@@ -272,6 +272,18 @@
       ]
     },
     {
+      "key": "relations-between-things",
+      "title": "Who is connected to what",
+      "description": "People, organisations, sources or any entities as nodes and their relations as edges: a live, explorable network rather than a list of links.",
+      "components": [
+        {
+          "name": "GraphCanvas",
+          "props": "nodes, edges, kinds?, selected?, hiddenKinds?, directed?, onselect?, onactivate?, detail?",
+          "insteadOf": "a hand-built canvas or SVG force layout, or a graph library's own chrome and colours"
+        }
+      ]
+    },
+    {
       "key": "page-frame",
       "title": "The frame every route shares",
       "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column, a foldable working list beside the page's own content.",

@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/ui",
-	"version": "2026.10.16",
+	"version": "2026.10.17",
 	"description": "Household shared component layer: shadcn-svelte primitives (bits-ui) plus the composed page chrome every app builds its routes from, restyled by each app's @poodle64/design-tokens alias layer. One fix reaches every app.",
 	"type": "module",
 	"license": "MIT",
@@ -83,6 +83,7 @@
 		"@lucide/svelte": "^1.25.0",
 		"@tanstack/table-core": "^8.21.3",
 		"clsx": "^2.1.1",
+		"d3-force": "^3.0.0",
 		"esm-env": "^1.2.2",
 		"html-to-image": "^1.11.13",
 		"tailwind-merge": "^3.6.0",
@@ -97,6 +98,7 @@
 		"@tailwindcss/cli": "^4.3.2",
 		"@testing-library/jest-dom": "^7.0.0",
 		"@testing-library/svelte": "^5.4.2",
+		"@types/d3-force": "^3.0.10",
 		"@types/node": "^22.20.1",
 		"bits-ui": "^2.18.1",
 		"formsnap": "^2.0.1",

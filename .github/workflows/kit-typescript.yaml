@@ -110,7 +110,7 @@ jobs:
         run: |
           set -e
           for c in about alert alert-dialog app-shell badge button card checkbox command \
-            command-palette context-column data-table dialog document-pane dropdown-menu \
+            command-palette context-column data-table dialog document-pane dropdown-menu graph-canvas \
             input input-group label ledger list-toolbar password-input popover progress \
             record-list record-switcher schema-form select separator skeleton sonner \
             switch table tabs textarea tooltip; do
