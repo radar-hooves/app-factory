@@ -27,10 +27,9 @@ radar-hooves/cadmus (Nightjar), 30/09/2026.
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 #: A session id is used as a FILENAME, so it is checked as one before it
 #: reaches a glob. Claude Code mints a UUID; this is the shape that stays a
@@ -43,16 +42,11 @@ PROJECTS = "projects"
 
 @dataclass(frozen=True, slots=True)
 class Turn:
-    """One question and the prose that answered it.
-
-    `citations` are the sources an agent that cites (the library's Milton)
-    resolved for the answer; a local persona's turns carry none.
-    """
+    """One question and the prose that answered it."""
 
     question: str
     answer: str
     at: datetime | None
-    citations: list[dict[str, Any]] = field(default_factory=list)
 
 
 def transcript_file(home: Path, session_id: str) -> Path | None:

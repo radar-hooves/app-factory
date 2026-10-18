@@ -2,21 +2,21 @@
 
 A person asks an `Agent`, reads a conversation back from it, and forgets one.
 Every agent speaks one wire vocabulary: Claude Code's own stream-json events,
-verbatim, plus `cli.ERROR_EVENT` (and, from the library, its citation and
-suggestion frames), so one page renders any of them and nothing translates.
+verbatim, plus `cli.ERROR_EVENT`, so one page renders any of them and nothing
+translates.
 
-`LocalAgent` is a persona this app runs itself, through `cli`. The library's
-Milton is the other implementation, `library_agent.LibraryAgent`, over the
-api-clients `library` client of the library's caller door.
+`LocalAgent` is a persona this app runs itself, through `cli`. What a
+question draws on from the library arrives as `passages` (`collections`), the
+app's retrieval, never the agent's.
 """
 
 import asyncio
 import shutil
 import uuid
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Awaitable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
 from agent_common import cli, transcript
 from agent_common.persona import Persona
@@ -34,6 +34,16 @@ ATTACHMENTS = "attachments"
 #: came with it; `LocalAgent.read` cuts a question at its LAST one.
 _ATTACHED = "\n\n---\n\nAttached to this question, to read at these paths:\n"
 
+#: How the passages block (`collections.passages_block`) begins, whichever
+#: heading it carries.
+PASSAGES_START = "Passages from the collections this person may read"
+
+#: The rule `LocalAgent.ask` puts between a question and the passages block.
+_RULE = "\n\n---\n\n"
+
+#: Where the passages block begins; `LocalAgent.read` cuts a question at its LAST one.
+_PASSAGED = _RULE + PASSAGES_START
+
 
 class Agent(Protocol):
     """Ask, read back, forget: all a chat needs of whatever answers it."""
@@ -44,15 +54,16 @@ class Agent(Protocol):
         *,
         resume: str | None = None,
         files: Mapping[str, bytes] | None = None,
-        depth: Literal["quick", "thorough"] | None = None,
+        passages: str | Awaitable[str] | None = None,
     ) -> AsyncGenerator[dict[str, Any]]:
         """Yield the turn's events as they arrive; `resume` continues a conversation, `files` come with the question.
 
-        `depth` is Milton's alone: a local persona has no reading budget or
-        model to pick between, so `LocalAgent` takes and ignores it.
+        `passages` is the block the app retrieved for this question
+        (`collections.passages_block`), appended to the question for the
+        agent to answer from; an awaitable of it is awaited once the agent
+        has started, so its start-up and the retrieval run together.
 
-        Closing the generator stops the turn: the local CLI is killed, the
-        library's stream closed.
+        Closing the generator stops the turn: the local CLI is killed.
         """
         ...
 
@@ -84,12 +95,15 @@ class LocalAgent:
         *,
         resume: str | None = None,
         files: Mapping[str, bytes] | None = None,
-        depth: Literal["quick", "thorough"] | None = None,
+        passages: str | Awaitable[str] | None = None,
     ) -> AsyncGenerator[dict[str, Any]]:
         """Ask the persona, streaming Claude Code's events verbatim.
 
-        `depth` is ignored: a persona's model and behaviour are fixed in its
-        own `settings.json`, so there is nothing here for it to pick between.
+        `passages` follow the question under a rule of their own, before the
+        attachment list; `read` takes both back off. An awaitable of them
+        starts the CLI first and writes the question to it once they resolve
+        (`cli.ask`); if it raises, the CLI is ended unasked and the error
+        propagates.
 
         Each conversation runs in a folder of its own under the persona's home
         (`CHATS`), so its session reads and writes that folder and no other
@@ -105,15 +119,27 @@ class LocalAgent:
         if not transcript.SESSION_ID.match(session):
             raise ValueError(f"not a session id: {session!r}")
         folder = self.persona.home / CHATS / session
+        attached = ""
         if files:
             paths = await asyncio.to_thread(_attach, folder / ATTACHMENTS, files)
-            question = question + _ATTACHED + "\n".join(f"- {path}" for path in paths)
+            attached = _ATTACHED + "\n".join(f"- {path}" for path in paths)
         else:
             await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
+
+        async def asked(later: Awaitable[str]) -> str:
+            return question + _RULE + await later + attached
+
+        whole: str | Awaitable[str] = (
+            question + attached
+            if not passages
+            else question + _RULE + passages + attached
+            if isinstance(passages, str)
+            else asked(passages)
+        )
         async for event in cli.ask(
             self.settings,
             self.persona,
-            question,
+            whole,
             resume=resume,
             session_id=None if resume else session,
             cwd=folder,
@@ -122,11 +148,11 @@ class LocalAgent:
             yield event
 
     async def read(self, session: str) -> list[Turn] | None:
-        """Every turn, each question as the person asked it, less the attachment list `ask` added."""
+        """Every turn, each question as the person asked it, less the passages and attachment list `ask` added."""
         turns = await asyncio.to_thread(transcript.read, self.persona.home, session)
         if turns is None:
             return None
-        return [replace(turn, question=_unattached(turn.question)) for turn in turns]
+        return [replace(turn, question=_unadorned(turn.question)) for turn in turns]
 
     async def forget(self, session: str) -> None:
         """Delete the transcript and the conversation's folder, its attachments and its scoped home."""
@@ -145,10 +171,17 @@ def _attach(folder: Path, files: Mapping[str, bytes]) -> list[Path]:
     return paths
 
 
-def _unattached(question: str) -> str:
-    """`question` less the block `LocalAgent.ask` appended, cut at the last heading so a quoted one survives."""
-    head, marker, _tail = question.rpartition(_ATTACHED.strip("\n"))
-    return head.rstrip() if marker else question
+def _unadorned(question: str) -> str:
+    """`question` less the attachment list and the passages `LocalAgent.ask` appended.
+
+    Each is cut at its last heading, so a quoted one survives; the attachment
+    list went on last, so it comes off first.
+    """
+    for marker in (_ATTACHED, _PASSAGED):
+        head, found, _tail = question.rpartition(marker.strip("\n"))
+        if found:
+            question = head.rstrip()
+    return question
 
 
 def _forget(home: Path, session: str) -> None:

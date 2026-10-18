@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Stand-in for `claude -p <question> --output-format stream-json`, run as a real subprocess.
 
+With `--input-format stream-json` the question is the one `user` frame read
+off stdin instead, as the real CLI takes it.
+
 Emits `system`/`init`, one `assistant` event whose text is a JSON object of
 this process's own argv and the environment names the driver decides, and a
 `result`; and appends the turn to `$CLAUDE_CONFIG_DIR/projects/<cwd>/<id>.jsonl`
@@ -81,9 +84,18 @@ def _initialize_each(argv: list[str]) -> dict[str, object]:
     return answers
 
 
+def _stdin_question() -> str:
+    """The text of the `user` frames on stdin, read to its end."""
+    texts = []
+    for line in sys.stdin:
+        frame = json.loads(line)
+        texts += [block["text"] for block in frame["message"]["content"] if block.get("type") == "text"]
+    return "\n".join(texts)
+
+
 def main() -> None:
     argv = sys.argv[1:]
-    question = _flag(argv, "-p") or ""
+    question = _stdin_question() if _flag(argv, "--input-format") == "stream-json" else _flag(argv, "-p") or ""
     if question == CRASH:
         sys.stderr.write("gateway said 401 for Authorization: Bearer sk-live-123 at https://gw.example/v1?sig=abc\n")
         sys.exit(3)
@@ -100,7 +112,14 @@ def main() -> None:
         if question.startswith(READ)
         else json.dumps({"servers": _initialize_each(argv), "read": json.loads(_read_each(question.split()[1:]))})
         if question.startswith(MCP)
-        else json.dumps({"argv": argv, "cwd": os.getcwd(), "env": {name: os.environ.get(name) for name in ENV_NAMES}})
+        else json.dumps(
+            {
+                "argv": argv,
+                "question": question,
+                "cwd": os.getcwd(),
+                "env": {name: os.environ.get(name) for name in ENV_NAMES},
+            }
+        )
     )
 
     print("a diagnostic line that is not JSON", flush=True)
