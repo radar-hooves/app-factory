@@ -574,6 +574,13 @@ paragraphs ~207px away from their own label. Both halves are gated in
 on the page's own left edge, and it follows a retune of
 `--ds-shell-measure-prose`.
 
+**Large screens.** The measures, the type and the rail are all rem, and past
+2560px the root size grows (1px per 160px of width, to 24px at 3840px), so a
+page fills a 4K screen as it fills a laptop's. At 2560px and below nothing
+moves. An app sets no per-page variant; one that sets its own root size does it
+after the `styles.css` import. Gated in `harness/drive.mjs` at 1440, 2560 and
+3840px.
+
 ### The page: container, sections and the type scale
 
 ```svelte

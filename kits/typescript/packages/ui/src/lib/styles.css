@@ -441,6 +441,20 @@
 	--ds-control-pad-icon-lg: 0.625rem;
 }
 
+/**
+ * Large screens. Past 2560 CSS px the root size grows with the viewport, 1px of
+ * root per 160px of width, capped at 1.5rem (a 4K screen at 1x, 3840px, reads
+ * 24px), so everything set in rem grows with it: type, the shell's measures
+ * (`page` 80rem, `wide` 120rem) and the rail. At 2560px and below the rule
+ * resolves to 1rem and nothing moves; it is continuous at the seam. An app that
+ * sets its own root size sets it after this import.
+ */
+@media (min-width: 2560px) {
+	html {
+		font-size: clamp(1rem, 100vw / 160, 1.5rem);
+	}
+}
+
 @layer base {
 	/**
 	 * The milled edge. Cards read as having depth from a hairline border plus a

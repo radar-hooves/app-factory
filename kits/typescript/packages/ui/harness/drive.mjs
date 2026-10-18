@@ -1869,6 +1869,42 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	await context.close();
 }
 
+// ── Large screens ───────────────────────────────────────────────────────────
+// Past 2560px the root size grows, so type and the measure grow with the
+// screen; at 1440px and 2560px nothing moves. Only an engine resolves rem.
+{
+	const read = async (width, height) => {
+		const { context, page } = await open('surface=measure&measure=page', { width, height });
+		await page.waitForSelector('[data-probe="measure-block"]');
+		await page.evaluate(() => document.fonts.ready);
+		const out = await page.evaluate(() => ({
+			root: parseFloat(getComputedStyle(document.documentElement).fontSize),
+			body: parseFloat(getComputedStyle(document.querySelector('[data-probe="measure-block"]')).fontSize),
+			box: document.querySelector('#ds-main').firstElementChild.getBoundingClientRect().width
+		}));
+		await context.close();
+		return out;
+	};
+	const at1440 = await read(1440, 900);
+	const at2560 = await read(2560, 1440);
+	const at3840 = await read(3840, 2160);
+	check(
+		'large screens: nothing changes at or below 2560px',
+		at1440.root === 16 && at2560.root === 16,
+		`root ${at1440.root}px at 1440, ${at2560.root}px at 2560`
+	);
+	check(
+		'large screens: 3840px grows the root to 24px and the type with it',
+		at3840.root === 24 && at3840.body === at2560.body * 1.5,
+		`root ${at3840.root}px, block type ${at2560.body}px -> ${at3840.body}px`
+	);
+	check(
+		'large screens: the page measure grows (80rem) at 3840px',
+		at2560.box === 1280 && at3840.box === 1920,
+		`measure box ${at2560.box}px at 2560, ${at3840.box}px at 3840`
+	);
+}
+
 // ── The content texture ─────────────────────────────────────────────────────
 // Almost nothing this feature claims survives outside an engine. The picture is
 // a resolved `background-image` — two `color-mix()` gradients over the app's own
