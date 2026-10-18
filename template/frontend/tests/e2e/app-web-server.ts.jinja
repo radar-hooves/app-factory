@@ -47,8 +47,9 @@ export function appWebServer(_port: number): AppWebServer {
 }
 
 /**
- * Anything this app must do before its first spec runs — seeding, a route
- * pre-warm, an asset build.
+ * Anything this app must do before its first spec runs — seeding, an asset
+ * build. Every static route is already warmed by the factory (warm-routes.ts);
+ * add here only a route it cannot know, one with a parameter.
  *
  * Runs AFTER the factory's database-environment guard has passed, never before:
  * a precondition that writes must not touch a database not yet proved throwaway.

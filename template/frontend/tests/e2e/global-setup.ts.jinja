@@ -1,6 +1,7 @@
 import type { FullConfig } from '@playwright/test';
 
 import { apiPrefix, appPreconditions } from './app-web-server';
+import { warmRoutes } from './warm-routes';
 
 /**
  * Refuses to run the E2E suite against a database that is not a throwaway.
@@ -20,6 +21,10 @@ import { apiPrefix, appPreconditions } from './app-web-server';
  * CI stamps its own ephemeral Postgres `local` rather than being exempted
  * here — an exemption keyed on `CI` would be one environment variable away
  * from disarming the guard on a laptop.
+ *
+ * Vite compiles a route on its first visit, so `warmRoutes` (tests/e2e/warm-routes.ts)
+ * visits every static route once, after the guard and before any spec, and no
+ * spec's first assertion pays for a compile.
  *
  * App-specific preconditions — seeding, a route pre-warm, an asset build — go in
  * `appPreconditions` in tests/e2e/app-web-server.ts, which this file calls once
@@ -121,5 +126,6 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
 	// Only now: a precondition that seeds or warms must never touch a database
 	// this guard has not already proved is a throwaway one.
+	await warmRoutes(baseURL);
 	await appPreconditions(baseURL);
 }
