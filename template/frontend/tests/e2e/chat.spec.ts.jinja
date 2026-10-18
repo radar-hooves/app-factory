@@ -230,7 +230,9 @@ test('a shared answer opens read-only on the persona it was asked of, until it i
 
 		await page.goto(`/chat/outrider?c=${outriderConversation}`);
 		await page.getByRole('button', { name: 'Share' }).first().click();
-		await expect(page.getByText(/anyone who can ask Outrider here can open the link/)).toBeVisible();
+		await expect(
+			page.getByText(/anyone who can ask Outrider here can open the link/)
+		).toBeVisible();
 		const link = (await read(page, outriderConversation)).turns[0]?.shared;
 		expect(link).toBe(`/chat/outrider/answers/${outriderConversation}/0`);
 
@@ -241,7 +243,9 @@ test('a shared answer opens read-only on the persona it was asked of, until it i
 
 		await page.goto(link as string);
 		await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
-		await expect(page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first()).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first()
+		).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Ask Outrider' })).toBeVisible();
 		await expect(composer(page)).toHaveCount(0);
 
