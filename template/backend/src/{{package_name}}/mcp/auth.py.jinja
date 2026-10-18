@@ -17,7 +17,7 @@ gate verifies it and puts the :class:`~{{ package_name }}.exchange.Asker` on the
 :func:`current_asker` reads it, and :func:`resolve_actor` answers that person
 (``actor_type`` ``person``, ``actor_id`` their ``sub``) with no
 ``config/actors.yaml`` row, since Authentik vouched for them. A person admitted
-to this app's rooms alone reaches none of its tools, as its HTTP routes refuse
+to chat alone reaches none of its tools, as its HTTP routes refuse
 them (``entitlements.admitted``).
 
 Authentik authenticates; this app authorises. Map ``actor_id`` / ``actor_type``
@@ -108,13 +108,13 @@ def resolve_actor() -> Actor:
     Raises:
         AuthenticationError: no client identity was presented, the presented
             identity is not registered in ``config/actors.yaml``, or a person
-            holds no entitlement on this app beyond a room's.
+            holds no entitlement on this app beyond a chat's.
     """
     asker = current_asker()
     if asker is not None:
         if not admitted(asker.entitlements):
             raise AuthenticationError(
-                "This person is admitted to this app's rooms alone, not its tools", context={"app": asker.app}
+                "This person is admitted to this app's chat alone, not its tools", context={"app": asker.app}
             )
         return Actor(id=asker.sub, type="person", display=asker.username)
     http_headers = get_http_headers()

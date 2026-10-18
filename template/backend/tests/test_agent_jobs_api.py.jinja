@@ -952,7 +952,7 @@ async def test_a_job_can_be_stopped_while_it_is_working(
 
     job = await _wait_until_settled(job_id, workspace_id)
     assert job.status == jobs_models.CANCELLED
-    assert not any(e.get("type") == "library_error" for e in _events(job_id, workspace_id))
+    assert not any(e.get("type") == "agent_error" for e in _events(job_id, workspace_id))
 
 
 async def test_stopping_an_already_finished_job_is_a_no_op(

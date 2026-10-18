@@ -12,7 +12,7 @@ from {{ package_name }}.deps import CurrentWorkspace, SessionDep
 from {{ package_name }}.entitlements import module_dependency
 
 # Gated on the module's own entitlement, as every domain slice is: a person
-# admitted to this app for something else (a room, by invitation) reaches
+# admitted to this app for something else (a chat, by invitation) reaches
 # none of it (tests/test_route_walk.py).
 router = APIRouter(dependencies=[module_dependency("example")])
 

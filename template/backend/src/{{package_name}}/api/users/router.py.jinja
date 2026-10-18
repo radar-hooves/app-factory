@@ -19,7 +19,7 @@ def list_users(session: SessionDep) -> list[UserSummary]:
     the projection is the three fields a picker needs. It exists because a
     grant names a user id (``POST /api/workspaces/{id}/members``), and an
     owner has to be able to find that id somewhere other than the database.
-    An account admitted only to a room has nobody to grant a seat to, and is
+    An account admitted only to chat has nobody to grant a seat to, and is
     refused (`entitlements.require_app_module`).
     """
     return [UserSummary.model_validate(user) for user in service.list_active(session)]

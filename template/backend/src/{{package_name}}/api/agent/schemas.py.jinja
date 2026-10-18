@@ -1,7 +1,7 @@
 """The agent slice's bodies: `@poodle64/librarian`'s own route shapes.
 
 `ConversationSummary`, `ConversationRead`, `StoredTurn` and `Quota` are the
-types `./chat`'s `RoomTransport` reads, so the page passes these bodies
+types `./chat`'s `ChatTransport` reads, so the page passes these bodies
 through untranslated.
 
 There is deliberately no response model for the ask stream. An SSE frame
@@ -11,39 +11,43 @@ something the page renders.
 """
 
 import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
 class AskRequest(BaseModel):
-    """`POST rooms/{room}/ask` as JSON; the same fields arrive as multipart with `files[]`."""
+    """`POST {persona}/ask` as JSON; the same fields arrive as multipart with `files[]`."""
 
     question: str = Field(min_length=1, max_length=8000)
-    #: A conversation of this person's in this room, to carry on.
+    #: A conversation of this person's with this persona, to carry on.
     resume: str | None = None
     #: What the page asked for (`briefing`), in its own word: kept with the
     #: question and read back with it, never sent to the agent.
     kind: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,31}$")
-    #: How hard the agent should work; a local persona's to ignore. None
-    #: charges as quick and lets the agent apply its own default.
-    depth: Literal["quick", "thorough"] | None = None
+    #: One of the collections the library lists for this person, to ask
+    #: across that alone; None asks across every one they may read.
+    collection: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
-class RoomRead(BaseModel):
+class PersonaRead(BaseModel):
     id: str
-    title: str
+    name: str
     blurb: str
     examples: list[str]
     not_held: str
-    #: The collections' reader-facing names, for a library room's scope line.
-    sources: list[str]
-    #: A library room cites documents and takes an answer mark.
-    library: bool
-    #: The newest date the library confirmed one of this room's own documents
-    #: current (a recheck, or a fetch), for "Checked against the open record
-    #: on …" on its home. When it was last checked, never a publication date;
-    #: None where the library genuinely does not know.
+    #: Whether each question first retrieves passages from the collections this person may read.
+    collections: bool
+
+
+class CollectionRead(BaseModel):
+    name: str
+    #: What the collection holds, in the library's own words; empty where it has none.
+    summary: str
+    #: The newest date the library confirmed one of its documents current (a
+    #: recheck, or a fetch), for "Checked against the open record on …". When
+    #: it was last checked, never a publication date; None where the library
+    #: genuinely does not know.
     documents_to: datetime.date | None = None
 
 
@@ -54,13 +58,21 @@ class ConversationSummary(BaseModel):
     answering_since: datetime.datetime | None = None
 
 
+class MarkRead(BaseModel):
+    helpful: bool
+    note: str | None = None
+
+
 class StoredTurn(BaseModel):
     question: str
     answer: str
     at: datetime.datetime | None
+    #: The passages the answer was drawn from, as the app recorded them when the turn ran.
     citations: list[dict[str, Any]] = []
     kind: str | None = None
-    depth: Literal["quick", "thorough"] | None = None
+    #: The one collection the question was narrowed to; None asked across every one.
+    collection: str | None = None
+    mark: MarkRead | None = None
     #: Where the answer is read while it is shared: the page's own address.
     shared: str | None = None
 

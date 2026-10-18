@@ -34,7 +34,7 @@ def authentik() -> Iterator[FakeAuthentik]:
     fake.provider("library", federates=(APP,))
     fake.provider("elsewhere")
     fake.groups[PERSON] = ["household"]
-    fake.entitlements[(PERSON, APP)] = ["room-helper", "notes:write"]
+    fake.entitlements[(PERSON, APP)] = ["chat-helper", "notes:write"]
     fake.entitlements[(PERSON, "library")] = ["collection-manual"]
     yield fake
     server.shutdown()
@@ -73,7 +73,7 @@ async def test_with_no_audience_the_token_is_for_this_app_and_carries_its_own_en
     token = await app_side.token(f"as:{PERSON}")
     asker = await app_side.verified(token)
     assert asker is not None
-    assert (asker.sub, asker.app, asker.entitlements) == (PERSON, APP, ("room-helper", "notes:write"))
+    assert (asker.sub, asker.app, asker.entitlements) == (PERSON, APP, ("chat-helper", "notes:write"))
     assert await library_side.verified(token) is None, "a token for this app is not the library's"
 
 

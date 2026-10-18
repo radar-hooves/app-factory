@@ -6,7 +6,7 @@ grant, federating this app's proxy provider (whose tokens are the
 `X-authentik-jwt` it trades) and every app that may ask this one for a
 person. The issuer is the one setting a deployment names. Empty turns the
 exchange off: a fresh stamp, a dev box and CI run without one, `/mcp` admits
-no asker, and a library room answers 503.
+no asker, and a persona that reads collections answers 503.
 
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_EXCHANGE_``):
     ISSUER         e.g. https://auth.example.org/application/o/{{ project_name }}-exchange/

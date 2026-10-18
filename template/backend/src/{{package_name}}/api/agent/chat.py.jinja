@@ -1,0 +1,181 @@
+"""The personas this app offers for chat, from `config/chat.yaml` (`app-factory docs/design/agent-console.md` §Chat).
+
+A persona is a directory under `config/personas/<id>/` (CLAUDE.md, settings.json,
+.mcp.json); a row of `chat.yaml` offers it for chat, and one `chat-<id>`
+entitlement lets a person in. A persona with `collections: true` first
+retrieves passages from the library as the person asking, and answers from
+them; one without answers from its own files. Which collections a person may
+read is the library's answer, never this app's, so the file names none.
+
+The file is committed and released like code and has no admin surface, so a
+wrong row is refused at start rather than met by a colleague: `load` raises on
+an id that is not a path segment, a row with no name, or no such persona
+directory. An app with no file offers no chat. A persona that reads
+collections in a deployment with no library configured is not a wrong row:
+the app starts, logs which persona waits on which setting, and that persona
+answers 503 until it is set.
+"""
+
+import asyncio
+import functools
+import logging
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+from agent_common import persona as agent_persona
+from agent_common.agent import LocalAgent
+from agent_common.collections import Collections
+
+from {{ package_name }}.api.agent import persona as persona_module
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.entitlements import CHAT_PREFIX
+from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
+from {{ package_name }}.exchange import ASKER_TOKEN, Asking
+
+logger = logging.getLogger(__name__)
+
+#: A persona's id is a path segment and half an entitlement name.
+_ID = re.compile(r"\A[a-z0-9][a-z0-9-]{0,62}\Z")
+#: What a persona that reads collections waits on.
+_LIBRARY_URL = "{{ project_name | upper | replace('-', '_') }}_AGENT_LIBRARY_URL"
+
+#: How long a turn waits on the library to list and search before it fails; retrieval is on the answer path.
+RETRIEVAL_SECONDS = 15.0
+
+
+class ChatInvalid(ValueError):
+    """`config/chat.yaml` offers a persona this app cannot open."""
+
+
+@dataclass(frozen=True, slots=True)
+class Persona:
+    """A persona offered for chat: how the page introduces it, and whether it reads the library's collections."""
+
+    id: str
+    name: str
+    blurb: str = ""
+    examples: tuple[str, ...] = ()
+    not_held: str = ""
+    collections: bool = False
+
+    @property
+    def entitlement(self) -> str:
+        return f"{CHAT_PREFIX}{self.id}"
+
+
+def load(settings: AgentSettings) -> dict[str, Persona]:
+    """Every persona in `settings.chat_file`, validated; none when there is no file.
+
+    Read once per file version: an edit reaches the next request, as a
+    persona's does.
+
+    Raises:
+        ChatInvalid: the file offers a persona this app cannot open.
+    """
+    path = settings.chat_file
+    try:
+        version = path.stat().st_mtime_ns
+    except FileNotFoundError:
+        return {}
+    return _load(path, version, settings.personas_dir, bool(settings.library_url))
+
+
+def get(settings: AgentSettings, persona_id: str) -> Persona:
+    """The persona `persona_id`.
+
+    Raises:
+        NotFoundError: this app offers no such persona for chat.
+    """
+    persona = load(settings).get(persona_id)
+    if persona is None:
+        raise NotFoundError(f"No persona named {persona_id!r}")
+    return persona
+
+
+async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, turn: bool = False) -> LocalAgent:
+    """The persona's agent for the person `asking` names.
+
+    A `turn` carries a token minted for this app in its environment as
+    `ASKER_TOKEN`, which its `.mcp.json` presents to this app's `/mcp`. A
+    deployment with no exchange runs its personas without one.
+
+    Raises:
+        AuthenticationError: Authentik refused the person.
+    """
+    run_env = {ASKER_TOKEN: await asking.token()} if turn and asking.exchange.configured else {}
+    return LocalAgent(settings.driver(), persona_module.load(settings, persona.id), run_env=run_env)
+
+
+async def collections(settings: AgentSettings, persona: Persona, asking: Asking) -> Collections:
+    """The library's collections, read as the person `asking` names, with a token the exchange mints for them.
+
+    Raises:
+        ServiceUnavailableError: this deployment names no library or cannot carry the person to it.
+        AuthenticationError: Authentik refused the person.
+    """
+    if not settings.library_url:
+        raise ServiceUnavailableError(
+            "Collections are not available here yet", context={"persona": persona.id, "unset": _LIBRARY_URL}
+        )
+    token = await asking.token(settings.library_audience)
+
+    async def bearer() -> str:
+        return token
+
+    return Collections(settings.library_url, bearer, timeout_seconds=RETRIEVAL_SECONDS)
+
+
+async def for_turn(settings: AgentSettings, persona: Persona, asking: Asking) -> tuple[LocalAgent, Collections | None]:
+    """The persona's agent and, for one that reads collections, the library as the person: both tokens minted at once.
+
+    Raises:
+        ServiceUnavailableError: as `collections`.
+        AuthenticationError: as `agent` and `collections`.
+    """
+    try:
+        async with asyncio.TaskGroup() as group:
+            asked = group.create_task(agent(settings, persona, asking, turn=True))
+            read = group.create_task(collections(settings, persona, asking)) if persona.collections else None
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from None
+    return asked.result(), read.result() if read else None
+
+
+@functools.lru_cache(maxsize=8)
+def _load(path: Path, _version: int, personas_dir: Path, library: bool) -> dict[str, Persona]:
+    raw = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(raw, dict):
+        raise ChatInvalid(f"{path}: expected a mapping of persona id to row")
+    directories = set(agent_persona.names(personas_dir))
+    loaded = {str(persona_id): _persona(str(persona_id), body, directories) for persona_id, body in raw.items()}
+    for persona in loaded.values():
+        if persona.collections and not library:
+            logger.warning(
+                "Persona %r answers 503 until %s is set", persona.id, _LIBRARY_URL, extra={"persona": persona.id}
+            )
+    return loaded
+
+
+def _persona(persona_id: str, body: object, directories: set[str]) -> Persona:
+    def refuse(why: str) -> ChatInvalid:
+        return ChatInvalid(f"persona {persona_id!r}: {why}")
+
+    if not _ID.match(persona_id):
+        raise refuse("an id is lowercase letters, digits and hyphens")
+    if not isinstance(body, dict) or not str(body.get("name") or "").strip():
+        raise refuse("needs a name")
+    if persona_id not in directories:
+        raise refuse(f"no persona directory {persona_id!r} under config/personas/")
+    collections = body.get("collections", False)
+    if not isinstance(collections, bool):
+        raise refuse("collections is true or false")
+    return Persona(
+        id=persona_id,
+        name=str(body["name"]).strip(),
+        blurb=str(body.get("blurb") or "").strip(),
+        examples=tuple(str(example) for example in body.get("examples") or ()),
+        not_held=str(body.get("not_held") or "").strip(),
+        collections=collections,
+    )

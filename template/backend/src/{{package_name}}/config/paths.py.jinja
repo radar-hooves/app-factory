@@ -66,7 +66,7 @@ def config_dir() -> Path:
     keeps it at the repository root. Deployment first, as `frontend_build_dir()`
     resolves, because `project_root()` lands in site-packages in a container.
     Every file under it defaults from here, so one an app has not written yet
-    (`rooms.yaml` in an app with no `personas/`) is still looked for in the
+    (`chat.yaml` in an app with no `personas/`) is still looked for in the
     right place.
     """
     for candidate in (Path.cwd() / "config", project_root() / "config"):
