@@ -849,7 +849,9 @@ async def test_only_a_settled_answer_is_shared_and_a_deleted_conversation_takes_
 # ── argv, env, and the app's hooks ────────────────────────────────────────
 
 
-async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_model(client: AsyncClient) -> None:
+async def test_a_turn_carries_the_derived_tools_the_mcp_config_the_seeded_model_and_the_chat_effort(
+    client: AsyncClient,
+) -> None:
     said = _said(_events((await _ask(client, "helper", "what is recreation leave?", _person("chat-helper"))).text))
     for part in (
         "question=what is recreation leave?",
@@ -857,6 +859,7 @@ async def test_a_turn_carries_the_derived_tools_the_mcp_config_and_the_seeded_mo
         "allowed=Read,Grep",
         "disallowed=Bash",
         "strict_mcp_config=True",
+        "effort=low",
         "permission_mode=bypassPermissions",
         "thinking_off=0",
     ):
