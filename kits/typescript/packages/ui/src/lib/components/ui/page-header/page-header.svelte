@@ -3,6 +3,7 @@
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import InfoTip from '../info-tip/info-tip.svelte';
+	import Breadcrumbs, { type BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';
 
 	/**
 	 * The one page-title pattern for every route. `subtitle` is a short, single
@@ -23,10 +24,11 @@
 	 * the drift this package exists to end. One component, one spacing rhythm,
 	 * two shapes.
 	 *
-	 * The trail itself stays the app's, as a snippet: a breadcrumb trail is made
-	 * of routed links, and a package with no SvelteKit runtime of its own cannot
-	 * own those (the same reasoning that makes AppShell take `currentPath` as a
-	 * prop rather than importing `$app/state`).
+	 * The trail is a list of steps (`BreadcrumbItem[]`), drawn by Breadcrumbs.
+	 * A snippet is still accepted for a trail that is not a list of links (a
+	 * record switcher in the trail's place), but a list is the default: three
+	 * apps wrote the same chevron trail by hand, one behind a 28-call-site
+	 * wrapper that existed only to turn this snippet into an array.
 	 *
 	 * `icon` and `meta` are snippets for the same reason and earn their place the
 	 * same way `breadcrumbs` did: three apps had hand-rolled the meta row and two
@@ -50,8 +52,8 @@
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		/** A short kicker above the title. Use this OR `breadcrumbs`, not both. */
 		eyebrow?: string;
-		/** The trail above the title — the app's own routed links. */
-		breadcrumbs?: Snippet;
+		/** The trail above the title: its steps, or a snippet for a trail that is not links. */
+		breadcrumbs?: BreadcrumbItem[] | Snippet;
 		/** The glyph alone. The tinted square around it is this component's. */
 		icon?: Snippet;
 		/** Omit for a header that is a breadcrumb bar with actions. */
@@ -66,6 +68,7 @@
 
 <div
 	bind:this={ref}
+	data-slot="page-header"
 	class={cn('mb-6 flex flex-wrap items-start justify-between gap-4', className)}
 	{...restProps}
 >
@@ -83,10 +86,12 @@
 			</span>
 		{/if}
 		<div class="min-w-0">
-			{#if breadcrumbs}
+			{#if typeof breadcrumbs === 'function'}
 				<div class="text-muted-foreground mb-1.5 flex min-w-0 items-center text-sm">
 					{@render breadcrumbs()}
 				</div>
+			{:else if breadcrumbs?.length}
+				<Breadcrumbs items={breadcrumbs} class="mb-1.5" />
 			{/if}
 			{#if eyebrow}
 				<div class="text-primary text-2xs tracking-eyebrow mb-1 font-medium uppercase">

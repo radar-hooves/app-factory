@@ -230,7 +230,7 @@
     {
       "key": "library-data",
       "title": "Library data the app fetched",
-      "description": "The estate's shared document-library surfaces — a faceted catalogue, one collection's detail, one document's detail, a ranked search answer — rendered from plain props the app maps its own API responses into. The package never fetches and never routes: the app owns the query, the offset and every link. Configuration is the schema-driven half (SchemaForm); library data is fixed components because its shape is stable.",
+      "description": "The estate's shared document-library surfaces — a faceted catalogue, one collection's detail, one document's detail, a document to read with its contents, a ranked search answer — rendered from plain props the app maps its own API responses into. The package never fetches and never routes: the app owns the query, the offset and every link. Configuration is the schema-driven half (SchemaForm); library data is fixed components because its shape is stable.",
       "components": [
         {
           "name": "LibraryBrowse",
@@ -246,6 +246,11 @@
           "name": "DocumentDetail",
           "props": "document, loading?, error?, collectionHref?, onOpenCollection?, actions?, children?",
           "insteadOf": "a bespoke document page: identity dl, locations, tags and memberships hand-laid-out per app"
+        },
+        {
+          "name": "DocumentReader",
+          "props": "title?, subtitle?, breadcrumbs?, meta?, actions?, html?, children?, contents?, contentsLabel?, aside?, footer?, loading?, error?, onRetry?",
+          "insteadOf": "a hand-built markdown page: its own h1, back row, table of contents, scroll-spy and max-w-4xl; or a document body in a box under DocumentDetail"
         },
         {
           "name": "SearchResults",
@@ -286,7 +291,7 @@
     {
       "key": "page-frame",
       "title": "The frame every route shares",
-      "description": "The standing chrome — the app shell and its nav, the one page-title treatment, the persistent right-hand context column, a foldable working list beside the page's own content.",
+      "description": "The standing chrome — the app shell and its nav, the one page-title treatment and its trail, the page's own container and sections, the persistent right-hand context column, a foldable working list beside the page's own content.",
       "components": [
         {
           "name": "AppShell",
@@ -307,6 +312,21 @@
           "name": "PageHeader",
           "props": "title?, eyebrow?, breadcrumbs?, icon?, subtitle?, info?, meta?, actions?",
           "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
+        },
+        {
+          "name": "Breadcrumbs",
+          "props": "items, label?",
+          "insteadOf": "a hand-written chevron trail in PageHeader's breadcrumbs snippet; PageHeader takes the same items as `breadcrumbs={[…]}`"
+        },
+        {
+          "name": "PageContainer",
+          "props": "children",
+          "insteadOf": "a per-page wrapper picking its own vertical rhythm (space-y-6, gap-10, …)"
+        },
+        {
+          "name": "PageSection",
+          "props": "title, level?, description?, count?, actions?, children?, id?",
+          "insteadOf": "a hand-styled section heading (an uppercase kicker, text-lg font-semibold, a display h2) and its own gap to the content under it"
         },
         {
           "name": "RecordSwitcher",
@@ -395,6 +415,11 @@
           "insteadOf": "a bare spinner or 'Loading…' you place by hand"
         },
         {
+          "name": "ContentSkeleton",
+          "props": "shape?, count?, label?",
+          "insteadOf": "bare Skeleton boxes sized by hand (h-44 rounded-xl, h-24) standing in for a list, tiles or a document body while the page's header is already drawn"
+        },
+        {
           "name": "ErrorState",
           "props": "message, action?",
           "insteadOf": "a hand-built error message with a retry button"
@@ -425,6 +450,7 @@
       "select",
       "separator",
       "skeleton",
+      "sheet",
       "sonner",
       "switch",
       "table",
