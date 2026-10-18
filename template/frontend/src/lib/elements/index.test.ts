@@ -22,7 +22,9 @@ async function runtime() {
 	return import('./index');
 }
 
-describe('the element API client', () => {
+// The first import of `./index` compiles elements.css through Tailwind, 15-20s
+// cold and over the 20s default when the whole suite runs in parallel.
+describe('the element API client', { timeout: 60_000 }, () => {
 	beforeEach(() => {
 		sessionStorage.clear();
 		assign.mockReset();
