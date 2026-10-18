@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.10.47] - 2026-10-18
+
+Need: a stamp passes its own commit gates without an exception (radar-hooves/master-project#380; consumer: casefile).
+
+### Fixed
+
+- **A fresh stamp passes its own stylelint.** `frontend/src/lib/elements/elements.css` lacked the blank line `comment-empty-line-before` requires between two comments, so every app's parity gate failed on commit after taking 2026.10.46 and casefile carried a temporary `.canonical-exceptions` entry. An app that took .46 takes this release and deletes any such entry.
+
 ## [2026.10.46] - 2026-10-18
 
 Need: the library's provisioning on atlas, titan and mimir found the broker refuses `<app>-exchange` as a catalogue name (radar-hooves/master-project#380).
