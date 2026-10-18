@@ -47,6 +47,11 @@ Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hoo
 - **`DESIGN.md` says what the shell is.** It names one composition with no `variant` or `content` prop, gives the page parts table and the type scale by role, and states body type as Avenir Next, else Hanken Grotesk.
 - **The drift gate counts `sheet` a primitive**, so a surface brief need not name it, and an app's vendored `components/ui/sheet/` now fails `vendored-copy`.
 
+### Fixed
+
+- **A name the identity provider repeats is held once.** Authentik holds one entitlement object per name per application binding, so the forwarded header repeats a name for every binding that grants it (caspo's operator: 15 names, five repeats). `_parse_entitlements` keeps the first of each, in order, so `/api/users/me` and every module gate see each name once.
+- **`/settings` lands on the first settings page even when its redirect is dropped.** A navigation or invalidation that takes SvelteKit's token while the redirect loads aborts it, and the page stayed on `/settings` (caspo's E2E, two runs in three). While the index is still shown it asks again, up to three times.
+
 ### An app taking these
 
 - **Nav:** pass `{nav}` to `AppShell` and `CommandPalette` in `app-frame.svelte` (eight, godswood and caspo already do).
@@ -57,6 +62,7 @@ Need: caspo's pages read as a fleet app's, sidebar to section heading (radar-hoo
 - **Reader:** a hand-built markdown page becomes `DocumentReader` with the app's sanitised HTML. caspo's `MarkdownDocumentPage` (four routes) and its library document's body box go; the back row becomes the trail.
 - **Sheet:** caspo's vendored `components/ui/sheet/` becomes a `vendored-copy` finding, so import `@poodle64/ui/sheet`. Its vendored `sidebar/` serves a second navigation column the shell has no slot for. The strategy chapter's contents become DocumentReader's, and the working-papers and ID26 trees become the papers index page and the rail's `children`.
 - **Loading:** a hand-sized Skeleton region becomes `ContentSkeleton`.
+- **Entitlements and the settings redirect:** both files are factory-owned (`api/users/dependencies.py`, `routes/(protected)/settings/+page.svelte`); take them with the release. caspo's local guard and test on its `foreman/wt-84b163ad` branch come out once it has.
 
 
 ## [2026.10.50] - 2026-10-18

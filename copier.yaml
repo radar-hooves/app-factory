@@ -116,6 +116,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/tests/e2e/chat{% endif %}"
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/settings/sections.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/routes/(protected)/settings/page.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_elements.py{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/elements/index.test.ts{% endif %}"
@@ -187,6 +188,7 @@ _migrations:
       - backend/tests/test_elements.py
       - frontend/src/lib/elements/index.test.ts
       - frontend/src/elements/selftest-card.svelte
+      - frontend/src/routes/(protected)/settings/page.test.ts
   # A deleted scaffold slice is re-stamped file by file as the template adds to
   # it (settings.py, 2026.10.x). The slice is gone when its router is.
   - version: v2026.10.24
