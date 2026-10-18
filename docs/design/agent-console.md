@@ -113,7 +113,7 @@ The chat surface, keeping its npm name this release: a new name needs a trusted 
 
 ## Measured
 
-On atlas, 18/10/2026, Claude Code 2.1.300, Sonnet, the live library at `library.godswood.au`.
+On atlas, 18/10/2026, Claude Code 2.1.300, Sonnet, the live library.
 
 | Path | First answer token | Whole answer |
 | --- | --- | --- |
