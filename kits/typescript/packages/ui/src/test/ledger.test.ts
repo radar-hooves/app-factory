@@ -557,6 +557,13 @@ describe('the ledger’s periods', () => {
 		expect(ledgerDate('2026-07-01')).toBe('1 Jul 2026');
 		expect(ledgerDate('2026-07-01', false)).toBe('1 Jul');
 	});
+
+	it('reads the household’s DD/MM/YYYY when asked', () => {
+		expect(ledgerDate('2026-06-30', true, 'numeric')).toBe('30/06/2026');
+		expect(ledgerDate('2026-07-01', false, 'numeric')).toBe('01/07');
+		expect(periodLabel('2026-09-14', 'week', 7, true, 'numeric')).toBe('14/09/2026 to 20/09/2026');
+		expect(periodLabel('2026-09-14', 'day', 7, true, 'numeric')).toBe('Monday 14/09/2026');
+	});
 });
 
 describe('Ledger: column heads sort', () => {
@@ -727,6 +734,25 @@ describe('Ledger: a conversion inside the account', () => {
 		expect(group).toContain('4 transactions');
 		expect(group).toContain('$70.00');
 		expect(group).toContain('In $100.00 · out ($30.00)');
+	});
+
+	it('shows no group net, in or out when groupTotals is off', () => {
+		const { all } = mount({ rows: CONV, layout: 'wide', groupTotals: false });
+		const group = all('[data-slot="ledger-group"]')[0]!.textContent!.replace(/\s+/g, ' ');
+		expect(group).toContain('4 transactions');
+		expect(group).not.toContain('$');
+		expect(group).not.toContain('In ');
+	});
+
+	it('writes row dates DD/MM/YYYY when dateFormat is numeric, and short by default', () => {
+		const wide = mount({ rows: CONV, layout: 'wide', dateFormat: 'numeric' });
+		expect(wide.container.textContent).toContain('15/09/2026');
+		wide.unmount();
+		const narrow = mount({ rows: CONV, layout: 'narrow', dateFormat: 'numeric' });
+		expect(narrow.container.textContent).toContain('15/09');
+		expect(narrow.container.textContent).not.toContain('15 Sep');
+		narrow.unmount();
+		expect(mount({ rows: CONV, layout: 'wide' }).container.textContent).toContain('15 Sep 2026');
 	});
 
 	it('counts in not the ticked rows’ net', async () => {

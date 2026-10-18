@@ -47,9 +47,16 @@ function isoOf(t: Date): string {
 	return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
 }
 
-/** "15 Sep", or "15 Sep 2026" with the year. */
-export function ledgerDate(iso: string, withYear = true): string {
+/** How a date reads: "15 Sep 2026" (`short`), or the household's "15/09/2026" (`numeric`). */
+export type LedgerDateFormat = 'short' | 'numeric';
+
+/** "15 Sep", or "15 Sep 2026" with the year; `numeric` gives "15/09" and "15/09/2026". */
+export function ledgerDate(iso: string, withYear = true, format: LedgerDateFormat = 'short'): string {
 	const [y, m, d] = parts(iso);
+	if (format === 'numeric') {
+		const dm = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+		return withYear ? `${dm}/${y}` : dm;
+	}
 	return `${d} ${MONTHS[m - 1]}${withYear ? ` ${y}` : ''}`;
 }
 
@@ -85,7 +92,8 @@ export function periodLabel(
 	key: string,
 	period: LedgerPeriod,
 	fyStart = 7,
-	withYear = true
+	withYear = true,
+	format: LedgerDateFormat = 'short'
 ): string {
 	switch (period) {
 		case 'fy': {
@@ -100,12 +108,15 @@ export function periodLabel(
 			const end = isoOf(shift(key, 6));
 			const [sy, sm, sd] = parts(key);
 			const [ey, em] = parts(end);
+			if (format === 'numeric') {
+				return `${ledgerDate(key, withYear || sy !== ey, format)} to ${ledgerDate(end, withYear || sy !== ey, format)}`;
+			}
 			const start = `${sd}${sm !== em ? ` ${MONTHS[sm - 1]}` : ''}${sy !== ey ? ` ${sy}` : ''}`;
 			return `${start} to ${ledgerDate(end, withYear || sy !== ey)}`;
 		}
 		case 'day': {
 			const [y, m, d] = parts(key);
-			return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${ledgerDate(key, withYear)}`;
+			return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${ledgerDate(key, withYear, format)}`;
 		}
 		default:
 			return '';

@@ -60,6 +60,7 @@
 		sortRows,
 		windowOf
 	} from './ledger.js';
+	import type { LedgerDateFormat } from './ledger.js';
 	import type { LedgerColumn, LedgerOpenContext, LedgerPreferences, LedgerRow } from './types.js';
 
 	type Id = R['id'];
@@ -71,6 +72,8 @@
 		onPreferencesChange,
 		preferencesNote,
 		fyStart = 7,
+		dateFormat = 'short',
+		groupTotals = true,
 		currency = 'AUD',
 		locale = AU_LOCALE,
 		noun = ['transaction', 'transactions'],
@@ -102,6 +105,13 @@
 		preferencesNote?: string;
 		/** The month a financial year starts, 1–12. July by default. */
 		fyStart?: number;
+		/** How dates read: "30 Jun 2026" (`short`), or the household's "30/06/2026" (`numeric`). */
+		dateFormat?: LedgerDateFormat;
+		/**
+		 * Show each group's net, and in and out. Turn off for rows that are all
+		 * `conversion`, whose group totals would read $0.00.
+		 */
+		groupTotals?: boolean;
 		currency?: string;
 		/** BCP 47 locale for every figure: amounts, nets and counts. */
 		locale?: string;
@@ -425,6 +435,7 @@
 		return { net: (inn + out) / 100, inn: inn / 100, out: out / 100 };
 	}
 
+	const date = (iso: string, withYear = true) => ledgerDate(iso, withYear, dateFormat);
 	const money = (value: number | string) => ledgerMoney(value, currency, locale);
 	const number = (n: number) => n.toLocaleString(locale);
 	const titleColumn = $derived(resolved.find((c) => c.key === 'title'));
@@ -500,7 +511,7 @@
 		{@const through = openable && THROUGH}
 		{#if c.key === 'date'}
 			<span class={cn(CELL, through, 'text-muted-foreground self-center tabular-nums')} {style}>
-				{ledgerDate(r.date, WIDE)}
+				{date(r.date, WIDE)}
 				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 			</span>
 		{:else if c.key === 'title'}
@@ -571,7 +582,7 @@
 			{#each og.lines as l, i (i)}
 				{#if PHONE}
 					<div role="listitem" class="flex items-center gap-3 px-3 py-1.5 text-xs">
-						<span class="text-muted-foreground tabular-nums">{ledgerDate(l.date, false)}</span>
+						<span class="text-muted-foreground tabular-nums">{date(l.date, false)}</span>
 						<span class="flex min-w-0 flex-1 flex-col">
 							<span class="truncate">{l.description}</span>
 							{#if l.source}<span class="text-muted-foreground text-2xs truncate">{l.source}</span
@@ -593,7 +604,7 @@
 								class={cn(CELL, 'text-muted-foreground self-center tabular-nums')}
 								style="grid-column: {column('date')};"
 							>
-								{ledgerDate(l.date, WIDE)}
+								{date(l.date, WIDE)}
 							</span>
 						{/if}
 						<span
@@ -641,9 +652,9 @@
 
 {#snippet row(r: R, first: boolean)}
 	{@const on = ticked.has(r.id)}
-	{@const label = `${r.title}, ${ledgerDate(r.date)}, ${money(r.amount)}`}
+	{@const label = `${r.title}, ${date(r.date)}, ${money(r.amount)}`}
 	{#if PHONE}
-		{@const two = [BY_DAY ? '' : ledgerDate(r.date, false), r.note ?? '']
+		{@const two = [BY_DAY ? '' : date(r.date, false), r.note ?? '']
 			.filter(Boolean)
 			.join(' · ')}
 		<div
@@ -732,11 +743,12 @@
 		key,
 		prefs.period,
 		fy,
-		!(mode === 'narrow' && (BY_DAY || prefs.period === 'week'))
+		!(mode === 'narrow' && (BY_DAY || prefs.period === 'week')),
+		dateFormat
 	)}
 	{@const span = WIDE && prefs.period === 'fy' ? `${fySpan(key, fy)} · ` : ''}
 	{@const metaText = single ? '' : PHONE ? number(rs.length) : span + count(rs.length)}
-	{@const net = single ? '' : money(t.net)}
+	{@const net = single || !groupTotals ? '' : money(t.net)}
 	{@const netTone = t.net > 0 ? 'text-status-success' : 'text-muted-foreground'}
 	{@const klass = cn(
 		GROUP,
@@ -805,7 +817,7 @@
 		</span>
 		<span class={cn(CELL, END, 'tabular-nums', netTone)} style="grid-column: {cAmount};">{net}</span
 		>
-		{#if WIDE && afterAmount > 0 && !BY_DAY}
+		{#if WIDE && afterAmount > 0 && !BY_DAY && groupTotals}
 			<span class={CELL} style="grid-column: {cAmount + 1} / -1;">
 				In {money(t.inn)} · out {money(t.out)}
 			</span>

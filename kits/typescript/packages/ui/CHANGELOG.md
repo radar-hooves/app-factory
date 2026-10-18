@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.20] - 2026-10-19
+
+### Added
+
+- **Ledger reads dates the household way and can drop its group totals** (consumer: godswood, radar-hooves/godswood#874): `dateFormat="numeric"` writes "30/06/2026" (wide) and "30/06" (narrow) in rows, statement lines, the row label and day and week group heads; the default `"short"` is unchanged ("30 Jun 2026"). `groupTotals={false}` omits each group's net and its in and out, for a list of `conversion` rows (debts, transfers) whose net would read $0.00. `ledgerDate` and `periodLabel` take the same format as a last argument.
+
 ## [2026.10.19] - 2026-10-19
 
 ### Added

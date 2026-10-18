@@ -22,6 +22,8 @@
 		withEditor = true,
 		withActions = false,
 		fyStart,
+		dateFormat,
+		groupTotals,
 		locale,
 		onAttachment,
 		tools,
@@ -35,6 +37,8 @@
 		withEditor?: boolean;
 		withActions?: boolean;
 		fyStart?: number;
+		dateFormat?: 'short' | 'numeric';
+		groupTotals?: boolean;
 		locale?: string;
 		onAttachment?: (row: Row) => void;
 		tools?: ListIconAction[];
@@ -77,6 +81,8 @@
 	columns={withActions ? [...columns, { key: 'title', label: 'Payee', actions: only }] : columns}
 	{layout}
 	{fyStart}
+	{dateFormat}
+	{groupTotals}
 	{locale}
 	{onAttachment}
 	{tools}
