@@ -1,11 +1,12 @@
 /**
  * The collection picker renders only when there is a genuine pick: two or
  * more collections the person may read. With one, or none, there is nothing
- * to choose and the row is not there. A collection is shown by its title,
- * never by its name or a retrieval summary.
+ * to choose and nothing is there. However many there are, it is one control
+ * (a person holding 27 once had a wall of chips taller than the box), and a
+ * collection is shown by its title, never by its name or a retrieval summary.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
 const COLLECTIONS = [
@@ -13,14 +14,26 @@ const COLLECTIONS = [
 	{ name: 'housing', title: 'Defence housing and relocation' }
 ];
 
+const MANY = Array.from({ length: 27 }, (_, n) => ({
+	name: `subject-${n}`,
+	title: n === 7 ? 'Radar' : `Subject ${n}`
+}));
+
 function base(props: Record<string, unknown> = {}) {
 	return { value: '', running: false, onsubmit: () => {}, onstop: () => {}, ...props };
+}
+
+const control = () => screen.getByRole('button', { name: /^Where Assistant looks: / });
+
+async function opened() {
+	await fireEvent.click(control());
+	return screen.getByRole('listbox', { name: 'Where Assistant looks' });
 }
 
 describe('Composer collection picker', () => {
 	it('renders nothing when the person has no collection to choose between', () => {
 		render(Composer, { props: base({ collections: [COLLECTIONS[0]] }) });
-		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /looks/ })).not.toBeInTheDocument();
 	});
 
 	it('renders nothing when the host passes none', () => {
@@ -28,51 +41,105 @@ describe('Composer collection picker', () => {
 		expect(screen.queryByText('All your collections')).not.toBeInTheDocument();
 	});
 
-	it('offers all of them, then each by its title and never its name', () => {
+	it('is one control however many there are, saying where the question looks', () => {
+		render(Composer, { props: base({ collections: MANY }) });
+		expect(control()).toHaveTextContent('All your collections');
+		expect(control()).toHaveAttribute('aria-haspopup', 'listbox');
+		expect(control()).toHaveAttribute('aria-expanded', 'false');
+		expect(screen.queryByText('Subject 1')).not.toBeInTheDocument();
+	});
+
+	it('opens on all of them, then each by its title and never its name', async () => {
 		render(Composer, { props: base({ collections: COLLECTIONS }) });
-		expect(screen.getByRole('button', { name: 'All your collections' })).toHaveAttribute(
-			'aria-pressed',
+		const list = await opened();
+		expect(control()).toHaveAttribute('aria-expanded', 'true');
+		expect(within(list).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual([
+			'All your collections',
+			'ADF pay and conditions Rates and leave',
+			'Defence housing and relocation'
+		]);
+		expect(within(list).getByRole('option', { name: /All your collections/ })).toHaveAttribute(
+			'aria-selected',
 			'true'
 		);
-		expect(screen.getByRole('button', { name: 'ADF pay and conditions' })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Defence housing and relocation' })).toBeInTheDocument();
 		expect(screen.queryByText('adf-pay')).not.toBeInTheDocument();
 	});
 
-	it('reads a slug as a title where the library has none, and never shows a summary', () => {
+	it('reads a slug as a title where the library has none, and never shows a summary', async () => {
 		const collections = [
 			{ name: 'defence-housing', summary: 'FILING: pipeline text, 4 documents' },
 			{ name: 'adf_pay' }
 		];
 		render(Composer, { props: base({ collections }) });
-		expect(screen.getByRole('button', { name: 'Defence housing' })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Adf pay' })).toBeInTheDocument();
+		const list = await opened();
+		expect(within(list).getByRole('option', { name: 'Defence housing' })).toBeInTheDocument();
+		expect(within(list).getByRole('option', { name: 'Adf pay' })).toBeInTheDocument();
 		expect(screen.queryByText(/FILING/)).not.toBeInTheDocument();
 	});
 
-	it('carries the description as the chip’s hover', () => {
-		render(Composer, { props: base({ collections: COLLECTIONS }) });
-		expect(screen.getByRole('button', { name: 'ADF pay and conditions' })).toHaveAttribute('title', 'Rates and leave');
-	});
-
-	it('marks the chosen collection and hands the host its name on a tap', async () => {
+	it('shows the chosen one on the control and hands the host its name on a pick', async () => {
 		const oncollection = vi.fn();
 		render(Composer, {
 			props: base({ collections: COLLECTIONS, collection: 'housing', oncollection })
 		});
+		expect(control()).toHaveTextContent('Defence housing and relocation');
+		const list = await opened();
 		expect(
-			screen.getByRole('button', { name: 'Defence housing and relocation' })
-		).toHaveAttribute('aria-pressed', 'true');
+			within(list).getByRole('option', { name: 'Defence housing and relocation' })
+		).toHaveAttribute('aria-selected', 'true');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'ADF pay and conditions' }));
+		await fireEvent.click(within(list).getByRole('option', { name: /ADF pay and conditions/ }));
 		expect(oncollection).toHaveBeenLastCalledWith('adf-pay');
-		await fireEvent.click(screen.getByRole('button', { name: 'All your collections' }));
+		expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+		expect(screen.getByRole('textbox')).toHaveFocus();
+
+		await fireEvent.click(within(await opened()).getByRole('option', { name: /All your/ }));
 		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+	});
+
+	it('is driven from the keyboard, and Escape hands focus back', async () => {
+		const oncollection = vi.fn();
+		render(Composer, { props: base({ collections: COLLECTIONS, oncollection }) });
+		control().focus();
+		await fireEvent.keyDown(control(), { key: 'ArrowDown' });
+		const list = screen.getByRole('listbox');
+		expect(list).toHaveFocus();
+		expect(list.getAttribute('aria-activedescendant')).toBe(
+			within(list).getByRole('option', { name: /All your/ }).id
+		);
+
+		await fireEvent.keyDown(list, { key: 'Escape' });
+		expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+		expect(control()).toHaveFocus();
+
+		await fireEvent.keyDown(control(), { key: 'ArrowDown' });
+		await fireEvent.keyDown(screen.getByRole('listbox'), { key: 'ArrowDown' });
+		await fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' });
+		expect(oncollection).toHaveBeenLastCalledWith('adf-pay');
+	});
+
+	it('takes a search from a long list up, and Enter picks the first match', async () => {
+		const oncollection = vi.fn();
+		render(Composer, { props: base({ collections: MANY, oncollection }) });
+		await fireEvent.click(control());
+		const field = screen.getByRole('combobox', { name: 'Where Assistant looks' });
+		expect(field).toHaveFocus();
+
+		await fireEvent.input(field, { target: { value: 'rad' } });
+		expect(screen.getAllByRole('option').map((o) => o.textContent?.trim())).toEqual(['Radar']);
+		await fireEvent.keyDown(field, { key: 'Enter' });
+		expect(oncollection).toHaveBeenLastCalledWith('subject-7');
+
+		await fireEvent.click(control());
+		await fireEvent.input(screen.getByRole('combobox'), { target: { value: 'zzz' } });
+		expect(screen.getByText('Nothing matches that.')).toBeInTheDocument();
 	});
 
 	it('is named for the persona it asks', () => {
 		render(Composer, { props: base({ collections: COLLECTIONS, name: 'Outrider' }) });
-		expect(screen.getByRole('group', { name: 'Where Outrider looks' })).toBeInTheDocument();
+		expect(
+			screen.getByRole('button', { name: 'Where Outrider looks: All your collections' })
+		).toBeInTheDocument();
 	});
 });
 

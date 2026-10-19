@@ -101,7 +101,7 @@
 	}
 
 	.ds-lib-share:hover:not(:disabled) {
-		background: var(--ds-color-surface-1);
+		background: var(--ds-color-surface-2);
 		color: var(--ds-color-foreground);
 	}
 

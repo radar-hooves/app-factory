@@ -138,7 +138,7 @@
 	}
 
 	.ds-lib-mark:hover:not(:disabled) {
-		background: var(--ds-color-surface-1);
+		background: var(--ds-color-surface-2);
 	}
 
 	/* A verdict keeps its colour under the pointer that just gave it. */

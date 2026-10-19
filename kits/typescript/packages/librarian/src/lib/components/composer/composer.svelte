@@ -1,10 +1,11 @@
 <!--
   The composer: one rounded box holding attachments, the input AND a footer row.
 
-  Two things carry it: the chips sit BELOW the input inside the same box rather
-  than beside it, and the trailing control is a circular filled accent button.
-  The empty→typing transition lives almost entirely in that control — the box
-  chrome grows with the text and nothing else moves.
+  Two things carry it: the quiet controls sit BELOW the input inside the same
+  box rather than beside it (attach, a briefing, and where the question looks
+  as one compact control), and the trailing control is a circular filled
+  accent button. The empty→typing transition lives almost entirely in that
+  control — the box chrome grows with the text and nothing else moves.
 
   While the persona is answering the box is disabled and the send button becomes a
   stop button: an ask route takes one question per request, and a box that
@@ -13,6 +14,7 @@
   the box open, with Send beside Stop.
 -->
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
@@ -27,35 +29,23 @@
 		rejectionMessage
 	} from '../../attachments';
 	import { DEFAULT_PERSONA, resolveCopy, type ChatCopy } from '../../copy';
+	import type { CollectionChoice } from './choices';
+	import ScopePicker from './scope-picker.svelte';
 
 	/** Past this many turns, the long-conversation banner offers to start
 	 *  over: a follow-up re-reads the whole conversation, so each one costs
 	 *  more than the last (measured — the longest ran 2.05M cached tokens). */
 	const DEFAULT_TURN_LIMIT = 8;
 
-	/** A collection a person may read, as the app lists it: `name` is what a
-	 *  question is narrowed to, `title` is what the picker shows (the name,
-	 *  made readable, where there is none) and `description` is its one-line
-	 *  hover. A retrieval summary is never a field here: it is filing history. */
-	export interface CollectionChoice {
-		name: string;
-		title?: string;
-		description?: string;
-	}
-
-	/** `defence-housing` as a reader would first read it: "Defence housing". */
-	function titleOf(choice: CollectionChoice): string {
-		const given = choice.title?.trim();
-		if (given) return given;
-		const words = choice.name.replace(/[-_]+/g, ' ').trim();
-		return words ? words[0]!.toLocaleUpperCase() + words.slice(1) : choice.name;
-	}
+	/** px kept between a lifted box and the keyboard. */
+	const KEYBOARD_GAP = 12;
 
 	interface Props {
 		value: string;
 		running: boolean;
 		/** The collections this person may read. The picker renders when there
-		 *  are two or more: with one, or none, there is nothing to choose. */
+		 *  are two or more: with one, or none, there is nothing to choose. It
+		 *  is one control however many there are, searchable from eight. */
 		collections?: CollectionChoice[];
 		/** The collection the next question is narrowed to, by name; undefined
 		 *  asks across all of them. */
@@ -131,14 +121,11 @@
 
 	// Who the question is put to: every collection the person may read, or one
 	// of them. A person with one collection (or none) has nothing to pick, so
-	// the row renders nothing rather than a chip that only reselects itself.
-	// A collection is shown by its title, the words a reader knows it by.
+	// nothing renders rather than a control that only reselects itself.
 	const hasChoice = $derived(collections.length > 1);
 
-	// Three chips in a narrow column clipped all three to fragments
-	// ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
-	// cannot finish reading is not a control, it is decoration.
-
+	let box = $state<HTMLElement | null>(null);
+	let wrapper = $state<HTMLElement | null>(null);
 	let textarea = $state<HTMLTextAreaElement | null>(null);
 	let picker = $state<HTMLInputElement | null>(null);
 	let rejected = $state('');
@@ -215,14 +202,21 @@
 
 	// The keyboard does not shrink the layout viewport on iOS, so a composer at
 	// the bottom of a full-height column sits UNDER it. The visual viewport is
-	// the one that moves; the overlap between the two is exactly how far the
-	// box must rise.
+	// the one that moves, and the box rises by however far its unlifted foot
+	// falls below it: the keyboard's height for a docked box, nothing for one
+	// centred above the keyboard on an empty conversation.
 	let lift = $state(0);
 	$effect(() => {
 		const viewport = globalThis.visualViewport;
 		if (!viewport) return;
 		const measure = () => {
-			lift = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+			const shown = viewport.offsetTop + viewport.height;
+			if (!wrapper || shown >= window.innerHeight) {
+				lift = 0;
+				return;
+			}
+			const foot = wrapper.getBoundingClientRect().bottom + untrack(() => lift);
+			lift = Math.max(0, Math.round(foot + KEYBOARD_GAP - shown));
 		};
 		measure();
 		viewport.addEventListener('resize', measure);
@@ -235,6 +229,7 @@
 </script>
 
 <div
+	bind:this={wrapper}
 	class="ds-lib-composer-lift"
 	style="transform: translateY(-{lift}px); padding-bottom: {lift
 		? '0px'
@@ -250,7 +245,7 @@
 		</div>
 	{/if}
 
-	<div class="ds-lib-box">
+	<div class="ds-lib-box" bind:this={box}>
 		{#if files.length > 0}
 			<ul class="ds-lib-files">
 				{#each files as file, index (file.name + file.size)}
@@ -318,29 +313,16 @@
 			{/if}
 
 			{#if hasChoice}
-				<div role="group" aria-label={words.collectionsLabel} class="ds-lib-scopes">
-					<button
-						type="button"
-						class="ds-lib-scope-chip"
-						aria-pressed={collection === undefined}
-						class:is-chosen={collection === undefined}
-						onclick={() => oncollection?.(undefined)}
-					>
-						{words.allCollections}
-					</button>
-					{#each collections as choice (choice.name)}
-						<button
-							type="button"
-							class="ds-lib-scope-chip"
-							aria-pressed={collection === choice.name}
-							class:is-chosen={collection === choice.name}
-							title={choice.description || undefined}
-							onclick={() => oncollection?.(choice.name)}
-						>
-							{titleOf(choice)}
-						</button>
-					{/each}
-				</div>
+				<ScopePicker
+					{collections}
+					{collection}
+					{words}
+					anchor={box}
+					onchoose={(name) => {
+						oncollection?.(name);
+						textarea?.focus();
+					}}
+				/>
 			{:else if note}
 				<span class="ds-lib-note">{note}</span>
 			{/if}
@@ -374,7 +356,9 @@
 		transition: transform 150ms ease;
 	}
 
+	/* Positioned: the scope list is placed against it. */
 	.ds-lib-box {
+		position: relative;
 		border: 1px solid var(--ds-color-border);
 		border-radius: var(--ds-radius-xl);
 		background: var(--ds-color-surface-1);
@@ -512,7 +496,6 @@
 	.ds-lib-icon-button:focus-visible,
 	.ds-lib-stop:focus-visible,
 	.ds-lib-send:focus-visible,
-	.ds-lib-scope-chip:focus-visible,
 	.ds-lib-file-remove:focus-visible {
 		outline: 2px solid var(--ds-color-ring);
 		outline-offset: 2px;
@@ -531,45 +514,6 @@
 	.ds-lib-send:hover:not(:disabled),
 	.ds-lib-stop:hover {
 		opacity: 0.9;
-	}
-
-	/* Three chips in a narrow column clipped all three to fragments
-	   ("defence-s…", "All colle…"). Wrapping beats truncating: a chip a reader
-	   cannot finish reading is not a control, it is decoration. */
-	.ds-lib-scopes {
-		display: flex;
-		min-width: 0;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.25rem;
-	}
-
-	.ds-lib-scope-chip {
-		max-width: 100%;
-		overflow: hidden;
-		border: 1px solid transparent;
-		border-radius: var(--ds-radius-full);
-		background: none;
-		padding: 0.125rem 0.5rem;
-		color: var(--ds-color-muted-foreground);
-		font: inherit;
-		font-size: var(--ds-text-2xs);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		cursor: pointer;
-		transition:
-			color 150ms ease,
-			background-color 150ms ease;
-	}
-
-	.ds-lib-scope-chip:hover {
-		color: var(--ds-color-foreground);
-	}
-
-	.ds-lib-scope-chip.is-chosen {
-		border-color: color-mix(in oklab, var(--ds-color-primary) 40%, transparent);
-		background: color-mix(in oklab, var(--ds-color-primary) 15%, transparent);
-		color: var(--ds-color-foreground);
 	}
 
 	.ds-lib-spacer {

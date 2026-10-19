@@ -48,6 +48,10 @@ export interface ChatCopy {
 	 *  shown by its own title, supplied by the app. */
 	collectionsLabel: string;
 	allCollections: string;
+	/** The picker's search field, from a long list up, and what it says
+	 *  when nothing matches. */
+	findCollection: string;
+	noCollectionMatch: string;
 	/** Past a few turns, the quiet line above the composer that offers to
 	 *  start over — a follow-up re-reads the whole conversation, so each one
 	 *  costs more than the last. */
@@ -90,9 +94,10 @@ export interface ChatCopy {
 	/** `{resets}` when the allowance comes back at the turn of the day. */
 	midnight: string;
 	support: string;
-	/** The conversation list. */
+	/** The conversation list, and closing it where the host lays it over the page. */
 	pastQuestions: string;
 	newQuestion: string;
+	closePastQuestions: string;
 	readingPastQuestions: string;
 	noPastQuestions: string;
 	pastQuestionsFailed: string;
@@ -154,6 +159,8 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		answeringPlaceholder: `${who} is answering…`,
 		collectionsLabel: `Where ${who} looks`,
 		allCollections: 'All your collections',
+		findCollection: 'Search',
+		noCollectionMatch: 'Nothing matches that.',
 		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
 		working: [`${who} is looking`, `${who} is reading`],
 		conversationLabel: `Conversation with ${who}`,
@@ -186,6 +193,7 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		support: 'Support',
 		pastQuestions: 'Past questions',
 		newQuestion: 'New question',
+		closePastQuestions: 'Close past questions',
 		readingPastQuestions: 'Reading your past questions…',
 		noPastQuestions: 'No past questions yet.',
 		pastQuestionsFailed: "Your past questions couldn't be read just now.",

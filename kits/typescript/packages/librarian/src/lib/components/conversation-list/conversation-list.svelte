@@ -4,7 +4,8 @@
 
   From cadmus's Past questions (cadmus#114). Presentation only: the host hands
   it the list and the acts (`Chat`'s own), nothing here fetches, and where it
-  sits — a column, a sheet — is the host's.
+  sits — a column, a sheet — is the host's. A host that lays it over the page
+  passes `onclose`, and the header carries the way out beside New question.
 
   Each row's acts open under it rather than in a floating menu, and a delete
   asks under the row too: nothing to position, nothing to trap focus in, and
@@ -17,6 +18,7 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
+	import XIcon from '@lucide/svelte/icons/x';
 	import type { ConversationSummary } from '../../chat.svelte';
 	import { DEFAULT_PERSONA, resolveCopy, type ChatCopy } from '../../copy';
 
@@ -33,6 +35,8 @@
 		/** A row chosen; with `href`, as well as following it. */
 		onopen?: (id: string) => void;
 		onnew: () => void;
+		/** Closes the list, for a host that lays it over the page. */
+		onclose?: () => void;
 		/** Each act offered only when given; each resolves true once done. */
 		onrename?: (id: string, title: string) => Promise<boolean>;
 		ondownload?: (id: string) => Promise<boolean>;
@@ -49,6 +53,7 @@
 		href,
 		onopen,
 		onnew,
+		onclose,
 		onrename,
 		ondownload,
 		ondelete,
@@ -122,6 +127,16 @@
 			<PlusIcon size={14} />
 			<span>{words.newQuestion}</span>
 		</button>
+		{#if onclose}
+			<button
+				type="button"
+				class="ds-lib-list-close"
+				onclick={onclose}
+				aria-label={words.closePastQuestions}
+			>
+				<XIcon size={16} />
+			</button>
+		{/if}
 	</header>
 
 	{#if failed}
@@ -405,7 +420,8 @@
 		animation: ds-lib-list-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 	}
 
-	.ds-lib-list-more {
+	.ds-lib-list-more,
+	.ds-lib-list-close {
 		display: grid;
 		width: 2.75rem;
 		height: 2.75rem;
@@ -419,7 +435,8 @@
 	}
 
 	.ds-lib-list-more:hover,
-	.ds-lib-list-more[aria-expanded='true'] {
+	.ds-lib-list-more[aria-expanded='true'],
+	.ds-lib-list-close:hover {
 		color: var(--ds-color-foreground);
 	}
 
@@ -468,7 +485,8 @@
 	.ds-lib-list-new:focus-visible,
 	.ds-lib-list-act:focus-visible,
 	.ds-lib-list-open:focus-visible,
-	.ds-lib-list-more:focus-visible {
+	.ds-lib-list-more:focus-visible,
+	.ds-lib-list-close:focus-visible {
 		outline: 2px solid var(--ds-color-ring);
 		outline-offset: -2px;
 	}

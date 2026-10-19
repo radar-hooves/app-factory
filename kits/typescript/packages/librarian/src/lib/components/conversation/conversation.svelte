@@ -2,6 +2,12 @@
   The whole reading surface: every turn, the scroll that follows the stream,
   and the source pane beside it.
 
+  Before the first question it reads as ChatGPT's and Claude's empty chat: the
+  opening and the composer together in the middle of the panel, with nothing
+  else competing. The first question docks the composer at the foot and the
+  transcript scrolls above it. The composer is one element in both places, so
+  a draft or an attachment survives the move.
+
   This owns the SCROLL CONTAINER, which is the reason it exists rather than the
   host composing `AgentTranscript` in a div of its own. Follow-scroll, the
   jump-to-latest pill and a document pane that narrows the transcript instead
@@ -91,10 +97,16 @@
 		 *  prose, its citation marks, its links) renders its own, and one that
 		 *  only adds to it renders `AgentTranscript` inside it. */
 		turn?: Snippet<[AgentTranscriptProps]>;
-		/** Before the first turn, inside the scroll and under the opening and
-		 *  the scope: what the host shows ahead of a question, which scrolls
-		 *  with the conversation rather than taking its height. */
+		/** Before the first turn: what the host shows ahead of a question, under
+		 *  the centred composer, the examples and the scope (inside the scroll,
+		 *  under the opening, where there is no composer). It scrolls rather
+		 *  than taking the panel's height. */
 		lead?: Snippet;
+		/** The host's controls for the conversation as a whole (its past
+		 *  questions, a new one), at the measure's trailing edge above the
+		 *  transcript. It stays put while the transcript scrolls and narrows
+		 *  with it when a pane opens. */
+		toolbar?: Snippet;
 	}
 
 	let {
@@ -120,6 +132,7 @@
 		composer,
 		turn: presentTurn,
 		lead,
+		toolbar,
 		formatCost
 	}: Props = $props();
 
@@ -129,6 +142,8 @@
 	const words = $derived(resolveCopy(copy, name));
 	const who = $derived(personaName(name));
 	const opening = $derived(welcome ?? words.welcome);
+	const empty = $derived(turns.length === 0);
+	const centred = $derived(empty && Boolean(composer));
 
 	/**
 	 * When each turn arrived, for the turns this surface actually watched
@@ -247,105 +262,113 @@
 </script>
 
 <div class="ds-lib-surface">
-	<div class="ds-lib-main">
-		<!-- The pill is positioned against the SCROLL region, not the column: the
-		     composer is in the column too, and a pill over the input is a pill in
-		     the way. -->
-		<div class="ds-lib-scroll-region">
-			<div
-				bind:this={viewport}
-				onscroll={scrolled}
-				role="log"
-				aria-live="polite"
-				aria-busy={running}
-				aria-label={words.conversationLabel}
-				class="ds-lib-scroll"
-			>
-				<!-- The measure, in this package's own stylesheet.
-				     `--ds-lib-measure` is the one knob a host may turn, and it is a
-				     token rather than a class precisely because a class here is a
-				     string a consuming app's Tailwind has to find in `dist` — the
-				     arrangement that silently produced `max-width: none` and a
-				     2302px line in Pebblestone's production build. -->
-				<div class="ds-lib-column">
-					{#if turns.length === 0}
-						<div class="ds-lib-empty">
-							<p class="ds-lib-welcome">{opening}</p>
-							{#if examples.length > 0}
-								<ul class="ds-lib-chips">
-									{#each examples.slice(0, 3) as example (example)}
-										<li>
-											<button type="button" class="ds-lib-chip" onclick={() => onexample?.(example)}>
-												{example}
-											</button>
-										</li>
-									{/each}
-								</ul>
-							{/if}
-						</div>
-					{/if}
-
-					<!-- Above the first turn, and in ONE place in the markup: the empty
-					     state carries the welcome, this carries the boundary, and both
-					     sit at the top of the same column so a reader meets them in
-					     the same order whether or not they have asked anything yet. -->
-					{#if scope}
-						<ScopeStatement statement={scope} expanded={turns.length === 0} copy={words} />
-					{/if}
-
-					{@render lead?.()}
-
-					{#each turns as turn, index (turn.id)}
-						{@const last = index === turns.length - 1}
-						{@const props = {
-							question: turn.question,
-							blocks: turn.blocks,
-							outcome: turn.outcome,
-							running: running && last,
-							answering: last ? (answering ?? undefined) : undefined,
-							citations: turn.citations ?? [],
-							collectionNames,
-							copy: words,
-							name: who,
-							at: turn.at ?? stamps[turn.id],
-							artefact: turn.artefact,
-							artefactOpen: isShowing(turn),
-							onopenartefact: opener(turn),
-							describeTool,
-							formatCost,
-							oncite: oncite || loadDocument ? cite : undefined,
-							onregenerate: last && !running ? onregenerate : undefined,
-							onmark:
-								last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined,
-							shared: turn.shared,
-							onshare:
-								onshare && !(last && running) ? (share: boolean) => onshare(turn, share) : undefined
-						} satisfies AgentTranscriptProps}
-						{#if presentTurn}
-							{@render presentTurn(props)}
-						{:else}
-							<AgentTranscript {...props} />
-						{/if}
-					{/each}
-				</div>
-			</div>
-
-			{#if !follow.following && turns.length > 0}
-				<button type="button" class="ds-lib-jump" onclick={jump}>
-					<ArrowDownIcon size={14} />
-					{words.jumpToLatest}
-				</button>
-			{/if}
-		</div>
-
-		{#if composer}
-			<!-- Lifted off the scroll area, and on the app's own background rather
-			     than the transcript's: prose scrolling up to the exact edge of the
-			     input is the one place a reader loses track of which is which. -->
-			<div class="ds-lib-composer">
-				<div class="ds-lib-column ds-lib-column-flush">{@render composer()}</div>
+	<div class="ds-lib-main" class:is-centred={centred}>
+		{#if toolbar}
+			<div class="ds-lib-toolbar">
+				<div class="ds-lib-column ds-lib-column-flush ds-lib-toolbar-row">{@render toolbar()}</div>
 			</div>
 		{/if}
+
+		<div class="ds-lib-stage">
+			<!-- The pill is positioned against the SCROLL region, not the column: the
+			     composer is in the column too, and a pill over the input is a pill in
+			     the way. -->
+			<div class="ds-lib-scroll-region">
+				<div
+					bind:this={viewport}
+					onscroll={scrolled}
+					role="log"
+					aria-live="polite"
+					aria-busy={running}
+					aria-label={words.conversationLabel}
+					class="ds-lib-scroll"
+				>
+					<!-- The measure, in this package's own stylesheet.
+					     `--ds-lib-measure` is the one knob a host may turn, and it is a
+					     token rather than a class precisely because a class here is a
+					     string a consuming app's Tailwind has to find in `dist` — the
+					     arrangement that silently produced `max-width: none` and a
+					     2302px line in Pebblestone's production build. -->
+					<div class="ds-lib-column">
+						{#if empty}
+							<div class="ds-lib-empty">
+								<p class="ds-lib-welcome">{opening}</p>
+								{#if !centred}{@render suggestions()}{/if}
+							</div>
+						{/if}
+
+						<!-- Above the first turn, and in ONE place in the markup: the empty
+						     state carries the welcome, this carries the boundary, and both
+						     sit at the top of the same column so a reader meets them in
+						     the same order whether or not they have asked anything yet.
+						     Centred, both sit under the composer instead. -->
+						{#if !centred}
+							{#if scope}
+								<ScopeStatement statement={scope} expanded={empty} copy={words} />
+							{/if}
+							{#if empty}{@render lead?.()}{/if}
+						{/if}
+
+						{#each turns as turn, index (turn.id)}
+							{@const last = index === turns.length - 1}
+							{@const props = {
+								question: turn.question,
+								blocks: turn.blocks,
+								outcome: turn.outcome,
+								running: running && last,
+								answering: last ? (answering ?? undefined) : undefined,
+								citations: turn.citations ?? [],
+								collectionNames,
+								copy: words,
+								name: who,
+								at: turn.at ?? stamps[turn.id],
+								artefact: turn.artefact,
+								artefactOpen: isShowing(turn),
+								onopenartefact: opener(turn),
+								describeTool,
+								formatCost,
+								oncite: oncite || loadDocument ? cite : undefined,
+								onregenerate: last && !running ? onregenerate : undefined,
+								onmark:
+									last && !running && onmark ? (verdict: Verdict) => onmark(turn, verdict) : undefined,
+								shared: turn.shared,
+								onshare:
+									onshare && !(last && running) ? (share: boolean) => onshare(turn, share) : undefined
+							} satisfies AgentTranscriptProps}
+							{#if presentTurn}
+								{@render presentTurn(props)}
+							{:else}
+								<AgentTranscript {...props} />
+							{/if}
+						{/each}
+					</div>
+				</div>
+
+				{#if !follow.following && turns.length > 0}
+					<button type="button" class="ds-lib-jump" onclick={jump}>
+						<ArrowDownIcon size={14} />
+						{words.jumpToLatest}
+					</button>
+				{/if}
+			</div>
+
+			{#if composer}
+				<div class="ds-lib-composer">
+					<div class="ds-lib-column ds-lib-column-flush">
+						{@render composer()}
+						{#if centred}
+							<div class="ds-lib-after">
+								{@render suggestions()}
+								{#if scope}
+									<ScopeStatement statement={scope} expanded={false} copy={words} />
+								{/if}
+								{@render lead?.()}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
 	</div>
 
 	{#if column?.kind === 'document' && loadDocument}
@@ -364,6 +387,20 @@
 		/>
 	{/if}
 </div>
+
+{#snippet suggestions()}
+	{#if examples.length > 0}
+		<ul class="ds-lib-chips">
+			{#each examples.slice(0, 3) as example (example)}
+				<li>
+					<button type="button" class="ds-lib-chip" onclick={() => onexample?.(example)}>
+						{example}
+					</button>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+{/snippet}
 
 <style>
 	/* `min-width: 0` for a host that sets this in a row beside columns of its
@@ -384,6 +421,7 @@
 		flex-direction: column;
 	}
 
+	.ds-lib-stage,
 	.ds-lib-scroll-region {
 		position: relative;
 		display: flex;
@@ -392,19 +430,25 @@
 		flex-direction: column;
 	}
 
+	/* The transcript fades into the composer's edge rather than stopping at a
+	   rule across the panel: the box is edge enough, and a fade lies over any
+	   ground the app paints, a texture included. The fade is the column's own
+	   bottom padding once the reader is at the latest. */
 	.ds-lib-scroll {
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
 	}
 
+	/* Turns are told apart by space and type, never boxes. */
 	.ds-lib-column {
 		display: flex;
 		width: 100%;
 		max-width: var(--ds-lib-measure, 46rem);
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 2.5rem;
 		margin-inline: auto;
 		padding: 1.5rem 1rem;
 	}
@@ -412,6 +456,72 @@
 	.ds-lib-column-flush {
 		gap: 0;
 		padding: 0;
+	}
+
+	.ds-lib-toolbar {
+		flex: none;
+		padding: 0.5rem 1rem 0;
+	}
+
+	.ds-lib-toolbar-row {
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.25rem;
+	}
+
+	/* Centred: the stage scrolls as one, and the opening and the composer meet
+	   in its middle. Auto margins centre them while they fit and let them
+	   scroll from the top once a tall lead does not, where
+	   `justify-content: center` would cut the top off. */
+	.is-centred .ds-lib-stage {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.is-centred .ds-lib-scroll-region {
+		flex: none;
+		margin-top: auto;
+	}
+
+	.is-centred .ds-lib-scroll {
+		flex: none;
+		overflow: visible;
+		mask-image: none;
+	}
+
+	.is-centred .ds-lib-scroll .ds-lib-column {
+		padding-bottom: 1.25rem;
+	}
+
+	.is-centred .ds-lib-composer {
+		margin-bottom: auto;
+		padding-top: 0;
+	}
+
+	.is-centred .ds-lib-empty {
+		align-items: center;
+		padding-block: 0;
+		text-align: center;
+	}
+
+	.is-centred .ds-lib-welcome {
+		font-family: var(--ds-font-display, inherit);
+		font-size: 1.5rem;
+		line-height: 1.3;
+		text-wrap: balance;
+	}
+
+	.ds-lib-after {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		padding-top: 1rem;
+	}
+
+	.ds-lib-after .ds-lib-chips {
+		flex-flow: row wrap;
+		justify-content: center;
 	}
 
 	.ds-lib-empty {
@@ -501,8 +611,6 @@
 
 	.ds-lib-composer {
 		flex: none;
-		border-top: 1px solid var(--ds-color-border);
-		background: var(--ds-color-background);
-		padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+		padding: 0.25rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
 	}
 </style>

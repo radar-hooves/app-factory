@@ -1,16 +1,16 @@
 <!--
   One question and everything the persona did answering it.
 
-  Four things carry the shape. The question is a bubble against the trailing
-  edge, so a reader scanning back finds their own words without reading any of
-  the answer. The answer is a bounded card under it, signed with the persona's
-  name and the time, because a transcript of unbounded prose reads as a log
-  and the director's first words about the live screen were "it doesn't look
-  like a ChatGPT window". Everything the persona DID is one quiet line inside
-  that card, never a stack. And the measure is the package's own CSS, never a
-  utility class a consuming app's Tailwind has to discover in `dist` — the one
-  that got away compiled to `max-width: none` in production and left a
-  2302px-wide transcript.
+  Four things carry the shape, ChatGPT's and Claude's. The question is a quiet
+  bubble against the trailing edge, so a reader scanning back finds their own
+  words without reading any of the answer. The answer is prose under it, signed
+  with the persona's name and the time, in no box: space and type tell one turn
+  from the next (the operator's bar, 19/10/2026: "clean and elegant, like what
+  you get when you chat with ChatGPT or Claude"). Everything the persona DID is
+  one quiet line in the answer, never a stack. And the measure is the package's
+  own CSS, never a utility class a consuming app's Tailwind has to discover in
+  `dist` — the one that got away compiled to `max-width: none` in production
+  and left a 2302px-wide transcript.
 -->
 <script lang="ts">
 	import CheckIcon from '@lucide/svelte/icons/check';
@@ -364,7 +364,7 @@
 	.ds-lib-turn {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 1rem;
 	}
 
 	.ds-lib-ask {
@@ -376,27 +376,19 @@
 		align-self: flex-end;
 	}
 
-	/* The reader's own words carry the consuming app's hue, the way every chat
-	   a person already uses colours THEIR side and leaves the other party
-	   neutral. It is an identity mark, not decoration: scanning back for "what
-	   did I ask" is a colour search, not a reading task.
-
-	   --ds-color-primary-solid, falling back to --ds-color-primary, because a
-	   dark-mode palette lightens its primary so the SAME token can serve as
-	   coloured text on a dark page. A fill behind light text and text on a dark
-	   ground want opposite lightness, and a brand asked to be both comes out
-	   washed — a deep red reads as salmon. An app with a fill-grade brand
-	   colour declares the solid pair; one that has not is unaffected.
-	   It stays on the SHORT side of the transcript on purpose — a question is
-	   a line or two, an answer is paragraphs, so filling the question is an
-	   accent and filling the answer would be a wall. */
+	/* A raised tone, not the brand: both references set the reader's words on
+	   a quiet surface at the trailing edge, and position and shape are what a
+	   reader scanning back finds them by. It stays on the SHORT side of the
+	   transcript on purpose — a question is a line or two, an answer is
+	   paragraphs, so the bubble is an accent and boxing the answer would be a
+	   wall. */
 	.ds-lib-bubble {
 		max-width: 85%;
 		border: 1px solid transparent;
 		border-radius: var(--ds-radius-xl);
-		background: var(--ds-color-primary-solid, var(--ds-color-primary));
+		background: var(--ds-color-surface-2);
 		padding: 0.625rem 1rem;
-		color: var(--ds-color-primary-solid-foreground, var(--ds-color-primary-foreground));
+		color: var(--ds-color-foreground);
 		font-size: 1rem;
 		line-height: 1.5rem;
 		overflow-wrap: break-word;
@@ -410,18 +402,10 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* The card. A turn a reader can see the edges of is the whole of what the
-	   director was asking for: one question and its answer, bounded, rather
-	   than prose running edge to edge under the last lot of prose. */
 	.ds-lib-answer {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		border: 1px solid var(--ds-color-border);
-		border-inline-start: 3px solid var(--ds-color-primary);
-		border-radius: var(--ds-radius-xl);
-		background: var(--ds-color-surface-2);
-		padding: 0.875rem 1rem 0.75rem;
 	}
 
 	.ds-lib-answer-head {
@@ -502,7 +486,7 @@
 	}
 
 	.ds-lib-action:hover {
-		background: var(--ds-color-surface-1);
+		background: var(--ds-color-surface-2);
 		color: var(--ds-color-foreground);
 	}
 

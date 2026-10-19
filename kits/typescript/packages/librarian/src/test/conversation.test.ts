@@ -178,4 +178,57 @@ describe("Conversation in the host's own words", () => {
 				Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
+
+	it('centres the opening over the composer before the first question, with the rest under it', () => {
+		const lead = createRawSnippet(() => ({ render: () => '<section>Lately</section>' }));
+		const composer = createRawSnippet(() => ({ render: () => '<textarea></textarea>' }));
+		conversation({
+			lead,
+			composer,
+			scope: 'Holds the pay manual.',
+			welcome: 'Ask about pay.',
+			examples: ['How much leave?']
+		});
+		const box = screen.getByRole('textbox');
+		const after = (first: Element, second: Element) =>
+			first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING;
+		expect(screen.getByRole('log')).toContainElement(screen.getByText('Ask about pay.'));
+		expect(after(screen.getByText('Ask about pay.'), box)).toBeTruthy();
+		for (const below of ['How much leave?', 'What Assistant answers from', 'Lately']) {
+			expect(screen.getByRole('log')).not.toContainElement(screen.getByText(below));
+			expect(after(box, screen.getByText(below))).toBeTruthy();
+		}
+		// Folded: a boundary is one quiet line beside the composer, not a banner.
+		expect(screen.getByRole('button', { name: /What Assistant answers from/ })).toHaveAttribute(
+			'aria-expanded',
+			'false'
+		);
+	});
+
+	it('docks the composer under the transcript once there is a turn, and the lead goes', () => {
+		const lead = createRawSnippet(() => ({ render: () => '<section>Lately</section>' }));
+		const composer = createRawSnippet(() => ({ render: () => '<textarea></textarea>' }));
+		const turns: Turn[] = [
+			{ id: '1', question: 'q', blocks: [{ kind: 'text', index: 0, text: 'a' }], outcome: null }
+		];
+		conversation({ turns, lead, composer, examples: ['How much leave?'] });
+		expect(screen.queryByText('Lately')).not.toBeInTheDocument();
+		expect(screen.queryByText('How much leave?')).not.toBeInTheDocument();
+		expect(
+			screen.getByRole('log').compareDocumentPosition(screen.getByRole('textbox')) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it("puts the host's conversation controls above the transcript, outside its scroll", () => {
+		const toolbar = createRawSnippet(() => ({
+			render: () => '<button type="button">Past questions</button>'
+		}));
+		conversation({ toolbar });
+		const control = screen.getByRole('button', { name: 'Past questions' });
+		expect(screen.getByRole('log')).not.toContainElement(control);
+		expect(
+			control.compareDocumentPosition(screen.getByRole('log')) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
 });

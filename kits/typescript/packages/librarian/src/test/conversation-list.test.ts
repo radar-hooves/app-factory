@@ -128,4 +128,16 @@ describe('ConversationList', () => {
 		await view.rerender({ conversations: [], failed: false, onnew: vi.fn() });
 		expect(screen.getByText('No past questions yet.')).toBeInTheDocument();
 	});
+
+	it('offers a way out only to a host that lays it over the page', async () => {
+		const onclose = vi.fn();
+		list({ onclose });
+		await fireEvent.click(screen.getByRole('button', { name: 'Close past questions' }));
+		expect(onclose).toHaveBeenCalledOnce();
+	});
+
+	it('has no close of its own in a column', () => {
+		list();
+		expect(screen.queryByRole('button', { name: 'Close past questions' })).not.toBeInTheDocument();
+	});
 });
