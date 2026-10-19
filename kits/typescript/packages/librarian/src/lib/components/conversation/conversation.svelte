@@ -311,7 +311,7 @@
 						     Centred, both sit under the composer instead. -->
 						{#if !centred}
 							{#if scope}
-								<ScopeStatement statement={scope} expanded={empty} copy={words} />
+								<ScopeStatement statement={scope} expanded={false} copy={words} />
 							{/if}
 							{@render lead?.()}
 						{/if}

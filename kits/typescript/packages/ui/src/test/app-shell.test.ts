@@ -667,6 +667,8 @@ describe('CommandPalette — query', () => {
 			expect(screen.getByTestId('probe-query')).toHaveTextContent('zzz nothing matches')
 		);
 		const row = await screen.findByText('Ask: zzz nothing matches');
+		// The app's row answers a text nothing else matches; no empty line over it.
+		expect(screen.queryByText('No results.')).toBeNull();
 		await fireEvent.click(row);
 
 		await waitFor(() =>

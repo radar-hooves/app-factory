@@ -469,7 +469,8 @@
 		class={cn(
 			'flex flex-none items-center gap-2.5',
 			compact ? '' : 'h-14 px-4',
-			railNarrow && !compact && 'justify-center px-0'
+			railNarrow && !compact && 'justify-center px-0',
+			railCollapsed && !railNarrow && !compact && 'px-3'
 		)}
 		aria-label={brandTitle ?? 'Home'}
 	>
@@ -612,8 +613,8 @@
 				the foot that read as a navigation destination. Expanded, it sits right
 				of the wordmark (`ml-auto`); collapsed, the head has no room beside the
 				mark, so the row becomes a column and the toggle stacks under it,
-				centred. A peek keeps that column (the toggle under the mark, at the
-				mark's edge): a peeked row half the height pulled every nav row 50px up
+				centred. A peek keeps that column, the mark and the toggle where the
+				slim rail put them: a peeked row half the height pulled every nav row 50px up
 				under the pointer, and a click landed on the row below the one aimed
 				at (caspo#177). `md:grid` keeps it off the mobile drawer, where
 				collapse does not apply — the same reason the foot control carried
@@ -634,7 +635,7 @@
 						class={cn(
 							'text-shell-muted-foreground hover:text-shell-foreground hidden size-8 flex-none place-items-center rounded-md transition-colors md:grid',
 							!railCollapsed && 'ml-auto',
-							railCollapsed && !railNarrow && 'ml-4'
+							railCollapsed && !railNarrow && 'ml-3'
 						)}
 						aria-label={collapseLabel}
 						aria-pressed={collapsed}

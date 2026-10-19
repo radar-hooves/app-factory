@@ -925,6 +925,13 @@
 		padding-inline: 0;
 	}
 
+	/* Peeking, a row's icon keeps the place the slim rail centred it in (the
+	   rail less the nav's 0.75rem gutters, less the 1.125rem icon, halved), the
+	   label drawn after it: nothing under the pointer moves, across or down. */
+	.ds-nav[data-peek='true'] .ds-nav-item {
+		padding-inline: calc((var(--ds-shell-rail-width-collapsed) - 1.5rem - 1.125rem) / 2) 0.625rem;
+	}
+
 	/* The settings destination's two panes (SettingsShell).
 
 	   Only the SHAPE is here; the list's width, tint and rule are utilities on the

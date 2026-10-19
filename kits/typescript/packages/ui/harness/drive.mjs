@@ -1509,7 +1509,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			page.evaluate(() => ({
 				rail: document.querySelector('.ds-shell-rail').getBoundingClientRect().width,
 				mainLeft: document.querySelector('#ds-main').getBoundingClientRect().left,
-				rowTop: document.querySelector('.ds-shell-rail nav a').getBoundingClientRect().top,
+				rows: [...document.querySelectorAll('.ds-shell-rail nav a, .ds-shell-rail-foot a')]
+					.map((row) => `${row.getBoundingClientRect().top}:${row.getBoundingClientRect().left}`)
+					.join(' '),
 				peek: document.querySelector('.ds-shell-rail').dataset.peek === 'true'
 			}));
 		const slim = await read();
@@ -1529,9 +1531,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		// The row under the pointer stays under it: a peek that moved the rows
 		// sent a click to the row below the one aimed at (caspo#177).
 		check(
-			'collapsed rail peek: the nav rows do not move',
-			peeked.rowTop === slim.rowTop && after.rowTop === slim.rowTop,
-			`first row top ${slim.rowTop} -> ${peeked.rowTop} -> ${after.rowTop}`
+			'collapsed rail peek: no nav row moves',
+			peeked.rows === slim.rows && after.rows === slim.rows,
+			`row top:left ${slim.rows} -> ${peeked.rows} -> ${after.rows}`
 		);
 		await context.close();
 	}

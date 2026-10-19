@@ -152,7 +152,9 @@ you set it. An accent that fails 4.5:1 as text on your ground sets an ink once,
 and every one of those follows; fills keep the accent:
 
 ```css
-:root { --ds-color-primary-ink: oklch(0.45 0.16 XXX); } /* >=4.5:1 on every ground, both modes */
+/* Each >=4.5:1 on every ground of its mode: the dark ground wants a light ink. */
+:root { --ds-color-primary-ink: oklch(0.45 0.16 XXX); }
+.dark { --ds-color-primary-ink: oklch(0.78 0.12 XXX); }
 ```
 
 ### Status palette (binding — do not redefine)

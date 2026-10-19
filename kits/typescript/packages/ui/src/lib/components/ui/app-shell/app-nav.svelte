@@ -256,6 +256,7 @@
 	class={cn('ds-nav flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4', className)}
 	aria-label={label}
 	data-collapsed={iconOnly ? 'true' : undefined}
+	data-peek={collapsed && peek ? 'true' : undefined}
 >
 	{#each groups as group, i (group.heading ?? group.items[0]?.href ?? i)}
 		<div class="flex flex-col gap-1">

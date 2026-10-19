@@ -21,8 +21,9 @@
 	 * `forceMount` on that row, or the palette's own filter hides it the moment
 	 * the text matches no label. In `lead` it renders above the nav group and
 	 * ungrouped, so it leads whether or not the text also matches a destination
-	 * (the filter's sort lifts ungrouped rows above every group); in `children`
-	 * it comes after the nav group:
+	 * (the filter's sort moves every group after it), and it is what answers a
+	 * text nothing else matches, so no "No results." line is drawn over it.
+	 * `children` is for groups of the app's own, beneath the nav group:
 	 *
 	 *     <CommandPalette bind:open bind:query {nav}>
 	 *       {#snippet lead()}
@@ -65,7 +66,8 @@
 		/** Bind ⌘K / Ctrl-K to toggle. Turn off to drive `open` yourself. */
 		shortcut?: boolean;
 		/** App rows above the nav group, left ungrouped so they stay first while
-		 *  the filter sorts: an action on what was typed. */
+		 *  the filter sorts: an action on what was typed. Given, the palette
+		 *  draws no empty line of its own. */
 		lead?: Snippet;
 		/** Extra command groups: app-specific actions beneath the nav group. */
 		children?: Snippet;
@@ -100,9 +102,11 @@
 <Command.Dialog bind:open title="Command palette" description={placeholder}>
 	<Command.Input {placeholder} bind:value={query} />
 	<Command.List>
-		<Command.Empty>{emptyText}</Command.Empty>
-
-		{@render lead?.()}
+		{#if lead}
+			{@render lead()}
+		{:else}
+			<Command.Empty>{emptyText}</Command.Empty>
+		{/if}
 
 		{#if items.length > 0}
 			<Command.Group heading={navHeading}>

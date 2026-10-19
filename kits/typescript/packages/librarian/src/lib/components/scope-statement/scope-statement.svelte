@@ -6,12 +6,12 @@
   once, in the persona's own words, is cheaper than every answer hedging.
 
   One quiet line, never a card: the label and a chevron in the muted ink, the
-  statement under it in the same ink when opened (caspo#177). It leads while
-  there is nothing else on the surface, and folds to that line as soon as
-  there is: a boundary a reader has already read is a banner in the way
-  of the conversation they came for. Folded is not gone — the same line reopens
-  it, and a reader who opened it stays opened until the surface itself changes
-  state.
+  statement under it in the same ink when opened (caspo#177). `Conversation`
+  renders it folded, under the empty chat's composer and over the transcript
+  alike: a boundary is a banner in the way of the conversation a reader came
+  for, and one line they can open costs it nothing. Folded is not gone: the
+  same line reopens it, and a reader who opened it stays opened until the
+  surface itself changes state.
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
