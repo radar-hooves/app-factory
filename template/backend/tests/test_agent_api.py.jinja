@@ -353,9 +353,9 @@ async def test_a_question_retrieves_across_every_collection_the_person_may_read_
     assert "[1] The Manual, Part 5: Leave (manual)\n\n— 5.1 Recreation leave\nIn manual" in said
     assert "a member accrues four weeks of recreation leave" in said
     assert "cite each claim by its document's number" in said
-    # The document is opened too: a section the chunk did not carry reaches the model under the same number.
+    # A short document is opened too, whole, under the same number.
     assert "— 5.2 Long service leave\nAccrues after ten years." in said
-    assert "A member accrues four weeks a year." not in said
+    assert "— 5.1 Recreation leave\nA member accrues four weeks a year." in said
 
 
 async def test_the_citations_are_read_back_from_the_apps_record_and_the_question_is_the_persons_own(
@@ -443,7 +443,9 @@ async def test_a_follow_up_the_search_misses_still_reads_the_document_the_turn_b
     who = _person("chat-manual")
     first = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
 
-    narrowed = _events((await _ask(client, "manual", "And long service?", who, resume=first, collection=fake_library.SECOND)).text)
+    narrowed = _events(
+        (await _ask(client, "manual", "And long service?", who, resume=first, collection=fake_library.SECOND)).text
+    )
     [found, carried] = narrowed[1]["items"]
     assert (found["n"], found["document_id"]) == (1, None)
     assert (carried["n"], carried["document_id"], carried["section"]) == (
@@ -454,7 +456,11 @@ async def test_a_follow_up_the_search_misses_still_reads_the_document_the_turn_b
     assert "[2] The Manual, Part 5: Leave\n\n— 5.2 Long service leave\nAccrues after ten years." in _said(narrowed)
 
     unrelated = _events(
-        (await _ask(client, "manual", "can you generate artefacts", who, resume=first, collection=fake_library.SECOND)).text
+        (
+            await _ask(
+                client, "manual", "can you generate artefacts", who, resume=first, collection=fake_library.SECOND
+            )
+        ).text
     )
     assert [item["n"] for item in unrelated[1]["items"]] == [1]
 
