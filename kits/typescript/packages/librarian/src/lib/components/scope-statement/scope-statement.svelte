@@ -5,8 +5,10 @@
   whether the answer they are about to read covers their case at all. Saying it
   once, in the persona's own words, is cheaper than every answer hedging.
 
-  It leads while there is nothing else on the surface, and folds to one line as
-  soon as there is: a boundary a reader has already read is a banner in the way
+  One quiet line, never a card: the label and a chevron in the muted ink, the
+  statement under it in the same ink when opened (caspo#177). It leads while
+  there is nothing else on the surface, and folds to that line as soon as
+  there is: a boundary a reader has already read is a banner in the way
   of the conversation they came for. Folded is not gone — the same line reopens
   it, and a reader who opened it stays opened until the surface itself changes
   state.
@@ -60,33 +62,32 @@
 	</button>
 
 	{#if open}
-		<!-- No measure of its own: the card IS the measure, and a paragraph
-		     capped narrower than the border around it leaves a hand's width of
-		     empty card down the right at 1440. -->
 		<p class="ds-lib-scope-text">{statement}</p>
 	{/if}
 </section>
 
 <style>
 	.ds-lib-scope {
-		border: 1px solid var(--ds-color-border);
-		border-radius: var(--ds-radius-xl);
-		background: color-mix(in oklab, var(--ds-color-surface-2) 60%, transparent);
-		padding: 0.5rem 0.75rem;
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		align-items: flex-start;
 	}
 
+	/* 44px tall: a thumb's target, with nothing drawn around it. */
 	.ds-lib-scope-toggle {
 		display: flex;
-		width: 100%;
+		max-width: 100%;
+		min-height: 2.75rem;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		border: 0;
 		border-radius: var(--ds-radius-md);
 		background: none;
 		padding: 0;
 		color: var(--ds-color-muted-foreground);
 		font: inherit;
-		font-size: var(--ds-text-2xs);
+		font-size: 0.8125rem;
 		text-align: start;
 		cursor: pointer;
 		transition: color 150ms ease;
@@ -103,13 +104,9 @@
 
 	.ds-lib-scope-label {
 		min-width: 0;
-		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-weight: 500;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
 	}
 
 	.ds-lib-scope-chevron {
@@ -123,7 +120,7 @@
 	}
 
 	.ds-lib-scope-text {
-		margin: 0.375rem 0 0;
+		margin: 0;
 		color: var(--ds-color-muted-foreground);
 		font-size: 0.875rem;
 		line-height: 1.5rem;

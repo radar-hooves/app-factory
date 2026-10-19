@@ -367,7 +367,9 @@
 							<div class="ds-lib-after">
 								{@render suggestions()}
 								{#if scope}
-									<ScopeStatement statement={scope} expanded={false} copy={words} />
+									<div class="ds-lib-after-scope">
+										<ScopeStatement statement={scope} expanded={false} copy={words} />
+									</div>
 								{/if}
 								{@render lead?.()}
 							</div>
@@ -530,6 +532,11 @@
 		flex-direction: column;
 		gap: 1.5rem;
 		padding-top: 1rem;
+	}
+
+	.ds-lib-after-scope {
+		display: flex;
+		justify-content: center;
 	}
 
 	.ds-lib-after .ds-lib-chips {

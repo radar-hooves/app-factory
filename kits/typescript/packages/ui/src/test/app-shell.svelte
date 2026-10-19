@@ -98,14 +98,16 @@
 	onNavigate={(href) => (navigatedTo = href)}
 	placeholder="Search the harness…"
 >
-	{#if query.trim()}
-		<Command.Item
-			forceMount
-			value="ask"
-			onSelect={() => {
-				asked = query;
-				paletteOpen = false;
-			}}>Ask: {query}</Command.Item
-		>
-	{/if}
+	{#snippet lead()}
+		{#if query.trim()}
+			<Command.Item
+				forceMount
+				value="ask"
+				onSelect={() => {
+					asked = query;
+					paletteOpen = false;
+				}}>Ask: {query}</Command.Item
+			>
+		{/if}
+	{/snippet}
 </CommandPalette>

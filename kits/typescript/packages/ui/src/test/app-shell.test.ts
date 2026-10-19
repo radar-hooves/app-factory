@@ -675,6 +675,22 @@ describe('CommandPalette — query', () => {
 		expect(screen.getByTestId('probe-palette')).toHaveTextContent('closed');
 	});
 
+	it("leads with the app's own row, even while the text matches a destination", async () => {
+		render(ShellHarness);
+		await fireEvent.keyDown(document, { key: 'k', metaKey: true });
+		const input = await screen.findByPlaceholderText('Search the harness…');
+		await fireEvent.input(input, { target: { value: 'Iden' } });
+
+		const ask = await screen.findByText('Ask: Iden');
+		const destination = await screen.findByRole('option', { name: /Identities/ });
+		await waitFor(() =>
+			expect(
+				ask.compareDocumentPosition(destination) & Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy()
+		);
+		await waitFor(() => expect(ask.closest('[data-selected]')).not.toBeNull());
+	});
+
 	it('clears the text when the palette closes', async () => {
 		render(ShellHarness);
 		await fireEvent.keyDown(document, { key: 'k', metaKey: true });

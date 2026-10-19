@@ -19,12 +19,17 @@
 	 * `query` is the text in the input, bindable, so an app can offer a row that
 	 * acts on what was typed ("Ask the agent: …", "Search everything for …"). Pass
 	 * `forceMount` on that row, or the palette's own filter hides it the moment
-	 * the text matches no label:
+	 * the text matches no label. In `lead` it renders above the nav group and
+	 * ungrouped, so it leads whether or not the text also matches a destination
+	 * (the filter's sort lifts ungrouped rows above every group); in `children`
+	 * it comes after the nav group:
 	 *
 	 *     <CommandPalette bind:open bind:query {nav}>
-	 *       {#if query.trim()}
-	 *         <Command.Item forceMount value="ask" onSelect={() => ask(query)}>Ask: {query}</Command.Item>
-	 *       {/if}
+	 *       {#snippet lead()}
+	 *         {#if query.trim()}
+	 *           <Command.Item forceMount value="ask" onSelect={() => ask(query)}>Ask: {query}</Command.Item>
+	 *         {/if}
+	 *       {/snippet}
 	 *     </CommandPalette>
 	 */
 	import type { Snippet } from 'svelte';
@@ -40,6 +45,7 @@
 		navHeading = 'Navigate',
 		emptyText = 'No results.',
 		shortcut = true,
+		lead,
 		children
 	}: {
 		open?: boolean;
@@ -58,6 +64,9 @@
 		emptyText?: string;
 		/** Bind ⌘K / Ctrl-K to toggle. Turn off to drive `open` yourself. */
 		shortcut?: boolean;
+		/** App rows above the nav group, left ungrouped so they stay first while
+		 *  the filter sorts: an action on what was typed. */
+		lead?: Snippet;
 		/** Extra command groups: app-specific actions beneath the nav group. */
 		children?: Snippet;
 	} = $props();
@@ -92,6 +101,8 @@
 	<Command.Input {placeholder} bind:value={query} />
 	<Command.List>
 		<Command.Empty>{emptyText}</Command.Empty>
+
+		{@render lead?.()}
 
 		{#if items.length > 0}
 			<Command.Group heading={navHeading}>
