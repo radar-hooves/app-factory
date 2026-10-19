@@ -56,6 +56,18 @@ async function ask(page: Page, question: string) {
 	await page.getByRole('button', { name: 'Send' }).click();
 }
 
+/** Past questions come over the page on demand, never as a column beside it. */
+async function pastQuestions(page: Page) {
+	await expect(page.getByRole('region', { name: 'Past questions' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Past questions' }).click();
+	return page.getByRole('region', { name: 'Past questions' });
+}
+
+/** Where the next question looks: one control, opened onto its list. */
+function scope(page: Page) {
+	return page.getByRole('button', { name: /^Where Outrider looks: / });
+}
+
 function conversationId(page: Page): string {
 	const id = new URL(page.url()).searchParams.get('c');
 	expect(id, 'the address names the conversation').toBeTruthy();
@@ -89,8 +101,10 @@ test('an ask streams its answer and names the conversation in the address and th
 	await expect(page.getByText('You asked: How is recreation leave accrued?')).toBeVisible();
 	await expect(page).toHaveURL(/\?c=/);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
-	const past = page.getByRole('region', { name: 'Past questions' });
+	const past = await pastQuestions(page);
 	await expect(past.getByText('How is recreation leave accrued?')).toBeVisible();
+	await past.getByRole('button', { name: 'Close past questions' }).click();
+	await expect(past).toHaveCount(0);
 	helperConversation = conversationId(page);
 });
 
@@ -122,7 +136,8 @@ test('a link reopens a conversation on another device', async ({ browser }) => {
 
 test('rename, download and delete a conversation', async ({ page }) => {
 	await page.goto(`/chat/helper?c=${helperConversation}`);
-	const past = page.getByRole('region', { name: 'Past questions' });
+	await expect(page.getByText('How is recreation leave accrued?').first()).toBeVisible();
+	const past = await pastQuestions(page);
 
 	await past.getByRole('button', { name: 'More: How is recreation leave accrued?' }).click();
 	await past.getByRole('button', { name: 'Rename' }).click();
@@ -179,6 +194,7 @@ test('a persona that reads collections cites, opens the cited document and takes
 }) => {
 	await page.goto('/chat/outrider');
 	await expect(page.getByText('Ask about pay, leave and conditions of service.')).toBeVisible();
+	await page.getByRole('button', { name: 'What Outrider answers from' }).click();
 	await expect(page.getByText(/Checked against the open record on .*2026\./)).toBeVisible();
 	await ask(page, 'How much recreation leave does a member accrue?');
 
@@ -266,17 +282,19 @@ test('a shared answer opens read-only on the persona it was asked of, until it i
 
 test('a person narrows a question to one collection, and a link can too', async ({ page }) => {
 	await page.goto('/chat/outrider');
-	const group = page.getByRole('group', { name: /Where Outrider looks/ });
-	await expect(group).toBeVisible();
-	await expect(group.getByRole('button', { name: 'All your collections' })).toHaveAttribute(
-		'aria-pressed',
+	await expect(scope(page)).toHaveText('All your collections');
+	await scope(page).click();
+	const list = page.getByRole('listbox', { name: 'Where Outrider looks' });
+	await expect(list.getByRole('option', { name: 'All your collections' })).toHaveAttribute(
+		'aria-selected',
 		'true'
 	);
 	// A collection is shown by its title, made readable, never its raw name.
-	await expect(group.getByText('manual', { exact: true })).toHaveCount(0);
+	await expect(list.getByText('manual', { exact: true })).toHaveCount(0);
 
-	await group.getByRole('button', { name: 'Conditions' }).click();
+	await list.getByRole('option', { name: /^Conditions/ }).click();
 	await expect(page).toHaveURL(/[?&]collection=conditions\b/);
+	await expect(scope(page)).toHaveText('Conditions');
 	await ask(page, 'What about long service leave, in detail?');
 	await expect(page.getByText(/long service leave, in detail/).first()).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
@@ -288,16 +306,12 @@ test('a person narrows a question to one collection, and a link can too', async 
 
 	// A link that names one narrows the next question the same way.
 	await page.goto('/chat/outrider?collection=manual');
-	await expect(
-		page.getByRole('group', { name: /Where Outrider looks/ }).getByRole('button', {
-			name: 'Manual'
-		})
-	).toHaveAttribute('aria-pressed', 'true');
+	await expect(scope(page)).toHaveText('Manual');
 
 	// A persona that reads no collections offers no choice.
 	await page.goto('/chat/helper');
 	await expect(composer(page)).toBeVisible();
-	await expect(page.getByRole('group', { name: /Where .* looks/ })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /^Where .* looks: / })).toHaveCount(0);
 
 	// The library refuses one the person may not read, as the page cannot offer it.
 	const refused = await page.request.post('/api/agent/outrider/ask', {
@@ -307,7 +321,7 @@ test('a person narrows a question to one collection, and a link can too', async 
 	expect(await refused.text()).toContain('that collection is not one you can read');
 });
 
-// The collections persona's composer is the tallest, with its picker row.
+// The collections persona's composer carries the most, with its picker.
 // On a phone the report button shares its corner with Send (app-factory#29).
 test('on a phone, Send is clear of the report button', async ({ browser }) => {
 	const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -435,6 +449,7 @@ test('the pages, photographed', async ({ browser }) => {
 	test.setTimeout(120_000);
 	const views: [string, string][] = [
 		['index', '/chat'],
+		['new', '/chat/outrider'],
 		['collections', `/chat/outrider?c=${outriderConversation}`],
 		['shared', `/chat/outrider/answers/${outriderConversation}/0`],
 		['allowance', '/chat/helper']

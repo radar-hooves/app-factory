@@ -1,7 +1,9 @@
 <!--
 	One persona: a person's conversations with it, built from
 	@poodle64/librarian's own `Chat` and components
-	(app-factory docs/design/agent-console.md). The address names the persona,
+	(app-factory docs/design/agent-console.md). The conversation has the whole
+	panel; past questions come over it from the bar above the transcript, on
+	demand, never as a second column beside the rail. The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), so a link reopens or narrows it on any device,
 	mid-answer included, and a question another page hands over (`?q=`) waits
@@ -10,6 +12,8 @@
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import HistoryIcon from '@lucide/svelte/icons/history';
+	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
@@ -19,8 +23,10 @@
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
+	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
+	import * as Sheet from '@poodle64/ui/sheet';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
 	import * as app from '$lib/agent/app';
@@ -196,11 +202,75 @@
 	<!-- No space reserved here for the shell's report button: the composer lifts
 	     it clear of Send (`--ds-report-clearance`), and a reserve here as well
 	     lifts Send back under it on a phone (app-factory#29). -->
-	<div class="relative flex h-full min-h-0 flex-1">
-		<aside
-			class="border-border bg-background absolute inset-y-0 left-0 z-10 w-72 overflow-y-auto border-r shadow-lg md:static md:shadow-none {listOpen
-				? ''
-				: 'max-md:hidden'}"
+	<div class="flex h-full min-h-0 flex-1">
+		<Conversation
+			turns={c.turns}
+			running={c.busy}
+			version={c.version}
+			answering={c.answering}
+			name={who}
+			welcome={p.blurb || undefined}
+			examples={p.examples}
+			onexample={(question) => (c.draft = question)}
+			{scope}
+			onregenerate={() => void c.again()}
+			onmark={(turn, verdict) => c.mark(turn, verdict)}
+			onshare={(turn, share) => c.share(turn, share)}
+			loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
+			oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
+			describeTool={extensions.describeTool}
+			turn={extensions.Turn ? presented : undefined}
+			lead={extensions.Home && !c.conversationId ? home : undefined}
+			{formatCost}
+			{copy}
+		>
+			{#snippet toolbar()}
+				{#if c.conversationId || c.turns.length > 0}
+					<Button variant="ghost" size="sm" onclick={fresh}>
+						<SquarePenIcon />
+						{words.newQuestion}
+					</Button>
+				{/if}
+				<Button
+					variant="ghost"
+					size="sm"
+					aria-haspopup="dialog"
+					aria-expanded={listOpen}
+					onclick={() => (listOpen = true)}
+				>
+					<HistoryIcon />
+					{words.pastQuestions}
+				</Button>
+			{/snippet}
+			{#snippet composer()}
+				<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
+				<Composer
+					bind:value={c.draft}
+					bind:files={c.files}
+					running={c.busy}
+					sendWhileRunning={c.sendWhileRunning}
+					name={who}
+					{copy}
+					{collections}
+					{collection}
+					oncollection={narrow}
+					turnCount={c.turns.length}
+					onnewquestion={fresh}
+					onsubmit={() => void c.ask(undefined, undefined, collection)}
+					onstop={() => void c.stop()}
+					onbriefing={briefing
+						? () => void c.ask(briefing.question, BRIEFING, collection)
+						: undefined}
+				/>
+			{/snippet}
+		</Conversation>
+	</div>
+	<Sheet.Root bind:open={listOpen}>
+		<Sheet.Content
+			side="left"
+			showCloseButton={false}
+			aria-label={words.pastQuestions}
+			class="overflow-y-auto"
 		>
 			<ConversationList
 				conversations={c.conversations}
@@ -209,69 +279,15 @@
 				href={(id) => address(id)}
 				onopen={() => (listOpen = false)}
 				onnew={fresh}
+				onclose={() => (listOpen = false)}
 				onrename={(id, title) => c.rename(id, title)}
 				ondownload={(id) => c.download(id)}
 				ondelete={remove}
 				name={who}
 				{copy}
 			/>
-		</aside>
-		<div class="flex min-h-0 min-w-0 flex-1 flex-col">
-			<div class="flex items-center gap-2 border-b px-4 py-2 md:hidden">
-				<button
-					type="button"
-					class="text-muted-foreground hover:text-foreground text-sm underline-offset-4 hover:underline"
-					aria-expanded={listOpen}
-					onclick={() => (listOpen = !listOpen)}
-				>
-					{words.pastQuestions}
-				</button>
-			</div>
-			<Conversation
-				turns={c.turns}
-				running={c.busy}
-				version={c.version}
-				answering={c.answering}
-				name={who}
-				welcome={p.blurb || undefined}
-				examples={p.examples}
-				onexample={(question) => (c.draft = question)}
-				{scope}
-				onregenerate={() => void c.again()}
-				onmark={(turn, verdict) => c.mark(turn, verdict)}
-				onshare={(turn, share) => c.share(turn, share)}
-				loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
-				oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
-				describeTool={extensions.describeTool}
-				turn={extensions.Turn ? presented : undefined}
-				lead={extensions.Home && !c.conversationId ? home : undefined}
-				{formatCost}
-				{copy}
-			>
-				{#snippet composer()}
-					<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
-					<Composer
-						bind:value={c.draft}
-						bind:files={c.files}
-						running={c.busy}
-						sendWhileRunning={c.sendWhileRunning}
-						name={who}
-						{copy}
-						{collections}
-						{collection}
-						oncollection={narrow}
-						turnCount={c.turns.length}
-						onnewquestion={fresh}
-						onsubmit={() => void c.ask(undefined, undefined, collection)}
-						onstop={() => void c.stop()}
-						onbriefing={briefing
-							? () => void c.ask(briefing.question, BRIEFING, collection)
-							: undefined}
-					/>
-				{/snippet}
-			</Conversation>
-		</div>
-	</div>
+		</Sheet.Content>
+	</Sheet.Root>
 {/if}
 
 {#snippet presented(props: AgentTranscriptProps)}

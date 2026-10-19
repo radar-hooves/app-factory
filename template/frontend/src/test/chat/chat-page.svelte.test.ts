@@ -150,10 +150,37 @@ describe('A persona page, through the app extension points', () => {
 		);
 	});
 
-	it("shows the persona's home inside the conversation's scroll", async () => {
+	it("shows the persona's home under the composer, before the first question", async () => {
 		at('/chat/outrider');
 		const home = await screen.findByTestId('app-home');
-		expect(screen.getByRole('log')).toContainElement(home);
+		expect(screen.getByRole('log')).not.toContainElement(home);
+		expect(
+			screen.getByRole('textbox').compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('brings past questions over the page on demand, never as a column beside it', async () => {
+		at('/chat/outrider');
+		const open = await screen.findByRole('button', { name: 'Past questions' });
+		expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull();
+		// Nothing to start over from yet.
+		expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
+
+		await fireEvent.click(open);
+		const past = await screen.findByRole('region', { name: 'Past questions' });
+		expect(within(past).getByText('No past questions yet.')).toBeTruthy();
+		await fireEvent.click(within(past).getByRole('button', { name: 'Close past questions' }));
+		await waitFor(() =>
+			expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull()
+		);
+	});
+
+	it('offers a new question from the bar once a conversation is open', async () => {
+		at('/chat/outrider?c=c1');
+		await screen.findAllByTestId('app-turn');
+		fake.goto.mockClear();
+		await fireEvent.click(screen.getByRole('button', { name: 'New question' }));
+		expect(fake.goto).toHaveBeenCalledWith('/chat/outrider', expect.anything());
 	});
 
 	it("reads a reopened answer through the app's own turn, and a briefing as its card", async () => {
@@ -200,14 +227,18 @@ describe('Choosing where a persona looks', () => {
 	it('offers every collection the person may read, by its title, and asks across all of them', async () => {
 		const asked = answering('c3', 'Four weeks.');
 		at('/chat/outrider');
-		const group = await screen.findByRole('group', { name: /Where Outrider looks/ });
-		expect(within(group).getByRole('button', { name: 'All your collections' })).toHaveAttribute(
-			'aria-pressed',
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Where Outrider looks: All your collections' })
+		);
+		const list = screen.getByRole('listbox', { name: 'Where Outrider looks' });
+		expect(within(list).getByRole('option', { name: 'All your collections' })).toHaveAttribute(
+			'aria-selected',
 			'true'
 		);
-		expect(within(group).getByRole('button', { name: 'Pay and leave' })).toBeTruthy();
-		expect(within(group).getByRole('button', { name: 'Conditions of service' })).toBeTruthy();
+		expect(within(list).getByRole('option', { name: /^Pay and leave/ })).toBeTruthy();
+		expect(within(list).getByRole('option', { name: /^Conditions of service/ })).toBeTruthy();
 		expect(screen.queryByText('manual')).toBeNull();
+		await fireEvent.keyDown(list, { key: 'Escape' });
 
 		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -218,7 +249,8 @@ describe('Choosing where a persona looks', () => {
 
 	it('puts the picked collection in the address', async () => {
 		at('/chat/outrider');
-		await fireEvent.click(await screen.findByRole('button', { name: 'Conditions of service' }));
+		await fireEvent.click(await screen.findByRole('button', { name: /^Where Outrider looks/ }));
+		await fireEvent.click(screen.getByRole('option', { name: /^Conditions of service/ }));
 		expect(fake.goto).toHaveBeenCalledWith(
 			'?collection=conditions',
 			expect.objectContaining({ replaceState: true })
@@ -228,8 +260,7 @@ describe('Choosing where a persona looks', () => {
 	it('narrows the question to the collection a link names', async () => {
 		const asked = answering('c4', 'Four weeks.');
 		at('/chat/outrider?collection=conditions');
-		const picked = await screen.findByRole('button', { name: 'Conditions of service' });
-		expect(picked).toHaveAttribute('aria-pressed', 'true');
+		await screen.findByRole('button', { name: 'Where Outrider looks: Conditions of service' });
 
 		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -240,10 +271,9 @@ describe('Choosing where a persona looks', () => {
 
 	it('asks across them all when a link names a collection the person may not read', async () => {
 		at('/chat/outrider?collection=restricted');
-		expect(await screen.findByRole('button', { name: 'All your collections' })).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
+		expect(
+			await screen.findByRole('button', { name: 'Where Outrider looks: All your collections' })
+		).toBeTruthy();
 	});
 
 	it('offers no choice for a persona that reads no collections', async () => {
@@ -252,7 +282,7 @@ describe('Choosing where a persona looks', () => {
 		try {
 			at('/chat/outrider');
 			await screen.findByRole('textbox');
-			expect(screen.queryByRole('group', { name: /Where Outrider looks/ })).toBeNull();
+			expect(screen.queryByRole('button', { name: /Where Outrider looks/ })).toBeNull();
 		} finally {
 			ROUTES['/api/agent/personas'] = [PERSONA];
 			ROUTES['/api/agent/{persona}/collections'] = COLLECTIONS;
@@ -263,9 +293,11 @@ describe('Choosing where a persona looks', () => {
 describe('Sharing an answer', () => {
 	it("says how current the persona's documents are on its home, by the oldest check", async () => {
 		at('/chat/outrider');
-		expect(
-			await screen.findByText(/Checked against the open record on .*20.*2026\./)
-		).toBeInTheDocument();
+		// Folded to one line under the centred composer, and opened from it.
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'What Outrider answers from' })
+		);
+		expect(screen.getByText(/Checked against the open record on .*20.*2026\./)).toBeInTheDocument();
 	});
 
 	it("shares a settled answer from the app's own turn, by its place", async () => {
