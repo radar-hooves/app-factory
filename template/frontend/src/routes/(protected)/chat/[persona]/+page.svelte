@@ -129,27 +129,35 @@
 
 	// The address names the conversation: a link, the back button or the list
 	// opens one, and no address is a new one. A question handed over by address
-	// waits in its box, unsent; one handed over in navigation state is asked at
-	// once. Either leaves the entry at once, so nothing puts it back on Back, a
-	// reload, or over what the person types next.
+	// waits in its box, unsent. Either leaves the entry at once, so nothing puts
+	// it back on Back, a reload, or over what the person types next.
 	$effect(() => {
 		const want = wanted;
 		const question = handed;
-		const ask = asked;
 		const current = chat;
 		if (!current) return;
 		untrack(() => {
 			if (!want) {
 				current.new();
-				if (ask) {
-					void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
-					void current.ask(ask, undefined, collection);
-					return;
-				}
 				if (!question) return;
 				current.draft = question;
 				void goto(address(), { replaceState: true, keepFocus: true, noScroll: true });
 			} else if (want !== current.conversationId) void reopen(current, want);
+		});
+	});
+
+	// A question handed over in navigation state is asked at once, and clearing
+	// the state from the entry is this effect's own doing: it must not start the
+	// address effect over, which would see no conversation yet and discard the
+	// turn just begun. So it follows `asked` alone, declared after the address
+	// effect so a new conversation is started before the question goes into it.
+	$effect(() => {
+		const ask = asked;
+		const current = chat;
+		if (!current || !ask) return;
+		untrack(() => {
+			void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
+			void current.ask(ask, undefined, collection);
 		});
 	});
 

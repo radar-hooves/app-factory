@@ -7,17 +7,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
-	page: {
-		params: { persona: 'outrider' } as Record<string, string>,
-		url: new URL('http://localhost/chat/outrider'),
-		state: {} as { ask?: string }
-	},
-	goto: vi.fn(async () => undefined),
+	goto: vi.fn(async (_href: string, _options?: { state?: { ask?: string } }) => undefined),
 	GET: vi.fn(),
 	PUT: vi.fn()
 }));
 
-vi.mock('$app/state', () => ({ page: fake.page }));
+vi.mock('$app/state', async () => ({ page: (await import('./page-state.svelte')).nav }));
 vi.mock('$app/navigation', () => ({ goto: fake.goto }));
 vi.mock('$lib/api', () => ({
 	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: vi.fn() }
@@ -32,6 +27,7 @@ vi.mock('$lib/agent/app', async () => ({
 	...(await import('./app'))
 }));
 
+import { nav as page } from './page-state.svelte';
 import ChatPage from '../../routes/(protected)/chat/[persona]/+page.svelte';
 import SharedPage from '../../routes/(protected)/chat/[persona]/answers/[conversation]/[turn]/+page.svelte';
 
@@ -105,6 +101,10 @@ const ROUTES: Record<string, unknown> = {
 		shared: '/chat/outrider/answers/c1/0'
 	}
 };
+// A navigation that sets state, as the router does: the entry takes it.
+fake.goto.mockImplementation(async (_href, options) => {
+	if (options && 'state' in options) page.state = options.state ?? {};
+});
 const routes = async (path: string) => ({
 	data: ROUTES[path],
 	response: new Response(null, { status: 200 })
@@ -112,8 +112,8 @@ const routes = async (path: string) => ({
 fake.GET.mockImplementation(routes);
 
 function at(address: string, state: { ask?: string } = {}) {
-	fake.page.url = new URL(address, 'http://localhost');
-	fake.page.state = state;
+	page.url = new URL(address, 'http://localhost');
+	page.state = state;
 	return render(ChatPage);
 }
 
@@ -162,6 +162,18 @@ describe('A persona page, through the app extension points', () => {
 			'/chat/outrider',
 			expect.objectContaining({ replaceState: true, state: {} })
 		);
+	});
+
+	it('keeps the turn on screen once the state is cleared, and asks once', async () => {
+		const asked = answering('s1', 'Four weeks.');
+		at('/chat/outrider', { ask: 'How much leave?' });
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(page.state).toEqual({}));
+		// The persona named the conversation: the address follows it.
+		await waitFor(() => expect(fake.goto).toHaveBeenCalledWith('?c=s1', expect.anything()));
+		// Clearing the state must not have started the room over.
+		expect(within(screen.getByRole('log')).getByText('How much leave?')).toBeInTheDocument();
+		expect(asked).toHaveBeenCalledTimes(1);
 	});
 
 	it('never asks from the address alone', async () => {
@@ -366,13 +378,13 @@ describe('Sharing an answer', () => {
 
 describe("A shared answer's page", () => {
 	function shared() {
-		fake.page.params = { persona: 'outrider', conversation: 'c1', turn: '0' };
-		fake.page.url = new URL('http://localhost/chat/outrider/answers/c1/0');
+		page.params = { persona: 'outrider', conversation: 'c1', turn: '0' };
+		page.url = new URL('http://localhost/chat/outrider/answers/c1/0');
 		return render(SharedPage);
 	}
 
 	afterEach(() => {
-		fake.page.params = { persona: 'outrider' };
+		page.params = { persona: 'outrider' };
 		fake.GET.mockImplementation(routes);
 	});
 

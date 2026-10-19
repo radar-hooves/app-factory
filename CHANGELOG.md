@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.57] - 2026-10-19
+
+Need: caspo's Home asks through navigation state and the answer never appeared (measured on caspo.au and in caspo's E2E, 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Every app with a chat room takes it on re-stamp.
+
+### Fixed
+
+- **A question handed over in navigation state stays on screen.** 2026.10.56 asked it, then threw the conversation away: clearing the entry's state re-ran the address effect, which with no `?c=` yet started a new conversation over the turn in flight. The ask has its own effect now; the turn appears, streams, and the address gains `?c=` as for any asked question. The unit test holds the turn after the state is cleared (it fails on 2026.10.56), and the chat E2E hands a question over through the app's own router, then reloads and goes Back and Forward without a second send.
+
 ## [2026.10.56] - 2026-10-19
 
 Need: caspo's Home is one centred composer, and "pressing Enter starts the conversation" as on Claude and ChatGPT (the operator, 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Every app with a chat room takes it on re-stamp.

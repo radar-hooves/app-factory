@@ -373,6 +373,44 @@ test('a question handed over by a link waits in the box, unsent', async ({ page 
 	await expect(page).toHaveURL(/\/chat\/helper$/);
 });
 
+test('a question handed over in navigation state is asked, stays on screen and is never re-sent', async ({
+	page
+}) => {
+	const question = "What about carer's leave?";
+	let asks = 0;
+	page.on('request', (request) => {
+		if (request.method() === 'POST' && request.url().endsWith('/api/agent/helper/ask')) asks += 1;
+	});
+	await page.goto('/chat');
+	await expect(page.getByRole('link', { name: /^Ask The Helper/ })).toBeVisible();
+	// Another page's `goto('/chat/helper', { state: { ask } })`, through the app's own router.
+	await page.evaluate(async (ask) => {
+		const loaded = performance
+			.getEntriesByType('resource')
+			.map((entry) => entry.name)
+			.find((name) => /\/app\/navigation\.js/.test(name));
+		const { goto } = await import(/* @vite-ignore */ loaded as string);
+		await goto('/chat/helper', { state: { ask } });
+	}, question);
+
+	// The turn survives the entry being cleared: it is on screen, streams, and the
+	// address gains the conversation as for any asked question.
+	await expect(page.getByText(`You asked: ${question}`)).toBeVisible();
+	await expect(page).toHaveURL(/\/chat\/helper\?c=/);
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText(`You asked: ${question}`)).toBeVisible();
+	const id = conversationId(page);
+	expect((await read(page, id)).turns).toHaveLength(1);
+
+	await page.reload();
+	await expect(page.getByText(`You asked: ${question}`)).toBeVisible();
+	await page.goBack();
+	await page.goForward();
+	await expect(page.getByText(`You asked: ${question}`)).toBeVisible();
+	await page.waitForTimeout(500);
+	expect(asks, 'reload, Back and Forward never re-send').toBe(1);
+});
+
 test('a link can wait a question in the box but never make the room ask it', async ({ page }) => {
 	let asks = 0;
 	page.on('request', (request) => {
