@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.59] - 2026-10-20
+
+Need: three defects in caspo's Outrider answers on 19-20/10/2026 that every chat over collections shares (radar-hooves/caspo#177); consumer: caspo. `agent-common` 2026.10.59 carries them; every app with a collections persona takes them on re-stamp.
+
+### Fixed
+
+- **A source is a document.** The search's chunks are grouped by document: PACMAN Annex 7.E is one source with Parts 1.1 and 1.2 behind its one number, in the citations frame, the stored turn and the passages block, and the persona cites that number. `agent_common.collections.Passage` is now a chunk (`locator`, `text`) and `Source` the numbered document.
+- **A follow-up is searched on its own words.** It is no longer glued to the question before it, which sent "write a summary into a markdown file" after a rent question to rent passages. The documents the previous turn cited are opened beside the search and join the sources only where they carry the follow-up's words; the persona is told its earlier passages are still in the conversation. The answer path stays one model call.
+- **A table answer gets its row.** The first three documents are opened: a short one reaches the model whole, a long one as the sections, table rows and paragraphs that carry the question's words (a long table as its header and matching rows), within 20 000 characters. A document that cannot be opened in 5 s is logged and the passages stand alone.
+
+Take `agent-common>=2026.10.59` (the template's floor): the stamped `ask.py` calls `Collections.opened` and reads `Source`, which no earlier kit has.
+
 ## [2026.10.58] - 2026-10-19
 
 Need: caspo's operator dropped the visible search control from the top rail ("no one will use it", 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Four of the stamped shell spec's cases failed in caspo because they required it. Every app takes the spec on re-stamp.
