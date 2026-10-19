@@ -373,6 +373,19 @@ test('a question handed over by a link waits in the box, unsent', async ({ page 
 	await expect(page).toHaveURL(/\/chat\/helper$/);
 });
 
+test('a link can wait a question in the box but never make the room ask it', async ({ page }) => {
+	let asks = 0;
+	page.on('request', (request) => {
+		if (request.method() === 'POST' && request.url().endsWith('/api/agent/helper/ask')) asks += 1;
+	});
+	// Asking on arrival is navigation state (`goto(href, { state: { ask } })`),
+	// which an address cannot carry: `?ask=` is just another parameter.
+	await page.goto('/chat/helper?ask=What%20about%20long%20service%20leave%3F');
+	await expect(composer(page)).toHaveValue('');
+	await page.waitForTimeout(500);
+	expect(asks).toBe(0);
+});
+
 test('a spent allowance is shown, and the next question is refused', async ({ page }) => {
 	for (let asked = 0; asked < 12; asked += 1) {
 		const response = await page.request.post('/api/agent/outrider/ask', {

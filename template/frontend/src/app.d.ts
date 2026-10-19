@@ -15,7 +15,11 @@ declare global {
 			/** False for a route that pads its own panes. */
 			padded?: boolean;
 		}
-		// interface PageState {}
+		/** Navigation state a page hands the next one; a pasted link cannot carry it. */
+		interface PageState {
+			/** A question the chat room asks on arrival, `goto('/chat/<persona>', { state: { ask } })`. */
+			ask?: string;
+		}
 		// interface Platform {}
 	}
 }

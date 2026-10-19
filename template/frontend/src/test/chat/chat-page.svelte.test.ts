@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const fake = vi.hoisted(() => ({
 	page: {
 		params: { persona: 'outrider' } as Record<string, string>,
-		url: new URL('http://localhost/chat/outrider')
+		url: new URL('http://localhost/chat/outrider'),
+		state: {} as { ask?: string }
 	},
 	goto: vi.fn(async () => undefined),
 	GET: vi.fn(),
@@ -110,8 +111,9 @@ const routes = async (path: string) => ({
 });
 fake.GET.mockImplementation(routes);
 
-function at(address: string) {
+function at(address: string, state: { ask?: string } = {}) {
 	fake.page.url = new URL(address, 'http://localhost');
+	fake.page.state = state;
 	return render(ChatPage);
 }
 
@@ -148,6 +150,26 @@ describe('A persona page, through the app extension points', () => {
 			'/chat/outrider',
 			expect.objectContaining({ replaceState: true })
 		);
+	});
+
+	it('asks a question handed over in navigation state, and leaves no trace in the entry', async () => {
+		const asked = answering('s1', 'Four weeks.');
+		at('/chat/outrider', { ask: 'How much leave?' });
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+		const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+		expect(JSON.parse(String(init.body))).toMatchObject({ question: 'How much leave?' });
+		expect(fake.goto).toHaveBeenCalledWith(
+			'/chat/outrider',
+			expect.objectContaining({ replaceState: true, state: {} })
+		);
+	});
+
+	it('never asks from the address alone', async () => {
+		const asked = vi.fn();
+		vi.stubGlobal('fetch', asked);
+		at('/chat/outrider?ask=How%20much%20leave%3F');
+		await screen.findByRole('textbox');
+		expect(asked).not.toHaveBeenCalled();
 	});
 
 	it("shows the persona's home under the composer, before the first question", async () => {

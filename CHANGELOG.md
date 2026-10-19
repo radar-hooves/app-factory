@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.56] - 2026-10-19
+
+Need: caspo's Home is one centred composer, and "pressing Enter starts the conversation" as on Claude and ChatGPT (the operator, 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Every app with a chat room takes it on re-stamp.
+
+### Added
+
+- **A page can hand the room a question to ask now.** `goto('/chat/<persona>', { state: { ask: '...' } })` opens a new conversation and sends it on arrival: the composer docks and the answer streams. It is navigation state (`App.PageState.ask`), so a pasted or crafted link cannot make a signed-in person spend an answer; `?ask=` is deliberately not read. The entry is cleared as the question is sent, so Back and reload send nothing. `?q=` still waits in the box unsent, for the palette's and a document's "Ask about it".
+
 ## [2026.10.55] - 2026-10-19
 
 Need: four more of caspo's (radar-hooves/caspo#177), measured by caspo's build today; consumer: caspo. Every app on the template takes them on re-stamp.

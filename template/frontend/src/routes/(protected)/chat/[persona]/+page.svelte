@@ -6,9 +6,10 @@
 	demand, never as a second column beside the rail. The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), so a link reopens or narrows it on any device,
-	mid-answer included, and a question another page hands over (`?q=`) waits
-	in the box. What differs per app arrives through `$lib/agent/app`, never an
-	edit here.
+	mid-answer included. A question another page hands over waits in the box
+	(`?q=`), or is asked on arrival when it says so in navigation state
+	(`goto(href, { state: { ask } })`), which a pasted link cannot carry.
+	What differs per app arrives through `$lib/agent/app`, never an edit here.
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
@@ -60,6 +61,7 @@
 	const personaId = $derived(page.params.persona);
 	const wanted = $derived(page.url.searchParams.get('c'));
 	const handed = $derived(page.url.searchParams.get('q')?.trim() || null);
+	const asked = $derived(typeof page.state.ask === 'string' ? page.state.ask.trim() || null : null);
 	// The address names a collection the library did not list for this person
 	// as no collection: the question then goes across every one they may read.
 	const collection = $derived.by(() => {
@@ -126,17 +128,24 @@
 	}
 
 	// The address names the conversation: a link, the back button or the list
-	// opens one, and no address is a new one, with a handed-over question in
-	// its box, unsent, and then out of the address, so nothing puts it back
-	// over what the person types next. Only the address is followed here.
+	// opens one, and no address is a new one. A question handed over by address
+	// waits in its box, unsent; one handed over in navigation state is asked at
+	// once. Either leaves the entry at once, so nothing puts it back on Back, a
+	// reload, or over what the person types next.
 	$effect(() => {
 		const want = wanted;
 		const question = handed;
+		const ask = asked;
 		const current = chat;
 		if (!current) return;
 		untrack(() => {
 			if (!want) {
 				current.new();
+				if (ask) {
+					void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
+					void current.ask(ask, undefined, collection);
+					return;
+				}
 				if (!question) return;
 				current.draft = question;
 				void goto(address(), { replaceState: true, keepFocus: true, noScroll: true });

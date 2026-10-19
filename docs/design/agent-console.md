@@ -96,7 +96,7 @@ Published to the household index at each factory release tag; the stamp pins it 
 | `GET /quota` | getAgentQuota | the caller |
 | `/{persona}/jobs/{id}/watch·message·stop` | as named | `agent-{persona}` |
 
-- Pages: `routes/(protected)/chat` (the caller's personas; straight to the only one), `chat/[persona]` (the conversation list, reopen by `?c=`, rename, download, delete, stop, share, mark, the allowance, `?q=` handed over unsent, the collection picker) and `chat/[persona]/answers/[conversation]/[turn]` (a shared answer, read-only). `src/lib/agent/app.ts` is the app's extension point (`ChatExtensions` in `src/lib/agent/chat.ts`: `oncite`, `describeTool`, `copy`, `Home`, `Turn`, `briefing`, `formatCost`).
+- Pages: `routes/(protected)/chat` (the caller's personas; straight to the only one), `chat/[persona]` (the conversation list, reopen by `?c=`, rename, download, delete, stop, share, mark, the allowance, `?q=` handed over unsent, or `goto('/chat/<persona>', { state: { ask } })` asked on arrival, the collection picker) and `chat/[persona]/answers/[conversation]/[turn]` (a shared answer, read-only). `src/lib/agent/app.ts` is the app's extension point (`ChatExtensions` in `src/lib/agent/chat.ts`: `oncite`, `describeTool`, `copy`, `Home`, `Turn`, `briefing`, `formatCost`).
 - `app_hooks.agent_turn` (text in, the passages block included), `agent_event` (events out) and `agent_turn_settled(persona, conversation, turn)`.
 
 ### `@poodle64/librarian`
