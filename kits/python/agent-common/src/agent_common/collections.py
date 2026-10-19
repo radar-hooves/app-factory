@@ -18,8 +18,11 @@ import asyncio
 import builtins
 import contextlib
 import datetime
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+import logging
+import math
+import re
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from library import CallerApi, Configuration, QueryRequest
@@ -28,10 +31,106 @@ from library.wrappers import EnhancedApiClient
 
 from agent_common.agent import PASSAGES_START
 
-#: Heads the passages block appended to a question.
+logger = logging.getLogger(__name__)
+
+#: Heads the passages block appended to a question. Each number is one document, however many passages come from it.
 _PASSAGES = (
-    f"{PASSAGES_START}, retrieved for this question. Answer from them, cite each claim by its number as [1], "
-    "and say plainly when they do not hold the answer:"
+    f"{PASSAGES_START}, retrieved for this question. Each number is one document: answer from them, "
+    "cite each claim by its document's number as [1], and say plainly when they do not hold the answer:"
+)
+
+#: Added to the heading of a follow-up, which is searched on its own words: what the earlier turns drew on is still in the conversation.
+_FOLLOW_UP = (
+    " This message follows earlier ones and was searched on its own words; the passages of the earlier turns are "
+    "still in this conversation. A message that continues them is answered from them as well, and one that asks "
+    "nothing of the collections is answered as what it is, ignoring passages that do not bear on it."
+)
+
+#: Most documents a turn opens beyond the passages the search returned, taken in rank order.
+OPENED_DOCUMENTS = 3
+
+#: A document this short is given to the model whole.
+SHORT_DOCUMENT_CHARACTERS = 6000
+
+#: A section this short is given whole; a longer one is cut to the rows and paragraphs that name what was asked.
+SECTION_CHARACTERS = 3000
+
+#: Most characters a turn adds to the passages from the documents' own text.
+EXCERPT_CHARACTERS = 20000
+
+#: How long opening documents may take; the passages are enough to answer without them.
+OPEN_TIMEOUT_SECONDS = 5.0
+
+_WORD = re.compile(r"[a-z0-9]{3,}")
+_STOP = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "can",
+        "how",
+        "what",
+        "who",
+        "when",
+        "where",
+        "which",
+        "with",
+        "from",
+        "into",
+        "that",
+        "this",
+        "have",
+        "has",
+        "had",
+        "was",
+        "were",
+        "will",
+        "would",
+        "could",
+        "should",
+        "about",
+        "does",
+        "did",
+        "your",
+        "our",
+        "their",
+        "its",
+        "his",
+        "her",
+        "them",
+        "they",
+        "than",
+        "then",
+        "there",
+        "here",
+        "very",
+        "just",
+        "also",
+        "any",
+        "all",
+        "some",
+        "more",
+        "most",
+        "other",
+        "such",
+        "only",
+        "own",
+        "same",
+        "too",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "please",
+        "tell",
+        "give",
+        "show",
+    }
 )
 
 #: The same heading when the search found nothing.
@@ -68,14 +167,29 @@ class Collection:
 
 @dataclass(frozen=True, slots=True)
 class Passage:
-    """One retrieved passage, numbered from 1 in the library's rank order, so `[n]` in an answer names it."""
+    """One retrieved chunk of a document: where in it, and its text."""
+
+    locator: str | None
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class Source:
+    """One document the search drew on, numbered from 1 in the library's rank order, so `[n]` in an answer names it.
+
+    `passages` are the chunks the search returned from it, in rank order.
+    `excerpts` are further text of the same document, opened for the question
+    (a short document whole, a long one's rows and paragraphs that name what
+    was asked), which the model reads and the reader's citation does not show.
+    A chunk with no document id is a source of its own.
+    """
 
     n: int
     collection: str
     document_id: int | None
     title: str
-    locator: str | None
-    text: str
+    passages: tuple[Passage, ...]
+    excerpts: tuple[Passage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,28 +234,94 @@ class Collections:
             for summary in summaries
         ]
 
-    async def search(self, query: str, names: Sequence[str], top_k: int) -> builtins.list[Passage]:
-        """The `top_k` passages of `names` that best answer `query`, numbered from 1 in the library's rank order.
+    async def search(self, query: str, names: Sequence[str], top_k: int) -> builtins.list[Source]:
+        """The documents of `names` that best answer `query`, numbered from 1 in the order the library first ranks them.
 
+        The `top_k` chunks it returns are grouped by document: a document with
+        several chunks is one source with all of them behind its one number.
         `names` are always passed: the library's `/query` reads none given as
-        "no restriction" and drops the person's cut. A passage's text is the
-        chunk's full text (`payload["document"]`), or its snippet where the
-        library sent no payload.
+        "no restriction" and drops the person's cut. A chunk's text is its full
+        text (`payload["document"]`), or its snippet where the library sent no
+        payload.
         """
         request = QueryRequest(query=query, collections=builtins.list(names), top_k=top_k)
         async with self._api() as api:
             response = await api.query_as_caller(query_request=request)
+        grouped: dict[tuple[str, int | None] | int, tuple[str, int | None, str, builtins.list[Passage]]] = {}
+        for index, chunk in enumerate(response.chunks):
+            key = (chunk.collection, chunk.document_id) if chunk.document_id is not None else index
+            passage = Passage(chunk.locator, str((chunk.payload or {}).get("document") or chunk.snippet or ""))
+            if key in grouped:
+                grouped[key][3].append(passage)
+            else:
+                grouped[key] = (chunk.collection, chunk.document_id, chunk.title, [passage])
         return [
-            Passage(
-                n=n,
-                collection=chunk.collection,
-                document_id=chunk.document_id,
-                title=chunk.title,
-                locator=chunk.locator,
-                text=str((chunk.payload or {}).get("document") or chunk.snippet or ""),
-            )
-            for n, chunk in enumerate(response.chunks, start=1)
+            Source(n, collection, document_id, title, tuple(passages))
+            for n, (collection, document_id, title, passages) in enumerate(grouped.values(), start=1)
         ]
+
+    async def opened(
+        self,
+        sources: builtins.list[Source],
+        question: str,
+        *,
+        earlier: Mapping[int, asyncio.Task[Document | None]] | None = None,
+    ) -> builtins.list[Source]:
+        """`sources` with the text of their documents the question needs, and the `earlier` turn's documents it names.
+
+        The search returns chunks, and a chunk of a long table or a short
+        annex need not hold the row asked for. The first `OPENED_DOCUMENTS`
+        sources are opened and given the model whole when short, else the
+        sections, rows and paragraphs that carry the question's words, weighted
+        by how few sections of that document carry them, within
+        `EXCERPT_CHARACTERS` for the turn. `earlier` are `document` tasks the
+        caller started for what an earlier turn cited, which a follow-up leans
+        on though this search missed it: each is added as a further source
+        only where it carries those words. Opening is an enrichment: a
+        document that cannot be read within `OPEN_TIMEOUT_SECONDS` is logged
+        and the passages stand alone.
+        """
+        terms = _terms(question)
+        held = {source.document_id for source in sources}
+        tasks = {
+            document_id: asyncio.ensure_future(self.document(document_id))
+            for document_id in dict.fromkeys(s.document_id for s in sources[:OPENED_DOCUMENTS])
+            if document_id is not None
+        }
+        carried = {i: task for i, task in (earlier or {}).items() if i not in held}
+        for task in (earlier or {}).values():
+            if task not in carried.values():
+                task.cancel()
+        tasks |= carried
+        done, _ = await asyncio.wait(tasks.values(), timeout=OPEN_TIMEOUT_SECONDS) if tasks else (set(), set())
+        found: dict[int, Document] = {}
+        for document_id, task in tasks.items():
+            if task not in done:
+                task.cancel()
+                logger.warning("Opening document %s timed out; answering from the passages", document_id)
+            elif task.cancelled() or (error := task.exception()):
+                logger.warning(
+                    "Could not open document %s; answering from the passages",
+                    document_id,
+                    exc_info=None if task.cancelled() else error,
+                )
+            elif (document := task.result()) is not None:
+                found[document_id] = document
+        budget = EXCERPT_CHARACTERS
+        result: builtins.list[Source] = []
+        for source in sources:
+            document = found.get(source.document_id) if source.document_id is not None else None
+            excerpts = _excerpts(document, terms, source.passages, whole=True, budget=budget) if document else ()
+            budget -= sum(len(p.text) for p in excerpts)
+            result.append(replace(source, excerpts=excerpts))
+        for document_id in carried:
+            if (document := found.get(document_id)) is None:
+                continue
+            excerpts = _excerpts(document, terms, (), whole=False, budget=budget)
+            if excerpts:
+                budget -= sum(len(p.text) for p in excerpts)
+                result.append(Source(len(result) + 1, "", document_id, document.title, (), excerpts))
+        return result
 
     async def document(self, document_id: int) -> Document | None:
         """A cited document, section by section; None where the library has none this person may read.
@@ -172,11 +352,82 @@ class Collections:
                 yield CallerApi(client)
 
 
-def passages_block(passages: list[Passage]) -> str:
-    """The text appended to a question: the heading, then each passage as `[n] title — locator (collection)` and its text."""
-    if not passages:
+def _terms(question: str) -> frozenset[str]:
+    """The words of a question that can name something: no stop words, a trailing plural dropped."""
+    return frozenset(
+        w.removesuffix("s") if len(w) > 4 else w for w in _WORD.findall(question.lower()) if w not in _STOP
+    )
+
+
+def _hits(text: str, terms: frozenset[str]) -> frozenset[str]:
+    """Which of `terms` start a word of `text`."""
+    words = set(_WORD.findall(text.lower()))
+    return frozenset(t for t in terms if any(w.startswith(t) for w in words))
+
+
+def _squash(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _excerpts(
+    document: Document, terms: frozenset[str], shown: tuple[Passage, ...], *, whole: bool, budget: int
+) -> tuple[Passage, ...]:
+    """What of `document` the question needs beyond `shown`, in the document's order and within `budget` characters.
+
+    Text already in `shown` is not repeated. A section longer than
+    `SECTION_CHARACTERS` is cut to its blocks that name the question's words,
+    a long table to its header and the rows that do.
+    """
+    seen = _squash(" ".join(p.text for p in shown))
+    sections = document.sections
+    if whole and sum(len(s["text"]) for s in sections) <= SHORT_DOCUMENT_CHARACTERS:
+        scored = [(1.0, i) for i in range(len(sections))]
+    else:
+        hit = [_hits(f"{s['heading']} {s['text']}", terms) for s in sections]
+        weight = {t: math.log(1 + len(sections) / n) for t in terms if (n := sum(t in h for h in hit))}
+        scored = sorted(
+            ((sum(weight[t] for t in h), i) for i, h in enumerate(hit) if h), key=lambda pair: (-pair[0], pair[1])
+        )
+    taken: dict[int, Passage] = {}
+    for _, i in scored:
+        section = sections[i]
+        text = section["text"] if len(section["text"]) <= SECTION_CHARACTERS else _blocks(section["text"], terms)
+        if not text.strip() or _squash(text) in seen or len(text) > budget:
+            continue
+        budget -= len(text)
+        taken[i] = Passage(section["heading"] or None, text)
+    return tuple(taken[i] for i in sorted(taken))
+
+
+def _blocks(text: str, terms: frozenset[str]) -> str:
+    """The blocks of a long section that name the question's words; a long table's header and matching rows only."""
+    kept: builtins.list[str] = []
+    previous = ""
+    for block in re.split(r"\n\s*\n", text):
+        lines = block.splitlines()
+        if len(block) > SECTION_CHARACTERS // 2 and block.lstrip().startswith("|"):
+            rows = [line for line in lines[2:] if _hits(line, terms)]
+            if rows:
+                if previous and previous not in kept:
+                    kept.append(previous)
+                kept.append("\n".join([*lines[:2], *rows]))
+        elif _hits(block, terms):
+            kept.append(block)
+        previous = block if len(block) <= 400 else ""
+    return "\n\n".join(kept)
+
+
+def passages_block(sources: builtins.list[Source], *, follow_up: bool = False) -> str:
+    """The text appended to a question: the heading, then each document as `[n] title (collection)` and its passages.
+
+    A passage is its place in the document, then its text. `follow_up` adds to
+    the heading what a message searched on its own words needs to be told.
+    """
+    if not sources:
         return _NO_PASSAGES
-    entries = [
-        f"[{p.n}] {p.title}{f' — {p.locator}' if p.locator else ''} ({p.collection})\n{p.text}" for p in passages
-    ]
-    return "\n\n".join([_PASSAGES, *entries])
+    entries = []
+    for s in sources:
+        head = f"[{s.n}] {s.title}{f' ({s.collection})' if s.collection else ''}"
+        parts = [f"{f'— {p.locator}{chr(10)}' if p.locator else ''}{p.text}" for p in (*s.passages, *s.excerpts)]
+        entries.append("\n\n".join([head, *parts]))
+    return "\n\n".join([_PASSAGES + (_FOLLOW_UP if follow_up else ""), *entries])

@@ -36,7 +36,7 @@ from typing import Any
 
 from agent_common import cli, sse
 from agent_common.agent import Agent
-from agent_common.collections import Collections, Passage, passages_block
+from agent_common.collections import Collections, Source, passages_block
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
@@ -88,8 +88,10 @@ class _Turn:
     charged: bool
     #: The one collection the question is narrowed to; None asks across every one the person may read.
     collection: str | None
-    #: The conversation's previous question, which a follow-up is searched with.
-    previous: str | None
+    #: Whether the conversation has an earlier question: a follow-up, searched on its own words.
+    follow_up: bool
+    #: The documents the previous turn cited, which a follow-up may lean on though its own search misses them.
+    earlier: tuple[int, ...]
 
 
 class _Unread(Exception):
@@ -163,7 +165,8 @@ async def ask(
         user_id=user_id,
         charged=not exempt,
         collection=collection,
-        previous=started.turns[position - 1]["question"] if position else None,
+        follow_up=bool(position),
+        earlier=_cited(started.turns[position - 1]) if position else (),
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -301,38 +304,45 @@ async def _passages(
     await db(
         lambda s: conversations.cite(s, turn.conversation_id, turn.position, items if isinstance(items, list) else [])
     )
-    return await run_in_threadpool(redact, turn.persona.id, turn.user_id, passages_block(found))
+    return await run_in_threadpool(redact, turn.persona.id, turn.user_id, passages_block(found, follow_up=turn.follow_up))
 
 
-async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Passage]:
-    """The passages that answer this question from the collections in scope.
+async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Source]:
+    """The documents that answer this question from the collections in scope, each with its passages.
 
     Across every collection the person may read, they are listed first and
     named: the library's search drops the person's cut when given no names.
     A question narrowed to one searches it while the listing confirms the
     person may read it, so neither waits on the other. A person who can read
-    none searches nothing. A follow-up is searched with the question before
-    it, since "what about reservists?" retrieves badly alone.
+    none searches nothing. A follow-up is searched on its own words, never
+    glued to the question before it, which drags the search back to the last
+    subject after the person has moved on. What the previous turn cited is
+    opened beside the search, so "and in Brisbane?" still finds its row in the
+    table just read; and the documents the search returned are opened too
+    (`Collections.opened`), since their chunks may miss the row asked for.
 
     Raises:
         _Unread: as `_passages`.
     """
     assert turn.collections is not None
     reader = turn.collections
-    query = f"{turn.previous}\n{turn.question}" if turn.previous else turn.question
+    query = turn.question
     searching = (
         asyncio.create_task(reader.search(query, [turn.collection], settings.passages))
         if turn.collection is not None
         else None
     )
+    earlier = {document_id: asyncio.ensure_future(reader.document(document_id)) for document_id in turn.earlier}
     try:
         try:
             names = [found.name for found in await reader.list()]
             if searching is None:
-                return await reader.search(query, names, settings.passages) if names else []
-            if turn.collection not in names:
+                found = await reader.search(query, names, settings.passages) if names else []
+            elif turn.collection not in names:
                 raise _Unread(NOT_LISTED)
-            return await searching
+            else:
+                found = await searching
+            return await reader.opened(found, query, earlier=earlier)
         except _Unread:
             raise
         except Exception as exc:
@@ -340,6 +350,8 @@ async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Passage]:
             raise _Unread(COLLECTIONS_UNREAD) from exc
     finally:
         _settle(searching)
+        for task in earlier.values():
+            _settle(task)
 
 
 def _settle(task: asyncio.Task[Any] | None) -> None:
@@ -352,18 +364,31 @@ def _settle(task: asyncio.Task[Any] | None) -> None:
         task.exception()
 
 
-def _citations(passages: list[Passage]) -> list[dict[str, Any]]:
-    """The passages as the page cites them: a number to match `[n]` in the answer, and where it came from."""
-    return [
-        {
-            "n": passage.n,
-            "document_id": None if passage.document_id is None else str(passage.document_id),
-            "title": passage.title,
-            "section": passage.locator,
-            "snippet": " ".join(passage.text.split())[:SNIPPET_CHARACTERS],
-        }
-        for passage in passages
-    ]
+def _citations(sources: list[Source]) -> list[dict[str, Any]]:
+    """The documents as the page cites them: a number to match `[n]` in the answer, and where each came from.
+
+    One item per document, however many passages it gave: `section` names
+    each of them, `snippet` opens with the first.
+    """
+    items = []
+    for source in sources:
+        shown = source.passages or source.excerpts
+        items.append(
+            {
+                "n": source.n,
+                "document_id": None if source.document_id is None else str(source.document_id),
+                "title": source.title,
+                "section": "; ".join(dict.fromkeys(p.locator for p in shown if p.locator)) or None,
+                "snippet": " ".join(shown[0].text.split())[:SNIPPET_CHARACTERS] if shown else "",
+            }
+        )
+    return items
+
+
+def _cited(previous: dict[str, Any]) -> tuple[int, ...]:
+    """The library documents a recorded turn cited, in its order."""
+    ids = (item.get("document_id") for item in previous.get("citations") or [] if isinstance(item, dict))
+    return tuple(dict.fromkeys(int(i) for i in ids if isinstance(i, str) and i.isdecimal()))
 
 
 def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> None:

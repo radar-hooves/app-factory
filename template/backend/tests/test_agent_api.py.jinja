@@ -350,9 +350,12 @@ async def test_a_question_retrieves_across_every_collection_the_person_may_read_
     assert [item["n"] for item in events[1]["items"]] == [1, 2]
     # The persona answers from the passages, appended to the question.
     said = _said(events)
-    assert "[1] The Manual, Part 5: Leave — 5.1 Recreation leave (manual)" in said
+    assert "[1] The Manual, Part 5: Leave (manual)\n\n— 5.1 Recreation leave\nIn manual" in said
     assert "a member accrues four weeks of recreation leave" in said
-    assert "cite each claim by its number" in said
+    assert "cite each claim by its document's number" in said
+    # The document is opened too: a section the chunk did not carry reaches the model under the same number.
+    assert "— 5.2 Long service leave\nAccrues after ten years." in said
+    assert "A member accrues four weeks a year." not in said
 
 
 async def test_the_citations_are_read_back_from_the_apps_record_and_the_question_is_the_persons_own(
@@ -420,19 +423,40 @@ async def test_the_scope_is_what_the_library_lists_for_this_person_never_more(
     ]
 
 
-async def test_a_follow_up_is_searched_with_the_question_before_it(
+async def test_a_follow_up_is_searched_on_its_own_words_and_told_so(
     client: AsyncClient, library: fake_library.FakeLibrary
 ) -> None:
     who = _person("chat-manual")
     first = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
-    await _ask(client, "manual", "And for reservists?", who, resume=first)
+    second = _events((await _ask(client, "manual", "And for reservists?", who, resume=first)).text)
 
-    assert [query["query"] for query in _queries(library, who)] == [
-        "How much leave?",
-        "How much leave?\nAnd for reservists?",
-    ]
+    assert [query["query"] for query in _queries(library, who)] == ["How much leave?", "And for reservists?"]
+    assert "searched on its own words" in _said(second)
+    assert "searched on its own words" not in _said(_events((await _ask(client, "manual", "Again?", who)).text))
     read = (await client.get(f"/api/agent/conversations/{first}", headers=who)).json()
     assert [turn["question"] for turn in read["turns"]] == ["How much leave?", "And for reservists?"]
+
+
+async def test_a_follow_up_the_search_misses_still_reads_the_document_the_turn_before_it_cited(
+    client: AsyncClient,
+) -> None:
+    who = _person("chat-manual")
+    first = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
+
+    narrowed = _events((await _ask(client, "manual", "And long service?", who, resume=first, collection=fake_library.SECOND)).text)
+    [found, carried] = narrowed[1]["items"]
+    assert (found["n"], found["document_id"]) == (1, None)
+    assert (carried["n"], carried["document_id"], carried["section"]) == (
+        2,
+        str(fake_library.DOCUMENT_ID),
+        "5.2 Long service leave",
+    )
+    assert "[2] The Manual, Part 5: Leave\n\n— 5.2 Long service leave\nAccrues after ten years." in _said(narrowed)
+
+    unrelated = _events(
+        (await _ask(client, "manual", "can you generate artefacts", who, resume=first, collection=fake_library.SECOND)).text
+    )
+    assert [item["n"] for item in unrelated[1]["items"]] == [1]
 
 
 async def test_a_person_who_may_read_nothing_is_still_answered_with_the_passages_saying_none_were_found(
@@ -488,7 +512,7 @@ async def test_the_collections_are_read_as_the_person_with_a_token_minted_for_th
         )
     }
     assert named == {(who["x-authentik-uid"], APP)}
-    assert len(library.bearers) == 4  # the ask lists and searches; the page lists and opens a document
+    assert len(library.bearers) == 5  # the ask lists, searches and opens a document; the page lists and opens one
     assert (APP, "library") in authentik.exchanged
     assert conversation
 

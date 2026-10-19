@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from agent_common.collections import Collection, Collections, Document, Passage, passages_block
+from agent_common.collections import Collection, Collections, Document, Passage, Source, passages_block
 from library.exceptions import ApiException
 
 URL = "https://library.test/api/caller"
@@ -101,7 +101,7 @@ async def test_the_collections_a_person_may_read_come_back_with_their_summaries_
     assert route.calls.last.request.headers["authorization"] == "Bearer test-bearer"
 
 
-async def test_a_search_names_its_collections_and_numbers_the_passages_in_rank_order(
+async def test_a_search_names_its_collections_and_numbers_the_documents_in_rank_order(
     library: respx.MockRouter,
 ) -> None:
     route = library.post("/query").respond(
@@ -111,6 +111,7 @@ async def test_a_search_names_its_collections_and_numbers_the_passages_in_rank_o
                 _chunk(1, payload={"document": "The full passage."}),
                 _chunk(2, payload=None, document_id=None),
                 _chunk(3, payload={"other": "x"}),
+                _chunk(4, payload=None, document_id=2048),
             ],
             "decision_id": "d1",
             "routed_collections": ["adf-pay"],
@@ -119,7 +120,7 @@ async def test_a_search_names_its_collections_and_numbers_the_passages_in_rank_o
         },
     )
 
-    passages = await _collections().search("How much leave?", ["adf-pay", "adf-conditions"], 8)
+    sources = await _collections().search("How much leave?", ["adf-pay", "adf-conditions"], 8)
 
     assert json.loads(route.calls.last.request.content) == {
         "query": "How much leave?",
@@ -127,11 +128,109 @@ async def test_a_search_names_its_collections_and_numbers_the_passages_in_rank_o
         "top_k": 8,
     }
     assert route.calls.last.request.headers["authorization"] == "Bearer test-bearer"
-    assert passages == [
-        Passage(1, "adf-pay", 1042, "Pay manual 1", "page 1", "The full passage."),
-        Passage(2, "adf-pay", None, "Pay manual 2", None, "snippet 2"),
-        Passage(3, "adf-pay", 1042, "Pay manual 3", "page 3", "snippet 3"),
+    # Chunks 1 and 3 are one document, so one number holds both; a chunk with no document id stands alone.
+    assert sources == [
+        Source(
+            1,
+            "adf-pay",
+            1042,
+            "Pay manual 1",
+            (Passage("page 1", "The full passage."), Passage("page 3", "snippet 3")),
+        ),
+        Source(2, "adf-pay", None, "Pay manual 2", (Passage(None, "snippet 2"),)),
+        Source(3, "adf-pay", 2048, "Pay manual 4", (Passage(None, "snippet 4"),)),
     ]
+
+
+def _annex(rows: int = 400) -> dict[str, Any]:
+    table = "\n".join(
+        [
+            "| Location | Major/Lieutenant Colonel |",
+            "| --- | --- |",
+            *(f"| Place{i} | ${1000 + i} |" for i in range(rows)),
+            "| Brisbane | $2,611 |",
+        ]
+    )
+    return _document(
+        metadata={"title": "Annex 7.E: Rent ceilings"},
+        sections=[
+            {"anchor": "p1-1", "heading": "Part 1.1: three bedrooms", "text": f"Part 1.1 ceilings.\n\n{table}"},
+            {"anchor": "p2", "heading": "Part 2", "text": "Member choice accommodation applies."},
+        ],
+    )
+
+
+async def test_a_long_table_the_passages_missed_the_row_of_is_cut_to_its_header_and_the_row_asked_for(
+    library: respx.MockRouter,
+) -> None:
+    library.get("/documents/1042").respond(200, json=_annex())
+    chunk = Passage("Part 1.1: three bedrooms", "| Place0 | $1000 |")
+
+    [source] = await _collections().opened(
+        [Source(1, "pacman", 1042, "Annex 7.E", (chunk,))], "squadron leader in brisbane"
+    )
+
+    [excerpt] = source.excerpts
+    assert excerpt.locator == "Part 1.1: three bedrooms"
+    assert "| Brisbane | $2,611 |" in excerpt.text
+    assert "| Location | Major/Lieutenant Colonel |" in excerpt.text
+    assert "Place30" not in excerpt.text
+    assert len(excerpt.text) < 600
+
+
+async def test_a_short_document_reaches_the_model_whole_without_repeating_what_a_passage_already_holds(
+    library: respx.MockRouter,
+) -> None:
+    library.get("/documents/1042").respond(200, json=_document())
+    chunk = Passage("Leave", "Recreation leave accrues.")
+
+    [source] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "anything at all")
+
+    assert source.excerpts == ()
+    library.get("/documents/1042").respond(
+        200,
+        json=_document(
+            sections=[
+                {"anchor": "a", "heading": "Leave", "text": "Recreation leave accrues."},
+                {"anchor": "b", "heading": "Long service", "text": "Accrues after ten years."},
+            ]
+        ),
+    )
+    [again] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "anything at all")
+    assert again.excerpts == (Passage("Long service", "Accrues after ten years."),)
+
+
+async def test_what_an_earlier_turn_cited_is_added_as_a_source_only_where_it_carries_the_question(
+    library: respx.MockRouter,
+) -> None:
+    library.get("/documents/1042").respond(200, json=_annex())
+    reader = _collections()
+
+    def earlier() -> dict[int, asyncio.Task[Document | None]]:
+        return {1042: asyncio.ensure_future(reader.document(1042))}
+
+    [carried] = await reader.opened([], "squadron leader in brisbane", earlier=earlier())
+    assert (carried.n, carried.document_id, carried.title, carried.passages) == (
+        1,
+        1042,
+        "Annex 7.E: Rent ceilings",
+        (),
+    )
+    assert "| Brisbane | $2,611 |" in carried.excerpts[0].text
+
+    assert await reader.opened([], "can you generate artefacts", earlier=earlier()) == []
+    held = [Source(1, "pacman", 1042, "Annex 7.E", (Passage(None, "x"),))]
+    assert [s.n for s in await reader.opened(held, "brisbane", earlier=earlier())] == [1]
+
+
+async def test_a_document_that_cannot_be_opened_leaves_the_passages_standing(
+    library: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    library.get("/documents/1042").respond(500, json={"error": "boom", "message": "down"})
+    held = [Source(1, "pacman", 1042, "Annex 7.E", (Passage(None, "x"),))]
+
+    assert await _collections().opened(held, "brisbane") == held
+    assert "Could not open document 1042" in caplog.text
 
 
 async def test_a_cited_document_opens_section_by_section_and_an_absent_one_reads_as_none(
@@ -190,18 +289,37 @@ async def test_the_bearer_is_asked_for_on_every_call_and_kept_out_of_the_repr(li
     assert "bearer" not in repr(collections)
 
 
-def test_the_passages_block_heads_each_passage_with_its_number_title_place_and_collection() -> None:
+def test_the_passages_block_heads_each_document_once_with_all_its_passages_behind_its_number() -> None:
     block = passages_block(
         [
-            Passage(1, "adf-pay", 1042, "Pay manual", "page 12", "Recreation leave accrues."),
-            Passage(2, "adf-conditions", None, "Conditions of service", None, "Reservists serve."),
+            Source(
+                1,
+                "adf-pay",
+                1042,
+                "Pay manual",
+                (Passage("page 12", "Recreation leave accrues."), Passage("page 14", "Leave is taken in days.")),
+                (Passage("Long service", "Accrues after ten years."),),
+            ),
+            Source(2, "adf-conditions", None, "Conditions of service", (Passage(None, "Reservists serve."),)),
         ]
     )
 
-    heading, first, second = block.split("\n\n")
+    heading, first, second = block.split("\n\n\n")[0], *block.split("\n\n[")[1:]
     assert heading.startswith("Passages from the collections this person may read, retrieved for this question.")
-    assert first == "[1] Pay manual — page 12 (adf-pay)\nRecreation leave accrues."
-    assert second == "[2] Conditions of service (adf-conditions)\nReservists serve."
+    assert "Each number is one document" in heading
+    assert first.startswith(
+        "1] Pay manual (adf-pay)\n\n— page 12\nRecreation leave accrues.\n\n— page 14\nLeave is taken in days."
+        "\n\n— Long service\nAccrues after ten years."
+    )
+    assert second == "2] Conditions of service (adf-conditions)\n\nReservists serve."
+    assert block.count("\n\n[1] ") == 1
+
+
+def test_a_follow_up_is_told_it_was_searched_on_its_own_words() -> None:
+    sources = [Source(1, "adf-pay", 1, "Pay manual", (Passage(None, "text"),))]
+
+    assert "searched on its own words" not in passages_block(sources)
+    assert "searched on its own words" in passages_block(sources, follow_up=True)
 
 
 def test_a_search_that_found_nothing_says_so_in_the_same_heading_shape() -> None:
