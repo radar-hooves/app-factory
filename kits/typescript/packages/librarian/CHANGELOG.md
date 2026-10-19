@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.3] - 2026-10-19
+
+Consumer: caspo, radar-hooves/caspo#177.
+
+### Changed
+
+- **The scope statement is one quiet line**: a muted label and chevron with no border or ground, the statement under it in the same ink when opened, and folded wherever `Conversation` renders it.
+- **Links read the accent ink**: the answer's links and the fair-use notice's read `var(--ds-color-primary-ink, var(--ds-color-primary))`, so an app whose accent fails as text fixes them with the one token `@poodle64/ui` 2026.10.22 reads.
+
 ## [2026.10.2] - 2026-10-19
 
 A calmer chat, like ChatGPT's and Claude's (consumer: caspo, radar-hooves/caspo#177).

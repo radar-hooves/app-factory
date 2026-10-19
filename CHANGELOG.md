@@ -4,6 +4,21 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.55] - 2026-10-19
+
+Need: four more of caspo's (radar-hooves/caspo#177), measured by caspo's build today; consumer: caspo. Every app on the template takes them on re-stamp.
+
+### Fixed
+
+- **A deploy reaches a signed-in browser at its next load.** The SPA shell went out with no Cache-Control of the app's own and was cached heuristically (caspo, 19/10/2026: a colleague kept the last build's entry after a go-live). Every response that is the shell, the client-route fallback and a 304 included, now says `no-cache, max-age=0, must-revalidate`; only `_app/immutable/` is cached for good.
+- **A collapsed rail's peek moves no nav row**, so a click lands on the row aimed at. `@poodle64/ui` 2026.10.22.
+
+### Changed
+
+- **The chat's scope statement is one quiet line**, folded, with no card. `@poodle64/librarian` 2026.10.3.
+- **The accent as text has one token**, `--ds-color-primary-ink`, read by `text-primary`, prose links, the primary chip and the chat's links; an app whose accent fails as text sets it once, per mode, in `app.css`.
+- **`CommandPalette` takes a `lead`**: an app's own row ("Ask: <query>") above the nav group, first whatever the text matches.
+
 ## [2026.10.54] - 2026-10-19
 
 Need: caspo's Outrider chat "so clean and elegant, like what you get when you chat with ChatGPT or Claude" (the operator, 19/10/2026), its round 6 board (radar-hooves/caspo#177); consumer: caspo. Every app with a chat room takes it on re-stamp.

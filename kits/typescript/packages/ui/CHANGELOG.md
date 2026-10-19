@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.22] - 2026-10-19
+
+Consumer: caspo, radar-hooves/caspo#177.
+
+### Fixed
+
+- **A collapsed rail's peek moves no row.** 2026.10.21's peek pulled every nav row about 50px up under the pointer (the peeked brand row lost its stacked collapse toggle), so a click landed on the row below the one aimed at. The brand row keeps its column while collapsed, `AppNav` takes `peek` and keeps the collapsed structure (a rule for a heading, no child rows) with the labels drawn, each row's icon stays where the slim rail put it, and every `.ds-nav-item` is one height (`min-height: 2.25rem`, so a collapsed rail is 2px a row taller).
+
+### Added
+
+- **`CommandPalette` `lead`**: rows above the nav group, left ungrouped so they stay first while the filter sorts; an "Ask: <query>" row then leads whether or not the text also matches a destination, and the palette draws no "No results." line over it.
+- **The accent as text reads `--ds-color-primary-ink`**: `text-primary` (registered as `--text-color-primary`), `.ds-prose a` and `.ds-chip-primary` read `var(--ds-color-primary-ink, var(--ds-color-primary))`. Unset it is the accent; an app whose accent fails 4.5:1 as text sets it once, per mode, and every fill keeps the accent.
+
 ## [2026.10.21] - 2026-10-19
 
 ### Added
