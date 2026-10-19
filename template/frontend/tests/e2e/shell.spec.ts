@@ -1,24 +1,45 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // The shell's own spec, and unlike example.spec.ts it is NOT the scaffold's to
 // delete: it drives the one piece of chrome canonical-app-shape.md requires of
 // every app and that four apps had each wired for themselves
 // (full-stack-app-template#23).
 //
-// It asserts the OUTCOME, not the render: clicking the top bar's affordance must
-// actually open the palette. A search button wired to nothing looks identical in
-// a screenshot, which is how three apps shipped a top bar with no search at all
-// without anything going red.
-test('the top bar search affordance opens the command palette @smoke', async ({ page }) => {
-	await page.goto('/');
-
-	// The shared shell's own test id, so this spec does not depend on the label
-	// an app chooses for its search button.
-	await page.getByTestId('ds-shell-search').click();
-
+// It asserts the OUTCOME, not the render: the palette must actually open. A
+// search button wired to nothing looks identical in a screenshot, which is how
+// three apps shipped a top bar with no search at all without anything going red.
+// The keyboard shortcut is the palette's own and every app has it; the visible
+// control is the app's choice (AppShell draws none without `onSearch`), so it is
+// held to the outcome only where the app renders it.
+async function expectPaletteOpen(page: Page) {
 	await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
 	// The palette's own input, so a dialog opened by something else cannot pass.
 	await expect(page.getByPlaceholder('Search…')).toBeFocused();
+}
+
+test('the keyboard shortcut opens the command palette @smoke', async ({ page }) => {
+	await page.goto('/');
+	// The shell has mounted, so the shortcut's listener is bound.
+	await expect(page.getByRole('banner')).toBeVisible();
+
+	await page.keyboard.press('ControlOrMeta+k');
+
+	await expectPaletteOpen(page);
+});
+
+test('the top bar search control, where the app draws one, opens the command palette', async ({
+	page
+}) => {
+	await page.goto('/');
+	await expect(page.getByRole('banner')).toBeVisible();
+	// The shared shell's own test id, so this spec does not depend on the label
+	// an app chooses for its search button.
+	const search = page.getByTestId('ds-shell-search');
+	test.skip((await search.count()) === 0, 'this app draws no visible search control');
+
+	await search.click();
+
+	await expectPaletteOpen(page);
 });
 
 // Every route the factory stamps sits under routes/(protected)/, so it renders inside
@@ -40,7 +61,6 @@ for (const { path, heading } of STAMPED_ROUTES) {
 		await expect(
 			page.locator('#ds-main').getByRole('heading', { name: heading, exact: true })
 		).toBeVisible();
-		await expect(page.getByTestId('ds-shell-search')).toBeVisible();
 	});
 }
 

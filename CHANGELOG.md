@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.58] - 2026-10-19
+
+Need: caspo's operator dropped the visible search control from the top rail ("no one will use it", 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Four of the stamped shell spec's cases failed in caspo because they required it. Every app takes the spec on re-stamp.
+
+### Changed
+
+- **The shell spec proves what an app actually offers.** The palette opens by Ctrl/⌘+K in every app (the smoke case); the visible `ds-shell-search` control is clicked to the same outcome only where the app draws one, and the stamped-route cases no longer require it. A shortcut or control wired to nothing still fails.
+
 ## [2026.10.57] - 2026-10-19
 
 Need: caspo's Home asks through navigation state and the answer never appeared (measured on caspo.au and in caspo's E2E, 19/10/2026), radar-hooves/caspo#177; consumer: caspo. Every app with a chat room takes it on re-stamp.
