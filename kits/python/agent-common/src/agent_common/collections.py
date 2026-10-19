@@ -61,76 +61,14 @@ EXCERPT_CHARACTERS = 20000
 #: How long opening documents may take; the passages are enough to answer without them.
 OPEN_TIMEOUT_SECONDS = 5.0
 
-_WORD = re.compile(r"[a-z0-9]{3,}")
+_WORD = re.compile(r"[a-z0-9]{2,}")
 _STOP = frozenset(
-    {
-        "the",
-        "and",
-        "for",
-        "are",
-        "but",
-        "not",
-        "you",
-        "can",
-        "how",
-        "what",
-        "who",
-        "when",
-        "where",
-        "which",
-        "with",
-        "from",
-        "into",
-        "that",
-        "this",
-        "have",
-        "has",
-        "had",
-        "was",
-        "were",
-        "will",
-        "would",
-        "could",
-        "should",
-        "about",
-        "does",
-        "did",
-        "your",
-        "our",
-        "their",
-        "its",
-        "his",
-        "her",
-        "them",
-        "they",
-        "than",
-        "then",
-        "there",
-        "here",
-        "very",
-        "just",
-        "also",
-        "any",
-        "all",
-        "some",
-        "more",
-        "most",
-        "other",
-        "such",
-        "only",
-        "own",
-        "same",
-        "too",
-        "out",
-        "off",
-        "over",
-        "under",
-        "again",
-        "please",
-        "tell",
-        "give",
-        "show",
-    }
+    re.findall(
+        r"[a-z]+",
+        "the and for are but not you can how what who when where which with from into that this have has had was were will would could should about does "
+        "did your our their its his her them they than then there here very just also any all some more most other such only own same too out off over "
+        "under again please tell give show in of to is an at on or as by it be do if no so up we my me he",
+    )
 )
 
 #: The same heading when the search found nothing.
@@ -293,7 +231,12 @@ class Collections:
             if task not in carried.values():
                 task.cancel()
         tasks |= carried
-        done, _ = await asyncio.wait(tasks.values(), timeout=OPEN_TIMEOUT_SECONDS) if tasks else (set(), set())
+        try:
+            done, _ = await asyncio.wait(tasks.values(), timeout=OPEN_TIMEOUT_SECONDS) if tasks else (set(), set())
+        except BaseException:
+            for task in tasks.values():
+                task.cancel()
+            raise
         found: dict[int, Document] = {}
         for document_id, task in tasks.items():
             if task not in done:
@@ -391,6 +334,8 @@ def _excerpts(
     taken: dict[int, Passage] = {}
     for _, i in scored:
         section = sections[i]
+        if whole and _covered(section["text"], shown):
+            continue
         text = section["text"] if len(section["text"]) <= SECTION_CHARACTERS else _blocks(section["text"], terms)
         if not text.strip() or _squash(text) in seen or len(text) > budget:
             continue
@@ -399,18 +344,26 @@ def _excerpts(
     return tuple(taken[i] for i in sorted(taken))
 
 
+def _covered(section: str, shown: tuple[Passage, ...]) -> bool:
+    """Whether passages already shown make up most of `section`, so repeating it adds little."""
+    squashed = _squash(section)
+    inside = sum(len(_squash(p.text)) for p in shown if _squash(p.text) in squashed)
+    return inside * 2 >= len(squashed)
+
+
 def _blocks(text: str, terms: frozenset[str]) -> str:
     """The blocks of a long section that name the question's words; a long table's header and matching rows only."""
     kept: builtins.list[str] = []
     previous = ""
     for block in re.split(r"\n\s*\n", text):
         lines = block.splitlines()
-        if len(block) > SECTION_CHARACTERS // 2 and block.lstrip().startswith("|"):
-            rows = [line for line in lines[2:] if _hits(line, terms)]
+        start = next((i for i, line in enumerate(lines) if line.lstrip().startswith("|")), None)
+        if len(block) > SECTION_CHARACTERS // 2 and start is not None:
+            rows = [line for line in lines[start + 2 :] if _hits(line, terms)]
             if rows:
                 if previous and previous not in kept:
                     kept.append(previous)
-                kept.append("\n".join([*lines[:2], *rows]))
+                kept.append("\n".join([*lines[: start + 2], *rows]))
         elif _hits(block, terms):
             kept.append(block)
         previous = block if len(block) <= 400 else ""

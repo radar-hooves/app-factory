@@ -438,31 +438,38 @@ async def test_a_follow_up_is_searched_on_its_own_words_and_told_so(
 
 
 async def test_a_follow_up_the_search_misses_still_reads_the_document_the_turn_before_it_cited(
-    client: AsyncClient,
+    client: AsyncClient, library: fake_library.FakeLibrary
 ) -> None:
     who = _person("chat-manual")
     first = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
 
-    narrowed = _events(
-        (await _ask(client, "manual", "And long service?", who, resume=first, collection=fake_library.SECOND)).text
-    )
-    [found, carried] = narrowed[1]["items"]
+    library.silent = {fake_library.COLLECTION}
+    asked = _events((await _ask(client, "manual", "And long service?", who, resume=first)).text)
+    [found, carried] = asked[1]["items"]
     assert (found["n"], found["document_id"]) == (1, None)
     assert (carried["n"], carried["document_id"], carried["section"]) == (
         2,
         str(fake_library.DOCUMENT_ID),
         "5.2 Long service leave",
     )
-    assert "[2] The Manual, Part 5: Leave\n\n— 5.2 Long service leave\nAccrues after ten years." in _said(narrowed)
+    assert "[2] The Manual, Part 5: Leave\n\n— 5.2 Long service leave\nAccrues after ten years." in _said(asked)
 
-    unrelated = _events(
-        (
-            await _ask(
-                client, "manual", "can you generate artefacts", who, resume=first, collection=fake_library.SECOND
-            )
-        ).text
-    )
+    unrelated = _events((await _ask(client, "manual", "can you generate artefacts", who, resume=first)).text)
     assert [item["n"] for item in unrelated[1]["items"]] == [1]
+
+
+async def test_a_question_narrowed_elsewhere_reads_nothing_the_turn_before_it_cited_outside_that_scope(
+    client: AsyncClient, library: fake_library.FakeLibrary
+) -> None:
+    who = _person("chat-manual")
+    first = _events((await _ask(client, "manual", "How much leave?", who)).text)[0]["session_id"]
+
+    library.silent = {fake_library.COLLECTION}
+    narrowed = _events(
+        (await _ask(client, "manual", "And long service?", who, resume=first, collection=fake_library.SECOND)).text
+    )
+    assert [item["document_id"] for item in narrowed[1]["items"]] == [None]
+    assert "Long service leave" not in _said(narrowed)
 
 
 async def test_a_person_who_may_read_nothing_is_still_answered_with_the_passages_saying_none_were_found(

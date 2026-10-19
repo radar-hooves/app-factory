@@ -166,7 +166,7 @@ async def ask(
         charged=not exempt,
         collection=collection,
         follow_up=bool(position),
-        earlier=_cited(started.turns[position - 1]) if position else (),
+        earlier=_cited(started.turns[position - 1], collection) if position else (),
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -386,8 +386,16 @@ def _citations(sources: list[Source]) -> list[dict[str, Any]]:
     return items
 
 
-def _cited(previous: dict[str, Any]) -> tuple[int, ...]:
-    """The library documents a recorded turn cited, in its order."""
+def _cited(previous: dict[str, Any], collection: str | None) -> tuple[int, ...]:
+    """The library documents a recorded turn cited, in its order, where this question's scope still holds them.
+
+    A question across every collection holds whatever an earlier turn cited,
+    as does one narrowed to the collection the earlier turn was narrowed to;
+    a question narrowed anywhere else holds none, so the scope the person
+    chose is never widened by what they read before.
+    """
+    if collection is not None and previous.get("collection") != collection:
+        return ()
     ids = (item.get("document_id") for item in previous.get("citations") or [] if isinstance(item, dict))
     return tuple(dict.fromkeys(int(i) for i in ids if isinstance(i, str) and i.isdecimal()))
 

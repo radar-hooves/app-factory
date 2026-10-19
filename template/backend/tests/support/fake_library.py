@@ -20,6 +20,8 @@ than a mock standing in for either.
   `RESTRICTED`. Every query is kept in `queries`.
 - `GET /documents/{id}`: a document in `COLLECTION` or in `RESTRICTED`,
   404 to a person who may not read the collection it sits in.
+- `silent`: collections a query returns no passage from, as a search that
+  misses a document the person has just read.
 - `fail_with`: every call answers this status, for a library that is down or
   refusing.
 
@@ -59,6 +61,8 @@ class FakeLibrary:
         #: Who may read what, by person; a person absent from it reads `COLLECTION` and `SECOND`.
         self.grants: dict[str, list[str]] = {}
         self.fail_with: int | None = None
+        #: Collections whose passages a query misses: it returns nothing from them.
+        self.silent: set[str] = set()
         #: Every query as the door received it, with the person who made it.
         self.queries: list[dict[str, Any]] = []
         #: Every call's bearer, in order.
@@ -198,7 +202,8 @@ class _Handler(BaseHTTPRequestHandler):
         if refused := [name for name in names if name not in self.fake.readable(person)]:
             self._send(403, {"error": "forbidden", "message": f"no read grant on {refused[0]}"})
             return
-        chunks = [_chunk(rank, name, body["query"]) for rank, name in enumerate(names[: body.get("top_k", 5)], 1)]
+        heard = [name for name in names if name not in self.fake.silent]
+        chunks = [_chunk(rank, name, body["query"]) for rank, name in enumerate(heard[: body.get("top_k", 5)], 1)]
         self._send(
             200,
             {"chunks": chunks, "decision_id": "d1", "routed_collections": names, "failures": {}, "empty": not chunks},

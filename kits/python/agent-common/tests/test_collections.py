@@ -327,3 +327,43 @@ def test_a_search_that_found_nothing_says_so_in_the_same_heading_shape() -> None
 
     assert block.startswith("Passages from the collections this person may read")
     assert "none were found" in block
+
+
+async def test_a_captioned_table_is_cut_to_its_rows_and_a_task_cancelled_mid_open_leaves_none_running(
+    library: respx.MockRouter,
+) -> None:
+    rows = "\n".join(f"| Place{i} | ${i} |" for i in range(300))
+    table = f"Table 1: ceilings\n| Location | Amount |\n| --- | --- |\n{rows}\n| Q3 Brisbane | $9 |"
+    library.get("/documents/1042").respond(
+        200, json=_document(sections=[{"anchor": "a", "heading": "H", "text": table}])
+    )
+    held = [Source(1, "pacman", 1042, "Annex", (Passage(None, "x"),))]
+
+    [source] = await _collections().opened(held, "and Q3?")
+
+    assert "| Q3 Brisbane | $9 |" in source.excerpts[0].text
+    assert "Place150" not in source.excerpts[0].text
+
+    async def silent(_request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(5)
+        return httpx.Response(200, json=_document())
+
+    library.get("/documents/1042").mock(side_effect=silent)
+    opening = asyncio.create_task(_collections().opened(held, "brisbane"))
+    await asyncio.sleep(0.2)
+    opening.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await opening
+    await asyncio.sleep(0.1)
+    assert not [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+
+async def test_a_passage_that_is_most_of_a_short_documents_section_is_not_repeated(library: respx.MockRouter) -> None:
+    library.get("/documents/1042").respond(
+        200, json=_document(sections=[{"anchor": "a", "heading": "Leave", "text": "Recreation leave accrues daily."}])
+    )
+    chunk = Passage("Leave", "Recreation leave accrues")
+
+    [source] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "leave")
+
+    assert source.excerpts == ()
