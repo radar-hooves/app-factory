@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.2] - 2026-10-19
+
+A calmer chat, like ChatGPT's and Claude's (consumer: caspo, radar-hooves/caspo#177).
+
+### Changed
+
+- **`Conversation` centres the opening and the composer on an empty chat**, with the examples, the folded scope statement and `lead` under the composer, and docks the composer at the foot from the first turn; it is one element in both, so a draft or an attachment survives. `toolbar` is a new snippet above the transcript, outside its scroll. `reopening` keeps a conversation being read back docked and silent, and a running surface with no turns waits docked too. The transcript fades at its edges in place of the composer's rule.
+- **`Composer`'s collection picker is one control**: a button naming the choice, opening a WAI-ARIA listbox (searchable from eight choices), each collection by its title over its description. A host's test that queried the `group` "Where … looks" and its `aria-pressed` chips queries the button `Where … looks: <choice>` and its listbox instead. New copy: `findCollection`, `noCollectionMatch`. The keyboard lift is measured from the box's own layout.
+- **`AgentTranscript`'s answer is prose in no box**, and its question a quiet `surface-2` bubble rather than the brand fill; `SourceList` lists under one hairline, not a box per row.
+- **`ConversationList` takes `onclose`** for a host that lays it over the page, with copy `closePastQuestions`.
+
 ## [2026.10.1] - 2026-10-19
 
 ### Changed

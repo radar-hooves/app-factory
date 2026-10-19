@@ -4,6 +4,17 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.54] - 2026-10-19
+
+Need: caspo's Outrider chat "so clean and elegant, like what you get when you chat with ChatGPT or Claude" (the operator, 19/10/2026), its round 6 board (radar-hooves/caspo#177); consumer: caspo. Every app with a chat room takes it on re-stamp.
+
+### Changed
+
+- **The room page gives the conversation the whole panel.** Past questions come over the page in a sheet, from a bar above the transcript holding Past questions and, once a conversation is open, New question; the permanent column beside the rail and its viewport breakpoints are gone.
+- **Before the first question, the opening and the composer sit together in the middle of the panel**, the examples, the folded scope statement and the app's `Home` under them; the first question docks the composer at the foot with the transcript scrolling above it.
+- **The composer's scope is one control**, the choice's title opening a searchable list of every collection the person may read, in place of a chip per collection.
+- **An answer reads as prose, not a card**, and its sources list under one hairline. `@poodle64/librarian` 2026.10.2.
+
 ## [2026.10.53] - 2026-10-19
 
 Need: caspo's inner pages, rail slim by default and readable on hover (radar-hooves/caspo#177); consumer: caspo.
