@@ -304,6 +304,24 @@ describe('nested nav — the collapsed rail', () => {
 		expect(screen.getByRole('link', { name: 'Education' })).toHaveAttribute('href', '/education');
 	});
 
+	it('peeks with the labels drawn and the collapsed structure kept, so no row moves', async () => {
+		// A peek that opened the tree slid every row below an open branch out
+		// from under the pointer that opened it (caspo#177); the harness measures
+		// the rows holding still, this pins why they can.
+		render(NestedHarness, {
+			props: { currentPath: '/education/one', collapsible: true, collapsed: true }
+		});
+		const rail = document.querySelector<HTMLElement>('.ds-shell-rail')!;
+		await fireEvent.pointerLeave(rail);
+		await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
+		await waitFor(() => expect(rail).toHaveAttribute('data-peek', 'true'));
+
+		const education = screen.getByRole('link', { name: 'Education' });
+		expect(education.querySelector('.sr-only')).toBeNull();
+		expect(screen.queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /(Expand|Collapse) Education/ })).not.toBeInTheDocument();
+	});
+
 	it('restores the tree when the rail is expanded again', async () => {
 		render(NestedHarness, {
 			props: { currentPath: '/education/one', collapsible: true, collapsed: true }

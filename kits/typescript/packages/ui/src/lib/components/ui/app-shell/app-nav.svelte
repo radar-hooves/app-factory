@@ -33,6 +33,7 @@
 		nav,
 		currentPath,
 		collapsed = false,
+		peek = false,
 		label = 'Primary',
 		onNavigate,
 		selected,
@@ -45,6 +46,10 @@
 		currentPath?: string;
 		/** Icon-only mode. Labels stay in the accessible tree via sr-only text. */
 		collapsed?: boolean;
+		/** Collapsed, with the labels drawn: the rail peeking. The collapsed
+		 *  structure stays (a rule for a heading, no child rows), so not one row
+		 *  moves under the pointer that opened it. */
+		peek?: boolean;
 		/** Accessible name for the landmark; distinguish a secondary column. */
 		label?: string;
 		/** Fired after any nav link activates — AppShell uses it to shut the drawer. */
@@ -68,6 +73,8 @@
 	} = $props();
 
 	const groups = $derived(toGroups(nav));
+	/** The labels are hidden: collapsed and not peeking. */
+	const iconOnly = $derived(collapsed && !peek);
 
 	// Ids are real ids in the consumer's document, and this component renders
 	// more than once per page by design (the rail, plus any route-scoped second
@@ -194,8 +201,8 @@
 				>{item.label.slice(0, 1).toUpperCase()}</span
 			>
 		{/if}
-		<span class={collapsed ? 'sr-only' : 'truncate'}>{item.label}</span>
-		{#if item.badge !== undefined && !collapsed}
+		<span class={iconOnly ? 'sr-only' : 'truncate'}>{item.label}</span>
+		{#if item.badge !== undefined && !iconOnly}
 			<span class="ds-nav-badge">{item.badge}</span>
 		{/if}
 	{/snippet}
@@ -211,7 +218,7 @@
 			class="ds-nav-item w-full text-start"
 			data-active={active ? 'true' : undefined}
 			aria-current={active ? 'true' : undefined}
-			title={collapsed ? item.label : undefined}
+			title={iconOnly ? item.label : undefined}
 			onclick={() => {
 				onSelect(item.href);
 				onNavigate?.();
@@ -234,7 +241,7 @@
 			data-within={within ? 'true' : undefined}
 			data-child={opts.child ? 'true' : undefined}
 			aria-current={active ? 'page' : undefined}
-			title={collapsed ? item.label : undefined}
+			title={iconOnly ? item.label : undefined}
 			target={item.external ? '_blank' : undefined}
 			rel={item.external ? 'noreferrer noopener' : undefined}
 			onclick={onNavigate}
@@ -248,7 +255,7 @@
 <nav
 	class={cn('ds-nav flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4', className)}
 	aria-label={label}
-	data-collapsed={collapsed ? 'true' : undefined}
+	data-collapsed={iconOnly ? 'true' : undefined}
 >
 	{#each groups as group, i (group.heading ?? group.items[0]?.href ?? i)}
 		<div class="flex flex-col gap-1">

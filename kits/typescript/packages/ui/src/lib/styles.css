@@ -676,9 +676,12 @@
 		--ds-nav-chrome-ink-muted: var(--ds-shell-chrome-muted-foreground);
 	}
 
+	/* One height labelled or icon-only (the 1.25rem line, not the 1.125rem
+	   icon, sets it), so a peek that draws the labels moves no row. */
 	.ds-nav-item {
 		position: relative;
 		display: flex;
+		min-height: 2.25rem;
 		align-items: center;
 		gap: 0.75rem;
 		border-radius: var(--ds-radius-md);
