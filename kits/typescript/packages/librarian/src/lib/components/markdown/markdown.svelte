@@ -214,8 +214,9 @@
 		color: var(--ds-color-foreground);
 	}
 
+	/* The accent as text: an app whose accent fails as text sets the ink. */
 	.agent-prose :global(a) {
-		color: var(--ds-color-primary);
+		color: var(--ds-color-primary-ink, var(--ds-color-primary));
 		text-underline-offset: 0.2em;
 		text-decoration-line: underline;
 	}

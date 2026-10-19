@@ -34,7 +34,9 @@ mode: light-first                           # light-first | dark-first | equal
 # --ds-color-primary must meet WCAG AA (>=4.5:1) against its OWN -foreground
 # pair, in both modes — primary as a background with text on top. No shared
 # component paints it as ink on chrome, so a light or high-lightness brand hue
-# costs you nothing in legibility. Pick the hue your brand wants.
+# costs you nothing in legibility. Pick the hue your brand wants. Where the
+# accent IS text (a link in prose, a primary chip, `text-primary`) it reads
+# --ds-color-primary-ink, which is the accent unless you set it (§Primary).
 # ---------------------------------------------------------------------------
 primary:
   light: oklch(0.50 0.155 XXX)              # REQUIRED — pick a hue (XXX = 0-360)
@@ -143,6 +145,15 @@ on the active label, say so explicitly and own the contrast:
 Check it at >=4.5:1 against `--ds-color-surface-1` (the chrome), not against
 `--ds-color-background` — they are different surfaces, and the chrome is the
 darker of the two.
+
+**Where the accent is text** — a link in prose, a primary chip, every
+`text-primary` — it reads `--ds-color-primary-ink`, which is the accent unless
+you set it. An accent that fails 4.5:1 as text on your ground sets an ink once,
+and every one of those follows; fills keep the accent:
+
+```css
+:root { --ds-color-primary-ink: oklch(0.45 0.16 XXX); } /* >=4.5:1 on every ground, both modes */
+```
 
 ### Status palette (binding — do not redefine)
 

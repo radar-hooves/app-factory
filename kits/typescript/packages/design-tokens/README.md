@@ -132,7 +132,10 @@ inline grep when it does not.
 
 An app's personality is exactly two knobs: its **accent**, and optionally a
 **palette** from the catalogue below. Every other semantic token is used as-is,
-and an app never hand-writes a value for one.
+and an app never hand-writes a value for one. The one refinement of the accent
+is `--ds-color-primary-ink`, the accent as text, which every text use of it
+reads (`text-primary`, a prose link, a primary chip); unset it IS the accent,
+and an app whose accent fails 4.5:1 as text sets it once.
 
 1. Copy `templates/DESIGN.md.template` to the app repo as `DESIGN.md`.
 2. Fill in all `REQUIRED` fields (name, description, primary colours).

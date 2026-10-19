@@ -251,6 +251,15 @@
 	--color-accent-foreground: var(--accent-foreground, var(--ds-color-foreground));
 	--color-input: var(--input, var(--ds-color-border));
 
+	/* The accent as TEXT. An accent chosen as a fill can fail 4.5:1 as text
+	   (caspo's is 2.48:1 on its light ground), so every text use of it reads
+	   --ds-color-primary-ink, which an app sets where its accent fails as text;
+	   unset, it is the accent itself, resolved live at the element. Tailwind's
+	   `text-*` reads `--text-color-*` before `--color-*`, so `text-primary`
+	   takes the ink while `bg-`, `border-` and `ring-primary` keep the fill.
+	   A key @poodle64/design-tokens does not register (it owns `--color-primary`). */
+	--text-color-primary: var(--ds-color-primary-ink, var(--ds-color-primary));
+
 	/* The shell's chrome surface — the nav rail and the top bar.
 	   Deliberately NOT `sidebar`. `20-sveltekit-frontend.md` makes the
 	   `sidebar-*` set the app's own to define, and this package registers
@@ -571,7 +580,7 @@
 	}
 
 	.ds-chip-primary {
-		color: var(--ds-color-primary);
+		color: var(--ds-color-primary-ink, var(--ds-color-primary));
 		background: color-mix(in oklch, var(--ds-color-primary) 14%, transparent);
 	}
 	.ds-dot-primary {
@@ -1243,7 +1252,7 @@
 	}
 
 	.ds-prose a {
-		color: var(--ds-color-primary);
+		color: var(--ds-color-primary-ink, var(--ds-color-primary));
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}

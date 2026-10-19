@@ -79,7 +79,7 @@
 	}
 
 	.ds-lib-fair-use a {
-		color: var(--ds-color-primary);
+		color: var(--ds-color-primary-ink, var(--ds-color-primary));
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
