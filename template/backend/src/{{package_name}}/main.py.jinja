@@ -26,6 +26,7 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -78,6 +79,16 @@ _FRONTEND_BUILD: Path = frontend_build_dir()
 # genuine missing asset, never a route.
 _IMMUTABLE_ASSET_PREFIX = "_app/"
 
+# The shell is revalidated at every load, so a deploy reaches a signed-in browser
+# the next time it opens the app: with no Cache-Control a browser caches it
+# heuristically off Last-Modified and keeps naming the last build's entry
+# (measured on caspo, 19/10/2026), and an edge's default browser TTL replaces a
+# bare `no-cache`. Only the content-hashed files under `_app/immutable/` are
+# kept for good; `_app/version.json` keeps its name across builds and is not.
+_SHELL_CACHE_CONTROL = "no-cache, max-age=0, must-revalidate"
+_HASHED_ASSET_PREFIX = "_app/immutable/"
+_HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
 # Every vertical slice mounts under this; an app with an older consumer contract names its own in app_hooks.
 _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
 
@@ -109,6 +120,18 @@ class _SPAStaticFiles(StaticFiles):
             if exc.status_code == 404 and path not in _DOCUMENT_ROUTES and not path.startswith(_IMMUTABLE_ASSET_PREFIX):
                 return await super().get_response("index.html", scope)
             raise
+
+    def file_response(
+        self, full_path: str | os.PathLike[str], stat_result: os.stat_result, scope: Scope, status_code: int = 200
+    ) -> Response:
+        """Every file the mount serves, a 304 included: the shell revalidated, hashed assets kept."""
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        served = Path(full_path).as_posix()
+        if served.endswith("/index.html"):
+            response.headers["Cache-Control"] = _SHELL_CACHE_CONTROL
+        elif f"/{_HASHED_ASSET_PREFIX}" in served:
+            response.headers["Cache-Control"] = _HASHED_ASSET_CACHE_CONTROL
+        return response
 
 
 class _SPAMount(Mount):

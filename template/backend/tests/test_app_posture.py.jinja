@@ -63,6 +63,27 @@ async def test_cors_middleware_is_installed_once_an_origin_is_configured():
     assert _has_cors(_app_with(cors_origins="https://example.test"))
 
 
+async def test_a_deploy_reaches_the_next_load_and_hashed_assets_are_kept(monkeypatch, tmp_path):
+    """Every response that is the shell says revalidate, a 304 too; only the hashed build output is cached for good."""
+    (tmp_path / "index.html").write_text("<html></html>")
+    (tmp_path / "_app" / "immutable").mkdir(parents=True)
+    (tmp_path / "_app" / "immutable" / "start.abc123.js").write_text("")
+    (tmp_path / "_app" / "version.json").write_text("{}")
+    monkeypatch.setattr(main, "_FRONTEND_BUILD", tmp_path)
+    shell = "no-cache, max-age=0, must-revalidate"
+    transport = ASGITransport(app=create_app(settings=get_settings()))
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for path in ("/", "/index.html", "/a/client/route"):
+            response = await client.get(path)
+            assert (response.status_code, response.headers["cache-control"]) == (200, shell), path
+        again = await client.get("/a/client/route", headers={"if-none-match": response.headers["etag"]})
+        assert (again.status_code, again.headers["cache-control"]) == (304, shell)
+        asset = await client.get("/_app/immutable/start.abc123.js")
+        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+        version = await client.get("/_app/version.json")
+        assert "immutable" not in version.headers.get("cache-control", "")
+
+
 async def test_an_api_path_the_spa_declines_is_the_routers(monkeypatch, tmp_path):
     """A redirect to the trailing-slash form that exists, or a JSON 404; never the SPA's page."""
     (tmp_path / "index.html").write_text("<html></html>")
