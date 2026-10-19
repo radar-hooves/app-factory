@@ -16,6 +16,8 @@
  * the blind spot that has now hidden five defects in this programme. Those
  * claims are made in a real browser instead; see `harness/README.md`.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import ShellHarness from './app-shell.svelte';
@@ -393,6 +395,83 @@ describe('AppShell — rail collapse', () => {
 	});
 });
 
+describe('AppShell — a collapsed rail peeks', () => {
+	const rail = () => document.querySelector<HTMLElement>('.ds-shell-rail')!;
+	const collapse = async () => {
+		render(ShellHarness);
+		await fireEvent.click(screen.getByTestId('ds-rail-collapse'));
+		await waitFor(() => expect(rail()).toHaveAttribute('data-collapsed', 'true'));
+		// The click left the pointer "on" the rail as far as a user is concerned;
+		// a real pointer leaves before the next test step.
+		await fireEvent.pointerLeave(rail());
+	};
+	const link = () => document.querySelector<HTMLElement>('.ds-shell-rail a[href="/identities"]')!;
+
+	it('shows labels while a mouse rests on it, and slims again on leave', async () => {
+		await collapse();
+		expect(link().querySelector('.sr-only')).not.toBeNull();
+
+		await fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+		await waitFor(() => expect(rail()).toHaveAttribute('data-peek', 'true'));
+		expect(link().querySelector('.sr-only')).toBeNull();
+		// The pin is untouched: the app's persisted state does not move.
+		expect(screen.getByTestId('probe-collapsed')).toHaveTextContent('collapsed');
+
+		await fireEvent.pointerLeave(rail());
+		await waitFor(() => expect(rail()).not.toHaveAttribute('data-peek'));
+	});
+
+	it('never opens for touch', async () => {
+		await collapse();
+		await fireEvent.pointerEnter(rail(), { pointerType: 'touch' });
+		await new Promise((r) => setTimeout(r, 250));
+		expect(rail()).not.toHaveAttribute('data-peek');
+	});
+
+	it('does not peek an expanded rail', async () => {
+		render(ShellHarness);
+		await fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+		await new Promise((r) => setTimeout(r, 250));
+		expect(rail()).not.toHaveAttribute('data-peek');
+	});
+
+	it('opens for keyboard focus inside and closes when focus leaves', async () => {
+		await collapse();
+		// jsdom has no :focus-visible; stand in the keyboard's answer.
+		const orig = HTMLElement.prototype.matches;
+		const spy = vi
+			.spyOn(HTMLElement.prototype, 'matches')
+			.mockImplementation(function (this: HTMLElement, sel: string) {
+				return sel === ':focus-visible' ? true : orig.call(this, sel);
+			} as never);
+		try {
+			link().focus();
+			await waitFor(() => expect(rail()).toHaveAttribute('data-peek', 'true'));
+			screen.getByTestId('identity').focus();
+			await waitFor(() => expect(rail()).not.toHaveAttribute('data-peek'));
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it('does not re-peek under the pointer straight after the toggle collapses it', async () => {
+		render(ShellHarness);
+		await fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+		await fireEvent.click(screen.getByTestId('ds-rail-collapse'));
+		await new Promise((r) => setTimeout(r, 250));
+		expect(rail()).toHaveAttribute('data-collapsed', 'true');
+		expect(rail()).not.toHaveAttribute('data-peek');
+	});
+
+	it('overlays rather than reflows, and stills under reduced motion', () => {
+		const css = readFileSync(join(__dirname, '../lib/styles.css'), 'utf8');
+		const rule = css.match(/\.ds-shell-rail\[data-collapsed='true'\]\[data-peek='true'\] \{[^}]*\}/s)?.[0] ?? '';
+		expect(rule).toContain('margin-right: calc(var(--ds-shell-rail-width-collapsed) - var(--ds-shell-rail-width));');
+		expect(rule).toContain('z-index: 30;');
+		expect(css).toMatch(/prefers-reduced-motion: reduce\) \{[^@]*\.ds-shell-rail \{\s*transition: none;/s);
+	});
+});
+
 describe('AppShell — searchPlacement', () => {
 	// Search is a global affordance. Where it sits changes what it reads AS: after
 	// the `context` slot it looks like route context; over with the theme toggle
@@ -574,6 +653,37 @@ describe('CommandPalette', () => {
 			expect(within(dialog, 'Identities')).toBeInTheDocument();
 			expect(queryWithin(dialog, 'Overview')).toBeNull();
 		});
+	});
+});
+
+describe('CommandPalette — query', () => {
+	it('hands the typed text to the app, and an app row acts on it', async () => {
+		render(ShellHarness);
+		await fireEvent.keyDown(document, { key: 'k', metaKey: true });
+		const input = await screen.findByPlaceholderText('Search the harness…');
+
+		await fireEvent.input(input, { target: { value: 'zzz nothing matches' } });
+		await waitFor(() =>
+			expect(screen.getByTestId('probe-query')).toHaveTextContent('zzz nothing matches')
+		);
+		const row = await screen.findByText('Ask: zzz nothing matches');
+		await fireEvent.click(row);
+
+		await waitFor(() =>
+			expect(screen.getByTestId('probe-asked')).toHaveTextContent('zzz nothing matches')
+		);
+		expect(screen.getByTestId('probe-palette')).toHaveTextContent('closed');
+	});
+
+	it('clears the text when the palette closes', async () => {
+		render(ShellHarness);
+		await fireEvent.keyDown(document, { key: 'k', metaKey: true });
+		const input = await screen.findByPlaceholderText('Search the harness…');
+		await fireEvent.input(input, { target: { value: 'abc' } });
+		await waitFor(() => expect(screen.getByTestId('probe-query')).toHaveTextContent('abc'));
+
+		await fireEvent.keyDown(document, { key: 'k', metaKey: true });
+		await waitFor(() => expect(screen.getByTestId('probe-query')).toHaveTextContent(/^$/));
 	});
 });
 

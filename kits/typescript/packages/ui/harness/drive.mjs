@@ -1489,6 +1489,44 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		);
 		await context.close();
 	}
+
+	// A collapsed rail peeks: wider while the pointer rests on it, the page not
+	// moving, and slim again when it leaves. Widths and positions, so only a
+	// real layout can say.
+	{
+		const { context, page } = await open('surface=nested&collapsible=1');
+		await page.click('[data-testid="ds-rail-collapse"]');
+		await page.waitForFunction(
+			() => document.querySelector('.ds-shell-rail')?.dataset.collapsed === 'true'
+		);
+		await page.mouse.move(700, 400);
+		const settle = () =>
+			page.waitForFunction(() =>
+				document.getAnimations().every((animation) => animation.playState !== 'running')
+			);
+		await settle();
+		const read = () =>
+			page.evaluate(() => ({
+				rail: document.querySelector('.ds-shell-rail').getBoundingClientRect().width,
+				mainLeft: document.querySelector('#ds-main').getBoundingClientRect().left,
+				peek: document.querySelector('.ds-shell-rail').dataset.peek === 'true'
+			}));
+		const slim = await read();
+		await page.mouse.move(20, 300);
+		await page.waitForFunction(() => document.querySelector('.ds-shell-rail').dataset.peek === 'true');
+		await settle();
+		const peeked = await read();
+		await page.mouse.move(700, 400);
+		await page.waitForFunction(() => !document.querySelector('.ds-shell-rail').dataset.peek);
+		await settle();
+		const after = await read();
+		check(
+			'collapsed rail peek: widens over the page without moving it, then slims again',
+			peeked.rail > slim.rail * 3 && peeked.mainLeft === slim.mainLeft && after.rail === slim.rail,
+			`rail ${slim.rail}px -> ${peeked.rail}px -> ${after.rail}px, content left ${slim.mainLeft} -> ${peeked.mainLeft}`
+		);
+		await context.close();
+	}
 }
 
 // ── The content measure ─────────────────────────────────────────────────────

@@ -1004,7 +1004,9 @@
 		height: 100dvh;
 		width: var(--ds-shell-rail-width);
 		max-width: 50%;
-		transition: width 200ms ease;
+		transition:
+			width 200ms ease,
+			margin-right 200ms ease;
 	}
 
 	/* Full viewport height (`inset-block: 0`), so the brand row at its top and
@@ -1066,6 +1068,19 @@
 
 	.ds-shell-rail[data-collapsed='true'] {
 		width: var(--ds-shell-rail-width-collapsed);
+	}
+
+	/* A collapsed rail peeking: it takes its full width but a negative right
+	   margin of the difference, so it still claims only the slim slot in the
+	   flex row and the page does not move. It sits above the top bar (z-20) and
+	   throws the same soft shadow the drawer does. */
+	.ds-shell-rail[data-collapsed='true'][data-peek='true'] {
+		width: var(--ds-shell-rail-width);
+		margin-right: calc(var(--ds-shell-rail-width-collapsed) - var(--ds-shell-rail-width));
+		z-index: 30;
+		box-shadow:
+			0 10px 15px -3px oklch(0 0 0 / 0.1),
+			0 4px 6px -4px oklch(0 0 0 / 0.1);
 	}
 
 	/* Width follows the pointer during a drag; the transition is for the

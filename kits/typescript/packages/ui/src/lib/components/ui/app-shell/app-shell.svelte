@@ -310,6 +310,53 @@
 	// that), so this can never suppress a legitimate desktop collapse.
 	const railCollapsed = $derived(collapsible && collapsed && !mobileNavOpen);
 
+	// A collapsed rail PEEKS: while a mouse rests on it, or keyboard focus is
+	// inside it, it widens over the page to show labels, and slims again when
+	// either leaves. The page does not reflow (the rail keeps its slim slot and
+	// the extra width overlays; see `data-peek` in styles.css). `collapsed` is
+	// untouched, so what an app persists is still the user's pin, the toggle.
+	//
+	// Pointer peeks need a mouse or pen: a touch tap fires pointerenter too, and
+	// a rail that opened on a tap would sit over the link being aimed at. Below
+	// md the rail is a drawer, never `railCollapsed`, so this cannot arise there.
+	// Focus peeks only for keyboard focus (`:focus-visible`), so pressing the
+	// toggle with a mouse does not hold the rail open. `peekSuppressed` is the
+	// other half of that: collapsing from under the pointer would otherwise peek
+	// at once and read as a toggle that did nothing, so it waits for the pointer
+	// to leave first.
+	const PEEK_DELAY_MS = 120;
+	let pointerOn = $state(false);
+	let focusIn = $state(false);
+	let peekSuppressed = $state(false);
+	let peekTimer: ReturnType<typeof setTimeout> | undefined;
+	const peeking = $derived(railCollapsed && !peekSuppressed && (pointerOn || focusIn));
+	// What the rail DRAWS: labels while peeking, icons otherwise.
+	const railNarrow = $derived(railCollapsed && !peeking);
+
+	function peekPointerEnter(event: PointerEvent) {
+		if (event.pointerType === 'touch') return;
+		clearTimeout(peekTimer);
+		peekTimer = setTimeout(() => (pointerOn = true), PEEK_DELAY_MS);
+	}
+	function peekPointerLeave() {
+		clearTimeout(peekTimer);
+		pointerOn = false;
+		peekSuppressed = false;
+	}
+	function peekFocusIn(event: FocusEvent) {
+		const target = event.target as HTMLElement | null;
+		if (target?.matches?.(':focus-visible')) focusIn = true;
+	}
+	function peekFocusOut(event: FocusEvent) {
+		const next = event.relatedTarget as Node | null;
+		if (!next || !(event.currentTarget as HTMLElement).contains(next)) focusIn = false;
+	}
+	function toggleCollapsed() {
+		collapsed = !collapsed;
+		peekSuppressed = true;
+	}
+	$effect(() => () => clearTimeout(peekTimer));
+
 	// The collapse toggle's accessible name states what pressing it will DO, so it
 	// flips with the state: collapsed → "Expand", expanded → "Collapse".
 	const collapseLabel = $derived(collapsed ? 'Expand sidebar' : 'Collapse sidebar');
@@ -411,7 +458,7 @@
 			!e.altKey &&
 			!isTypingTarget(e.target)
 		) {
-			collapsed = !collapsed;
+			toggleCollapsed();
 		}
 	}}
 />
@@ -422,7 +469,7 @@
 		class={cn(
 			'flex flex-none items-center gap-2.5',
 			compact ? '' : 'h-14 px-4',
-			railCollapsed && !compact && 'justify-center px-0'
+			railNarrow && !compact && 'justify-center px-0'
 		)}
 		aria-label={brandTitle ?? 'Home'}
 	>
@@ -443,7 +490,7 @@
 					{@render brandMark()}
 				</span>
 			{/if}
-			{#if brandTitle && !railCollapsed}
+			{#if brandTitle && !railNarrow}
 				<!--
 					The wordmark stands down below sm, leaving the mark alone. On a phone
 					the rail is gone, so this same lockup is what the top bar carries — and
@@ -534,6 +581,7 @@
 			class="ds-shell-rail bg-shell text-shell-foreground border-border flex-none flex-col border-r"
 			style={railWidth ? `--ds-shell-rail-width: ${railWidth}px` : undefined}
 			data-collapsed={railCollapsed ? 'true' : undefined}
+			data-peek={peeking ? 'true' : undefined}
 			data-resizing={resizing ? 'true' : undefined}
 			data-drawer={mobileNavOpen ? 'true' : undefined}
 			data-testid={mobileNavOpen ? 'ds-shell-drawer' : undefined}
@@ -541,6 +589,10 @@
 			aria-modal={mobileNavOpen ? 'true' : undefined}
 			aria-label={mobileNavOpen ? 'Navigation' : undefined}
 			onkeydown={trapTab}
+			onpointerenter={peekPointerEnter}
+			onpointerleave={peekPointerLeave}
+			onfocusin={peekFocusIn}
+			onfocusout={peekFocusOut}
 		>
 			{#if mobileNavOpen}
 				<button
@@ -564,14 +616,14 @@
 				not apply — the same reason the foot control carried `md:flex`.
 			-->
 			{#if collapsible}
-				<div class={cn('flex items-center', railCollapsed ? 'flex-col gap-1 py-2' : 'pr-2')}>
+				<div class={cn('flex items-center', railNarrow ? 'flex-col gap-1 py-2' : 'pr-2')}>
 					{@render brandLockup()}
 					<button
 						type="button"
-						onclick={() => (collapsed = !collapsed)}
+						onclick={toggleCollapsed}
 						class={cn(
 							'text-shell-muted-foreground hover:text-shell-foreground hidden size-8 flex-none place-items-center rounded-md transition-colors md:grid',
-							!railCollapsed && 'ml-auto'
+							!railNarrow && 'ml-auto'
 						)}
 						aria-label={collapseLabel}
 						aria-pressed={collapsed}
@@ -591,7 +643,7 @@
 			<AppNav
 				{nav}
 				{currentPath}
-				collapsed={railCollapsed}
+				collapsed={railNarrow}
 				label={navLabel}
 				onNavigate={() => (mobileNavOpen = false)}
 			/>
@@ -617,7 +669,7 @@
 						onclick={() => (mobileNavOpen = false)}
 					>
 						<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
-						<span class={railCollapsed && !mobileNavOpen ? 'sr-only' : 'truncate'}>
+						<span class={railNarrow && !mobileNavOpen ? 'sr-only' : 'truncate'}>
 							{settingsLabel}
 						</span>
 					</a>
@@ -629,7 +681,10 @@
 					bind:dragging={resizing}
 					storageKey="ds-shell-rail-width"
 					snap={170}
-					onsnap={() => (collapsed = true)}
+					onsnap={() => {
+						collapsed = true;
+						peekSuppressed = true;
+					}}
 					data-testid="ds-rail-resize"
 				/>
 			{/if}

@@ -7,6 +7,7 @@
 	import type { NavSource } from '$lib/components/ui/app-shell/types.js';
 	import type { ShellMeasure } from '$lib/components/ui/app-shell/measure.js';
 	import type { ShellTexture } from '$lib/components/ui/app-shell/texture.js';
+	import * as Command from '$lib/components/ui/command/index.js';
 	import Package from '@lucide/svelte/icons/package';
 
 	let {
@@ -53,11 +54,15 @@
 	let themeFlips = $state(0);
 	let navigatedTo = $state('none');
 	let collapsed = $state(false);
+	let query = $state('');
+	let asked = $state('none');
 </script>
 
 <div data-testid="probe-theme">{themeFlips}</div>
 <div data-testid="probe-navigated">{navigatedTo}</div>
 <div data-testid="probe-collapsed">{collapsed ? 'collapsed' : 'expanded'}</div>
+<div data-testid="probe-query">{query}</div>
+<div data-testid="probe-asked">{asked}</div>
 <div data-testid="probe-palette">{paletteOpen ? 'open' : 'closed'}</div>
 
 <AppShell
@@ -88,7 +93,19 @@
 
 <CommandPalette
 	bind:open={paletteOpen}
+	bind:query
 	{nav}
 	onNavigate={(href) => (navigatedTo = href)}
 	placeholder="Search the harness…"
-/>
+>
+	{#if query.trim()}
+		<Command.Item
+			forceMount
+			value="ask"
+			onSelect={() => {
+				asked = query;
+				paletteOpen = false;
+			}}>Ask: {query}</Command.Item
+		>
+	{/if}
+</CommandPalette>

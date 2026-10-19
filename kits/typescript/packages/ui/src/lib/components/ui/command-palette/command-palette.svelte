@@ -15,6 +15,17 @@
 	 *     let paletteOpen = $state(false);
 	 *     <AppShell {nav} onSearch={() => (paletteOpen = true)}>…</AppShell>
 	 *     <CommandPalette bind:open={paletteOpen} {nav} onNavigate={goto} />
+	 *
+	 * `query` is the text in the input, bindable, so an app can offer a row that
+	 * acts on what was typed ("Ask the agent: …", "Search everything for …"). Pass
+	 * `forceMount` on that row, or the palette's own filter hides it the moment
+	 * the text matches no label:
+	 *
+	 *     <CommandPalette bind:open bind:query {nav}>
+	 *       {#if query.trim()}
+	 *         <Command.Item forceMount value="ask" onSelect={() => ask(query)}>Ask: {query}</Command.Item>
+	 *       {/if}
+	 *     </CommandPalette>
 	 */
 	import type { Snippet } from 'svelte';
 	import * as Command from '$lib/components/ui/command/index.js';
@@ -22,6 +33,7 @@
 
 	let {
 		open = $bindable(false),
+		query = $bindable(''),
 		nav,
 		onNavigate,
 		placeholder = 'Search…',
@@ -31,6 +43,8 @@
 		children
 	}: {
 		open?: boolean;
+		/** What the user has typed. Cleared whenever the palette closes. */
+		query?: string;
 		/** The same value passed to AppShell. Filter for permissions first. */
 		nav?: NavSource;
 		/**
@@ -49,6 +63,10 @@
 	} = $props();
 
 	const items = $derived(toItems(nav));
+
+	$effect(() => {
+		if (!open) query = '';
+	});
 
 	function go(href: string) {
 		open = false;
@@ -71,7 +89,7 @@
 />
 
 <Command.Dialog bind:open title="Command palette" description={placeholder}>
-	<Command.Input {placeholder} />
+	<Command.Input {placeholder} bind:value={query} />
 	<Command.List>
 		<Command.Empty>{emptyText}</Command.Empty>
 
