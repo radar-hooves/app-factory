@@ -320,6 +320,7 @@ the job may go on by itself; `sendWhileRunning` is true.
 | Sharing an answer        | `onshare(turn, share)` on `Conversation`, over `chat.share`: every settled answer offers Share, which copies the link `StoredTurn.shared` names; a shared one offers Copy link and Stop sharing. Nothing is shared unless the reader asks. A host's own `turn` places `AnswerShare` (`./answer-share`) with the `onshare` and `shared` it is handed |
 | A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the chat |
 | Still answering          | `answering` on `Conversation`, from the controller                                                                                               |
+| Reopening                | `reopening` on `Conversation` while a reopened conversation has no turns yet (`chat.conversationId` set, `chat.turns` empty): docked and silent, never a new conversation's centred opening |
 | The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |
 | Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first. A host laying it over the page (a sheet) passes `onclose` for the header's close |
 

@@ -118,6 +118,13 @@ describe('Composer collection picker', () => {
 		expect(oncollection).toHaveBeenLastCalledWith('adf-pay');
 	});
 
+	it('closes when focus leaves it for somewhere else on the page', async () => {
+		render(Composer, { props: base({ collections: COLLECTIONS }) });
+		const list = await opened();
+		await fireEvent.focusOut(list, { relatedTarget: screen.getByRole('textbox') });
+		expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+	});
+
 	it('takes a search from a long list up, and Enter picks the first match', async () => {
 		const oncollection = vi.fn();
 		render(Composer, { props: base({ collections: MANY, oncollection }) });

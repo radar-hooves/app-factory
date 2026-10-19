@@ -66,6 +66,10 @@
 		/** When the last answer began, epoch ms, where this page did not see it
 		 *  start (`Chat.answering`): it reads as still being written. */
 		answering?: number | null;
+		/** A conversation is being read back and has no turns yet: the surface
+		 *  waits docked and says nothing, rather than centring a new
+		 *  conversation's opening for a moment and snapping away from it. */
+		reopening?: boolean;
 		/** Overrides for the package's own words. */
 		copy?: Partial<ChatCopy>;
 		/** Enables the source pane. Without it, chips render but do not open. */
@@ -122,6 +126,7 @@
 		onmark,
 		onshare,
 		answering = null,
+		reopening = false,
 		copy,
 		loadDocument,
 		oncite,
@@ -142,8 +147,10 @@
 	const words = $derived(resolveCopy(copy, name));
 	const who = $derived(personaName(name));
 	const opening = $derived(welcome ?? words.welcome);
-	const empty = $derived(turns.length === 0);
-	const centred = $derived(empty && Boolean(composer));
+	// A turn on its way (a reopened conversation, a job's first) is not a new
+	// conversation, so neither waits centred.
+	const empty = $derived(turns.length === 0 && !reopening);
+	const centred = $derived(empty && !running && Boolean(composer));
 
 	/**
 	 * When each turn arrived, for the turns this surface actually watched

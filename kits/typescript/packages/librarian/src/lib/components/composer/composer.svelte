@@ -14,7 +14,6 @@
   the box open, with Send beside Stop.
 -->
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
@@ -205,6 +204,12 @@
 	// the one that moves, and the box rises by however far its unlifted foot
 	// falls below it: the keyboard's height for a docked box, nothing for one
 	// centred above the keyboard on an empty conversation.
+	//
+	// The foot is read from layout, never from where the box is drawn: the
+	// transform's current value (mid-transition included) and the safe-area
+	// padding that lifting removes are both taken back out, so a second event
+	// inside the 150ms transition cannot read a half-lifted box and overshoot.
+	// Any scroll re-measures, since a scrolling stage moves the box too.
 	let lift = $state(0);
 	$effect(() => {
 		const viewport = globalThis.visualViewport;
@@ -215,15 +220,20 @@
 				lift = 0;
 				return;
 			}
-			const foot = wrapper.getBoundingClientRect().bottom + untrack(() => lift);
+			const style = getComputedStyle(wrapper);
+			const drawn = style.transform === 'none' ? 0 : new DOMMatrixReadOnly(style.transform).m42;
+			const foot =
+				wrapper.getBoundingClientRect().bottom - drawn - (parseFloat(style.paddingBottom) || 0);
 			lift = Math.max(0, Math.round(foot + KEYBOARD_GAP - shown));
 		};
 		measure();
 		viewport.addEventListener('resize', measure);
 		viewport.addEventListener('scroll', measure);
+		document.addEventListener('scroll', measure, { capture: true, passive: true });
 		return () => {
 			viewport.removeEventListener('resize', measure);
 			viewport.removeEventListener('scroll', measure);
+			document.removeEventListener('scroll', measure, { capture: true });
 		};
 	});
 </script>

@@ -208,6 +208,7 @@
 			running={c.busy}
 			version={c.version}
 			answering={c.answering}
+			reopening={Boolean(c.conversationId) && c.turns.length === 0}
 			name={who}
 			welcome={p.blurb || undefined}
 			examples={p.examples}

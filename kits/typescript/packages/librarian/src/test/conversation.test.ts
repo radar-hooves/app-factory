@@ -231,4 +231,15 @@ describe("Conversation in the host's own words", () => {
 			control.compareDocumentPosition(screen.getByRole('log')) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
+
+	it('waits docked and says nothing while a conversation is read back', () => {
+		const composer = createRawSnippet(() => ({ render: () => '<textarea></textarea>' }));
+		conversation({ composer, reopening: true, welcome: 'Ask about pay.', examples: ['How much leave?'] });
+		expect(screen.queryByText('Ask about pay.')).not.toBeInTheDocument();
+		expect(screen.queryByText('How much leave?')).not.toBeInTheDocument();
+		expect(
+			screen.getByRole('log').compareDocumentPosition(screen.getByRole('textbox')) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
 });

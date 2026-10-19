@@ -99,7 +99,7 @@
 			place = {
 				up,
 				width,
-				left: Math.max(8, Math.min(at.left - box.left, box.width - width - 8)),
+				left: Math.max(8, Math.min(at.left - box.left - anchor.clientLeft, box.width - width - 8)),
 				height: Math.max(160, Math.min(TALLEST, (up ? above : below) - 12))
 			};
 		}
@@ -122,8 +122,14 @@
 		onchoose(option.name);
 	}
 
+	/** The active option in view, scrolling the list alone: `scrollIntoView`
+	 *  would scroll a centred stage or the page under it as well. */
 	function reveal() {
-		if (activeId) document.getElementById(activeId)?.scrollIntoView?.({ block: 'nearest' });
+		const option = activeId ? document.getElementById(activeId) : null;
+		if (!option || !list) return;
+		const bottom = option.offsetTop + option.offsetHeight;
+		if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
+		else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
 	}
 
 	function move(to: number) {
@@ -158,12 +164,18 @@
 		}
 	}
 
+	// A soft keyboard that resizes the layout viewport (Firefox on Android)
+	// fires `resize` the moment the search field takes focus; only a change of
+	// width moves the box the list was placed against.
 	$effect(() => {
 		if (!open) return;
+		const width = window.innerWidth;
 		const outside = (event: PointerEvent) => {
 			if (!root?.contains(event.target as Node)) close(false);
 		};
-		const resized = () => close(false);
+		const resized = () => {
+			if (window.innerWidth !== width) close(false);
+		};
 		document.addEventListener('pointerdown', outside, true);
 		window.addEventListener('resize', resized);
 		return () => {
@@ -173,7 +185,13 @@
 	});
 </script>
 
-<div class="ds-lib-scope-picker" bind:this={root}>
+<div
+	class="ds-lib-scope-picker"
+	bind:this={root}
+	onfocusout={(event) => {
+		if (open && !root?.contains(event.relatedTarget as Node | null)) close(false);
+	}}
+>
 	<button
 		bind:this={trigger}
 		type="button"
@@ -343,7 +361,9 @@
 		color: var(--ds-color-muted-foreground);
 	}
 
+	/* Positioned: each option's offset is measured from it. */
 	.ds-lib-scope-list {
+		position: relative;
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
