@@ -396,11 +396,38 @@ const QUOTA: Quota = {
 	support_url: '/support'
 };
 
-/** The collections the person may read, as the app lists them. */
+/** The collections the person may read, as the app lists them: as many as
+ *  caspo's operator holds, so the picker is seen searching. */
 export const COLLECTIONS: CollectionChoice[] = [
 	{ name: 'adf-pay', title: 'ADF pay and conditions', description: 'Rates, allowances and leave' },
 	{ name: 'defence-housing', title: 'Defence housing and relocation' },
-	{ name: 'travel' }
+	{ name: 'travel' },
+	...[
+		'Defence policy',
+		'Procurement',
+		'Radar',
+		'Electronic warfare',
+		'Electro optics',
+		'Communications',
+		'Signal processing',
+		'Simulation',
+		'Defence parliamentary',
+		'Defence audit',
+		'Defence doctrine',
+		'Defence personnel',
+		'Defence allied',
+		'Networks',
+		'Export controls',
+		'Digital sourcing',
+		'Marketplace precedent',
+		'Defence security',
+		'Defence aviation safety',
+		'Public governance',
+		'Materiel engineering',
+		'Open architecture',
+		'Asdefcon',
+		'Acp synthesis'
+	].map((title) => ({ name: title.toLowerCase().replaceAll(' ', '-'), title }))
 ];
 
 const at = (n: number) => new Date(minutes(n)).toISOString();

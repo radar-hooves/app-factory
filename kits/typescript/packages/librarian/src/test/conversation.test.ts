@@ -205,14 +205,14 @@ describe("Conversation in the host's own words", () => {
 		);
 	});
 
-	it('docks the composer under the transcript once there is a turn, and the lead goes', () => {
+	it('docks the composer under the transcript once there is a turn, with the lead in the scroll', () => {
 		const lead = createRawSnippet(() => ({ render: () => '<section>Lately</section>' }));
 		const composer = createRawSnippet(() => ({ render: () => '<textarea></textarea>' }));
 		const turns: Turn[] = [
 			{ id: '1', question: 'q', blocks: [{ kind: 'text', index: 0, text: 'a' }], outcome: null }
 		];
 		conversation({ turns, lead, composer, examples: ['How much leave?'] });
-		expect(screen.queryByText('Lately')).not.toBeInTheDocument();
+		expect(screen.getByRole('log')).toContainElement(screen.getByText('Lately'));
 		expect(screen.queryByText('How much leave?')).not.toBeInTheDocument();
 		expect(
 			screen.getByRole('log').compareDocumentPosition(screen.getByRole('textbox')) &

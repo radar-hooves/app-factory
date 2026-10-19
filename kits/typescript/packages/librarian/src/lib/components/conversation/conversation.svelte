@@ -97,10 +97,10 @@
 		 *  prose, its citation marks, its links) renders its own, and one that
 		 *  only adds to it renders `AgentTranscript` inside it. */
 		turn?: Snippet<[AgentTranscriptProps]>;
-		/** Before the first turn: what the host shows ahead of a question, under
-		 *  the centred composer, the examples and the scope (inside the scroll,
-		 *  under the opening, where there is no composer). It scrolls rather
-		 *  than taking the panel's height. */
+		/** What leads the conversation: inside the scroll, under the opening and
+		 *  the scope, so a tall one scrolls rather than taking the panel's
+		 *  height; before the first question, under the centred composer, its
+		 *  examples and the scope. */
 		lead?: Snippet;
 		/** The host's controls for the conversation as a whole (its past
 		 *  questions, a new one), at the measure's trailing edge above the
@@ -306,7 +306,7 @@
 							{#if scope}
 								<ScopeStatement statement={scope} expanded={empty} copy={words} />
 							{/if}
-							{#if empty}{@render lead?.()}{/if}
+							{@render lead?.()}
 						{/if}
 
 						{#each turns as turn, index (turn.id)}
@@ -430,16 +430,22 @@
 		flex-direction: column;
 	}
 
-	/* The transcript fades into the composer's edge rather than stopping at a
-	   rule across the panel: the box is edge enough, and a fade lies over any
-	   ground the app paints, a texture included. The fade is the column's own
-	   bottom padding once the reader is at the latest. */
+	/* The transcript fades at its edges, under the toolbar and into the
+	   composer, rather than stopping at a rule across the panel: the box is
+	   edge enough, and a fade lies over any ground the app paints, a texture
+	   included. Each fade is the column's own padding at either end. */
 	.ds-lib-scroll {
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
+		mask-image: linear-gradient(
+			to bottom,
+			transparent,
+			#000 1.25rem,
+			#000 calc(100% - 1.5rem),
+			transparent
+		);
 	}
 
 	/* Turns are told apart by space and type, never boxes. */

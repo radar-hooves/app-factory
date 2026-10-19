@@ -14,6 +14,10 @@
 	 */
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
+	import HistoryIcon from '@lucide/svelte/icons/history';
+	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
+	import { Button } from '@poodle64/ui/button';
+	import * as Sheet from '@poodle64/ui/sheet';
 	import Conversation from '@poodle64/librarian/conversation';
 	import Composer from '@poodle64/librarian/composer';
 	import ConversationList from '@poodle64/librarian/conversation-list';
@@ -88,6 +92,7 @@
 	let quota = $state<Quota | null>(null);
 	let past = $state<ConversationSummary[] | null>(null);
 	let current = $state<string | undefined>(undefined);
+	let listOpen = $state(false);
 	const formatCost = (usd: number) => `about A$${(usd * 1.5).toFixed(2)}`;
 	// `live` is the package's own controller over a fake of the chat routes,
 	// driven rather than seeded: every other scene is a picture.
@@ -161,20 +166,24 @@
 	</header>
 
 	<div class="relative flex min-h-0 flex-1">
-		{#if live || past}
-			<!-- The host's placement: a column from 768, over the conversation below it. -->
-			<aside
-				class="border-border bg-background absolute inset-y-0 left-0 z-10 w-72 overflow-y-auto border-r md:static {live
-					? 'max-md:hidden'
-					: ''}"
-			>
+		<!-- The host's placement, as the stamped room page has it: past questions
+		     over the page from the bar above the transcript, never a column. -->
+		<Sheet.Root bind:open={listOpen}>
+			<Sheet.Content side="left" showCloseButton={false} aria-label="Past questions" class="overflow-y-auto">
 				{#if live}
 					<ConversationList
 						conversations={chat.conversations}
 						failed={chat.listFailed}
 						current={chat.conversationId}
-						onopen={(id) => void chat.open(id)}
-						onnew={() => chat.new()}
+						onopen={(id) => {
+							listOpen = false;
+							void chat.open(id);
+						}}
+						onnew={() => {
+							listOpen = false;
+							chat.new();
+						}}
+						onclose={() => (listOpen = false)}
 						onrename={(id, title) => chat.rename(id, title)}
 						ondownload={(id) => chat.download(id)}
 						ondelete={(id) => chat.remove(id)}
@@ -185,13 +194,14 @@
 						{current}
 						onopen={(id) => (current = id)}
 						onnew={() => (current = undefined)}
+						onclose={() => (listOpen = false)}
 						onrename={async () => true}
 						ondownload={async () => true}
 						ondelete={async () => true}
 					/>
 				{/if}
-			</aside>
-		{/if}
+			</Sheet.Content>
+		</Sheet.Root>
 		{#if live}
 			<Conversation
 				turns={chat.turns}
@@ -204,6 +214,7 @@
 				onregenerate={() => void chat.again()}
 				onmark={(turn, verdict) => chat.mark(turn, verdict)}
 				{loadDocument}
+				toolbar={bar}
 			>
 				{#snippet composer()}
 					<FairUseNotice quota={chat.quota} />
@@ -257,6 +268,7 @@
 			}}
 			{loadDocument}
 			formatCost={requested === 'cost' ? formatCost : undefined}
+			toolbar={past ? bar : undefined}
 		>
 			{#snippet composer()}
 				{#if job}
@@ -304,3 +316,22 @@
 		{/if}
 	</div>
 </div>
+
+{#snippet bar()}
+	{#if live && chat.conversationId}
+		<Button variant="ghost" size="sm" onclick={() => chat.new()}>
+			<SquarePenIcon />
+			New question
+		</Button>
+	{/if}
+	<Button
+		variant="ghost"
+		size="sm"
+		aria-haspopup="dialog"
+		aria-expanded={listOpen}
+		onclick={() => (listOpen = true)}
+	>
+		<HistoryIcon />
+		Past questions
+	</Button>
+{/snippet}

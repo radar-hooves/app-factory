@@ -66,12 +66,15 @@
 		text-transform: uppercase;
 	}
 
+	/* Rows under one hairline, not a box each: a source list is read down,
+	   and a stack of outlines is the noise the chat was asked to lose. */
 	.ds-lib-sources-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.125rem;
 		margin: 0;
-		padding: 0;
+		border-top: 1px solid var(--ds-color-border);
+		padding: 0.375rem 0 0;
 		list-style: none;
 	}
 
@@ -80,8 +83,8 @@
 		width: 100%;
 		align-items: baseline;
 		gap: 0.5rem;
-		border: 1px solid var(--ds-color-border);
-		border-radius: var(--ds-radius-lg);
+		border: 0;
+		border-radius: var(--ds-radius-md);
 		background: none;
 		padding: 0.375rem 0.625rem;
 		color: inherit;
@@ -89,13 +92,10 @@
 		font-size: 0.875rem;
 		text-align: start;
 		cursor: pointer;
-		transition:
-			background-color 150ms ease,
-			border-color 150ms ease;
+		transition: background-color 150ms ease;
 	}
 
 	.ds-lib-source:hover:not(:disabled) {
-		border-color: var(--ds-color-border-strong);
 		background: var(--ds-color-surface-2);
 	}
 
@@ -125,6 +125,7 @@
 
 	.ds-lib-source-title {
 		color: var(--ds-color-foreground);
+		font-weight: 500;
 	}
 
 	.ds-lib-source-section {

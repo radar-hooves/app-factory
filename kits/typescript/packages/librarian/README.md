@@ -35,7 +35,7 @@ src/lib/
     document-pane/         the cited document, open at the cited passage
     artefact-card/         an artefact's card, in the host's words
     artefact-pane/         an artefact that is its answer's prose, in the column
-    composer/              the input box: attachments, collection picker, a note, send/stop
+    composer/              the input box: attachments, one collection control, a note, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        a whole investigation, as one quiet line
     tool-row/              one tool call
@@ -174,12 +174,13 @@ on it fires once and never again.
 | Attachments              | nothing: `ask()` posts multipart (`question`, `resume`, `collection`, `files[]`) whenever `files` is non-empty, and JSON when it is not. The route must accept both                      |
 | Reading a cited document | `loadDocument(document_id) => Promise<{title, sections: [{anchor, heading, text}]}>`, proxied through the app's own authenticated route (caspo: `GET /api/sources/documents/{id}/content`) |
 | Asking again             | `onregenerate`: re-send the last question as a NEW turn; the package exposes the action and never re-asks by itself                                                                         |
-| Choosing a collection    | `Composer`'s `collections` (`{ name, title?, description? }[]`, the ones the person may read) and `collection` (the chosen name; undefined is all of them), with `oncollection(name \| undefined)`. It renders from two collections up, each by its title (the name made readable where there is none) with the description as its hover, never a retrieval summary |
-| The empty state          | `welcome` and up to three `examples`                                                                                                                                                        |
+| Choosing a collection    | `Composer`'s `collections` (`{ name, title?, description? }[]`, the ones the person may read) and `collection` (the chosen name; undefined is all of them), with `oncollection(name \| undefined)`. From two collections up it is ONE control naming the choice, opening a listbox (searchable from eight) where each shows by its title (the name made readable where there is none) over its description, never a retrieval summary |
+| The empty state          | `welcome` and up to three `examples`. With a composer, the opening and the composer sit together in the middle of the panel, the examples, the folded scope and `lead` under it; the first turn docks the composer at the foot |
+| Conversation controls    | `toolbar`: a snippet at the measure's trailing edge above the transcript, outside its scroll (the room page's Past questions and New question)                                               |
 | What this surface covers | `scope`: one statement per persona, in the host's own words. Rendered above the first turn and folded to a line once the conversation starts                                                   |
 | The words themselves     | `copy`: a partial of `ChatCopy`. Every component resolves it itself, so overriding one line does not mean restating the rest                                                           |
 | An answer its own way    | `turn`: a snippet given each turn's `AgentTranscriptProps` in place of `AgentTranscript`. Render your own from the parts, or `AgentTranscript` inside your own to add to it               |
-| What leads a conversation | `lead`: a snippet inside the scroll, under the opening and the scope, so a tall one scrolls with the conversation instead of taking its height                                            |
+| What leads a conversation | `lead`: a snippet inside the scroll, under the opening and the scope, so a tall one scrolls with the conversation instead of taking its height; under the centred composer before the first question |
 
 Nothing here fetches on its own behalf. The document read is
 authenticated, and a package that called it directly would be reaching past
@@ -320,7 +321,7 @@ the job may go on by itself; `sendWhileRunning` is true.
 | A shared answer, read    | `Conversation` given `[storedTurn(id, 0, answer)]` from `./chat` and no handlers, no composer: the question, the answer and its sources, read-only, citations opening as in the chat |
 | Still answering          | `answering` on `Conversation`, from the controller                                                                                               |
 | The allowance            | `FairUseNotice quota={…}` in the composer snippet: a count while there are questions left, a notice with `support_url` once there are none. Nothing for `exempt`, or a `limit` of 0 |
-| Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first        |
+| Past conversations       | `ConversationList`: newest first, `href` makes each row a link, and each act renders only when its handler is given; a delete asks first. A host laying it over the page (a sheet) passes `onclose` for the header's close |
 
 ### Watching a session somebody else started
 
@@ -480,7 +481,7 @@ of them is composed from the persona's name:
 
 That one prop carries the working line ("Penny is looking…"), both composer
 placeholders, the uncited-answer note, both failure sentences, the scope
-label, the collection picker's label, the opening line, the name signed on every answer card and the
+label, the collection picker's label, the opening line, the name signed on every answer and the
 accessible name of the scroll region. A slug is fine: `penny` renders as
 "Penny", `chief-engineer` as "Chief Engineer", and a name the host already
 capitalised is left exactly as written.
@@ -511,8 +512,8 @@ settles, offering "Ask again".
 
 ### Timestamps
 
-`Turn.at` (epoch ms) renders as a clock time on the question and the answer
-card, which is a different fact from the duration badge beside the actions. A
+`Turn.at` (epoch ms) renders as a clock time on the question and the answer,
+which is a different fact from the duration badge beside the actions. A
 host that persists conversations sets it; a host that does not gets one
 stamped when the turn first appears, and a turn already on screen at mount —
 one read back out of a stored conversation — deliberately shows none rather than claiming
@@ -541,8 +542,9 @@ running from its own static build. The same script asserts what a screenshot
 cannot: that nothing scrolls sideways at any width, that the source pane
 opens and closes from the keyboard with focus returning to the chip and is
 really draggable, that the scope statement folds once there is a
-conversation over it and reopens from that line, that the collection picker
-starts on all of them and marks the one tapped by its summary, that the persona's
+conversation over it and reopens from that line, that the collection control
+starts on all of them, stays one control for 27 and takes a searched pick from
+the keyboard, that past questions come over the page and hand focus back, that the persona's
 between-tool narration is nowhere in the answer prose before the activity
 line is opened, that a job's artefact and the pages it read open in the
 host's own columns and never in a pane of the package's, and that the reading

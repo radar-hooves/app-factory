@@ -387,6 +387,10 @@ for (const theme of THEMES) {
 	}
 
 	await visit('past');
+	if (await page.getByRole('region', { name: 'Past questions' }).count()) {
+		failures.push('past: the list stands beside the conversation rather than coming over it');
+	}
+	await page.getByRole('button', { name: 'Past questions' }).click();
 	const past = page.getByRole('region', { name: 'Past questions' });
 	// `allInnerTexts` does not wait, so the list has to be there first.
 	await past.getByRole('listitem').first().waitFor();
@@ -396,6 +400,11 @@ for (const theme of THEMES) {
 	}
 	const open = past.getByRole('button', { name: 'Recreation leave each year', exact: true });
 	if ((await open.getAttribute('aria-current')) !== 'true') failures.push('past: the open conversation is not marked');
+	await page.screenshot({ path: join(out, 'past-open-1440.png') });
+	await page.keyboard.press('Escape');
+	await past.waitFor({ state: 'detached' });
+	const back = await page.evaluate(() => document.activeElement?.textContent?.trim());
+	if (back !== 'Past questions') failures.push(`past: closing the list left focus on "${back}"`);
 	await context.close();
 }
 
@@ -408,7 +417,11 @@ for (const theme of THEMES) {
 	const page = await context.newPage();
 	await page.goto(`http://localhost:${PORT}/chat?state=live`, { waitUntil: 'domcontentloaded' });
 	const list = page.getByRole('region', { name: 'Past questions' });
+	const history = page.getByRole('button', { name: 'Past questions' });
+	await history.click();
 	await list.getByText('Recreation leave each year').waitFor();
+	await list.getByRole('button', { name: 'Close past questions' }).click();
+	await list.waitFor({ state: 'detached' });
 	await page.getByText('40 of 40 questions left today.', { exact: false }).waitFor();
 
 	await page.locator('textarea').fill('What is the total?');
@@ -428,6 +441,7 @@ for (const theme of THEMES) {
 	if ((await page.locator('article').count()) !== 2) failures.push('live: asking again made no second turn');
 	if (await page.getByRole('button', { name: 'Stop' }).count()) failures.push('live: Stop outlived the answer it stopped');
 
+	await history.click();
 	await list.getByRole('button', { name: 'Field allowance while deployed', exact: true }).click();
 	await page.getByText('Outrider is still answering…').waitFor();
 	if (!(await page.getByText('And while I am in transit?').count())) {
@@ -438,6 +452,7 @@ for (const theme of THEMES) {
 		failures.push('live: still answering after the answer settled');
 	}
 
+	await history.click();
 	await list.getByRole('button', { name: 'More: Field allowance while deployed' }).click();
 	await list.getByRole('button', { name: 'Rename' }).click();
 	const title = list.getByRole('textbox', { name: 'Rename' });
@@ -476,27 +491,36 @@ for (const theme of THEMES) {
 	await context.close();
 }
 
-// The collection picker: all of them to start, a tap narrows to one by the
-// words it is known by, and the choice is the pressed one. Neither survives a
-// screenshot.
+// The collection picker: one control however many there are, all of them to
+// start, a search from a long list up, and a pick by the words a collection is
+// known by, from the keyboard. None of it survives a screenshot.
 {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 	const page = await context.newPage();
 	await page.goto(`http://localhost:${PORT}/chat?state=collections`, {
 		waitUntil: 'domcontentloaded'
 	});
-	const all = page.getByRole('button', { name: 'All your collections' });
-	await all.waitFor();
-	if ((await all.getAttribute('aria-pressed')) !== 'true') {
+	const control = page.getByRole('button', { name: /^Where Outrider looks: / });
+	await control.waitFor();
+	if ((await control.innerText()).trim() !== 'All your collections') {
 		failures.push('collections: asking across all of them is not the starting choice');
 	}
-	const one = page.getByRole('button', { name: 'Defence housing and relocation' });
-	await one.click();
-	if ((await one.getAttribute('aria-pressed')) !== 'true') {
-		failures.push('collections: a tapped collection is not the chosen one');
+	if (await page.getByText('Defence housing and relocation').count()) {
+		failures.push('collections: the choices stand in the composer rather than behind one control');
 	}
+	await control.click();
+	const field = page.getByRole('combobox', { name: 'Where Outrider looks' });
+	await field.waitFor();
+	await page.screenshot({ path: join(out, 'collections-open-1440.png') });
+	await field.fill('housing');
+	await page.keyboard.press('Enter');
+	if ((await control.innerText()).trim() !== 'Defence housing and relocation') {
+		failures.push('collections: a searched pick is not the chosen one');
+	}
+	const focused = await page.evaluate(() => document.activeElement?.tagName);
+	if (focused !== 'TEXTAREA') failures.push(`collections: a pick left focus on ${focused}, not the box`);
 	if (await page.getByText('defence-housing').count()) {
-		failures.push('collections: a collection is shown by its name, not its summary');
+		failures.push('collections: a collection is shown by its name, not its title');
 	}
 	await context.close();
 }
