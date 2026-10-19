@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.21] - 2026-10-19
+
+### Added
+
+- **A collapsed rail peeks** (consumer: caspo, radar-hooves/caspo#177): while a mouse or pen rests on it (after 120ms), or keyboard focus is inside it, the rail widens over the page to show labels, and slims again when either leaves. The page does not reflow: the rail keeps its slim slot and the width overlays. No prop: every collapsible shell does it, as one shape. Never on touch, and below md the drawer is untouched. `collapsed` is not changed by a peek, so what an app persists is still the user's pin, the toggle on the brand row; collapsing from under the pointer waits for it to leave before peeking. `prefers-reduced-motion` stills the width change.
+- **`CommandPalette` `query`** (consumer: caspo, radar-hooves/caspo#177): bindable text the user has typed, cleared when the palette closes. An app renders its own row from it ("Ask the agent: …", "Search everything for …") as a `Command.Item` with `forceMount`, so the palette's filter does not hide it.
+
 ## [2026.10.20] - 2026-10-19
 
 ### Added

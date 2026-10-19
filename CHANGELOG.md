@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.53] - 2026-10-19
+
+Need: caspo's inner pages, rail slim by default and readable on hover (radar-hooves/caspo#177); consumer: caspo.
+
+### Added
+
+- **A collapsed `AppShell` rail peeks labels over the page** on hover or keyboard focus, without reflowing it, and **`CommandPalette` binds the typed `query`**. `@poodle64/ui` 2026.10.21.
+
 ## [2026.10.52] - 2026-10-19
 
 Need: a persona turn served when the gateway routes it to a Claude Max seat (radar-hooves/caspo#183), and a chat page that never says "Milton" (radar-hooves/caspo#191, master-project#380); consumer: caspo.
