@@ -899,7 +899,9 @@ async def test_a_turn_carries_the_derived_tools_the_mcp_config_the_seeded_model_
         "disallowed=Bash",
         "strict_mcp_config=True",
         "effort=low",
-        "permission_mode=bypassPermissions",
+        "permission_mode=dontAsk",
+        "restricted=True",
+        "tools=Read,Grep",
         "thinking_off=0",
     ):
         assert part in said
@@ -1043,3 +1045,187 @@ async def test_a_persona_turn_presents_a_token_naming_the_person_who_asked(
     assert asker == Asker(
         sub=who["x-authentik-uid"], app=APP, username=who["x-authentik-uid"], groups=(), entitlements=()
     )
+
+
+# ── what an armed persona makes, and an edited question ──────────────────
+
+
+def _answered(events: list[dict[str, Any]]) -> str:
+    """The text of the turn's last assistant event: the echo, after any tool step."""
+    whole = [e for e in events if e.get("type") == "assistant"][-1]
+    return str(whole["message"]["content"][0]["text"])
+
+
+def _conversation(events: list[dict[str, Any]]) -> str:
+    return str(next(e for e in events if e.get("subtype") == "init")["session_id"])
+
+
+async def test_a_document_the_persona_writes_is_announced_recorded_and_downloaded(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    events = _events((await _ask(client, "helper", "__write__:brief.md:# Brief", who)).text)
+    conversation = _conversation(events)
+
+    [made] = [e for e in events if e.get("type") == "artefact"]
+    stored = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()["turns"][0]
+    download = await client.get(
+        f"/api/agent/conversations/{conversation}/artefact", params={"name": "brief.md", "version": 1}, headers=who
+    )
+
+    assert (made["name"], made["version"], made["media_type"]) == ("brief.md", 1, "text/markdown")
+    assert stored["artefacts"] == [
+        {"name": "brief.md", "version": 1, "media_type": "text/markdown", "formats": made["formats"]}
+    ]
+    assert [step["name"] for step in stored["steps"]] == ["Write"]
+    assert download.status_code == 200 and download.text == "# Brief"
+    assert download.headers["content-disposition"] == "attachment; filename*=UTF-8''brief.md"
+
+
+async def test_word_is_offered_only_where_this_app_renders_it(client: AsyncClient) -> None:
+    from agent_common import documents
+
+    who = _person("chat-helper")
+    events = _events((await _ask(client, "helper", "__write__:brief.md:# Brief", who)).text)
+    word = await client.get(
+        f"/api/agent/conversations/{_conversation(events)}/artefact",
+        params={"name": "brief.md", "version": 1, "format": "docx"},
+        headers=who,
+    )
+
+    if documents.available():
+        assert word.status_code == 200
+        assert word.headers["content-type"] == documents.FORMATS["docx"]
+        assert word.headers["content-disposition"] == "attachment; filename*=UTF-8''brief.docx"
+    else:
+        assert word.status_code == 404
+
+
+async def test_an_html_document_is_served_to_be_saved_and_never_run_in_this_apps_origin(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    events = _events((await _ask(client, "helper", "__write__:page.html:<script>alert(1)</script>", who)).text)
+    served = await client.get(
+        f"/api/agent/conversations/{_conversation(events)}/artefact",
+        params={"name": "page.html", "version": 1},
+        headers=who,
+    )
+
+    assert served.headers["content-security-policy"] == "sandbox"
+    assert served.headers["content-disposition"].startswith("attachment;")
+
+
+async def test_another_persons_document_is_one_they_cannot_reach(client: AsyncClient) -> None:
+    events = _events((await _ask(client, "helper", "__write__:brief.md:# Mine", _person("chat-helper"))).text)
+    theirs = await client.get(
+        f"/api/agent/conversations/{_conversation(events)}/artefact",
+        params={"name": "brief.md", "version": 1},
+        headers=_person("chat-helper"),
+    )
+    assert theirs.status_code == 404
+
+
+async def test_the_files_a_question_came_with_are_named_on_its_turn(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    asked = await client.post(
+        "/api/agent/helper/ask",
+        data={"question": "what is in this?"},
+        files=[("files[]", ("../leave.txt", b"x"))],
+        headers=who,
+    )
+    conversation = _conversation(_events(asked.text))
+
+    stored = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()
+    assert stored["turns"][0]["files"] == ["leave.txt"]
+
+
+async def test_an_edited_question_replaces_it_and_every_turn_after_it(client: AsyncClient) -> None:
+    who = _person("chat-helper", "admin")
+    conversation = _conversation(_events((await _ask(client, "helper", "one", who)).text))
+    await _ask(client, "helper", "two", who, resume=conversation)
+    await _ask(client, "helper", "three", who, resume=conversation)
+    assert (await client.put(f"/api/agent/conversations/{conversation}/turns/2/share", headers=who)).status_code == 200
+
+    edited = await client.post(
+        "/api/agent/helper/ask", json={"question": "two, edited", "resume": conversation, "edit": 1}, headers=who
+    )
+    turns = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()["turns"]
+
+    assert "resume_at=None" not in _answered(_events(edited.text))
+    assert [turn["question"] for turn in turns] == ["one", "two, edited"]
+    assert turns[1]["answer"].startswith("question=two, edited")
+    assert _row(conversation).shared == []
+
+
+async def test_editing_the_first_question_starts_the_conversation_over(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    conversation = _conversation(_events((await _ask(client, "helper", "one", who)).text))
+    await _ask(client, "helper", "two", who, resume=conversation)
+    first_session = _row(conversation).session_id
+
+    await client.post(
+        "/api/agent/helper/ask", json={"question": "anew", "resume": conversation, "edit": 0}, headers=who
+    )
+    turns = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()["turns"]
+
+    assert [turn["question"] for turn in turns] == ["anew"]
+    assert _row(conversation).session_id not in (None, first_session)
+
+
+async def test_an_edit_of_a_question_the_conversation_does_not_hold_is_refused(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    conversation = _conversation(_events((await _ask(client, "helper", "one", who)).text))
+
+    beyond = await client.post(
+        "/api/agent/helper/ask", json={"question": "x", "resume": conversation, "edit": 1}, headers=who
+    )
+    unanchored = await client.post("/api/agent/helper/ask", json={"question": "x", "edit": 0}, headers=who)
+
+    assert (beyond.status_code, unanchored.status_code) == (404, 404)
+
+
+async def test_a_persona_that_reads_collections_carries_the_library_into_its_session_as_the_person(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    said = _answered(_events((await _ask(client, "manual", "what is leave?", _person("chat-manual"))).text))
+
+    assert f"library={agent_settings.library_url}" in said
+    assert "library_token=set" in said
+
+
+async def test_a_persona_that_reads_none_is_given_no_library(client: AsyncClient) -> None:
+    said = _answered(_events((await _ask(client, "helper", "what is leave?", _person("chat-helper"))).text))
+    assert "library=absent" in said and "library_token=absent" in said
+
+
+async def test_an_edit_the_agent_never_takes_leaves_the_conversation_as_it_was(client: AsyncClient) -> None:
+    who = _person("chat-helper", "admin")
+    conversation = _conversation(_events((await _ask(client, "helper", "one", who)).text))
+    await _ask(client, "helper", "two", who, resume=conversation)
+
+    failed = await client.post(
+        "/api/agent/helper/ask",
+        json={"question": fake_agent_cli.CRASH_TRIGGER, "resume": conversation, "edit": 1},
+        headers=who,
+    )
+    turns = (await client.get(f"/api/agent/conversations/{conversation}", headers=who)).json()["turns"]
+
+    assert any(e.get("type") == "agent_error" for e in _events(failed.text))
+    assert [turn["question"] for turn in turns] == ["one", "two"]
+
+
+async def test_two_files_of_one_name_both_reach_the_question(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    asked = await client.post(
+        "/api/agent/helper/ask",
+        data={"question": "compare these"},
+        files=[("files[]", ("notes.txt", b"a")), ("files[]", ("notes.txt", b"b"))],
+        headers=who,
+    )
+    stored = (await client.get(f"/api/agent/conversations/{_conversation(_events(asked.text))}", headers=who)).json()
+    assert stored["turns"][0]["files"] == ["notes.txt", "notes (2).txt"]
+
+
+async def test_more_files_than_a_question_may_carry_are_refused(client: AsyncClient) -> None:
+    many = [("files[]", (f"{n}.txt", b"x")) for n in range(11)]
+    refused = await client.post(
+        "/api/agent/helper/ask", data={"question": "all of these"}, files=many, headers=_person("chat-helper")
+    )
+    assert refused.status_code == 422

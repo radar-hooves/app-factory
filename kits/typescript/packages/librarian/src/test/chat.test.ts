@@ -187,6 +187,96 @@ describe('Chat asking', () => {
 	});
 });
 
+describe('Chat edit and resend', () => {
+	async function settled(turns: number) {
+		const { transport, asks } = persona();
+		const c = chat(transport);
+		for (let i = 0; i < turns; i += 1) {
+			const asked = c.ask(`question ${i}`);
+			asks[i].pipe.push(...CHAT);
+			asks[i].pipe.end();
+			await asked;
+		}
+		return { c, transport, asks };
+	}
+
+	it('drops the turns from the position on, and asks with edit and the conversation', async () => {
+		const { c, asks } = await settled(3);
+
+		const edited = c.edit(1, '  better question  ');
+
+		expect(c.turns.map((t) => t.question)).toEqual(['question 0', 'better question']);
+		expect(asks[3].request).toMatchObject({
+			question: 'better question',
+			resume: SESSION,
+			edit: 1,
+			files: []
+		});
+		asks[3].pipe.push(...CHAT);
+		asks[3].pipe.end();
+		expect(await edited).toBe(true);
+		expect(c.turns.map((t) => t.question)).toEqual(['question 0', 'better question']);
+		expect(prose(c)).toContain(ANSWER);
+	});
+
+	it('edits the first question, position zero, and sends no files', async () => {
+		const { c, asks } = await settled(2);
+		void c.edit(0, 'again');
+		expect(c.turns.map((t) => t.question)).toEqual(['again']);
+		expect(asks[2].request.edit).toBe(0);
+		asks[2].pipe.end();
+	});
+
+	it('keeps every turn when the allowance refuses an edit', async () => {
+		const { c, asks } = await settled(2);
+		const edited = c.edit(0, 'again');
+		asks[2].pipe.push({ type: 'agent_error', status: 429 });
+		expect(await edited).toBe(false);
+		expect(c.turns.map((t) => t.question)).toEqual(['question 0', 'question 1']);
+	});
+
+	it('does nothing without a conversation, a question to replace, or words', async () => {
+		const { c, asks } = await settled(1);
+		expect(await c.edit(5, 'x')).toBe(false);
+		expect(await c.edit(0, '   ')).toBe(false);
+		c.new();
+		expect(await c.edit(0, 'x')).toBe(false);
+		expect(asks).toHaveLength(1);
+	});
+
+	it('is not offered over an answer being written', async () => {
+		const { transport, asks } = persona();
+		const c = chat(transport);
+		void c.ask('first');
+		expect(await c.edit(0, 'x')).toBe(false);
+		asks[0].pipe.end();
+	});
+
+	it('shows the files the composer attached on the sent question', async () => {
+		const { transport, asks } = persona();
+		const c = chat(transport);
+		c.draft = 'Read this';
+		c.files = [new File(['x'], 'scan.pdf', { type: 'application/pdf' })];
+		void c.ask();
+		expect(c.turns[0].files).toEqual(['scan.pdf']);
+		asks[0].pipe.end();
+	});
+
+	it('reads one version of a written document through the transport, as the open conversation', async () => {
+		const loadArtefact = vi.fn(async () => ({ text: '# Brief', mediaType: 'text/markdown' }));
+		const artefactUrl = vi.fn(
+			(id: string, name: string, version: number, format: string) => `/${id}/${name}/${version}/${format}`
+		);
+		const { transport } = persona({ loadArtefact, artefactUrl });
+		const c = chat(transport);
+		expect(c.artefactUrl('brief.md', 1, 'pdf')).toBe('');
+		await c.open(SESSION);
+		expect(await c.loadArtefact('brief.md', 2)).toEqual({ text: '# Brief', mediaType: 'text/markdown' });
+		expect(loadArtefact).toHaveBeenCalledWith(SESSION, 'brief.md', 2);
+		expect(c.artefactUrl('brief.md', 1, 'pdf')).toBe(`/${SESSION}/brief.md/1/pdf`);
+	});
+});
+
 describe('Chat kinds of turn', () => {
 	const briefing = { title: 'Briefing', isAnswer: true };
 	const artefact = (kind: string) => (kind === 'briefing' ? briefing : undefined);

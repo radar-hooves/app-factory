@@ -83,6 +83,26 @@ describe('ask()', () => {
 		expect(JSON.parse(calls[0][1].body as string)).not.toHaveProperty('collection');
 	});
 
+	it('sends the position of the question it replaces, zero included, in either encoding', async () => {
+		const { calls, fetch } = capture();
+		await drain(ask({ question: 'q', resume: 's', edit: 0, endpoint: ASK, fetch }));
+		expect(JSON.parse(calls[0][1].body as string)).toMatchObject({ resume: 's', edit: 0 });
+
+		await drain(
+			ask({
+				question: 'q',
+				resume: 's',
+				edit: 2,
+				files: [new File(['x'], 'a.png', { type: 'image/png' })],
+				endpoint: ASK,
+				fetch
+			})
+		);
+		expect((calls[1][1].body as FormData).get('edit')).toBe('2');
+		await drain(ask({ question: 'q', endpoint: ASK, fetch }));
+		expect(JSON.parse(calls[2][1].body as string)).not.toHaveProperty('edit');
+	});
+
 	it('sends multipart when files are attached', async () => {
 		const { calls, fetch } = capture();
 		const file = new File(['x'], 'posting-order.pdf', { type: 'application/pdf' });

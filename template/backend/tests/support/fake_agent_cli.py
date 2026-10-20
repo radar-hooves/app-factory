@@ -79,6 +79,14 @@ the test's own, so the persona's home is where it can be said), the answer
 is prose streamed a word at a time as `stream_event` deltas before
 the whole `assistant` event, as `--include-partial-messages` streams it: a
 turn slow enough for a page to be refreshed or stopped under it.
+
+A question opening `__write__:<path>:<text>` writes the rest of its first
+line to `<path>` under the working folder through a `Write` step, its
+`tool_use` and its `tool_result` both printed and kept, before answering, as
+the real CLI reports a document it wrote. Every transcript line carries a
+`uuid`, and a `parentUuid` naming the line before it or, for the first line
+a run keeps, the message `--resume-session-at` names: an edited question
+branches the transcript as the real CLI's does.
 """
 
 import base64
@@ -104,6 +112,7 @@ CHATTY_STDERR_TRIGGER = "__chatty_stderr__"
 AWAIT_MESSAGE_TRIGGER = "__await_message__"
 IMAGE_TRIGGER = "__image__:"
 SECRET_STDERR_TRIGGER = "__secret_stderr__"
+WRITE_TRIGGER = "__write__:"
 #: How long `__await_message__` holds its turn open for a next frame before answering anyway.
 AWAIT_MESSAGE_SECONDS = 5.0
 #: Past the 64 KiB default pipe buffer a stderr write blocks on once full.
@@ -201,12 +210,18 @@ def _echo(question: str, argv: list[str]) -> str:
             f"strict_mcp_config={'--strict-mcp-config' in argv}",
             f"effort={_flag(argv, '--effort')}",
             f"permission_mode={_flag(argv, '--permission-mode')}",
+            f"restricted={'--restricted' in argv}",
+            f"tools={_flag(argv, '--tools')}",
+            f"resume_at={_flag(argv, '--resume-session-at')}",
             f"thinking_off={os.environ.get('MAX_THINKING_TOKENS')}",
             f"append_system_prompt={_flag(argv, '--append-system-prompt')}",
             f"input_format={_flag(argv, '--input-format')}",
             # Present only if the driver leaked the parent's own environment
             # through rather than building the child's from scratch.
             f"marker={os.environ.get('AGENT_TEST_MARKER', 'absent')}",
+            # The library as the person asking, for a persona whose .mcp.json names its reader door.
+            f"library={os.environ.get('LIBRARY_URL', 'absent')}",
+            f"library_token={'set' if os.environ.get('LIBRARY_TOKEN') else 'absent'}",
             "telemetry=" + ",".join(f"{name}={os.environ.get(name, 'absent')}" for name in TELEMETRY_VARS),
         ]
     )
@@ -315,10 +330,54 @@ def _settings() -> dict[str, object]:
     return loaded
 
 
+#: The `parentUuid` the next line kept takes; empty until this run keeps its first.
+_parent: list[str | None] = []
+
+
 def _keep(session_id: str, event: dict[str, object]) -> None:
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-    with open(_transcript(session_id), "a") as handle:
-        handle.write(json.dumps({**event, "session_id": session_id, "timestamp": stamp}) + "\n")
+    path = _transcript(session_id)
+    if not _parent:
+        _parent.append(_flag(sys.argv[1:], "--resume-session-at") or _last_uuid(path))
+    line = str(uuid.uuid4())
+    with open(path, "a") as handle:
+        kept = {**event, "session_id": session_id, "timestamp": stamp, "uuid": line, "parentUuid": _parent[0]}
+        handle.write(json.dumps(kept) + "\n")
+    _parent[0] = line
+
+
+def _last_uuid(path: str) -> str | None:
+    if not os.path.isfile(path):
+        return None
+    with open(path) as handle:
+        lines = [json.loads(line) for line in handle if line.strip()]
+    return str(lines[-1].get("uuid")) if lines else None
+
+
+def _write_turn(session_id: str, text: str) -> None:
+    """`__write__:<path>:<text>`: write the text through a `Write` step, kept as the real CLI keeps one."""
+    relative, _, body = text.removeprefix(WRITE_TRIGGER).split("\n", 1)[0].partition(":")
+    target = os.path.join(os.getcwd(), relative)
+    with open(target, "w") as handle:
+        handle.write(body)
+    call: dict[str, object] = {
+        "type": "tool_use",
+        "id": "toolu_fake_write",
+        "name": "Write",
+        "input": {"file_path": target, "content": body},
+    }
+    used = _assistant(session_id, [call])
+    _emit(used)
+    _keep(session_id, used)
+    done: dict[str, object] = {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "toolu_fake_write", "content": "File created"}],
+        },
+    }
+    _emit({**done, "session_id": session_id})
+    _keep(session_id, done)
 
 
 def _paced(session_id: str, question: str, pace: float) -> str:
@@ -378,6 +437,8 @@ def stream_json_session(argv: list[str]) -> None:
         if text == CHATTY_STDERR_TRIGGER:
             sys.stderr.write("x" * CHATTY_STDERR_BYTES)
             sys.stderr.flush()
+        if text.startswith(WRITE_TRIGGER):
+            _write_turn(session_id, text)
         if text == MCP_PROBE_TRIGGER:
             answer = json.dumps(_probe_mcp(argv))
         elif text.startswith(IMAGE_TRIGGER):
@@ -445,6 +506,8 @@ def main() -> None:
     echo = _echo(question, argv)
     model = next(p.removeprefix("model=") for p in echo.split(" | ") if p.startswith("model="))
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "model": model})
+    if question.startswith(WRITE_TRIGGER):
+        _write_turn(session_id, question)
     pace = float(str(_settings().get("fakeAgentPace") or 0))
     answer = _paced(session_id, question, pace) if pace else echo
     whole = _assistant(session_id, [{"type": "text", "text": answer}])

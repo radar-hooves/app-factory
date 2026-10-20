@@ -24,7 +24,8 @@ import { untrack } from 'svelte';
 import type { AgentEvent } from './client';
 import type { Citation } from './citations';
 import { Session } from './session.svelte';
-import { fold, foldState, type Artefact, type Turn } from './transcript.svelte';
+import { fold, foldState, type Artefact, type Block, type Turn } from './transcript.svelte';
+import type { Written } from './written';
 
 /** One conversation in the list. */
 export interface ConversationSummary {
@@ -52,6 +53,21 @@ export interface StoredTurn {
 	collection?: string | null;
 	/** Where this answer's read-only view lives while it is shared. */
 	shared?: string | null;
+	/** The names of the files attached to the question. */
+	files?: string[];
+	/** The document versions written answering it, in order. */
+	artefacts?: Written[];
+	/** Every tool the agent called, in order, with its (truncated) result. */
+	steps?: StoredStep[];
+}
+
+/** One tool call of a stored turn. */
+export interface StoredStep {
+	id: string;
+	name: string;
+	input: Record<string, unknown>;
+	result: string;
+	is_error: boolean;
 }
 
 /** A conversation reopened. */
@@ -88,6 +104,8 @@ export interface AskRequest {
 	kind?: string;
 	/** The one collection to ask, by name: `client.ask()`'s `collection`. */
 	collection?: string;
+	/** The position of the question this replaces: `client.ask()`'s `edit`. */
+	edit?: number;
 }
 
 /**
@@ -121,6 +139,15 @@ export interface ChatTransport {
 	 *  stops sharing it. Resolves to where it is read while shared, null once
 	 *  it is not. */
 	share?(id: string, turn: number, share: boolean): Promise<string | null>;
+	/** `GET conversations/{id}/artefact`, as `source`: one version of a document
+	 *  the agent wrote. */
+	loadArtefact?(
+		id: string,
+		name: string,
+		version: number
+	): Promise<{ text: string; mediaType: string }>;
+	/** Where that version downloads as `format` (`source`, or one of its `formats`). */
+	artefactUrl?(id: string, name: string, version: number, format: string): string;
 }
 
 /** A job's routes. */
@@ -307,6 +334,32 @@ export class Chat {
 			: Promise.resolve(false);
 	}
 
+	/**
+	 * Replace the question at `position` (its place among `turns`) with `text`:
+	 * the turns from there on go from the page and from the server, and the new
+	 * question streams in at that position. The files that went with the old
+	 * one are not sent again. Same kind and collection as the one replaced.
+	 * Resolves like `ask`; a refusal puts the dropped turns back.
+	 */
+	async edit(position: number, text: string): Promise<boolean> {
+		const body = text.trim();
+		const resume = this.conversationId;
+		const was = this.#turns[position];
+		if (!body || !resume || !was || this.#job || this.busy || this.quota?.reached) return false;
+		const removed = this.#turns.splice(position);
+		const held = removed.filter((t) => this.#held.delete(t.id)).map((t) => t.id);
+		this.#version += 1;
+		const asked = await this.#ask(body, [], false, was.kind, was.collection, position);
+		// Refused before the server dropped anything: the page is as it was left.
+		// A conversation found already being answered was shown whole instead.
+		if (!asked && this.#turns.length === position) {
+			this.#turns.push(...removed);
+			for (const id of held) this.#held.add(id);
+			this.#version += 1;
+		}
+		return asked;
+	}
+
 	/** Stop the answer being written, wherever it is being written. */
 	async stop(): Promise<void> {
 		const id = this.conversationId;
@@ -449,7 +502,8 @@ export class Chat {
 		files: File[],
 		typed: boolean,
 		kind?: string,
-		collection?: string
+		collection?: string,
+		edit?: number
 	): Promise<boolean> {
 		const chat = this.#chat!;
 		const mine = this.#generation;
@@ -462,6 +516,7 @@ export class Chat {
 			blocks: [],
 			outcome: null,
 			citations: [],
+			files: files.map((f) => f.name),
 			kind,
 			collection,
 			artefact: this.#card(kind)
@@ -479,7 +534,8 @@ export class Chat {
 			resume: this.conversationId,
 			signal: stream.controller.signal,
 			kind,
-			collection
+			collection,
+			edit
 		})) {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
 			if (stream.stopWanted) {
@@ -538,6 +594,19 @@ export class Chat {
 		}
 		this.#finish();
 		return true;
+	}
+
+	/** One version of a document the agent wrote in the open conversation. */
+	loadArtefact(name: string, version: number): Promise<{ text: string; mediaType: string }> {
+		const id = this.conversationId;
+		if (!id || !this.#chat?.loadArtefact) return Promise.reject(new Error('no artefact'));
+		return this.#chat.loadArtefact(id, name, version);
+	}
+
+	/** Where that version downloads as `format`; empty with no conversation open. */
+	artefactUrl(name: string, version: number, format: string): string {
+		const id = this.conversationId;
+		return id && this.#chat?.artefactUrl ? this.#chat.artefactUrl(id, name, version, format) : '';
 	}
 
 	/** What a turn of `kind` opens, if the host says it opens anything. */
@@ -667,13 +736,25 @@ export class Chat {
 /** A turn as read back, ready for `Conversation`: given one and no handlers,
  *  that is the read-only view of a shared answer. */
 export function storedTurn(conversation: string, index: number, stored: StoredTurn): Turn {
+	const blocks: Block[] = (stored.steps ?? []).map((step, at) => ({
+		kind: 'tool',
+		index: at,
+		id: step.id,
+		name: step.name,
+		rawInput: JSON.stringify(step.input ?? {}),
+		result: step.result,
+		isError: step.is_error
+	}));
+	if (stored.answer) blocks.push({ kind: 'text', index: blocks.length, text: stored.answer });
 	return {
 		id: `${conversation}:${index}`,
 		question: stored.question,
 		at: epoch(stored.at) ?? undefined,
-		blocks: stored.answer ? [{ kind: 'text', index: 0, text: stored.answer }] : [],
+		blocks,
 		outcome: null,
 		citations: stored.citations ?? [],
+		files: stored.files ?? [],
+		written: stored.artefacts ?? [],
 		kind: stored.kind ?? undefined,
 		collection: stored.collection ?? undefined,
 		shared: stored.shared ?? undefined

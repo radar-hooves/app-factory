@@ -15,6 +15,8 @@
 <script lang="ts">
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import CopyIcon from '@lucide/svelte/icons/copy';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import {
 		outcomeLine,
@@ -34,6 +36,8 @@
 		type Citation
 	} from '../../citations';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type ChatCopy } from '../../copy';
+	import { webSources } from '../../web-sources';
+	import { writtenKey, type Written, type WrittenUrl } from '../../written';
 	import type { Verdict } from '../../chat.svelte';
 	import AnswerMark from '../answer-mark/answer-mark.svelte';
 	import AnswerShare from '../answer-share/answer-share.svelte';
@@ -41,7 +45,10 @@
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
 	import Markdown from '../markdown/markdown.svelte';
+	import type { Fences } from '../markdown/markdown';
 	import SourceList from '../source-list/source-list.svelte';
+	import WebList from '../web-list/web-list.svelte';
+	import WrittenCard from '../written-card/written-card.svelte';
 
 	/** Everything one turn renders from: what `Conversation` hands a host's
 	 *  own `turn` snippet, so it can render this component or its own. */
@@ -76,6 +83,22 @@
 		onopenartefact?: () => void;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
+		/** The names of the files that went with the question, shown as chips. */
+		files?: string[];
+		/** Replaces this question with `text` and asks it again from here
+		 *  (`Chat.edit`), resolving false when that did not go through. Omit
+		 *  and no edit control renders: not while an answer is being written. */
+		onedit?: (text: string) => Promise<boolean>;
+		/** The documents the persona wrote answering it, carded under the answer. */
+		written?: Written[];
+		/** The version the reading column shows now, by `writtenKey`. */
+		showingWritten?: string;
+		/** Opens a version in the reading column. Omit and the cards only link. */
+		onopenwritten?: (written: Written) => void;
+		/** Where a version downloads. Omit and no download links render. */
+		writtenUrl?: WrittenUrl;
+		/** Languages of fenced code the host draws with its own component. */
+		fences?: Fences;
 		/** When an answer this page did not start began, epoch ms: it is still
 		 *  being written, and the clock counts from then. */
 		answering?: number;
@@ -111,6 +134,13 @@
 		artefactOpen = false,
 		onopenartefact,
 		describeTool,
+		files = [],
+		onedit,
+		written = [],
+		showingWritten,
+		onopenwritten,
+		writtenUrl,
+		fences,
 		answering,
 		onmark,
 		shared,
@@ -183,6 +213,28 @@
 
 	const hasAnswer = $derived(texts.length > 0);
 
+	// Pages the answer drew on, once it has settled: a link still being typed
+	// is not a source.
+	const web = $derived(running ? [] : webSources(blocks, answer));
+
+	let editing = $state(false);
+	let edited = $state('');
+	let sending = $state(false);
+
+	function startEdit() {
+		edited = asked;
+		editing = true;
+	}
+
+	async function sendEdit() {
+		const text = edited.trim();
+		if (!text || !onedit || sending) return;
+		sending = true;
+		const sent = await onedit(text);
+		sending = false;
+		if (sent) editing = false;
+	}
+
 	/**
 	 * What went wrong, if anything did — in words, whether or not the run gave
 	 * any.
@@ -251,12 +303,51 @@
 	     VS Code-style panel: this surface is read by people who arrive with
 	     those two as their model of what a chat looks like. A session whose
 	     stream never carried its prompt has no words to put here. -->
-	{#if asked}
+	{#if asked && editing}
+		<form
+			class="ds-lib-ask ds-lib-edit"
+			onsubmit={(event) => {
+				event.preventDefault();
+				void sendEdit();
+			}}
+		>
+			<textarea
+				class="ds-lib-edit-text"
+				rows="3"
+				aria-label={words.editQuestion}
+				bind:value={edited}
+			></textarea>
+			{#if files.length > 0}<p class="ds-lib-edit-note">{words.editFilesNote}</p>{/if}
+			<div class="ds-lib-edit-actions">
+				<button type="button" class="ds-lib-action" onclick={() => (editing = false)}>
+					{words.cancel}
+				</button>
+				<button type="submit" class="ds-lib-action" disabled={!edited.trim() || sending}>
+					{words.editSend}
+				</button>
+			</div>
+		</form>
+	{:else if asked}
 		<div class="ds-lib-ask">
 			<div class="ds-lib-bubble">{asked}</div>
-			{#if clock}
-				<time class="ds-lib-ask-time" datetime={clock.iso}>{clock.text}</time>
+			{#if files.length > 0}
+				<ul class="ds-lib-ask-files">
+					{#each files as file, i (i)}
+						<li class="ds-lib-ask-file"><PaperclipIcon size={12} />{file}</li>
+					{/each}
+				</ul>
 			{/if}
+			<div class="ds-lib-ask-meta">
+				{#if onedit && !running}
+					<button type="button" class="ds-lib-action" onclick={startEdit}>
+						<PencilIcon size={14} />
+						<span>{words.editQuestion}</span>
+					</button>
+				{/if}
+				{#if clock}
+					<time class="ds-lib-ask-time" datetime={clock.iso}>{clock.text}</time>
+				{/if}
+			</div>
 		</div>
 	{/if}
 
@@ -279,7 +370,7 @@
 
 		{#each segments as seg (seg.index)}
 			{#if seg.kind === 'activity'}
-				<ActivityGroup group={seg} live={running && seg.index === lastIndex} />
+				<ActivityGroup group={seg} live={running && seg.index === lastIndex} copy={words} />
 			{:else if !isArtefact}
 				<Markdown
 					content={seg.index === lastTextIndex && split.citations.length > 0
@@ -287,6 +378,7 @@
 						: seg.text}
 					streaming={running && seg.index === lastIndex}
 					{collectionNames}
+					{fences}
 					citationNumbers={numbers}
 					oncite={(n) => {
 						const found = sources.find((c) => c.n === n);
@@ -300,8 +392,22 @@
 			<ArtefactCard {artefact} open={artefactOpen} onopen={onopenartefact} copy={words} />
 		{/if}
 
+		{#each written as doc (writtenKey(doc))}
+			<WrittenCard
+				written={doc}
+				open={showingWritten === writtenKey(doc)}
+				onopen={onopenwritten ? () => onopenwritten(doc) : undefined}
+				url={writtenUrl}
+				copy={words}
+			/>
+		{/each}
+
 		{#if !isArtefact && sources.length > 0}
 			<SourceList {sources} {words} {oncite} />
+		{/if}
+
+		{#if !isArtefact && web.length > 0}
+			<WebList sources={web} {words} />
 		{/if}
 
 		<!-- An empty `notHeld` is a host whose persona answers from no sources,
@@ -393,6 +499,60 @@
 		line-height: 1.5rem;
 		overflow-wrap: break-word;
 		white-space: pre-wrap;
+	}
+
+	.ds-lib-ask-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.ds-lib-ask-files {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.25rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ds-lib-ask-file {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-md);
+		padding: 0.125rem 0.5rem;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-edit {
+		align-items: stretch;
+	}
+
+	.ds-lib-edit-text {
+		width: 100%;
+		resize: vertical;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-lg);
+		background: var(--ds-color-surface-1);
+		padding: 0.5rem 0.75rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+	}
+
+	.ds-lib-edit-note {
+		margin: 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-edit-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.25rem;
 	}
 
 	.ds-lib-ask-time,

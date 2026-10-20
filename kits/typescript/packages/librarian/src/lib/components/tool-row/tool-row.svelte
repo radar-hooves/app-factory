@@ -7,34 +7,40 @@
 
   The row says what the persona DID, in a reader's own words — never the
   tool's name or the raw command it ran: the host's `DescribeTool`, or the
-  package's own `describe()`. Expanding a settled row shows what came back,
-  never what was typed.
+  package's own `describe()`. Expanding it shows what went in and what came
+  back, the way Claude Code's own panel does.
 -->
 <script lang="ts">
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import { describe, type ToolBlock, type ToolWords } from '../../transcript.svelte';
+	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {
 		block: ToolBlock;
 		running: boolean;
-		/** Identical consecutive steps folded into this row — five pages of one
-		 *  document is one act of reading to a human. */
-		repeats?: number;
 		/** The call in the persona's words. Absent takes the package's own. */
 		words?: ToolWords;
+		copy?: Partial<ChatCopy>;
 	}
 
-	let { block, running, repeats = 1, words }: Props = $props();
+	let { block, running, words, copy }: Props = $props();
 	let open = $state(false);
 
+	const label = $derived(resolveCopy(copy));
 	const settled = $derived(block.result !== undefined);
 	const said = $derived(words ?? describe(block));
 	const tone = $derived(block.isError ? 'error' : settled ? 'success' : 'info');
-	const again = $derived(
-		said.repeat
-			? `· ${repeats} ${repeats === 1 ? said.repeat[0] : said.repeat[1]}`
-			: `× ${repeats}`
-	);
+	// Pretty while it parses; the raw text while it is still arriving.
+	const input = $derived.by(() => {
+		try {
+			const parsed: unknown = JSON.parse(block.rawInput);
+			return typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length === 0
+				? ''
+				: JSON.stringify(parsed, null, 2);
+		} catch {
+			return block.rawInput;
+		}
+	});
 </script>
 
 <div class="ds-lib-tool">
@@ -42,23 +48,27 @@
 		type="button"
 		class="ds-lib-tool-row"
 		onclick={() => (open = !open)}
-		disabled={!settled}
 		aria-expanded={open}
 	>
 		<span class="ds-lib-tool-chevron" class:is-open={open}>
-			{#if settled}<ChevronRightIcon size={12} />{/if}
+			<ChevronRightIcon size={12} />
 		</span>
 		<span class="ds-lib-tool-dot" data-tone={tone} class:is-live={!settled && running}></span>
 		<span class="ds-lib-tool-said">
 			<span class="ds-lib-tool-verb">{said.verb}</span>
 			{#if said.object}<span class="ds-lib-tool-object">{said.object}</span>{/if}
-			{#if repeats > 1}<span>{again}</span>{/if}
 		</span>
+		{#if block.isError}<span class="ds-lib-tool-failed">{label.stepFailed}</span>{/if}
 	</button>
 
 	{#if open}
 		<div class="ds-lib-tool-body">
+			{#if input}
+				<p class="ds-lib-tool-label">{label.stepInput}</p>
+				<pre class="ds-lib-tool-result">{input}</pre>
+			{/if}
 			{#if block.result}
+				<p class="ds-lib-tool-label">{label.stepResult}</p>
 				<pre class="ds-lib-tool-result">{block.result}</pre>
 			{/if}
 		</div>
@@ -85,10 +95,6 @@
 		font: inherit;
 		text-align: start;
 		cursor: pointer;
-	}
-
-	.ds-lib-tool-row:disabled {
-		cursor: default;
 	}
 
 	.ds-lib-tool-chevron {
@@ -150,13 +156,27 @@
 	}
 
 	.ds-lib-tool-result {
-		margin-top: 0.25rem;
-		max-height: 18rem;
+		margin: 0.125rem 0 0;
+		max-height: 12rem;
 		overflow: auto;
 		color: var(--ds-color-muted-foreground);
 		font-family: var(--ds-font-code);
 		font-size: var(--ds-text-2xs);
 		white-space: pre-wrap;
+	}
+
+	.ds-lib-tool-label {
+		margin: 0.25rem 0 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-tool-failed {
+		flex: none;
+		color: var(--ds-color-status-error);
+		font-size: var(--ds-text-2xs);
 	}
 
 	.ds-lib-tool-lines {

@@ -66,6 +66,9 @@ export interface AskOptions {
 	/** The one collection this question is asked of, by name. Absent asks
 	 *  across every collection the person may read. */
 	collection?: string;
+	/** The position (0-based) of the person's question this one replaces: the
+	 *  server drops that turn and every one after it. Needs `resume`. */
+	edit?: number;
 	/** Files the persona reads for this question. Switches the request to multipart. */
 	files?: File[];
 	/** What kind of turn this ask should become. Absent means an ordinary
@@ -103,7 +106,8 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 				question: options.question,
 				resume: options.resume ?? null,
 				collection: options.collection,
-				kind: options.kind
+				kind: options.kind,
+				edit: options.edit
 			}),
 			signal
 		};
@@ -115,6 +119,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	if (options.collection) form.append('collection', options.collection);
 	for (const file of options.files) form.append('files[]', file, file.name);
 	if (options.kind) form.append('kind', options.kind);
+	if (options.edit !== undefined) form.append('edit', String(options.edit));
 	return { method: 'POST', credentials: 'include', body: form, signal };
 }
 

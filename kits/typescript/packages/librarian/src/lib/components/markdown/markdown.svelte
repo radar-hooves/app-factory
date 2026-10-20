@@ -7,7 +7,14 @@
   consuming app.
 -->
 <script lang="ts">
-	import { highlight, markCitations, markCollections, render } from './markdown';
+	import {
+		highlight,
+		markCitations,
+		markCollections,
+		mountFences,
+		render,
+		type Fences
+	} from './markdown';
 
 	interface Props {
 		content: string;
@@ -20,6 +27,9 @@
 		/** A step down, for prose that is reference material beside an answer
 		 *  rather than the answer itself — the source pane's sections. */
 		dense?: boolean;
+		/** A language to draw with the host's own component instead of as code.
+		 *  Absent, every fence renders as code. */
+		fences?: Fences;
 	}
 
 	let {
@@ -28,11 +38,21 @@
 		collectionNames = new Set(),
 		citationNumbers = new Set(),
 		oncite,
-		dense = false
+		dense = false,
+		fences
 	}: Props = $props();
 	let host = $state<HTMLElement | null>(null);
 
 	const html = $derived(render(content, { streaming }));
+
+	// Once settled (a half-written fence is not a chart), and before the
+	// highlight below, which would otherwise take the block first. Its own
+	// effect, so a change to the chips never unmounts what it drew.
+	$effect(() => {
+		void html;
+		if (!host || streaming || !fences) return;
+		return mountFences(host, fences);
+	});
 
 	// Highlight only once the text has settled. Re-running per token would
 	// re-parse grammars for a block that changes again milliseconds later.

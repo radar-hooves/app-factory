@@ -24,6 +24,7 @@ vi.mock('$lib/agent/app', async () => ({
 	describeTool: undefined,
 	copy: undefined,
 	formatCost: undefined,
+	fences: undefined,
 	...(await import('./app'))
 }));
 

@@ -18,6 +18,7 @@
 
 import DOMPurify from 'isomorphic-dompurify';
 import { marked } from 'marked';
+import { mount, unmount, type Component } from 'svelte';
 import type { Highlighter } from 'shiki';
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -42,14 +43,49 @@ export function balance(markdown: string): string {
 	return text;
 }
 
+const FETCHERS = 'img, picture, source, video, audio, track, iframe, object, embed, link, style, image, use';
+const URL_ATTRS = ['src', 'href', 'xlink:href', 'poster', 'data', 'srcset'];
+
+/** Only what cannot leave the origin: a data URL, a same-origin path, a fragment. */
+function stays(url: string): boolean {
+	const u = url.trim();
+	return /^data:/i.test(u) || (u.startsWith('/') && !u.startsWith('//')) || u.startsWith('#');
+}
+
+/**
+ * A rendered answer must not fetch from anywhere: a remote image or url() in
+ * agent output is a beacon that carries the conversation out in its query.
+ * A remote image degrades to its alt text (or its address as a link).
+ */
+function dropFetchers(root: Element): void {
+	for (const el of root.querySelectorAll(FETCHERS)) {
+		const urls = URL_ATTRS.map((a) => el.getAttribute(a)).filter((v): v is string => v !== null);
+		if (urls.every(stays)) continue;
+		if (el.tagName === 'IMG') {
+			const alt = el.getAttribute('alt')?.trim();
+			const src = el.getAttribute('src')?.trim() ?? '';
+			if (alt) el.replaceWith(root.ownerDocument.createTextNode(alt));
+			else if (/^https?:\/\//i.test(src)) {
+				const a = root.ownerDocument.createElement('a');
+				a.setAttribute('href', src);
+				a.textContent = src;
+				el.replaceWith(a);
+			} else el.remove();
+		} else el.remove();
+	}
+}
+
 export function render(markdown: string, { streaming = false } = {}): string {
 	const source = streaming ? balance(markdown) : markdown;
 	const html = marked.parse(source, { async: false });
-	return DOMPurify.sanitize(html, {
+	const body = DOMPurify.sanitize(html, {
 		ADD_ATTR: ['target', 'rel', 'data-cite', 'tabindex', 'role'],
 		FORBID_TAGS: ['style', 'form', 'input', 'button'],
-		FORBID_ATTR: ['style', 'onerror', 'onload']
-	});
+		FORBID_ATTR: ['style', 'srcset', 'onerror', 'onload'],
+		RETURN_DOM: true
+	}) as unknown as HTMLElement;
+	dropFetchers(body);
+	return body.innerHTML;
 }
 
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -142,6 +178,29 @@ export function markCitations(root: HTMLElement, valid: Set<number>): void {
 		fragment.append(text.data.slice(cursor));
 		text.replaceWith(fragment);
 	}
+}
+
+/** Fenced code blocks of a language a host names, drawn by its own component. */
+export type Fences = Record<string, Component<{ source: string }>>;
+
+/**
+ * Draw every fenced block whose language the host registered with the host's
+ * component, in place of the code block. The source is the block's text, never
+ * HTML. Returns what unmounts them.
+ */
+export function mountFences(root: HTMLElement, fences: Fences): () => void {
+	const drawn: Array<Record<string, unknown>> = [];
+	for (const code of root.querySelectorAll('pre > code')) {
+		const lang = [...code.classList].find((c) => c.startsWith('language-'))?.slice(9);
+		const pre = code.parentElement;
+		if (!lang || !pre || !Object.hasOwn(fences, lang)) continue;
+		const target = document.createElement('div');
+		pre.replaceWith(target);
+		drawn.push(mount(fences[lang], { target, props: { source: code.textContent ?? '' } }));
+	}
+	return () => {
+		for (const one of drawn) void unmount(one);
+	};
 }
 
 /**

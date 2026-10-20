@@ -20,19 +20,32 @@
 	import type { DescribeTool, Turn } from '../../transcript.svelte';
 	import type { Verdict } from '../../chat.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
+	import {
+		writtenKey,
+		writtenVersions,
+		type LoadWritten,
+		type Written,
+		type WrittenUrl
+	} from '../../written';
 	import { DEFAULT_PERSONA, personaName, resolveCopy, type ChatCopy } from '../../copy';
 	import { FollowScroll } from '../../follow-scroll.svelte';
 	import AgentTranscript, {
 		type AgentTranscriptProps
 	} from '../agent-transcript/agent-transcript.svelte';
 	import ArtefactPane from '../artefact-pane/artefact-pane.svelte';
+	import type { Fences } from '../markdown/markdown';
 	import DocumentPane from '../document-pane/document-pane.svelte';
 	import ScopeStatement from '../scope-statement/scope-statement.svelte';
 
-	/** What the reading column holds — a cited document or a study artefact,
-	 *  never both and never two panes: whichever the reader last opened
-	 *  replaces whatever was there. */
-	type Column = { kind: 'document'; citation: Citation } | { kind: 'artefact'; turn: Turn } | null;
+	/** What the reading column holds — a cited document, a study artefact or a
+	 *  document the persona wrote, never two at once and never two panes:
+	 *  whichever the reader last opened replaces whatever was there. A written
+	 *  document's `version` is null while the reader follows the newest. */
+	type Column =
+		| { kind: 'document'; citation: Citation }
+		| { kind: 'artefact'; turn: Turn }
+		| { kind: 'written'; name: string; version: number | null }
+		| null;
 
 	interface Props {
 		turns: Turn[];
@@ -86,6 +99,19 @@
 		showing?: string;
 		/** The persona's own words for its tools, and what they read. */
 		describeTool?: DescribeTool;
+		/** Replaces the question at `position` (its place among `turns`) with
+		 *  `text` and asks it again from there (`Chat.edit`). Offered on every
+		 *  plain question while no answer is being written; without it no turn
+		 *  can be edited. */
+		onedit?: (position: number, text: string) => Promise<boolean>;
+		/** Reads one version of a document the persona wrote, to show it in the
+		 *  column. Without it its cards link but do not open. */
+		loadWritten?: LoadWritten;
+		/** Where a version downloads. Without it no download links render. */
+		writtenUrl?: WrittenUrl;
+		/** Languages of fenced code the host draws with its own component
+		 *  rather than as code. */
+		fences?: Fences;
 		/** Prices a turn's `outcome.costUsd` in the host's own currency and
 		 *  words ("about A$0.34"), for the footer's cost line beside a turn's
 		 *  duration. The package never converts currency itself; omitted, the
@@ -133,6 +159,10 @@
 		onopenartefact,
 		showing,
 		describeTool,
+		onedit,
+		loadWritten,
+		writtenUrl,
+		fences,
 		collectionNames = new Set(),
 		composer,
 		turn: presentTurn,
@@ -252,6 +282,24 @@
 		return undefined;
 	}
 
+	/** Opens a written version, following the newest if it is the newest. */
+	function openWritten(written: Written) {
+		const newest = writtenVersions(turns, written.name).at(-1)?.version;
+		column = {
+			kind: 'written',
+			name: written.name,
+			version: written.version === newest ? null : written.version
+		};
+	}
+
+	const shownWritten = $derived.by(() => {
+		const open = column;
+		if (open?.kind !== 'written') return undefined;
+		const versions = writtenVersions(turns, open.name);
+		const shown = versions.find((v) => v.version === open.version) ?? versions.at(-1);
+		return { versions, version: shown?.version, key: shown ? writtenKey(shown) : undefined };
+	});
+
 	function isShowing(turn: Turn): boolean {
 		if (onopenartefact) return showing === turn.id;
 		return column?.kind === 'artefact' && column.turn.id === turn.id;
@@ -333,6 +381,16 @@
 								artefactOpen: isShowing(turn),
 								onopenartefact: opener(turn),
 								describeTool,
+								files: turn.files,
+								written: turn.written,
+								showingWritten: shownWritten?.key,
+								onopenwritten: loadWritten ? openWritten : undefined,
+								writtenUrl,
+								fences,
+								onedit:
+									onedit && !running && !turn.kind && turn.question
+										? (text: string) => onedit(index, text)
+										: undefined,
 								formatCost,
 								oncite: oncite || loadDocument ? cite : undefined,
 								onregenerate: last && !running ? onregenerate : undefined,
@@ -384,6 +442,18 @@
 		<DocumentPane
 			citation={column.citation}
 			{loadDocument}
+			copy={words}
+			onclose={() => (column = null)}
+		/>
+	{:else if column?.kind === 'written' && shownWritten && shownWritten.versions.length > 0}
+		<ArtefactPane
+			versions={shownWritten.versions}
+			version={shownWritten.version}
+			onversion={(version) => {
+				if (column?.kind === 'written') column = { ...column, version };
+			}}
+			{loadWritten}
+			{writtenUrl}
 			copy={words}
 			onclose={() => (column = null)}
 		/>

@@ -1,15 +1,12 @@
 /**
- * A persona is a person, not a place: `describe()` and `summariseActivity()`
- * feed the tool row and the activity summary, and neither may leak a tool
+ * A persona is a person, not a place: `describe()` feeds the tool row, and it may not leak a tool
  * name, a raw path, or a collection count into what a reader sees.
  */
 import { describe as vdescribe, it, expect } from 'vitest';
 import {
 	describe,
 	outcomeLine,
-	summariseActivity,
 	Transcript,
-	type ActivityGroup,
 	type Outcome,
 	type ToolBlock
 } from '$lib/transcript.svelte';
@@ -53,31 +50,6 @@ vdescribe('describe()', () => {
 		const said = describe(tool('Bash', { command: 'ls -1 collections/household-legal' }));
 		expect(said.verb).toBe('Looked through the library');
 		expect(said.object).toBe('');
-	});
-});
-
-vdescribe('summariseActivity()', () => {
-	it('counts searches and documents read, never a collection count', () => {
-		const group: ActivityGroup = {
-			kind: 'activity',
-			index: 0,
-			steps: [],
-			tallies: [
-				{ one: 'search', many: 'searches', count: 1 },
-				{ one: 'document read', many: 'documents read', count: 2 }
-			]
-		};
-		expect(summariseActivity(group)).toBe('1 search · 2 documents read');
-	});
-
-	it('falls back to a plain phrase when nothing was tallied', () => {
-		const group: ActivityGroup = {
-			kind: 'activity',
-			index: 0,
-			steps: [],
-			tallies: []
-		};
-		expect(summariseActivity(group)).toBe('Looked into it');
 	});
 });
 

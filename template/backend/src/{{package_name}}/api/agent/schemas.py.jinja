@@ -29,6 +29,9 @@ class AskRequest(BaseModel):
     #: across that alone; None asks across every one they may read. Its name
     #: is the library's, checked against their listing, never shaped here.
     collection: str | None = Field(default=None, min_length=1, max_length=200)
+    #: The place of the question this one replaces, in the page's count, with
+    #: `resume`: it and every turn after it give way to this one.
+    edit: int | None = Field(default=None, ge=0, le=999)
 
 
 class PersonaRead(BaseModel):
@@ -67,6 +70,25 @@ class MarkRead(BaseModel):
     note: str | None = None
 
 
+class ArtefactRead(BaseModel):
+    """A version of a document the agent wrote; `formats` are what it can be downloaded as beyond itself."""
+
+    name: str
+    version: int
+    media_type: str
+    formats: list[str] = []
+
+
+class StepRead(BaseModel):
+    """A tool the agent called, and what came back, as its transcript holds them."""
+
+    id: str
+    name: str
+    input: dict[str, Any]
+    result: str
+    is_error: bool
+
+
 class StoredTurn(BaseModel):
     question: str
     answer: str
@@ -79,6 +101,12 @@ class StoredTurn(BaseModel):
     mark: MarkRead | None = None
     #: Where the answer is read while it is shared: the page's own address.
     shared: str | None = None
+    #: The names of the files that came with the question.
+    files: list[str] = []
+    #: The document versions the agent wrote answering it, in order.
+    artefacts: list[ArtefactRead] = []
+    #: Every tool the agent called answering it, in order.
+    steps: list[StepRead] = []
 
 
 class ConversationRead(ConversationSummary):

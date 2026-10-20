@@ -9,6 +9,8 @@
 
 import type { AgentEvent } from './client';
 import type { Citation } from './citations';
+import { hostOf } from './web-sources';
+import type { Written } from './written';
 
 export interface TextBlock {
 	kind: 'text';
@@ -83,12 +85,6 @@ export interface ToolWords {
 	object: string;
 	/** One dimmed line under the row. */
 	detail?: string;
-	/** How the activity line counts the call, singular and plural:
-	 *  `['search', 'searches']` reads "2 searches". Absent is not counted. */
-	tally?: [one: string, many: string];
-	/** How the row counts a run of identical calls: `['page', 'pages']`
-	 *  reads "· 5 pages". Absent reads "× 5". */
-	repeat?: [one: string, many: string];
 	/** Something the call read that a reader can open, listed under the
 	 *  answer and handed back to the host's `oncite` when tapped. */
 	source?: { id: string; title: string; section?: string };
@@ -113,22 +109,34 @@ export function describe(block: ToolBlock): ToolWords {
 	return lines ? { ...said, detail: lines === 1 ? '1 line' : `${lines} lines` } : said;
 }
 
-const READ: Pick<ToolWords, 'tally' | 'repeat'> = {
-	tally: ['document read', 'documents read'],
-	repeat: ['page', 'pages']
-};
-const SEARCH: Pick<ToolWords, 'tally'> = { tally: ['search', 'searches'] };
-
 function describeCall(block: ToolBlock): ToolWords {
 	const input = parseInput(block);
 	const command = typeof input.command === 'string' ? input.command : '';
 
 	if (block.name === 'Read') {
 		const path = str(input.file_path ?? input.path);
-		return { verb: 'Read', object: documentName(path), ...READ };
+		return { verb: 'Read', object: documentName(path) };
+	}
+	if (block.name === 'Write') return { verb: 'Wrote', object: baseName(str(input.file_path)) };
+	if (block.name === 'Edit') return { verb: 'Edited', object: baseName(str(input.file_path)) };
+	if (block.name === 'mcp__library__search') {
+		return { verb: 'Searched the library for', object: str(input.query) };
+	}
+	if (block.name === 'mcp__library__document_content' || block.name === 'mcp__library__document_detail') {
+		return { verb: 'Read a document', object: '' };
+	}
+	if (block.name === 'mcp__supacrawl__supacrawl_search') {
+		return { verb: 'Searched the web for', object: str(input.query) };
+	}
+	if (block.name === 'mcp__supacrawl__supacrawl_scrape') {
+		return { verb: 'Read', object: hostOf(str(input.url)) };
+	}
+	if (block.name.startsWith('mcp__') && block.name.endsWith('__ocr')) {
+		const file = str(input.file_path ?? input.path ?? input.file ?? input.filename ?? input.url);
+		return { verb: 'Read the scanned pages of', object: baseName(file) };
 	}
 	if (block.name === 'Grep') {
-		return { verb: 'Looked for', object: str(input.pattern), ...SEARCH };
+		return { verb: 'Looked for', object: str(input.pattern) };
 	}
 	if (block.name === 'Glob') {
 		return { verb: 'Looked for documents', object: '' };
@@ -136,12 +144,12 @@ function describeCall(block: ToolBlock): ToolWords {
 	if (block.name === 'Bash') {
 		if (/\bgrep\b|\brg\b/.test(command)) {
 			const quoted = command.match(/["']([^"']{2,60})["']/);
-			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase', ...SEARCH };
+			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase' };
 		}
 		if (/\bls\b/.test(command)) return { verb: 'Looked through the library', object: '' };
 		if (/\bfind\b/.test(command)) return { verb: 'Looked for documents', object: '' };
 		if (/\bcat\b|\bhead\b|\bsed\b/.test(command)) {
-			return { verb: 'Read', object: documentName(lastPath(command)), ...READ };
+			return { verb: 'Read', object: documentName(lastPath(command)) };
 		}
 		if (/\bwc\b/.test(command)) return { verb: 'Checked', object: '' };
 		return { verb: 'Looked into it', object: '' };
@@ -163,6 +171,8 @@ function parseInput(block: ToolBlock): Record<string, unknown> {
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const baseName = (path: string): string => path.split('/').filter(Boolean).at(-1) ?? '';
 
 /** A staged path ends with the document's title slug; that is its name. */
 function documentName(path: string): string {
@@ -232,6 +242,8 @@ export class Transcript {
 	outcome = $state<Outcome | null>(null);
 	/** Sources for the answer, from the app's `citations` frame. */
 	citations = $state<Citation[]>([]);
+	/** The document versions the persona wrote, in order. */
+	written = $state<Written[]>([]);
 	other = $state<AgentEvent[]>([]);
 
 	#fold = foldState();
@@ -240,6 +252,7 @@ export class Transcript {
 		this.blocks = [];
 		this.outcome = null;
 		this.citations = [];
+		this.written = [];
 		this.other = [];
 		this.#fold = foldState();
 	}
@@ -260,6 +273,7 @@ export interface FoldTarget {
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];
+	written?: Written[];
 }
 
 /** Where one turn's fold keeps its place between events. */
@@ -307,6 +321,23 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 		into.citations = (event.items ?? []).filter(
 			(item) => typeof item === 'object' && item !== null
 		);
+		return true;
+	}
+
+	// The app emits this right after the tool result of a successful Write or
+	// Edit: one version of one document the persona wrote.
+	if (event.type === 'artefact') {
+		if (typeof event.name === 'string' && typeof event.version === 'number') {
+			// Assigned, then pushed through the state's own proxy: `??=` hands back the raw array, and that push redraws nothing.
+			into.written ??= [];
+			into.written.push({
+				name: event.name,
+				version: event.version,
+				media_type: typeof event.media_type === 'string' ? event.media_type : '',
+				bytes: typeof event.bytes === 'number' ? event.bytes : undefined,
+				formats: Array.isArray(event.formats) ? event.formats.map(String) : []
+			});
+		}
 		return true;
 	}
 
@@ -426,31 +457,19 @@ function renderResult(content: unknown): string {
 // ── Grouping: what the reader sees instead of every step ─────────────────────
 
 export interface ActivityStep {
-	/** The block this step stands for; a repeated step keeps the FIRST.
+	/** The block this step stands for.
 	 *
 	 * A `text` block here is interstitial narration, not the answer — see
 	 * `segment()`. */
 	block: Block;
-	/** How many identical consecutive steps collapsed into this one. */
-	repeats: number;
-	/** A tool step in the persona's words, resolved once here so the row, the
-	 *  count and the collapse all agree. */
+	/** A tool step in the persona's words, resolved once here. */
 	words?: ToolWords;
-}
-
-/** One count on the activity line: "2 searches". */
-export interface Tally {
-	one: string;
-	many: string;
-	count: number;
 }
 
 export interface ActivityGroup {
 	kind: 'activity';
 	index: number;
 	steps: ActivityStep[];
-	/** What the steps counted as, in the order each first appeared. */
-	tallies: Tally[];
 }
 
 export type Segment = ActivityGroup | TextBlock;
@@ -471,6 +490,10 @@ export interface Turn {
 	blocks: Block[];
 	outcome: Outcome | null;
 	citations?: Citation[];
+	/** The names of the files attached to the question. */
+	files?: string[];
+	/** The document versions the persona wrote answering it, in order. */
+	written?: Written[];
 	/** Something this turn produced for the reader to open, carded under the
 	 *  answer once the turn settles. */
 	artefact?: Artefact;
@@ -500,15 +523,11 @@ export interface Artefact {
 /**
  * Fold a turn's flat block list into what a reader should actually see.
  *
- * Three problems this solves, all reported off a real transcript:
+ * Two problems this solves, reported off a real transcript:
  *
- * 1. Fifteen tool rows stood between the question and the first word of the
- *    answer, so the answer had to be scrolled to. Contiguous activity becomes
- *    ONE group the caller can collapse.
- * 2. "Reading pspf guidelines 2026" appeared five times in a row — five pages
- *    of one document, which is one act of reading to a human. Consecutive
- *    steps with the same label collapse to one row carrying a count.
- * 3. The persona's between-tool narration was rendering unfolded, as answer prose.
+ * 1. Contiguous activity becomes ONE group, so the answer's prose is never
+ *    split by each step; every step stays its own collapsed row in it.
+ * 2. The persona's between-tool narration was rendering unfolded, as answer prose.
  *    The caller stream carries no `thinking` blocks at all — measured on
  *    production 11/09/2026 — so "Let me also check whether…" arrives as an
  *    ordinary `text` block, indistinguishable from the answer except by
@@ -516,7 +535,7 @@ export interface Artefact {
  *    narration; only the run of text after the LAST tool call is the answer.
  *    Narration folds into the activity group as a thinking-shaped step.
  *
- * That third rule is provisional while a turn streams, and deliberately so: a
+ * That second rule is provisional while a turn streams, and deliberately so: a
  * text block that is currently last IS the answer as far as anything can know,
  * and renders as prose. The tool call that arrives after it re-homes it into
  * the group. Nothing here holds state to make that work — `segment` is pure
@@ -548,17 +567,11 @@ export function segment(blocks: Block[], describeTool?: DescribeTool): Segment[]
 		// block is the same row, for the same reason.
 		if (block.kind !== 'tool' && !block.text.trim()) continue;
 		if (!current) {
-			current = { kind: 'activity', index: block.index, steps: [], tallies: [] };
+			current = { kind: 'activity', index: block.index, steps: [] };
 			out.push(current);
 		}
 		const words = block.kind === 'tool' ? wordsFor(block, describeTool) : undefined;
-		const last = current.steps.at(-1);
-		if (last && sameStep(last, block, words)) {
-			last.repeats += 1;
-		} else {
-			current.steps.push({ block, repeats: 1, words });
-		}
-		if (words?.tally) count(current, words.tally);
+		current.steps.push({ block, words });
 	}
 	return out;
 }
@@ -575,31 +588,6 @@ const HANDS_IN = 'StructuredOutput';
 /** A call that is part of the work, rather than the handing-in of its answer. */
 function isStep(block: Block): boolean {
 	return block.kind === 'tool' && block.name !== HANDS_IN;
-}
-
-function sameStep(last: ActivityStep, block: Block, words: ToolWords | undefined): boolean {
-	if (last.block.kind !== block.kind) return false;
-	if (block.kind === 'thinking') return true;
-	// Two narration sentences are two things the persona said; collapsing them to
-	// one row with a count would lose the second one entirely.
-	if (block.kind === 'text') return false;
-	return last.words?.verb === words?.verb && last.words?.object === words?.object;
-}
-
-function count(group: ActivityGroup, [one, many]: [string, string]): void {
-	const seen = group.tallies.find((t) => t.one === one && t.many === many);
-	if (seen) seen.count += 1;
-	else group.tallies.push({ one, many, count: 1 });
-}
-
-/** One line describing a whole investigation, for the collapsed state.
- *
- * Counts of what the persona did are fine ("1 search · 2 documents read"); how
- * it organises what it knows is not — no collection count, no corpus.
- */
-export function summariseActivity(group: ActivityGroup): string {
-	const parts = group.tallies.map((t) => `${t.count} ${t.count === 1 ? t.one : t.many}`);
-	return parts.length ? parts.join(' · ') : 'Looked into it';
 }
 
 /**

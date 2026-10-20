@@ -32,7 +32,8 @@ HEADERS_VARIABLE = "AGENT_COMMON_REMOTE_HEADERS"
 #: The command whose stdout is a JSON object of headers, run by `sh -c`.
 HELPER_VARIABLE = "AGENT_COMMON_REMOTE_HELPER"
 
-HELPER_SECONDS = 30.0
+#: The CLI waits for every server before its first model call, so a helper is bounded well inside that.
+HELPER_SECONDS = 10.0
 #: One stdin line may carry a large tool result back the other way; this bounds a request.
 LINE_LIMIT = 16 * 1024 * 1024
 _TIMEOUT = httpx.Timeout(30.0, read=600.0)
@@ -94,10 +95,15 @@ class Relay:
                     self._protocol = version if isinstance(version, str) else self._protocol
                 await self._write(answer)
         except (httpx.HTTPError, HelperFailed, ValueError) as exc:
+            # Named by kind and status alone: an httpx error's text carries the URL, which a query may sign.
+            status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            said = (
+                f"the server answered {status}" if status else f"the server could not be reached ({type(exc).__name__})"
+            )
             for request in message if isinstance(message, list) else [message]:
                 if isinstance(request, dict) and "id" in request and "method" in request:
                     await self._write(
-                        {"jsonrpc": "2.0", "id": request["id"], "error": {"code": -32000, "message": str(exc)}}
+                        {"jsonrpc": "2.0", "id": request["id"], "error": {"code": -32000, "message": said}}
                     )
 
     async def close(self) -> None:

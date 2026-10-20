@@ -503,6 +503,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/conversations/{conversation_id}/artefact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Artefact
+         * @description A version of a document the agent wrote, as a file: as it was written, or rendered in the persona's brand.
+         *
+         *     HTML is served to be saved, never rendered in this app's origin.
+         */
+        get: operations["getArtefact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/conversations/{conversation_id}/stop": {
         parameters: {
             query?: never;
@@ -627,11 +649,13 @@ export interface paths {
          * @description Ask the persona, streaming its events; JSON, or multipart with `files[]`.
          *
          *     The stream opens by naming the conversation. A persona that chats with
-         *     collections then retrieves first and sends a `citations` frame before
-         *     its own events. Refused before it opens: 404 for a `resume` that is not
-         *     this person's conversation with this persona, or a `collection` the
-         *     library does not list for them; 409 while that conversation is being
-         *     answered; 429 once today's allowance is spent.
+         *     collections then sends a `citations` frame before its own events; a
+         *     `collection` the library does not list for this person ends the turn
+         *     with an `agent_error` frame, unasked and uncharged. Refused before it
+         *     opens: 404 for a `resume` that is not this person's conversation with
+         *     this persona, or any `collection` for a persona that reads none; 409
+         *     while that conversation is being answered; 429 once today's allowance
+         *     is spent.
          */
         post: operations["askPersona"];
         delete?: never;
@@ -978,6 +1002,23 @@ export interface components {
             raised_at: string;
             /** Read At */
             read_at: string | null;
+        };
+        /**
+         * ArtefactRead
+         * @description A version of a document the agent wrote; `formats` are what it can be downloaded as beyond itself.
+         */
+        ArtefactRead: {
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /** Media Type */
+            media_type: string;
+            /**
+             * Formats
+             * @default []
+             */
+            formats: string[];
         };
         /** CollectionRead */
         CollectionRead: {
@@ -1393,6 +1434,24 @@ export interface components {
                 [key: string]: boolean | number | string;
             };
         };
+        /**
+         * StepRead
+         * @description A tool the agent called, and what came back, as its transcript holds them.
+         */
+        StepRead: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Input */
+            input: {
+                [key: string]: unknown;
+            };
+            /** Result */
+            result: string;
+            /** Is Error */
+            is_error: boolean;
+        };
         /** StoredTurn */
         StoredTurn: {
             /** Question */
@@ -1415,6 +1474,21 @@ export interface components {
             mark?: components["schemas"]["MarkRead"] | null;
             /** Shared */
             shared?: string | null;
+            /**
+             * Files
+             * @default []
+             */
+            files: string[];
+            /**
+             * Artefacts
+             * @default []
+             */
+            artefacts: components["schemas"]["ArtefactRead"][];
+            /**
+             * Steps
+             * @default []
+             */
+            steps: components["schemas"]["StepRead"][];
         };
         /**
          * UserSummary
@@ -2228,6 +2302,41 @@ export interface operations {
     exportConversation: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getArtefact: {
+        parameters: {
+            query: {
+                name: string;
+                version: number;
+                format?: "source" | "docx" | "pdf";
+            };
             header?: never;
             path: {
                 conversation_id: string;

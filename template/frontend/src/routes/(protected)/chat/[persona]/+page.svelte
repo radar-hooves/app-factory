@@ -234,6 +234,10 @@
 			onregenerate={() => void c.again()}
 			onmark={(turn, verdict) => c.mark(turn, verdict)}
 			onshare={(turn, share) => c.share(turn, share)}
+			onedit={(position, text) => c.edit(position, text)}
+			loadWritten={(name, version) => c.loadArtefact(name, version)}
+			writtenUrl={(name, version, format) => c.artefactUrl(name, version, format)}
+			fences={extensions.fences}
 			loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
 			oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
 			describeTool={extensions.describeTool}

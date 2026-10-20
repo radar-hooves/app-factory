@@ -80,6 +80,10 @@ export interface ChatExtensions {
 	/** What an answer cost, in this app's own currency and words ("about
 	 *  A$0.34"), from US dollars; absent, the plain US dollar figure. */
 	formatCost?: (usd: number) => string;
+	/** Fenced code blocks of a language this app names, drawn by its own
+	 *  component in place of the code (`{ chart: Chart }` draws ```chart); the
+	 *  block's text arrives as `source`. Absent, every fence renders as code. */
+	fences?: Record<string, Component<{ source: string }>>;
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -98,10 +102,16 @@ export function fileName(disposition: string | null, fallback: string): string {
 	return encoded ? decodeURIComponent(encoded) : fallback;
 }
 
+/** One version of a document the persona wrote, as `source` or a rendered format. */
+function artefactUrl(id: string, name: string, version: number, format: string): string {
+	const query = new URLSearchParams({ name, version: String(version), format });
+	return `${BASE}/api/agent/conversations/${encodeURIComponent(id)}/artefact?${query}`;
+}
+
 export function chatTransport(persona: Persona): ChatTransport {
 	const at = (id: string) => ({ params: { path: { conversation_id: id } } });
 	return {
-		ask: ({ question, files, resume, signal, kind, collection }) =>
+		ask: ({ question, files, resume, signal, kind, collection, edit }) =>
 			ask({
 				question,
 				files,
@@ -109,6 +119,7 @@ export function chatTransport(persona: Persona): ChatTransport {
 				signal,
 				kind,
 				collection,
+				edit,
 				endpoint: `${BASE}/api/agent/${persona.id}/ask`
 			}),
 		read: (id) =>
@@ -144,6 +155,18 @@ export function chatTransport(persona: Persona): ChatTransport {
 			);
 			return shared.shared ?? null;
 		},
+		loadArtefact: async (id, name, version) => {
+			const { data: text, response } = await api.GET(
+				'/api/agent/conversations/{conversation_id}/artefact',
+				{
+					params: { path: { conversation_id: id }, query: { name, version } },
+					parseAs: 'text'
+				}
+			);
+			if (!response.ok || text === undefined) throw new Error(`HTTP ${response.status}`);
+			return { text: text as string, mediaType: response.headers.get('content-type') ?? '' };
+		},
+		artefactUrl,
 		download: async (id) => {
 			const { data: body, response } = await api.GET(
 				'/api/agent/conversations/{conversation_id}/export',

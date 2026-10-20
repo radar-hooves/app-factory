@@ -45,7 +45,7 @@ SESSION_ID = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 PROJECTS = "projects"
 
 
-#: How much of a tool's result a turn read back keeps.
+#: How much of a tool's result, and of each text it was given, a turn read back keeps.
 RESULT_CHARACTERS = 4000
 
 
@@ -255,11 +255,15 @@ def steps_of(window: list[dict[str, object]]) -> tuple[Step, ...]:
     for call in calls:
         result, is_error = results.get(str(call.get("id")), ("", False))
         tool_input = call.get("input")
+        given = {
+            key: value[:RESULT_CHARACTERS] if isinstance(value, str) else value
+            for key, value in (tool_input if isinstance(tool_input, dict) else {}).items()
+        }
         steps.append(
             Step(
                 id=str(call.get("id")),
                 name=str(call.get("name")),
-                input=tool_input if isinstance(tool_input, dict) else {},
+                input=given,
                 result=result[:RESULT_CHARACTERS],
                 is_error=is_error,
             )

@@ -71,6 +71,25 @@ export interface ChatCopy {
 	showingArtefact: string;
 	/** Beside the clock on an answer this page did not start. */
 	stillAnswering: string;
+	/** An expanded tool step: what went in, what came back, and a call that failed. */
+	stepInput: string;
+	stepResult: string;
+	stepFailed: string;
+	/** Editing a question already asked: the control, the send, and what the
+	 *  edit does not carry. */
+	editQuestion: string;
+	editSend: string;
+	editFilesNote: string;
+	/** Web pages an answer drew on, listed apart from its numbered sources. */
+	fromTheWeb: string;
+	/** A document the persona wrote: its version (`{n}`), the version switcher's
+	 *  name, and what each download is called. */
+	writtenVersion: string;
+	writtenVersions: string;
+	formatMarkdown: string;
+	formatHtml: string;
+	formatWord: string;
+	formatPdf: string;
 	/** The answer mark: the two verdicts, the optional note, and after. */
 	markHelpful: string;
 	markNotHelpful: string;
@@ -173,6 +192,19 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		openArtefact: 'Open',
 		showingArtefact: 'Showing',
 		stillAnswering: `${who} is still answering`,
+		stepInput: 'Input',
+		stepResult: 'Result',
+		stepFailed: 'Failed',
+		editQuestion: 'Edit',
+		editSend: 'Send',
+		editFilesNote: 'Files attached to the original question are not sent again.',
+		fromTheWeb: 'From the web',
+		writtenVersion: 'Version {n}',
+		writtenVersions: 'Version',
+		formatMarkdown: 'Markdown',
+		formatHtml: 'HTML',
+		formatWord: 'Word',
+		formatPdf: 'PDF',
 		markHelpful: 'Helpful',
 		markNotHelpful: 'Not helpful',
 		markNote: 'Anything to add? (optional)',

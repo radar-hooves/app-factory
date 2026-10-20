@@ -7,16 +7,10 @@
  * the real job stream's.
  */
 import { describe, it, expect } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
 import { Session } from '$lib/session.svelte';
-import {
-	readFrom,
-	segment,
-	summariseActivity,
-	type ActivityGroup,
-	type DescribeTool
-} from '$lib/transcript.svelte';
+import { readFrom, segment, type ActivityGroup, type DescribeTool } from '$lib/transcript.svelte';
 import { captured } from './fixtures/captured';
 
 const describeTool: DescribeTool = (block) => {
@@ -27,12 +21,11 @@ const describeTool: DescribeTool = (block) => {
 		return {
 			verb: 'Read',
 			object: `page ${slice[1]}, ${part}`,
-			tally: ['slice read', 'slices read'],
 			source: { id: `page-${slice[1]}-${slice[2]}`, title: `Page ${slice[1]}`, section: part }
 		};
 	}
 	if (block.name === 'Bash') {
-		return { verb: 'Added up', object: 'the line amounts', tally: ['sum checked', 'sums checked'] };
+		return { verb: 'Added up', object: 'the line amounts' };
 	}
 	return undefined;
 };
@@ -42,9 +35,9 @@ for (const event of captured('job-stream')) session.apply(event);
 const [first, second] = session.turns;
 
 describe('a host DescribeTool', () => {
-	it('counts the activity line in the persona’s own words', () => {
+	it('puts the persona’s own words on each step', () => {
 		const [group] = segment(first.blocks, describeTool) as ActivityGroup[];
-		expect(summariseActivity(group)).toBe('2 slices read · 1 sum checked');
+		expect(group.steps.flatMap((s) => (s.words ? [s.words.verb] : []))).toEqual(['Read', 'Read', 'Added up']);
 	});
 
 	it('lists what the calls read, once each, in the order read', () => {
@@ -57,7 +50,7 @@ describe('a host DescribeTool', () => {
 
 	it('leaves a tool it has no words for to the package', () => {
 		const [group] = segment(first.blocks, () => undefined) as ActivityGroup[];
-		expect(summariseActivity(group)).toBe('2 documents read');
+		expect(group.steps.flatMap((s) => (s.words ? [s.words.verb] : []))).toEqual(['Read', 'Read', 'Looked into it']);
 	});
 
 	it('reaches the rendered turn: the rows, and "Read from" with no trust mark', async () => {
@@ -72,9 +65,8 @@ describe('a host DescribeTool', () => {
 				oncite: () => {}
 			}
 		});
-		const line = screen.getByRole('button', { name: '2 slices read · 1 sum checked' });
-		await fireEvent.click(line);
 		expect(screen.getByText('page 1, top slice')).toBeInTheDocument();
+		expect(screen.getByText('the line amounts')).toBeInTheDocument();
 		expect(screen.getByText('Read from')).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /Page 1 · bottom slice/ })).toBeEnabled();
 		expect(screen.queryByText(/verified/)).not.toBeInTheDocument();

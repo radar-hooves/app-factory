@@ -201,6 +201,7 @@ async def test_a_document_the_agent_writes_is_kept_as_a_version_and_announced_af
         "version": 1,
         "media_type": "text/markdown",
         "bytes": 5,
+        "formats": ["docx", "pdf"],
     }
     assert [event["version"] for event in _kept(resumed)] == [2]
     assert await agent.artefact(session, "brief.md", 1) == (b"# One", "text/markdown")
@@ -320,3 +321,31 @@ async def test_a_word_files_text_is_written_beside_it_and_named_with_it(
 
     assert "Twenty days a year." in (turn / "policy.docx.md").read_text()
     assert f"- {turn / 'policy.docx'} (its text: {turn / 'policy.docx.md'})" in _question_sent(events)
+
+
+async def test_keep_past_the_turns_the_conversation_holds_is_refused_before_anything_is_asked(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "one"))
+    with pytest.raises(ValueError, match="no turn 2"):
+        await _ask(agent, "again", resume=session, keep=2)
+    turns = await agent.read(session)
+    assert turns is not None and [turn.question for turn in turns] == ["one"]
+
+
+async def test_a_document_whose_version_cannot_be_kept_leaves_the_turn_answered(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    long = "é" * 100 + ".md"  # past one path segment once quoted
+    events = await _ask(LocalAgent(settings, milton), f"__write__ {long} # Long")
+    assert _kept(events) == []
+    assert events[-1]["type"] == "result"
+
+
+async def test_an_attachment_named_for_its_folder_is_filed_as_an_attachment(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    events = await _ask(LocalAgent(settings, milton), "what is this?", files={"..": b"x"})
+    [turn] = list((milton.home / CHATS / _session(events) / ATTACHMENTS).iterdir())
+    assert [path.name for path in turn.iterdir()] == ["attachment"]

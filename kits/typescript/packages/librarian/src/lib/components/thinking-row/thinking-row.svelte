@@ -15,6 +15,7 @@
 
 	interface Props {
 		block: ThinkingBlock | TextBlock;
+		/** Still being written: "Thinking…" rather than "Thought". */
 		active: boolean;
 	}
 

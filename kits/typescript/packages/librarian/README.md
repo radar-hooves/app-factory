@@ -34,11 +34,13 @@ src/lib/
     agent-transcript/      one question and everything the persona did answering it
     document-pane/         the cited document, open at the cited passage
     artefact-card/         an artefact's card, in the host's words
-    artefact-pane/         an artefact that is its answer's prose, in the column
+    artefact-pane/         an artefact that is its answer's prose, or one version of a written document, in the column
+    written-card/          a document the persona wrote: version, Open, downloads
+    web-list/              the web pages an answer drew on, apart from its numbered sources
     composer/              the input box: attachments, one collection control, a note, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
-    activity-group/        a whole investigation, as one quiet line
-    tool-row/              one tool call
+    activity-group/        what the persona did, one collapsed row per step
+    tool-row/              one tool call, opening on its input and result
     thinking-row/          one thought, or one line of between-tool narration
     working/               the pre-first-token "something is happening" indicator
 ```
@@ -394,10 +396,14 @@ end that way.
 
 | Concern                | How                                                                                                                                                                  |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The persona's tools    | `describeTool(block) => ToolWords \| undefined`: the row (`verb`, `object`, `detail`), the activity line's counts (`tally`), and what it read (`source`). `undefined` leaves a call to the package's own words |
+| The persona's tools    | `describeTool(block) => ToolWords \| undefined`: the row (`verb`, `object`, `detail`) and what it read (`source`). `undefined` leaves a call to the package's own words |
 | What an answer read    | `ToolWords.source` lists under the answer, under `copy.sources`; tapping one calls `oncite`. Nothing checked it, so it carries no trust mark                          |
 | An artefact            | `turn.artefact = { title, summary }` cards under the prose once the turn settles; `isAnswer: true` is an artefact that IS the prose, and replaces it                  |
 | Opening it             | `onopenartefact(turn)` and `showing` (the turn id the host shows). Without a handler, an `isAnswer` artefact opens in `ArtefactPane` and any other offers no action |
+| Editing a question     | `Conversation`'s `onedit(position, text)` (`Chat.edit`) offers an edit control on each plain question while nothing is being answered; the turns from there on are dropped and the new question streams in at that position (`ask({ edit })`). Files are not sent again |
+| Documents it wrote     | `artefact` frames and a stored turn's `artefacts` become `turn.written`, carded with Open and downloads. `loadWritten(name, version)` and `writtenUrl(name, version, format)` (`Chat.loadArtefact` / `Chat.artefactUrl` over the transport) let the pane show a version: Markdown sanitised, HTML only in a `sandbox=""` frame |
+| Web sources            | Pages from the turn's supacrawl calls and the answer's Markdown links list under `copy.fromTheWeb`, unnumbered, apart from the library's `[n]` sources |
+| Drawing a fence        | `fences={{ chart: Chart }}` on `Conversation` draws a fenced block of that language with the host's component (`source` is its text), once the answer has settled |
 | "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no sources                                                                                                     |
 | Saying something mid-run | `Composer`'s `sendWhileRunning`: while the session works the box stays open and Send sits beside Stop. For a route that reads a message while the run works; a chat leaves it off and waits for its answer |
 

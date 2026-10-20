@@ -157,9 +157,12 @@ async def test_a_refused_header_is_minted_again_once(upstream: _Upstream, tmp_pa
 async def test_a_server_that_fails_answers_the_request_with_an_error(upstream: _Upstream, tmp_path: Path) -> None:
     upstream.fail = True
 
-    [answer] = await _relayed(_web(upstream, _helper(tmp_path)), {}, _initialize(7))
+    config = _web(upstream, _helper(tmp_path))
+    config["mcpServers"]["web"]["url"] += "?sig=signed-for-the-app"
 
-    assert answer["id"] == 7 and answer["error"]["code"] == -32000
+    [answer] = await _relayed(config, {}, _initialize(7))
+
+    assert answer["id"] == 7 and answer["error"] == {"code": -32000, "message": "the server answered 500"}
 
 
 def test_a_helper_that_fails_ends_the_relay_and_says_nothing_it_printed(tmp_path: Path) -> None:

@@ -126,8 +126,8 @@ _DECIDED = frozenset(
 #: sub-agent, whatever a persona allows (agent-console.md §The asker and the writes).
 CHAT_TOOLS = ("Read", "Glob", "Grep", "Write", "Edit")
 
-#: A persona's CLAUDE.md reaches a restricted session on its command line,
-#: where one argument may run to 128 KiB (MAX_ARG_STRLEN).
+#: A persona's CLAUDE.md and settings.json reach a restricted session on its
+#: command line, where one argument may run to 128 KiB (MAX_ARG_STRLEN).
 INSTRUCTIONS_LIMIT = 100_000
 
 _BEARER = re.compile(r"(?i)\bbearer\s+\S+")
@@ -272,8 +272,9 @@ def argv(
     """
     if rewind is not None and resume is None:
         raise ValueError("a rewind resumes a session")
-    if restricted and len(persona.instructions) > INSTRUCTIONS_LIMIT:
-        raise ValueError(f"{persona.name}'s CLAUDE.md is past {INSTRUCTIONS_LIMIT} characters")
+    for named, text in (("CLAUDE.md", persona.instructions), ("settings.json", persona.settings)):
+        if restricted and len(text) > INSTRUCTIONS_LIMIT:
+            raise ValueError(f"{persona.name}'s {named} is past {INSTRUCTIONS_LIMIT} characters")
     command = [settings.executable, "-p"]
     if question is not None:
         command.append(question)

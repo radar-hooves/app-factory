@@ -11,7 +11,6 @@
 import { describe, it, expect } from 'vitest';
 import {
 	segment,
-	summariseActivity,
 	type ActivityGroup,
 	type Block,
 	type Segment,
@@ -62,10 +61,6 @@ describe('narration, then a tool, then the answer', () => {
 		expect(out).toHaveLength(2);
 		expect(out[0].kind).toBe('activity');
 		expect(out[1].kind).toBe('text');
-	});
-
-	it('still counts only what the persona DID in the summary', () => {
-		expect(summariseActivity(groups(out)[0])).toBe('1 search · 1 document read');
 	});
 });
 
@@ -168,12 +163,18 @@ describe('what never reaches a row', () => {
 		expect(stepText(groups(out)[0])).toEqual(['[tool]', '[tool]']);
 	});
 
-	it('keeps two narration sentences as two rows, never one with a count', () => {
+	it('keeps two narration sentences as two rows', () => {
 		const out = segment([
 			text('First, the accrual rate.'),
 			text('Then the carry-over cap.'),
 			tool('Grep', { pattern: 'leave' })
 		]);
-		expect(groups(out)[0].steps.map((s) => s.repeats)).toEqual([1, 1, 1]);
+		expect(groups(out)[0].steps).toHaveLength(3);
+	});
+
+	it('keeps identical consecutive calls as a row each', () => {
+		const page = { file_path: '/data/staged/pacman-division-2/page-014.md' };
+		const out = segment([tool('Read', page), tool('Read', page), thinking('x'), thinking('y')]);
+		expect(groups(out)[0].steps).toHaveLength(4);
 	});
 });

@@ -17,7 +17,14 @@ the turn with one error frame, the persona never asked and nothing charged.
 The agent's own `init` follows with the same address as this slice's: its
 session id is the agent's to keep (`conversations.claim`), never the page's.
 Everything else is the agent's event, verbatim, through the app's
-`agent_event` hook.
+`agent_event` hook; a document version the agent wrote (`artefact`) is also
+recorded on the turn, so a reopened conversation offers it again.
+
+An edited question (`edit`) replaces the question at that place and every
+turn after it, once the agent has taken it: its transcript taken back to the
+answer before it, or, with none, a new session started and the old one
+forgotten. Until then the question waits at the end of the record, and a
+turn that ends before the agent takes it leaves the conversation as it was.
 
 A stop is a row flag, so it reaches the turn from any worker: the task reads
 it every second and closes the agent, which kills the local CLI.
@@ -32,10 +39,11 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from agent_common import cli, sse
-from agent_common.agent import Agent
+from agent_common.agent import ARTEFACT_EVENT, Agent
 from agent_common.collections import Collections, Source, passages_block
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, sessionmaker
@@ -68,6 +76,9 @@ NOT_LISTED = "that collection is not one you can read"
 #: existed: telling them apart is itself a disclosure.
 DENIAL = "That conversation is not one you can continue; ask again without it to start a new one"
 
+#: What an edit of a question the conversation does not hold says.
+NO_SUCH_QUESTION = "That question is not one you can edit"
+
 _turns: set[asyncio.Task[None]] = set()
 
 
@@ -92,6 +103,17 @@ class _Turn:
     follow_up: bool
     #: The documents the previous turn cited, which a follow-up may lean on though its own search misses them.
     earlier: tuple[int, ...]
+    #: The place of the question an edited one replaces; `position` is where it waits until the agent takes it.
+    edit: int | None = None
+    #: For an edited question, how many of the agent's answers it is asked after; none starts a new session.
+    keep: int = 0
+
+
+@dataclass(slots=True)
+class _Place:
+    """Where the turn's question is in the record: it moves when an edit is taken, and goes when one is not."""
+
+    position: int | None
 
 
 class _Unread(Exception):
@@ -112,24 +134,29 @@ async def ask(
     files: dict[str, bytes],
     kind: str | None = None,
     collection: str | None = None,
+    edit: int | None = None,
 ) -> StreamingResponse:
-    """Stamp the conversation answering, start its turn, and stream it.
+    """Stamp the conversation answering, start its turn, and stream it; `edit` replaces the question at that place.
 
     Raises:
         NotFoundError: `resume` is not one of this person's conversations with
-            this persona, or `collection` names one for a persona that reads none.
+            this persona, or `collection` names one for a persona that reads none,
+            or `edit` names no question of it.
         ConflictError: that conversation is already being answered.
         AllowanceSpentError: today's allowance is spent.
     """
     if collection is not None and collections is None:
         raise NotFoundError(NO_COLLECTION)
     question = await run_in_threadpool(redact, persona.id, user_id, question)
+    keep = await _kept(db_session_factory, agent, persona, user_id, resume, edit) if edit is not None else 0
 
     def begin() -> conversations.AgentConversation:
         with db_session_factory() as db:
             conversation = conversations.owned(db, resume, user_id) if resume else None
             if resume and (conversation is None or conversation.persona != persona.id):
                 raise NotFoundError(DENIAL)
+            if edit is not None and (conversation is None or edit >= len(conversation.turns)):
+                raise NotFoundError(NO_SUCH_QUESTION)
             if conversation is not None and conversations.answering(conversation) is not None:
                 raise ConflictError("That conversation is still being answered")
             allowance = quota.allowance(db, settings, user_id, exempt=exempt)
@@ -146,6 +173,8 @@ async def ask(
                 conversation=conversation,
                 kind=kind,
                 collection=collection,
+                files=[Path(name).name or "attachment" for name in files],
+                edit=edit,
             )
             if started is None:
                 raise ConflictError("That conversation is still being answered")
@@ -153,6 +182,7 @@ async def ask(
 
     started = await run_in_threadpool(begin)
     position = len(started.turns) - 1
+    place = position if edit is None else edit
     turn = _Turn(
         persona=persona,
         agent=agent,
@@ -160,13 +190,15 @@ async def ask(
         conversation_id=started.id,
         position=position,
         question=question,
-        resume=started.session_id,
+        resume=started.session_id if edit is None or keep else None,
         files=files,
         user_id=user_id,
         charged=not exempt,
         collection=collection,
-        follow_up=bool(position),
-        earlier=_cited(started.turns[position - 1], collection) if position else (),
+        follow_up=bool(place),
+        earlier=_cited(started.turns[place - 1], collection) if place else (),
+        edit=edit,
+        keep=keep,
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -210,7 +242,8 @@ async def _run(
     async def db[T](work: Callable[[Session], T]) -> T:
         return await _in_db(db_session_factory, work)
 
-    answering = asyncio.create_task(_answer(db_session_factory, settings, turn, emit))
+    place = _Place(turn.position)
+    answering = asyncio.create_task(_answer(db_session_factory, settings, turn, emit, place))
     try:
         beat = time.monotonic()
         while not answering.done():
@@ -232,7 +265,8 @@ async def _run(
             await answering
         await db(lambda s: conversations.settle(s, turn.conversation_id))
         emit(None)
-        await _settled(turn)
+        if place.position is not None:
+            await _settled(turn, place.position)
 
 
 async def _in_db[T](db_session_factory: sessionmaker[Session], work: Callable[[Session], T]) -> T:
@@ -248,8 +282,13 @@ async def _answer(
     settings: AgentSettings,
     turn: _Turn,
     emit: Callable[[dict[str, Any] | None], None],
+    place: _Place,
 ) -> None:
-    """Ask the agent and pass on each event; claim, charge and record the answer as they happen."""
+    """Ask the agent and pass on each event; claim, charge and record the answer as they happen.
+
+    An edited question takes its place when the agent takes it, and leaves
+    the record if the agent never does.
+    """
 
     async def db(work: Callable[[Session], object]) -> None:
         await _in_db(db_session_factory, work)
@@ -257,18 +296,27 @@ async def _answer(
     accepted = held = False
     passages = asyncio.create_task(_passages(settings, turn, emit, db)) if turn.collections is not None else None
     try:
-        async with contextlib.aclosing(
-            turn.agent.ask(turn.question, resume=turn.resume, files=turn.files or None, passages=passages)
-        ) as events:
+        asked = turn.agent.ask(
+            turn.question, resume=turn.resume, files=turn.files or None, passages=passages, keep=turn.keep or None
+        )
+        async with contextlib.aclosing(asked) as events:
             async for event in events:
                 if event.get("type") == "system" and event.get("subtype") == "init":
                     if not accepted and isinstance(event.get("session_id"), str):
                         accepted = True
-                        await db(functools.partial(_accept, settings, turn, str(event["session_id"])))
+                        session = str(event["session_id"])
+                        replaced = await _in_db(db_session_factory, functools.partial(_accept, settings, turn, session))
+                        place.position = turn.position if turn.edit is None else turn.edit
+                        if replaced and replaced != session:
+                            await turn.agent.forget(replaced)
                     event = {**event, "session_id": turn.conversation_id}
-                if not held and _speaks(event):
+                answered_at = place.position
+                if not held and _speaks(event) and answered_at is not None:
                     held = True
-                    await db(lambda s: conversations.answered(s, turn.conversation_id, turn.position))
+                    await db(functools.partial(_answered, turn, answered_at))
+                if event.get("type") == ARTEFACT_EVENT and answered_at is not None:
+                    made = {key: event.get(key) for key in ("name", "version", "media_type", "formats")}
+                    await db(functools.partial(_made, turn, answered_at, made))
                 rewritten = redact_event(turn.persona.id, event)
                 if rewritten is not None:
                     emit(rewritten)
@@ -279,6 +327,9 @@ async def _answer(
         emit({"type": cli.ERROR_EVENT, "error": "the agent failed to answer"})
     finally:
         _settle(passages)
+        if turn.edit is not None and not accepted:
+            place.position = None
+            await db(lambda s: conversations.withdraw(s, turn.conversation_id, turn.position))
 
 
 async def _passages(
@@ -400,11 +451,55 @@ def _cited(previous: dict[str, Any], collection: str | None) -> tuple[int, ...]:
     return tuple(dict.fromkeys(int(i) for i in ids if isinstance(i, str) and i.isdecimal()))
 
 
-def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> None:
-    """The agent took the question: the conversation is its session's now, and the question is charged."""
-    conversations.claim(db, turn.conversation_id, session_id)
+async def _kept(
+    db_session_factory: sessionmaker[Session],
+    agent: Agent,
+    persona: Persona,
+    user_id: uuid.UUID,
+    resume: str | None,
+    edit: int,
+) -> int:
+    """How many of the agent's answers come before question `edit`, counted against its transcript as the page reads it.
+
+    Raises:
+        NotFoundError: there is no such conversation of this person's, or no such question in it.
+    """
+
+    def found() -> conversations.AgentConversation:
+        with db_session_factory() as db:
+            conversation = conversations.owned(db, resume, user_id) if resume else None
+            if conversation is None or conversation.persona != persona.id or edit >= len(conversation.turns):
+                raise NotFoundError(NO_SUCH_QUESTION)
+            return conversation
+
+    conversation = await run_in_threadpool(found)
+    held = await agent.read(conversation.session_id) if conversation.session_id else None
+    return sum(turn.agent_index is not None for turn in conversations.merged(conversation, held or [])[:edit])
+
+
+def _answered(turn: _Turn, position: int, db: Session) -> None:
+    conversations.answered(db, turn.conversation_id, position)
+
+
+def _made(turn: _Turn, position: int, artefact: dict[str, Any], db: Session) -> None:
+    conversations.made(db, turn.conversation_id, position, artefact)
+
+
+def _accept(settings: AgentSettings, turn: _Turn, session_id: str, db: Session) -> str | None:
+    """The agent took the question: the conversation is its session's now, and the question is charged.
+
+    An edited question takes its place, and a session it left behind is returned to be forgotten.
+    """
+    replaced = None
+    if turn.edit is None:
+        conversations.claim(db, turn.conversation_id, session_id)
+    else:
+        replaced = conversations.replace(
+            db, turn.conversation_id, turn.position, turn.edit, None if turn.keep else session_id
+        )
     if turn.charged:
         quota.charge(db, settings, turn.user_id)
+    return replaced
 
 
 def _speaks(event: dict[str, Any]) -> bool:
@@ -417,12 +512,12 @@ def _speaks(event: dict[str, Any]) -> bool:
     )
 
 
-async def _settled(turn: _Turn) -> None:
+async def _settled(turn: _Turn, position: int) -> None:
     """Call `app_hooks.agent_turn_settled(persona, conversation, turn)`, if this app defines one.
 
-    `turn` is the question's place as the page counts it, the same number an
-    answer mark is addressed by. A hook that raises is logged, never
-    re-raised: the turn has settled regardless.
+    `position` is the question's place as the page counts it, the same
+    number an answer mark is addressed by. A hook that raises is logged,
+    never re-raised: the turn has settled regardless.
     """
     from {{ package_name }} import app_hooks
 
@@ -430,7 +525,7 @@ async def _settled(turn: _Turn) -> None:
     if hook is None:
         return
     try:
-        await run_in_threadpool(hook, turn.persona.id, turn.conversation_id, turn.position)
+        await run_in_threadpool(hook, turn.persona.id, turn.conversation_id, position)
     except Exception:
         logger.exception("app_hooks.agent_turn_settled failed for conversation %s", turn.conversation_id)
 

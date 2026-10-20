@@ -1,5 +1,10 @@
 <!--
-  An artefact that is its answer's own prose, open in the reading column.
+  An artefact that is its answer's own prose, or one version of a document the
+  persona wrote, open in the reading column.
+
+  A written document is shown from its source: Markdown through the package's
+  sanitising renderer, HTML only inside a sandboxed frame with no permissions
+  (no scripts, no same origin), never injected into the page.
 
   The same shell shape `DocumentPane` uses (a column at 64rem, a bottom sheet
   below it) because decision 2 of the agent surface is that a colleague never
@@ -8,14 +13,33 @@
 -->
 <script lang="ts">
 	import XIcon from '@lucide/svelte/icons/x';
+	import { untrack } from 'svelte';
 	import { segment, type TextBlock, type Turn } from '../../transcript.svelte';
 	import { resolveCitations, splitSources, type Citation } from '../../citations';
-	import { resolveCopy, type ChatCopy } from '../../copy';
+	import { fill, resolveCopy, type ChatCopy } from '../../copy';
+	import {
+		downloads,
+		framed,
+		isHtml,
+		writtenKey,
+		type LoadWritten,
+		type Written,
+		type WrittenUrl
+	} from '../../written';
 	import Markdown from '../markdown/markdown.svelte';
 	import SourceList from '../source-list/source-list.svelte';
 
+
 	interface Props {
-		turn: Turn;
+		/** The turn whose answer is the artefact. Absent when `versions` is given. */
+		turn?: Turn;
+		/** Every version of one written document, oldest first: the pane shows
+		 *  `version` of them, with a switcher. */
+		versions?: Written[];
+		version?: number;
+		onversion?: (version: number) => void;
+		loadWritten?: LoadWritten;
+		writtenUrl?: WrittenUrl;
 		onclose: () => void;
 		/** Opens the cited document instead — swapping the column back, never
 		 *  stacking it beside the artefact. Omit and the sources still list, but
@@ -24,14 +48,49 @@
 		copy?: Partial<ChatCopy>;
 	}
 
-	let { turn, onclose, oncite, copy }: Props = $props();
+	let {
+		turn,
+		versions = [],
+		version,
+		onversion,
+		loadWritten,
+		writtenUrl,
+		onclose,
+		oncite,
+		copy
+	}: Props = $props();
 
 	const words = $derived(resolveCopy(copy));
 
-	const texts = $derived(segment(turn.blocks).filter((s): s is TextBlock => s.kind === 'text'));
+	// The newest, until the reader picks another.
+	const current = $derived(versions.find((v) => v.version === version) ?? versions.at(-1));
+	const currentKey = $derived(current ? writtenKey(current) : '');
+	let source = $state<{ text: string; mediaType: string } | null>(null);
+	let failed = $state(false);
+
+	// Keyed on the version alone: a new version of the same name arriving in
+	// the stream must not read this one again.
+	$effect(() => {
+		if (!currentKey) return;
+		const shown = untrack(() => current);
+		const load = untrack(() => loadWritten);
+		if (!shown || !load) return;
+		let live = true;
+		source = null;
+		failed = false;
+		load(shown.name, shown.version).then(
+			(read) => live && (source = read),
+			() => live && (failed = true)
+		);
+		return () => (live = false);
+	});
+
+	const texts = $derived(
+		segment(turn?.blocks ?? []).filter((s): s is TextBlock => s.kind === 'text')
+	);
 	const rawAnswer = $derived(texts.map((t) => t.text).join('\n\n'));
 	const split = $derived(splitSources(rawAnswer));
-	const sources = $derived(resolveCitations(turn.citations ?? [], split.citations));
+	const sources = $derived(resolveCitations(turn?.citations ?? [], split.citations));
 
 	let closeButton = $state<HTMLButtonElement | null>(null);
 
@@ -53,7 +112,7 @@
 
 <svelte:window onkeydown={keydown} />
 
-<aside aria-label="Study artefact" class="ds-lib-pane">
+<aside aria-label={current?.name ?? 'Study artefact'} class="ds-lib-pane">
 	<!-- The sheet's grabber. On a phone this is an overlay a reader has to be
 	     able to see the top edge of; on a desktop it is a column, so there is
 	     nothing here to grab. -->
@@ -61,9 +120,34 @@
 
 	<header class="ds-lib-pane-header">
 		<div class="ds-lib-pane-heading">
-			<h2 class="ds-lib-pane-title">{turn.artefact?.title}</h2>
-			{#if turn.artefact?.summary}
-				<p class="ds-lib-pane-subtitle">{turn.artefact.summary}</p>
+			{#if current}
+				<h2 class="ds-lib-pane-title">{current.name}</h2>
+				<div class="ds-lib-pane-tools">
+					<select
+						class="ds-lib-pane-versions"
+						aria-label={words.writtenVersions}
+						value={current.version}
+						onchange={(event) => onversion?.(Number(event.currentTarget.value))}
+					>
+						{#each versions as option (option.version)}
+							<option value={option.version}>{fill(words.writtenVersion, { n: option.version })}</option>
+						{/each}
+					</select>
+					{#if writtenUrl}
+						<ul class="ds-lib-pane-links" aria-label={words.download}>
+							{#each downloads(current, words) as link (link.format)}
+								<li>
+									<a href={writtenUrl(current.name, current.version, link.format)}>{link.label}</a>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{:else}
+				<h2 class="ds-lib-pane-title">{turn?.artefact?.title}</h2>
+				{#if turn?.artefact?.summary}
+					<p class="ds-lib-pane-subtitle">{turn.artefact.summary}</p>
+				{/if}
 			{/if}
 		</div>
 		<button
@@ -77,15 +161,29 @@
 		</button>
 	</header>
 
-	<div class="ds-lib-pane-body">
-		<Markdown content={split.citations.length > 0 ? split.body : rawAnswer} />
+	{#if current}
+		{@const html = source !== null && isHtml(source.mediaType || current.media_type)}
+		<div class="ds-lib-pane-body" class:is-frame={html}>
+			{#if failed}
+				<p class="ds-lib-pane-subtitle">{words.documentUnavailable}</p>
+			{:else if source && html}
+				<iframe class="ds-lib-pane-frame" sandbox="" srcdoc={framed(source.text)} title={current.name}
+				></iframe>
+			{:else if source}
+				<Markdown content={source.text} />
+			{/if}
+		</div>
+	{:else}
+		<div class="ds-lib-pane-body">
+			<Markdown content={split.citations.length > 0 ? split.body : rawAnswer} />
 
-		{#if sources.length > 0}
-			<div class="ds-lib-pane-sources">
-				<SourceList {sources} {words} {oncite} level={3} />
-			</div>
-		{/if}
-	</div>
+			{#if sources.length > 0}
+				<div class="ds-lib-pane-sources">
+					<SourceList {sources} {words} {oncite} level={3} />
+				</div>
+			{/if}
+		</div>
+	{/if}
 </aside>
 
 <style>
@@ -185,6 +283,52 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		padding: 0.75rem 1rem;
+	}
+
+	.ds-lib-pane-tools {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem 0.75rem;
+		margin-top: 0.25rem;
+	}
+
+	.ds-lib-pane-versions {
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-md);
+		background: var(--ds-color-surface-1);
+		padding: 0.125rem 0.25rem;
+		color: var(--ds-color-foreground);
+		font: inherit;
+		font-size: var(--ds-text-2xs);
+	}
+
+	.ds-lib-pane-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin: 0;
+		padding: 0;
+		font-size: var(--ds-text-2xs);
+		list-style: none;
+	}
+
+	.ds-lib-pane-links a {
+		color: var(--ds-color-muted-foreground);
+		text-decoration: underline;
+	}
+
+	.ds-lib-pane-body.is-frame {
+		overflow: hidden;
+		padding: 0;
+	}
+
+	.ds-lib-pane-frame {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+		background: #fff;
 	}
 
 	.ds-lib-pane-sources {

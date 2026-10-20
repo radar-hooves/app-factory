@@ -424,8 +424,154 @@ test('a link can wait a question in the box but never make the room ask it', asy
 	expect(asks).toBe(0);
 });
 
+/** The reading column a written document opens in, named for the document. */
+function pane(page: Page, name: string) {
+	return page.getByRole('complementary', { name });
+}
+
+/** The card for one version of a written document: the innermost block holding its version and its Open. */
+function card(page: Page, version: number) {
+	return page
+		.locator('div')
+		.filter({ has: page.getByText(`Version ${version}`, { exact: true }) })
+		.filter({ has: page.getByRole('button', { name: /^(Open|Showing)/ }) })
+		.last();
+}
+
+test('a document the persona writes shows as a card, opens beside the chat and downloads as written', async ({
+	page
+}) => {
+	test.setTimeout(60_000);
+	await page.goto('/chat/helper');
+	await ask(page, '__write__:brief.md:# Leave brief');
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	const id = conversationId(page);
+
+	const first = card(page, 1);
+	await expect(first.getByText('brief.md', { exact: true })).toBeVisible();
+	await first.getByRole('button', { name: 'Open' }).click();
+	await expect(pane(page, 'brief.md').getByRole('heading', { name: 'Leave brief' })).toBeVisible();
+
+	// Its download is the bytes the persona wrote, not a rendering of them.
+	const href = await pane(page, 'brief.md')
+		.getByRole('list', { name: 'Download' })
+		.getByRole('link', { name: 'Markdown' })
+		.getAttribute('href');
+	expect(href).toBeTruthy();
+	const bytes = await ok(page.request.get(href as string));
+	expect(await bytes.text()).toBe('# Leave brief');
+
+	// The same name written again is Version 2, and the column can read either.
+	await pane(page, 'brief.md').getByRole('button', { name: 'Close source' }).click();
+	await ask(page, '__write__:brief.md:# Leave brief, revised');
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	const second = card(page, 2);
+	await expect(second.getByText('brief.md', { exact: true })).toBeVisible();
+	await second.getByRole('button', { name: 'Open' }).click();
+	const column = pane(page, 'brief.md');
+	await expect(column.getByRole('heading', { name: 'Leave brief, revised' })).toBeVisible();
+	await column.getByRole('combobox', { name: 'Version' }).selectOption('1');
+	await expect(column.getByRole('heading', { name: 'Leave brief', exact: true })).toBeVisible();
+	await expect(column.getByRole('heading', { name: 'Leave brief, revised' })).toHaveCount(0);
+
+	const stored = await readJson<{ turns: { artefacts: { name: string; version: number }[] }[] }>(
+		page.request.get(`/api/agent/conversations/${id}`)
+	);
+	expect(stored.turns.flatMap((t) => t.artefacts.map((a) => [a.name, a.version]))).toEqual([
+		['brief.md', 1],
+		['brief.md', 2]
+	]);
+});
+
+test('the Write step is its own collapsed row, and opens on its input and its result', async ({
+	page
+}) => {
+	await page.goto('/chat/helper');
+	await ask(page, '__write__:notes.md:# Notes');
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+
+	const step = page.getByRole('button', { name: /Wrote\s*notes\.md/ });
+	await expect(step).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.getByText('File created')).toHaveCount(0);
+
+	await step.click();
+	await expect(step).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByText('Input', { exact: true })).toBeVisible();
+	await expect(page.getByText('"content": "# Notes"')).toBeVisible();
+	await expect(page.getByText('Result', { exact: true })).toBeVisible();
+	await expect(page.getByText('File created')).toBeVisible();
+
+	await step.click();
+	await expect(step).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('an edited question is sent again, replacing the old answer and everything after it', async ({
+	page
+}) => {
+	// Three paced answers, one of them after an edit.
+	test.setTimeout(90_000);
+	await page.goto('/chat/helper');
+	await ask(page, 'one');
+	await expect(page.getByText('You asked: one', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	await ask(page, 'two');
+	await expect(page.getByText('You asked: two', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	const id = conversationId(page);
+
+	await page.getByRole('button', { name: 'Edit' }).last().click();
+	const box = page.getByRole('textbox', { name: 'Edit' });
+	await box.fill('two, edited');
+	await box.locator('xpath=ancestor::form').getByRole('button', { name: 'Send' }).click();
+
+	await expect(page.getByText('You asked: two, edited', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText('You asked: two', { exact: true })).toHaveCount(0);
+	await expect(page.getByText('You asked: one', { exact: true })).toBeVisible();
+
+	const asked = async () => (await read(page, id)).turns.map((t) => t.question);
+	await expect.poll(asked, { timeout: 10_000 }).toEqual(['one', 'two, edited']);
+
+	await page.reload();
+	await expect(page).toHaveURL(new RegExp(`[?&]c=${id}`));
+	await expect(page.getByText('You asked: two, edited', { exact: true })).toBeVisible();
+	await expect(page.getByText('You asked: one', { exact: true })).toBeVisible();
+	await expect(page.getByText('You asked: two', { exact: true })).toHaveCount(0);
+});
+
+test('a file attached to a question shows as a chip on it, and still does after a reload', async ({
+	page
+}) => {
+	await page.goto('/chat/helper');
+	await page.locator('input[type=file]').setInputFiles({
+		name: 'roster.txt',
+		mimeType: 'text/plain',
+		buffer: Buffer.from('Monday: early\nTuesday: late\n')
+	});
+	await expect(page.getByText('roster.txt')).toBeVisible();
+	await ask(page, 'What does the attached roster say?');
+	await expect(page.getByText('You asked: What does the attached roster say?')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
+	const id = conversationId(page);
+
+	// The chip rides the sent question, and the composer's own is spent.
+	// (The persona's echo lists the file's path too, so match the name alone.)
+	const chip = () => page.getByRole('listitem').filter({ hasText: /^roster\.txt$/ });
+	await expect(chip()).toHaveCount(1);
+	await expect(page.getByRole('button', { name: 'Remove roster.txt' })).toHaveCount(0);
+
+	await page.reload();
+	await expect(page.getByText('You asked: What does the attached roster say?')).toBeVisible();
+	await expect(chip()).toHaveCount(1);
+
+	const stored = await readJson<{ turns: { files: string[] }[] }>(
+		page.request.get(`/api/agent/conversations/${id}`)
+	);
+	expect(stored.turns[0]?.files).toEqual(['roster.txt']);
+});
+
 test('a spent allowance is shown, and the next question is refused', async ({ page }) => {
-	for (let asked = 0; asked < 12; asked += 1) {
+	for (let asked = 0; asked < 40; asked += 1) {
 		const response = await page.request.post('/api/agent/outrider/ask', {
 			data: { question: 'One more?', resume: outriderConversation }
 		});

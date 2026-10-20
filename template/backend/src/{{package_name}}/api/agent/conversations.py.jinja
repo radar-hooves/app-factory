@@ -14,8 +14,13 @@ from its `init` event into `session_id`.
 `turns` is this slice's record of every question asked: when, its words as
 the agent was sent them, whether the agent holds an answer to it, what the
 page asked for when it was not a plain question (a briefing), the one
-collection it was narrowed to, the passages retrieved for it (`citations`)
-and the person's mark on the answer. The agent's transcript lists only
+collection it was narrowed to, the passages retrieved for it (`citations`),
+the names of the files that came with it (`files`), each version of a
+document the agent wrote answering it (`artefacts`) and the person's mark
+on the answer. An edited question waits at the end of the record, marked
+with the place it `replaces`, until the agent takes it; it then replaces
+that record and every one after it (`replace`), or, if the agent never
+takes it, goes (`withdraw`). The agent's transcript lists only
 answered questions; the page counts every question it asked. `merged`
 reconciles the two, so a question stopped before the agent took it neither
 vanishes from a reopened conversation nor shifts a mark or a share onto
@@ -85,6 +90,12 @@ class Turn:
     collection: str | None = None
     #: The person's mark on the answer: `{"helpful": bool, "note": str | None}`.
     mark: dict[str, Any] | None = None
+    #: The names of the files the question came with.
+    files: list[str] = field(default_factory=list)
+    #: Each document version the agent wrote answering it: `{"name", "version", "media_type", "formats"}`.
+    artefacts: list[dict[str, Any]] = field(default_factory=list)
+    #: Every tool the agent called answering it, from its transcript.
+    steps: tuple[Any, ...] = ()
 
 
 def now() -> datetime.datetime:
@@ -114,12 +125,16 @@ def begin(
     conversation: AgentConversation | None,
     kind: str | None = None,
     collection: str | None = None,
+    files: list[str] | None = None,
+    edit: int | None = None,
 ) -> AgentConversation | None:
     """Stamp a turn as being answered and record its question; a new conversation when `conversation` is None.
 
-    Commits, so a stop landing on any worker finds the row. None when the
-    conversation is already being answered: the stamp is taken by one
-    conditional UPDATE, so two asks racing on two workers cannot both win.
+    `edit` is the place of the question this one replaces, recorded beside
+    it until the agent takes it (`replace`). Commits, so a stop landing on
+    any worker finds the row. None when the conversation is already being
+    answered: the stamp is taken by one conditional UPDATE, so two asks
+    racing on two workers cannot both win.
     """
     at = now()
     record: dict[str, Any] = {"at": at.isoformat(), "question": question, "answered": False}
@@ -127,6 +142,10 @@ def begin(
         record["kind"] = kind
     if collection:
         record["collection"] = collection
+    if files:
+        record["files"] = files
+    if edit is not None:
+        record["replaces"] = edit
     if conversation is None:
         conversation = AgentConversation(
             id=str(uuid.uuid4()),
@@ -160,6 +179,35 @@ def begin(
     return conversation
 
 
+def replace(db: Session, conversation_id: str, position: int, edit: int, session_id: str | None) -> str | None:
+    """The edited question at `position`, taken by the agent, replaces question `edit` and every one after it.
+
+    Their shares go with them. `session_id` is a new session the agent
+    started for a conversation it kept no answer of; the one it replaces is
+    returned, to be forgotten.
+    """
+    conversation = db.get(AgentConversation, conversation_id, with_for_update=True)
+    if conversation is None or position >= len(conversation.turns):
+        return None
+    record = {key: value for key, value in conversation.turns[position].items() if key != "replaces"}
+    conversation.turns = [*conversation.turns[:edit], record]
+    conversation.shared = [place for place in conversation.shared if place < edit]
+    replaced = None
+    if session_id is not None:
+        replaced, conversation.session_id = conversation.session_id, session_id
+    db.commit()
+    return replaced
+
+
+def withdraw(db: Session, conversation_id: str, position: int) -> None:
+    """Take back an edited question the agent never took: the conversation stays as it was."""
+    conversation = db.get(AgentConversation, conversation_id, with_for_update=True)
+    if conversation is None or position >= len(conversation.turns) or "replaces" not in conversation.turns[position]:
+        return
+    conversation.turns = [*conversation.turns[:position], *conversation.turns[position + 1 :]]
+    db.commit()
+
+
 def claim(db: Session, conversation_id: str, session_id: str) -> None:
     """Record the agent's own id for the conversation, the first time it names one."""
     db.execute(
@@ -173,6 +221,14 @@ def claim(db: Session, conversation_id: str, session_id: str) -> None:
 def answered(db: Session, conversation_id: str, position: int) -> None:
     """The agent holds an answer to question `position`: its transcript lists it."""
     _record(db, conversation_id, position, answered=True)
+
+
+def made(db: Session, conversation_id: str, position: int, artefact: dict[str, Any]) -> None:
+    """Record a version of a document the agent wrote answering question `position`."""
+    conversation = db.get(AgentConversation, conversation_id)
+    if conversation is None or position >= len(conversation.turns):
+        return
+    _record(db, conversation_id, position, artefacts=[*conversation.turns[position].get("artefacts", []), artefact])
 
 
 def cite(db: Session, conversation_id: str, position: int, citations: list[dict[str, Any]]) -> None:
@@ -268,6 +324,9 @@ def merged(conversation: AgentConversation, agent_turns: list[Any]) -> list[Turn
                 record.get("kind"),
                 record.get("collection"),
                 record.get("mark"),
+                list(record.get("files") or []),
+                list(record.get("artefacts") or []),
+                tuple(getattr(agent_turns[index], "steps", ())) if answered else (),
             )
         )
         index += bool(answered)
