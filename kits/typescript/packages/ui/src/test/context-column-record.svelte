@@ -4,7 +4,7 @@
 	import ContextColumn from '$lib/components/ui/context-column';
 	import DocumentPane from '$lib/components/ui/document-pane';
 
-	let { withDocument = false }: { withDocument?: boolean } = $props();
+	let { withDocument = false, ariaLabel }: { withDocument?: boolean; ariaLabel?: string } = $props();
 
 	let section = $state('Tenancy');
 	// svelte-ignore state_referenced_locally
@@ -19,6 +19,7 @@
 <button type="button" onclick={() => (section = 'Insurance')}>Insurance</button>
 <button type="button" onclick={() => (lease = true)}>Open the lease</button>
 <ContextColumn
+	{ariaLabel}
 	title={section}
 	subtitle={section === 'Tenancy' ? 'Opened on what needs you' : undefined}
 	onClose={() => {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet, Component } from 'svelte';
 	import * as Dialog from '../dialog/index.js';
+	import InfoTip from '../info-tip/info-tip.svelte';
 	import X from '@lucide/svelte/icons/x';
 
 	// The one dialogue frame: a titled header with optional icon and subtitle, a
@@ -11,6 +12,7 @@
 		onOpenChange,
 		title,
 		subtitle,
+		info,
 		icon: Icon,
 		size = 'md',
 		children,
@@ -35,6 +37,8 @@
 		onOpenChange?: (open: boolean) => void;
 		title: string;
 		subtitle?: string;
+		/** A tip beside the title, as PageHeader's: what the name means. */
+		info?: string;
 		icon?: Component<{ class?: string }>;
 		/**
 		 * The dialogue's measure. Named rather than free-form for the same reason
@@ -81,9 +85,17 @@
 				</span>
 			{/if}
 			<div class="min-w-0 flex-1">
-				<Dialog.Title class="font-display text-lg leading-tight font-semibold tracking-[var(--ds-font-display-tracking,-0.025em)]"
-					>{title}</Dialog.Title
-				>
+				<div class="flex items-center gap-2">
+					<Dialog.Title class="font-display text-lg leading-tight font-semibold tracking-[var(--ds-font-display-tracking,-0.025em)]"
+						>{title}</Dialog.Title
+					>
+					{#if info}
+						<InfoTip
+							text={info}
+							class="text-muted-foreground/50 hover:text-muted-foreground size-4 transition-colors"
+						/>
+					{/if}
+				</div>
 				{#if subtitle}
 					<Dialog.Description class="text-muted-foreground mt-0.5 text-sm"
 						>{subtitle}</Dialog.Description

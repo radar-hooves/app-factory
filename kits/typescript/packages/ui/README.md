@@ -1652,6 +1652,13 @@ routes by situation, so it stands outside the situation→component registry
 for the same reason. `getSessionId()` reading null when telemetry is off is
 ordinary, not an error: the report sends with a null `session_id`.
 
+The bottom-right corner is the widget's, and it publishes its footprint on the
+document: `--ds-report-reserve`, the room the shell leaves at a padded page's
+end so its last control scrolls clear; `--ds-report-beside`, where another
+fixed control in the corner sits, beside the trigger and inside that room
+(`ContextColumn`'s opener). A page control under the corner lifts the trigger
+with `--ds-report-clearance` instead (the librarian composer does).
+
 ## The alerts bell
 
 `@poodle64/ui/alerts` (`AlertBell`) is app machinery of the same kind: the app

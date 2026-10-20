@@ -156,12 +156,14 @@ describe('ContextColumn: the dialogue below xl names itself once', () => {
 		expect(within(dialog).getByText('Opened on what needs you')).toBeInTheDocument();
 	});
 
-	it('opens a list page’s stats under one At a glance', async () => {
-		render(ContextColumn, { props: { stats: [{ label: 'Value', value: 1 }] } });
+	it('opens a list page’s stats under one At a glance, its info tip beside the name', async () => {
+		render(ContextColumn, { props: { stats: [{ label: 'Value', value: 1 }], statsInfo: 'Held today.' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Open At a glance' }));
 		const dialog = await screen.findByRole('dialog');
 		expect(within(dialog).getAllByRole('heading', { name: 'At a glance' })).toHaveLength(1);
 		expect(within(dialog).getByText('Value')).toBeInTheDocument();
+		expect(dialog.querySelectorAll('header')).toHaveLength(1);
+		expect(within(dialog.querySelector('header')!).getByText('Held today.')).toBeInTheDocument();
 	});
 
 	it('keeps the stat card’s own title when the dialogue is named otherwise', async () => {
@@ -171,8 +173,11 @@ describe('ContextColumn: the dialogue below xl names itself once', () => {
 		expect(within(dialog).getByRole('heading', { name: 'At a glance' })).toBeInTheDocument();
 	});
 
-	it('stacks its opener above the report button’s corner', () => {
-		render(ContextColumn, { props: { stats: [] } });
-		expect(screen.getByRole('button', { name: 'Open At a glance' }).className).toContain('--ds-corner-above');
+	it('keeps the record item’s own title and close when the dialogue is named otherwise', async () => {
+		render(Harness, { props: { ariaLabel: 'Property context' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Open Property context' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getByRole('heading', { name: 'Tenancy' })).toBeInTheDocument();
+		expect(within(dialog).getByRole('button', { name: 'Close Tenancy' })).toBeInTheDocument();
 	});
 });

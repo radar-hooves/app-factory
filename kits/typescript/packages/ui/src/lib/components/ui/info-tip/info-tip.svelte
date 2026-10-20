@@ -20,7 +20,11 @@
 	} = $props();
 </script>
 
-<Tooltip.Provider delayDuration={150}>
+<!-- Opened by hover or a keyboard's focus, never by focus a script moves after a
+     click or tap: a dialogue whose first control is a tip (AppDialog's `info`)
+     opens with it shut. Opened from the keyboard, the focused tip shows, as
+     tabbing to it would. -->
+<Tooltip.Provider delayDuration={150} ignoreNonKeyboardFocus>
 	<Tooltip.Root>
 		<!--
 			The icon trigger takes a 44x44 hit area (`size-11`) and hands the space

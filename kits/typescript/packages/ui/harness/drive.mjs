@@ -4791,11 +4791,12 @@ for (const [height, long] of [
 
 // A phone's bottom-right corner holds two floating controls: the feedback
 // widget's and ContextColumn's "At a glance" opener. The widget owns the corner
-// and the opener stacks above it (godswood#889). Each is hit-tested at its own
-// centre and its four inner corners, so neither covers the other's hit area;
-// the dialogue it opens names itself once.
+// and the opener sits beside it, inside the band the shell reserves at the
+// content's end (godswood#889). Each is hit-tested at its own centre and four
+// inner corners, so neither covers the other's hit area; a list scrolled to its
+// end clears both; the dialogue it opens names itself once.
 {
-	const { context, page, errors } = await open('surface=records', { width: 390, height: 780 }, 'light');
+	const { context, page, errors } = await open('surface=records&long=1', { width: 390, height: 780 }, 'light');
 	await page.addStyleTag({ content: SETTLE });
 	await page.waitForSelector('[aria-label="Report a problem"]');
 	const tap = await page.evaluate(() => {
@@ -4811,13 +4812,18 @@ for (const [height, long] of [
 				})
 			};
 		};
-		return { report: reach('Report a problem'), glance: reach('Open At a glance') };
+		const scrollers = [...document.querySelectorAll('[data-slot="app-shell-content"], [data-slot="record-rows"]')];
+		for (const el of scrollers) el.scrollTop = el.scrollHeight;
+		const ended = scrollers.some((el) => el.scrollHeight > el.clientHeight) && scrollers.every((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
+		const last = [...document.querySelectorAll('[data-slot="record-row"]')].pop().getBoundingClientRect();
+		return { report: reach('Report a problem'), glance: reach('Open At a glance'), ended, last: [last.left, last.top, last.right, last.bottom].map(Math.round) };
 	}).catch((error) => ({ error: error.message }));
+	const shared = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
 	check('ContextColumn at 390px: the opener and the report button are both tappable', !tap.error && tap.report.hit && tap.glance.hit, JSON.stringify(tap));
 	if (!tap.error) {
 		const [a, b] = [tap.report.box, tap.glance.box];
-		const shared = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
-		check('ContextColumn at 390px: the opener stands above the report button, sharing no pixel', shared === 0 && b[3] <= a[1], JSON.stringify(tap));
+		check('ContextColumn at 390px: the opener sits beside the report button, on its line, sharing no pixel', shared(a, b) === 0 && b[2] <= a[0] && b[3] === a[3], JSON.stringify(tap));
+		check('ContextColumn at 390px: a list scrolled to its end clears both', tap.ended && shared(tap.last, a) === 0 && shared(tap.last, b) === 0, JSON.stringify(tap));
 	}
 	await page.click('button[aria-label="Open At a glance"]');
 	await page.waitForSelector('[role="dialog"]');
@@ -4825,6 +4831,15 @@ for (const [height, long] of [
 		() => [...document.querySelectorAll('[role="dialog"] *')].filter((e) => e.children.length === 0).map((e) => e.textContent.trim())
 	);
 	check('ContextColumn at 390px: the dialogue names itself once', names.filter((n) => n === 'At a glance').length === 1, JSON.stringify(names));
+	// Its info tip, beside the name, is the dialogue's first control: the focus
+	// the dialogue moves there on open leaves it shut, and a keyboard's opens it.
+	await page.waitForTimeout(400);
+	const shut = await page.locator('[data-slot="tooltip-content"]').count();
+	check('ContextColumn at 390px: the dialogue opens with its info tip shut', shut === 0, `${shut} open`);
+	await page.keyboard.press('Tab');
+	await page.keyboard.press('Shift+Tab');
+	const keyed = await page.waitForSelector('[data-slot="tooltip-content"]', { timeout: 2000 }).then(() => 'open', () => 'shut');
+	check('ContextColumn at 390px: a keyboard’s focus opens the info tip', keyed === 'open', keyed);
 	check('ContextColumn at 390px: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }

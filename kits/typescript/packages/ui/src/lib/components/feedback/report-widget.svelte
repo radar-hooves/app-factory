@@ -62,12 +62,13 @@
 	$effect(() => {
 		const root = document.documentElement;
 		root.style.setProperty('--ds-report-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))');
-		// The corner is this widget's. Any other fixed control in it stacks above
-		// by this bottom offset (one rule, no per-app offset).
-		root.style.setProperty('--ds-corner-above', 'calc(4.5rem + var(--ds-report-clearance, 0px))');
+		// The corner is this widget's. Another fixed control in it sits beside the
+		// trigger, this far in from the right edge with the same gap, so it stays
+		// inside the reserve too (ContextColumn's opener does).
+		root.style.setProperty('--ds-report-beside', '4.5rem');
 		return () => {
 			root.style.removeProperty('--ds-report-reserve');
-			root.style.removeProperty('--ds-corner-above');
+			root.style.removeProperty('--ds-report-beside');
 		};
 	});
 

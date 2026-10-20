@@ -78,8 +78,8 @@
 		onClose,
 		children,
 		documentPane,
-		/** The landmark's accessible name. `<aside>` with no name is exposed as
-		    "complementary" alone — set this to identify which one. */
+		/** The column's name: its landmark's, its opener's and its dialogue's.
+		    Defaults to the opened item's title, else the stat card's. */
 		ariaLabel,
 		ref = $bindable(null),
 		class: className,
@@ -107,6 +107,8 @@
 	const BESIDE = 1250;
 	const beside = $derived(row !== null && row >= BESIDE);
 	const name = $derived(ariaLabel ?? title ?? statsTitle);
+	/** The dialogue's title is the body's own heading, so the body leaves it to the dialogue. */
+	const headed = $derived(name === (children ? title : statsTitle));
 </script>
 
 {#snippet close()}
@@ -131,18 +133,13 @@
 	{/key}
 {/snippet}
 
-<!-- `framed`: the dialogue's own header already carries the name, so the body
-     leaves its heading out rather than repeat it. -->
+<!-- `framed`: the dialogue's own header carries the name, with its subtitle or
+     info, so the body leaves its heading out rather than repeat it. -->
 {#snippet body(framed: boolean)}
 	{#if children}
 		{#if documentPane && row !== null && !beside}{@render documentPane()}{:else}{@render item(framed)}{/if}
 	{:else}
-		<StatList
-			items={stats ?? []}
-			title={statsTitle}
-			info={statsInfo}
-			bare={framed && name === statsTitle}
-		/>
+		<StatList items={stats ?? []} title={statsTitle} info={statsInfo} bare={framed} />
 		{#if detail}
 			{@render detail()}
 		{/if}
@@ -151,7 +148,7 @@
 
 <aside
 	bind:this={ref}
-	aria-label={ariaLabel ?? title}
+	aria-label={name}
 	class={cn(
 		'hidden max-h-full min-h-0 w-[clamp(360px,28vw,460px)] shrink-0 flex-col gap-5 xl:flex',
 		className
@@ -172,19 +169,27 @@
      package's usual 36px control row: this is the one control whose entire
      job is making otherwise-unreachable content reachable, so it earns the
      full touch-target minimum rather than the shell's ordinary density.
-     The bottom-right corner is the feedback widget's; this stacks above it
-     (`--ds-corner-above`, which the widget publishes) so neither covers the other. -->
+     The bottom-right corner is the feedback widget's; this sits beside it
+     (`--ds-report-beside`, which the widget publishes) and follows its lift, so
+     neither covers the other and both stay in the band the shell reserves at
+     the content's end. -->
 <button
 	type="button"
 	onclick={() => (sheetOpen = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(var(--ds-corner-above,1rem)+env(safe-area-inset-bottom))] z-30 grid size-11 flex-none place-items-center rounded-full border xl:hidden"
+	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-[var(--ds-report-beside,1rem)] bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-30 grid size-11 flex-none place-items-center rounded-full border xl:hidden"
 	aria-label="Open {name}"
 >
 	<PanelRight class="size-4.5" />
 </button>
 
-<AppDialog bind:open={sheetOpen} title={name} subtitle={children ? subtitle : undefined} size="sm">
+<AppDialog
+	bind:open={sheetOpen}
+	title={name}
+	subtitle={headed && children ? subtitle : undefined}
+	info={headed && !children ? statsInfo : undefined}
+	size="sm"
+>
 	<div class={cn('flex flex-col gap-5', children && documentPane && 'h-[70dvh]')}>
-		{@render body(true)}
+		{@render body(headed)}
 	</div>
 </AppDialog>

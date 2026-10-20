@@ -6,7 +6,7 @@
 	 * property module boards, 08/10/2026). The data is invented: this repo is
 	 * public. `?list=` picks the list page (properties, managers, pnl, tools);
 	 * `?doc=1` opens the record page on a document; `?switcher=1` opens the
-	 * switcher's menu.
+	 * switcher's menu; `?long=1` lengthens the properties list.
 	 */
 	import AppShell from '../dist/components/ui/app-shell/app-shell.svelte';
 	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
@@ -241,6 +241,8 @@
 	let ran = $state('');
 
 	const list = params.get('list') ?? 'properties';
+	// `?long=1`: more properties than a phone holds, so the list scrolls to an end.
+	const owned = params.get('long') === '1' ? [0, 1, 2, 3, 4, 5].flatMap((n) => properties.map((p) => ({ ...p, id: p.id + 10 * n }))) : properties;
 	let opened = $state<string | number | null>(null);
 
 	// ── A record's page: its sections, the opened one in the column, its document beside ──
@@ -379,7 +381,7 @@
 					<output class="hidden" data-probe="tool-ran">{ran}</output>
 				{:else}
 					<RecordList
-						rows={properties}
+						rows={owned}
 						columns={propertyColumns}
 						noun={['property', 'properties']}
 						title="Owned properties"

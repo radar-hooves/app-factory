@@ -37,7 +37,7 @@
 		items: StatItem[];
 		title?: string;
 		info?: string;
-		/** Drop the title: the frame around the card already names it (a dialogue). */
+		/** Leave the header out: the frame around the card (a dialogue) carries its title and info. */
 		bare?: boolean;
 	} = $props();
 </script>
@@ -47,16 +47,16 @@
 	class="bg-card border-border ds-edge flex shrink-0 flex-col overflow-hidden rounded-lg border {klass}"
 	{...restProps}
 >
-	{#if !bare || info}
-	<header class="border-border flex items-center gap-2 border-b px-4 py-3">
-		{#if !bare}<h2 class="text-body leading-tight font-semibold tracking-tight">{title}</h2>{/if}
-		{#if info}
-			<InfoTip
-				text={info}
-				class="text-muted-foreground/50 hover:text-muted-foreground size-3.5 transition-colors"
-			/>
-		{/if}
-	</header>
+	{#if !bare}
+		<header class="border-border flex items-center gap-2 border-b px-4 py-3">
+			<h2 class="text-body leading-tight font-semibold tracking-tight">{title}</h2>
+			{#if info}
+				<InfoTip
+					text={info}
+					class="text-muted-foreground/50 hover:text-muted-foreground size-3.5 transition-colors"
+				/>
+			{/if}
+		</header>
 	{/if}
 	<dl class="flex flex-col">
 		{#each items as item (item.label)}
