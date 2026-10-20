@@ -10,7 +10,8 @@ import { splitVisuals } from '$lib/components/markdown/markdown';
 import { defaultVisuals } from '$lib/visuals';
 import Visual from './fixtures/visual.svelte';
 
-const embed = vi.hoisted(() => vi.fn(async () => ({})));
+// vega-embed's result, as the chart uses it: a view it ends before redrawing and when it goes.
+const embed = vi.hoisted(() => vi.fn(async () => ({ finalize: () => {} })));
 vi.mock('vega-embed', () => ({ default: embed }));
 
 beforeEach(() => embed.mockClear());
