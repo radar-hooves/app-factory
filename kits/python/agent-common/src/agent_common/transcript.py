@@ -15,6 +15,11 @@ opens nothing but the file, so a caller that adds its own reading of a turn
 (the library resolves citations through the `cwd` each line records) builds on
 them rather than parsing the file again.
 
+A conversation taken back to an earlier answer (`--resume-session-at`, an
+edited question) branches the file: the new question's `parentUuid` is that
+answer, and the turns it replaced stay on disk. `active` keeps the branch the
+last line is on, the conversation as the CLI resumes it.
+
 A question comes back as the CLI was sent it. Whatever a caller wrapped around
 the question on the way in is the caller's to take back off, exactly, against
 a string it owns (`agent.LocalAgent` does so for its attachment list); a
@@ -40,13 +45,29 @@ SESSION_ID = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 PROJECTS = "projects"
 
 
+#: How much of a tool's result a turn read back keeps.
+RESULT_CHARACTERS = 4000
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One tool the agent called in a turn, and what came back."""
+
+    id: str
+    name: str
+    input: dict[str, object]
+    result: str
+    is_error: bool
+
+
 @dataclass(frozen=True, slots=True)
 class Turn:
-    """One question and the prose that answered it."""
+    """One question, the prose that answered it, and the tools called on the way."""
 
     question: str
     answer: str
     at: datetime | None
+    steps: tuple[Step, ...] = ()
 
 
 def transcript_file(home: Path, session_id: str) -> Path | None:
@@ -80,13 +101,30 @@ def read(home: Path, session_id: str) -> list[Turn] | None:
     if path is None:
         return None
     turns: list[Turn] = []
-    for window in windows(events(path)):
+    for window in windows(active(events(path))):
         question = question_of(window)
         answer = answer_of(window)
         if question is None or answer is None:
             continue
-        turns.append(Turn(question=question, answer=answer.strip(), at=asked_at(window)))
+        turns.append(Turn(question=question, answer=answer.strip(), at=asked_at(window), steps=steps_of(window)))
     return turns
+
+
+def rewind_point(home: Path, session_id: str, keep: int) -> str | None:
+    """The last message of the first `keep` answered turns, to resume at; None when there are not that many.
+
+    Counted as `read` counts, so the `keep` a caller passes is the number of
+    turns it read back and keeps.
+    """
+    path = transcript_file(home, session_id)
+    if path is None or keep < 1:
+        return None
+    answered = [window for window in windows(active(events(path))) if question_of(window) and answer_of(window)]
+    if len(answered) < keep:
+        return None
+    said = [event.get("uuid") for event in answered[keep - 1] if event.get("type") in ("user", "assistant")]
+    found = [uuid for uuid in said if isinstance(uuid, str)]
+    return found[-1] if found else None
 
 
 def forget(home: Path, session_id: str) -> None:
@@ -121,6 +159,30 @@ def events(path: Path) -> list[dict[str, object]]:
         if isinstance(event, dict):
             found.append(event)
     return found
+
+
+def active(entries: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The entries on the branch the last one is on, in order: the conversation as the CLI resumes it.
+
+    Walked back from the last entry by `parentUuid`. A file whose lines carry
+    no ids, or whose chain breaks before reaching one with no parent, is
+    taken whole, as it was before any rewind.
+    """
+    by_id = {entry["uuid"]: entry for entry in entries if isinstance(entry.get("uuid"), str)}
+    last = next((entry for entry in reversed(entries) if isinstance(entry.get("uuid"), str)), None)
+    if last is None:
+        return entries
+    chain: set[object] = set()
+    entry: dict[str, object] | None = last
+    while entry is not None:
+        chain.add(entry["uuid"])
+        parent = entry.get("parentUuid")
+        if parent is None:
+            break
+        entry = by_id.get(parent)
+        if entry is None or entry["uuid"] in chain:
+            return entries
+    return [entry for entry in entries if entry.get("uuid") in chain or not isinstance(entry.get("uuid"), str)]
 
 
 def windows(entries: list[dict[str, object]]) -> list[list[dict[str, object]]]:
@@ -170,6 +232,51 @@ def answer_of(window: list[dict[str, object]]) -> str | None:
     said = [_prose(event) for event in window if event.get("type") == "assistant"]
     joined = "\n\n".join(part for part in said if part)
     return joined or None
+
+
+def steps_of(window: list[dict[str, object]]) -> tuple[Step, ...]:
+    """Every tool the agent called in this turn, in order, each with its result."""
+    results: dict[str, tuple[str, bool]] = {}
+    calls: list[dict[str, object]] = []
+    for event in window:
+        message = event.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict):
+                continue
+            if event.get("type") == "assistant" and block.get("type") == "tool_use":
+                calls.append(block)
+            elif event.get("type") == "user" and block.get("type") == "tool_result":
+                results[str(block.get("tool_use_id"))] = (
+                    _result_text(block.get("content")),
+                    bool(block.get("is_error")),
+                )
+    steps = []
+    for call in calls:
+        result, is_error = results.get(str(call.get("id")), ("", False))
+        tool_input = call.get("input")
+        steps.append(
+            Step(
+                id=str(call.get("id")),
+                name=str(call.get("name")),
+                input=tool_input if isinstance(tool_input, dict) else {},
+                result=result[:RESULT_CHARACTERS],
+                is_error=is_error,
+            )
+        )
+    return tuple(steps)
+
+
+def _result_text(content: object) -> str:
+    """A tool result's text, its blocks' texts joined; an image or a document is named, never carried."""
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content if isinstance(content, list) else []:
+        if isinstance(block, dict):
+            text = block.get("text")
+            parts.append(text if isinstance(text, str) else f"[{block.get('type')}]")
+    return "\n".join(parts)
 
 
 def asked_at(window: list[dict[str, object]]) -> datetime | None:

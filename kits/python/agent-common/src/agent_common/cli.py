@@ -11,8 +11,13 @@ CLI rather than the Agent SDK: the SDK hands back typed Python objects that
 would have to be re-serialised, and re-serialising is translating.
 
 Two kinds of turn share it. A chat turn (`ask`) is one question, one process,
-one stream: CLAUDE.md in the persona's home is its system prompt and
-settings.json its model. A question known at once goes on the command line;
+one stream, run `--restricted`: a person's question is answered by a session
+whose file tools reach only its own folder, which has no tool that runs a
+command, and which writes no settings, git or MCP file, so it reads no
+settings or memory file of its own and is handed CLAUDE.md and settings.json
+on its command line instead; it is offered only the tools its settings.json
+allows (`--permission-mode dontAsk`), of the built-in ones only `CHAT_TOOLS`.
+A question known at once goes on the command line;
 one still being put together (passages the app is retrieving) is written to
 stdin once it is ready, so the CLI's start-up, a second or two, runs while
 the question is assembled. An app-started job writes every turn to
@@ -115,7 +120,18 @@ _DECIDED = frozenset(
     }
 )
 
+#: The built-in tools a chat turn may be offered, and only those its persona's
+#: settings.json allows: reading and writing its own folder. Never a tool
+#: that runs a command, fetches the web from the session, or starts a
+#: sub-agent, whatever a persona allows (agent-console.md §The asker and the writes).
+CHAT_TOOLS = ("Read", "Glob", "Grep", "Write", "Edit")
+
+#: A persona's CLAUDE.md reaches a restricted session on its command line,
+#: where one argument may run to 128 KiB (MAX_ARG_STRLEN).
+INSTRUCTIONS_LIMIT = 100_000
+
 _BEARER = re.compile(r"(?i)\bbearer\s+\S+")
+_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 _URL_QUERY = re.compile(r"(https?://[^\s?]+)\?\S*")
 
 
@@ -224,6 +240,8 @@ def argv(
     model: str | None = None,
     partial_messages: bool = True,
     replay: bool = True,
+    restricted: bool = False,
+    rewind: str | None = None,
 ) -> list[str]:
     """The exact command line. Split out so a test can assert it without a subprocess.
 
@@ -240,7 +258,22 @@ def argv(
     frame back as the turn that consumes it starts: a job's only record of
     what the agent was sent. A chat turn already knows what it sent, and its
     stream goes to a person, so it does not replay.
+
+    `restricted` is a chat turn's: `--restricted` under `dontAsk`, the
+    persona's settings.json passed whole as `--settings` and its CLAUDE.md
+    appended to the system prompt, and `--tools` naming the `CHAT_TOOLS` its
+    allow list names. `rewind`, with `resume`, is the message the
+    conversation is taken back to before this question
+    (`--resume-session-at`): an edited question replaces what followed it.
+
+    Raises:
+        ValueError: a restricted persona's CLAUDE.md is past `INSTRUCTIONS_LIMIT`,
+            or `rewind` comes without `resume`.
     """
+    if rewind is not None and resume is None:
+        raise ValueError("a rewind resumes a session")
+    if restricted and len(persona.instructions) > INSTRUCTIONS_LIMIT:
+        raise ValueError(f"{persona.name}'s CLAUDE.md is past {INSTRUCTIONS_LIMIT} characters")
     command = [settings.executable, "-p"]
     if question is not None:
         command.append(question)
@@ -264,9 +297,19 @@ def argv(
         persona.disallowed_tools,
         "--effort",
         settings.effort,
-        "--permission-mode",
-        "bypassPermissions",
     ]
+    if restricted:
+        command += [
+            "--restricted",
+            "--permission-mode",
+            "dontAsk",
+            "--tools",
+            chat_tools(persona),
+            "--settings",
+            persona.settings,
+        ]
+    else:
+        command += ["--permission-mode", "bypassPermissions"]
     config = mcp_config if mcp_config is not None else persona.mcp_config
     if config is not None:
         # --strict-mcp-config stops the CLI walking cwd's ancestors for a
@@ -279,7 +322,8 @@ def argv(
     # ...", the identity Anthropic's subscription path (a Max seat behind the
     # gateway) requires to serve Sonnet and Opus 5; without it that path 429s.
     identity = f"You are {persona.name}, the {settings.service} service's agent."
-    command += ["--append-system-prompt", f"{identity}\n\n{append_system_prompt}" if append_system_prompt else identity]
+    prompt = [identity, persona.instructions.strip() if restricted else "", append_system_prompt or ""]
+    command += ["--append-system-prompt", "\n\n".join(part for part in prompt if part)]
     if json_schema is not None:
         command += ["--json-schema", json.dumps(json_schema)]
     if model:
@@ -292,7 +336,15 @@ def argv(
         command += ["--session-id", session_id]
     if resume:
         command += ["--resume", resume]
+    if rewind:
+        command += ["--resume-session-at", rewind]
     return command
+
+
+def chat_tools(persona: Persona) -> str:
+    """The `CHAT_TOOLS` the persona's allow list names, a rule's specifier (`Write(./notes/**)`) aside."""
+    named = {rule.split("(", 1)[0].strip() for rule in persona.allowed_tools.split(",")}
+    return ",".join(tool for tool in CHAT_TOOLS if tool in named)
 
 
 async def spawn(
@@ -345,7 +397,7 @@ async def spawn(
     scratch.mkdir(exist_ok=True)
     env = environment(settings, dataclasses.replace(persona, home=home), run_env)
     env["TMPDIR"] = env["CLAUDE_CODE_TMPDIR"] = str(scratch)
-    relayed = bridge.Bridge(mcp, run_env=run_env or {}) if mcp is not None else None
+    relayed = bridge.Bridge(mcp, run_env=run_env or {}, session_dir=cwd) if mcp is not None else None
     try:
         if relayed is not None and path is not None:
             await asyncio.to_thread(_write_config, Path(path), relayed.config)
@@ -468,11 +520,15 @@ def _servers(mcp_config: str | None) -> object:
 
 
 def _ports(settings: Settings, env: Mapping[str, str], servers: object) -> list[int]:
-    """The TCP ports a session needs: its model endpoint, telemetry, and each HTTP MCP server's."""
+    """The TCP ports a session needs: its model endpoint, telemetry, and each HTTP MCP server's.
+
+    A server's URL is read as the CLI reads it, its `${VAR}` and
+    `${VAR:-default}` expanded from the session's own environment.
+    """
     urls = [settings.gateway_url or "https://api.anthropic.com", env.get("OTEL_EXPORTER_OTLP_ENDPOINT", "")]
     if isinstance(servers, dict):
         urls += [
-            server["url"]
+            _REFERENCE.sub(lambda match: env.get(match[1]) or match[2] or "", server["url"])
             for server in servers.values()
             if isinstance(server, dict) and isinstance(server.get("url"), str)
         ]
@@ -574,6 +630,7 @@ async def ask(
     read: Sequence[Path] = (),
     write: Sequence[Path] = (),
     connect: Sequence[int] = (),
+    rewind: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Ask `persona` one question and yield each event the session emits, in order, unaltered.
 
@@ -586,34 +643,55 @@ async def ask(
     persona serves more than one person; `append_system_prompt` and `model`
     are for a caller whose question needs more than the persona's own files
     say; `run_env` is this run's own variables (`environment`); `read`,
-    `write` and `connect` are `spawn`'s. One synthetic event is added, and it
-    is clearly the transport's own: an `ERROR_EVENT` frame if the process
-    cannot start, goes silent past the idle timeout, or dies badly. Claude
-    Code's own `result` event terminates a healthy stream.
+    `write` and `connect` are `spawn`'s; `rewind` is `argv`'s. One synthetic
+    event is added, and it is clearly the transport's own: an `ERROR_EVENT`
+    frame if the process cannot start, goes silent past the idle timeout, or
+    dies badly. Claude Code's own `result` event terminates a healthy stream.
+
+    The turn is `restricted` (`argv`). Given a `cwd` of its own, the persona's
+    `.mcp.json` reaches the session through `spawn`'s `mcp`, written into that
+    folder, so its stdio servers, and an HTTP server whose header a
+    `headersHelper` mints, run as the app and never in the session
+    (`bridge`).
+
+    Raises:
+        ValueError: as `argv`, or the persona's `.mcp.json` is not JSON.
     """
     later = None if isinstance(question, str) else question
-    command = argv(
-        settings,
-        persona,
-        question if isinstance(question, str) else None,
-        resume=resume,
-        session_id=session_id,
-        append_system_prompt=append_system_prompt,
-        model=model,
-        input_format="stream-json" if later is not None else None,
-        replay=False,
-    )
+    folder = cwd or persona.home
+    servers = persona.mcp_config if cwd is not None else None
+    try:
+        mcp = json.loads(servers.read_text()) if servers is not None else None
+        command = argv(
+            settings,
+            persona,
+            question if isinstance(question, str) else None,
+            resume=resume,
+            session_id=session_id,
+            append_system_prompt=append_system_prompt,
+            model=model,
+            input_format="stream-json" if later is not None else None,
+            replay=False,
+            restricted=True,
+            rewind=rewind,
+            mcp_config=folder / ".mcp.json" if mcp is not None else None,
+        )
+    except BaseException:
+        if inspect.iscoroutine(later):
+            later.close()
+        raise
     try:
         process = await spawn(
             settings,
             persona,
             command,
-            cwd=cwd or persona.home,
+            cwd=folder,
             stdin=later is not None,
             run_env=run_env,
             read=read,
             write=write,
             connect=connect,
+            mcp=mcp,
         )
     except BaseException as exc:
         # Never awaited now: closed, so it is not reported as a coroutine left unawaited.

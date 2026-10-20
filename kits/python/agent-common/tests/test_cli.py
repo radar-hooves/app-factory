@@ -1,11 +1,12 @@
 """The driver, through the argv and environment it builds and a real subprocess it reads."""
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-from agent_common import cli
+from agent_common import cli, persona
 from agent_common.persona import Persona
 
 
@@ -225,3 +226,79 @@ def test_a_user_frame_is_one_stream_json_line() -> None:
 
 def test_the_scrub_takes_bearer_tokens_and_query_strings() -> None:
     assert cli.scrub_credentials("bearer abc at http://x/y?sig=1 ok") == "Bearer [redacted] at http://x/y?[redacted] ok"
+
+
+# ── a chat turn, restricted ──────────────────────────────────────────────
+
+
+def test_a_restricted_turn_is_offered_only_what_its_persona_allows(settings: cli.Settings, milton: Persona) -> None:
+    command = cli.argv(settings, milton, "what is leave?", restricted=True)
+
+    assert "bypassPermissions" not in command
+    at = command.index("--restricted")
+    assert command[at : at + 7] == [
+        "--restricted",
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "Read,Grep",
+        "--settings",
+        milton.settings,
+    ]
+    prompt = command[command.index("--append-system-prompt") + 1]
+    assert prompt == f"You are {milton.name}, the {settings.service} service's agent.\n\n{milton.instructions}"
+
+
+def test_a_restricted_turn_never_offers_a_shell_or_the_web_whatever_its_persona_allows(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    allowed = "Bash,WebFetch,WebSearch,Task,Write(./notes/**),mcp__library__search,Read"
+    armed = dataclasses.replace(milton, allowed_tools=allowed)
+    assert cli.chat_tools(armed) == "Read,Write"
+
+
+def test_a_persona_with_no_built_in_tool_allowed_is_offered_none(settings: cli.Settings, milton: Persona) -> None:
+    command = cli.argv(settings, dataclasses.replace(milton, allowed_tools="mcp__app__lookup"), "q", restricted=True)
+    assert command[command.index("--tools") + 1] == ""
+
+
+def test_a_rewind_resumes_at_its_message(settings: cli.Settings, milton: Persona) -> None:
+    command = cli.argv(settings, milton, "q", resume="abc", rewind="m-1", restricted=True)
+    assert command[-4:] == ["--resume", "abc", "--resume-session-at", "m-1"]
+
+
+def test_a_rewind_without_a_session_is_refused(settings: cli.Settings, milton: Persona) -> None:
+    with pytest.raises(ValueError, match="resumes a session"):
+        cli.argv(settings, milton, "q", rewind="m-1")
+
+
+def test_a_persona_too_long_for_one_argument_is_refused(settings: cli.Settings, milton: Persona) -> None:
+    long = dataclasses.replace(milton, instructions="x" * (cli.INSTRUCTIONS_LIMIT + 1))
+    with pytest.raises(ValueError, match=r"CLAUDE\.md"):
+        cli.argv(settings, long, "q", restricted=True)
+
+
+def test_a_servers_port_is_read_as_the_cli_reads_its_url() -> None:
+    servers = {
+        "library": {"type": "http", "url": "${LIBRARY_URL}/mcp/"},
+        "app": {"type": "http", "url": "${APP_URL:-http://localhost:8310}/mcp/"},
+    }
+    ports = cli._ports(cli.Settings(service="s"), {"LIBRARY_URL": "http://library:8305/api/caller"}, servers)
+    assert ports == [443, 8305, 8310]
+
+
+async def test_a_chat_turn_hands_its_personas_servers_to_the_bridge_in_its_own_folder(
+    settings: cli.Settings, write_persona: Any, tmp_path: Path
+) -> None:
+    directory = write_persona(tmp_path / "personas", "served")
+    stdio = {"command": "python3", "args": ["-c", "pass"]}
+    (directory / ".mcp.json").write_text(json.dumps({"mcpServers": {"tool": stdio}}))
+    served = persona.load(tmp_path / "personas", "served", tmp_path / "homes")
+    folder = tmp_path / "conversation"
+    folder.mkdir()
+
+    command = _echo(await _ask(settings, served, "hi", cwd=folder))["argv"]
+
+    assert command[command.index("--mcp-config") + 1] == str(folder / ".mcp.json")
+    assert "--restricted" in command
+    assert json.loads((folder / ".mcp.json").read_text()) == {"mcpServers": {"tool": stdio}}

@@ -8,9 +8,10 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
-from agent_common import cli, sandbox, transcript
+from agent_common import cli, persona, sandbox, transcript
 from agent_common.agent import ATTACHMENTS, CHATS, LocalAgent
 from agent_common.persona import Persona
 
@@ -18,6 +19,7 @@ pytestmark = pytest.mark.skipif(not sandbox.supported(), reason="this kernel's L
 
 READ = "__read__"  # fake_claude.py's triggers
 MCP = "__mcp__"
+CONNECT = "__connect__"
 
 #: A stdio server that, asked to `initialize`, answers with the key it was told where to find.
 _SERVER = """
@@ -237,3 +239,31 @@ async def test_one_conversation_of_a_persona_cannot_read_another(
         str(transcript_file): "denied",
         str(milton.home / "settings.json"): "denied",
     }
+
+
+async def test_a_chat_session_reaches_the_server_its_url_names_once_expanded_and_no_other_port(
+    confined: cli.Settings, write_persona: Any, tmp_path: Path
+) -> None:
+    """The library's door is named `${LIBRARY_URL}/mcp/`: its port is admitted as the CLI will read it."""
+    door, other = socket.create_server(("127.0.0.1", 0)), socket.create_server(("127.0.0.1", 0))
+    directory = write_persona(tmp_path / "personas", "reader")
+    library = {"type": "http", "url": "${LIBRARY_URL}/mcp/", "headers": {"Authorization": "Bearer ${LIBRARY_TOKEN}"}}
+    (directory / ".mcp.json").write_text(json.dumps({"mcpServers": {"library": library}}))
+    reader = persona.load(tmp_path / "personas", "reader", tmp_path / "homes")
+    door_port, other_port = door.getsockname()[1], other.getsockname()[1]
+    run_env = {"LIBRARY_URL": f"http://127.0.0.1:{door_port}/api/caller", "LIBRARY_TOKEN": "one asker's"}
+
+    try:
+        events = [
+            event
+            async for event in LocalAgent(confined, reader, run_env=run_env).ask(f"{CONNECT} {door_port} {other_port}")
+        ]
+    finally:
+        door.close()
+        other.close()
+
+    result = next(event for event in events if event.get("type") == "result")
+    assert json.loads(result["result"]) == {str(door_port): "ok", str(other_port): "denied"}
+    session = next(event["session_id"] for event in events if event.get("subtype") == "init")
+    told = (reader.home / CHATS / session / ".mcp.json").read_text()
+    assert json.loads(told)["mcpServers"]["library"] == library

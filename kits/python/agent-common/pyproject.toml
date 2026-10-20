@@ -12,7 +12,15 @@ dependencies = [
     # the private index (the workspace root's [tool.uv.sources]). The floor is
     # the first release carrying `CallerApi.query_as_caller`.
     "library>=2026.10.18124341",
+    # httpx: `remote` forwards a relayed server's messages over it.
+    "httpx>=0.28.1",
 ]
+
+[project.optional-dependencies]
+# Word and PDF from a persona's documents, and a Word attachment's text
+# (`documents`): pandoc and typst, each a self-contained wheel, about 230 MB
+# unpacked between them, so only an app that offers them installs them.
+documents = ["pypandoc-binary>=1.17", "typst>=0.15.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -25,6 +33,11 @@ packages = ["src/agent_common"]
 python_version = "3.14"
 strict = true
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+# pypandoc ships no types; `documents` calls one function of it.
+module = ["pypandoc"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

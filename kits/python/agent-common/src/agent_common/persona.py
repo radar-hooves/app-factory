@@ -36,14 +36,18 @@ class Persona:
     `allowed_tools` and `disallowed_tools` are comma-joined tool lists,
     already shaped for `--allowedTools`/`--disallowedTools` — derived from
     settings.json's own `permissions.allow`/`permissions.deny` so the file
-    and the flags that enforce it under `--permission-mode bypassPermissions`
-    can never disagree.
+    and the flags that enforce it can never disagree. `instructions` and
+    `settings` are CLAUDE.md and settings.json as text, which a restricted
+    session takes on its command line because it reads no settings or memory
+    file of its own (`cli.argv`).
     """
 
     name: str
     home: Path
     allowed_tools: str
     disallowed_tools: str
+    instructions: str = ""
+    settings: str = "{}"
 
     @property
     def mcp_config(self) -> Path | None:
@@ -147,11 +151,14 @@ def load(personas_dir: Path, name: str, homes_dir: Path) -> Persona:
     _seed(source, home)
 
     settings_path = home / "settings.json"
-    settings_json = json.loads(settings_path.read_text()) if settings_path.is_file() else {}
+    settings_text = settings_path.read_text() if settings_path.is_file() else "{}"
+    settings_json = json.loads(settings_text)
 
     return Persona(
         name=name,
         home=home,
         allowed_tools=_tool_list(settings_json, "allow"),
         disallowed_tools=_tool_list(settings_json, "deny"),
+        instructions=(home / "CLAUDE.md").read_text(),
+        settings=settings_text,
     )

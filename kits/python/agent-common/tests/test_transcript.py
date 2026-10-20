@@ -88,3 +88,74 @@ def test_forget_deletes_every_file_of_that_session_and_nothing_else(tmp_path: Pa
 
     assert not first.exists() and not second.exists()
     assert kept.exists()
+
+
+def _chain(*lines: dict[str, object], parents: dict[int, int | None] | None = None) -> list[dict[str, object]]:
+    """`lines` given ids `m0`, `m1`… each the parent of the next, unless `parents` names another."""
+    chained = []
+    for n, line in enumerate(lines):
+        parent = (parents or {}).get(n, n - 1)
+        chained.append({**line, "uuid": f"m{n}", "parentUuid": None if parent is None or parent < 0 else f"m{parent}"})
+    return chained
+
+
+def test_a_rewound_conversation_reads_back_as_the_branch_its_last_line_is_on(tmp_path: Path) -> None:
+    lines = _chain(
+        _user("one"),
+        _said(_text("first")),
+        _user("two"),
+        _said(_text("replaced")),
+        _user("two, edited"),
+        _said(_text("second")),
+        parents={4: 1},
+    )
+    _write(tmp_path, "s", lines)
+
+    turns = transcript.read(tmp_path, "s")
+
+    assert turns is not None
+    assert [(turn.question, turn.answer) for turn in turns] == [("one", "first"), ("two, edited", "second")]
+
+
+def test_a_broken_chain_is_read_whole(tmp_path: Path) -> None:
+    lines = _chain(_user("one"), _said(_text("first")), parents={1: 9})
+    _write(tmp_path, "s", lines)
+
+    turns = transcript.read(tmp_path, "s")
+
+    assert turns is not None and [turn.question for turn in turns] == ["one"]
+
+
+def test_the_rewind_point_is_the_last_message_of_the_turns_kept(tmp_path: Path) -> None:
+    _write(tmp_path, "s", _chain(_user("one"), _said(_text("first")), _user("two"), _said(_text("second"))))
+
+    assert transcript.rewind_point(tmp_path, "s", 1) == "m1"
+    assert transcript.rewind_point(tmp_path, "s", 2) == "m3"
+    assert transcript.rewind_point(tmp_path, "s", 3) is None
+    assert transcript.rewind_point(tmp_path, "s", 0) is None
+
+
+def test_a_turns_tools_come_back_with_their_results(tmp_path: Path) -> None:
+    call: dict[str, object] = {
+        "type": "tool_use",
+        "id": "t1",
+        "name": "mcp__library__search",
+        "input": {"search_query": "leave"},
+    }
+    image: dict[str, object] = {"type": "image", "source": {}}
+    result: dict[str, object] = {"type": "tool_result", "tool_use_id": "t1", "content": [_text("three hits"), image]}
+    failed: dict[str, object] = {"type": "tool_use", "id": "t2", "name": "Read", "input": {"file_path": "/x"}}
+    refused: dict[str, object] = {
+        "type": "tool_result",
+        "tool_use_id": "t2",
+        "content": "no such file",
+        "is_error": True,
+    }
+    _write(tmp_path, "s", [_user("q"), _said(call, failed), _user([result, refused]), _said(_text("answer"))])
+
+    [turn] = transcript.read(tmp_path, "s") or []
+
+    assert turn.steps == (
+        transcript.Step("t1", "mcp__library__search", {"search_query": "leave"}, "three hits\n[image]", False),
+        transcript.Step("t2", "Read", {"file_path": "/x"}, "no such file", True),
+    )

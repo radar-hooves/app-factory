@@ -27,6 +27,8 @@ dev = [
     # the kit imports. Same floors as the stamped backend.
     "api-common>=2026.9.4",
     "redactyl-core>=2026.7.0",
+    # agent-common's `documents` extra, so its suite drives real pandoc and typst.
+    "agent-common[documents]",
 ]
 
 # The household's private index (devpi), explicit: ONLY the packages pinned to
@@ -41,6 +43,7 @@ url = "http://172.21.0.2:3141/poodle64/prod/+simple/"
 explicit = true
 
 [tool.uv.sources]
+agent-common = { workspace = true }
 library = { index = "godswood" }
 api-common = { index = "godswood" }
 redactyl-core = { index = "godswood" }

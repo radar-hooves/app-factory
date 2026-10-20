@@ -13,12 +13,18 @@ the triggers below misbehaves instead, the way a real CLI sometimes does.
 `__mcp__ <path>...` starts each stdio server its `--mcp-config` names, as the
 real CLI does (its environment under the server's own `env`, in its `cwd`),
 asks each to `initialize`, and reports their answers beside what this process
-could read of each path.
+could read of each path. `__write__ <path> <text>` writes `text` to `path`
+under its working directory by a `Write` step, its `tool_use` and its
+`tool_result`, as the real CLI reports one; `__fail_write__ <path>` reports
+a `Write` that failed. `__connect__ <port>...` reports whether this process
+could open a TCP connection to each port on the loopback. Each transcript line carries a `uuid` and the
+`parentUuid` of the line before it, or of `--resume-session-at`'s message.
 """
 
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -30,6 +36,9 @@ CHATTY = "__chatty__"
 GIANT = "__giant__"
 READ = "__read__"
 MCP = "__mcp__"
+WRITE = "__write__"
+FAIL_WRITE = "__fail_write__"
+CONNECT = "__connect__"
 GIANT_SIZE = 200_000
 ENV_NAMES = (
     "HOME",
@@ -60,6 +69,18 @@ def _read_each(paths: list[str]) -> str:
                 seen[path] = handle.read()
         except PermissionError:
             seen[path] = "denied"
+    return json.dumps(seen)
+
+
+def _connect_each(ports: list[str]) -> str:
+    """Whether this process could connect to each loopback port, or `denied`."""
+    seen = {}
+    for port in ports:
+        try:
+            socket.create_connection(("127.0.0.1", int(port)), 2).close()
+            seen[port] = "ok"
+        except PermissionError:
+            seen[port] = "denied"
     return json.dumps(seen)
 
 
@@ -110,6 +131,8 @@ def main() -> None:
         if question == GIANT
         else _read_each(question.split()[1:])
         if question.startswith(READ)
+        else _connect_each(question.split()[1:])
+        if question.startswith(CONNECT)
         else json.dumps({"servers": _initialize_each(argv), "read": json.loads(_read_each(question.split()[1:]))})
         if question.startswith(MCP)
         else json.dumps(
@@ -124,18 +147,46 @@ def main() -> None:
 
     print("a diagnostic line that is not JSON", flush=True)
     _emit({"type": "system", "subtype": "init", "session_id": session_id, "cwd": os.getcwd()})
+    words = question.split(maxsplit=2)
+    if words and words[0] in (WRITE, FAIL_WRITE):
+        target = os.path.join(os.getcwd(), words[1])
+        if words[0] == WRITE:
+            with open(target, "w") as handle:
+                handle.write(words[2] if len(words) > 2 else "")
+        call = {"type": "tool_use", "id": "toolu_write", "name": "Write", "input": {"file_path": target}}
+        _emit({"type": "assistant", "message": {"content": [call]}, "session_id": session_id})
+        outcome: dict[str, object] = {"type": "tool_result", "tool_use_id": "toolu_write", "content": "done"}
+        if words[0] == FAIL_WRITE:
+            outcome["is_error"] = True
+        _emit({"type": "user", "message": {"content": [outcome]}, "session_id": session_id})
     _emit({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}, "session_id": session_id})
     _emit({"type": "result", "subtype": "success", "session_id": session_id, "result": text, "is_error": False})
 
     folder = os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "projects", re.sub(r"[^A-Za-z0-9]", "-", os.getcwd()))
     os.makedirs(folder, exist_ok=True)
     stamp = "2026-09-30T02:00:00.000Z"
-    with open(os.path.join(folder, f"{session_id}.jsonl"), "a") as handle:
-        for line in (
+    path = os.path.join(folder, f"{session_id}.jsonl")
+    parent = _flag(argv, "--resume-session-at") or _last_uuid(path)
+    with open(path, "a") as handle:
+        lines: list[dict[str, object]] = [
             {"type": "user", "message": {"role": "user", "content": question}, "cwd": os.getcwd(), "timestamp": stamp},
             {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}},
-        ):
+        ]
+        for line in lines:
+            line["uuid"] = minted = str(uuid.uuid4())
+            line["parentUuid"] = parent
+            parent = minted
             handle.write(json.dumps(line) + "\n")
+
+
+def _last_uuid(path: str) -> str | None:
+    """The `uuid` of the transcript's last line, the parent of the next."""
+    try:
+        with open(path) as handle:
+            lines = handle.read().splitlines()
+    except FileNotFoundError:
+        return None
+    return json.loads(lines[-1]).get("uuid") if lines else None
 
 
 if __name__ == "__main__":

@@ -17,6 +17,18 @@ and the relay presents a token from its environment, which no other session
 can read, so a port reused once the session ends starts nothing for anyone
 else; a token starts one server at a time. The session gains the server's
 tools and nothing the server holds, not even its `env`.
+
+An HTTP server whose header a `headersHelper` mints is relayed the same way:
+the CLI runs a helper inside the session, where whatever it reads (an
+identity key, a token file) the session's `Read` reads too. So the app runs
+it, in `remote`, which forwards the session's messages to the server's URL
+with the headers the helper printed and its own `headers` beside them. An
+HTTP server with no helper is the CLI's to reach, `${VAR}` in its headers
+expanded from the session's own environment (a run's token).
+
+`${AGENT_SESSION_DIR}` in a relayed server's `env`, `args` or `cwd` is the
+session's working folder, for a server that reads what the session was given
+(an attachment) and must read nothing else.
 """
 
 import asyncio
@@ -30,7 +42,10 @@ import signal
 import socket
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
+
+from agent_common import remote
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +58,10 @@ _HANDSHAKE_SECONDS = 5.0
 _GRACE_SECONDS = 5.0
 #: The keys of a server entry the bridge itself acts on, so never the relay's.
 _SERVERS_OWN = ("command", "args", "env", "cwd")
+#: The keys of an HTTP entry `remote` acts on in its place.
+_REMOTES_OWN = ("type", "url", "headers", "headersHelper")
+#: The variable a relayed server's entry names the session's folder by.
+SESSION_DIR_VARIABLE = "AGENT_SESSION_DIR"
 _REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 #: Run as `python -I -c RELAY <port>` inside the session: stdlib only, nothing read off disk.
@@ -64,15 +83,16 @@ while chunk := link.recv(65536):
 class Bridge:
     """A session's relayed servers: the config its CLI reads, the port its relays reach."""
 
-    def __init__(self, mcp: Mapping[str, Any], *, run_env: Mapping[str, str]) -> None:
+    def __init__(self, mcp: Mapping[str, Any], *, run_env: Mapping[str, str], session_dir: Path | None = None) -> None:
         servers = mcp.get("mcpServers")
         servers = servers if isinstance(servers, dict) else {}
         stdio = {
-            name: server
+            name: _remote(server) if isinstance(server.get("headersHelper"), str) else server
             for name, server in servers.items()
-            if isinstance(server, dict) and isinstance(server.get("command"), str)
+            if isinstance(server, dict)
+            and (isinstance(server.get("command"), str) or isinstance(server.get("headersHelper"), str))
         }
-        self._env = {**os.environ, **run_env}
+        self._env = {**os.environ, **run_env, **({SESSION_DIR_VARIABLE: str(session_dir)} if session_dir else {})}
         self._servers: dict[bytes, tuple[str, dict[str, Any]]] = {}
         self._running: dict[bytes, asyncio.subprocess.Process] = {}
         self._connections: set[asyncio.Task[None]] = set()
@@ -179,3 +199,22 @@ class Bridge:
 
 def _expand(value: str, env: Mapping[str, str]) -> str:
     return _REFERENCE.sub(lambda match: env.get(match[1]) or match[2] or "", value)
+
+
+def _remote(server: Mapping[str, Any]) -> dict[str, Any]:
+    """An HTTP server entry as the stdio server `remote` makes of it, its references expanded when it starts."""
+    return {
+        **{key: value for key, value in server.items() if key not in _REMOTES_OWN},
+        "command": sys.executable,
+        "args": ["-I", "-m", "agent_common.remote"],
+        "env": {
+            remote.URL_VARIABLE: str(server.get("url") or ""),
+            remote.HEADERS_VARIABLE: "\n".join(f"{name}: {value}" for name, value in _headers(server).items()),
+            remote.HELPER_VARIABLE: str(server["headersHelper"]),
+        },
+    }
+
+
+def _headers(server: Mapping[str, Any]) -> dict[str, str]:
+    headers = server.get("headers")
+    return {str(name): str(value) for name, value in headers.items()} if isinstance(headers, dict) else {}

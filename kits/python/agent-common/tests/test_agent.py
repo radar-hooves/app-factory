@@ -3,11 +3,21 @@
 import asyncio
 import dataclasses
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
-from agent_common import cli
-from agent_common.agent import ATTACHMENTS, CHATS, PASSAGES_START, Agent, LocalAgent
+from agent_common import cli, documents, persona
+from agent_common.agent import (
+    ARTEFACT_EVENT,
+    ARTEFACTS,
+    ATTACHMENTS,
+    CHATS,
+    PASSAGES_START,
+    TOOLS_BRIEF,
+    Agent,
+    LocalAgent,
+)
 from agent_common.persona import Persona
 
 
@@ -20,7 +30,8 @@ def _session(events: list[dict[str, Any]]) -> str:
 
 
 def _reported(events: list[dict[str, Any]]) -> dict[str, Any]:
-    assistant = next(event for event in events if event.get("type") == "assistant")
+    """What the fake CLI said of itself: the text of its last assistant event."""
+    assistant = [event for event in events if event.get("type") == "assistant"][-1]
     reported: dict[str, Any] = json.loads(assistant["message"]["content"][0]["text"])
     return reported
 
@@ -164,3 +175,148 @@ async def test_a_run_carries_its_askers_variables_in_its_process_and_its_repr_do
     assistant = next(event for event in events if event.get("type") == "assistant")
     assert json.loads(assistant["message"]["content"][0]["text"])["env"]["ASKER_TOKEN"] == "one asker's"
     assert "one asker's" not in repr(agent)
+
+
+# ── documents the agent writes ───────────────────────────────────────────
+
+
+def _kept(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [event for event in events if event.get("type") == ARTEFACT_EVENT]
+
+
+async def test_a_document_the_agent_writes_is_kept_as_a_version_and_announced_after_its_result(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+
+    events = await _ask(agent, "__write__ brief.md # One")
+    session = _session(events)
+    [first] = _kept(events)
+    resumed = await _ask(agent, "__write__ brief.md # Two", resume=session)
+
+    assert events.index(first) == 1 + next(i for i, event in enumerate(events) if event.get("type") == "user")
+    assert first == {
+        "type": ARTEFACT_EVENT,
+        "name": "brief.md",
+        "version": 1,
+        "media_type": "text/markdown",
+        "bytes": 5,
+    }
+    assert [event["version"] for event in _kept(resumed)] == [2]
+    assert await agent.artefact(session, "brief.md", 1) == (b"# One", "text/markdown")
+    assert await agent.artefact(session, "brief.md", 2) == (b"# Two", "text/markdown")
+    assert await agent.artefact(session, "brief.md", 3) is None
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "__write__ notes.txt plain text is the agent's file, not a document",
+        "__write__ .hidden.md a dotted name",
+        "__fail_write__ brief.md",
+    ],
+)
+async def test_only_a_document_written_into_the_folder_is_kept(
+    settings: cli.Settings, milton: Persona, question: str
+) -> None:
+    events = await _ask(LocalAgent(settings, milton), question)
+    assert _kept(events) == []
+
+
+async def test_a_write_that_lands_outside_the_folder_or_in_its_attachments_is_not_kept(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "hi", files={"a.md": b"theirs"}))
+    [turn] = list((milton.home / CHATS / session / ATTACHMENTS).iterdir())
+    (milton.home / CHATS / "elsewhere.md").write_text("x")
+
+    attached = await _ask(agent, f"__write__ {ATTACHMENTS}/{turn.name}/a.md mine", resume=session)
+    outside = await _ask(agent, "__write__ ../elsewhere.md y", resume=session)
+
+    assert _kept(attached) == [] and _kept(outside) == []
+    assert await agent.artefact(session, "../elsewhere.md", 1) is None
+
+
+async def test_forget_takes_every_version(settings: cli.Settings, milton: Persona) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "__write__ brief.md # One"))
+
+    await agent.forget(session)
+
+    assert not (milton.home / ARTEFACTS / session).exists()
+
+
+# ── an edited question ───────────────────────────────────────────────────
+
+
+async def test_keep_takes_the_conversation_back_to_its_first_turns_before_asking(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "one"))
+    await _ask(agent, "two", resume=session)
+
+    edited = await _ask(agent, "two, edited", resume=session, keep=1)
+
+    assert "--resume-session-at" in _reported(edited)["argv"]
+    turns = await agent.read(session)
+    assert turns is not None
+    assert [turn.question for turn in turns] == ["one", "two, edited"]
+
+
+@pytest.mark.parametrize("keep", [0, -1])
+async def test_a_conversation_is_never_kept_to_nothing(settings: cli.Settings, milton: Persona, keep: int) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "one"))
+    with pytest.raises(ValueError, match="at least one turn"):
+        await _ask(agent, "again", resume=session, keep=keep)
+
+
+async def test_keep_needs_a_conversation_to_take_back(settings: cli.Settings, milton: Persona) -> None:
+    with pytest.raises(ValueError, match="at least one turn"):
+        await _ask(LocalAgent(settings, milton), "one", keep=1)
+
+
+# ── what a persona that may look further is told ─────────────────────────
+
+
+def _armed(root: Path, homes: Path, allow: list[str]) -> Persona:
+    directory = root / "armed"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "CLAUDE.md").write_text("You are armed.")
+    (directory / "settings.json").write_text(json.dumps({"model": "sonnet", "permissions": {"allow": allow}}))
+    return persona.load(root, "armed", homes)
+
+
+async def test_a_persona_allowed_to_write_is_told_how_to_use_it(settings: cli.Settings, tmp_path: Path) -> None:
+    armed = _armed(tmp_path / "personas", tmp_path / "homes", ["Read", "Write"])
+    command = _reported(await _ask(LocalAgent(settings, armed), "hi"))["argv"]
+
+    prompt = command[command.index("--append-system-prompt") + 1]
+
+    assert "You are armed." in prompt
+    assert TOOLS_BRIEF.splitlines()[0] in prompt
+    assert ("Word or PDF" in prompt) is documents.available()
+
+
+async def test_a_persona_that_only_reads_its_folder_is_told_nothing_more(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    command = _reported(await _ask(LocalAgent(settings, milton), "hi"))["argv"]
+    assert TOOLS_BRIEF.splitlines()[0] not in command[command.index("--append-system-prompt") + 1]
+
+
+# ── a Word file attached ─────────────────────────────────────────────────
+
+
+async def test_a_word_files_text_is_written_beside_it_and_named_with_it(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    word = documents.render(b"# Leave\n\nTwenty days a year.", "text/markdown", "docx")
+
+    events = await _ask(LocalAgent(settings, milton), "what does this say?", files={"policy.docx": word})
+    [turn] = list((milton.home / CHATS / _session(events) / ATTACHMENTS).iterdir())
+
+    assert "Twenty days a year." in (turn / "policy.docx.md").read_text()
+    assert f"- {turn / 'policy.docx'} (its text: {turn / 'policy.docx.md'})" in _question_sent(events)

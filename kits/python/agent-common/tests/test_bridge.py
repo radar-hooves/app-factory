@@ -87,3 +87,36 @@ async def test_the_apps_config_is_written_only_into_the_sessions_own_folder(
 
     with pytest.raises(ValueError, match="must name a file in `cwd`"):
         await cli.spawn(settings, milton, command, cwd=tmp_path, mcp={"mcpServers": {}})
+
+
+async def test_an_http_server_whose_header_a_helper_mints_is_relayed() -> None:
+    helped = {"type": "http", "url": "https://mcp.example/web/mcp", "headersHelper": "mint --credential web"}
+    direct = {"type": "http", "url": "${LIBRARY_URL}/mcp/", "headers": {"Authorization": "Bearer ${LIBRARY_TOKEN}"}}
+
+    relayed = bridge.Bridge({"mcpServers": {"web": helped, "library": direct}}, run_env={})
+    try:
+        web = relayed.config["mcpServers"]["web"]
+        assert set(web) == {"command", "args", "env"}
+        assert web["args"][:2] == ["-I", "-c"] and set(web["env"]) == {bridge.TOKEN_VARIABLE}
+        assert relayed.config["mcpServers"]["library"] == direct
+    finally:
+        await relayed.close()
+
+
+async def test_a_relayed_server_is_told_the_sessions_folder(tmp_path: Path) -> None:
+    seen = tmp_path / "seen"
+    server = tmp_path / "server.py"
+    server.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(sys.argv[1])")
+    config = {"mcpServers": {"app": {"command": sys.executable, "args": [str(server), "${AGENT_SESSION_DIR}"]}}}
+    relayed = bridge.Bridge(config, run_env={}, session_dir=tmp_path / "conversation")
+    token = relayed.config["mcpServers"]["app"]["env"][bridge.TOKEN_VARIABLE]
+    assert relayed.port is not None
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", relayed.port)
+        writer.write(f"{token}\n".encode())
+        await writer.drain()
+        await asyncio.wait_for(reader.read(), 10)
+        writer.close()
+    finally:
+        await relayed.close()
+    assert seen.read_text() == str(tmp_path / "conversation")
