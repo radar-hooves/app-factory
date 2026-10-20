@@ -7,13 +7,16 @@
   consuming app.
 -->
 <script lang="ts">
+	import { resolveCopy, type ChatCopy } from '../../copy';
+	import type { Visual } from '../../visuals';
+	import VisualBlock from '../visual-block/visual-block.svelte';
 	import {
 		highlight,
 		markCitations,
 		markCollections,
-		mountFences,
+		markWebLinks,
 		render,
-		type Fences
+		splitVisuals
 	} from './markdown';
 
 	interface Props {
@@ -23,13 +26,20 @@
 		collectionNames?: Set<string>;
 		/** `[n]` markers to turn into chips; omit and the markers stay as text. */
 		citationNumbers?: Set<number>;
+		/** Web pages by `webKey`, numbered after the library's: a link to one
+		 *  renders as its chip. */
+		webNumbers?: Map<string, number>;
 		oncite?: (n: number) => void;
 		/** A step down, for prose that is reference material beside an answer
 		 *  rather than the answer itself — the source pane's sections. */
 		dense?: boolean;
-		/** A language to draw with the host's own component instead of as code.
-		 *  Absent, every fence renders as code. */
-		fences?: Fences;
+		/** Renderers by a fence's language: a block of one is drawn by its
+		 *  component in place of the code. Absent, every fence is code. */
+		visuals?: Record<string, Visual>;
+		/** The same document's earlier version, as Markdown: what differs here
+		 *  is marked with a bar. */
+		previous?: string;
+		copy?: Partial<ChatCopy>;
 	}
 
 	let {
@@ -37,53 +47,68 @@
 		streaming = false,
 		collectionNames = new Set(),
 		citationNumbers = new Set(),
+		webNumbers = new Map(),
 		oncite,
 		dense = false,
-		fences
+		visuals,
+		previous,
+		copy
 	}: Props = $props();
 	let host = $state<HTMLElement | null>(null);
 
-	const html = $derived(render(content, { streaming }));
+	const words = $derived(resolveCopy(copy));
 
-	// Once settled (a half-written fence is not a chart), and before the
-	// highlight below, which would otherwise take the block first. Its own
-	// effect, so a change to the chips never unmounts what it drew.
-	$effect(() => {
-		void html;
-		if (!host || streaming || !fences) return;
-		return mountFences(host, fences);
-	});
+	// A visual is its own component between chunks of prose, so a token that
+	// grows the last chunk leaves the charts above it standing.
+	const parts = $derived(
+		visuals
+			? splitVisuals(content, (lang) => Object.hasOwn(visuals, lang))
+			: [{ kind: 'md' as const, text: content }]
+	);
+	const chunked = $derived(parts.some((part) => part.kind === 'visual'));
+	const lastPart = $derived(parts.length - 1);
+
+	const prose = (text: string, last: boolean): string => render(text, { streaming: streaming && last, previous });
 
 	// Highlight only once the text has settled. Re-running per token would
 	// re-parse grammars for a block that changes again milliseconds later.
 	$effect(() => {
-		if (!host || !html) return;
+		void parts;
+		if (!host) return;
 		// Chips are cheap and wanted DURING streaming; highlighting is not.
 		markCollections(host, collectionNames);
 		markCitations(host, citationNumbers);
+		markWebLinks(host, webNumbers);
 		if (streaming) return;
 		void highlight(host);
 	});
 
 	// Delegated, because the chips are created by the sanitiser's output rather
 	// than by this template — there is no element here to put a handler on.
-	function citeFrom(target: EventTarget | null): number | null {
-		const chip = (target as HTMLElement | null)?.closest?.('[data-cite]');
-		const n = Number((chip as HTMLElement | undefined)?.dataset.cite);
-		return Number.isFinite(n) && n > 0 ? n : null;
+	function chipOf(target: EventTarget | null): HTMLElement | null {
+		return ((target as HTMLElement | null)?.closest?.('[data-cite]') as HTMLElement | null) ?? null;
+	}
+
+	function press(chip: HTMLElement) {
+		if (chip.dataset.web) {
+			window.open(chip.dataset.web, '_blank', 'noopener,noreferrer');
+			return;
+		}
+		const n = Number(chip.dataset.cite);
+		if (Number.isFinite(n) && n > 0) oncite?.(n);
 	}
 
 	function click(event: MouseEvent) {
-		const n = citeFrom(event.target);
-		if (n !== null) oncite?.(n);
+		const chip = chipOf(event.target);
+		if (chip) press(chip);
 	}
 
 	function keydown(event: KeyboardEvent) {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
-		const n = citeFrom(event.target);
-		if (n === null) return;
+		const chip = chipOf(event.target);
+		if (!chip) return;
 		event.preventDefault();
-		oncite?.(n);
+		press(chip);
 	}
 </script>
 
@@ -97,9 +122,30 @@
 	class="agent-prose"
 	class:is-dense={dense}
 	class:is-streaming={streaming}
+	class:is-chunked={chunked}
 >
-	<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
-	{@html html}
+	{#if !chunked}
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
+		{@html prose(content, true)}
+	{:else}
+		{#each parts as part, i (i)}
+			{#if part.kind === 'md'}
+				<div class="ds-lib-chunk">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised in render() -->
+					{@html prose(part.text, i === lastPart)}
+				</div>
+			{:else if visuals}
+				<VisualBlock
+					lang={part.lang}
+					visual={visuals[part.lang]}
+					source={part.source}
+					closed={part.closed}
+					{streaming}
+					{words}
+				/>
+			{/if}
+		{/each}
+	{/if}
 </div>
 
 <style>
@@ -131,6 +177,31 @@
 		animation: ds-lib-caret 1.1s steps(1, end) infinite;
 	}
 
+	/* Chunked, the caret rides the last prose chunk's last block, not the chunk. */
+	.agent-prose.is-chunked.is-streaming :global(> .ds-lib-chunk:last-child::after) {
+		content: none;
+	}
+
+	.agent-prose.is-chunked.is-streaming :global(> .ds-lib-chunk:last-child > *:last-child::after) {
+		content: '';
+		display: inline-block;
+		width: 0.45em;
+		height: 1.05em;
+		margin-inline-start: 0.12em;
+		border-radius: 1px;
+		background: var(--ds-color-primary);
+		vertical-align: -0.15em;
+		animation: ds-lib-caret 1.1s steps(1, end) infinite;
+	}
+
+	.agent-prose :global(.ds-lib-chunk > *:first-child) {
+		margin-top: 0;
+	}
+
+	.agent-prose :global(.ds-lib-chunk > *:last-child) {
+		margin-bottom: 0;
+	}
+
 	@keyframes ds-lib-caret {
 		50% {
 			opacity: 0;
@@ -138,7 +209,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.agent-prose.is-streaming :global(> *:last-child::after) {
+		.agent-prose.is-streaming :global(> *:last-child::after),
+		.agent-prose.is-chunked.is-streaming :global(> .ds-lib-chunk:last-child > *:last-child::after) {
 			animation: none;
 		}
 	}
@@ -372,6 +444,28 @@
 	.agent-prose :global(sup.ds-cite:focus-visible) {
 		outline: 2px solid var(--ds-color-ring);
 		outline-offset: 2px;
+	}
+
+	/* What this version changed: a bar in the margin beside the block. */
+	.agent-prose :global([data-changed]) {
+		position: relative;
+	}
+
+	.agent-prose :global([data-changed]::before) {
+		content: '';
+		position: absolute;
+		inset-block: 0;
+		inset-inline-start: -0.75rem;
+		width: 2px;
+		background: var(--ds-color-foreground);
+	}
+
+	.agent-prose :global(tr[data-changed]::before) {
+		content: none;
+	}
+
+	.agent-prose :global(tr[data-changed] > td:first-child) {
+		box-shadow: inset 2px 0 0 var(--ds-color-foreground);
 	}
 
 	.agent-prose :global(hr) {

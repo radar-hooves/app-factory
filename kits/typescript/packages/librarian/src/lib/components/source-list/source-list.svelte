@@ -17,16 +17,18 @@
 		oncite?: (citation: Citation) => void;
 		/** `h2` in a transcript turn, `h3` under the artefact's own title. */
 		level?: 2 | 3;
+		/** The heading, where it is not "Sources". */
+		heading?: string;
 	}
 
-	let { sources, words, oncite, level = 2 }: Props = $props();
+	let { sources, words, oncite, level = 2, heading = words.sources }: Props = $props();
 </script>
 
 <section class="ds-lib-sources">
 	{#if level === 2}
-		<h2 class="ds-lib-sources-heading">{words.sources}</h2>
+		<h2 class="ds-lib-sources-heading">{heading}</h2>
 	{:else}
-		<h3 class="ds-lib-sources-heading">{words.sources}</h3>
+		<h3 class="ds-lib-sources-heading">{heading}</h3>
 	{/if}
 	<ol class="ds-lib-sources-list">
 		{#each sources as source (source.n)}

@@ -35,8 +35,9 @@ src/lib/
     document-pane/         the cited document, open at the cited passage
     artefact-card/         an artefact's card, in the host's words
     artefact-pane/         an artefact that is its answer's prose, or one version of a written document, in the column
-    written-card/          a document the persona wrote: version, Open, downloads
-    web-list/              the web pages an answer drew on, apart from its numbered sources
+    written-card/          a document the persona wrote: kind, pages, version, Open, and a download chip
+    source-fold/           what an answer drew on, folded: the library's numbered sources, then the web pages numbered on from them
+    visual-block/          a fenced block of a registered language: its renderer, Drawing… while it arrives, its code when invalid
     composer/              the input box: attachments, one collection control, a note, send/stop
     markdown/              sanitised, streaming-safe markdown + highlighting
     activity-group/        what the persona did, one collapsed row per step
@@ -401,9 +402,10 @@ end that way.
 | An artefact            | `turn.artefact = { title, summary }` cards under the prose once the turn settles; `isAnswer: true` is an artefact that IS the prose, and replaces it                  |
 | Opening it             | `onopenartefact(turn)` and `showing` (the turn id the host shows). Without a handler, an `isAnswer` artefact opens in `ArtefactPane` and any other offers no action |
 | Editing a question     | `Conversation`'s `onedit(position, text)` (`Chat.edit`) offers an edit control on each plain question while nothing is being answered; the turns from there on are dropped and the new question streams in at that position (`ask({ edit })`). Files are not sent again |
-| Documents it wrote     | `artefact` frames and a stored turn's `artefacts` become `turn.written`, carded with Open and downloads. `loadWritten(name, version)` and `writtenUrl(name, version, format)` (`Chat.loadArtefact` / `Chat.artefactUrl` over the transport) let the pane show a version: Markdown sanitised, HTML only in a `sandbox=""` frame |
-| Web sources            | Pages from the turn's supacrawl calls and the answer's Markdown links list under `copy.fromTheWeb`, unnumbered, apart from the library's `[n]` sources |
-| Drawing a fence        | `fences={{ chart: Chart }}` on `Conversation` draws a fenced block of that language with the host's component (`source` is its text), once the answer has settled |
+| Documents it wrote     | `artefact` frames and a stored turn's `artefacts` (each with `title`, `kind`, `changes`, `pages`) become `turn.written`: the newest version of each is a card with Open and a download chip (Word where `formats` has it, else the source). The pane marks what a version changed since the one before: a "Changed since vN" line from `changes`, and a bar beside each changed block. `loadWritten(name, version)` and `writtenUrl(name, version, format)` (`Chat.loadArtefact` / `Chat.artefactUrl` over the transport) let the pane show a version: Markdown sanitised, HTML only in a `sandbox=""` frame |
+| The turn's steps       | One fold, "Read your attachment, searched the library and the web, and wrote a minute · 6 steps", composed from the steps (`stepsSummary`); it says what is happening now while the turn runs, and opens on one row per step (a search row counts what it found, a web search opens on the pages it found) |
+| Web sources            | Pages from the turn's supacrawl calls and the answer's Markdown links fold with the library's sources ("6 sources · 4 library · 2 web"), numbered on from the library's, and a link to one in the answer reads as that number's chip |
+| Drawing a fence        | `visuals` on `Conversation` is a registry keyed on a fence's language, `{ component, parse }` each; `defaultVisuals` (from `@poodle64/librarian/visuals`) draws `vega-lite` (one Vega-Lite v5 spec, in the app's tokens), `timeline` and `card`. An app passes `{ ...defaultVisuals, openui }`. A block whose closing fence has not arrived is "Drawing…", one that does not parse is its code |
 | "Answered without a source" | `copy.notHeld: ''` for a persona that answers from no sources                                                                                                     |
 | Saying something mid-run | `Composer`'s `sendWhileRunning`: while the session works the box stays open and Send sits beside Stop. For a route that reads a message while the run works; a chat leaves it off and waits for its answer |
 

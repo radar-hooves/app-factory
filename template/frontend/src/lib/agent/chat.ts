@@ -22,6 +22,7 @@ import type {
 import type { Citation, LoadDocument } from '@poodle64/librarian/citations';
 import type { ChatCopy } from '@poodle64/librarian/copy';
 import type { DescribeTool } from '@poodle64/librarian/transcript';
+import type { Visual } from '@poodle64/librarian/visuals';
 import { api } from '$lib/api';
 
 /** A persona as `GET /api/agent/personas` lists it. */
@@ -34,6 +35,8 @@ export interface Persona {
 	not_held: string;
 	/** Whether each question first reads the library's collections as the person. */
 	collections: boolean;
+	/** The fence languages the persona was told to draw. */
+	visuals: string[];
 }
 
 /** A collection the person may read, as `GET /api/agent/{persona}/collections` lists it. */
@@ -80,10 +83,12 @@ export interface ChatExtensions {
 	/** What an answer cost, in this app's own currency and words ("about
 	 *  A$0.34"), from US dollars; absent, the plain US dollar figure. */
 	formatCost?: (usd: number) => string;
-	/** Fenced code blocks of a language this app names, drawn by its own
-	 *  component in place of the code (`{ chart: Chart }` draws ```chart); the
-	 *  block's text arrives as `source`. Absent, every fence renders as code. */
-	fences?: Record<string, Component<{ source: string }>>;
+	/** Renderers for a fenced block's language, added to the package's own
+	 *  (`vega-lite`, `timeline`, `card`) or replacing one: `{ component, parse }`,
+	 *  where `parse` turns the block's text into the `value` the component draws
+	 *  and throws on a block that is invalid (the page then shows the code). Its
+	 *  source need not be JSON. */
+	visuals?: Record<string, Visual>;
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? '';

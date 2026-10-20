@@ -1019,6 +1019,20 @@ export interface components {
              * @default []
              */
             formats: string[];
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Kind */
+            kind?: string | null;
+            /** Changes */
+            changes?: string | null;
+            /**
+             * Pages
+             * @default 1
+             */
+            pages: number;
         };
         /** CollectionRead */
         CollectionRead: {
@@ -1330,6 +1344,8 @@ export interface components {
             not_held: string;
             /** Collections */
             collections: boolean;
+            /** Visuals */
+            visuals: string[];
         };
         /** QuotaRead */
         QuotaRead: {

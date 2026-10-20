@@ -77,7 +77,11 @@ export const WRITE_TURN: AgentEvent[] = [
 		version: 1,
 		media_type: 'text/markdown',
 		bytes: 7,
-		formats: ['docx', 'pdf']
+		formats: ['docx', 'pdf'],
+		title: 'Brief: leave',
+		kind: 'minute',
+		changes: null,
+		pages: 1
 	},
 	assistant(use('f2', 'Edit', { file_path: '/chat/brief.md', old_string: 'Brief', new_string: 'Briefing' })),
 	said('f2', 'Edited'),
@@ -87,7 +91,11 @@ export const WRITE_TURN: AgentEvent[] = [
 		version: 2,
 		media_type: 'text/markdown',
 		bytes: 11,
-		formats: ['docx', 'pdf']
+		formats: ['docx', 'pdf'],
+		title: 'Brief: leave',
+		kind: 'minute',
+		changes: 'through your CO',
+		pages: 1
 	},
 	assistant(text('Written to brief.md.')),
 	done

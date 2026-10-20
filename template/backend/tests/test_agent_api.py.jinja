@@ -243,6 +243,7 @@ async def test_the_personas_listed_are_the_ones_the_caller_is_granted(client: As
             "examples": [],
             "not_held": "your own leave balance",
             "collections": True,
+            "visuals": [],
         }
     ]
     both = await client.get("/api/agent/personas", headers=_person("chat-helper", "chat-manual"))
@@ -264,6 +265,8 @@ async def test_an_app_with_no_chat_file_offers_none(client: AsyncClient, agent_s
         ("quota:\n  name: X\n", "the chat's own route names"),
         ("helper:\n  blurb: X\n", "needs a name"),
         ("helper:\n  name: X\n  collections: yes please\n", "true or false"),
+        ("helper:\n  name: X\n  visuals: chart\n", "list of fence languages"),
+        ("helper:\n  name: X\n  visuals: [pie]\n", "no prompt fragment for the visual 'pie'"),
     ],
 )
 def test_a_persona_this_app_cannot_open_refuses_to_load(agent_settings: AgentSettings, body: str, why: str) -> None:
@@ -1073,7 +1076,16 @@ async def test_a_document_the_persona_writes_is_announced_recorded_and_downloade
 
     assert (made["name"], made["version"], made["media_type"]) == ("brief.md", 1, "text/markdown")
     assert stored["artefacts"] == [
-        {"name": "brief.md", "version": 1, "media_type": "text/markdown", "formats": made["formats"]}
+        {
+            "name": "brief.md",
+            "version": 1,
+            "media_type": "text/markdown",
+            "formats": made["formats"],
+            "title": "Brief",
+            "kind": None,
+            "changes": None,
+            "pages": 1,
+        }
     ]
     assert [step["name"] for step in stored["steps"]] == ["Write"]
     assert download.status_code == 200 and download.text == "# Brief"
@@ -1188,6 +1200,26 @@ async def test_a_persona_that_reads_collections_carries_the_library_into_its_ses
 
     assert f"library={agent_settings.library_url}" in said
     assert "library_token=set" in said
+
+
+async def test_a_persona_with_visuals_lists_them_and_is_told_their_format(
+    client: AsyncClient, agent_settings: AgentSettings, personas_dir: Path
+) -> None:
+    (personas_dir / "helper" / "visuals").mkdir()
+    (personas_dir / "helper" / "visuals" / "openui.md").write_text("Write OpenUI Lang.")
+    agent_settings.chat_file.write_text("helper:\n  name: Helper\n  visuals: [vega-lite, openui]\n")
+    who = _person("chat-helper")
+
+    listed = (await client.get("/api/agent/personas", headers=who)).json()
+    said = _answered(_events((await _ask(client, "helper", "chart it", who)).text))
+
+    assert listed[0]["visuals"] == ["vega-lite", "openui"]
+    assert "append_system_prompt=" in said and "Vega-Lite v5" in said and "Write OpenUI Lang." in said
+
+
+async def test_a_persona_with_no_visuals_is_told_none(client: AsyncClient) -> None:
+    said = _answered(_events((await _ask(client, "helper", "hello", _person("chat-helper"))).text))
+    assert "Vega-Lite" not in said
 
 
 async def test_a_persona_that_reads_none_is_given_no_library(client: AsyncClient) -> None:

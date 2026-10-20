@@ -11,10 +11,14 @@ library's caller mount as `LIBRARY_URL`, so a persona whose `.mcp.json` names
 the library's reader door (`${LIBRARY_URL}/mcp/`, `Bearer ${LIBRARY_TOKEN}`)
 searches it again as the same person when its passages fall short.
 
+A persona's `visuals` lists the fence languages its page draws inside an
+answer (`agent_common.visuals`); it is told the format of each, from the
+factory's fragment or its own `visuals/<language>.md`.
+
 The file is committed and released like code and has no admin surface, so a
 wrong row is refused at start rather than met by a colleague: `load` raises on
 an id that is not a path segment, a row with no name, or no such persona
-directory. An app with no file offers no chat. A persona that reads
+directory, or a `visuals` entry with no prompt fragment. An app with no file offers no chat. A persona that reads
 collections in a deployment with no library configured is not a wrong row:
 the app starts, logs which persona waits on which setting, and that persona
 answers 503 until it is set.
@@ -30,6 +34,7 @@ from pathlib import Path
 
 import yaml
 from agent_common import persona as agent_persona
+from agent_common import visuals
 from agent_common.agent import LocalAgent
 from agent_common.collections import Collections
 
@@ -58,6 +63,9 @@ LIBRARY_TOKEN = "LIBRARY_TOKEN"
 #: Under a persona's directory, the brand its documents are rendered in (`agent_common.documents`).
 DOCUMENTS = "documents"
 
+#: Under a persona's directory, its own prompt fragments for the fenced visuals it may write (`agent_common.visuals`).
+VISUALS = "visuals"
+
 
 class ChatInvalid(ValueError):
     """`config/chat.yaml` offers a persona this app cannot open."""
@@ -73,6 +81,7 @@ class Persona:
     examples: tuple[str, ...] = ()
     not_held: str = ""
     collections: bool = False
+    visuals: tuple[str, ...] = ()
 
     @property
     def entitlement(self) -> str:
@@ -120,7 +129,10 @@ async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, tu
     """
     run_env = {ASKER_TOKEN: await asking.token()} if turn and asking.exchange.configured else {}
     driver = dataclasses.replace(settings.driver(), effort=settings.chat_effort)
-    return LocalAgent(driver, persona_module.load(settings, persona.id), run_env=run_env)
+    guidance = (
+        visuals.guidance(persona.visuals, settings.personas_dir / persona.id / VISUALS) if persona.visuals else ""
+    )
+    return LocalAgent(driver, persona_module.load(settings, persona.id), run_env=run_env, guidance=guidance)
 
 
 async def collections(settings: AgentSettings, persona: Persona, asking: Asking) -> Collections:
@@ -181,7 +193,9 @@ def _load(path: Path, _version: int, personas_dir: Path, library: bool) -> dict[
     if not isinstance(raw, dict):
         raise ChatInvalid(f"{path}: expected a mapping of persona id to row")
     directories = set(agent_persona.names(personas_dir))
-    loaded = {str(persona_id): _persona(str(persona_id), body, directories) for persona_id, body in raw.items()}
+    loaded = {
+        str(persona_id): _persona(str(persona_id), body, directories, personas_dir) for persona_id, body in raw.items()
+    }
     for persona in loaded.values():
         if persona.collections and not library:
             logger.warning(
@@ -190,7 +204,7 @@ def _load(path: Path, _version: int, personas_dir: Path, library: bool) -> dict[
     return loaded
 
 
-def _persona(persona_id: str, body: object, directories: set[str]) -> Persona:
+def _persona(persona_id: str, body: object, directories: set[str], personas_dir: Path) -> Persona:
     def refuse(why: str) -> ChatInvalid:
         return ChatInvalid(f"persona {persona_id!r}: {why}")
 
@@ -205,6 +219,14 @@ def _persona(persona_id: str, body: object, directories: set[str]) -> Persona:
     collections = body.get("collections", False)
     if not isinstance(collections, bool):
         raise refuse("collections is true or false")
+    fences = body.get("visuals") or []
+    if not isinstance(fences, list) or not all(isinstance(fence, str) for fence in fences):
+        raise refuse("visuals is a list of fence languages")
+    for fence in fences:
+        try:
+            visuals.fragment(fence, personas_dir / persona_id / VISUALS)
+        except ValueError:
+            raise refuse(f"no prompt fragment for the visual {fence!r}") from None
     return Persona(
         id=persona_id,
         name=str(body["name"]).strip(),
@@ -212,4 +234,5 @@ def _persona(persona_id: str, body: object, directories: set[str]) -> Persona:
         examples=tuple(str(example) for example in body.get("examples") or ()),
         not_held=str(body.get("not_held") or "").strip(),
         collections=collections,
+        visuals=tuple(fences),
     )

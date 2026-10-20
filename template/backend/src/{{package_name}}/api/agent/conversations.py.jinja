@@ -92,7 +92,7 @@ class Turn:
     mark: dict[str, Any] | None = None
     #: The names of the files the question came with.
     files: list[str] = field(default_factory=list)
-    #: Each document version the agent wrote answering it: `{"name", "version", "media_type", "formats"}`.
+    #: Each document version the agent wrote answering it: `{"name", "version", "media_type", "formats", "title", "kind", "changes", "pages"}`.
     artefacts: list[dict[str, Any]] = field(default_factory=list)
     #: Every tool the agent called answering it, from its transcript.
     steps: tuple[Any, ...] = ()

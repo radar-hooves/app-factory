@@ -7,7 +7,7 @@
  * that has no business carrying it.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
 import type { Block, Outcome } from '$lib/transcript.svelte';
 import type { Citation } from '$lib/citations';
@@ -39,13 +39,15 @@ function answer(props: Record<string, unknown> = {}) {
 }
 
 describe('the trust mark on a source', () => {
-	it('says when the document was last confirmed, in plain words', () => {
+	it('says when the document was last confirmed, in plain words', async () => {
 		answer({ citations: [SOURCE] });
+		await fireEvent.click(screen.getByRole('button', { name: /source/ }));
 		expect(screen.getByText(/verified 23 Jun 2026/)).toBeInTheDocument();
 	});
 
-	it('says a document nothing has confirmed is not verified', () => {
+	it('says a document nothing has confirmed is not verified', async () => {
 		answer({ citations: [{ ...SOURCE, verified_at: null }] });
+		await fireEvent.click(screen.getByRole('button', { name: /source/ }));
 		expect(screen.getByText(/not verified/)).toBeInTheDocument();
 	});
 

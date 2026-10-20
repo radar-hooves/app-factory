@@ -1,7 +1,8 @@
 /**
 * A document the persona wrote, in the reading column: Markdown through the
-* sanitising renderer, HTML only in an empty-sandbox frame, every version
-* reachable, and the fence seam for a host's own visualisation.
+* sanitising renderer on a paper surface, HTML only in an empty-sandbox frame,
+* every version reachable and marked against the one before, and the visuals
+* a persona's fenced blocks are drawn by.
 */
 import { FRAME_CSP, framed } from '$lib/written';
 import { describe, it, expect, vi } from 'vitest';
@@ -11,11 +12,29 @@ import Conversation from '$lib/components/conversation/conversation.svelte';
 import Markdown from '$lib/components/markdown/markdown.svelte';
 import type { Turn } from '$lib/transcript.svelte';
 import type { Written } from '$lib/written';
-import Fence from './fixtures/fence.svelte';
+import Visual from './fixtures/visual.svelte';
 
-const v1: Written = { name: 'brief.md', version: 1, media_type: 'text/markdown', formats: ['pdf'] };
-const v2: Written = { name: 'brief.md', version: 2, media_type: 'text/markdown', formats: ['pdf'] };
-const page: Written = { name: 'site/page.html', version: 1, media_type: 'text/html', formats: [] };
+const v1: Written = {
+	name: 'brief.md',
+	version: 1,
+	media_type: 'text/markdown',
+	formats: ['pdf'],
+	title: 'Brief: leave',
+	kind: 'minute',
+	changes: null,
+	pages: 1
+};
+const v2: Written = { ...v1, version: 2, changes: 'through your CO, and enclosure 2' };
+const page: Written = {
+	name: 'site/page.html',
+	version: 1,
+	media_type: 'text/html',
+	formats: [],
+	title: 'A page',
+	kind: null,
+	changes: null,
+	pages: 0
+};
 
 const url = (name: string, version: number, format: string) => `/a?${name}&${version}&${format}`;
 
@@ -85,12 +104,19 @@ describe('the pane on a written document', () => {
 		expect(load).toHaveBeenCalledWith('brief.md', 2);
 		const picker = screen.getByRole('combobox', { name: 'Version' }) as HTMLSelectElement;
 		expect(picker.value).toBe('2');
-		expect([...picker.options].map((o) => o.textContent)).toEqual(['Version 1', 'Version 2']);
+		expect([...picker.options].map((o) => o.textContent)).toEqual(['v1', 'v2']);
+		expect(screen.getByRole('heading', { name: 'Brief: leave' })).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: /Download/ }));
+		expect(screen.getByRole('menuitem', { name: 'Markdown' })).toHaveAttribute(
+			'href',
+			'/a?brief.md&2&source'
+		);
+		expect(screen.getByRole('menuitem', { name: 'PDF' })).toHaveAttribute('href', '/a?brief.md&2&pdf');
+		// A phone's bar offers the one download directly: the source, with no Word copy.
 		expect(screen.getByRole('link', { name: 'Markdown' })).toHaveAttribute(
 			'href',
 			'/a?brief.md&2&source'
 		);
-		expect(screen.getByRole('link', { name: 'PDF' })).toHaveAttribute('href', '/a?brief.md&2&pdf');
 
 		await fireEvent.change(picker, { target: { value: '1' } });
 		expect(switched).toEqual([1]);
@@ -140,7 +166,7 @@ describe('Conversation with a written document', () => {
 	it('only links when the host cannot read a version', () => {
 		render(Conversation, { props: { turns, running: false, writtenUrl: url } });
 		expect(screen.queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
-		expect(screen.getAllByRole('link', { name: 'Markdown' })).toHaveLength(2);
+		expect(screen.getAllByRole('link', { name: /brief\.md/ })).toHaveLength(2);
 	});
 });
 
@@ -176,35 +202,147 @@ describe('Conversation editing a question', () => {
 	});
 });
 
-describe('fenced code a host draws', () => {
+describe('the pane on a version of a document', () => {
+	const sources: Record<number, string> = {
+		1: '---\ntitle: Brief\n---\n# Brief\n\nFirst paragraph.\n\n1. One\n2. Two\n',
+		2: '---\ntitle: Brief\n---\n# Brief\n\nFirst paragraph.\n\n1. One\n2. Two, through the CO\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n'
+	};
+	const load = async (_name: string, version: number) => ({
+		text: sources[version],
+		mediaType: 'text/markdown'
+	});
+
+	it('strips front matter, and says what kind of document it is', async () => {
+		const { container } = render(ArtefactPane, {
+			props: { versions: [v1], loadWritten: load, onclose: () => {} }
+		});
+		await waitFor(() => expect(screen.getByRole('heading', { name: 'Brief' })).toBeInTheDocument());
+		expect(container.textContent).not.toContain('title: Brief');
+		expect(container.querySelector('.ds-lib-pane-subtitle')).toHaveTextContent('Minute');
+		expect(container.querySelector('.ds-lib-pane-paper')).not.toBeNull();
+	});
+
+	it('says what changed since the version before, and marks the blocks that did', async () => {
+		const { container } = render(ArtefactPane, {
+			props: { versions: [v1, v2], loadWritten: load, onclose: () => {} }
+		});
+
+		expect(screen.getByText('Changed since v1: through your CO, and enclosure 2')).toBeInTheDocument();
+		await waitFor(() => expect(container.querySelector('[data-changed]')).not.toBeNull());
+		const marked = [...container.querySelectorAll('[data-changed]')].map((el) =>
+			el.textContent?.replace(/\s+/g, ' ').trim()
+		);
+		// The edited list item and the table's three new rows; the heading, the
+		// paragraph and the first item are as they were.
+		expect(marked).toHaveLength(4);
+		expect(marked[0]).toBe('Two, through the CO');
+		expect(marked.slice(2)).toEqual(['1 2', '3 4']);
+	});
+
+	it('marks nothing on the first version, and has no line for a version that says nothing changed', async () => {
+		const { container } = render(ArtefactPane, {
+			props: { versions: [v1], loadWritten: load, onclose: () => {} }
+		});
+		await waitFor(() => expect(screen.getByRole('heading', { name: 'Brief' })).toBeInTheDocument());
+		expect(container.querySelector('[data-changed]')).toBeNull();
+		expect(container.querySelector('.ds-lib-pane-changed')).toBeNull();
+	});
+
+	it('copies the document as shown', async () => {
+		const write = vi.fn(async () => {});
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+		render(ArtefactPane, { props: { versions: [v1], loadWritten: load, onclose: () => {} } });
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument());
+		await fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+		expect(write).toHaveBeenCalledWith(expect.not.stringContaining('title: Brief'));
+	});
+});
+
+describe('visuals a persona’s fenced blocks are drawn by', () => {
+	const visual = {
+		component: Visual,
+		parse: (source: string) => source.trim().split('\n')
+	};
 	const content = 'Before\n\n```chart\na\nb\n```\n\n```python\nprint(1)\n```\n';
 
-	it('hands a registered language’s source to the host’s component', async () => {
-		const { container } = render(Markdown, { props: { content, fences: { chart: Fence } } });
+	it('hands a registered language’s parsed block to its component, leaving other code as code', () => {
+		const { container } = render(Markdown, { props: { content, visuals: { chart: visual } } });
 
-		await waitFor(() => expect(screen.getByTestId('chart')).toHaveTextContent('2 rows'));
+		expect(screen.getByTestId('visual')).toHaveTextContent('["a","b"]');
+		expect(screen.getByTestId('visual')).toHaveAttribute('data-source', 'a\nb');
 		expect(container.textContent).toContain('print(1)');
+		expect(container.querySelector('code.language-chart')).toBeNull();
+		expect(container.querySelector('code.language-python')).not.toBeNull();
+	});
+
+	it('draws a block that is closed while the answer still streams, and a placeholder for one that is not', () => {
+		const { container } = render(Markdown, {
+			props: {
+				content: 'Intro\n\n```chart\na\n```\n\nMid\n\n```chart\n{"half',
+				streaming: true,
+				copy: undefined,
+				visuals: { chart: visual }
+			}
+		});
+		expect(screen.getAllByTestId('visual')).toHaveLength(1);
+		expect(screen.getByRole('status')).toHaveTextContent('Drawing…');
 		expect(container.querySelector('code.language-chart')).toBeNull();
 	});
 
-	it('leaves every fence as code with none registered, or while streaming', () => {
+	it('keeps a block still open once the answer has stopped, as the text it was', () => {
+		const { container } = render(Markdown, {
+			props: { content: 'Intro\n\n```chart\n{"half', visuals: { chart: visual } }
+		});
+		expect(screen.queryByRole('status')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('visual')).not.toBeInTheDocument();
+		expect(container.querySelector('code.language-chart')).toHaveTextContent('{"half');
+	});
+
+	it('shows a closed block that will not parse as its raw text, and the answer around it stays', () => {
+		const { container } = render(Markdown, {
+			props: {
+				content: 'Before\n\n```chart\nnot json\n```\n\nAfter',
+				visuals: {
+					chart: {
+						component: Visual,
+						parse: (source: string) => JSON.parse(source)
+					}
+				}
+			}
+		});
+		expect(screen.queryByTestId('visual')).not.toBeInTheDocument();
+		expect(container.querySelector('code.language-chart')).toHaveTextContent('not json');
+		expect(container.textContent).toContain('Before');
+		expect(container.textContent).toContain('After');
+	});
+
+	it('leaves every fence as code with none registered, and a language with no renderer', () => {
 		const { container, unmount } = render(Markdown, { props: { content } });
-		expect(screen.queryByTestId('chart')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('visual')).not.toBeInTheDocument();
 		expect(container.querySelector('code.language-chart')).not.toBeNull();
 		unmount();
 
-		const streaming = render(Markdown, {
-			props: { content, streaming: true, fences: { chart: Fence } }
-		});
-		expect(screen.queryByTestId('chart')).not.toBeInTheDocument();
-		expect(streaming.container.querySelector('code.language-chart')).not.toBeNull();
+		const other = render(Markdown, { props: { content, visuals: { timeline: visual } } });
+		expect(screen.queryByTestId('visual')).not.toBeInTheDocument();
+		expect(other.container.querySelector('code.language-chart')).not.toBeNull();
 	});
 
 	it('does not treat an inherited property name as a registered language', () => {
 		const { container } = render(Markdown, {
-			props: { content: '```constructor\nx\n```', fences: { chart: Fence } }
+			props: { content: '```constructor\nx\n```', visuals: { chart: visual } }
 		});
 		expect(container.querySelector('code.language-constructor')).not.toBeNull();
+	});
+
+	it('leaves a fence inside another code block as the text it is', () => {
+		const { container } = render(Markdown, {
+			props: {
+				content: '````markdown\n```chart\na\n```\n````',
+				visuals: { chart: visual }
+			}
+		});
+		expect(screen.queryByTestId('visual')).not.toBeInTheDocument();
+		expect(container.textContent).toContain('```chart');
 	});
 });
 

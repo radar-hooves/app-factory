@@ -18,8 +18,9 @@
 
 import DOMPurify from 'isomorphic-dompurify';
 import { marked } from 'marked';
-import { mount, unmount, type Component } from 'svelte';
+import { markChanges } from '../../diff';
 import type { Highlighter } from 'shiki';
+import { webKey } from '../../web-sources';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -75,17 +76,25 @@ function dropFetchers(root: Element): void {
 	}
 }
 
-export function render(markdown: string, { streaming = false } = {}): string {
-	const source = streaming ? balance(markdown) : markdown;
-	const html = marked.parse(source, { async: false });
-	const body = DOMPurify.sanitize(html, {
+/**
+ * `markdown` as sanitised HTML. With `previous`, the version before it, each
+ * block it changed is marked on the sanitised DOM, before its one serialisation.
+ */
+export function render(markdown: string, { streaming = false, previous }: { streaming?: boolean; previous?: string } = {}): string {
+	const body = sanitised(streaming ? balance(markdown) : markdown);
+	if (previous !== undefined && !streaming) markChanges(body, sanitised(previous));
+	return body.innerHTML;
+}
+
+function sanitised(source: string): HTMLElement {
+	const body = DOMPurify.sanitize(marked.parse(source, { async: false }), {
 		ADD_ATTR: ['target', 'rel', 'data-cite', 'tabindex', 'role'],
 		FORBID_TAGS: ['style', 'form', 'input', 'button'],
 		FORBID_ATTR: ['style', 'srcset', 'onerror', 'onload'],
 		RETURN_DOM: true
 	}) as unknown as HTMLElement;
 	dropFetchers(body);
-	return body.innerHTML;
+	return body;
 }
 
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -180,27 +189,93 @@ export function markCitations(root: HTMLElement, valid: Set<number>): void {
 	}
 }
 
-/** Fenced code blocks of a language a host names, drawn by its own component. */
-export type Fences = Record<string, Component<{ source: string }>>;
+/** A turn's prose and the fenced blocks of a registered language, in order. */
+export type Part =
+	| { kind: 'md'; text: string }
+	| { kind: 'visual'; lang: string; source: string; closed: boolean };
+
+const OPEN = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[^`]*$/;
+const CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 
 /**
- * Draw every fenced block whose language the host registered with the host's
- * component, in place of the code block. The source is the block's text, never
- * HTML. Returns what unmounts them.
+ * Cut `markdown` at each fenced block whose language `has` a renderer for.
+ * A fence of another language (or none) is ordinary code and stays in the
+ * prose, and so does anything inside one: an example of a visual's fence in a
+ * code block is text. A block still open at the end is `closed: false`.
  */
-export function mountFences(root: HTMLElement, fences: Fences): () => void {
-	const drawn: Array<Record<string, unknown>> = [];
-	for (const code of root.querySelectorAll('pre > code')) {
-		const lang = [...code.classList].find((c) => c.startsWith('language-'))?.slice(9);
-		const pre = code.parentElement;
-		if (!lang || !pre || !Object.hasOwn(fences, lang)) continue;
-		const target = document.createElement('div');
-		pre.replaceWith(target);
-		drawn.push(mount(fences[lang], { target, props: { source: code.textContent ?? '' } }));
-	}
-	return () => {
-		for (const one of drawn) void unmount(one);
+export function splitVisuals(markdown: string, has: (lang: string) => boolean): Part[] {
+	const parts: Part[] = [];
+	let prose: string[] = [];
+	let code: { fence: string; visual?: { lang: string; lines: string[] } } | null = null;
+
+	const flush = () => {
+		if (prose.join('').trim()) parts.push({ kind: 'md', text: prose.join('\n') });
+		prose = [];
 	};
+
+	for (const line of markdown.split('\n')) {
+		if (code) {
+			const close = CLOSE.exec(line);
+			if (close && close[1][0] === code.fence[0] && close[1].length >= code.fence.length) {
+				if (code.visual) {
+					parts.push({
+						kind: 'visual',
+						lang: code.visual.lang,
+						source: code.visual.lines.join('\n'),
+						closed: true
+					});
+				} else prose.push(line);
+				code = null;
+			} else if (code.visual) code.visual.lines.push(line);
+			else prose.push(line);
+			continue;
+		}
+		const open = OPEN.exec(line);
+		if (open) {
+			const lang = open[2];
+			if (lang && has(lang)) {
+				flush();
+				code = { fence: open[1], visual: { lang, lines: [] } };
+			} else {
+				code = { fence: open[1] };
+				prose.push(line);
+			}
+			continue;
+		}
+		prose.push(line);
+	}
+	if (code?.visual)
+		parts.push({
+			kind: 'visual',
+			lang: code.visual.lang,
+			source: code.visual.lines.join('\n'),
+			closed: false
+		});
+	else flush();
+	return parts;
+}
+
+/**
+ * Turn each link to a numbered web page into its citation chip: the link's
+ * text stays, unlinked, and the chip after it carries the page's number and
+ * opens the page. Against the rendered DOM, for the reason `markCitations` is.
+ */
+export function markWebLinks(root: HTMLElement, numbers: Map<string, number>): void {
+	if (numbers.size === 0) return;
+	for (const link of root.querySelectorAll('a[href]')) {
+		const href = link.getAttribute('href') ?? '';
+		const n = numbers.get(webKey(href));
+		if (n === undefined) continue;
+		const chip = document.createElement('sup');
+		chip.className = 'ds-cite';
+		chip.dataset.cite = String(n);
+		chip.dataset.web = href;
+		chip.setAttribute('role', 'button');
+		chip.setAttribute('tabindex', '0');
+		chip.setAttribute('aria-label', `Web page ${n}`);
+		chip.textContent = String(n);
+		link.replaceWith(...link.childNodes, chip);
+	}
 }
 
 /**

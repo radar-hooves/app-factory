@@ -1,19 +1,27 @@
 <!--
-  One tool call, as a row in the transcript.
+  One tool call, as a row in the turn's fold.
 
-  Not a card: a status dot, an action in bold, its target beside it, one
-  dimmed sub-line. Borders and badge pills make a run of five calls read as
-  five separate events rather than one train of thought.
-
-  The row says what the persona DID, in a reader's own words — never the
-  tool's name or the raw command it ran: the host's `DescribeTool`, or the
+  Not a card: the kind of step as an icon, an action in bold, its target
+  beside it, and at the right hand what the result counted ("9 found") and a
+  chevron. The row says what the persona DID, in a reader's own words — never
+  the tool's name or the raw command it ran: the host's `DescribeTool`, or the
   package's own `describe()`. Expanding it shows what went in and what came
-  back, the way Claude Code's own panel does.
+  back, the way Claude Code's own panel does; a web search shows the pages it
+  found instead, as small cards.
 -->
 <script lang="ts">
+	import BookOpenTextIcon from '@lucide/svelte/icons/book-open-text';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import CircleIcon from '@lucide/svelte/icons/circle';
+	import FilePenIcon from '@lucide/svelte/icons/file-pen';
+	import FileTextIcon from '@lucide/svelte/icons/file-text';
+	import GlobeIcon from '@lucide/svelte/icons/globe';
+	import LibraryIcon from '@lucide/svelte/icons/library';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import { describe, type ToolBlock, type ToolWords } from '../../transcript.svelte';
 	import { resolveCopy, type ChatCopy } from '../../copy';
+	import { stepKind, stepMeta, type StepKind } from '../../steps';
+	import { searchPages } from '../../web-sources';
 
 	interface Props {
 		block: ToolBlock;
@@ -26,9 +34,23 @@
 	let { block, running, words, copy }: Props = $props();
 	let open = $state(false);
 
+	const ICONS = {
+		attachment: FileTextIcon,
+		library: LibraryIcon,
+		web: GlobeIcon,
+		open: BookOpenTextIcon,
+		write: FilePenIcon,
+		edit: PencilIcon,
+		thought: CircleIcon,
+		other: CircleIcon
+	} satisfies Record<StepKind, unknown>;
+
 	const label = $derived(resolveCopy(copy));
 	const settled = $derived(block.result !== undefined);
 	const said = $derived(words ?? describe(block));
+	const Icon = $derived(ICONS[stepKind(block)]);
+	const meta = $derived(stepMeta(block, label));
+	const pages = $derived(searchPages(block));
 	const tone = $derived(block.isError ? 'error' : settled ? 'success' : 'info');
 	// Pretty while it parses; the raw text while it is still arriving.
 	const input = $derived.by(() => {
@@ -50,26 +72,43 @@
 		onclick={() => (open = !open)}
 		aria-expanded={open}
 	>
-		<span class="ds-lib-tool-chevron" class:is-open={open}>
-			<ChevronRightIcon size={12} />
+		<span class="ds-lib-tool-icon" data-tone={tone} class:is-live={!settled && running} aria-hidden="true">
+			<Icon size={14} />
 		</span>
-		<span class="ds-lib-tool-dot" data-tone={tone} class:is-live={!settled && running}></span>
 		<span class="ds-lib-tool-said">
 			<span class="ds-lib-tool-verb">{said.verb}</span>
 			{#if said.object}<span class="ds-lib-tool-object">{said.object}</span>{/if}
 		</span>
 		{#if block.isError}<span class="ds-lib-tool-failed">{label.stepFailed}</span>{/if}
+		{#if meta}<span class="ds-lib-tool-meta">{meta}</span>{/if}
+		<span class="ds-lib-tool-chevron" class:is-open={open} aria-hidden="true">
+			<ChevronRightIcon size={14} />
+		</span>
 	</button>
 
 	{#if open}
 		<div class="ds-lib-tool-body">
-			{#if input}
-				<p class="ds-lib-tool-label">{label.stepInput}</p>
-				<pre class="ds-lib-tool-result">{input}</pre>
-			{/if}
-			{#if block.result}
-				<p class="ds-lib-tool-label">{label.stepResult}</p>
-				<pre class="ds-lib-tool-result">{block.result}</pre>
+			{#if pages.length > 0}
+				<ul class="ds-lib-tool-pages">
+					{#each pages as page (page.url)}
+						<li>
+							<a class="ds-lib-tool-page" href={page.url} target="_blank" rel="noopener noreferrer">
+								<span class="ds-lib-tool-page-host"><GlobeIcon size={11} />{page.host}</span>
+								<span class="ds-lib-tool-page-title">{page.title}</span>
+								{#if page.snippet}<span class="ds-lib-tool-page-snippet">{page.snippet}</span>{/if}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				{#if input}
+					<p class="ds-lib-tool-label">{label.stepInput}</p>
+					<pre class="ds-lib-tool-result">{input}</pre>
+				{/if}
+				{#if block.result}
+					<p class="ds-lib-tool-label">{label.stepResult}</p>
+					<pre class="ds-lib-tool-result">{block.result}</pre>
+				{/if}
 			{/if}
 		</div>
 	{:else if said.detail}
@@ -87,8 +126,8 @@
 		display: flex;
 		width: 100%;
 		align-items: center;
-		gap: 0.5rem;
-		padding-block: 0.125rem;
+		gap: 0.625rem;
+		padding-block: 0.25rem;
 		border: 0;
 		background: none;
 		color: inherit;
@@ -97,12 +136,23 @@
 		cursor: pointer;
 	}
 
+	.ds-lib-tool-icon {
+		display: flex;
+		flex: none;
+		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-tool-icon[data-tone='error'] {
+		color: var(--ds-color-status-error);
+	}
+
+	.ds-lib-tool-icon.is-live {
+		animation: ds-lib-tool-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+	}
+
 	.ds-lib-tool-chevron {
 		display: flex;
-		width: 0.75rem;
 		flex: none;
-		align-items: center;
-		justify-content: center;
 		color: var(--ds-color-muted-foreground);
 		transition: transform 150ms ease;
 	}
@@ -111,28 +161,70 @@
 		transform: rotate(90deg);
 	}
 
-	.ds-lib-tool-dot {
-		width: 0.375rem;
-		height: 0.375rem;
+	.ds-lib-tool-meta {
 		flex: none;
-		border-radius: var(--ds-radius-full);
-		background: var(--ds-color-status-info);
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+		font-variant-numeric: tabular-nums;
 	}
 
-	.ds-lib-tool-dot[data-tone='error'] {
-		background: var(--ds-color-status-error);
+	.ds-lib-tool-pages {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
 	}
 
-	.ds-lib-tool-dot[data-tone='success'] {
-		background: var(--ds-color-status-success);
+	.ds-lib-tool-page {
+		display: flex;
+		height: 100%;
+		flex-direction: column;
+		gap: 0.125rem;
+		border: 1px solid var(--ds-color-border);
+		border-radius: var(--ds-radius-md);
+		padding: 0.5rem 0.625rem;
+		color: inherit;
+		font-size: var(--ds-text-2xs);
+		line-height: 1.35;
+		text-decoration: none;
 	}
 
-	.ds-lib-tool-dot.is-live {
-		animation: ds-lib-tool-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+	.ds-lib-tool-page:hover {
+		background: var(--ds-color-surface-2);
+	}
+
+	.ds-lib-tool-page:focus-visible {
+		outline: 2px solid var(--ds-color-ring);
+		outline-offset: 2px;
+	}
+
+	.ds-lib-tool-page-host {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-tool-page-title {
+		color: var(--ds-color-foreground);
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+
+	.ds-lib-tool-page-snippet {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		overflow: hidden;
+		color: var(--ds-color-muted-foreground);
 	}
 
 	.ds-lib-tool-said {
 		min-width: 0;
+		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -150,9 +242,9 @@
 
 	.ds-lib-tool-body {
 		margin-top: 0.25rem;
-		margin-inline-start: 1.375rem;
+		margin-inline-start: 0.4375rem;
 		border-inline-start: 1px solid var(--ds-color-border);
-		padding-inline-start: 0.75rem;
+		padding-inline-start: 1rem;
 	}
 
 	.ds-lib-tool-result {
@@ -181,7 +273,7 @@
 
 	.ds-lib-tool-lines {
 		margin: 0;
-		padding-inline-start: 1.375rem;
+		padding-inline-start: 1.5rem;
 		color: var(--ds-color-muted-foreground);
 		font-size: var(--ds-text-2xs);
 	}
@@ -193,7 +285,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.ds-lib-tool-dot.is-live {
+		.ds-lib-tool-icon.is-live {
 			animation: none;
 		}
 

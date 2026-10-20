@@ -124,6 +124,7 @@ def list_personas(identity: CurrentIdentity, settings: SettingsDep) -> list[Pers
             examples=list(persona.examples),
             not_held=persona.not_held,
             collections=persona.collections,
+            visuals=list(persona.visuals),
         )
         for persona in chat.load(settings.agent).values()
         if has_module(identity.entitlements, persona.entitlement)

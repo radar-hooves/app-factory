@@ -80,6 +80,60 @@ export interface ChatCopy {
 	editQuestion: string;
 	editSend: string;
 	editFilesNote: string;
+	/** The fold over a turn's steps: its sentence is composed from the steps,
+	 *  each phrase lower-case and joined by `stepsAnd` ("Read your attachment,
+	 *  searched the library and the web, and wrote a minute"). `{kind}` is the
+	 *  document's own kind, or `documentKind`. */
+	stepsRead: string;
+	stepsSearchedLibrary: string;
+	stepsSearchedWeb: string;
+	stepsSearchedBoth: string;
+	stepsOpened: string;
+	stepsWrote: string;
+	stepsEdited: string;
+	stepsThought: string;
+	stepsOther: string;
+	stepsAnd: string;
+	/** What is happening now, while the turn runs. */
+	nowRead: string;
+	nowLibrary: string;
+	nowWeb: string;
+	nowOpen: string;
+	nowWrite: string;
+	nowEdit: string;
+	nowThought: string;
+	nowOther: string;
+	stepCount: string;
+	stepCountOne: string;
+	/** The right-hand count of a step's row. */
+	stepFound: string;
+	stepPagesRead: string;
+	stepPageRead: string;
+	/** A thinking row: while it streams, once done, and with its duration. */
+	thinking: string;
+	thought: string;
+	thoughtFor: string;
+	/** The kind of a document that names none. */
+	documentKind: string;
+	pagesCount: string;
+	pageCount: string;
+	/** The pane: when a version was written, what changed, and copying it. */
+	paneWritten: string;
+	paneEdited: string;
+	justNow: string;
+	changedSince: string;
+	copyDocument: string;
+	copiedDocument: string;
+	/** The sources fold: its summary and its two groups. */
+	sourcesCount: string;
+	sourcesCountOne: string;
+	sourcesLibrary: string;
+	sourcesWeb: string;
+	fromTheLibrary: string;
+	readToday: string;
+	readOn: string;
+	/** A fenced block still being written. */
+	drawing: string;
 	/** Web pages an answer drew on, listed apart from its numbered sources. */
 	fromTheWeb: string;
 	/** A document the persona wrote: its version (`{n}`), the version switcher's
@@ -198,8 +252,51 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		editQuestion: 'Edit',
 		editSend: 'Send',
 		editFilesNote: 'Files attached to the original question are not sent again.',
+		stepsRead: 'read your attachment',
+		stepsSearchedLibrary: 'searched the library',
+		stepsSearchedWeb: 'searched the web',
+		stepsSearchedBoth: 'searched the library and the web',
+		stepsOpened: 'opened a document',
+		stepsWrote: 'wrote a {kind}',
+		stepsEdited: 'edited the {kind}',
+		stepsThought: 'thought',
+		stepsOther: 'looked into it',
+		stepsAnd: 'and',
+		nowRead: 'Reading your attachment…',
+		nowLibrary: 'Searching the library…',
+		nowWeb: 'Searching the web…',
+		nowOpen: 'Opening a document…',
+		nowWrite: 'Writing a {kind}…',
+		nowEdit: 'Editing the {kind}…',
+		nowThought: 'Thinking…',
+		nowOther: 'Working on it…',
+		stepCount: '{n} steps',
+		stepCountOne: '1 step',
+		stepFound: '{n} found',
+		stepPagesRead: '{n} pages read',
+		stepPageRead: '1 page read',
+		thinking: 'Thinking…',
+		thought: 'Thought',
+		thoughtFor: 'Thought for {n}s',
+		documentKind: 'document',
+		pagesCount: '{n} pages',
+		pageCount: '1 page',
+		paneWritten: 'written {when}',
+		paneEdited: 'edited {when}',
+		justNow: 'just now',
+		changedSince: 'Changed since v{n}: {changes}',
+		copyDocument: 'Copy',
+		copiedDocument: 'Copied',
+		sourcesCount: '{n} sources',
+		sourcesCountOne: '1 source',
+		sourcesLibrary: '{n} library',
+		sourcesWeb: '{n} web',
+		fromTheLibrary: 'From the library',
+		readToday: 'read today',
+		readOn: 'read {date}',
+		drawing: 'Drawing…',
 		fromTheWeb: 'From the web',
-		writtenVersion: 'Version {n}',
+		writtenVersion: 'v{n}',
 		writtenVersions: 'Version',
 		formatMarkdown: 'Markdown',
 		formatHtml: 'HTML',

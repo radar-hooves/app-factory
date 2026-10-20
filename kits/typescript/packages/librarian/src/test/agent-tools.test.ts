@@ -3,8 +3,8 @@
  * library, the documents it writes, and a reopened turn that looks like the
  * live one.
  */
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
 import { storedTurn } from '$lib/chat.svelte';
 import type { AgentEvent } from '$lib/client';
@@ -33,11 +33,15 @@ const props = (
 	...extra
 });
 
+/** The turn's steps open behind one line; every test that reads a row opens it. */
+async function unfold() {
+	for (const head of document.querySelectorAll('.ds-lib-steps-head')) await fireEvent.click(head);
+}
+
 const rows = () =>
-	screen
-		.getAllByRole('button')
-		.map((b) => b.textContent?.replace(/\s+/g, ' ').trim())
-		.filter((text) => text !== 'Copy');
+	[...document.querySelectorAll('.ds-lib-tool-row, .ds-lib-thinking-row')].map((b) =>
+		b.textContent?.replace(/\s+/g, ' ').trim()
+	);
 
 describe('a tool step in the persona’s words', () => {
 	const tool = (name: string, input: Record<string, unknown>) =>
@@ -73,15 +77,20 @@ describe('a tool step in the persona’s words', () => {
 });
 
 describe('a turn with a library search', () => {
-	it('shows the search as a collapsed row, with the numbered sources beside it', async () => {
+	it('folds the search behind one line, its row counting what it found, with the sources folded beside it', async () => {
 		const t = live(LIBRARY_SEARCH);
 		render(AgentTranscript, { props: props(t) });
 
-		expect(rows()).toContain('Searched the library for recreation leave');
-		await fireEvent.click(screen.getByRole('button', { name: /Searched the library/ }));
+		expect(rows()).toEqual([]);
+		expect(screen.getByRole('button', { name: /^Searched the library.*1 step$/ })).toBeInTheDocument();
+		await unfold();
+		expect(rows()).toEqual(['Searched the library for recreation leave 1 found']);
+		await fireEvent.click(screen.getByRole('button', { name: /Searched the library for/ }));
 		expect(document.body.textContent).toContain('"query": "recreation leave"');
 		expect(document.body.textContent).toContain('Leave manual');
-		expect(screen.getByText('Sources')).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('button', { name: /^1 source$/ }));
+		expect(screen.getByRole('heading', { name: 'From the library' })).toBeInTheDocument();
 		expect(screen.queryByText('From the web')).not.toBeInTheDocument();
 	});
 });
@@ -92,7 +101,12 @@ describe('web sources', () => {
 
 	it('come from the pages read and the answer’s links, once each, never a search result left unread', () => {
 		expect(webSources(t.blocks, answer)).toEqual([
-			{ url: 'https://example.org/allowances', title: 'Allowances', host: 'example.org' },
+			{
+				url: 'https://example.org/allowances',
+				title: 'Allowances',
+				host: 'example.org',
+				read: true
+			},
 			{ url: 'https://www.defence.gov.au/news/pay-rise', title: 'Defence', host: 'defence.gov.au' },
 			{ url: 'https://en.wikipedia.org/wiki/Pay', title: 'the wiki', host: 'en.wikipedia.org' }
 		]);
@@ -108,22 +122,70 @@ describe('web sources', () => {
 		expect(webSources(live(LIBRARY_SEARCH).blocks, '')).toEqual([]);
 	});
 
-	it('list apart from the library, unnumbered, opening in a new tab', () => {
+	it('fold into a count, numbered on from the library, opening in a new tab', async () => {
 		render(AgentTranscript, { props: props(t) });
 
+		await fireEvent.click(screen.getByRole('button', { name: /^3 sources$/ }));
 		expect(screen.getByRole('heading', { name: 'From the web' })).toBeInTheDocument();
-		// The answer links it inline too; the list's own link names its host.
-		const link = screen.getAllByRole('link', { name: /Defence/ }).find((a) => a.textContent?.includes('defence.gov.au'));
+		const link = screen
+			.getAllByRole('link', { name: /Defence/ })
+			.find((a) => a.textContent?.includes('defence.gov.au'));
 		expect(link).toHaveAttribute('href', 'https://www.defence.gov.au/news/pay-rise');
 		expect(link).toHaveAttribute('target', '_blank');
 		expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+		expect(link?.textContent).toMatch(/^\s*2\s*Defence/);
 		expect(link).toHaveTextContent('defence.gov.au');
-		expect(screen.queryByText('Sources')).not.toBeInTheDocument();
+		expect(screen.queryByText('From the library')).not.toBeInTheDocument();
+	});
+
+	it('count the library’s first, and a link in the answer reads as the next number’s chip', async () => {
+		const events: AgentEvent[] = [
+			...LIBRARY_SEARCH.slice(0, 4),
+			{
+				type: 'assistant',
+				message: {
+					content: [
+						{
+							type: 'text',
+							text: 'Leave is 20 days [1], and pay rose ([Defence](https://www.defence.gov.au/news/pay-rise)).'
+						}
+					]
+				}
+			},
+			LIBRARY_SEARCH[5]
+		];
+		const mixed = live(events);
+		const { container } = render(AgentTranscript, { props: props(mixed) });
+
+		await fireEvent.click(screen.getByRole('button', { name: /^2 sources/ }));
+		expect(screen.getByText('1 library · 1 web')).toBeInTheDocument();
+		const chip = await waitFor(() => {
+			const found = container.querySelector('sup[data-web]');
+			expect(found).not.toBeNull();
+			return found as HTMLElement;
+		});
+		expect(chip).toHaveTextContent('2');
+		expect(chip.dataset.web).toBe('https://www.defence.gov.au/news/pay-rise');
+		// The link's words stay, no longer a link: the chip is how a page opens.
+		expect(container.querySelector('.agent-prose a')).toBeNull();
+		expect(container.querySelector('.agent-prose')).toHaveTextContent('pay rose (Defence2)');
+		const open = vi.spyOn(window, 'open').mockReturnValue(null);
+		await fireEvent.click(chip);
+		expect(open).toHaveBeenCalledWith(chip.dataset.web, '_blank', 'noopener,noreferrer');
+		open.mockRestore();
+		expect(screen.getByText('1 library · 1 web')).toBeInTheDocument();
+	});
+
+	it('say when a page was read, today for a turn asked today', async () => {
+		render(AgentTranscript, { props: props(t, { at: Date.now() }) });
+		await fireEvent.click(screen.getByRole('button', { name: /^3 sources$/ }));
+		expect(document.body.textContent).toContain('example.org · read today');
+		expect(document.body.textContent).not.toContain('en.wikipedia.org · read');
 	});
 
 	it('wait until the answer has settled', () => {
 		render(AgentTranscript, { props: props(t, { running: true }) });
-		expect(screen.queryByText('From the web')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /sources/ })).not.toBeInTheDocument();
 	});
 });
 
@@ -133,6 +195,7 @@ describe('a thinking block', () => {
 	it('is a folded row, "Thought" once done, opening on its text', async () => {
 		render(AgentTranscript, { props: props(t) });
 
+		await unfold();
 		expect(rows().slice(0, 2)).toEqual(['Thought', 'Read leave']);
 		expect(screen.queryByText('The clause is in section 4.')).not.toBeInTheDocument();
 		await fireEvent.click(screen.getByRole('button', { name: 'Thought' }));
@@ -152,24 +215,57 @@ describe('a thinking block', () => {
 			event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }
 		});
 		render(AgentTranscript, { props: props(streaming, { running: true }) });
-		expect(screen.getByRole('button', { name: 'Thinking…' })).toBeInTheDocument();
+		expect(screen.getAllByRole('button', { name: 'Thinking…' })).not.toHaveLength(0);
+	});
+
+	it('says how long it ran once it closes, measured on this page', async () => {
+		vi.useFakeTimers();
+		try {
+			const timed = new Transcript();
+			timed.apply({ type: 'stream_event', event: { type: 'message_start' } });
+			timed.apply({
+				type: 'stream_event',
+				event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } }
+			});
+			timed.apply({
+				type: 'stream_event',
+				event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }
+			});
+			vi.advanceTimersByTime(8200);
+			timed.apply({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 } });
+			timed.apply({
+				type: 'stream_event',
+				event: { type: 'content_block_start', index: 1, content_block: { type: 'text' } }
+			});
+			timed.apply({
+				type: 'stream_event',
+				event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Done.' } }
+			});
+			render(AgentTranscript, { props: props(timed) });
+			await unfold();
+			expect(rows()).toEqual(['Thought for 8s']);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
 describe('a document the persona wrote', () => {
 	const t = live(WRITE_TURN);
 
-	it('folds each artefact frame into the turn, in order', () => {
-		expect(t.written.map((w) => [w.name, w.version, w.media_type, w.formats])).toEqual([
-			['brief.md', 1, 'text/markdown', ['docx', 'pdf']],
-			['brief.md', 2, 'text/markdown', ['docx', 'pdf']]
+	it('folds each artefact frame into the turn, in order, with its title, kind, changes and pages', () => {
+		expect(
+			t.written.map((w) => [w.name, w.version, w.media_type, w.formats, w.title, w.kind, w.changes, w.pages])
+		).toEqual([
+			['brief.md', 1, 'text/markdown', ['docx', 'pdf'], 'Brief: leave', 'minute', null, 1],
+			['brief.md', 2, 'text/markdown', ['docx', 'pdf'], 'Brief: leave', 'minute', 'through your CO', 1]
 		]);
 		const into = { blocks: [], outcome: null } as Parameters<typeof fold>[0];
 		fold(into, foldState(), WRITE_TURN[3]);
 		expect(into.written).toHaveLength(1);
 	});
 
-	it('cards every version with Open and a download for the source and each format', async () => {
+	it('cards the newest version with its kind, pages and version, Open, and a Word chip', async () => {
 		const opened: number[] = [];
 		render(AgentTranscript, {
 			props: props(t, {
@@ -179,19 +275,37 @@ describe('a document the persona wrote', () => {
 			})
 		});
 
+		await unfold();
 		expect(rows()).toContain('Wrote brief.md');
-		expect(screen.getByText('Version 1')).toBeInTheDocument();
-		expect(screen.getByText('Version 2')).toBeInTheDocument();
-		const [first] = screen.getAllByRole('link', { name: 'Markdown' });
-		expect(first).toHaveAttribute('href', '/artefact?name=brief.md&version=1&format=source');
-		expect(screen.getAllByRole('link', { name: 'Word' })[1]).toHaveAttribute(
-			'href',
-			'/artefact?name=brief.md&version=2&format=docx'
-		);
-		expect(screen.getAllByRole('link', { name: 'PDF' })).toHaveLength(2);
+		expect(screen.getByText('Brief: leave')).toBeInTheDocument();
+		expect(screen.getByText('Minute · 1 page · v2')).toBeInTheDocument();
+		expect(screen.queryByText('Minute · 1 page · v1')).not.toBeInTheDocument();
+		const chip = screen.getByRole('link', { name: /brief\.docx/ });
+		expect(chip).toHaveAttribute('href', '/artefact?name=brief.md&version=2&format=docx');
+		expect(chip).toHaveAttribute('download', 'brief.docx');
+		expect(chip).toHaveTextContent('Word · v2');
+		expect(chip).toHaveTextContent('Download');
 
-		await fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[1]);
+		await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 		expect(opened).toEqual([2]);
+	});
+
+	it('offers the source as written where there is no Word copy', () => {
+		const html = {
+			name: 'site/page.html',
+			version: 1,
+			media_type: 'text/html',
+			formats: [],
+			title: 'A page',
+			kind: null,
+			changes: null,
+			pages: 0
+		};
+		render(AgentTranscript, {
+			props: props({ blocks: [] , written: [html] }, { writtenUrl: () => '/x' })
+		});
+		expect(screen.getByText('Document · v1')).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /page\.html/ })).toHaveTextContent('HTML · v1');
 	});
 });
 
@@ -200,7 +314,18 @@ describe('a turn read back', () => {
 		question: 'What is in the brief?',
 		answer: 'Written to brief.md.',
 		files: ['scan.pdf'],
-		artefacts: [{ name: 'brief.md', version: 1, media_type: 'text/markdown', formats: ['pdf'] }],
+		artefacts: [
+			{
+				name: 'brief.md',
+				version: 1,
+				media_type: 'text/markdown',
+				formats: ['pdf'],
+				title: 'Brief',
+				kind: null,
+				changes: null,
+				pages: 0
+			}
+		],
 		steps: [
 			{
 				id: 's1',
@@ -220,17 +345,16 @@ describe('a turn read back', () => {
 		expect(stored.written).toHaveLength(1);
 	});
 
-	it('renders the rows, the chips and the cards the live turn had', () => {
+	it('renders the rows, the attachment and the card the live turn had', async () => {
 		render(AgentTranscript, {
 			props: { ...props(stored), question: stored.question, files: stored.files }
 		});
 
-		expect(rows()).toEqual([
-			'Searched the library for brief',
-			'Wrote brief.md Failed'
-		]);
+		await unfold();
+		expect(rows()).toEqual(['Searched the library for brief', 'Wrote brief.md Failed']);
 		expect(screen.getByText('scan.pdf')).toBeInTheDocument();
-		expect(screen.getByText('Version 1')).toBeInTheDocument();
+		expect(screen.getByText('PDF')).toBeInTheDocument();
+		expect(screen.getByText('Brief')).toBeInTheDocument();
 	});
 
 	it('is plain text for a turn stored before steps existed', () => {

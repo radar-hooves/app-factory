@@ -315,7 +315,10 @@ async def _answer(
                     held = True
                     await db(functools.partial(_answered, turn, answered_at))
                 if event.get("type") == ARTEFACT_EVENT and answered_at is not None:
-                    made = {key: event.get(key) for key in ("name", "version", "media_type", "formats")}
+                    made = {
+                        key: event.get(key)
+                        for key in ("name", "version", "media_type", "formats", "title", "kind", "changes", "pages")
+                    }
                     await db(functools.partial(_made, turn, answered_at, made))
                 rewritten = redact_event(turn.persona.id, event)
                 if rewritten is not None:

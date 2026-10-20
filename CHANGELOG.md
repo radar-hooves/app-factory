@@ -6,27 +6,29 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [2026.10.60] - 2026-10-20
 
-Need: the operator's ruling of 20/10/2026 that caspo's Outrider is armed like pebblestone's Penny, for up to 50 Defence colleagues, "like the Claude Code VS Code extension in a browser"; consumer: caspo. `agent-common` 2026.10.60 and `@poodle64/librarian` 2026.10.4 carry it. Design: `docs/design/agent-console.md` §An armed persona.
+Need: the operator's ruling of 20/10/2026 that caspo's Outrider is armed like pebblestone's Penny, for up to 50 Defence colleagues, "like the Claude Code VS Code extension in a browser"; consumer: caspo. `agent-common` 2026.10.60 and `@poodle64/librarian` 2026.10.5 carry it. Design: `docs/design/agent-console.md` §An armed persona.
 
 ### Added
 
 - **An armed persona.** A persona that allows more than `Read` in its `settings.json` and names servers in its `.mcp.json` looks further when its passages fall short: the library's reader door as the same person (`LIBRARY_URL`, `LIBRARY_TOKEN` in the session), the web through supacrawl's fleet server, the files a person attached, the read-only servers it names, and documents it writes. A plain question keeps the turn it had: retrieval first, one model call when the passages answer it.
 - **Documents.** A Markdown or HTML file the persona writes in its folder is kept as a version, announced with an `artefact` frame, recorded on its turn, shown beside the chat with every version, and downloaded as written (`GET /api/agent/conversations/{id}/artefact`), or as Word or PDF in the persona's `documents/` brand where the app installs `agent-common[documents]` (pandoc and typst, about 230 MB).
 - **Edit and resend** (`POST ask` with `edit`): an edited question replaces itself and every turn after it, once the agent takes it.
-- **The page follows the extension:** each tool step a collapsed row, thinking folded, edit on a question, attachment chips on a sent question, document cards and the document pane, the pages an answer read under "From the web" apart from its numbered sources, and `ChatExtensions.fences` for an app's own drawn blocks. A reopened turn shows its tool steps, files and documents (`StoredTurn.steps`, `files`, `artefacts`).
+- **The page in Claude.ai's pattern** (the operator's ruling of 20/10/2026, caspo's mock-up B): one fold per turn over its steps, read as a sentence ("Read your attachment, searched the library and the web, and wrote a minute · 6 steps") and opening on a row per step, a web search on the pages it found; thinking folded with its duration; edit on a question; the attachment above its question; a document as a card (title, kind, pages, version) and a Word chip, opening in a wider pane with a version picker, copy, download, "Changed since v1" and a bar beside each changed block, a full-screen sheet on a phone; the sources folded as "N sources · library · web", the web's numbered on from the library's. A reopened turn shows its tool steps, files and documents (`StoredTurn.steps`, `files`, `artefacts`).
+- **Visuals in an answer**: a renderer registry keyed on a fenced block's language (`@poodle64/librarian/visuals`) draws `vega-lite` charts in the app's tokens, `timeline` and `card` blocks, and Markdown tables; "Drawing…" while a block streams, its raw text if it will not parse. A `chat.yaml` row's `visuals:` tells the persona the formats (`agent_common.visuals`, or the persona's own `visuals/<language>.md`); `ChatExtensions.visuals` adds a renderer.
+- **A document's front matter** (`title`, `kind`, `changes`) and its page count reach the `artefact` frame and the stored turn.
 - **An HTTP server whose header a `headersHelper` mints runs through the bridge** (`agent_common.remote`), chat's and a job's alike: the helper runs as the app, never in the session.
 
 ### Changed
 
 - **Every chat turn runs `--restricted` under `dontAsk`**: file tools reach only the conversation's folder, no tool runs a command, and only the built-in tools in `CHAT_TOOLS` the persona's allow list names are offered. Its CLAUDE.md reaches it in the system prompt, `@` imports unfollowed; a persona whose CLAUDE.md leans on imports writes them in. A job is unchanged.
 - **A chat persona's `.mcp.json` goes through the bridge**, as a job's does; a stdio server runs as the app.
-- **`ToolWords.tally` and `repeat` are gone** from `@poodle64/librarian`, with the grouped activity line: an app's `describeTool` returning either no longer type-checks. An app test that mocks `$lib/agent/app` names `fences: undefined`.
+- **`ToolWords.tally` and `repeat` are gone** from `@poodle64/librarian`: an app's `describeTool` returning either no longer type-checks. An app test that mocks `$lib/agent/app` names `visuals: undefined`. `copy.writtenVersion` reads "v{n}", and the library's source heading is `copy.fromTheLibrary`. Librarian 2026.10.4, published with this release's first half and adopted by no app, carried a `fences` prop and `WebList`; `visuals` and the sources fold replace them. vega, vega-lite and vega-embed are dependencies of the package (about 10 MB installed), loaded only when a chart is drawn.
 
 ### Fixed
 
 - **A file a person attached now reaches the persona.** The ask route tested each upload against FastAPI's `UploadFile`, which no parsed form yields, and dropped every one. It takes at most 10 files of 20 MB each, and two of one name both arrive.
 
-Take `agent-common>=2026.10.60` (the template's floor) and `@poodle64/librarian` 2026.10.4 together: the stamped slice calls `LocalAgent.artefact` and `ask(keep=)`, which no earlier kit has.
+Take `agent-common>=2026.10.60` (the template's floor) and `@poodle64/librarian` 2026.10.5 together: the stamped slice calls `LocalAgent.artefact` and `ask(keep=)`, which no earlier kit has.
 
 ## [2026.10.59] - 2026-10-20
 

@@ -24,6 +24,7 @@
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
+	import { defaultVisuals } from '@poodle64/librarian/visuals';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
@@ -42,6 +43,7 @@
 	} from '$lib/agent/chat';
 
 	const extensions: ChatExtensions = app;
+	const visuals = { ...defaultVisuals, ...extensions.visuals };
 	/** The kind a briefing is asked as, and read back by. */
 	const BRIEFING = 'briefing';
 
@@ -237,7 +239,7 @@
 			onedit={(position, text) => c.edit(position, text)}
 			loadWritten={(name, version) => c.loadArtefact(name, version)}
 			writtenUrl={(name, version, format) => c.artefactUrl(name, version, format)}
-			fences={extensions.fences}
+			{visuals}
 			loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
 			oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
 			describeTool={extensions.describeTool}

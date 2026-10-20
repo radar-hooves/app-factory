@@ -7,7 +7,7 @@
  * the real job stream's.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
 import { Session } from '$lib/session.svelte';
 import { readFrom, segment, type ActivityGroup, type DescribeTool } from '$lib/transcript.svelte';
@@ -61,10 +61,12 @@ describe('a host DescribeTool', () => {
 				outcome: first.outcome,
 				running: false,
 				describeTool,
-				copy: { sources: 'Read from' },
+				copy: { fromTheLibrary: 'Read from' },
 				oncite: () => {}
 			}
 		});
+		await fireEvent.click(document.querySelector('.ds-lib-steps-head') as Element);
+		await fireEvent.click(screen.getByRole('button', { name: /sources?$/ }));
 		expect(screen.getByText('page 1, top slice')).toBeInTheDocument();
 		expect(screen.getByText('the line amounts')).toBeInTheDocument();
 		expect(screen.getByText('Read from')).toBeInTheDocument();

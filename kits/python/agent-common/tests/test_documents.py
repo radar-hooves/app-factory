@@ -72,3 +72,22 @@ def test_the_brands_pdf_template_is_the_one_a_pdf_is_set_in(tmp_path: Path) -> N
 def test_what_it_does_not_render_is_refused(media_type: str, fmt: str) -> None:
     with pytest.raises(documents.Unrenderable):
         documents.render(b"x", media_type, fmt)
+
+
+def test_front_matter_is_the_documents_title_and_not_its_text() -> None:
+    source = b"---\ntitle: Q3 minute\nkind: Minute\n---\n\nTwenty days a year.\n"
+    word = documents.render(source, "text/markdown", "docx")
+
+    assert "Q3 minute" in _word_text(word)
+    assert "kind: Minute" not in _word_text(word)
+    assert "---" not in documents.text_of_docx(word)
+    assert documents.render(source, "text/markdown", "pdf").startswith(b"%PDF-")
+
+
+def test_front_matter_whose_values_carry_colons_still_renders() -> None:
+    source = b"---\ntitle: Minute: Q3\nchanges: tightened: the second paragraph\n---\n\nBody.\n"
+
+    word = documents.render(source, "text/markdown", "docx")
+
+    assert "Minute: Q3" in _word_text(word)
+    assert "tightened" not in _word_text(word)

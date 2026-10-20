@@ -16,7 +16,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
+	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import {
 		outcomeLine,
@@ -35,9 +35,10 @@
 		splitSources,
 		type Citation
 	} from '../../citations';
-	import { DEFAULT_PERSONA, personaName, resolveCopy, type ChatCopy } from '../../copy';
-	import { webSources } from '../../web-sources';
-	import { writtenKey, type Written, type WrittenUrl } from '../../written';
+	import { DEFAULT_PERSONA, fill, personaName, resolveCopy, type ChatCopy } from '../../copy';
+	import { webKey, webSources } from '../../web-sources';
+	import { newestPerName, writtenKey, type Written, type WrittenUrl } from '../../written';
+	import type { Visual } from '../../visuals';
 	import type { Verdict } from '../../chat.svelte';
 	import AnswerMark from '../answer-mark/answer-mark.svelte';
 	import AnswerShare from '../answer-share/answer-share.svelte';
@@ -45,9 +46,7 @@
 	import ActivityGroup from '../activity-group/activity-group.svelte';
 	import ArtefactCard from '../artefact-card/artefact-card.svelte';
 	import Markdown from '../markdown/markdown.svelte';
-	import type { Fences } from '../markdown/markdown';
-	import SourceList from '../source-list/source-list.svelte';
-	import WebList from '../web-list/web-list.svelte';
+	import SourceFold from '../source-fold/source-fold.svelte';
 	import WrittenCard from '../written-card/written-card.svelte';
 
 	/** Everything one turn renders from: what `Conversation` hands a host's
@@ -97,8 +96,9 @@
 		onopenwritten?: (written: Written) => void;
 		/** Where a version downloads. Omit and no download links render. */
 		writtenUrl?: WrittenUrl;
-		/** Languages of fenced code the host draws with its own component. */
-		fences?: Fences;
+		/** Renderers by a fence's language: a block of one is drawn by its
+		 *  component in the answer. Absent, every fence is code. */
+		visuals?: Record<string, Visual>;
 		/** When an answer this page did not start began, epoch ms: it is still
 		 *  being written, and the clock counts from then. */
 		answering?: number;
@@ -140,7 +140,7 @@
 		showingWritten,
 		onopenwritten,
 		writtenUrl,
-		fences,
+		visuals,
 		answering,
 		onmark,
 		shared,
@@ -214,8 +214,31 @@
 	const hasAnswer = $derived(texts.length > 0);
 
 	// Pages the answer drew on, once it has settled: a link still being typed
-	// is not a source.
-	const web = $derived(running ? [] : webSources(blocks, answer));
+	// is not a source. They are numbered on from the library's, and a link to
+	// one reads as the same chip.
+	const web = $derived.by(() => {
+		if (running) return [];
+		const from = Math.max(0, ...sources.map((c) => c.n));
+		return webSources(blocks, answer).map((page, i) => ({ ...page, n: from + i + 1 }));
+	});
+	const webNumbers = $derived(new Map(web.map((page) => [webKey(page.url), page.n])));
+
+	// Which day the pages were read: today only for a turn asked today.
+	const readWhen = $derived.by(() => {
+		if (at === undefined) return '';
+		const when = new Date(at);
+		if (new Date().toDateString() === when.toDateString()) return words.readToday;
+		return fill(words.readOn, {
+			date: when.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+		});
+	});
+
+	const cards = $derived(newestPerName(written));
+
+	const fileType = (file: string): string => {
+		const ext = /\.([A-Za-z0-9]{1,5})$/.exec(file)?.[1];
+		return ext ? ext.toUpperCase() : '';
+	};
 
 	let editing = $state(false);
 	let edited = $state('');
@@ -329,14 +352,20 @@
 		</form>
 	{:else if asked}
 		<div class="ds-lib-ask">
-			<div class="ds-lib-bubble">{asked}</div>
 			{#if files.length > 0}
 				<ul class="ds-lib-ask-files">
 					{#each files as file, i (i)}
-						<li class="ds-lib-ask-file"><PaperclipIcon size={12} />{file}</li>
+						<li class="ds-lib-ask-file">
+							<span class="ds-lib-ask-file-icon" aria-hidden="true"><FileTextIcon size={16} /></span>
+							<span class="ds-lib-ask-file-text">
+								<span class="ds-lib-ask-file-name">{file}</span>
+								{#if fileType(file)}<span class="ds-lib-ask-file-type">{fileType(file)}</span>{/if}
+							</span>
+						</li>
 					{/each}
 				</ul>
 			{/if}
+			<div class="ds-lib-bubble">{asked}</div>
 			<div class="ds-lib-ask-meta">
 				{#if onedit && !running}
 					<button type="button" class="ds-lib-action" onclick={startEdit}>
@@ -370,7 +399,12 @@
 
 		{#each segments as seg (seg.index)}
 			{#if seg.kind === 'activity'}
-				<ActivityGroup group={seg} live={running && seg.index === lastIndex} copy={words} />
+				<ActivityGroup
+					group={seg}
+					live={running && seg.index === lastIndex}
+					{written}
+					copy={words}
+				/>
 			{:else if !isArtefact}
 				<Markdown
 					content={seg.index === lastTextIndex && split.citations.length > 0
@@ -378,8 +412,10 @@
 						: seg.text}
 					streaming={running && seg.index === lastIndex}
 					{collectionNames}
-					{fences}
+					{visuals}
+					copy={words}
 					citationNumbers={numbers}
+					{webNumbers}
 					oncite={(n) => {
 						const found = sources.find((c) => c.n === n);
 						if (found) oncite?.(found);
@@ -392,7 +428,7 @@
 			<ArtefactCard {artefact} open={artefactOpen} onopen={onopenartefact} copy={words} />
 		{/if}
 
-		{#each written as doc (writtenKey(doc))}
+		{#each cards as doc (writtenKey(doc))}
 			<WrittenCard
 				written={doc}
 				open={showingWritten === writtenKey(doc)}
@@ -402,12 +438,8 @@
 			/>
 		{/each}
 
-		{#if !isArtefact && sources.length > 0}
-			<SourceList {sources} {words} {oncite} />
-		{/if}
-
-		{#if !isArtefact && web.length > 0}
-			<WebList sources={web} {words} />
+		{#if !isArtefact && (sources.length > 0 || web.length > 0)}
+			<SourceFold library={sources} {web} {words} {oncite} {readWhen} />
 		{/if}
 
 		<!-- An empty `notHeld` is a host whose persona answers from no sources,
@@ -519,13 +551,37 @@
 
 	.ds-lib-ask-file {
 		display: flex;
+		max-width: 100%;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.625rem;
 		border: 1px solid var(--ds-color-border);
-		border-radius: var(--ds-radius-md);
-		padding: 0.125rem 0.5rem;
+		border-radius: var(--ds-radius-full);
+		padding: 0.375rem 0.875rem 0.375rem 0.5rem;
+	}
+
+	.ds-lib-ask-file-icon {
+		display: flex;
+		flex: none;
 		color: var(--ds-color-muted-foreground);
+	}
+
+	.ds-lib-ask-file-text {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
 		font-size: var(--ds-text-2xs);
+		line-height: 1.25;
+	}
+
+	.ds-lib-ask-file-name {
+		color: var(--ds-color-foreground);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		overflow-wrap: anywhere;
+	}
+
+	.ds-lib-ask-file-type {
+		color: var(--ds-color-muted-foreground);
 	}
 
 	.ds-lib-edit {

@@ -3,6 +3,7 @@
 import asyncio
 import dataclasses
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from agent_common.agent import (
     TOOLS_BRIEF,
     Agent,
     LocalAgent,
+    describe,
 )
 from agent_common.persona import Persona
 
@@ -202,11 +204,55 @@ async def test_a_document_the_agent_writes_is_kept_as_a_version_and_announced_af
         "media_type": "text/markdown",
         "bytes": 5,
         "formats": ["docx", "pdf"],
+        "title": "One",
+        "kind": None,
+        "changes": None,
+        "pages": 1,
     }
     assert [event["version"] for event in _kept(resumed)] == [2]
     assert await agent.artefact(session, "brief.md", 1) == (b"# One", "text/markdown")
     assert await agent.artefact(session, "brief.md", 2) == (b"# Two", "text/markdown")
     assert await agent.artefact(session, "brief.md", 3) is None
+
+
+async def test_a_document_without_a_heading_is_titled_by_its_file(settings: cli.Settings, milton: Persona) -> None:
+    [kept] = _kept(await _ask(LocalAgent(settings, milton), "__write__ minute-one.md just words"))
+    assert (kept["title"], kept["pages"]) == ("minute-one", 1)
+
+
+def test_front_matter_gives_a_document_its_title_kind_and_changes() -> None:
+    text = b"---\ntitle: 'Q3 minute'\nkind: Minute\nchanges: \"added the actions\"\n---\n# Other\n\nBody."
+    assert describe(text, "m", "text/markdown") == {
+        "title": "Q3 minute",
+        "kind": "Minute",
+        "changes": "added the actions",
+        "pages": 1,
+    }
+
+
+def test_a_heading_titles_a_document_without_front_matter_and_pages_are_counted_in_words() -> None:
+    text = ("# The brief\n\n" + "word " * 901).encode()
+    assert describe(text, "m", "text/markdown") == {"title": "The brief", "kind": None, "changes": None, "pages": 3}
+
+
+def test_an_unclosed_front_matter_block_is_text() -> None:
+    assert describe(b"---\ntitle: x\nno close", "stem", "text/markdown")["title"] == "stem"
+
+
+def test_html_is_titled_by_its_title_then_its_heading_and_counted_without_tags() -> None:
+    page = b"<html><head><title> A  page </title></head><body><h1>Other</h1><p>one two</p></body></html>"
+    assert describe(page, "p", "text/html")["title"] == "A page"
+    assert describe(b"<h1>Only <b>this</b></h1>", "p", "text/html")["title"] == "Only this"
+    assert describe(b"<p>none</p>", "p", "text/html")["title"] == "p"
+
+
+def test_a_title_is_bounded() -> None:
+    assert len(describe(b"# " + b"x" * 500, "m", "text/markdown")["title"]) == 200
+
+
+async def test_guidance_follows_the_brief_in_the_system_prompt(settings: cli.Settings, milton: Persona) -> None:
+    plain = await _ask(LocalAgent(settings, milton, guidance="SEE THIS"), "hello")
+    assert "SEE THIS" in str(_reported(plain))
 
 
 @pytest.mark.parametrize(
@@ -349,3 +395,14 @@ async def test_an_attachment_named_for_its_folder_is_filed_as_an_attachment(
     events = await _ask(LocalAgent(settings, milton), "what is this?", files={"..": b"x"})
     [turn] = list((milton.home / CHATS / _session(events) / ATTACHMENTS).iterdir())
     assert [path.name for path in turn.iterdir()] == ["attachment"]
+
+
+def test_a_page_of_unclosed_tags_is_read_in_one_pass() -> None:
+    hostile = b"<script " * 120_000 + b"<title>late</title>"
+    started = time.monotonic()
+    describe(hostile, "p", "text/html")
+    assert time.monotonic() - started < 2
+
+
+def test_only_the_first_heading_titles_a_page() -> None:
+    assert describe(b"<h1>First</h1><h1>Second</h1>", "p", "text/html")["title"] == "First"

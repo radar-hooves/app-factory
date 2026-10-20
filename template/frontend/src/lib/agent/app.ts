@@ -10,8 +10,8 @@
  * and its answer in place of the package's own) and `briefing` (what the
  * composer's briefing control asks, and the card it reads as) and
  * `formatCost` (an answer's cost in this app's own currency and words, from
- * US dollars, "about A$0.34") and `fences` (a language of fenced code the app
- * draws with its own component, `{ chart: Chart }`). The factory's copy
+ * US dollars, "about A$0.34") and `visuals` (a renderer for a
+ * fence's language beside the package's own, `{ openui: { component, parse } }`). The factory's copy
  * exports none, and the page is the package's own.
  */
 export {};

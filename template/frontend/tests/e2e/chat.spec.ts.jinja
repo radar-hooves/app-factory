@@ -205,6 +205,11 @@ test('a persona that reads collections cites, opens the cited document and takes
 	expect(stored?.collection, 'asked across every collection').toBeNull();
 	expect(stored?.citations?.length, 'the passages it answered from are kept').toBeGreaterThan(0);
 
+	// The sources fold behind their count, then open the document they cite.
+	await page
+		.getByRole('button', { name: /^\d+ sources?$/ })
+		.first()
+		.click();
 	await page
 		.getByRole('button', { name: /The Manual, Part 5: Leave/ })
 		.first()
@@ -259,6 +264,10 @@ test('a shared answer opens read-only on the persona it was asked of, until it i
 
 		await page.goto(link as string);
 		await expect(page.getByText(/four weeks of recreation leave/).first()).toBeVisible();
+		await page
+			.getByRole('button', { name: /^\d+ sources?$/ })
+			.first()
+			.click();
 		await expect(
 			page.getByRole('button', { name: /The Manual, Part 5: Leave/ }).first()
 		).toBeVisible();
@@ -424,16 +433,16 @@ test('a link can wait a question in the box but never make the room ask it', asy
 	expect(asks).toBe(0);
 });
 
-/** The reading column a written document opens in, named for the document. */
-function pane(page: Page, name: string) {
-	return page.getByRole('complementary', { name });
+/** The reading column a written document opens in, named for the version it shows. */
+function pane(page: Page) {
+	return page.getByRole('complementary', { name: /^Leave brief/ });
 }
 
 /** The card for one version of a written document: the innermost block holding its version and its Open. */
 function card(page: Page, version: number) {
 	return page
 		.locator('div')
-		.filter({ has: page.getByText(`Version ${version}`, { exact: true }) })
+		.filter({ has: page.getByText(new RegExp(` · v${version}$`)) })
 		.filter({ has: page.getByRole('button', { name: /^(Open|Showing)/ }) })
 		.last();
 }
@@ -447,28 +456,28 @@ test('a document the persona writes shows as a card, opens beside the chat and d
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
 	const id = conversationId(page);
 
+	// The card names the document by its title; its chip downloads the file it is.
 	const first = card(page, 1);
-	await expect(first.getByText('brief.md', { exact: true })).toBeVisible();
+	await expect(first.getByText('Leave brief', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: /brief\.md.*v1.*Download/ })).toBeVisible();
 	await first.getByRole('button', { name: 'Open' }).click();
-	await expect(pane(page, 'brief.md').getByRole('heading', { name: 'Leave brief' })).toBeVisible();
+	await expect(pane(page).getByRole('heading', { name: 'Leave brief' })).toBeVisible();
 
 	// Its download is the bytes the persona wrote, not a rendering of them.
-	const href = await pane(page, 'brief.md')
-		.getByRole('list', { name: 'Download' })
-		.getByRole('link', { name: 'Markdown' })
-		.getAttribute('href');
+	await pane(page).getByRole('button', { name: 'Download' }).click();
+	const href = await pane(page).getByRole('menuitem', { name: 'Markdown' }).getAttribute('href');
 	expect(href).toBeTruthy();
 	const bytes = await ok(page.request.get(href as string));
 	expect(await bytes.text()).toBe('# Leave brief');
 
-	// The same name written again is Version 2, and the column can read either.
-	await pane(page, 'brief.md').getByRole('button', { name: 'Close source' }).click();
+	// The same name written again is v2, and the column can read either.
+	await pane(page).getByRole('button', { name: 'Close source' }).click();
 	await ask(page, '__write__:brief.md:# Leave brief, revised');
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
 	const second = card(page, 2);
-	await expect(second.getByText('brief.md', { exact: true })).toBeVisible();
+	await expect(second.getByText('Leave brief, revised', { exact: true })).toBeVisible();
 	await second.getByRole('button', { name: 'Open' }).click();
-	const column = pane(page, 'brief.md');
+	const column = pane(page);
 	await expect(column.getByRole('heading', { name: 'Leave brief, revised' })).toBeVisible();
 	await column.getByRole('combobox', { name: 'Version' }).selectOption('1');
 	await expect(column.getByRole('heading', { name: 'Leave brief', exact: true })).toBeVisible();
@@ -490,6 +499,8 @@ test('the Write step is its own collapsed row, and opens on its input and its re
 	await ask(page, '__write__:notes.md:# Notes');
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
 
+	// The turn's steps are folded behind one line, which opens on the rows.
+	await page.getByRole('button', { name: /^Wrote a .*1 step/ }).click();
 	const step = page.getByRole('button', { name: /Wrote\s*notes\.md/ });
 	await expect(step).toHaveAttribute('aria-expanded', 'false');
 	await expect(page.getByText('File created')).toHaveCount(0);
@@ -556,7 +567,9 @@ test('a file attached to a question shows as a chip on it, and still does after 
 
 	// The chip rides the sent question, and the composer's own is spent.
 	// (The persona's echo lists the file's path too, so match the name alone.)
-	const chip = () => page.getByRole('listitem').filter({ hasText: /^roster\.txt$/ });
+	// Named, with its type beside it, as drawn above the question.
+	const chip = () =>
+		page.getByRole('listitem').filter({ has: page.getByText('roster.txt', { exact: true }) });
 	await expect(chip()).toHaveCount(1);
 	await expect(page.getByRole('button', { name: 'Remove roster.txt' })).toHaveCount(0);
 

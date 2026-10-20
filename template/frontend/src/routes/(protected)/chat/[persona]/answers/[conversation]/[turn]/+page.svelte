@@ -13,6 +13,7 @@
 	import { storedTurn } from '@poodle64/librarian/chat';
 	import Conversation from '@poodle64/librarian/conversation';
 	import type { Turn } from '@poodle64/librarian/transcript';
+	import { defaultVisuals } from '@poodle64/librarian/visuals';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { api } from '$lib/api';
@@ -25,6 +26,7 @@
 	} from '$lib/agent/chat';
 
 	const extensions: ChatExtensions = app;
+	const visuals = { ...defaultVisuals, ...extensions.visuals };
 
 	let persona = $state<Persona | null>(null);
 	let turn = $state<Turn | null>(null);
@@ -80,6 +82,7 @@
 			describeTool={extensions.describeTool}
 			turn={extensions.Turn ? presented : undefined}
 			lead={origin}
+			{visuals}
 			{copy}
 		/>
 	</div>

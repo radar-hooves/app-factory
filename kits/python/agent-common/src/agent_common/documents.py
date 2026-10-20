@@ -58,6 +58,27 @@ def _own(brand: Path | None, name: str) -> Path | None:
     return brand / name if brand is not None and (brand / name).is_file() else None
 
 
+def front_matter(text: str) -> tuple[dict[str, str], str]:
+    """A leading `---` block of `key: value` lines, trimmed and unquoted, and the text after it.
+
+    Read line by line, never as YAML: a persona writes `changes: tightened: the second paragraph`.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    meta: dict[str, str] = {}
+    for at, line in enumerate(lines[1:], 1):
+        if line.strip() == "---":
+            return meta, "\n".join(lines[at + 1 :])
+        key, colon, value = line.partition(":")
+        value = value.strip()
+        if colon and key.strip() and not key[0].isspace():
+            if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            meta[key.strip().lower()] = value
+    return {}, text
+
+
 def text_of_docx(data: bytes) -> str:
     """A Word file's text as Markdown, its headings, lists and tables kept.
 
@@ -76,13 +97,27 @@ def render(source: bytes, media_type: str, fmt: str, brand: Path | None = None) 
     reads = READS.get(media_type)
     if reads is None or fmt not in FORMATS:
         raise Unrenderable(f"{media_type} is not rendered as {fmt}")
+    titled: list[str] = []
+    if media_type == "text/markdown":
+        # Front matter is the document's own lines, not YAML (`front_matter`): its title alone goes on.
+        meta, body = front_matter(source.decode(errors="replace"))
+        source = body.encode()
+        titled = ["--metadata", f"title={meta['title']}"] if meta.get("title") else []
     if fmt == "docx":
         reference = _own(brand, "reference.docx")
-        args = ["--from", reads, "--to", "docx", "--output", "-"]
+        args = ["--from", reads, "--to", "docx", "--output", "-", *titled]
         return _pandoc([*args, *(["--reference-doc", str(reference)] if reference else [])], source)
     template = _own(brand, "template.typ")
     typeset = _pandoc(
-        ["--from", reads, "--to", "typst", "--standalone", *(["--template", str(template)] if template else [])],
+        [
+            "--from",
+            reads,
+            "--to",
+            "typst",
+            "--standalone",
+            *titled,
+            *(["--template", str(template)] if template else []),
+        ],
         source,
     )
     import typst  # the optional extra

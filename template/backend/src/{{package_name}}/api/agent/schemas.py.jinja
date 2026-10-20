@@ -42,6 +42,8 @@ class PersonaRead(BaseModel):
     not_held: str
     #: Whether each question first retrieves passages from the collections this person may read.
     collections: bool
+    #: The fenced block languages this persona is told it may draw in an answer.
+    visuals: list[str]
 
 
 class CollectionRead(BaseModel):
@@ -77,6 +79,10 @@ class ArtefactRead(BaseModel):
     version: int
     media_type: str
     formats: list[str] = []
+    title: str = ""
+    kind: str | None = None
+    changes: str | None = None
+    pages: int = 1
 
 
 class StepRead(BaseModel):

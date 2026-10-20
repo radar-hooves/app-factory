@@ -22,6 +22,10 @@ export interface ThinkingBlock {
 	kind: 'thinking';
 	index: number;
 	text: string;
+	/** Epoch ms the block opened and closed on this page, measured live; absent
+	 *  for one the stream delivered whole or read back. */
+	startedAt?: number;
+	endedAt?: number;
 }
 
 export interface ToolBlock {
@@ -335,7 +339,12 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 				version: event.version,
 				media_type: typeof event.media_type === 'string' ? event.media_type : '',
 				bytes: typeof event.bytes === 'number' ? event.bytes : undefined,
-				formats: Array.isArray(event.formats) ? event.formats.map(String) : []
+				formats: Array.isArray(event.formats) ? event.formats.map(String) : [],
+				title: typeof event.title === 'string' && event.title ? event.title : event.name,
+				kind: typeof event.kind === 'string' ? event.kind : null,
+				changes: typeof event.changes === 'string' ? event.changes : null,
+				pages: typeof event.pages === 'number' ? event.pages : 0,
+				at: Date.now()
 			});
 		}
 		return true;
@@ -393,7 +402,7 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 		state.open.set(inner.index, position);
 		if (cb.type === 'text') into.blocks.push({ kind: 'text', index: position, text: '' });
 		else if (cb.type === 'thinking')
-			into.blocks.push({ kind: 'thinking', index: position, text: '' });
+			into.blocks.push({ kind: 'thinking', index: position, text: '', startedAt: Date.now() });
 		else if (cb.type === 'tool_use')
 			into.blocks.push({
 				kind: 'tool',
@@ -402,6 +411,11 @@ export function fold(into: FoldTarget, state: FoldState, event: AgentEvent): boo
 				name: cb.name ?? 'tool',
 				rawInput: ''
 			});
+		return true;
+	}
+	if (inner.type === 'content_block_stop' && inner.index !== undefined) {
+		const block = into.blocks[state.open.get(inner.index) ?? -1];
+		if (block?.kind === 'thinking' && block.startedAt !== undefined) block.endedAt = Date.now();
 		return true;
 	}
 	if (inner.type === 'content_block_delta' && inner.index !== undefined) {

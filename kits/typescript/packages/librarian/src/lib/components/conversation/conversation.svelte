@@ -33,7 +33,7 @@
 		type AgentTranscriptProps
 	} from '../agent-transcript/agent-transcript.svelte';
 	import ArtefactPane from '../artefact-pane/artefact-pane.svelte';
-	import type { Fences } from '../markdown/markdown';
+	import type { Visual } from '../../visuals';
 	import DocumentPane from '../document-pane/document-pane.svelte';
 	import ScopeStatement from '../scope-statement/scope-statement.svelte';
 
@@ -109,9 +109,9 @@
 		loadWritten?: LoadWritten;
 		/** Where a version downloads. Without it no download links render. */
 		writtenUrl?: WrittenUrl;
-		/** Languages of fenced code the host draws with its own component
-		 *  rather than as code. */
-		fences?: Fences;
+		/** Renderers by a fence's language (`defaultVisuals`, and the app's own):
+		 *  a block of one is drawn by its component rather than as code. */
+		visuals?: Record<string, Visual>;
 		/** Prices a turn's `outcome.costUsd` in the host's own currency and
 		 *  words ("about A$0.34"), for the footer's cost line beside a turn's
 		 *  duration. The package never converts currency itself; omitted, the
@@ -162,7 +162,7 @@
 		onedit,
 		loadWritten,
 		writtenUrl,
-		fences,
+		visuals,
 		collectionNames = new Set(),
 		composer,
 		turn: presentTurn,
@@ -386,7 +386,7 @@
 								showingWritten: shownWritten?.key,
 								onopenwritten: loadWritten ? openWritten : undefined,
 								writtenUrl,
-								fences,
+								visuals,
 								onedit:
 									onedit && !running && !turn.kind && turn.question
 										? (text: string) => onedit(index, text)
