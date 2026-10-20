@@ -4789,6 +4789,46 @@ for (const [height, long] of [
 	await context.close();
 }
 
+// A phone's bottom-right corner holds two floating controls: the feedback
+// widget's and ContextColumn's "At a glance" opener. The widget owns the corner
+// and the opener stacks above it (godswood#889). Each is hit-tested at its own
+// centre and its four inner corners, so neither covers the other's hit area;
+// the dialogue it opens names itself once.
+{
+	const { context, page, errors } = await open('surface=records', { width: 390, height: 780 }, 'light');
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[aria-label="Report a problem"]');
+	const tap = await page.evaluate(() => {
+		const reach = (label) => {
+			const el = document.querySelector(`button[aria-label="${label}"]`);
+			const r = el.getBoundingClientRect();
+			const points = [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
+			return {
+				box: [r.left, r.top, r.right, r.bottom].map(Math.round),
+				hit: points.every(([x, y]) => {
+					const top = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y);
+					return top === el || el.contains(top);
+				})
+			};
+		};
+		return { report: reach('Report a problem'), glance: reach('Open At a glance') };
+	}).catch((error) => ({ error: error.message }));
+	check('ContextColumn at 390px: the opener and the report button are both tappable', !tap.error && tap.report.hit && tap.glance.hit, JSON.stringify(tap));
+	if (!tap.error) {
+		const [a, b] = [tap.report.box, tap.glance.box];
+		const shared = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+		check('ContextColumn at 390px: the opener stands above the report button, sharing no pixel', shared === 0 && b[3] <= a[1], JSON.stringify(tap));
+	}
+	await page.click('button[aria-label="Open At a glance"]');
+	await page.waitForSelector('[role="dialog"]');
+	const names = await page.evaluate(
+		() => [...document.querySelectorAll('[role="dialog"] *')].filter((e) => e.children.length === 0).map((e) => e.textContent.trim())
+	);
+	check('ContextColumn at 390px: the dialogue names itself once', names.filter((n) => n === 'At a glance').length === 1, JSON.stringify(names));
+	check('ContextColumn at 390px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 // Desktop presentation: assert copied content and failure outcomes, not screenshots.
 for (const [label, viewport, theme, scale, rtl] of [
 	['landscape light', { width: 1440, height: 900 }, 'light', 1, false],

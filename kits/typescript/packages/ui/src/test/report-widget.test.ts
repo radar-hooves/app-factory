@@ -208,3 +208,13 @@ describe('ReportWidget — the states', () => {
 		);
 	});
 });
+
+describe('ReportWidget: the corner', () => {
+	it('publishes the offset above its trigger for any other fixed control, and withdraws it on unmount', () => {
+		const root = document.documentElement;
+		const { unmount } = render(ReportWidget);
+		expect(root.style.getPropertyValue('--ds-corner-above')).toContain('4.5rem');
+		unmount();
+		expect(root.style.getPropertyValue('--ds-corner-above')).toBe('');
+	});
+});

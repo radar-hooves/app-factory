@@ -11,6 +11,7 @@ import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Download from '@lucide/svelte/icons/download';
 import Harness from './context-column-record.svelte';
 import DocumentPane from '$lib/components/ui/document-pane';
+import ContextColumn from '$lib/components/ui/context-column';
 
 const original = window.ResizeObserver;
 afterEach(() => {
@@ -142,5 +143,36 @@ describe('DocumentPane', () => {
 	it('has no close where nothing closes it', () => {
 		render(DocumentPane, { props: { title: 'Lease', pages: PAGES } });
 		expect(screen.queryByRole('button', { name: /^Close/ })).toBeNull();
+	});
+});
+
+describe('ContextColumn: the dialogue below xl names itself once', () => {
+	it('opens a record on its body, the dialogue title being the item’s name', async () => {
+		render(Harness);
+		await fireEvent.click(screen.getByRole('button', { name: 'Open Tenancy' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getAllByRole('heading', { name: 'Tenancy' })).toHaveLength(1);
+		expect(within(dialog).getByText('Tenancy body')).toBeInTheDocument();
+		expect(within(dialog).getByText('Opened on what needs you')).toBeInTheDocument();
+	});
+
+	it('opens a list page’s stats under one At a glance', async () => {
+		render(ContextColumn, { props: { stats: [{ label: 'Value', value: 1 }] } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Open At a glance' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getAllByRole('heading', { name: 'At a glance' })).toHaveLength(1);
+		expect(within(dialog).getByText('Value')).toBeInTheDocument();
+	});
+
+	it('keeps the stat card’s own title when the dialogue is named otherwise', async () => {
+		render(ContextColumn, { props: { stats: [{ label: 'Value', value: 1 }], ariaLabel: 'Property context' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Open Property context' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getByRole('heading', { name: 'At a glance' })).toBeInTheDocument();
+	});
+
+	it('stacks its opener above the report button’s corner', () => {
+		render(ContextColumn, { props: { stats: [] } });
+		expect(screen.getByRole('button', { name: 'Open At a glance' }).className).toContain('--ds-corner-above');
 	});
 });

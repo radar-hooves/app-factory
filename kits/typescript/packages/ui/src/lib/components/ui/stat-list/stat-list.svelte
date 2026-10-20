@@ -29,6 +29,7 @@
 		items,
 		title = 'At a glance',
 		info,
+		bare = false,
 		class: klass = '',
 		ref = $bindable(null),
 		...restProps
@@ -36,6 +37,8 @@
 		items: StatItem[];
 		title?: string;
 		info?: string;
+		/** Drop the title: the frame around the card already names it (a dialogue). */
+		bare?: boolean;
 	} = $props();
 </script>
 
@@ -44,8 +47,9 @@
 	class="bg-card border-border ds-edge flex shrink-0 flex-col overflow-hidden rounded-lg border {klass}"
 	{...restProps}
 >
+	{#if !bare || info}
 	<header class="border-border flex items-center gap-2 border-b px-4 py-3">
-		<h2 class="text-body leading-tight font-semibold tracking-tight">{title}</h2>
+		{#if !bare}<h2 class="text-body leading-tight font-semibold tracking-tight">{title}</h2>{/if}
 		{#if info}
 			<InfoTip
 				text={info}
@@ -53,6 +57,7 @@
 			/>
 		{/if}
 	</header>
+	{/if}
 	<dl class="flex flex-col">
 		{#each items as item (item.label)}
 			<div

@@ -1858,6 +1858,7 @@
 	<div data-probe="row-tap-selected">{tapSelectedId ?? 'none'}</div>
 {:else if surface === 'records' || surface === 'record'}
 	<Records {surface} {params} />
+	<ReportWidget />
 {:else if surface === 'ledger'}
 	<div class="bg-background flex h-screen flex-col p-4">
 		<Ledger

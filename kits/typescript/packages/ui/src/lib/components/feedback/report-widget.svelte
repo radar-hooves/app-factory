@@ -62,7 +62,13 @@
 	$effect(() => {
 		const root = document.documentElement;
 		root.style.setProperty('--ds-report-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))');
-		return () => root.style.removeProperty('--ds-report-reserve');
+		// The corner is this widget's. Any other fixed control in it stacks above
+		// by this bottom offset (one rule, no per-app offset).
+		root.style.setProperty('--ds-corner-above', 'calc(4.5rem + var(--ds-report-clearance, 0px))');
+		return () => {
+			root.style.removeProperty('--ds-report-reserve');
+			root.style.removeProperty('--ds-corner-above');
+		};
 	});
 
 	async function submit() {

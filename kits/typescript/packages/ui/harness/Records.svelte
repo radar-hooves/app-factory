@@ -400,7 +400,6 @@
 					{ label: 'Needs you', value: 2, status: 'warning', sub: 'properties' }
 				]}
 				statsInfo="The owned properties, today."
-				ariaLabel="Property context"
 			/>
 		</div>
 	</AppShell>
