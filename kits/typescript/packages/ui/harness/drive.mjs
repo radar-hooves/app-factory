@@ -23,11 +23,14 @@
  *
  *     pnpm run test:browser        # harness:build + this
  *
- * On NixOS, where Playwright's own WebKit will not run, build the harness and
- * drive it in Playwright's image at the version the lockfile pins:
+ * On NixOS, where Playwright's own WebKit will not run, build as CI does
+ * (`pnpm -r run build` in kits/typescript, then `pnpm run harness:build`) and
+ * drive it in Playwright's image at the version the lockfile pins, mounting the
+ * whole checkout, since pnpm links this package's modules from the kit's root:
  *
+ *     R=$(git rev-parse --show-toplevel)
  *     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --ipc=host \
- *       -v "$PWD:$PWD" -w "$PWD" mcr.microsoft.com/playwright:v1.62.0-noble node harness/drive.mjs
+ *       -v "$R:$R" -w "$PWD" mcr.microsoft.com/playwright:v1.62.0-noble node harness/drive.mjs
  */
 import { chromium, webkit, devices } from 'playwright';
 import { createServer } from 'node:http';
