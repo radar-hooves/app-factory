@@ -524,7 +524,7 @@
 				data-slot="ledger-title"
 			>
 				<span class="flex min-w-0 items-center gap-1.5">
-					<span class="min-w-0 truncate">{r.title}</span>
+					<span class="min-w-0 line-clamp-2 break-words">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
 					{@render chip(r)}
 					{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
@@ -676,7 +676,7 @@
 			{/if}
 			<span class="pointer-events-none flex min-w-0 flex-col justify-center gap-0.5">
 				<span class="flex min-w-0 items-center gap-1.5">
-					<span class="min-w-0 truncate font-medium">{r.title}</span>
+					<span class="min-w-0 line-clamp-2 font-medium break-words">{r.title}</span>
 					{#if r.attachment}{@render clip(r)}{/if}
 					{@render chip(r)}
 					{#if titleColumn?.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render titleColumn.actions(r)}</span>{/if}

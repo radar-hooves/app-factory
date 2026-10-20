@@ -99,7 +99,7 @@ rather than rebuilding it:
 | `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose` at the reading measure, and a contents list from its own headings. See [A document to read](#a-document-to-read). |
 | `content-skeleton`                              | A region loading, shaped like what replaces it: `rows`, `tiles` or `prose`. A whole page waiting is LoadingState. |
 | `panel`                                         | The generic titled card, and the settings section: optional icon, a clamped one-line `subtitle` or a wrapping `description`, trailing `action`s, a body that can opt out of padding or scroll inside the card (`scroll`), an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
-| `list-toolbar`                                  | The bar above a list, on the page ground: title, count, icon actions named by their tooltips, one labelled action. The Ledger and the RecordList draw theirs with it. |
+| `list-toolbar`                                  | The bar above a list, on the page ground: title, count (both wrap when crowded), icon actions named by their tooltips, one labelled action. The Ledger and the RecordList draw theirs with it. |
 | `record-list`                                   | The ledger's look for a list that is not money. See [Lists that are not money](#lists-that-are-not-money). |
 | `record-switcher`                               | The open record's whole name as the top bar's control, its menu finding, grouping and picturing every record, and the record's pages as tabs. |
 | `document-pane`                                 | One document beside what it belongs to: titled, closable, its page fitted, with paging and zoom (a `PageCanvas` in a `Panel`). |
@@ -429,8 +429,8 @@ all three serve any route:
 </Panel>
 ```
 
-`description` wraps; `subtitle` is the one-line qualifier beside the title and
-truncates. Carry one or the other. A page writes a run of `Panel`s and no
+`description` and `subtitle` both wrap, never end in an ellipsis; the subtitle
+is the short qualifier under the title. Carry one or the other. A page writes a run of `Panel`s and no
 wrapper: the pane stacks them on the package's section rhythm itself.
 
 ### A working list beside a page's own content
@@ -1015,7 +1015,7 @@ Settled here, the same in every module, and not props:
   row with no note centres its title. The checkbox, the review chip, the date and
   every single-value cell centre too.
 - **One mark per kind.** A review chip (StatusBadge's dot and label on a tint)
-  beside the title on line one, which truncates before the chip does; a synthetic row's "Not as printed" badge leads its second line and
+  beside the title on line one, which wraps (to two lines at most) before the chip gives any width; a synthetic row's "Not as printed" badge leads its second line and
   opens the row in place to the lines it was made from.
 - **PocketSmith's look.** No panel around the list; a head card exactly as wide
   as the group cards, its columns on theirs; one rounded card per period with

@@ -50,15 +50,18 @@
 <div
 	role="toolbar"
 	aria-label={label ?? title}
-	class={cn('flex min-h-11 flex-none items-center gap-2 px-2 pb-2', className)}
+	class={cn('flex min-h-11 flex-none flex-wrap items-center gap-x-2 gap-y-1 px-2 pb-2', className)}
 	data-slot="list-toolbar"
 	{...restProps}
 >
 	{@render leading?.()}
-	<!-- Crowded, the count gives way before the title, and the title ends in an ellipsis. -->
-	<div class="flex min-w-0 items-baseline gap-2.5 whitespace-nowrap">
-		{#if title}<h2 class="text-body min-w-0 truncate font-semibold">{title}</h2>{/if}
-		{#if meta}<span class="text-muted-foreground min-w-0 shrink-[100] truncate text-sm">{meta}</span>{/if}
+	<!--
+		Crowded, the text wraps, never ends in an ellipsis: the count drops under
+		the title, and the controls drop to a second line before either is cut.
+	-->
+	<div class="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
+		{#if title}<h2 class="text-body font-semibold break-words">{title}</h2>{/if}
+		{#if meta}<span class="text-muted-foreground text-sm break-words">{meta}</span>{/if}
 	</div>
 	<span class="min-w-0 flex-1"></span>
 	{@render children?.()}

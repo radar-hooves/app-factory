@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: godswood, radar-hooves/godswood#889 (its F2 review, measured at 390 and 3360 px).
+
+### Fixed
+
+- **Text wraps where it was cut to an ellipsis.** `ListToolbar` wraps its title and count (the count drops under the title, and the controls drop to a second line, before either is cut); `Panel` `subtitle` wraps; a `Ledger` payee wraps to two lines (`line-clamp-2`) beside its Review chip, which keeps its width. A header is as tall as its text, so no row or bar has a fixed height to break.
+- **A page strip with more tabs than room says so.** `RecordSwitcher`'s tab strip scrolls the open page into view, fades the edge that has more beyond it (`data-more-before` / `data-more-after`), and the fade follows the scroll.
+
 ## [2026.10.22] - 2026-10-19
 
 Consumer: caspo, radar-hooves/caspo#177.

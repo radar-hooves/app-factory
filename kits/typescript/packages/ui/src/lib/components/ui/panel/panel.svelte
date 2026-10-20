@@ -32,12 +32,12 @@
 	}: WithElementRef<HTMLAttributes<HTMLElement>> & {
 		title?: string;
 		/**
-		 * A one-line qualifier beside the title. It TRUNCATES, and every existing
-		 * call site is written against that: a panel header is one rhythm, and a
-		 * subtitle that wrapped would change it everywhere at once.
+		 * A short qualifier under the title. It WRAPS: a header is as tall as its
+		 * text, so a phone shows the whole qualifier rather than "Profit and l…".
 		 *
 		 * For the sentence or two that explains what the section is for, use
-		 * `description`, which wraps. Carry one or the other, not both.
+		 * `description`, which sits in the same place with more room. Carry one
+		 * or the other, not both.
 		 */
 		subtitle?: string;
 		/**
@@ -120,7 +120,7 @@
 					{title}
 				</h2>
 				{#if subtitle}
-					<p class="text-muted-foreground truncate text-xs">{subtitle}</p>
+					<p class="text-muted-foreground text-xs break-words">{subtitle}</p>
 				{/if}
 				{#if description}
 					<p class="text-muted-foreground mt-1 text-sm">{description}</p>

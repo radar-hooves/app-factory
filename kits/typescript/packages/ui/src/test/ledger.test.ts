@@ -141,8 +141,9 @@ describe('Ledger: rows, newest first, grouped by month until the viewer chooses'
 		const lineOne = chips[0]!.parentElement!;
 		expect(lineOne).toBe(lineOne.closest('[data-slot="ledger-title"]')!.firstElementChild);
 		expect(lineOne).toHaveTextContent('Ray White');
-		// The title is the one that gives way; the chip never shrinks.
-		expect(lineOne.firstElementChild!.className).toContain('truncate');
+		// The title is the one that gives way, wrapping to a second line before it is cut; the chip never shrinks.
+		expect(lineOne.firstElementChild!.className).toContain('line-clamp-2');
+		expect(lineOne.firstElementChild!.className).not.toContain('truncate');
 		expect(chips[0]!.className).toContain('flex-none');
 	});
 

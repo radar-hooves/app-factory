@@ -4,8 +4,8 @@
  * and the record's own pages as tabs. The trigger's look against the board is
  * measured in `harness/drive.mjs` (`?surface=record`).
  */
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/svelte';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/svelte';
 import House from '@lucide/svelte/icons/house';
 import RecordSwitcher from '$lib/components/ui/record-switcher';
 import type { RecordSwitcherGroup } from '$lib/components/ui/record-switcher';
@@ -130,5 +130,59 @@ describe('RecordSwitcher', () => {
 		expect(nav).toHaveClass('min-w-0', 'overflow-x-auto');
 		expect(within(nav).getByRole('link', { name: 'Ledger' })).toHaveClass('flex-none');
 		expect(container.querySelector('[aria-hidden="true"]')).toHaveClass('max-sm:hidden');
+	});
+
+	describe('a strip with tabs past its edge', () => {
+		const sizes = { clientWidth: 100, scrollWidth: 300 };
+		const saved = Object.fromEntries(
+			Object.keys(sizes).map((k) => [k, Object.getOwnPropertyDescriptor(HTMLElement.prototype, k)])
+		);
+		beforeEach(() => {
+			for (const [k, v] of Object.entries(sizes))
+				Object.defineProperty(HTMLElement.prototype, k, { configurable: true, get: () => v });
+		});
+		afterEach(() => {
+			for (const k of Object.keys(sizes)) {
+				if (saved[k]) Object.defineProperty(HTMLElement.prototype, k, saved[k]!);
+				else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[k];
+			}
+		});
+
+		it('fades the edge that has more, and says so, so a hidden tab is not silent', async () => {
+			mount({
+				pages: [
+					{ label: 'Overview', href: '/property/4', current: true },
+					{ label: 'Ledger', href: '/property/4/ledger' }
+				]
+			});
+			const nav = screen.getByRole('navigation', { name: 'Pages of 4. Banksia' });
+			await waitFor(() => expect(nav).toHaveAttribute('data-more-after'));
+			expect(nav).not.toHaveAttribute('data-more-before');
+			expect(nav.style.getPropertyValue('--fade-end')).toBe('1.5rem');
+			expect(nav.style.getPropertyValue('--fade-start')).toBe('0px');
+			nav.scrollLeft = 200;
+			await fireEvent.scroll(nav);
+			expect(nav).toHaveAttribute('data-more-before');
+			expect(nav).not.toHaveAttribute('data-more-after');
+		});
+
+		it('scrolls the open page into view when it lies past the right edge', () => {
+			Object.defineProperty(HTMLElement.prototype, 'offsetLeft', { configurable: true, get: () => 250 });
+			Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 40 });
+			try {
+				mount({
+					pages: [
+						{ label: 'Overview', href: '/property/4' },
+						{ label: 'P&L', href: '/property/4?tab=pnl', current: true }
+					]
+				});
+				const nav = screen.getByRole('navigation', { name: 'Pages of 4. Banksia' });
+				// The open tab's right edge is 290 and the strip shows 100: scrolled to bring it in.
+				expect(nav.scrollLeft).toBe(190);
+			} finally {
+				delete (HTMLElement.prototype as unknown as Record<string, unknown>).offsetLeft;
+				delete (HTMLElement.prototype as unknown as Record<string, unknown>).offsetWidth;
+			}
+		});
 	});
 });

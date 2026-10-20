@@ -6,7 +6,9 @@
 	 * a thumbnail each, and ends with the way to all of them, so it still
 	 * works at fifty. The record's own pages follow as tabs. On a phone the
 	 * breadcrumb (the section's name and the "/") gives way, and the tabs scroll
-	 * sideways inside the row, so every page stays reachable.
+	 * sideways inside the row, so every page stays reachable. The open page is
+	 * scrolled into view, and a strip with more beyond an edge fades that edge,
+	 * so a hidden tab is never silent.
 	 *
 	 * It places nothing itself: put it inside `ShellControls` with whatever
 	 * else the page sets in the bar.
@@ -79,6 +81,32 @@
 	 */
 	// svelte-ignore state_referenced_locally
 	let highlighted = $state(here());
+	/** The page strip, and whether tabs lie past its left or right edge. */
+	let strip = $state<HTMLElement | null>(null);
+	let moreBefore = $state(false);
+	let moreAfter = $state(false);
+	const measure = () => {
+		if (!strip) return;
+		moreBefore = strip.scrollLeft > 1;
+		moreAfter = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+	};
+	$effect(() => {
+		void pages;
+		if (!strip) return;
+		const open = strip.querySelector<HTMLElement>('[aria-current="page"]');
+		if (open) {
+			const left = open.offsetLeft;
+			const right = left + open.offsetWidth;
+			if (left < strip.scrollLeft) strip.scrollLeft = left;
+			else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth;
+		}
+		measure();
+		if (typeof ResizeObserver === 'undefined') return;
+		const watch = new ResizeObserver(measure);
+		watch.observe(strip);
+		return () => watch.disconnect();
+	});
+	const fade = (edge: boolean) => (edge ? '1.5rem' : '0px');
 	const eyebrow = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
 </script>
 
@@ -150,8 +178,13 @@
 
 	{#if pages.length}
 		<nav
+			bind:this={strip}
 			aria-label="Pages of {name}"
-			class="ml-1 flex min-w-0 items-stretch gap-1 self-stretch overflow-x-auto sm:ml-3"
+			class="relative ml-1 flex min-w-0 items-stretch gap-1 self-stretch overflow-x-auto sm:ml-3"
+			style="--fade-start: {fade(moreBefore)}; --fade-end: {fade(moreAfter)}; mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);"
+			data-more-before={moreBefore || undefined}
+			data-more-after={moreAfter || undefined}
+			onscroll={measure}
 		>
 			{#each pages as p (p.href)}
 				<a

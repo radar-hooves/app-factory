@@ -43,9 +43,11 @@ describe('Panel — the titled section', () => {
 		expect(text.className).not.toContain('line-clamp');
 	});
 
-	it('keeps subtitle a truncating one-liner beside it', () => {
+	it('wraps the subtitle too, so a phone shows the whole qualifier', () => {
 		render(Harness, { props: { subtitle: 'Company-wide' } });
-		expect(screen.getByText('Company-wide').className).toContain('truncate');
+		const text = screen.getByText('Company-wide');
+		expect(text.className).not.toContain('truncate');
+		expect(text.className).not.toContain('line-clamp');
 	});
 
 	it('tops-aligns the header once a description can wrap', () => {

@@ -4209,9 +4209,9 @@ for (const density of ['comfortable', 'compact']) {
 			const text = chip.parentElement.firstElementChild;
 			const card = row.closest('[data-slot="ledger-card"]').getBoundingClientRect();
 			const c = chip.getBoundingClientRect();
-			return { cut: text.scrollWidth > text.clientWidth, chipWide: c.width, chipWithin: c.right <= card.right && c.left >= card.left, label: chip.textContent.trim() };
+			return { wraps: text.getBoundingClientRect().height > parseFloat(getComputedStyle(text).lineHeight) * 1.5, whole: text.scrollWidth <= text.clientWidth, chipWide: c.width, chipWithin: c.right <= card.right && c.left >= card.left, label: chip.textContent.trim() };
 		});
-		check(`Ledger ${label}: the title truncates before the review chip does`, fit.cut && fit.chipWithin && fit.chipWide > 40 && fit.label === 'Review', JSON.stringify(fit));
+		check(`Ledger ${label}: the title wraps beside the review chip, whole, and the chip keeps its width`, fit.wraps && fit.whole && fit.chipWithin && fit.chipWide > 40 && fit.label === 'Review', JSON.stringify(fit));
 		await context.close();
 	}
 
@@ -4491,6 +4491,15 @@ for (const density of ['comfortable', 'compact']) {
 		m.layout === 'phone' && m.heads === null && m.overflow <= 0 && m.docOverflow <= 0,
 		`layout ${m.layout}, overflow ${m.overflow}px, document ${m.docOverflow}px`
 	);
+	const bar = await page.evaluate(() => {
+		const texts = [...document.querySelectorAll('[data-slot="list-toolbar"] h2, [data-slot="list-toolbar"] h2 + span')];
+		return {
+			n: texts.length,
+			cut: texts.filter((t) => getComputedStyle(t).textOverflow === 'ellipsis' || t.scrollWidth > t.clientWidth).length,
+			over: [...document.querySelectorAll('[data-slot="list-toolbar"]')].filter((b) => b.scrollWidth > b.clientWidth).length
+		};
+	});
+	check('ListToolbar at 390px: the title and count are whole (wrapped, never an ellipsis) and the bar overflows nothing', bar.n > 0 && bar.cut === 0 && bar.over === 0, JSON.stringify(bar));
 	await context.close();
 
 	// godswood, via the master-project orchestrator (app-factory#35): a 1280px
@@ -4678,6 +4687,24 @@ for (const density of ['comfortable', 'compact']) {
 		'RecordSwitcher at 390px: no breadcrumb, the tabs scroll in the row and the last page is reachable',
 		!phone.label && !phone.slash && phone.scrolls && phone.lastInRow && phone.triggerInRow && phone.pageOverflow <= 0,
 		JSON.stringify(phone)
+	);
+	// A tab out of sight is never silent: the strip fades the edge that has more, and the fade follows the scroll.
+	const edge = async () =>
+		page.evaluate(() => {
+			const nav = document.querySelector('[data-testid="ds-shell-location"] nav');
+			const mask = getComputedStyle(nav).maskImage || getComputedStyle(nav).webkitMaskImage;
+			return { before: nav.hasAttribute('data-more-before'), after: nav.hasAttribute('data-more-after'), masked: !!mask && mask !== 'none' };
+		});
+	await page.evaluate(() => (document.querySelector('[data-testid="ds-shell-location"] nav').scrollLeft = 0));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-location"] nav').hasAttribute('data-more-before'));
+	const atStart = await edge();
+	await page.evaluate(() => document.querySelector('[data-testid="ds-shell-location"] nav').lastElementChild.scrollIntoView({ inline: 'end' }));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-location"] nav').hasAttribute('data-more-after'));
+	const atEnd = await edge();
+	check(
+		'RecordSwitcher at 390px: the strip fades the edge with more tabs beyond it, and the fade moves with the scroll',
+		atStart.after && !atStart.before && atEnd.before && !atEnd.after && atStart.masked,
+		JSON.stringify({ atStart, atEnd })
 	);
 	await context.close();
 }

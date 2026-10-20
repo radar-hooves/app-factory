@@ -81,4 +81,16 @@ describe('ListToolbar', () => {
 		expect(screen.queryAllByRole('button')).toHaveLength(0);
 		expect(screen.queryAllByRole('link')).toHaveLength(0);
 	});
+
+	it('wraps a crowded title and count rather than ending them in an ellipsis', () => {
+		render(Harness, { props: { title: 'Profit and loss', meta: 'before depreciation', withLeading: true } });
+		const title = screen.getByRole('heading', { level: 2 });
+		const bar = screen.getByRole('toolbar');
+		expect(bar).toHaveClass('flex-wrap');
+		for (const el of [title, screen.getByText('before depreciation')]) {
+			expect(el.className).not.toContain('truncate');
+			expect(el.className).not.toContain('nowrap');
+		}
+		expect(title.parentElement).toHaveClass('flex-wrap');
+	});
 });
