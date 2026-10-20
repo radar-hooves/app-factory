@@ -91,9 +91,9 @@
 		moreAfter = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
 	};
 	$effect(() => {
-		void pages;
+		const at = pages.findIndex((p) => p.current);
 		if (!strip) return;
-		const open = strip.querySelector<HTMLElement>('[aria-current="page"]');
+		const open = strip.children[at] as HTMLElement | undefined;
 		if (open) {
 			const left = open.offsetLeft;
 			const right = left + open.offsetWidth;
@@ -102,8 +102,9 @@
 		}
 		measure();
 		if (typeof ResizeObserver === 'undefined') return;
+		// The tabs too: a label or a font that changes their width moves the strip's end.
 		const watch = new ResizeObserver(measure);
-		watch.observe(strip);
+		for (const el of [strip, ...strip.children]) watch.observe(el);
 		return () => watch.disconnect();
 	});
 	const fade = (edge: boolean) => (edge ? '1.5rem' : '0px');

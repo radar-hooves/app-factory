@@ -93,4 +93,17 @@ describe('ListToolbar', () => {
 		}
 		expect(title.parentElement).toHaveClass('flex-wrap');
 	});
+
+	it('keeps its controls together at the end, so a line of their own still ends the bar', () => {
+		render(Harness, {
+			props: { title: 'Owned properties', tools: [{ label: 'Download as CSV', icon: Download }], action: { label: 'Add property', icon: Plus }, withControl: true }
+		});
+		const controls = screen.getByRole('toolbar').querySelector('[data-slot="list-toolbar-controls"]')!;
+		expect(controls).toHaveClass('ml-auto', 'justify-end');
+		expect([...controls.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') ?? b.textContent?.trim())).toEqual([
+			'Columns',
+			'Download as CSV',
+			'Add property'
+		]);
+	});
 });

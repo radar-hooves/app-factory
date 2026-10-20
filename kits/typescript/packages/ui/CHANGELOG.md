@@ -8,8 +8,8 @@ Consumer: godswood, radar-hooves/godswood#889 (its F2 review, measured at 390 an
 
 ### Fixed
 
-- **Text wraps where it was cut to an ellipsis.** `ListToolbar` wraps its title and count (the count drops under the title, and the controls drop to a second line, before either is cut); `Panel` `subtitle` wraps; a `Ledger` payee wraps to two lines (`line-clamp-2`) beside its Review chip, which keeps its width. A header is as tall as its text, so no row or bar has a fixed height to break.
-- **A page strip with more tabs than room says so.** `RecordSwitcher`'s tab strip scrolls the open page into view, fades the edge that has more beyond it (`data-more-before` / `data-more-after`), and the fade follows the scroll.
+- **Text wraps where it was cut to an ellipsis.** `ListToolbar`, crowded, drops its controls together to a line of their own, still at the end (one `data-slot="list-toolbar-controls"` group), then the count under the title, then wraps the title; `Panel` `subtitle` wraps; a `Ledger` payee wraps to a second line beside its Review chip, which keeps its width, and only a payee longer than two lines still ends in an ellipsis (`line-clamp-2`). Every bar and row here has a minimum height, never a fixed one, and no fleet call site holds one to a fixed height.
+- **A page strip with more tabs than room says so.** `RecordSwitcher`'s tab strip scrolls the open page into view, fades the edge that has more beyond it (`data-more-before` / `data-more-after`), and the fade follows the scroll and the tabs' own width.
 
 ## [2026.10.22] - 2026-10-19
 

@@ -56,33 +56,40 @@
 >
 	{@render leading?.()}
 	<!--
-		Crowded, the text wraps, never ends in an ellipsis: the count drops under
-		the title, and the controls drop to a second line before either is cut.
+		Crowded, nothing ends in an ellipsis: the controls drop together to a
+		line of their own, still at the end, then the count drops under the
+		title, then the title wraps.
 	-->
-	<div class="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
-		{#if title}<h2 class="text-body font-semibold break-words">{title}</h2>{/if}
-		{#if meta}<span class="text-muted-foreground text-sm break-words">{meta}</span>{/if}
+	{#if title || meta}
+		<div class="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
+			{#if title}<h2 class="text-body min-w-0 font-semibold break-words">{title}</h2>{/if}
+			{#if meta}<span class="text-muted-foreground min-w-0 text-sm break-words">{meta}</span>{/if}
+		</div>
+	{/if}
+	<div
+		class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 [&:not(:has(>*))]:hidden"
+		data-slot="list-toolbar-controls"
+	>
+		{@render children?.()}
+		{#if tools.length}
+			<Tooltip.Provider delayDuration={150}>
+				{#each tools as tool (tool.label)}
+					<IconAction action={tool} />
+				{/each}
+			</Tooltip.Provider>
+		{/if}
+		{#if action}
+			<Button
+				variant="outline"
+				size="sm"
+				href={action.href}
+				download={action.href ? (action.download === true ? '' : action.download || undefined) : undefined}
+				disabled={action.disabled}
+				onclick={action.onclick}
+				data-slot="list-toolbar-action"
+			>
+				{#if ActionIcon}<ActionIcon />{/if}{action.label}
+			</Button>
+		{/if}
 	</div>
-	<span class="min-w-0 flex-1"></span>
-	{@render children?.()}
-	{#if tools.length}
-		<Tooltip.Provider delayDuration={150}>
-			{#each tools as tool (tool.label)}
-				<IconAction action={tool} />
-			{/each}
-		</Tooltip.Provider>
-	{/if}
-	{#if action}
-		<Button
-			variant="outline"
-			size="sm"
-			href={action.href}
-			download={action.href ? (action.download === true ? '' : action.download || undefined) : undefined}
-			disabled={action.disabled}
-			onclick={action.onclick}
-			data-slot="list-toolbar-action"
-		>
-			{#if ActionIcon}<ActionIcon />{/if}{action.label}
-		</Button>
-	{/if}
 </div>

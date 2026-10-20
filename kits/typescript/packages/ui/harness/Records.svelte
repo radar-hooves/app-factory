@@ -415,12 +415,12 @@
 				icon={Home}
 				all={{ label: 'All properties', href: '#/property' }}
 				pages={[
-					{ label: 'Overview', href: '#/property/4', current: true },
+					{ label: 'Overview', href: '#/property/4' },
 					{ label: 'Ledger', href: '#/property/4/ledger' },
 					{ label: 'P&L', href: '#/property/4/pnl' },
 					{ label: 'Documents', href: '#/property/4/documents' },
 					{ label: 'Tenancy', href: '#/property/4/tenancy' }
-				]}
+				].map((p) => ({ ...p, current: p.label === (params.get('page') ?? 'Overview') }))}
 				bind:open={switcherOpen}
 			/>
 		</ShellControls>

@@ -4209,9 +4209,12 @@ for (const density of ['comfortable', 'compact']) {
 			const text = chip.parentElement.firstElementChild;
 			const card = row.closest('[data-slot="ledger-card"]').getBoundingClientRect();
 			const c = chip.getBoundingClientRect();
-			return { wraps: text.getBoundingClientRect().height > parseFloat(getComputedStyle(text).lineHeight) * 1.5, whole: text.scrollWidth <= text.clientWidth, chipWide: c.width, chipWithin: c.right <= card.right && c.left >= card.left, label: chip.textContent.trim() };
+			return { lines: Math.round(text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight)), whole: text.scrollHeight <= text.clientHeight + 1, chipWide: c.width, chipWithin: c.right <= card.right && c.left >= card.left, label: chip.textContent.trim() };
 		});
-		check(`Ledger ${label}: the title wraps beside the review chip, whole, and the chip keeps its width`, fit.wraps && fit.whole && fit.chipWithin && fit.chipWide > 40 && fit.label === 'Review', JSON.stringify(fit));
+		// The fixture's payee needs four lines at 390px, so there the second line is the last and ends in an
+		// ellipsis; at 1000px it fits in one or two, by the face the machine has.
+		const fits = w > 390 ? fit.lines <= 2 && fit.whole : fit.lines === 2 && !fit.whole;
+		check(`Ledger ${label}: the title ${w > 390 ? 'is whole on two lines at most' : 'wraps to two lines and is clamped there'} beside the review chip, which keeps its width`, fits && fit.chipWithin && fit.chipWide > 40 && fit.label === 'Review', JSON.stringify(fit));
 		await context.close();
 	}
 
@@ -4492,14 +4495,24 @@ for (const density of ['comfortable', 'compact']) {
 		`layout ${m.layout}, overflow ${m.overflow}px, document ${m.docOverflow}px`
 	);
 	const bar = await page.evaluate(() => {
-		const texts = [...document.querySelectorAll('[data-slot="list-toolbar"] h2, [data-slot="list-toolbar"] h2 + span')];
+		const b = document.querySelector('[data-slot="list-toolbar"]');
+		const texts = [...b.querySelectorAll('h2, h2 + span')];
+		const title = b.querySelector('h2').getBoundingClientRect();
+		const controls = b.querySelector('[data-slot="list-toolbar-controls"]').getBoundingClientRect();
+		const end = b.getBoundingClientRect().right - parseFloat(getComputedStyle(b).paddingRight);
 		return {
 			n: texts.length,
 			cut: texts.filter((t) => getComputedStyle(t).textOverflow === 'ellipsis' || t.scrollWidth > t.clientWidth).length,
-			over: [...document.querySelectorAll('[data-slot="list-toolbar"]')].filter((b) => b.scrollWidth > b.clientWidth).length
+			over: b.scrollWidth > b.clientWidth,
+			dropped: controls.top >= title.bottom,
+			atEnd: Math.abs(controls.right - end) < 1
 		};
 	});
-	check('ListToolbar at 390px: the title and count are whole (wrapped, never an ellipsis) and the bar overflows nothing', bar.n > 0 && bar.cut === 0 && bar.over === 0, JSON.stringify(bar));
+	check(
+		'ListToolbar at 390px: crowded, the controls drop together to a line of their own at the end, and the title and count stay whole',
+		bar.n === 2 && bar.cut === 0 && !bar.over && bar.dropped && bar.atEnd,
+		JSON.stringify(bar)
+	);
 	await context.close();
 
 	// godswood, via the master-project orchestrator (app-factory#35): a 1280px
@@ -4692,8 +4705,15 @@ for (const density of ['comfortable', 'compact']) {
 	const edge = async () =>
 		page.evaluate(() => {
 			const nav = document.querySelector('[data-testid="ds-shell-location"] nav');
-			const mask = getComputedStyle(nav).maskImage || getComputedStyle(nav).webkitMaskImage;
-			return { before: nav.hasAttribute('data-more-before'), after: nav.hasAttribute('data-more-after'), masked: !!mask && mask !== 'none' };
+			const css = getComputedStyle(nav);
+			const mask = css.maskImage || css.webkitMaskImage;
+			return {
+				before: nav.hasAttribute('data-more-before'),
+				after: nav.hasAttribute('data-more-after'),
+				masked: !!mask && mask !== 'none',
+				start: css.getPropertyValue('--fade-start').trim(),
+				end: css.getPropertyValue('--fade-end').trim()
+			};
 		});
 	await page.evaluate(() => (document.querySelector('[data-testid="ds-shell-location"] nav').scrollLeft = 0));
 	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-location"] nav').hasAttribute('data-more-before'));
@@ -4703,9 +4723,28 @@ for (const density of ['comfortable', 'compact']) {
 	const atEnd = await edge();
 	check(
 		'RecordSwitcher at 390px: the strip fades the edge with more tabs beyond it, and the fade moves with the scroll',
-		atStart.after && !atStart.before && atEnd.before && !atEnd.after && atStart.masked,
+		atStart.after && !atStart.before && atEnd.before && !atEnd.after && atStart.masked &&
+			atStart.start === '0px' && atStart.end === '1.5rem' && atEnd.start === '1.5rem' && atEnd.end === '0px',
 		JSON.stringify({ atStart, atEnd })
 	);
+	const sub = await page.evaluate(() => {
+		const p = [...document.querySelectorAll('header p')].find((e) => e.textContent.startsWith('House and granny flat'));
+		return { lines: Math.round(p.getBoundingClientRect().height / parseFloat(getComputedStyle(p).lineHeight)), whole: p.scrollWidth <= p.clientWidth };
+	});
+	check('Panel at 390px: a long subtitle wraps, whole', sub.lines > 1 && sub.whole, JSON.stringify(sub));
+	await context.close();
+
+	// Opened on its last page, the strip starts scrolled to it: the open tab is in view, the fade on the edge behind it.
+	({ context, page, errors } = await open('surface=record&page=Tenancy', { width: 390, height: 844 }, 'light'));
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
+	const opened = await page.evaluate(() => {
+		const nav = document.querySelector('[data-testid="ds-shell-location"] nav');
+		const n = nav.getBoundingClientRect();
+		const t = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
+		return { tab: nav.querySelector('[aria-current="page"]').textContent.trim(), inView: t.left >= n.left - 1 && t.right <= n.right + 1, before: nav.hasAttribute('data-more-before') };
+	});
+	check('RecordSwitcher at 390px: opened on a page past the edge, the strip scrolls to it', opened.tab === 'Tenancy' && opened.inView && opened.before, JSON.stringify(opened));
 	await context.close();
 }
 
