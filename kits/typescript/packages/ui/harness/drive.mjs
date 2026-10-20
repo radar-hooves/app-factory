@@ -22,6 +22,12 @@
  * verdict rather than a screenshot someone eyeballed.
  *
  *     pnpm run test:browser        # harness:build + this
+ *
+ * On NixOS, where Playwright's own WebKit will not run, build the harness and
+ * drive it in Playwright's image at the version the lockfile pins:
+ *
+ *     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --ipc=host \
+ *       -v "$PWD:$PWD" -w "$PWD" mcr.microsoft.com/playwright:v1.62.0-noble node harness/drive.mjs
  */
 import { chromium, webkit, devices } from 'playwright';
 import { createServer } from 'node:http';
