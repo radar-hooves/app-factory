@@ -10,7 +10,7 @@ template/                   the web skeleton, where master's parity, converge an
 skeletons/desktop/          the desktop skeleton; a symlink into template/ where web and desktop share a file
 kits/rust/desktop-shell     traffic lights and the tray guard
 skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness and per-app view sweep (desktop-pitfalls.md)
-.github/workflows/desktop-ci.yaml   the desktop CI, called by each app @main
+.github/workflows/desktop-ci.yaml   the desktop CI; only bragi calls it, until its move to change.yaml retires it
 ```
 
 Copier reads a git source's config from its root alone, so both skeletons answer one `copier.yaml`, and `_subdirectory` is rendered from the `skeleton` answer. A web app's answers file predates the question, takes the default, and renders byte-identical to before (proven against casefile's answers: 212 files identical, the answers file gains `skeleton: web`). `template/` becomes `skeletons/web/` in one move once master's canonical-app-migration tools read the path from `_subdirectory` instead of hard-coding `template/`.
@@ -25,7 +25,7 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 | Tauri config | | | `tauri.conf.json` (windows, CSP, bundle, updater key), `capabilities/` |
 | Frontend shell | `@poodle64/ui`, `@poodle64/design-tokens` | `svelte.config.js`, `vite.config.ts` (port from answers), `vitest.config.ts`, `tsconfig.json`, `components.json`, `.npmrc`, `src/app.html`, `src/routes/+layout.ts`, `src/lib/utils.ts`, `src/test/setup.ts` | `package.json`, `src/app.css` (palette), routes and components |
 | Settings pane | the telemetry section: next, into `@poodle64/ui` once `@poodle64/ui/settings` lands | | the pane's other sections |
-| CI | `desktop-ci.yaml`: fmt, clippy, tests on atlas and huginn in the app's devShell; the frontend gates on atlas (any desktop app, public or private, calls it on `pull_request` and push to main; a fork's jobs run on GitHub-hosted runners);`flake.nix`'s `pnpmDeps` hash corrected on a pull request's branch, where the flake packages pnpm dependencies | `.github/workflows/ci.yaml` (the caller, granting that one job its write), `security.yaml`, `scripts/update-pnpm-deps-hash.sh` | a workflow of its own for checks only it needs |
+| CI | | `.github/workflows/change.yaml`, master's one caller copied unchanged (no `ci.yaml`, no `security.yaml`: the weekly scan is master's) | `release.yaml`: stamped with its gate, a green `change` run on the tagged commit, and the app's build jobs `needs: gate`; `.claude/CLAUDE.md` |
 | macOS signing | | `scripts/cargo-codesign.sh`: build/sign/verify; read-only final bundle verification; explicit local ad-hoc mode; releases/configured signing fail closed; execute the signed dev binary | `tauri.conf.json`: runner and local `signingIdentity: "-"`; build host declares `APPLE_SIGNING_IDENTITY` for both signers; `flake.nix`: `jq` |
 | Release and updater | not built; see below | | `release.yaml`, the updater wiring |
 | Lints and formatters | | `stylelint.config.js`, the drift and craft lints, `.pre-commit-config.yaml` | the lints' baselines |

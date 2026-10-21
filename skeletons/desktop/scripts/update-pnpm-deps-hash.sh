@@ -4,9 +4,9 @@
 #
 # pnpmDeps is a fixed-output derivation: Nix needs its content hash up front, a
 # lockfile change invalidates it, and nothing derives it from the lockfile the
-# way cargoLock derives Cargo's from Cargo.lock. The factory's desktop-ci.yaml
-# runs this on a pull request and pushes the correction, so a dependency bump
-# needs nobody to run Nix by hand.
+# way cargoLock derives Cargo's from Cargo.lock. An app's own workflow runs this
+# on a pull request and pushes the correction, where it wants a dependency bump
+# to need nobody to run Nix by hand.
 #
 # It always builds against a deliberately wrong hash first. A fixed-output path
 # is addressed by hash and name, so a store already holding the old hash's path

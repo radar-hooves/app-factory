@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.61] - 2026-10-21
+
+Need: Sitting 10's CI cut-over (the operator's rulings of 11/10/2026: one shape for every repo, what the factory stamps follows it); consumer: master-project sunset review, radar-hooves/master-project#377.
+
+### Changed
+
+- **The desktop skeleton stamps master's `change.yaml` caller, copied unchanged, and a `release.yaml` whose `gate` job waits for a green `change` run on the tagged commit** (app-owned after the first stamp, for its build jobs). It no longer stamps `ci.yaml` or `security.yaml`: the weekly scan is master's.
+- **The desktop skeleton stamps `.claude/CLAUDE.md`** (app-owned) carrying the rule that a reported fix is committed unbumped and the tag is cut on the operator's word for the batch.
+
+### Removed
+
+- `ci.yaml` and `security.yaml` from the desktop skeleton. `desktop-ci.yaml` stays while bragi calls it.
+
 ## [2026.10.60] - 2026-10-20
 
 Need: the operator's ruling of 20/10/2026 that caspo's Outrider is armed like pebblestone's Penny, for up to 50 Defence colleagues, "like the Claude Code VS Code extension in a browser"; consumer: caspo. `agent-common` 2026.10.60 and `@poodle64/librarian` 2026.10.5 carry it. Design: `docs/design/agent-console.md` §An armed persona.
