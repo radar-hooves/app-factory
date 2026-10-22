@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.63] - 2026-10-22
+
+Need: Sitting 11 of the sunset review (huginn's runner now carries a `macos` label, so no stamped copy names a host); consumer: master-project sunset review, radar-hooves/master-project#384.
+
+### Changed
+
+- **The macOS legs select `[self-hosted, macos]`, not `huginn`:** the desktop CI's macOS matrix leg, the factory self-test's signing proof, and both `actionlint.yaml` files (labels `household`, `macos`). An app that pinned its own labels is unchanged.
+
+### Not changed
+
+- **`.claude/settings.json` is not factory-owned.** The template and skeletons render none, and `.template-parity.json` lists none, so no parity gate grades an app's `allowedMcpServers`. An app's commit that fails on parity fails on the files the manifest does list.
+
 ## [2026.10.62] - 2026-10-22
 
 Need: Sitting 11 of the sunset review (the household runners carry a `household` label so public repos name no host; deleted rule files must reach the rules fence); consumer: master-project sunset review, radar-hooves/master-project#384.

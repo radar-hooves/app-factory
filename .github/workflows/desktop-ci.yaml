@@ -41,11 +41,11 @@ jobs:
             runner: '["self-hosted", "household"]'
             hosted: ubuntu-latest
           - os: macos
-            runner: '["self-hosted", "huginn"]'
+            runner: '["self-hosted", "macos"]'
             hosted: macos-latest
     # by-exception (2026-10-01), fail-closed on a deleted fork (null head repo): a fork PR's code runs on a GitHub-hosted runner, never the household's
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && matrix.hosted || fromJSON(matrix.runner) }}
-    # Bounds a hang once the job runs; an offline huginn leaves it queued instead.
+    # Bounds a hang once the job runs; an offline macOS runner leaves it queued instead.
     timeout-minutes: 75
     steps:
       - name: Checkout

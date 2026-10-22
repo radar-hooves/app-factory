@@ -67,7 +67,7 @@ jobs:
   macos-signing:
     name: Native macOS signing proof
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.macos-signing-identity != '' }}
-    runs-on: ['self-hosted', 'huginn']
+    runs-on: ['self-hosted', 'macos']
     timeout-minutes: 15
     steps:
       - name: Checkout
