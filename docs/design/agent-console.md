@@ -204,7 +204,7 @@ The factory's migration `d943d70b8845` renames `agent_conversations.room` to `pe
 | caspo | Three library chats; conversations whose answers are Milton's, held at the library; `room-<id>` grants held by colleagues | Writes `config/chat.yaml` (Outrider, `collections: true`) and Outrider's persona directory; deletes its old conversation rows in a migration of its own (Outrider can neither read nor continue Milton's transcripts); at Authentik, adds `chat-outrider` to caspo's application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read; colleagues sign in again |
 | godswood, eight, casefile | No `config/rooms.yaml`, so no conversation rows | Take the release; write `config/chat.yaml` when they offer chat (Milton is godswood's persona) |
 | pebblestone | Already persona-shaped (`/agent/[persona]`) | Its personas become `config/chat.yaml` rows when it takes the factory's slice |
-| library | Its own line: the `reading_room` tool and tables, `/api/reading-room` | Retires them in its own lane; keeps `/api/caller` as the one door apps read |
+| library | Its own line: the `collection_chat` tool and tables, `/api/collection-chat` | Renamed in its own lane; keeps `/api/caller` as the one door apps read |
 
 ## The tier and the hard limit
 
@@ -230,7 +230,7 @@ A persona's turn carries `ASKER_TOKEN`, minted for this app as the person who as
 
 ## Needs this design files
 
-- **library:** `/api/caller/query` honours the person's cut under an exchanged token (it resolves scope from the app's project; reported to its lane 18/10/2026, and the factory names collections from the person's own listing meanwhile); a search across two collections takes 2.8 s against 0.5 s for one; a reader-facing title on a collection's profile; retiring `reading_room`. Its reader door's example entry presents `${ASKER_TOKEN}`, which it refuses: an app's token is `LIBRARY_TOKEN`.
+- **library:** `/api/caller/query` honours the person's cut under an exchanged token (it resolves scope from the app's project; reported to its lane 18/10/2026, and the factory names collections from the person's own listing meanwhile); a search across two collections takes 2.8 s against 0.5 s for one; a reader-facing title on a collection's profile; the `collection_chat` rename. Its reader door's example entry presents `${ASKER_TOKEN}`, which it refuses: an app's token is `LIBRARY_TOKEN`.
 - **supacrawl:** a mode for a persona's gateway caller that refuses private and loopback addresses (`SUPACRAWL_BLOCK_PRIVATE_NETWORKS` is unset on atlas, and the mcpnet listener serves every fleet server unsigned) and refuses `actions` (`executeJavascript` posts anywhere) and caller `headers`. Until then a page's text can steer a persona's `supacrawl_scrape` into the household's network; name `supacrawl_search` alone.
 - **mcp-servers (litellm-mcp):** `ocr` reads a path on its own host, under its own roots, so a file in an app's container never reaches it; it needs the file by bytes or as a package an app runs through the bridge (`${AGENT_SESSION_DIR}` names the session's folder for it).
 - **caspo:** Outrider's `settings.json` and `.mcp.json` as above; `mcp-gateway-api` granted to caspo's identity at the broker; `agent-common[documents]` and its brand for Word and PDF; and its `/mcp` intelligence tools withholding operator-provided claims from a person who is not an admin, as its HTTP routes do (the tools take the caller's `include_operator`, default true).
