@@ -4,6 +4,15 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.62] - 2026-10-22
+
+Need: Sitting 11 of the sunset review (the household runners carry a `household` label so public repos name no host; deleted rule files must reach the rules fence); consumer: master-project sunset review, radar-hooves/master-project#384.
+
+### Changed
+
+- **Every self-hosted runner label that named `atlas` is `household`:** the `runner_labels` default in `copier.yaml`, both `actionlint.yaml` files (labels `household`, `huginn`), the desktop skeleton's `release.yaml`, and the factory's own workflows. The macOS `huginn` legs keep their label. An app that pinned `runner_labels` is unchanged.
+- **`rules-fence` runs `always_run: true`, keeping `files:`,** in the web template's and the desktop skeleton's pre-commit config. pre-commit's file list omits deletions, so a commit that only deleted or renamed away a `.claude/rules/*.md` never ran the hook; master's fence reads the staged set itself.
+
 ## [2026.10.61] - 2026-10-21
 
 Need: Sitting 10's CI cut-over (the operator's rulings of 11/10/2026: one shape for every repo, what the factory stamps follows it); consumer: master-project sunset review, radar-hooves/master-project#377.

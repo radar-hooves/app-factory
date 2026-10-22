@@ -20,7 +20,7 @@ jobs:
   gate:
     if: startsWith(github.ref, 'refs/tags/v')
     name: change passed on the tagged commit
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     permissions:
       actions: read
     steps:

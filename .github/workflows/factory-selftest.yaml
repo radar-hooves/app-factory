@@ -82,7 +82,7 @@ jobs:
   render-and-test:
     name: Render a scratch app and run its own suite
     if: ${{ !github.event.pull_request.head.repo.fork && inputs.macos-signing-identity == '' }}
-    runs-on: ['self-hosted', 'atlas']
+    runs-on: ['self-hosted', 'household']
     timeout-minutes: 30
     env:
       # Deliberately NOT UV_FROZEN=1. That pin is for a real app's CI, which
