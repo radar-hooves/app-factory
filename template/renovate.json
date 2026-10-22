@@ -8,6 +8,11 @@
       "enabled": false
     },
     {
+      "description": "psycopg-binary publishes no Python 3.15 wheel, so a stamped app's backend install fails on a 3.15 image (eight#149, 22/10/2026). Holds the Python runtime and the uv image below 3.15 for every app. Retires when psycopg-binary ships cp315 wheels.",
+      "matchPackageNames": ["python", "ghcr.io/astral-sh/uv"],
+      "allowedVersions": "<3.15"
+    },
+    {
       "description": "vite-plugin-svelte v7 declares `vite: ^8` as a peer and registers its Svelte prebundle loader ONLY under optimizeDeps.rolldownOptions — v6 branches on vite.rolldownVersion and falls back to optimizeDeps.esbuildOptions, v7 deleted that branch. Vite 7's esbuild dep-optimiser never reads rolldownOptions, so every prebundled .svelte file goes through uncompiled and `vite dev` dies, while build, check, lint and Vitest all stay green — a bump nothing in CI catches. Verified 07/09/2026 against the published 6.2.4 and 7.0.0 sources. Retires when this app takes Vite 8.",
       "matchPackageNames": ["@sveltejs/vite-plugin-svelte"],
       "allowedVersions": "<7"

@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.65] - 2026-10-22
+
+Need: psycopg-binary has no Python 3.15 wheel, so Renovate's 3.14 to 3.15 bump broke the backend install; consumer: eight, radar-hooves/eight#149.
+
+### Changed
+
+- **The template's `renovate.json` holds `python` and `ghcr.io/astral-sh/uv` below 3.15**, so every app takes the hold once. An app that carries the same package rule in its own `renovate.json` (and a `.canonical-exceptions` entry for it) drops both on its next `copier update`. Remove the rule here when psycopg-binary ships cp315 wheels.
+
+### Answered
+
+- **`depth` was removed on purpose** in 2026.10.51 with `@poodle64/librarian` 2026.10.0: the rooms, the library's Milton through `/ask` and its quick and thorough ask went together, and a chat turn now runs one way. It is not restored: an app drops its quick and thorough control and the double quota charge, and a room page ports to the chat page.
+
 ## [2026.10.64] - 2026-10-22
 
 Need: the chat page failed `svelte/prefer-svelte-reactivity` under eslint-plugin-svelte 3.23; consumer: casefile, via master-project Sitting 11, radar-hooves/master-project#384.
