@@ -17,7 +17,7 @@ declare global {
 		}
 		/** Navigation state a page hands the next one; a pasted link cannot carry it. */
 		interface PageState {
-			/** A question the chat room asks on arrival, `goto('/chat/<persona>', { state: { ask } })`. */
+			/** A question the chat page asks on arrival, `goto('/chat/<persona>', { state: { ask } })`. */
 			ask?: string;
 		}
 		// interface Platform {}

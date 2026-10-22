@@ -166,7 +166,7 @@
 	</header>
 
 	<div class="relative flex min-h-0 flex-1">
-		<!-- The host's placement, as the stamped room page has it: past questions
+		<!-- The host's placement, as the stamped chat page has it: past questions
 		     over the page from the bar above the transcript, never a column. -->
 		<Sheet.Root bind:open={listOpen}>
 			<Sheet.Content side="left" showCloseButton={false} aria-label="Past questions" class="overflow-y-auto">

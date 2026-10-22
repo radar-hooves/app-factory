@@ -5,7 +5,7 @@ Revises:
 Create Date: 2026-10-18 13:00:00.000000+00:00
 
 `agent_conversations.room` becomes `persona`: a person chats with the app's persona over the
-collections they may read, and the persona, not a room, is what a conversation is with. The values
+collections they may read, and the persona is what a conversation is with. The values
 are kept. A row whose value names no persona in `config/chat.yaml` is listed nowhere and refused as
 a conversation that is not the person's; an app maps its own values in a migration of its own
 (`docs/design/agent-console.md` §What each app does with its data).

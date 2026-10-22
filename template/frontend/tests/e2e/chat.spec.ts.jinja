@@ -420,7 +420,7 @@ test('a question handed over in navigation state is asked, stays on screen and i
 	expect(asks, 'reload, Back and Forward never re-send').toBe(1);
 });
 
-test('a link can wait a question in the box but never make the room ask it', async ({ page }) => {
+test('a link can wait a question in the box but never make the chat ask it', async ({ page }) => {
 	let asks = 0;
 	page.on('request', (request) => {
 		if (request.method() === 'POST' && request.url().endsWith('/api/agent/helper/ask')) asks += 1;

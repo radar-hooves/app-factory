@@ -102,15 +102,15 @@ describe('AppIdentity — entitlements', () => {
 			props: {
 				user: { username: 'jdoe', display_name: null, email: null },
 				workspace: 'Household',
-				entitlements: ['room-pacman', 'admin', 'room-pacman', 'admin'],
+				entitlements: ['chat-pacman', 'admin', 'chat-pacman', 'admin'],
 				onSignOut: () => {}
 			}
 		});
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-		await waitFor(() => expect(screen.getByText('room-pacman')).toBeInTheDocument());
+		await waitFor(() => expect(screen.getByText('chat-pacman')).toBeInTheDocument());
 
-		expect(screen.getAllByText('room-pacman')).toHaveLength(1);
+		expect(screen.getAllByText('chat-pacman')).toHaveLength(1);
 		expect(screen.getAllByText('admin')).toHaveLength(1);
 	});
 });

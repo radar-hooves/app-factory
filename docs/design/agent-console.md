@@ -1,12 +1,12 @@
 # Agent console
 
-Status: **built for the factory release after 2026.10.50** (master-project#380); an armed persona (§An armed persona) for the release after 2026.10.59, on the operator's ruling of 20/10/2026. Need: the operator's rulings of 17 and 18/10/2026, through master's design session: chat leaves the library, "there's no such thing as room terminology anymore ... we chat with collections", one persona shape lives in the factory, and collections follow the person's Authentik entitlements. Milton is godswood's persona, Penny pebblestone's, Outrider CASPO's. His bar: "fast, snappy, particularly when you're chatting with an agent".
+Status: **built for the factory release after 2026.10.50** (master-project#380); an armed persona (§An armed persona) for the release after 2026.10.59, on the operator's ruling of 20/10/2026. Need: the operator's rulings of 17 and 18/10/2026, through master's design session: chat leaves the library, "we chat with collections", with the old vocabulary dead, one persona shape lives in the factory, and collections follow the person's Authentik entitlements. Milton is godswood's persona, Penny pebblestone's, Outrider CASPO's. His bar: "fast, snappy, particularly when you're chatting with an agent".
 
 ## Decision
 
 **A person chats with the app's persona, by its name, over the collections the library lets that person read. The persona is a Claude Code home the app runs itself (`config/personas/<id>/`), offered for chat by a row of `config/chat.yaml` and entered with one `chat-<persona>` entitlement. For each question the app retrieves passages from the library as the person (a token-exchange bearer, `aud=library`) and the persona answers from them in one model call, streaming; the library is read for retrieval only, and decides which collections that person may read. A person asks across every collection they may read, or narrows a question to one. A persona whose own files arm it looks further when its passages fall short: the library again and whole documents, the web, the files a person attached, a document it writes, and the read-only servers its `.mcp.json` names.**
 
-Cost against the rooms it replaces: every stamped app carries about 180 more lines of backend and 200 of frontend (the generated `schema.d.ts` among them); `@poodle64/librarian` sheds about 590 and `agent-common` about 160. One migration on the factory branch. Per app: a `config/chat.yaml` and, for a persona that reads collections, the exchange ([`exchange.md`](exchange.md)) and a caller row at the library.
+Cost against the library-chat pages it replaces: every stamped app carries about 180 more lines of backend and 200 of frontend (the generated `schema.d.ts` among them); `@poodle64/librarian` sheds about 590 and `agent-common` about 160. One migration on the factory branch. Per app: a `config/chat.yaml` and, for a persona that reads collections, the exchange ([`exchange.md`](exchange.md)) and a caller row at the library.
 
 ```d2
 vars: {d2-config: {layout-engine: elk}}
@@ -163,7 +163,7 @@ On atlas, 18/10/2026, Claude Code 2.1.300, Sonnet, the live library.
 
 | Path | First answer token | Whole answer |
 | --- | --- | --- |
-| Before: caspo's rooms through the library's Milton, as the operator, 8 asks (caspo's own table) | 27-114 s (first model event about 10 s) | 34-160 s |
+| Before: caspo's questions through the library's Milton, as the operator, 8 asks (caspo's own table) | 27-114 s (first model event about 10 s) | 34-160 s |
 | This shape, a stamped scratch app, caspo's six questions over `defence-personnel` and `acp-ghost-bat`, one, the other and both, two passes, high effort | median 5.5-6.7 s by scope, 3.1-9.1 s | median 9.7-10.1 s, 5.2-13.8 s |
 | The same at low effort, host load 72-93 on 20 cores | median 5.8-7.1 s, 4.5-10.9 s | median 9.2-10.2 s, 7.1-15.7 s |
 
@@ -201,8 +201,8 @@ The factory's migration `d943d70b8845` renames `agent_conversations.room` to `pe
 
 | App | Its data | What it does |
 | --- | --- | --- |
-| caspo | Three library rooms; conversations whose answers are Milton's, held at the library; `room-<id>` grants held by colleagues | Writes `config/chat.yaml` (Outrider, `collections: true`) and Outrider's persona directory; deletes its old conversation rows in a migration of its own (Outrider can neither read nor continue Milton's transcripts); at Authentik, adds `chat-outrider` to caspo's application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read; colleagues sign in again |
-| godswood, eight, casefile | No `config/rooms.yaml`, so no rooms and no conversation rows | Take the release; write `config/chat.yaml` when they offer chat (Milton is godswood's persona) |
+| caspo | Three library chats; conversations whose answers are Milton's, held at the library; `room-<id>` grants held by colleagues | Writes `config/chat.yaml` (Outrider, `collections: true`) and Outrider's persona directory; deletes its old conversation rows in a migration of its own (Outrider can neither read nor continue Milton's transcripts); at Authentik, adds `chat-outrider` to caspo's application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read; colleagues sign in again |
+| godswood, eight, casefile | No `config/rooms.yaml`, so no conversation rows | Take the release; write `config/chat.yaml` when they offer chat (Milton is godswood's persona) |
 | pebblestone | Already persona-shaped (`/agent/[persona]`) | Its personas become `config/chat.yaml` rows when it takes the factory's slice |
 | library | Its own line: the `reading_room` tool and tables, `/api/reading-room` | Retires them in its own lane; keeps `/api/caller` as the one door apps read |
 

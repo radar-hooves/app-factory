@@ -4,16 +4,16 @@ Revision ID: d63b309b1239
 Revises: f3a9c1d8e2b4
 Create Date: 2026-09-30 14:00:00.000000+00:00
 
-Rooms (`app-factory docs/design/agent-console.md`): a person's conversation in a room,
+Conversations (`app-factory docs/design/agent-console.md`): a person's conversation with a persona,
 its title, whether an answer is being written, the slice's record of every
 question asked and which answers are shared read-only
 (`api/agent/conversations.py`); and one person's daily
-question count across every room (`api/agent/quota.py`). Both CASCADE on the
+question count across every persona (`api/agent/quota.py`). Both CASCADE on the
 user, personal-subject like the table they replace.
 
 Every `agent_sessions` row moves across with its own id, owned as before.
 That slice never recorded which persona a session was with, so a carried
-conversation is in no room (`room` empty) and no page lists it; an app that
+conversation is with no persona (`room` empty) and no page lists it; an app that
 knows sets `room` in a data migration of its own.
 
 An app taking this by `copier update` must repoint ``down_revision`` at its own

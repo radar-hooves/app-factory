@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.66] - 2026-10-22
+
+Need: the operator's ruling of 17/10/2026 that a person chats with collections, so "room" is no word of the factory's; consumer: eight, via its orchestrator.
+
+### Changed
+
+- **The live surface no longer says "room":** the console chat page's comment, the librarian README's conversation-controls row, the chat page's `app.d.ts` note, a chat test and an e2e test title, the `ui` identity test's sample entitlement (`chat-pacman`), the design doc's prose, and the two conversation migrations' docstrings. No behaviour changes; no kit is republished. What stays is a name of old data: the `room` column in the two migrations, `room-<id>` entitlements and `config/rooms.yaml` in the migration table, and the retirement list's deleted `rooms` paths in `copier.yaml`. The library's `reading_room` tool is its own lane's.
+
 ## [2026.10.65] - 2026-10-22
 
 Need: psycopg-binary has no Python 3.15 wheel, so Renovate's 3.14 to 3.15 bump broke the backend install; consumer: eight, radar-hooves/eight#149.
