@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.64] - 2026-10-22
+
+Need: the chat page failed `svelte/prefer-svelte-reactivity` under eslint-plugin-svelte 3.23; consumer: casefile, via master-project Sitting 11, radar-hooves/master-project#384.
+
+### Fixed
+
+- **The chat page builds its query strings with `SvelteURLSearchParams`:** `address()` and `narrow()` in `chat/[persona]/+page.svelte` no longer use the bare `URLSearchParams`, so the stamped page lints clean on eslint-plugin-svelte 3.23 with no disable comment. Output is unchanged. An app that carries `eslint-disable` lines for this can drop them.
+
 ## [2026.10.63] - 2026-10-22
 
 Need: Sitting 11 of the sunset review (huginn's runner now carries a `macos` label, so no stamped copy names a host); consumer: master-project sunset review, radar-hooves/master-project#384.

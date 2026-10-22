@@ -13,6 +13,7 @@
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import HistoryIcon from '@lucide/svelte/icons/history';
 	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
 	import { goto } from '$app/navigation';
@@ -88,7 +89,7 @@
 
 	/** This page's address with the conversation named (or none), keeping the collection. */
 	function address(conversation?: string | null): string {
-		const query = new URLSearchParams();
+		const query = new SvelteURLSearchParams();
 		if (collection) query.set('collection', collection);
 		if (conversation) query.set('c', conversation);
 		const text = query.toString();
@@ -195,7 +196,7 @@
 
 	/** Narrows the next question to one collection, or to all of them, in the address. */
 	function narrow(name: string | undefined) {
-		const query = new URLSearchParams(page.url.searchParams);
+		const query = new SvelteURLSearchParams(page.url.searchParams);
 		if (name) query.set('collection', name);
 		else query.delete('collection');
 		void goto(`?${query}`, { replaceState: true, keepFocus: true, noScroll: true });
