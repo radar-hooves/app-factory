@@ -14,6 +14,7 @@ Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost lik
 - **`ToolWords.doing`**, the present-tense verb a row shows while its call runs; `describe()` gives one for every call it knows.
 - **`ThinkingRow` takes `reading`**: open while the turn runs, folded once it settles, the reader's own choice held either way.
 - **`ActivityGroup` takes `running`** (the turn has not settled), defaulting to `live`.
+- **`ChatTransport.clear` and `Chat.clear()`**: every conversation with the persona the server lets go, then the list read again and a new conversation where the open one went; `Chat.clearable` says whether the routes offer it.
 - Copy: `stop`, `nowStarting`, `nowPassages`, `nowPassage`, `nowAnswer`, `stepFoundOne`.
 
 ### Changed

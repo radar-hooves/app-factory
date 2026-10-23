@@ -151,6 +151,12 @@ export function chatTransport(persona: Persona): ChatTransport {
 		rename: (id, title) =>
 			data(api.PATCH('/api/agent/conversations/{conversation_id}', { ...at(id), body: { title } })),
 		remove: (id) => data(api.DELETE('/api/agent/conversations/{conversation_id}', at(id))),
+		clear: () =>
+			data(
+				api.DELETE('/api/agent/{persona}/conversations', {
+					params: { path: { persona: persona.id } }
+				})
+			),
 		mark: (id, turn, verdict) =>
 			data(
 				api.PUT('/api/agent/conversations/{conversation_id}/turns/{turn}/mark', {

@@ -678,7 +678,14 @@ export interface paths {
         get: operations["listConversations"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Clear Conversations
+         * @description Forget every one of this person's conversations with the persona, as `delete` forgets one.
+         *
+         *     Only the caller's own, and never one still being answered: its turn is
+         *     writing to it, and it stays listed until it settles.
+         */
+        delete: operations["clearConversations"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2617,6 +2624,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConversationSummary"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clearConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -130,6 +130,10 @@ export interface ChatTransport {
 	rename(id: string, title: string): Promise<void>;
 	/** `DELETE conversations/{id}`. */
 	remove(id: string): Promise<void>;
+	/** `DELETE {persona}/conversations`: every one of this person's
+	 *  conversations with this persona but one still being answered. Absent,
+	 *  the host offers no Clear all. */
+	clear?(): Promise<void>;
 	/** `GET conversations/{id}/export`: the file, and the name to save it as. */
 	download(id: string): Promise<{ name: string; body: Blob }>;
 	/** The answer mark, where the agent takes one. `turn` is the answer's
@@ -446,6 +450,26 @@ export class Chat {
 		const at = this.conversations?.findIndex((c) => c.id === id) ?? -1;
 		if (at >= 0) this.conversations?.splice(at, 1);
 		if (this.conversationId === id) this.new();
+		return true;
+	}
+
+	/** Whether this persona's conversations can be cleared all at once (`ChatTransport.clear`). */
+	get clearable(): boolean {
+		return Boolean(this.#chat?.clear);
+	}
+
+	/** Forget every conversation with this persona but one still being
+	 *  answered, then list what is left. The open one, forgotten, leaves a new one. */
+	async clear(): Promise<boolean> {
+		if (!this.#chat?.clear) return false;
+		try {
+			await this.#chat.clear();
+		} catch {
+			return false;
+		}
+		const open = this.conversationId;
+		await this.list();
+		if (open && !this.conversations?.some((c) => c.id === open)) this.new();
 		return true;
 	}
 

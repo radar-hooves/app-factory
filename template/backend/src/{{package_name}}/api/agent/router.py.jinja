@@ -357,6 +357,32 @@ def list_conversations(persona: EnteredPersona, identity: CurrentIdentity, db: S
     return [_summary(conversation) for conversation in conversations.listed(db, identity.user.id, persona.id)]
 
 
+@router.delete("/{persona}/conversations", operation_id="clearConversations", status_code=204)
+async def clear_conversations(
+    persona: EnteredPersona, identity: CurrentIdentity, settings: SettingsDep, db: SessionDep, asking: CurrentAsking
+) -> None:
+    """Forget every one of this person's conversations with the persona, as `delete` forgets one.
+
+    Only the caller's own, and never one still being answered: its turn is
+    writing to it, and it stays listed until it settles.
+    """
+    listed = await run_in_threadpool(conversations.listed, db, identity.user.id, persona.id)
+    settled = [conversation for conversation in listed if conversations.answering(conversation) is None]
+    if not settled:
+        return
+    agent = await chat.agent(settings.agent, persona, asking)
+    for conversation in settled:
+        if conversation.session_id:
+            await agent.forget(conversation.session_id)
+
+    def forget() -> None:
+        for conversation in settled:
+            db.delete(conversation)
+        db.commit()
+
+    await run_in_threadpool(forget)
+
+
 @router.get("/{persona}/documents/{document_id}", operation_id="getDocument")
 async def document(
     persona: EnteredPersona, document_id: int, settings: SettingsDep, asking: CurrentAsking

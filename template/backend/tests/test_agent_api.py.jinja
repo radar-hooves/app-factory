@@ -778,6 +778,40 @@ async def test_rename_download_and_delete(client: AsyncClient, agent_settings: A
     assert await agent.read(session) is None
 
 
+async def test_clearing_forgets_every_settled_conversation_of_this_persons_with_this_persona(
+    client: AsyncClient, agent_settings: AgentSettings, app: FastAPI
+) -> None:
+    who = _person("chat-helper", "chat-manual")
+    # Three questions: the test allowance.
+    settled = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]
+    answering = _events((await _ask(client, "helper", "two", who)).text)[0]["session_id"]
+    other = _events((await _ask(client, "manual", "another persona", who)).text)[0]["session_id"]
+    stranger = _person("chat-helper")
+    theirs = _events((await _ask(client, "helper", "somebody else's", stranger)).text)[0]["session_id"]
+    await _settled()
+    session = str(_row(settled).session_id)
+    with get_session_factory()() as db:
+        db.execute(
+            update(AgentConversation)
+            .where(AgentConversation.id == answering)
+            .values(answering_since=conversations.now(), last_activity_at=conversations.now())
+        )
+        db.commit()
+    agent = await chat.agent(agent_settings, chat.get(agent_settings, "helper"), Asking(app.state.exchange, "", ""))
+    assert await agent.read(session) is not None
+
+    assert (await client.delete("/api/agent/helper/conversations", headers=who)).status_code == 204
+
+    listed = (await client.get("/api/agent/helper/conversations", headers=who)).json()
+    assert [c["id"] for c in listed] == [answering]
+    assert await agent.read(session) is None
+    assert [c["id"] for c in (await client.get("/api/agent/manual/conversations", headers=who)).json()] == [other]
+    assert [c["id"] for c in (await client.get("/api/agent/helper/conversations", headers=stranger)).json()] == [theirs]
+    # A persona the person may not enter refuses; one with nothing to clear is no error.
+    assert (await client.delete("/api/agent/manual/conversations", headers=stranger)).status_code == 403
+    assert (await client.delete("/api/agent/helper/conversations", headers=_person("chat-helper"))).status_code == 204
+
+
 async def test_a_revoked_grant_closes_the_persons_old_conversations(client: AsyncClient) -> None:
     who = _person("chat-helper")
     conversation = _events((await _ask(client, "helper", "one", who)).text)[0]["session_id"]

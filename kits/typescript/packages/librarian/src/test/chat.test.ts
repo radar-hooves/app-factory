@@ -278,13 +278,17 @@ describe('Chat edit and resend', () => {
 	it('reads one version of a written document through the transport, as the open conversation', async () => {
 		const loadArtefact = vi.fn(async () => ({ text: '# Brief', mediaType: 'text/markdown' }));
 		const artefactUrl = vi.fn(
-			(id: string, name: string, version: number, format: string) => `/${id}/${name}/${version}/${format}`
+			(id: string, name: string, version: number, format: string) =>
+				`/${id}/${name}/${version}/${format}`
 		);
 		const { transport } = persona({ loadArtefact, artefactUrl });
 		const c = chat(transport);
 		expect(c.artefactUrl('brief.md', 1, 'pdf')).toBe('');
 		await c.open(SESSION);
-		expect(await c.loadArtefact('brief.md', 2)).toEqual({ text: '# Brief', mediaType: 'text/markdown' });
+		expect(await c.loadArtefact('brief.md', 2)).toEqual({
+			text: '# Brief',
+			mediaType: 'text/markdown'
+		});
 		expect(loadArtefact).toHaveBeenCalledWith(SESSION, 'brief.md', 2);
 		expect(c.artefactUrl('brief.md', 1, 'pdf')).toBe(`/${SESSION}/brief.md/1/pdf`);
 	});
@@ -659,6 +663,36 @@ describe('Chat conversations', () => {
 		expect(c.turns).toEqual([]);
 	});
 
+	it('clears every conversation the server lets go, and the open one cleared leaves a new one', async () => {
+		let listed = [conversation(), { ...conversation(), id: 'b', title: 'Still answering' }];
+		const clear = vi.fn(async () => {
+			listed = listed.filter((c) => c.id === 'b');
+		});
+		const { transport } = persona({ list: vi.fn(async () => listed), clear });
+		const c = chat(transport);
+		await c.open(SESSION);
+		await c.list();
+		expect(c.clearable).toBe(true);
+
+		expect(await c.clear()).toBe(true);
+		expect(clear).toHaveBeenCalledOnce();
+		expect(c.conversations?.map((x) => x.id)).toEqual(['b']);
+		expect(c.conversationId).toBeNull();
+	});
+
+	it('offers no clear where the persona’s routes have none, and says so when it fails', async () => {
+		expect(chat(persona().transport).clearable).toBe(false);
+		expect(await chat(persona().transport).clear()).toBe(false);
+		const { transport } = persona({
+			list: vi.fn(async () => [conversation()]),
+			clear: vi.fn(async () => Promise.reject(new Error()))
+		});
+		const c = chat(transport);
+		await c.list();
+		expect(await c.clear()).toBe(false);
+		expect(c.conversations).toHaveLength(1);
+	});
+
 	it('reads the list again once an answer settles', async () => {
 		const { transport, asks } = persona();
 		const c = chat(transport);
@@ -754,7 +788,9 @@ describe('Chat shares', () => {
 	it('reads back which answers are shared', async () => {
 		const read = vi.fn(async () =>
 			conversation({
-				turns: [{ question: 'Total?', answer: ANSWER, shared: `/chat/outrider/answers/${SESSION}/0` }]
+				turns: [
+					{ question: 'Total?', answer: ANSWER, shared: `/chat/outrider/answers/${SESSION}/0` }
+				]
 			})
 		);
 		const c = chat(persona({ read }).transport);
