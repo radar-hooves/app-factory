@@ -140,7 +140,8 @@ be the same thing.
 There is now exactly one shell shape, no prop to choose a different one.
 Operator ruling, 31/07/2026: every household app renders the same composition,
 a permanent side rail on `md`+ (an overlay drawer below it) carrying primary
-navigation, brand and the collapse toggle, **plus** a real top navbar (search,
+navigation and the brand, **plus** a real top navbar (the collapse toggle at
+its leading edge, search,
 leading/trailing slots, theme toggle, identity), always both together, with
 content that is always full-width. Apps do not choose variants, content modes,
 or spacing.

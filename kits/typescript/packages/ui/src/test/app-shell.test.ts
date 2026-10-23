@@ -319,23 +319,33 @@ describe('AppShell — rail collapse', () => {
 		});
 	});
 
-	it('sits in the rail head, on the brand row, above the nav — not at the foot', () => {
-		// The move that motivated this: a control acting on the rail belongs at the
-		// rail's own top edge, sharing the brand row, not a full-width row at the
-		// foot reading like a navigation destination. Proven by DOM order, since
-		// jsdom applies no layout — the toggle shares the brand link's parent and
-		// precedes the nav body.
+	it('sits at the leading edge of the top bar, before the title — not in the rail', () => {
+		// The shadcn sidebar blocks' `Sidebar.Trigger` place: first in the bar, a
+		// thin separator after it, the rail's header left holding the brand alone.
+		// Proven by DOM order, since jsdom applies no layout.
 		render(ShellHarness, { props: { collapsible: true } });
 		const rail = document.querySelector('.ds-shell-rail')!;
+		const header = document.querySelector('header.ds-shell-bar')!;
 		const toggle = screen.getByTestId('ds-rail-collapse');
-		const brand = rail.querySelector<HTMLElement>('a[aria-label="Harness"]')!;
-		const nav = rail.querySelector('nav')!;
+		const separator = screen.getByTestId('ds-rail-collapse-separator');
+		const identity = screen.getByTestId('identity');
 
-		expect(toggle.parentElement).toContainElement(brand);
+		expect(rail).not.toContainElement(toggle);
+		expect(header).toContainElement(toggle);
+		expect(toggle.className).toContain('md:grid');
+		expect(toggle.className).toContain('hidden');
 		expect(
-			toggle.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the toggle should precede the nav body'
+			toggle.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the separator follows the toggle'
 		).toBeTruthy();
+		expect(
+			separator.compareDocumentPosition(identity) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the rest of the bar follows the separator'
+		).toBeTruthy();
+		// The rail header holds the brand alone: nothing but the brand link
+		// precedes the nav.
+		const brand = rail.querySelector<HTMLElement>('a[aria-label="Harness"]')!;
+		expect(brand.parentElement).toBe(rail);
 	});
 
 	it('names the toggle for its action in both states', async () => {
@@ -461,6 +471,14 @@ describe('AppShell — a collapsed rail peeks', () => {
 		await new Promise((r) => setTimeout(r, 250));
 		expect(rail()).toHaveAttribute('data-collapsed', 'true');
 		expect(rail()).not.toHaveAttribute('data-peek');
+	});
+
+	it('peeks when the pointer comes onto a rail collapsed from the bar', async () => {
+		render(ShellHarness);
+		await fireEvent.click(screen.getByTestId('ds-rail-collapse'));
+		await waitFor(() => expect(rail()).toHaveAttribute('data-collapsed', 'true'));
+		await fireEvent.pointerEnter(rail(), { pointerType: 'mouse' });
+		await waitFor(() => expect(rail()).toHaveAttribute('data-peek', 'true'));
 	});
 
 	it('overlays rather than reflows, and stills under reduced motion', () => {

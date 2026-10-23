@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.25] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: the rail's toggle sat on its own row under the wordmark, "not a canonical location").
+
+### Changed
+
+- **`AppShell`'s collapse toggle moves to the leading edge of the top bar**, before the page's title, with a thin separator after it: where the shadcn sidebar blocks put `Sidebar.Trigger`. The rail's header now holds the brand alone, centred on the slim rail and aligned on the open one. Unchanged: md and up only (the phone drawer keeps its own trigger), the `aria-label`, `aria-pressed`, `title`, the `[` shortcut, `data-testid="ds-rail-collapse"` and the `PanelLeftOpen`/`PanelLeftClose` icons. A new `ds-rail-collapse-separator` test id marks the separator. Collapsing from the bar no longer leaves the peek suppressed: it ends when the pointer comes onto the rail, as before it ended when the pointer left. An app's test that looked for the toggle inside `.ds-shell-rail` looks in the bar.
+
 ## [2026.10.24] - 2026-10-23
 
 Consumer: caspo (a lead, a paragraph and an intro in one column ended at three right edges).

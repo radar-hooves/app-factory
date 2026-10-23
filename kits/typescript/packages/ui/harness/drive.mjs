@@ -1463,6 +1463,64 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
+	// The collapse toggle leads the top bar (shadcn's Sidebar.Trigger place) and
+	// the rail's head holds the brand alone, centred on the slim rail and
+	// aligned on the open one. Geometry, so only a real layout can say.
+	{
+		const { context, page } = await open('surface=nested&collapsible=1');
+		await page.waitForSelector('.ds-shell-rail');
+		const read = () =>
+			page.evaluate(() => {
+				const r = (el) => el.getBoundingClientRect();
+				const rail = document.querySelector('.ds-shell-rail');
+				const bar = document.querySelector('header.ds-shell-bar');
+				const toggle = document.querySelector('[data-testid="ds-rail-collapse"]');
+				const brand = rail.querySelector('a[aria-label]');
+				const mark = brand.querySelector('span, svg, img') ?? brand;
+				return {
+					inBar: bar.contains(toggle) && !rail.contains(toggle),
+					toggleLeft: r(toggle).left - r(bar).left,
+					toggleTopInBar: r(toggle).top >= r(bar).top && r(toggle).bottom <= r(bar).bottom,
+					brandOnly: [...rail.children].filter((c) => c !== brand && c.tagName === 'A').length,
+					brandCentreOffset: Math.abs((r(brand).left + r(brand).right) / 2 - (r(rail).left + r(rail).right) / 2),
+					markLeft: r(mark).left - r(rail).left,
+					railHeadHeight: r(brand).height
+				};
+			});
+		const open1 = await read();
+		check(
+			'collapse toggle: first in the top bar, inside it, not in the rail',
+			open1.inBar && open1.toggleTopInBar && open1.toggleLeft < 40,
+			`in bar ${open1.inBar}, ${open1.toggleLeft.toFixed(0)}px from the bar edge`
+		);
+		check(
+			'expanded rail: the brand aligns to the rail padding',
+			open1.markLeft >= 12 && open1.markLeft <= 20,
+			`mark ${open1.markLeft.toFixed(0)}px from the rail edge`
+		);
+		await page.screenshot({ path: 'harness/dist/rail-toggle-expanded.png', clip: { x: 0, y: 0, width: 900, height: 160 } });
+		await page.click('[data-testid="ds-rail-collapse"]');
+		await page.waitForFunction(
+			() => document.querySelector('.ds-shell-rail')?.dataset.collapsed === 'true'
+		);
+		await page.waitForFunction(() =>
+			document.getAnimations().every((animation) => animation.playState !== 'running')
+		);
+		const slim = await read();
+		check(
+			'collapsed rail: the brand is centred on the slim rail',
+			slim.brandCentreOffset <= 1.5,
+			`brand centre ${slim.brandCentreOffset.toFixed(1)}px off the rail centre`
+		);
+		check(
+			'collapsed rail: the toggle has not moved',
+			slim.inBar && Math.abs(slim.toggleLeft - open1.toggleLeft) < 1,
+			`${open1.toggleLeft.toFixed(0)}px then ${slim.toggleLeft.toFixed(0)}px`
+		);
+		await page.screenshot({ path: 'harness/dist/rail-toggle-collapsed.png', clip: { x: 0, y: 0, width: 900, height: 160 } });
+		await context.close();
+	}
+
 	// A collapsed rail renders no tree at all, and the parent stays a link. The
 	// claim is about a real 3.5rem column, so it is measured here rather than
 	// asserted off a class name.

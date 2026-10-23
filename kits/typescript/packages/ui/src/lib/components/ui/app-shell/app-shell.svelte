@@ -12,15 +12,15 @@
 	 *
 	 * There is now exactly one composition, no variant prop to choose it: a
 	 * permanent side rail on md+ (an overlay drawer below it) carrying primary
-	 * navigation and a brand row that also carries the collapse toggle, PLUS a
+	 * navigation and the brand, PLUS a
 	 * real top navbar (search, leading/trailing slots, theme toggle, identity) —
 	 * always both together. Operator ruling, 31/07/2026: every household app
 	 * renders one shell shape; apps do not choose variants.
 	 *
-	 * The collapse toggle sits at the rail's own top edge, on the brand row,
-	 * where every comparable shell puts a control that acts on the rail — icon
-	 * only, right of the wordmark, stacking under the mark when the rail is
-	 * collapsed. The foot is left to the app.
+	 * The collapse toggle is the leading edge of the top bar, before the page's
+	 * title, with a thin separator after it — where the shadcn sidebar blocks put
+	 * `Sidebar.Trigger`. The rail's header holds the brand alone, and the foot is
+	 * left to the app.
 	 *
 	 * Search can sit in either of two places, because it reads as a different
 	 * thing depending on what is beside it. `searchPlacement` defaults to
@@ -142,7 +142,7 @@
 		 */
 		currentPath?: string;
 		/**
-		 * Offer an icon-only collapse toggle at the rail head, on the brand row.
+		 * Offer an icon-only collapse toggle at the leading edge of the top bar.
 		 *
 		 * Defaults ON. It was opt-in while the control was being introduced, and
 		 * two of nine household apps opted in — so seven rails could not be
@@ -303,7 +303,7 @@
 	// than a flourish. The rail and the drawer are one element carrying one
 	// `collapsed` state, so a user who collapsed the rail on a desktop and later
 	// opened the menu on a phone was handed a 3.5rem icon-only drawer with no way
-	// out — the Collapse control is `md:flex` and does not render at that width.
+	// out — the Collapse control is `md:grid` and does not render at that width.
 	// Nesting did not cause that, it raised the stakes: a collapsed rail renders
 	// no children, so the phone would have lost the sub-navigation entirely.
 	// `mobileNavOpen` implies narrow (the matchMedia effect below is what earns
@@ -335,6 +335,9 @@
 
 	function peekPointerEnter(event: PointerEvent) {
 		if (event.pointerType === 'touch') return;
+		// The toggle is in the bar, so a collapse made there leaves the suppression
+		// set with the pointer off the rail; coming onto the rail ends it.
+		peekSuppressed = false;
 		clearTimeout(peekTimer);
 		peekTimer = setTimeout(() => (pointerOn = true), PEEK_DELAY_MS);
 	}
@@ -403,8 +406,7 @@
 		const candidates = [
 			...overlay.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')
 		].filter((el) => el.tabIndex !== -1);
-		// Drop what CSS has hidden — the collapse control is display:none below md
-		// and must not be a tab stop. `getClientRects()` is the check that works
+		// Drop what CSS has hidden — anything display:none must not be a tab stop. `getClientRects()` is the check that works
 		// against a real layout; where there is no layout engine at all it reports
 		// EVERYTHING as hidden, so an empty result means "cannot tell", not "none",
 		// and the trap falls back to the unfiltered set rather than silently
@@ -606,52 +608,7 @@
 				</button>
 			{/if}
 
-			<!--
-				The collapse toggle rides the brand row, at the rail's own top edge —
-				where a control that acts on the rail belongs (Notion, Linear, GitHub's
-				newer nav all put it there), rather than a full-width labelled row at
-				the foot that read as a navigation destination. Expanded, it sits right
-				of the wordmark (`ml-auto`); collapsed, the head has no room beside the
-				mark, so the row becomes a column and the toggle stacks under it,
-				centred. A peek keeps that column, the mark and the toggle where the
-				slim rail put them: a peeked row half the height pulled every nav row 50px up
-				under the pointer, and a click landed on the row below the one aimed
-				at (caspo#177). `md:grid` keeps it off the mobile drawer, where
-				collapse does not apply — the same reason the foot control carried
-				`md:flex`.
-			-->
-			{#if collapsible}
-				<div
-					class={cn(
-						'flex',
-						railCollapsed ? 'flex-col gap-1 py-2' : 'items-center pr-2',
-						railNarrow && 'items-center'
-					)}
-				>
-					{@render brandLockup()}
-					<button
-						type="button"
-						onclick={toggleCollapsed}
-						class={cn(
-							'text-shell-muted-foreground hover:text-shell-foreground hidden size-8 flex-none place-items-center rounded-md transition-colors md:grid',
-							!railCollapsed && 'ml-auto',
-							railCollapsed && !railNarrow && 'ml-3'
-						)}
-						aria-label={collapseLabel}
-						aria-pressed={collapsed}
-						title={`${collapseLabel} (press [)`}
-						data-testid="ds-rail-collapse"
-					>
-						{#if collapsed}
-							<PanelLeftOpen class="size-4" />
-						{:else}
-							<PanelLeftClose class="size-4" />
-						{/if}
-					</button>
-				</div>
-			{:else}
-				{@render brandLockup()}
-			{/if}
+			{@render brandLockup()}
 			<AppNav
 				{nav}
 				{currentPath}
@@ -733,6 +690,35 @@
 						<Menu class="size-4" />
 					{/if}
 				</button>
+			{/if}
+
+			<!--
+				The collapse toggle is the leading edge of the bar, before the page's
+				title and a thin separator after it: where the shadcn sidebar blocks put
+				`Sidebar.Trigger`, so the rail's header holds the brand alone. `md:grid`
+				keeps it off the phone, where the drawer has its own trigger.
+			-->
+			{#if collapsible}
+				<button
+					type="button"
+					onclick={toggleCollapsed}
+					class="text-shell-muted-foreground hover:text-shell-foreground -ml-1 hidden size-8 flex-none place-items-center rounded-md transition-colors md:grid"
+					aria-label={collapseLabel}
+					aria-pressed={collapsed}
+					title={`${collapseLabel} (press [)`}
+					data-testid="ds-rail-collapse"
+				>
+					{#if collapsed}
+						<PanelLeftOpen class="size-4" />
+					{:else}
+						<PanelLeftClose class="size-4" />
+					{/if}
+				</button>
+				<span
+					class="bg-border hidden h-4 w-px flex-none md:block"
+					aria-hidden="true"
+					data-testid="ds-rail-collapse-separator"
+				></span>
 			{/if}
 
 			<!-- The rail carries the brand on md+; below md the rail is gone, so the
