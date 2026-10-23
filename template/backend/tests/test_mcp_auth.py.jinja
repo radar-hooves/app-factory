@@ -26,6 +26,7 @@ from pydantic import SecretStr
 
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
+from {{ package_name }}.mcp.auth import requires
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from tests.support.fake_authentik import FakeAuthentik
 
@@ -302,7 +303,7 @@ def _probe_tool(monkeypatch):
     def _with_probe():
         server = build_app_server()
 
-        @server.tool(name=PROBE_TOOL)
+        @server.tool(name=PROBE_TOOL, meta=requires())
         def _probe() -> dict[str, str]:
             """Echo the identity the bearer gate injected. Authorises nothing."""
             from fastmcp.server.dependencies import get_http_headers

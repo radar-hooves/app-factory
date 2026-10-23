@@ -4,7 +4,8 @@ This is the producer's door (`app-factory docs/design/alerts.md`): n8n or anothe
 service holds an Authentik bearer and is listed in `config/actors.yaml`, and
 `ActorGateMiddleware` (`mcp/auth.py`) has refused every other caller before this
 tool runs. Every registered actor may raise and clear any key; reading the
-alerts back is the operator's, through `/api/alerts`.
+alerts back is the operator's, through `/api/alerts`. A person needs `admin:write`,
+which the raise and clear routes require.
 """
 
 from typing import Literal
@@ -16,12 +17,13 @@ from pydantic import ValidationError
 from {{ package_name }}.api.alerts import service
 from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.db.session import get_session_factory
+from {{ package_name }}.mcp.auth import requires
 
 
 def register_alert_tools(mcp: FastMCP) -> None:
     """Register the `alerts` dispatcher on `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(meta=requires("admin", write=True))
     def alerts(
         action: Literal["raise", "clear"],
         key: str,

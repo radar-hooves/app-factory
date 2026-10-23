@@ -20,11 +20,15 @@ gate verifies it and puts the :class:`~{{ package_name }}.exchange.Asker` on the
 to chat alone reaches none of its tools, as its HTTP routes refuse
 them (``entitlements.admitted``).
 
+A person is held to the entitlements the tool's REST counterpart requires,
+declared on the tool as ``meta=requires("<module>", write=...)`` and enforced by
+:func:`person_may` under FastMCP's ``AuthMiddleware`` on call and on list. A tool
+that declares nothing is refused to a person and hidden from their list. A
+machine caller is not held to it: its gate is ``config/actors.yaml``.
+
 Authentik authenticates; this app authorises. Map ``actor_id`` / ``actor_type``
 onto your own server-side authorisation (roles, grants, tenancy) as the domain
-grows, and a person's tool calls onto their entitlements as a route's
-(``entitlements.has_module(current_asker().entitlements, ...)``) — this module
-has no domain knowledge of its own.
+grows — this module has no domain knowledge of its own.
 """
 
 from __future__ import annotations
@@ -33,12 +37,13 @@ import logging
 from functools import lru_cache
 
 import mcp.types as mt
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import AuthorizationError, ToolError
+from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_context, get_http_headers, get_http_request
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
-from {{ package_name }}.entitlements import admitted
+from {{ package_name }}.entitlements import admitted, has_module
 from {{ package_name }}.exceptions import AuthenticationError
 from {{ package_name }}.exchange import Asker
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
@@ -75,6 +80,39 @@ def current_asker() -> Asker | None:
         return None
     asker = request.scope.get("asker")
     return asker if isinstance(asker, Asker) else None
+
+
+def requires(module: str | None = None, *, write: bool = False) -> dict[str, object]:
+    """What a person needs to call a tool: pass as ``@mcp.tool(meta=requires("notes", write=True))``.
+
+    Name the module (and grade) the tool's REST counterpart's router or route requires,
+    so ``entitlements.has_module`` answers the same on both surfaces. No module: any
+    person admitted to the app, for a tool that touches no module (``health_check``).
+    """
+    return {"requires": {} if module is None else {"module": module, "write": write}}
+
+
+async def person_may(ctx: AuthContext) -> bool:
+    """FastMCP auth check: hold a person to the entitlement the component declares.
+
+    Run by ``AuthMiddleware(auth=person_may)`` on call and on list (a refusal is
+    hidden from the list). A machine caller and stdio have no asker and pass.
+    Raising names the missing entitlement; an undeclared component fails closed.
+    """
+    asker = current_asker()
+    if asker is None:
+        return True
+    name = ctx.component.name
+    if not admitted(asker.entitlements):
+        raise AuthorizationError(f"This person is admitted to this app's chat alone, not its tool {name}")
+    meta = ctx.component.meta or {}
+    if "requires" not in meta:
+        raise AuthorizationError(f"The tool {name} declares no entitlement, so a person may not call it")
+    need = meta["requires"]
+    if not need or has_module(asker.entitlements, need["module"], write=need["write"]):
+        return True
+    grade = f"{need['module']}:write" if need["write"] else need["module"]
+    raise AuthorizationError(f"You do not have the {grade} entitlement the tool {name} needs")
 
 
 def resolve_actor() -> Actor:

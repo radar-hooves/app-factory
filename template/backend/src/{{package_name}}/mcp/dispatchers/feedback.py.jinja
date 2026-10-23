@@ -3,10 +3,9 @@
 Gated exactly like every other `/mcp` tool: `ActorGateMiddleware`
 (`mcp/auth.py`) is wired onto the FastMCP instance before any dispatcher
 registers, so a call reaching either tool below has already proved a
-registered actor. There is no separate "admin" concept on this surface — that
-is a Tier 1a entitlement grade the human proxy asserts, and a machine caller
-never carries one (`rules-library/platform/tenancy.md` §There Is No Machine
-Caller).
+registered actor. A machine caller
+is gated by `actors.yaml` alone; a person needs `admin`, as the feedback routes
+require.
 """
 
 from fastmcp import FastMCP
@@ -14,6 +13,7 @@ from fastmcp import FastMCP
 from {{ package_name }}.api.feedback import service
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
+from {{ package_name }}.mcp.auth import requires
 
 _MAX_LIMIT = 100
 
@@ -39,7 +39,7 @@ def _report_dict(report: FeedbackReport) -> dict[str, object]:
 def register_feedback_tools(mcp: FastMCP) -> None:
     """Register `feedback_get` and `feedback_list` on `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(meta=requires("admin"))
     def feedback_get(id: int) -> dict[str, object]:
         """Return one feedback report by id, without its screenshot bytes.
 
@@ -49,7 +49,7 @@ def register_feedback_tools(mcp: FastMCP) -> None:
         with get_session_factory()() as session:
             return _report_dict(service.get_report(session, id))
 
-    @mcp.tool()
+    @mcp.tool(meta=requires("admin"))
     def feedback_list(status: str | None = None, limit: int = 20) -> list[dict[str, object]]:
         """List feedback reports, newest first, optionally filtered by status.
 

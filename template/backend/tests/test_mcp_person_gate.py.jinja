@@ -1,0 +1,186 @@
+"""A person reaches through /mcp only what the app's REST routes give them.
+
+Each tool declares the module its REST counterpart requires (`mcp.auth.requires`)
+and `AuthMiddleware(auth=person_may)` holds a person to it on call and on list.
+The tools driven here are registered by THIS FILE, so deleting the scaffold's own
+changes nothing here; the one test that reads the app's tools asserts only that each
+declares something. A person is a token this app's exchange issued (a fake Authentik
+signs it); the machine is a userinfo bearer on `config/actors.yaml`.
+"""
+
+import json
+from collections.abc import Iterator
+from typing import Any
+
+import httpx
+import pytest
+from fastmcp import Client
+
+from {{ package_name }}.config.sections.exchange import ExchangeSettings
+from {{ package_name }}.mcp.auth import requires
+from tests.support.fake_authentik import FakeAuthentik
+
+APP = "{{ project_name }}"
+USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
+HERE = {"notes_read", "notes_write", "ledger_read", "admin_write", "anyone", "undeclared"}
+
+
+@pytest.fixture
+def fake(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeAuthentik]:
+    """The app's exchange pointed at a fake Authentik, a machine bearer at a fake userinfo, and six tools added."""
+    authentik = FakeAuthentik()
+    server = authentik.serve()
+    authentik.provider(APP, secret="fake-exchange-secret")
+
+    real_get = httpx.AsyncClient.get
+
+    async def _get(self, url, *, headers=None, **kwargs):
+        if str(url) != USERINFO_URL:
+            return await real_get(self, url, headers=headers, **kwargs)
+        presented = (headers or {}).get("Authorization", "")[7:].strip()
+        request = httpx.Request("GET", url)
+        if presented != "machine":
+            return httpx.Response(401, request=request)
+        return httpx.Response(200, json={"preferred_username": "mcp-service"}, request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", _get)
+
+    from {{ package_name }} import main as main_module
+    from {{ package_name }}.config import get_settings
+
+    configured = get_settings().model_copy(deep=True)
+    configured.mcp.oidc_userinfo_url = USERINFO_URL
+    configured.exchange = ExchangeSettings(
+        issuer=authentik.issuer(APP), client_id=APP, client_secret="fake-exchange-secret"
+    )
+    monkeypatch.setattr(main_module, "get_settings", lambda: configured)
+
+    build_app_server = main_module.create_mcp_server
+
+    def _with_tools():
+        mcp = build_app_server()
+
+        def _tool(name: str, **declaration: Any) -> None:
+            mcp.tool(name=name, **declaration)(lambda: {"ran": name})
+
+        _tool("notes_read", meta=requires("notes"))
+        _tool("notes_write", meta=requires("notes", write=True))
+        _tool("ledger_read", meta=requires("ledger"))
+        _tool("admin_write", meta=requires("admin", write=True))
+        _tool("anyone", meta=requires())
+        _tool("undeclared")
+        return mcp
+
+    monkeypatch.setattr(main_module, "create_mcp_server", _with_tools)
+    yield authentik
+    server.shutdown()
+
+
+def _person(fake: FakeAuthentik, uid: str, *entitlements: str) -> str:
+    fake.entitlements[(uid, APP)] = list(entitlements)
+    return fake.mint(APP, uid)
+
+
+async def _rpc(client: httpx.AsyncClient, token: str, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {token}",
+    }
+    init = {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}
+    opened = await client.post(
+        "/mcp/", headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": init}
+    )
+    assert opened.status_code == 200, opened.text
+    session = {"Mcp-Session-Id": opened.headers["mcp-session-id"]} if "mcp-session-id" in opened.headers else {}
+    await client.post(
+        "/mcp/", headers={**headers, **session}, json={"jsonrpc": "2.0", "method": "notifications/initialized"}
+    )
+    answered = await client.post(
+        "/mcp/", headers={**headers, **session}, json={"jsonrpc": "2.0", "id": 2, "method": method, "params": params}
+    )
+    assert answered.status_code == 200, answered.text
+    body = answered.text.split("data: ", 1)[1] if "data: " in answered.text else answered.text
+    parsed: dict[str, Any] = json.loads(body)
+    return parsed
+
+
+async def _drive(token: str) -> tuple[set[str], dict[str, str | None]]:
+    """The tools of ours this bearer is listed, and per tool the refusal it got (None: it ran)."""
+    from {{ package_name }}.main import create_app
+
+    app = create_app()
+    refusals: dict[str, str | None] = {}
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as client,
+    ):
+        listed = {t["name"] for t in (await _rpc(client, token, "tools/list", {}))["result"]["tools"]}
+        for name in sorted(HERE):
+            answer = await _rpc(client, token, "tools/call", {"name": name, "arguments": {}})
+            if "error" in answer:
+                refusals[name] = answer["error"]["message"]
+            elif answer["result"]["isError"]:
+                refusals[name] = json.dumps(answer["result"]["content"])
+            else:
+                refusals[name] = None
+    return listed & HERE, refusals
+
+
+@pytest.mark.integration
+async def test_a_person_holding_one_module_lists_and_calls_only_its_tools(fake):
+    listed, refusals = await _drive(_person(fake, "p-notes", "notes", "chat-helper"))
+    assert listed == {"notes_read", "anyone"}
+    assert refusals["notes_read"] is None and refusals["anyone"] is None
+    for name in ("ledger_read", "notes_write", "admin_write"):
+        assert refusals[name] is not None, name
+    assert "ledger" in refusals["ledger_read"]
+    assert "notes:write" in refusals["notes_write"]
+
+
+@pytest.mark.integration
+async def test_the_write_grade_implies_read_as_it_does_on_the_routes(fake):
+    listed, refusals = await _drive(_person(fake, "p-writer", "notes:write"))
+    assert listed == {"notes_read", "notes_write", "anyone"}
+    assert refusals["notes_write"] is None
+
+
+@pytest.mark.integration
+async def test_an_admin_only_tool_refuses_a_person_without_admin_write(fake):
+    listed, refusals = await _drive(_person(fake, "p-reader", "notes", "admin"))
+    assert "admin_write" not in listed
+    assert "admin:write" in str(refusals["admin_write"])
+    listed, refusals = await _drive(_person(fake, "p-admin", "admin:write"))
+    assert "admin_write" in listed and refusals["admin_write"] is None
+
+
+@pytest.mark.integration
+async def test_an_undeclared_tool_is_hidden_and_refused_to_a_person_whatever_they_hold(fake):
+    listed, refusals = await _drive(_person(fake, "p-everything", "notes:write", "ledger:write", "admin:write"))
+    assert "undeclared" not in listed
+    assert "declares no entitlement" in str(refusals["undeclared"])
+    assert listed == HERE - {"undeclared"}
+
+
+@pytest.mark.integration
+async def test_a_person_admitted_to_chat_alone_sees_and_calls_nothing(fake):
+    listed, refusals = await _drive(_person(fake, "p-chat", "chat-helper"))
+    assert listed == set()
+    assert all(refusal is not None for refusal in refusals.values())
+
+
+@pytest.mark.integration
+async def test_a_machine_caller_is_unchanged(fake):
+    """The machine path keeps its rules: actors.yaml admits it and no declaration narrows it, undeclared tool included."""
+    listed, refusals = await _drive("machine")
+    assert listed == HERE
+    assert refusals == dict.fromkeys(HERE)
+
+
+async def test_every_tool_the_app_registers_declares_what_a_person_needs():
+    """A new tool is closed to persons until placed; this fails until its author declares it."""
+    from {{ package_name }}.mcp.server import create_mcp_server
+
+    async with Client(create_mcp_server()) as mcp:
+        undeclared = [tool.name for tool in await mcp.list_tools() if "requires" not in (tool.meta or {})]
+    assert undeclared == []

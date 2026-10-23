@@ -12,6 +12,11 @@ required: Authentik serves one instance-wide userinfo endpoint, so the token
 alone proves identity, not which app it was minted for — the allow-list is
 what restores the app boundary.
 
+A PERSON (an exchanged token) is further held to the entitlements the tool's REST
+counterpart requires: declare them on each tool, `@mcp.tool(meta=requires("notes",
+write=True))`, naming the module its router or route gates on. A tool that declares
+none is refused to a person and hidden from their list.
+
 A tool still calls resolve_actor() when it needs to know WHO is calling in
 order to authorise off actor.id / actor.type. It no longer has to call it in
 order to be gated at all.
@@ -25,8 +30,9 @@ Design rules (rules-library/sidekick/sidekick-tooling.md):
 import logging
 
 from fastmcp import FastMCP
+from fastmcp.server.middleware import AuthMiddleware
 
-from {{ package_name }}.mcp.auth import ActorGateMiddleware, resolve_actor
+from {{ package_name }}.mcp.auth import ActorGateMiddleware, person_may, requires, resolve_actor
 from {{ package_name }}.mcp.dispatchers.alerts import register_alert_tools
 from {{ package_name }}.mcp.dispatchers.feedback import register_feedback_tools
 
@@ -48,6 +54,10 @@ def create_mcp_server() -> FastMCP:
     # genuine in-process caller is untouched. Wire this BEFORE any dispatcher —
     # a tool registered without it is reachable by any valid Authentik bearer.
     mcp.add_middleware(ActorGateMiddleware())
+    # Hold a PERSON to the entitlement each tool declares with `meta=requires(...)`,
+    # on call and on list; an undeclared tool is closed to a person. A machine is
+    # untouched (actors.yaml is its gate).
+    mcp.add_middleware(AuthMiddleware(auth=person_may))
 
     # The feedback and alerts slices' tools come from the factory, same as their
     # HTTP routers (api/main.py). Register this app's own domain dispatchers
@@ -55,7 +65,7 @@ def create_mcp_server() -> FastMCP:
     register_feedback_tools(mcp)
     register_alert_tools(mcp)
 
-    @mcp.tool()
+    @mcp.tool(meta=requires())
     def health_check() -> dict[str, str]:
         """Check that the MCP server is reachable and report the calling actor.
 
