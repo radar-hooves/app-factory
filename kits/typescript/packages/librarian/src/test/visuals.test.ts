@@ -10,42 +10,51 @@ import { splitVisuals } from '$lib/components/markdown/markdown';
 import { defaultVisuals } from '$lib/visuals';
 import Visual from './fixtures/visual.svelte';
 
-// vega-embed's result, as the chart uses it: a view it ends before redrawing and when it goes.
-const embed = vi.hoisted(() => vi.fn(async () => ({ finalize: () => {} })));
-vi.mock('vega-embed', () => ({ default: embed }));
+// LayerChart is loaded when a chart is drawn: the test stands a fixture in for the drawing component.
+const drawn = vi.hoisted(() => ({ loaded: 0 }));
+vi.mock('$lib/components/visual-block/chart-draw.svelte', async () => {
+	drawn.loaded += 1;
+	return { default: (await import('./fixtures/visual.svelte')).default };
+});
 
-beforeEach(() => embed.mockClear());
+beforeEach(() => (drawn.loaded = 0));
 
 const spec = {
-	$schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-	config: { background: 'red' },
-	data: { values: [{ a: 'x', b: 3 }] },
-	mark: 'bar',
-	encoding: { x: { field: 'a' }, y: { field: 'b' } }
+	title: 'Rent by year',
+	type: 'bar',
+	x: 'year',
+	y: ['rent'],
+	data: [
+		{ year: '2025', rent: 3 },
+		{ year: '2026', rent: 4 }
+	]
 };
 const block = (lang: string, body: string) => `Before\n\n\`\`\`${lang}\n${body}\n\`\`\`\n\nAfter`;
 
 describe('the default visuals', () => {
-	it('are a Vega-Lite chart, a timeline and an entity card', () => {
-		expect(Object.keys(defaultVisuals).sort()).toEqual(['card', 'timeline', 'vega-lite']);
+	it('are a chart, a timeline and an entity card', () => {
+		expect(Object.keys(defaultVisuals).sort()).toEqual(['card', 'chart', 'timeline']);
 	});
 
-	it('refuse a Vega-Lite block that is not a view, or that names an address to fetch or open', () => {
-		const parse = defaultVisuals['vega-lite'].parse;
-		expect(parse(JSON.stringify(spec))).toMatchObject({ mark: 'bar' });
+	it('refuse a chart block that is not a bar, line or area of numbers', () => {
+		const parse = defaultVisuals.chart.parse;
+		expect(parse(JSON.stringify(spec))).toMatchObject({ type: 'bar', x: 'year', y: ['rent'] });
+		expect(parse(JSON.stringify({ ...spec, type: 'line' }))).toMatchObject({ type: 'line' });
 		expect(() => parse('{not json')).toThrow();
 		expect(() => parse('[1]')).toThrow();
-		expect(() => parse('{"data":{"values":[]}}')).toThrow();
-		expect(() => parse(JSON.stringify({ ...spec, data: { url: 'https://evil.example/?q=1' } }))).toThrow();
-		// vega-embed merges a spec's own embed options over the app's: a URL there is fetched.
-		expect(() =>
-			parse(JSON.stringify({ ...spec, usermeta: { embedOptions: { config: 'https://evil.example/c?q=1' } } }))
-		).toThrow();
-		expect(() => parse(JSON.stringify({ ...spec, title: '//evil.example/x' }))).toThrow();
-		expect(() => parse(JSON.stringify({ ...spec, description: 'javascript:alert(1)' }))).toThrow();
-		expect(() =>
-			parse(JSON.stringify({ ...spec, encoding: { href: { value: 'https://evil.example' } } }))
-		).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, type: 'pie' }))).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, y: [] }))).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, y: ['a', 'b', 'c', 'd', 'e', 'f'] }))).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, data: [] }))).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, data: [{ year: '2025', rent: 'three' }] }))).toThrow();
+		expect(() => parse(JSON.stringify({ ...spec, data: [{ rent: 3 }] }))).toThrow();
+	});
+
+	it('keep only the fields a chart draws, so a spec carries nothing else to the page', () => {
+		const parsed = defaultVisuals.chart.parse(
+			JSON.stringify({ ...spec, config: { background: 'red' }, data: [{ year: '2025', rent: 3, href: 'https://evil.example' }] })
+		);
+		expect(parsed).toEqual({ ...spec, data: [{ year: '2025', rent: 3 }] });
 	});
 
 	it('refuse a timeline without events, and a card without a name', () => {
@@ -56,44 +65,36 @@ describe('the default visuals', () => {
 });
 
 describe('a persona’s block, in an answer', () => {
-	it('mounts the chart for a complete vega-lite block, over the app’s tokens and not the spec’s', async () => {
-		render(Markdown, {
-			props: { content: block('vega-lite', JSON.stringify(spec)), visuals: defaultVisuals }
-		});
+	it('loads the chart only for a complete chart block, with its title', async () => {
+		const plain = render(Markdown, { props: { content: 'No chart here.', visuals: defaultVisuals } });
+		expect(drawn.loaded).toBe(0);
+		plain.unmount();
 
-		await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
-		const [host, drawn, options] = embed.mock.calls[0] as unknown as [
-			HTMLElement,
-			Record<string, unknown>,
-			{ actions: boolean; renderer: string; config: Record<string, unknown> }
-		];
-		expect(host).toBeInstanceOf(HTMLElement);
-		expect(drawn).toMatchObject({ mark: 'bar', width: 'container' });
-		expect(drawn).not.toHaveProperty('$schema');
-		expect(drawn).not.toHaveProperty('config');
-		expect(options).toMatchObject({ actions: false, renderer: 'svg' });
-		expect(options.config).toHaveProperty('axis.labelColor');
-		expect(options.config).toHaveProperty('title.font');
+		render(Markdown, { props: { content: block('chart', JSON.stringify(spec)), visuals: defaultVisuals } });
+		expect(screen.getByText('Rent by year')).toBeInTheDocument();
+		await waitFor(() => expect(screen.getByTestId('visual')).toBeInTheDocument());
+		expect(drawn.loaded).toBe(1);
+		expect(screen.getByTestId('visual')).toHaveTextContent('"rent":4');
 	});
 
 	it('shows Drawing… while a block’s closing fence has not arrived', () => {
 		const { container } = render(Markdown, {
 			props: {
-				content: 'Before\n\n```vega-lite\n{"mark":',
+				content: 'Before\n\n```chart\n{"type":',
 				streaming: true,
 				visuals: defaultVisuals
 			}
 		});
 		expect(screen.getByRole('status')).toHaveTextContent('Drawing…');
-		expect(embed).not.toHaveBeenCalled();
+		expect(drawn.loaded).toBe(0);
 		expect(container.textContent).toContain('Before');
 	});
 
 	it('shows an invalid block as its raw text in a code block, with the answer around it', () => {
 		const { container } = render(Markdown, {
-			props: { content: block('vega-lite', '{ not json'), visuals: defaultVisuals }
+			props: { content: block('chart', '{ not json'), visuals: defaultVisuals }
 		});
-		expect(embed).not.toHaveBeenCalled();
+		expect(drawn.loaded).toBe(0);
 		expect(container.querySelector('pre code')).toHaveTextContent('{ not json');
 		expect(container.textContent).toContain('Before');
 		expect(container.textContent).toContain('After');
@@ -140,27 +141,27 @@ describe('a persona’s block, in an answer', () => {
 			props: { content: block('python', 'print(1)'), visuals: defaultVisuals }
 		});
 		expect(container.querySelector('code.language-python')).not.toBeNull();
-		expect(embed).not.toHaveBeenCalled();
+		expect(drawn.loaded).toBe(0);
 	});
 });
 
 describe('splitting an answer at its visuals', () => {
-	const has = (lang: string) => lang === 'vega-lite';
+	const has = (lang: string) => lang === 'chart';
 
 	it('cuts prose, a closed block, prose', () => {
-		expect(splitVisuals('a\n\n```vega-lite\n{}\n```\n\nb', has)).toEqual([
+		expect(splitVisuals('a\n\n```chart\n{}\n```\n\nb', has)).toEqual([
 			{ kind: 'md', text: 'a\n' },
-			{ kind: 'visual', lang: 'vega-lite', source: '{}', closed: true },
+			{ kind: 'visual', lang: 'chart', source: '{}', closed: true },
 			{ kind: 'md', text: '\nb' }
 		]);
 	});
 
 	it('marks a block still open, and leaves other fences and nested ones in the prose', () => {
-		expect(splitVisuals('a\n```vega-lite\n{"x"', has)).toEqual([
+		expect(splitVisuals('a\n```chart\n{"x"', has)).toEqual([
 			{ kind: 'md', text: 'a' },
-			{ kind: 'visual', lang: 'vega-lite', source: '{"x"', closed: false }
+			{ kind: 'visual', lang: 'chart', source: '{"x"', closed: false }
 		]);
-		const only = splitVisuals('```python\n```vega-lite\n```', has);
+		const only = splitVisuals('```python\n```chart\n```', has);
 		expect(only).toHaveLength(1);
 		expect(only[0].kind).toBe('md');
 	});

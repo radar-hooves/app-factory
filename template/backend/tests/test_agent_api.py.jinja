@@ -1207,19 +1207,19 @@ async def test_a_persona_with_visuals_lists_them_and_is_told_their_format(
 ) -> None:
     (personas_dir / "helper" / "visuals").mkdir()
     (personas_dir / "helper" / "visuals" / "openui.md").write_text("Write OpenUI Lang.")
-    agent_settings.chat_file.write_text("helper:\n  name: Helper\n  visuals: [vega-lite, openui]\n")
+    agent_settings.chat_file.write_text("helper:\n  name: Helper\n  visuals: [chart, openui]\n")
     who = _person("chat-helper")
 
     listed = (await client.get("/api/agent/personas", headers=who)).json()
     said = _answered(_events((await _ask(client, "helper", "chart it", who)).text))
 
-    assert listed[0]["visuals"] == ["vega-lite", "openui"]
-    assert "append_system_prompt=" in said and "Vega-Lite v5" in said and "Write OpenUI Lang." in said
+    assert listed[0]["visuals"] == ["chart", "openui"]
+    assert "append_system_prompt=" in said and "tagged chart" in said and "Write OpenUI Lang." in said
 
 
 async def test_a_persona_with_no_visuals_is_told_none(client: AsyncClient) -> None:
     said = _answered(_events((await _ask(client, "helper", "hello", _person("chat-helper"))).text))
-    assert "Vega-Lite" not in said
+    assert "tagged chart" not in said
 
 
 async def test_a_persona_that_reads_none_is_given_no_library(client: AsyncClient) -> None:

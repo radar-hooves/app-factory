@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.6] - 2026-10-23
+
+Consumer: caspo, radar-hooves/caspo#196.
+
+### Changed
+
+- **`defaultVisuals.chart` replaces `vega-lite`**: a `chart` block is `{title, type: bar | line | area, x, y: [fields], data}`, drawn with LayerChart 2.6.0 in `--chart-1` to `--chart-5` and fetched only when an answer carries one. `vega`, `vega-lite` and `vega-embed` are no longer dependencies. An app that lists `vega-lite` in `chat.yaml` lists `chart`.
+
 ## [2026.10.3] - 2026-10-19
 
 Consumer: caspo, radar-hooves/caspo#177.

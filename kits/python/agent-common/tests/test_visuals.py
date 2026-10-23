@@ -11,14 +11,14 @@ def test_no_visual_is_no_guidance() -> None:
 
 
 def test_guidance_is_the_lead_then_each_fragment_in_order() -> None:
-    text = visuals.guidance(["vega-lite", "card"])
+    text = visuals.guidance(["chart", "card"])
     assert text.startswith(visuals.LEAD)
-    assert text.index("Vega-Lite v5") < text.index("tagged card")
+    assert text.index("tagged chart") < text.index("tagged card")
     assert "timeline" not in text
 
 
 def test_every_factory_language_has_a_fragment() -> None:
-    assert set(visuals.FRAGMENTS) == {"table", "vega-lite", "timeline", "card"}
+    assert set(visuals.FRAGMENTS) == {"table", "chart", "timeline", "card"}
 
 
 def test_a_personas_own_fragment_supplies_or_overrides(tmp_path: Path) -> None:

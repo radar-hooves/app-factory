@@ -84,7 +84,7 @@ export interface ChatExtensions {
 	 *  A$0.34"), from US dollars; absent, the plain US dollar figure. */
 	formatCost?: (usd: number) => string;
 	/** Renderers for a fenced block's language, added to the package's own
-	 *  (`vega-lite`, `timeline`, `card`) or replacing one: `{ component, parse }`,
+	 *  (`chart`, `timeline`, `card`) or replacing one: `{ component, parse }`,
 	 *  where `parse` turns the block's text into the `value` the component draws
 	 *  and throws on a block that is invalid (the page then shows the code). Its
 	 *  source need not be JSON. */

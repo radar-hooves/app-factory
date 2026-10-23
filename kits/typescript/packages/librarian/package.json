@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/librarian",
-	"version": "2026.10.5",
+	"version": "2026.10.6",
 	"description": "An agent's conversation surface as a consumable Svelte 5 package: the stream client, transcript state and self-styling chat components (transcript, composer, markdown) every household app renders instead of rebuilding, speaking as whichever persona the app names.",
 	"type": "module",
 	"license": "MIT",
@@ -73,9 +73,7 @@
 		"shiki": "^4.4.3"
 	},
 	"dependencies": {
-		"vega": "6.4.0",
-		"vega-embed": "7.3.0",
-		"vega-lite": "6.4.3"
+		"layerchart": "2.6.0"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "^1.7.0",

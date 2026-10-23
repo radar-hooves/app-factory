@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.67] - 2026-10-23
+
+Need: a persona's chart should draw on the household charting stack (`stacks/svelte-charting.md`: LayerChart), not Vega-Lite through vega-embed, and weigh nothing on a chat page's first load; consumer: caspo, radar-hooves/caspo#196.
+
+### Changed
+
+- **The `vega-lite` visual is the `chart` visual**: `@poodle64/librarian` 2026.10.6 draws `chart` blocks with LayerChart, `{"title", "type": "bar" | "line" | "area", "x", "y": [fields], "data": [rows]}`, up to five series in `--chart-1` to `--chart-5`, 500 rows, numbers only; a block outside that shows its code. The renderer is a dynamic import, fetched when an answer carries a chart. `vega`, `vega-lite` and `vega-embed` leave the package (the kit lockfile loses about 290 lines) and the template's `ssr.external` workaround goes with them. `agent_common.visuals.FRAGMENTS["chart"]` tells the persona the format.
+
+### Migration
+
+A consumer on `vega-lite` changes `visuals: [vega-lite, ...]` to `[chart, ...]` in `chat.yaml` (an unknown language fails the app's start, not a request), pins `@poodle64/librarian` 2026.10.6 and deletes `ssr: { external: ['vega-embed'] }` from `vite.config.ts` (`copier update` moves the pin and the config). A conversation already saved with a `vega-lite` block shows that block's code. An app's own `visuals/vega-lite.md` fragment and renderer, if any, stay its own.
+
 ## [2026.10.66] - 2026-10-22
 
 Need: the operator's ruling of 17/10/2026 that a person chats with collections, so "room" is no word of the factory's; consumer: eight, via its orchestrator.

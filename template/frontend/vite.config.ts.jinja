@@ -30,11 +30,6 @@ const realNodeModules = (() => {
 export default defineConfig(({ command, isPreview }) => {
 	const plugins = [tailwindcss(), sveltekit()];
 
-	// Left to the browser: the chat draws a chart with vega-embed only there, and
-	// the server build would follow it into vega-canvas's Node entry, which
-	// imports the native `canvas` module and fails `vite build` unresolved.
-	const ssr = { external: ['vega-embed'] };
-
 	// The dev proxy and the identity it injects exist ONLY to serve `vite dev`.
 	// `vite build`, `vite preview` and `svelte-check` also load this config but
 	// never run that proxy, so they must not require a dev identity the built SPA
@@ -42,7 +37,7 @@ export default defineConfig(({ command, isPreview }) => {
 	// image build (`pnpm run build`) and the CI type-check (`pnpm check`) for a
 	// value they never use.
 	if (command !== 'serve' || isPreview) {
-		return { plugins, ssr };
+		return { plugins };
 	}
 
 	// Who dev says you are, and whether it may start at all. The reasoning — and
@@ -96,7 +91,6 @@ export default defineConfig(({ command, isPreview }) => {
 
 	return {
 		plugins: [...plugins, requireDevIdentity],
-		ssr,
 		define: { __APP_BACKEND_PREFIXES__: JSON.stringify(Object.keys(appRoutes)) },
 		server: {
 			port: {{ frontend_port }},

@@ -19,10 +19,11 @@ To draw a visual, use one of these. Each fenced block is valid JSON and nothing 
 
 FRAGMENTS: dict[str, str] = {
     "table": "- A comparison across rows and columns: a Markdown table.",
-    "vega-lite": (
-        "- A chart of numbers: a fenced block tagged vega-lite holding one Vega-Lite v5 spec as JSON, with the "
-        'data inline in data.values, a single mark ("bar", "line", "point" or "area") and x and y encodings. '
-        "No colours, fonts, sizes or config; the app styles it."
+    "chart": (
+        '- A chart of numbers: a fenced block tagged chart holding {"title": string, "type": "bar" | "line" | '
+        '"area", "x": string, "y": [string], "data": [object]}. x names the field on the horizontal axis; y names '
+        "one to five fields of numbers, one series each; data has one object per x carrying those fields. Write "
+        "dates as YYYY-MM-DD. No colours, fonts or sizes; the app styles it."
     ),
     "timeline": (
         '- Dated events: a fenced block tagged timeline holding {"title": string, "events": '

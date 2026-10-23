@@ -12,12 +12,21 @@
 import type { Component } from 'svelte';
 import EntityCard from './components/visual-block/entity-card.svelte';
 import Timeline from './components/visual-block/timeline.svelte';
-import VegaChart from './components/visual-block/vega-chart.svelte';
+import Chart from './components/visual-block/chart.svelte';
 
 export interface Visual {
 	component: Component<{ value: unknown; source: string }>;
 	/** The block's text as the value its component draws; throws on a block that is invalid. */
 	parse: (source: string) => unknown;
+}
+
+export interface ChartValue {
+	title: string;
+	type: 'bar' | 'line' | 'area';
+	/** The field on the x axis; each y is a field drawn as a series. */
+	x: string;
+	y: string[];
+	data: Array<Record<string, string | number>>;
 }
 
 export interface TimelineValue {
@@ -44,32 +53,30 @@ const object = (source: string): Record<string, unknown> => {
 	return value;
 };
 
-/** Any string naming an address: a spec that carries one could fetch it, or link to it carrying the conversation out. */
-const ADDRESS = /^[a-z][a-z0-9+.-]*:|\/\//i;
+const KINDS = ['bar', 'line', 'area'] as const;
+const MAX_SERIES = 5;
+const MAX_ROWS = 500;
 
-/**
- * A spec that names an address anywhere, by key or by value, or carries
- * `usermeta`, whose `embedOptions` vega-embed merges over the app's own
- * (`config` or `patch` as a URL is fetched, `actions` turns the export menu back on).
- */
-function addressed(value: unknown): boolean {
-	if (typeof value === 'string') return ADDRESS.test(value.trim());
-	if (Array.isArray(value)) return value.some(addressed);
-	if (!isRecord(value)) return false;
-	return Object.entries(value).some(
-		// `$schema` names the spec's own version and is never drawn or fetched (`vega-chart` drops it).
-		([key, inner]) =>
-			key !== '$schema' && (key === 'url' || key === 'href' || key === 'usermeta' || addressed(inner))
-	);
-}
-
-const VIEWS = ['mark', 'layer', 'hconcat', 'vconcat', 'concat', 'facet', 'repeat'];
-
-function parseVega(source: string): unknown {
-	const spec = object(source);
-	if (!VIEWS.some((key) => key in spec)) throw new Error('not a view');
-	if (addressed(spec)) throw new Error('names an address');
-	return spec;
+function parseChart(source: string): ChartValue {
+	const value = object(source);
+	const type = KINDS.find((kind) => kind === value.type);
+	if (!type) throw new Error('not a bar, line or area');
+	const x = text(value.x);
+	const y = Array.isArray(value.y) ? value.y.map(text) : [];
+	if (!x || y.length === 0 || y.length > MAX_SERIES || y.some((key) => !key)) throw new Error('no x or y');
+	const rows = Array.isArray(value.data) ? value.data : [];
+	if (rows.length === 0 || rows.length > MAX_ROWS) throw new Error('no data');
+	const data = rows.map((row) => {
+		if (!isRecord(row) || !text(row[x])) throw new Error('a row with no x');
+		const point: Record<string, string | number> = { [x]: typeof row[x] === 'number' ? row[x] : text(row[x]) };
+		for (const key of y) {
+			const number = row[key];
+			if (typeof number !== 'number' || !Number.isFinite(number)) throw new Error('a y that is not a number');
+			point[key] = number;
+		}
+		return point;
+	});
+	return { title: text(value.title), type, x, y, data };
 }
 
 function parseTimeline(source: string): TimelineValue {
@@ -99,9 +106,9 @@ function parseCard(source: string): CardValue {
 	};
 }
 
-/** A chart, a timeline and an entity card. An app adds to these or replaces one through `ChatExtensions.visuals`. */
+/** A chart (LayerChart), a timeline and an entity card. An app adds to these or replaces one through `ChatExtensions.visuals`. */
 export const defaultVisuals: Record<string, Visual> = {
-	'vega-lite': { component: VegaChart, parse: parseVega },
+	chart: { component: Chart, parse: parseChart },
 	timeline: { component: Timeline, parse: parseTimeline },
 	card: { component: EntityCard, parse: parseCard }
 };
