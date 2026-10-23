@@ -139,6 +139,7 @@ async def _configured(
 ) -> AsyncIterator[None]:
     os.chmod(FAKE_CLI, os.stat(FAKE_CLI).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setattr(ask_module, "STOP_POLL_SECONDS", 0.05)
+    chat._listings.clear()
     configured: Settings = get_settings().model_copy(update={"agent": agent_settings, "exchange": exchange_settings})
     app.dependency_overrides[get_settings] = lambda: configured
     unconfigured, app.state.exchange = app.state.exchange, Exchange(exchange_settings)
