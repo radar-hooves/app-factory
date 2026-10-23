@@ -292,10 +292,11 @@
 		border: 1px solid transparent;
 		border-radius: var(--ds-radius-full);
 		background: none;
-		padding: 0.25rem 0.5rem 0.25rem 0.625rem;
+		min-height: 2.75rem;
+		padding: 0 var(--ds-spacing-sm) 0 0.75rem;
 		color: var(--ds-color-muted-foreground);
 		font: inherit;
-		font-size: var(--ds-text-2xs);
+		font-size: 0.875rem;
 		cursor: pointer;
 		transition:
 			color 150ms ease,

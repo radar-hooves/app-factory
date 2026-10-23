@@ -142,8 +142,10 @@
 		const el = textarea;
 		if (!el) return;
 		el.style.height = 'auto';
-		const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
-		el.style.height = `${Math.min(el.scrollHeight, line * 6 + 20)}px`;
+		const style = getComputedStyle(el);
+		const line = parseFloat(style.lineHeight) || 27;
+		const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+		el.style.height = `${Math.min(el.scrollHeight, line * 6 + padding)}px`;
 	}
 
 	$effect(() => {
@@ -285,7 +287,7 @@
 			bind:value
 			oninput={grow}
 			onkeydown={keydown}
-			rows="1"
+			rows="3"
 			disabled={waiting}
 			placeholder={waiting ? words.answeringPlaceholder : words.askPlaceholder}
 			class="ds-lib-input"
@@ -310,7 +312,7 @@
 					disabled={running || files.length >= MAX_FILES}
 					aria-label="Attach a file"
 				>
-					<PaperclipIcon size={16} />
+					<PaperclipIcon size={20} />
 				</button>
 			{/if}
 
@@ -323,7 +325,7 @@
 					aria-label="Ask for a briefing"
 					title="Ask for a briefing"
 				>
-					<FileTextIcon size={16} />
+					<FileTextIcon size={20} />
 				</button>
 			{/if}
 
@@ -344,7 +346,7 @@
 			<span class="ds-lib-spacer"></span>
 			{#if running}
 				<button type="button" class="ds-lib-stop" onclick={onstop} aria-label="Stop">
-					<SquareIcon size={14} fill="currentColor" />
+					<SquareIcon size={16} fill="currentColor" />
 				</button>
 			{/if}
 			{#if !waiting}
@@ -355,7 +357,7 @@
 					disabled={!value.trim()}
 					aria-label="Send"
 				>
-					<ArrowUpIcon size={16} />
+					<ArrowUpIcon size={20} />
 				</button>
 			{/if}
 		</div>
@@ -446,10 +448,14 @@
 		resize: none;
 		border: 0;
 		background: transparent;
-		padding: 0.75rem 1rem 0.5rem;
+		padding: var(--ds-spacing-md) var(--ds-spacing-md) var(--ds-spacing-sm);
 		color: var(--ds-color-foreground);
 		font: inherit;
-		font-size: 1rem;
+		/* No token carries a body size or a control size, so these are raw:
+		   a resting box that reads as a chat composer on every page (an app
+		   overriding them is a defect here). Three lines, 18px text. */
+		font-size: 1.125rem;
+		line-height: 1.5;
 		outline: none;
 	}
 
@@ -467,7 +473,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		row-gap: 0.375rem;
-		padding: 0 0.75rem 0.625rem;
+		padding: 0 var(--ds-spacing-sm) var(--ds-spacing-sm);
 	}
 
 	.ds-lib-picker {
@@ -478,8 +484,8 @@
 	.ds-lib-stop,
 	.ds-lib-send {
 		display: flex;
-		width: 2rem;
-		height: 2rem;
+		width: 2.75rem;
+		height: 2.75rem;
 		flex: none;
 		align-items: center;
 		justify-content: center;

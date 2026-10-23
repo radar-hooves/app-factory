@@ -21,6 +21,8 @@ declare global {
 			ask?: string;
 			/** Files that go with `ask`; `handOff` from `$lib/agent/chat` sets both. */
 			files?: File[];
+			/** The kind `ask` is asked as (`BRIEFING`); absent, a plain question. */
+			kind?: string;
 		}
 		// interface Platform {}
 	}

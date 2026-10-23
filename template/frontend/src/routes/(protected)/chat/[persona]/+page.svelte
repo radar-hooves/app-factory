@@ -8,8 +8,8 @@
 	(`?collection=<name>`), so a link reopens or narrows it on any device,
 	mid-answer included. A question another page hands over waits in the box
 	(`?q=`), or is asked on arrival, with its files, when it says so in
-	navigation state (`handOff` from `$lib/agent/chat`), which a pasted link
-	cannot carry. That question never waits on the collection list: it goes as
+	navigation state (`handOff` from `$lib/agent/chat`, which a Home page's
+	`AskHome` calls), which a pasted link cannot carry. That question never waits on the collection list: it goes as
 	soon as the persona is known, narrowed by the name the address gives.
 	What differs per app arrives through `$lib/agent/app`, never an edit here.
 -->
@@ -23,7 +23,6 @@
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
 	import { Chat } from '@poodle64/librarian/chat';
 	import { resolveCopy } from '@poodle64/librarian/copy';
-	import Composer from '@poodle64/librarian/composer';
 	import Conversation from '@poodle64/librarian/conversation';
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
@@ -34,7 +33,9 @@
 	import * as Sheet from '@poodle64/ui/sheet';
 	import { toast } from 'svelte-sonner';
 	import * as app from '$lib/agent/app';
+	import AskBox from '$lib/agent/ask-box.svelte';
 	import {
+		BRIEFING,
 		chatTransport,
 		collectionsOf,
 		documentsTo,
@@ -47,8 +48,6 @@
 
 	const extensions: ChatExtensions = app;
 	const visuals = { ...defaultVisuals, ...extensions.visuals };
-	/** The kind a briefing is asked as, and read back by. */
-	const BRIEFING = 'briefing';
 
 	// Currency and rate are this app's own, declared in $lib/agent/app.ts;
 	// without one, the plain USD figure, which is always correct, merely
@@ -81,7 +80,6 @@
 	const choices = $derived<Collection[]>(
 		!listed && collection ? [{ name: collection, title: '', description: '' }] : collections
 	);
-	const briefing = $derived(persona ? extensions.briefing?.(persona) : undefined);
 	const who = $derived(persona?.name ?? '');
 	const copy = $derived(persona ? extensions.copy?.(persona) : undefined);
 	const words = $derived(resolveCopy(copy, who));
@@ -180,11 +178,11 @@
 		const current = chat;
 		if (!current || !ask) return;
 		untrack(() => {
-			const files = page.state.files;
+			const { files, kind } = page.state;
 			void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
 			void current.ask(
 				ask,
-				undefined,
+				typeof kind === 'string' ? kind : undefined,
 				collection,
 				Array.isArray(files) ? files.filter((f) => f instanceof File) : []
 			);
@@ -296,13 +294,12 @@
 			{/snippet}
 			{#snippet composer()}
 				<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
-				<Composer
+				<AskBox
+					persona={p}
 					bind:value={c.draft}
 					bind:files={c.files}
 					running={c.busy}
 					sendWhileRunning={c.sendWhileRunning}
-					name={who}
-					{copy}
 					collections={choices}
 					{collection}
 					oncollection={narrow}
@@ -310,9 +307,7 @@
 					onnewquestion={fresh}
 					onsubmit={() => void c.ask(undefined, undefined, collection)}
 					onstop={() => void c.stop()}
-					onbriefing={briefing
-						? () => void c.ask(briefing.question, BRIEFING, collection)
-						: undefined}
+					onbriefing={(card) => void c.ask(card.question, BRIEFING, collection)}
 				/>
 			{/snippet}
 		</Conversation>

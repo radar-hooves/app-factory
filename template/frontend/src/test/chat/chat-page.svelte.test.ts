@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
 	goto: vi.fn(
-		async (_href: string, _options?: { state?: { ask?: string; files?: File[] } }) => undefined
+		async (_href: string, _options?: { state?: { ask?: string; files?: File[]; kind?: string } }) =>
+			undefined
 	),
 	GET: vi.fn(),
 	PUT: vi.fn()
@@ -30,6 +31,7 @@ vi.mock('$lib/agent/app', async () => ({
 	...(await import('./app'))
 }));
 
+import AskHome from '$lib/agent/ask-home.svelte';
 import { forgetAgent, handOff } from '$lib/agent/chat';
 import { nav as page } from './page-state.svelte';
 import ChatPage from '../../routes/(protected)/chat/[persona]/+page.svelte';
@@ -115,7 +117,7 @@ const routes = async (path: string) => ({
 });
 fake.GET.mockImplementation(routes);
 
-function at(address: string, state: { ask?: string; files?: File[] } = {}) {
+function at(address: string, state: { ask?: string; files?: File[]; kind?: string } = {}) {
 	page.url = new URL(address, 'http://localhost');
 	page.state = state;
 	return render(ChatPage);
@@ -388,6 +390,23 @@ describe('A question handed over from another page', () => {
 		expect(within(screen.getByRole('log')).getByText('scan.pdf')).toBeInTheDocument();
 	});
 
+	it('is sent as a briefing, with its files and its collection, when the hand-off says so', async () => {
+		const asked = answering('h5', '# Leave');
+		const file = new File(['x'], 'scan.pdf', { type: 'application/pdf' });
+		at('/chat/outrider?collection=conditions', {
+			ask: 'Write a briefing on Outrider, every claim cited.',
+			files: [file],
+			kind: 'briefing'
+		});
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+		const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+		const body = init.body as FormData;
+		expect(body.get('kind')).toBe('briefing');
+		expect(body.get('collection')).toBe('conditions');
+		expect(body.getAll('files[]')).toHaveLength(1);
+		expect(await screen.findAllByText('Briefing: Outrider')).toHaveLength(2);
+	});
+
 	it('finds the personas and collections a Home page already read, and asks for neither again', async () => {
 		const { personasOf, collectionsOf } = await import('$lib/agent/chat');
 		const [outrider] = await personasOf();
@@ -406,6 +425,30 @@ describe('A question handed over from another page', () => {
 		await handOff('outrider', { ask: 'Read this', files: [file], collection: 'conditions' });
 		expect(fake.goto).toHaveBeenCalledWith('/chat/outrider?collection=conditions', {
 			state: { ask: 'Read this', files: [file] }
+		});
+	});
+
+	it("is handed over by a Home page's box with the question, its files, the scope and the briefing choice", async () => {
+		const file = new File(['x'], 'scan.pdf', { type: 'application/pdf' });
+		render(AskHome, { persona: 'outrider' });
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Where Outrider looks: All your collections' })
+		);
+		await fireEvent.click(await screen.findByRole('option', { name: /Conditions of service/ }));
+		const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+		await fireEvent.change(input, { target: { files: [file] } });
+		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'How much leave?' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+		expect(fake.goto).toHaveBeenLastCalledWith('/chat/outrider?collection=conditions', {
+			state: { ask: 'How much leave?', files: [file] }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Ask for a briefing' }));
+		expect(fake.goto).toHaveBeenLastCalledWith('/chat/outrider?collection=conditions', {
+			state: {
+				ask: 'Write a briefing on Outrider, every claim cited.',
+				files: [file],
+				kind: 'briefing'
+			}
 		});
 	});
 });

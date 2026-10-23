@@ -233,23 +233,31 @@ export function forgetAgent(): void {
 	collectionLists.clear();
 }
 
+/** The kind a briefing is asked as, and read back by. */
+export const BRIEFING = 'briefing';
+
 /** What a Home page hands the chat page: the question, the files that go with
- *  it, and the collection (by name) it is narrowed to. */
+ *  it, the collection (by name) it is narrowed to, and the kind it is asked as
+ *  (`BRIEFING` for the box's briefing control; absent for a plain question). */
 export interface HandedOver {
 	ask: string;
 	files?: File[];
 	collection?: string;
+	kind?: string;
 }
 
 /**
  * Takes the person to `/chat/<persona>` with `ask` asked on arrival; the page
  * sends it without waiting on anything but the persona. A Home page calls
- * this on Enter and awaits nothing.
+ * this on Enter and awaits nothing (`AskHome` is that page's box).
  */
-export function handOff(persona: string, { ask, files, collection }: HandedOver): Promise<void> {
+export function handOff(
+	persona: string,
+	{ ask, files, collection, kind }: HandedOver
+): Promise<void> {
 	const query = collection ? `?${new URLSearchParams({ collection })}` : '';
 	return goto(`/chat/${encodeURIComponent(persona)}${query}`, {
-		state: files?.length ? { ask, files } : { ask }
+		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
 	});
 }
 
