@@ -7,13 +7,15 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
-	goto: vi.fn(async (_href: string, _options?: { state?: { ask?: string } }) => undefined),
+	goto: vi.fn(
+		async (_href: string, _options?: { state?: { ask?: string; files?: File[] } }) => undefined
+	),
 	GET: vi.fn(),
 	PUT: vi.fn()
 }));
 
 vi.mock('$app/state', async () => ({ page: (await import('./page-state.svelte')).nav }));
-vi.mock('$app/navigation', () => ({ goto: fake.goto }));
+vi.mock('$app/navigation', () => ({ goto: fake.goto, preloadCode: vi.fn(async () => undefined) }));
 vi.mock('$lib/api', () => ({
 	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: vi.fn() }
 }));
@@ -28,6 +30,7 @@ vi.mock('$lib/agent/app', async () => ({
 	...(await import('./app'))
 }));
 
+import { forgetAgent, handOff } from '$lib/agent/chat';
 import { nav as page } from './page-state.svelte';
 import ChatPage from '../../routes/(protected)/chat/[persona]/+page.svelte';
 import SharedPage from '../../routes/(protected)/chat/[persona]/answers/[conversation]/[turn]/+page.svelte';
@@ -112,7 +115,7 @@ const routes = async (path: string) => ({
 });
 fake.GET.mockImplementation(routes);
 
-function at(address: string, state: { ask?: string } = {}) {
+function at(address: string, state: { ask?: string; files?: File[] } = {}) {
 	page.url = new URL(address, 'http://localhost');
 	page.state = state;
 	return render(ChatPage);
@@ -135,6 +138,7 @@ function answering(session: string, result: string) {
 }
 
 afterEach(() => {
+	forgetAgent();
 	vi.unstubAllGlobals();
 	fake.goto.mockClear();
 });
@@ -322,6 +326,87 @@ describe('Choosing where a persona looks', () => {
 			ROUTES['/api/agent/personas'] = [PERSONA];
 			ROUTES['/api/agent/{persona}/collections'] = COLLECTIONS;
 		}
+	});
+});
+
+describe('A question handed over from another page', () => {
+	/** The routes, with the collections held back until `release` is called. */
+	function holdingCollections() {
+		let release: () => void = () => undefined;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		fake.GET.mockImplementation(async (path: string) => {
+			if (path === '/api/agent/{persona}/collections') await held;
+			return routes(path);
+		});
+		return release;
+	}
+	const called = (path: string) => fake.GET.mock.calls.filter(([p]) => p === path).length;
+
+	it('is sent before the collection list arrives', async () => {
+		const release = holdingCollections();
+		fake.GET.mockClear();
+		const asked = answering('h1', 'Four weeks.');
+		try {
+			at('/chat/outrider', { ask: 'How much leave?' });
+			await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+			const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+			expect(JSON.parse(String(init.body)).collection).toBeUndefined();
+			// The list was asked for beside the persona, not after it.
+			expect(called('/api/agent/{persona}/collections')).toBe(1);
+		} finally {
+			release();
+			fake.GET.mockImplementation(routes);
+		}
+	});
+
+	it('is sent narrowed by the name in the address, which the picker shows until the list arrives', async () => {
+		const release = holdingCollections();
+		const asked = answering('h2', 'Four weeks.');
+		try {
+			at('/chat/outrider?collection=conditions', { ask: 'How much leave?' });
+			await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+			const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+			expect(JSON.parse(String(init.body))).toMatchObject({ collection: 'conditions' });
+			expect(screen.getByRole('button', { name: 'Where Outrider looks: Conditions' })).toBeTruthy();
+			release();
+			await screen.findByRole('button', {
+				name: 'Where Outrider looks: Conditions of service'
+			});
+		} finally {
+			release();
+			fake.GET.mockImplementation(routes);
+		}
+	});
+
+	it('is sent with the files handed over with it', async () => {
+		const asked = answering('h3', 'Read.');
+		const file = new File(['x'], 'scan.pdf', { type: 'application/pdf' });
+		at('/chat/outrider', { ask: 'Read this', files: [file] });
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+		const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+		expect((init.body as FormData).getAll('files[]')).toHaveLength(1);
+		expect(within(screen.getByRole('log')).getByText('scan.pdf')).toBeInTheDocument();
+	});
+
+	it('finds the personas and collections a Home page already read, and asks for neither again', async () => {
+		const { personasOf, collectionsOf } = await import('$lib/agent/chat');
+		const [outrider] = await personasOf();
+		await collectionsOf(outrider!);
+		fake.GET.mockClear();
+		const asked = answering('h4', 'Four weeks.');
+		at('/chat/outrider', { ask: 'How much leave?' });
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+		await screen.findByRole('textbox');
+		expect(called('/api/agent/personas')).toBe(0);
+		expect(called('/api/agent/{persona}/collections')).toBe(0);
+	});
+
+	it('is handed over by the helper as navigation state, with the collection in the address', async () => {
+		const file = new File(['x'], 'scan.pdf');
+		await handOff('outrider', { ask: 'Read this', files: [file], collection: 'conditions' });
+		expect(fake.goto).toHaveBeenCalledWith('/chat/outrider?collection=conditions', {
+			state: { ask: 'Read this', files: [file] }
+		});
 	});
 });
 

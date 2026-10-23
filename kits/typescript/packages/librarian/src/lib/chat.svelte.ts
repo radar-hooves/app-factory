@@ -307,22 +307,29 @@ export class Chat {
 
 	/**
 	 * Ask `question`, or what is in the box, as a `kind` of turn when it is not
-	 * a plain question, narrowed to one `collection` by name when given. Resolves
-	 * once the turn settles: true if it was asked, false if it was refused,
-	 * here or by the server, in which case typed words go back into the box.
+	 * a plain question, narrowed to one `collection` by name when given. A
+	 * question handed in carries `files` with it, the box's own going with a
+	 * typed one. Resolves once the turn settles: true if it was asked, false if
+	 * it was refused, here or by the server, in which case typed words go back
+	 * into the box.
 	 */
-	async ask(question?: string, kind?: string, collection?: string): Promise<boolean> {
+	async ask(
+		question?: string,
+		kind?: string,
+		collection?: string,
+		files: File[] = []
+	): Promise<boolean> {
 		const typed = question === undefined;
 		const text = (question ?? this.draft).trim();
 		if (!text) return false;
 		if (this.#job) return this.#message(text, typed);
 		if (this.busy || this.quota?.reached) return false;
-		const files = typed ? this.files : [];
+		const sent = typed ? this.files : files;
 		if (typed) {
 			this.draft = '';
 			this.files = [];
 		}
-		return this.#ask(text, files, typed, kind, collection);
+		return this.#ask(text, sent, typed, kind, collection);
 	}
 
 	/** The last question again, as a new turn: the conversation is append-only,

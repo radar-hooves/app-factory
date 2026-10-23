@@ -120,8 +120,13 @@
 
 	// Who the question is put to: every collection the person may read, or one
 	// of them. A person with one collection (or none) has nothing to pick, so
-	// nothing renders rather than a control that only reselects itself.
-	const hasChoice = $derived(collections.length > 1);
+	// nothing renders rather than a control that only reselects itself, unless
+	// the question is already narrowed to the one held: a page that has not yet
+	// had the list shows the collection its address names, and the control stays
+	// put as the rest of the list arrives.
+	const hasChoice = $derived(
+		collections.length > 1 || (collection !== undefined && collections.length > 0)
+	);
 
 	let box = $state<HTMLElement | null>(null);
 	let wrapper = $state<HTMLElement | null>(null);

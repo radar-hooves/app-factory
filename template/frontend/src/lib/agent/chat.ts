@@ -23,6 +23,7 @@ import type { Citation, LoadDocument } from '@poodle64/librarian/citations';
 import type { ChatCopy } from '@poodle64/librarian/copy';
 import type { DescribeTool } from '@poodle64/librarian/transcript';
 import type { Visual } from '@poodle64/librarian/visuals';
+import { goto, preloadCode } from '$app/navigation';
 import { api } from '$lib/api';
 
 /** A persona as `GET /api/agent/personas` lists it. */
@@ -194,11 +195,76 @@ export function documentsTo(date: string): string {
 	return `Checked against the open record on ${day}.`;
 }
 
-/** The collections `persona` reads as the caller, or none for a persona that reads none. */
-export function collectionsOf(persona: Persona): Promise<Collection[]> {
-	return data<Collection[]>(
+let personaList: Promise<Persona[]> | null = null;
+
+/** The personas this person may ask, read once for the SPA session and shared
+ *  while in flight, so a Home page that has them makes the chat page's arrival
+ *  need no request. A failure is forgotten, not kept. */
+export function personasOf(): Promise<Persona[]> {
+	personaList ??= data<Persona[]>(api.GET('/api/agent/personas')).catch((error) => {
+		personaList = null;
+		throw error;
+	});
+	return personaList;
+}
+
+/** How long a persona's collection list is reused before it is read again. */
+const COLLECTIONS_FRESH_MS = 60_000;
+const collectionLists = new Map<string, { at: number; list: Promise<Collection[]> }>();
+
+/** The collections `persona` reads as the caller (none for a persona that reads
+ *  none), reused for a minute and shared while in flight. */
+export function collectionsOf(persona: Pick<Persona, 'id'>): Promise<Collection[]> {
+	const held = collectionLists.get(persona.id);
+	if (held && Date.now() - held.at < COLLECTIONS_FRESH_MS) return held.list;
+	const list = data<Collection[]>(
 		api.GET('/api/agent/{persona}/collections', { params: { path: { persona: persona.id } } })
-	);
+	).catch((error) => {
+		if (collectionLists.get(persona.id)?.list === list) collectionLists.delete(persona.id);
+		throw error;
+	});
+	collectionLists.set(persona.id, { at: Date.now(), list });
+	return list;
+}
+
+/** Forgets what `personasOf` and `collectionsOf` hold. */
+export function forgetAgent(): void {
+	personaList = null;
+	collectionLists.clear();
+}
+
+/** What a Home page hands the chat page: the question, the files that go with
+ *  it, and the collection (by name) it is narrowed to. */
+export interface HandedOver {
+	ask: string;
+	files?: File[];
+	collection?: string;
+}
+
+/**
+ * Takes the person to `/chat/<persona>` with `ask` asked on arrival; the page
+ * sends it without waiting on anything but the persona. A Home page calls
+ * this on Enter and awaits nothing.
+ */
+export function handOff(persona: string, { ask, files, collection }: HandedOver): Promise<void> {
+	const query = collection ? `?${new URLSearchParams({ collection })}` : '';
+	return goto(`/chat/${encodeURIComponent(persona)}${query}`, {
+		state: files?.length ? { ask, files } : { ask }
+	});
+}
+
+/**
+ * Readies `/chat/<persona>` ahead of a `handOff`: its code, the personas and
+ * that persona's collections. A Home page calls this as it mounts.
+ */
+export function warmChat(persona: string): void {
+	void preloadCode(`/chat/${encodeURIComponent(persona)}`).catch(() => undefined);
+	void personasOf()
+		.then((all) => {
+			const found = all.find((p) => p.id === persona);
+			return found?.collections ? collectionsOf(found) : undefined;
+		})
+		.catch(() => undefined);
 }
 
 /** An answer shared from `persona`, read-only; rejects for one not shared or a persona not entered. */

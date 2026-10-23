@@ -7,8 +7,10 @@
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), so a link reopens or narrows it on any device,
 	mid-answer included. A question another page hands over waits in the box
-	(`?q=`), or is asked on arrival when it says so in navigation state
-	(`goto(href, { state: { ask } })`), which a pasted link cannot carry.
+	(`?q=`), or is asked on arrival, with its files, when it says so in
+	navigation state (`handOff` from `$lib/agent/chat`), which a pasted link
+	cannot carry. That question never waits on the collection list: it goes as
+	soon as the persona is known, narrowed by the name the address gives.
 	What differs per app arrives through `$lib/agent/app`, never an edit here.
 -->
 <script lang="ts">
@@ -31,13 +33,13 @@
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import * as Sheet from '@poodle64/ui/sheet';
 	import { toast } from 'svelte-sonner';
-	import { api } from '$lib/api';
 	import * as app from '$lib/agent/app';
 	import {
 		chatTransport,
 		collectionsOf,
 		documentsTo,
 		personaDocuments,
+		personasOf,
 		type Collection,
 		type ChatExtensions,
 		type Persona
@@ -56,6 +58,8 @@
 	let persona = $state<Persona | null>(null);
 	let chat = $state<Chat | null>(null);
 	let collections = $state<Collection[]>([]);
+	// False until the library's list has arrived (or the persona reads none).
+	let listed = $state(false);
 	let missing = $state(false);
 	let listOpen = $state(false);
 
@@ -65,12 +69,18 @@
 	const wanted = $derived(page.url.searchParams.get('c'));
 	const handed = $derived(page.url.searchParams.get('q')?.trim() || null);
 	const asked = $derived(typeof page.state.ask === 'string' ? page.state.ask.trim() || null : null);
-	// The address names a collection the library did not list for this person
-	// as no collection: the question then goes across every one they may read.
+	// Once the library has listed them, the address names a collection it did
+	// not list for this person as no collection: the question then goes across
+	// every one they may read. Before that the name stands as given (the library
+	// refuses one the person cannot read), so a question never waits on the list.
 	const collection = $derived.by(() => {
 		const named = page.url.searchParams.get('collection');
-		return collections.some((c) => c.name === named) ? (named ?? undefined) : undefined;
+		if (!named) return undefined;
+		return !listed || collections.some((c) => c.name === named) ? named : undefined;
 	});
+	const choices = $derived<Collection[]>(
+		!listed && collection ? [{ name: collection, title: '', description: '' }] : collections
+	);
 	const briefing = $derived(persona ? extensions.briefing?.(persona) : undefined);
 	const who = $derived(persona?.name ?? '');
 	const copy = $derived(persona ? extensions.copy?.(persona) : undefined);
@@ -109,15 +119,18 @@
 		chat = null;
 		persona = null;
 		collections = [];
+		listed = false;
 		missing = false;
 		listOpen = false;
-		const { data } = await api.GET('/api/agent/personas');
+		// Read beside the personas, and waited on by nothing: a persona that
+		// reads no collections has its answer discarded.
+		const pending = id ? collectionsOf({ id }).catch((): Collection[] => []) : null;
+		const found = await personasOf()
+			.then((all) => all.find((p) => p.id === id) ?? null)
+			.catch(() => null);
 		if (personaId !== id) return;
-		const found = data?.find((p) => p.id === id) ?? null;
 		missing = found === null;
 		if (!found) return;
-		const listed = found.collections ? await collectionsOf(found).catch(() => []) : [];
-		if (personaId !== id) return;
 		const card = extensions.briefing?.(found);
 		chat = new Chat(chatTransport(found), {
 			artefact: (kind) =>
@@ -125,9 +138,17 @@
 					? { title: card.title, summary: card.summary, isAnswer: true }
 					: undefined
 		});
-		collections = listed;
 		persona = found;
 		void chat.list();
+		if (!found.collections || !pending) {
+			listed = true;
+			return;
+		}
+		void pending.then((list) => {
+			if (personaId !== id) return;
+			collections = list;
+			listed = true;
+		});
 	}
 
 	// The address names the conversation: a link, the back button or the list
@@ -149,18 +170,24 @@
 		});
 	});
 
-	// A question handed over in navigation state is asked at once, and clearing
-	// the state from the entry is this effect's own doing: it must not start the
-	// address effect over, which would see no conversation yet and discard the
-	// turn just begun. So it follows `asked` alone, declared after the address
+	// A question handed over in navigation state, with its files, is asked at
+	// once, and clearing the state from the entry is this effect's own doing: it
+	// must not start the address effect over, which would see no conversation yet
+	// and discard the turn just begun. So it follows `asked` alone, declared after the address
 	// effect so a new conversation is started before the question goes into it.
 	$effect(() => {
 		const ask = asked;
 		const current = chat;
 		if (!current || !ask) return;
 		untrack(() => {
+			const files = page.state.files;
 			void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
-			void current.ask(ask, undefined, collection);
+			void current.ask(
+				ask,
+				undefined,
+				collection,
+				Array.isArray(files) ? files.filter((f) => f instanceof File) : []
+			);
 		});
 	});
 
@@ -276,7 +303,7 @@
 					sendWhileRunning={c.sendWhileRunning}
 					name={who}
 					{copy}
-					{collections}
+					collections={choices}
 					{collection}
 					oncollection={narrow}
 					turnCount={c.turns.length}

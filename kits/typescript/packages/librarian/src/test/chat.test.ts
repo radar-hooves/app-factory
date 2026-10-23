@@ -262,6 +262,19 @@ describe('Chat edit and resend', () => {
 		asks[0].pipe.end();
 	});
 
+	it('sends the files handed in with a handed question, and leaves the box alone', async () => {
+		const { transport, asks } = persona();
+		const c = chat(transport);
+		const handed = new File(['x'], 'scan.pdf', { type: 'application/pdf' });
+		const boxed = new File(['y'], 'other.pdf', { type: 'application/pdf' });
+		c.files = [boxed];
+		void c.ask('Read this', undefined, undefined, [handed]);
+		expect(asks[0].request.files).toEqual([handed]);
+		expect(c.turns[0].files).toEqual(['scan.pdf']);
+		expect(c.files).toEqual([boxed]);
+		asks[0].pipe.end();
+	});
+
 	it('reads one version of a written document through the transport, as the open conversation', async () => {
 		const loadArtefact = vi.fn(async () => ({ text: '# Brief', mediaType: 'text/markdown' }));
 		const artefactUrl = vi.fn(
