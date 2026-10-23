@@ -567,8 +567,9 @@ def _checked(uploads: list[UploadFile]) -> None:
     if len(uploads) > ATTACHMENTS:
         raise BadRequestError(f"Attach at most {ATTACHMENTS} files")
     for upload in uploads:
-        name = (upload.filename or "attachment")[:100]
-        if PurePosixPath(name.lower()).suffix not in ATTACHMENT_TYPES:
+        filename = upload.filename or "attachment"
+        name = filename[:100]
+        if PurePosixPath(filename.lower()).suffix not in ATTACHMENT_TYPES:
             raise UnsupportedMediaTypeError(
                 f"{name} is not a type that can be read; attach {', '.join(ATTACHMENT_TYPES)}"
             )

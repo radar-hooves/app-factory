@@ -62,10 +62,10 @@
 		const byPath: Record<string, string[]> = {};
 		if (!validate) return byPath;
 		try {
-			const validate = ajv.compile(schema as object);
+			const check = ajv.compile(schema as object);
 			const probe = structuredClone($state.snapshot(value));
-			if (validate(probe)) return byPath;
-			for (const error of validate.errors ?? []) {
+			if (check(probe)) return byPath;
+			for (const error of check.errors ?? []) {
 				const missing = (error.params as { missingProperty?: string })?.missingProperty;
 				const instance = error.instancePath.replace(/^\//, '').split('/').filter(Boolean).join('.');
 				const path = missing ? [instance, missing].filter(Boolean).join('.') : instance;

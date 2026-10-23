@@ -118,7 +118,7 @@ def content_security_policy(
     hashes = {
         "'sha256-" + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + "'"
         for page in build_dir.rglob("*.html")
-        for body in _INLINE_SCRIPT.findall(page.read_text(encoding="utf-8"))
+        for body in _INLINE_SCRIPT.findall(page.read_bytes().decode())
     }
     origins = [origin for origin in element_origins if _ORIGIN.fullmatch(origin)]
     directives = {
@@ -136,7 +136,7 @@ def content_security_policy(
     }
     for name, declared in (extra or {}).items():
         if name in EXTENDABLE:
-            directives.setdefault(name, []).extend(
+            directives.setdefault(name, ["'self'"]).extend(
                 origin for origin in dict.fromkeys(declared) if _ORIGIN.fullmatch(origin)
             )
     return "; ".join(f"{name} {' '.join(values)}" for name, values in directives.items() if values)

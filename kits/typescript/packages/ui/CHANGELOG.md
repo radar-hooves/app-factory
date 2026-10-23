@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.23] - 2026-10-23
 
 Consumer: godswood, radar-hooves/godswood#889 (its F2 review, measured at 390 and 3360 px).
 
