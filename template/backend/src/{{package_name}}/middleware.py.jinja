@@ -100,7 +100,11 @@ def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()
     build), so there is no `'unsafe-inline'` for scripts and no build-time step.
     Each origin in ELEMENT_ORIGINS is admitted for its `/elements.js` (a module
     import, then its own chunks) and for the API reads its elements make as the
-    viewer; nothing declared adds nothing. `frame-ancestors` is here because a
+    viewer; nothing declared adds nothing. `style-src` allows inline style, and
+    only that: mode-watcher inserts a `<style>` that switches transitions off
+    while the mode changes, and SvelteKit's own markup carries `style` attributes
+    (its screen-reader announcer, the `display: contents` wrapper), each measured
+    as a violation in Chromium; a style cannot run script. `frame-ancestors` is here because a
     `<meta>` policy cannot carry it.
     """
     hashes = {
@@ -115,7 +119,7 @@ def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()
         [
             "default-src 'none'",
             f"script-src {scripts}",
-            "style-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
             f"connect-src {connect}",

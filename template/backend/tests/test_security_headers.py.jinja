@@ -57,15 +57,17 @@ async def test_script_src_trusts_the_shell_s_own_inline_script_by_hash_and_never
     assert not re.search(r"unsafe-inline", " ".join(scripts))
 
 
-async def test_style_src_allows_no_inline_style(build):
-    assert _directive(await _get("/"), "style-src") == ["'self'"]
+async def test_inline_style_is_allowed_for_styles_alone(build):
+    response = await _get("/")
+    assert _directive(response, "style-src") == ["'self'", "'unsafe-inline'"]
+    assert "'unsafe-inline'" not in " ".join(_directive(response, "script-src") + _directive(response, "default-src"))
 
 
 async def test_each_declared_element_origin_is_admitted_to_scripts_and_connections_and_nothing_else(build):
     response = await _get("/", element_origins=f"{LIBRARY}/, https://x.example.org;script-src *")
     assert _directive(response, "script-src") == ["'self'", _hash(BOOTSTRAP), LIBRARY]
     assert _directive(response, "connect-src") == ["'self'", LIBRARY]
-    assert _directive(response, "style-src") == ["'self'"]
+    assert _directive(response, "style-src") == ["'self'", "'unsafe-inline'"]
 
 
 async def test_no_declared_origin_adds_nothing(build):
