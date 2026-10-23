@@ -552,7 +552,8 @@ async def test_the_collections_are_read_as_the_person_with_a_token_minted_for_th
         )
     }
     assert named == {(who["x-authentik-uid"], APP)}
-    assert len(library.bearers) == 4  # the ask lists, searches and opens a document; the page opens one, its listing held
+    # the ask lists, searches and opens a document; the page opens one, its listing held
+    assert len(library.bearers) == 4
     assert authentik.exchanged.count((APP, "library")) == 1  # one token for the ask and every page call after it
     assert conversation
 
