@@ -35,8 +35,11 @@
 		title = 'Application',
 		subtitle = "Runtime settings this deployment's operator can change without a code change or a deploy.",
 		/** What a 401 does: the app's own re-authentication (its API client's redirect), since only the app knows its sign-in. */
-		onunauthorized
+		onunauthorized,
+		/** The request function; the app's own where its API client stamps every call (View as colleague, workspace). */
+		fetch: send
 	}: {
+		fetch?: typeof fetch;
 		endpoint?: string;
 		title?: string;
 		subtitle?: string;
@@ -63,7 +66,7 @@
 	): Promise<{ data: T } | { failure: string }> {
 		let response: Response;
 		try {
-			response = await fetch(`${endpoint}/${path}`, {
+			response = await (send ?? fetch)(`${endpoint}/${path}`, {
 				...init,
 				credentials: 'include',
 				signal: AbortSignal.timeout(TIMEOUT_MS)
@@ -136,7 +139,14 @@
 	<LoadingState message="Loading…" class="mt-16" />
 {:else}
 	<Panel title="Settings">
-		<SchemaForm schema={formSchema!} uischema={formLayout} value={formValue} onChange={handleChange} />
+		<!-- Not validated here: Ajv compiles with eval, which the app's CSP refuses. The server validates each PATCH and its refusal is the toast. -->
+		<SchemaForm
+			schema={formSchema!}
+			uischema={formLayout}
+			value={formValue}
+			onChange={handleChange}
+			validate={false}
+		/>
 	</Panel>
 
 	{#if overridden.length}

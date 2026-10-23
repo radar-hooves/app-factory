@@ -47,6 +47,18 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
 
 describe('AlertBell', () => {
+	it('asks through the fetch it is given, not the global', async () => {
+		const global = serve([]);
+		const own = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ alerts: [alert(1)], total: 1, unread: 1 })
+		});
+		render(AlertBell, { fetch: own });
+		await waitFor(() => expect(screen.getByTestId('alert-bell')).toBeInTheDocument());
+		expect(own).toHaveBeenCalled();
+		expect(global).not.toHaveBeenCalled();
+	});
+
 	it('lists from the endpoint and renders nothing while nothing is open', async () => {
 		const fetchMock = serve([]);
 		render(AlertBell);

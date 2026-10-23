@@ -36,9 +36,12 @@
 		/** Who reads a report, as "the <team> team". The app's own name, never an internal one. */
 		team = 'support',
 		/** Fired with the id the endpoint returned, once, on the success leg. */
-		onSubmitted
+		onSubmitted,
+		/** The request function; the app's own where its API client stamps every call (View as colleague, workspace). */
+		fetch: send
 	}: {
 		endpoint?: string;
+		fetch?: typeof fetch;
 		team?: string;
 		onSubmitted?: (id: string) => void;
 	} = $props();
@@ -84,7 +87,7 @@
 		}
 
 		try {
-			const response = await fetch(endpoint, {
+			const response = await (send ?? fetch)(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

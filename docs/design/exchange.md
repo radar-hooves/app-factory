@@ -97,7 +97,7 @@ An admin previews the app as a colleague sees it, without a dummy account at the
 
 - **The rule.** `get_identity` honours the header only when the names the proxy granted hold `admin` or `admin:write`. The effective entitlements are granted ∩ requested, so it only removes, and a non-admin's header is ignored. Every `/api` gate (`require_module`, `has_module`, `admitted`, a persona's list and chat) reads `Identity.entitlements`, so all of them see the narrowed set. `/api/users/me` adds `held` (the granted set) and `viewing_as`, so the banner's "Stop viewing as colleague" survives narrowing `admin` away.
 - **What it cannot narrow.** The collections the library shows: the app exchanges the person's own token and the library cuts to that subject's grant. An admin viewing as a colleague still reads their own collections. `/mcp` and the exchange are untouched, so a persona's own tools run with the admin's real entitlements.
-- **Requests that bypass the client.** A bare `fetch` (the kit's streamed ask unless given `fetch`, the settings page, the report widget, the alert bell) carries no header and is answered as the admin; route such a call through `api`, or pass the kit a `fetch` that adds `getViewAs()`.
+- **Requests that bypass the client.** `apiFetch` (`lib/api/client.ts`) is `fetch` plus the header while narrowing is on; the chat's streamed ask and the kit's settings page, report widget and alert bell take it as their `fetch`. A browser navigation (the artefact download link) cannot carry a header and is answered as the admin; a new bare `fetch` in the app passes `apiFetch`.
 
 ## Open
 

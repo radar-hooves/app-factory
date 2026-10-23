@@ -6,7 +6,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { SettingsPage } from '@poodle64/ui/settings';
-	import { redirectToAuthentik } from '$api';
+	import { apiFetch, redirectToAuthentik } from '$api';
 </script>
 
-<SettingsPage onunauthorized={() => redirectToAuthentik(page.url.pathname + page.url.search)} />
+<SettingsPage
+	fetch={apiFetch}
+	onunauthorized={() => redirectToAuthentik(page.url.pathname + page.url.search)} />

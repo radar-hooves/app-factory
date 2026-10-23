@@ -24,7 +24,7 @@ import type { ChatCopy } from '@poodle64/librarian/copy';
 import type { DescribeTool } from '@poodle64/librarian/transcript';
 import type { Visual } from '@poodle64/librarian/visuals';
 import { goto, preloadCode } from '$app/navigation';
-import { api } from '$lib/api';
+import { api, apiFetch } from '$lib/api';
 
 /** A persona as `GET /api/agent/personas` lists it. */
 export interface Persona {
@@ -126,7 +126,8 @@ export function chatTransport(persona: Persona): ChatTransport {
 				kind,
 				collection,
 				edit,
-				endpoint: `${BASE}/api/agent/${persona.id}/ask`
+				endpoint: `${BASE}/api/agent/${persona.id}/ask`,
+				fetch: apiFetch
 			}),
 		read: (id) =>
 			data<ConversationRead>(api.GET('/api/agent/conversations/{conversation_id}', at(id))),

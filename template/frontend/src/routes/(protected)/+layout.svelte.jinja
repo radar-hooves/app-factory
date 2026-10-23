@@ -20,7 +20,7 @@
 	import { ReportWidget } from '@poodle64/ui/feedback';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
-	import { redirectToAuthentik } from '$lib/api';
+	import { apiFetch, redirectToAuthentik } from '$lib/api';
 	import AppFrame, { workspaceLabel } from '$lib/app-frame.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
@@ -112,5 +112,5 @@
      /api/feedback/, and the SPA's static mount at / answers the slashless POST
      with a 405 before any redirect could add the slash (master-project#335). -->
 {#if auth.user}
-	<ReportWidget endpoint="/api/feedback/" team="{% endraw %}{{ team_name }}{% raw %}" />
+	<ReportWidget fetch={apiFetch} endpoint="/api/feedback/" team="{% endraw %}{{ team_name }}{% raw %}" />
 {/if}{% endraw %}

@@ -33,8 +33,10 @@
 
 	let {
 		/** The app's alerts route, defaulting to the one every factory app serves. */
-		endpoint = '/api/alerts'
-	}: { endpoint?: string } = $props();
+		endpoint = '/api/alerts',
+		/** The request function; the app's own where its API client stamps every call (View as colleague, workspace). */
+		fetch: send
+	}: { endpoint?: string; fetch?: typeof fetch } = $props();
 
 	const POLL_MS = 60_000;
 	const TIMEOUT_MS = 30_000;
@@ -46,7 +48,7 @@
 	let open = $state(false);
 
 	function call(path: string, method = 'GET'): Promise<Response | null> {
-		return fetch(`${endpoint}/${path}`, { method, signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(
+		return (send ?? fetch)(`${endpoint}/${path}`, { method, signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(
 			() => null
 		);
 	}

@@ -249,4 +249,15 @@ describe('SchemaForm — schema validation', () => {
 			expect(screen.getByText('Required')).toBeInTheDocument();
 		});
 	});
+
+	it('compiles nothing and marks nothing when validate is off, as under a CSP without eval', () => {
+		const { container } = render(Harness, {
+			schema,
+			uischema,
+			initial: { ...initial, name: undefined },
+			validate: false
+		});
+		expect(screen.queryByText('Required')).toBeNull();
+		expect(container.querySelector('[data-schema-form]')).toBeTruthy();
+	});
 });

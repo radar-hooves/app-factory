@@ -1,5 +1,6 @@
 export {
 	api,
+	apiFetch,
 	redirectToAuthentik,
 	getActiveWorkspaceId,
 	setActiveWorkspaceId,

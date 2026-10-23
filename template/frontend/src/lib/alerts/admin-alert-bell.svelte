@@ -11,9 +11,10 @@
 -->
 <script lang="ts">
 	import { AlertBell } from '@poodle64/ui/alerts';
+	import { apiFetch } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 </script>
 
 {#if auth.can('admin')}
-	<AlertBell />
+	<AlertBell fetch={apiFetch} />
 {/if}

@@ -36,6 +36,7 @@
 		value,
 		onChange,
 		disabled = false,
+		validate = true,
 		idPrefix = 'sf',
 		class: className
 	}: SchemaFormProps = $props();
@@ -59,6 +60,7 @@
 	 */
 	const errors = $derived.by(() => {
 		const byPath: Record<string, string[]> = {};
+		if (!validate) return byPath;
 		try {
 			const validate = ajv.compile(schema as object);
 			const probe = structuredClone($state.snapshot(value));

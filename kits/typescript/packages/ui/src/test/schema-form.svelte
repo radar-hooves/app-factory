@@ -10,12 +10,14 @@
 		uischema,
 		initial = {},
 		disabled = false,
+		validate = true,
 		onchange
 	}: {
 		schema: JsonSchema;
 		uischema?: UISchemaElement;
 		initial?: Record<string, unknown>;
 		disabled?: boolean;
+		validate?: boolean;
 		onchange?: (next: Record<string, unknown>, change: SchemaFormChange) => void;
 	} = $props();
 
@@ -30,6 +32,7 @@
 	{uischema}
 	{value}
 	{disabled}
+	{validate}
 	onChange={(next, change) => {
 		value = next;
 		onchange?.(next, change);
