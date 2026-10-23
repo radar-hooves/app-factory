@@ -4,6 +4,21 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the operator's rulings of 24/10/2026 on caspo's chat page ("it needs to look and feel exactly like claude code, where you can actually see that something is going on"; the briefing button, "how many times you're gonna click that"; the scope disclosure, which Home and About already say); consumer: caspo.
+
+### Changed
+
+- **The chat page's turn shows its work as Claude Code does** (`@poodle64/librarian`, unreleased): each step a row as it starts, one turning working line at the foot of the turn with its verb, seconds and Stop, the working-out open as it is written, and a briefing written as a document opened as that document. The page passes `retrieves` (the persona searches its collections first) and `onstop` to `Conversation`.
+- **The chat page's composer offers no briefing control.** A briefing is asked from a Home page's box (`AskHome`), which still offers it, and one handed over still reads as its card. `AskBox`'s `onbriefing` is optional.
+
+### Added
+
+- **`ChatExtensions.scope`**: what the chat page says a persona answers from, in the app's own words, in place of the page's sentence; an app that says it on its Home or About returns nothing, and the page shows none.
+
+Migration: bump `@poodle64/librarian` to the release that carries this; an app whose own turn (`ChatExtensions.Turn`) drew its own working line renders the package's `Working` with `activityNow` (`@poodle64/librarian/steps`) and `onstop`, and its steps with `ActivityGroup` given `running`; an app whose `copy` overrode `working` with a list passes one string; an app that states its scope elsewhere exports `scope = () => undefined` from `$lib/agent/app`.
+
 ## [2026.10.70] - 2026-10-24
 
 Need: two changes to caspo's chrome, the operator's rulings of 24/10/2026; consumer: caspo.

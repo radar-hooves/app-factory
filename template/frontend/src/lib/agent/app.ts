@@ -7,8 +7,9 @@
  * `oncite` (what a citation opens), `describeTool` (how a tool call in an
  * answer reads), `copy` (the words, per persona), `Home` (a component on a new
  * conversation, inside its scroll), `Turn` (a component presenting a question
- * and its answer in place of the package's own) and `briefing` (what the
- * composer's briefing control asks, and the card it reads as) and
+ * and its answer in place of the package's own) and `briefing` (what a Home page's
+ * briefing control asks, and the card it reads as) and `scope` (what the
+ * chat page says a persona answers from, or nothing) and
  * `formatCost` (an answer's cost in this app's own currency and words, from
  * US dollars, "about A$0.34") and `visuals` (a renderer for a
  * fence's language beside the package's own, `{ openui: { component, parse } }`)

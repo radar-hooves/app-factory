@@ -78,9 +78,15 @@ export interface ChatExtensions {
 	 *  given every prop `AgentTranscript` takes, to render the app's own
 	 *  presentation, or `AgentTranscript` inside it to add to it. */
 	Turn?: Component<AgentTranscriptProps & { persona: Persona }>;
-	/** A briefing from the composer's own control; absent, the composer
-	 *  offers none. */
+	/** A briefing from a Home page's question box (`AskHome`); absent, it
+	 *  offers none. The chat page's own composer never does: a briefing is
+	 *  asked once, not a control to keep clicking (operator, 24/10/2026). */
 	briefing?: (persona: Persona) => Briefing;
+	/** What the chat page says a persona answers from, in place of its own
+	 *  sentence (what it does not hold, how current its collections are). An
+	 *  app that says it on its Home or About returns nothing, and the page
+	 *  shows none. */
+	scope?: (persona: Persona) => string | undefined;
 	/** What an answer cost, in this app's own currency and words ("about
 	 *  A$0.34"), from US dollars; absent, the plain US dollar figure. */
 	formatCost?: (usd: number) => string;

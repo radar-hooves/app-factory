@@ -2,6 +2,38 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost like a disco strobe", the search "was a static picture that didn't move", and "it needs to look and feel exactly like claude code, where you can actually see that something is going on"; a briefing written as a document could not be opened).
+
+### Added
+
+- **`Spinner`**: Claude Code's glyph, six shapes there and back at a steady 120 ms beat, changing shape and never brightness; one still shape under `prefers-reduced-motion`.
+- **`activityNow(blocks, written, copy, { citations, retrieves, resumed })`**, from the new `./steps` export: the working line's verb. Before the first word, the app's search of its collections (`retrieves`), then the passages it found (`citations`), else starting; after it, the step under way, thinking, the answer being written, or working on it.
+- **`AgentTranscript` and `Conversation` take `retrieves` and `onstop`**; `Conversation` hands `onstop` to the answer being written only.
+- **`ToolWords.doing`**, the present-tense verb a row shows while its call runs; `describe()` gives one for every call it knows.
+- **`ThinkingRow` takes `reading`**: open while the turn runs, folded once it settles, the reader's own choice held either way.
+- **`ActivityGroup` takes `running`** (the turn has not settled), defaulting to `live`.
+- Copy: `stop`, `nowStarting`, `nowPassages`, `nowPassage`, `nowAnswer`, `stepFoundOne`.
+
+### Changed
+
+- **`Working` is one line: the spinner, one plain verb (`label`, else `copy.working`), the seconds, and Stop when given `onstop`.** The words never change on a timer. `ChatCopy.working` is one string, not a list to cycle; a host that overrode it with a list passes one string.
+- **`AgentTranscript` draws the working line at the foot of the turn while it runs**, under the steps and the answer streaming beneath them, not only before the first block. A host `working` snippet still stands in for it before anything has shown.
+- **While the turn runs, its steps are rows, one each as it starts**: the one under way turns the spinner in place of its icon and says what it is doing ("Searching the library for …"), turning to what it did and what it found when the result comes. Settled, they fold behind the one sentence as before. The live group has no head line; the working line says what is happening now.
+- **A library search counts passages** ("8 passages", "1 passage"), from the library's `chunks` as well as `hits` and `results`; its row reads the library's `search_query` argument as well as `query`.
+- **A library document read is named by its title**, from `document_title`, `title` or the page's first heading, read off the text so a conversation's cut-short copy of the result still names it.
+- **"N lines" sits only under a `Read`, `Grep` or `Bash` step**, never under a library, web or write call answering in one line of JSON.
+- **A briefing the persona wrote as a document is that document.** `AgentTranscript` shows the prose and the document's card, never the briefing card over the sentence that says it was written; `Conversation` opens the newest version in the column on settle, not the prose.
+
+### Fixed
+
+- **`ActivityGroup`'s declaration exports the component.** It shared a name with the `ActivityGroup` type, and `svelte-package` emitted a default export a consumer could not render.
+
+### Removed
+
+- The pulse on `Working`'s dot and on a running `ToolRow`'s icon (opacity animation), and `ActivityGroup`'s live head line.
+
 ## [2026.10.8] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: "we don't need the second supporting line... most names are too long... search by groups of collections, and then allow selection of a whole group or just one collection").

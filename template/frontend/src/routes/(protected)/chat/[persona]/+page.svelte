@@ -11,7 +11,9 @@
 	navigation state (`handOff` from `$lib/agent/chat`, which a Home page's
 	`AskHome` calls), which a pasted link cannot carry. That question never waits on the collection list: it goes as
 	soon as the persona is known, narrowed by the name the address gives.
-	What differs per app arrives through `$lib/agent/app`, never an edit here.
+	A briefing is asked once, from a Home page, so this composer offers no
+	control for one (operator, 24/10/2026); one handed over still reads as its
+	card. What differs per app arrives through `$lib/agent/app`, never an edit here.
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
@@ -85,6 +87,9 @@
 	const words = $derived(resolveCopy(copy, who));
 	const scope = $derived.by(() => {
 		if (!persona) return undefined;
+		// An app that says it elsewhere (its Home, its About) says it in its own
+		// words here, or not at all.
+		if (extensions.scope) return extensions.scope(persona) || undefined;
 		// How current, beside what is not held: a miss on yesterday's news then
 		// reads as dated rather than broken. The oldest check among the
 		// collections a question reaches is the one that bounds the answer.
@@ -272,6 +277,8 @@
 			turn={extensions.Turn ? presented : undefined}
 			lead={extensions.Home && !c.conversationId ? home : undefined}
 			working={extensions.Thinking ? thinking : undefined}
+			retrieves={Boolean(p.collections)}
+			onstop={() => void c.stop()}
 			{formatCost}
 			{copy}
 		>
@@ -308,7 +315,6 @@
 					onnewquestion={fresh}
 					onsubmit={() => void c.ask(undefined, undefined, collection)}
 					onstop={() => void c.stop()}
-					onbriefing={(card) => void c.ask(card.question, BRIEFING, collection)}
 				/>
 			{/snippet}
 		</Conversation>

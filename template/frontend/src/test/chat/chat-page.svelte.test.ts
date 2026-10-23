@@ -6,7 +6,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const art = vi.hoisted(() => ({ Thinking: undefined as unknown }));
+const art = vi.hoisted(() => ({
+	Thinking: undefined as unknown,
+	scope: undefined as unknown
+}));
 const fake = vi.hoisted(() => ({
 	goto: vi.fn(
 		async (_href: string, _options?: { state?: { ask?: string; files?: File[]; kind?: string } }) =>
@@ -35,6 +38,9 @@ vi.mock('$lib/agent/app', async () => ({
 	// The page reads it on each render, so a test sets it before rendering.
 	get Thinking() {
 		return art.Thinking;
+	},
+	get scope() {
+		return art.scope;
 	}
 }));
 
@@ -149,6 +155,7 @@ function answering(session: string, result: string) {
 
 afterEach(() => {
 	art.Thinking = undefined;
+	art.scope = undefined;
 	forgetAgent();
 	vi.unstubAllGlobals();
 	fake.goto.mockClear();
@@ -245,11 +252,14 @@ describe('A persona page, through the app extension points', () => {
 		expect(screen.queryByTestId('app-home')).toBeNull();
 	});
 
-	it("asks the app's briefing from the composer, as a briefing", async () => {
+	it("offers no briefing control, and asks one a Home page handed over as a briefing", async () => {
 		const asked = answering('c2', '# Leave');
-		at('/chat/outrider');
-		await fireEvent.click(await screen.findByRole('button', { name: 'Ask for a briefing' }));
+		at('/chat/outrider', {
+			ask: 'Write a briefing on Outrider, every claim cited.',
+			kind: 'briefing'
+		});
 		await waitFor(() => expect(asked).toHaveBeenCalled());
+		expect(screen.queryByRole('button', { name: 'Ask for a briefing' })).toBeNull();
 		const [url, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
 		expect(url).toMatch(/\/api\/agent\/outrider\/ask$/);
 		expect(JSON.parse(String(init.body))).toMatchObject({
@@ -282,9 +292,10 @@ describe('While an answer has shown nothing yet', () => {
 		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
 	}
 
-	it("draws the package's own working line when the app supplies no Thinking", async () => {
+	it("draws the package's own working line when the app supplies no Thinking: the search, and Stop", async () => {
 		await waiting();
-		expect(await screen.findByText(/Outrider is (looking|reading)/)).toBeInTheDocument();
+		expect(await screen.findByText('Searching the library…')).toBeInTheDocument();
+		expect(screen.getAllByRole('button', { name: 'Stop' }).length).toBeGreaterThan(0);
 		expect(screen.queryByTestId('app-thinking')).toBeNull();
 	});
 
@@ -292,7 +303,7 @@ describe('While an answer has shown nothing yet', () => {
 		art.Thinking = Thinking;
 		await waiting();
 		expect(await screen.findByText('Outrider has the kettle on')).toBeInTheDocument();
-		expect(screen.queryByText(/Outrider is (looking|reading)/)).toBeNull();
+		expect(screen.queryByText('Searching the library…')).toBeNull();
 	});
 });
 
@@ -493,6 +504,21 @@ describe('Sharing an answer', () => {
 			await screen.findByRole('button', { name: 'What Outrider answers from' })
 		);
 		expect(screen.getByText(/Checked against the open record on .*20.*2026\./)).toBeInTheDocument();
+	});
+
+	it('says nothing of it where the app says it elsewhere, and the app’s own words where it gives them', async () => {
+		art.scope = () => undefined;
+		const { unmount } = at('/chat/outrider');
+		await screen.findByRole('textbox');
+		expect(screen.queryByRole('button', { name: 'What Outrider answers from' })).toBeNull();
+		unmount();
+
+		art.scope = () => 'Only the open record.';
+		at('/chat/outrider');
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'What Outrider answers from' })
+		);
+		expect(screen.getByText('Only the open record.')).toBeInTheDocument();
 	});
 
 	it("shares a settled answer from the app's own turn, by its place", async () => {
