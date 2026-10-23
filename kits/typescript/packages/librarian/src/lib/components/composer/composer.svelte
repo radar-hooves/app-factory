@@ -479,12 +479,14 @@
 		opacity: 0.6;
 	}
 
+	/* One row at every width: the scope picker gives way (its words ellipse)
+	   before Send leaves the right-hand end of the box (operator, 24/10/2026:
+	   on a phone it wrapped to the bottom-left). */
 	.ds-lib-controls {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		align-items: center;
 		gap: 0.5rem;
-		row-gap: 0.375rem;
 		padding: 0 var(--ds-spacing-sm) var(--ds-spacing-sm);
 	}
 

@@ -29,6 +29,8 @@ Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost lik
 
 ### Fixed
 
+- **The composer's controls are one row at every width**: the scope picker's words ellipse before Send leaves the right-hand end of the box. On a phone the row wrapped and Send landed at the bottom-left.
+
 - **`ActivityGroup`'s declaration exports the component.** It shared a name with the `ActivityGroup` type, and `svelte-package` emitted a default export a consumer could not render.
 
 ### Removed
