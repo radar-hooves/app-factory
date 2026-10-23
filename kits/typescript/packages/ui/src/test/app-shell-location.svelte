@@ -33,7 +33,7 @@
 
 <div data-testid="probe-year">{year}</div>
 
-<AppShell {nav} {currentPath} bind:collapsed brandTitle="Harness" settingsHref="/settings">
+<AppShell {nav} {currentPath} bind:collapsed brandTitle="Harness">
 	{#if withControls}
 		<ShellControls>
 			<Segmented bind:value={year} options={years} label="Financial year" size="sm" />

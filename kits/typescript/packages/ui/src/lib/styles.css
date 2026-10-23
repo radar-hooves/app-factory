@@ -837,12 +837,11 @@
 		padding-left: calc(0.625rem + 1px);
 	}
 
-	/* The rail's foot: where you configure the app, and which build you are on.
-	   Separated from the scrolling section list by a rule in the chrome's OWN
+	/* The drawer's foot: feedback, on a phone. Separated from the scrolling section list by a rule in the chrome's OWN
 	   ink rather than `--border`, for the reason the group guide takes the same
 	   treatment — a page-surface token cannot follow chrome an app has branded. */
 	/* `padding-inline` matches `.ds-nav`'s own `px-3`, because the foot sits
-	   OUTSIDE that wrapper: without it the Settings row's icon lands 0.75rem
+	   OUTSIDE that wrapper: without it the row's icon lands 0.75rem
 	   left of every icon above it and the rail reads as two lists. */
 	.ds-shell-rail-foot {
 		display: flex;

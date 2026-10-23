@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.26] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026, from a page-by-page map of the UI: "You don't need to have six places to achieve the same thing"). One standard for every app.
+
+### Changed
+
+- **The bar's title is "Section › Page"** wherever the current route is a child of a nav item with `children` ("Securities › Trading", not a bare "Trading"); a top-level page keeps its one name. It shows on a phone too, leading the first row, truncated. `activeNavLabel` is `activeNavTitle` (same arguments, the joined title; `TITLE_SEPARATOR` is exported from `types`). A page's `ShellControls` keep the row below on a phone, `ds-shell-controls` marks them, and `ds-shell-location` still wraps the title and the controls.
+- **Settings has one home, the account menu.** `AppIdentity`'s `onAccountSettings` item reads "Settings" (was "Account settings") and renders only when wired. Sign out lives there only.
+- **Feedback has one home, the bar.** `ReportWidget` draws no floating trigger: it registers how to open its dialogue and `AppShell` draws the trigger, an icon button in the bar's right group from md (`ds-shell-report`, before the consumer's `actions`, the theme toggle and the account menu) and a row at the foot of the phone drawer (`ds-shell-drawer-report`). The widget's props, POST and test ids (`feedback-done`, `feedback-error`, `feedback-id`) are unchanged; the trigger keeps its name, "Report a problem". An app mounts the widget beside the shell as before and wires nothing else.
+- **`ContextColumn`'s opener owns its own room.** The padded content ends with `--ds-float-reserve`, which `ContextColumn` declares below xl, in place of the widget's `--ds-report-reserve`; the opener sits at `right-4`. `--ds-report-clearance` still lifts it.
+
+### Removed
+
+- **`AppShell`'s `settingsHref` and `settingsLabel`, and the rail-foot Settings row.** An app that passed them drops them and wires `onAccountSettings` on its `AppIdentity`.
+- **The floating report button and `--ds-report-reserve` / `--ds-report-beside`.** Nothing of the shell floats over a page.
+
 ## [2026.10.25] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: the rail's toggle sat on its own row under the wordmark, "not a canonical location").

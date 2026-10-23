@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.9] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost like a disco strobe", the search "was a static picture that didn't move", and "it needs to look and feel exactly like claude code, where you can actually see that something is going on"; a briefing written as a document could not be opened).
 

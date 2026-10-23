@@ -52,7 +52,7 @@
 	 * - `children` for a section whose own pages are destinations, one level
 	 *   deep (the type refuses two). A table of contents, a document tree or a
 	 *   filter is not navigation: it goes in the page beside what it serves.
-	 * - No Settings row: `settingsHref` pins it at the rail's foot.
+	 * - No Settings row: Settings is the account menu's one item, wired below.
 	 * - Who may see a row is decided before it gets here (`$derived` over
 	 *   `auth.entitlements`); the shell knows nothing of permissions.
 	 * - Name rows in the reader's words, never the library's architecture
@@ -103,7 +103,6 @@
 	measure={page.data.measure ?? 'wide'}
 	padded={page.data.padded ?? true}
 	onSearch={() => (paletteOpen = true)}
-	settingsHref="/settings"
 >
 	<!-- The workspace switch, for whoever has more than one to switch between —
 	     renders nothing for an org-of-one (see workspace-menu.svelte). The
@@ -122,8 +121,8 @@
 	     top bar (rules-library/platform/authentication.md §Frontend Auth Store
 	     Contract). Waits for auth.user rather than passing it a null one; the
 	     loading and workspace-choice states still get full shell chrome, just
-	     not yet an avatar. onAccountSettings sends the caller to the same
-	     /settings destination as the rail's own Settings row.
+	     not yet an avatar. onAccountSettings is the Settings item, the one door
+	     to /settings: the rail has no row for it, and sign out lives here only.
 
 	     onManageMembers is wired ONLY while WorkspaceMenu renders nothing for
 	     this caller (one membership, `!auth.canSwitchWorkspace`): that menu

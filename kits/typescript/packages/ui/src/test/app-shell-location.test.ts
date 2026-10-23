@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import Harness from './app-shell-location.svelte';
-import { activeNavLabel } from '$lib/components/ui/app-shell/types.js';
+import { activeNavTitle } from '$lib/components/ui/app-shell/types.js';
 
 const nav = [
 	{ label: 'Overview', href: '/overview' },
@@ -12,14 +12,14 @@ const nav = [
 	}
 ];
 
-describe('activeNavLabel', () => {
-	it('names the active item, the active child over its parent, and nothing off-nav', () => {
-		expect(activeNavLabel(nav, '/overview')).toBe('Overview');
-		expect(activeNavLabel(nav, '/securities')).toBe('Securities');
-		expect(activeNavLabel(nav, '/securities/investing')).toBe('Investing');
-		expect(activeNavLabel(nav, '/securities/investing/abc')).toBe('Investing');
-		expect(activeNavLabel(nav, '/elsewhere')).toBeUndefined();
-		expect(activeNavLabel(nav, undefined)).toBeUndefined();
+describe('activeNavTitle', () => {
+	it('names a top-level page by its one name, a child as "Section › Page", and nothing off-nav', () => {
+		expect(activeNavTitle(nav, '/overview')).toBe('Overview');
+		expect(activeNavTitle(nav, '/securities')).toBe('Securities');
+		expect(activeNavTitle(nav, '/securities/investing')).toBe('Securities › Investing');
+		expect(activeNavTitle(nav, '/securities/investing/abc')).toBe('Securities › Investing');
+		expect(activeNavTitle(nav, '/elsewhere')).toBeUndefined();
+		expect(activeNavTitle(nav, undefined)).toBeUndefined();
 	});
 });
 
@@ -28,7 +28,7 @@ describe('AppShell — location row', () => {
 
 	it('shows where you are, and follows navigation', async () => {
 		const { rerender } = render(Harness, { currentPath: '/securities/trading' });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Trading');
+		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Securities › Trading');
 		await rerender({ currentPath: '/overview' });
 		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Overview');
 	});
@@ -38,20 +38,17 @@ describe('AppShell — location row', () => {
 		expect(screen.queryByTestId('ds-shell-location')).not.toBeInTheDocument();
 	});
 
-	it('names the settings section, on the same match the foot row lights on', async () => {
-		const { rerender } = render(Harness, { currentPath: '/settings/about' });
-		const settings = screen.getByRole('link', { name: 'Settings' });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Settings');
-		expect(settings).toHaveAttribute('aria-current', 'page');
+	it('shows on a phone too, truncated in the space it has', () => {
+		render(Harness, { currentPath: '/securities/trading' });
+		const row = screen.getByTestId('ds-shell-location');
+		expect(row).toHaveClass('max-sm:contents');
+		expect(row.querySelector('span')).toHaveClass('truncate', 'min-w-0', 'max-sm:flex-1', 'max-sm:basis-0');
+	});
 
-		// A route that merely starts with the same characters is not inside it.
-		await rerender({ currentPath: '/settings-archive' });
+	it('has no Settings row in the rail: Settings is the account menu’s', () => {
+		render(Harness, { currentPath: '/settings/about' });
+		expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
 		expect(screen.queryByTestId('ds-shell-location')).not.toBeInTheDocument();
-		expect(settings).not.toHaveAttribute('aria-current');
-
-		// A nav route still names itself.
-		await rerender({ currentPath: '/overview' });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Overview');
 	});
 
 	it('carries the page’s registered controls, live, and withdraws them on unmount', async () => {

@@ -4,14 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.10.71] - 2026-10-24
 
-Need: the operator's rulings of 24/10/2026 on caspo's chat page ("it needs to look and feel exactly like claude code, where you can actually see that something is going on"; the briefing button, "how many times you're gonna click that"; the scope disclosure, which Home and About already say); consumer: caspo.
+Need: the operator's rulings of 24/10/2026 on caspo's chat page and chrome ("it needs to look and feel exactly like claude code, where you can actually see that something is going on"; the briefing button, "how many times you're gonna click that"; the scope disclosure, which Home and About already say); consumer: caspo.
 
 ### Changed
 
-- **The chat page's turn shows its work as Claude Code does** (`@poodle64/librarian`, unreleased): each step a row as it starts, one turning working line at the foot of the turn with its verb, seconds and Stop, the working-out open as it is written, and a briefing written as a document opened as that document. The page passes `retrieves` (the persona searches its collections first) and `onstop` to `Conversation`.
+- **The bar says where you are as "Section › Page"; Settings and feedback each have one home** (`@poodle64/ui` 2026.10.26, which stamped apps now pin; the operator, from a page-by-page map of the UI: "You don't need to have six places to achieve the same thing"). A child page's bar title is "Securities › Trading", a top-level page's its one name, and it shows on a phone, truncated. Settings is the account menu's item only: `AppShell` loses `settingsHref` and `settingsLabel` and the rail has no foot row. Feedback is an icon in the bar's right group from md, before the app's own `actions`, and a row in the phone drawer; the floating button and the room reserved for it are gone. `ReportWidget` keeps its props, POST and test ids. Migration: bump `@poodle64/ui` to `^2026.10.26`; drop `settingsHref` (and `settingsLabel`) from `AppShell`; wire `onAccountSettings` on `AppIdentity`, which now reads "Settings" and shows only when wired; an app's test that clicked the rail's Settings row or the floating report button opens the account menu, or clicks `ds-shell-report` (`ds-shell-drawer-report` on a phone); `activeNavLabel` is `activeNavTitle`; stop reading `--ds-report-reserve` and `--ds-report-beside`.
+- **The chat page's turn shows its work as Claude Code does** (`@poodle64/librarian` 2026.10.9, which stamped apps now pin): each step a row as it starts, one turning working line at the foot of the turn with its verb, seconds and Stop, the working-out open as it is written, and a briefing written as a document opened as that document. The page passes `retrieves` (the persona searches its collections first) and `onstop` to `Conversation`.
 - **The chat page's composer offers no briefing control.** A briefing is asked from a Home page's box (`AskHome`), which still offers it, and one handed over still reads as its card. `AskBox`'s `onbriefing` is optional.
+
+### Fixed
+
+- **The chat composer's controls are one row at every width** (`@poodle64/librarian` 2026.10.9): Send stays at the right of the box on a phone.
 
 ### Added
 

@@ -216,19 +216,22 @@ export function hasActiveNavChild(item: NavItem, currentPath: string | undefined
 	return navChildren(item).some((child) => isNavItemActive(child, currentPath));
 }
 
+/** What the bar puts between a section and its page: "Securities › Trading". */
+export const TITLE_SEPARATOR = ' › ';
+
 /**
- * The label of where the user is: the active child's where one matches, else
- * the active item's. Undefined when nothing matches, so an unlisted route
- * renders no label rather than a wrong one.
+ * The bar's title for where the user is: "Section › Page" inside a section that
+ * discloses children, the item's one name for a top-level page. Undefined when
+ * nothing matches, so an unlisted route renders no title rather than a wrong one.
  */
-export function activeNavLabel(
+export function activeNavTitle(
 	nav: NavSource | undefined,
 	currentPath: string | undefined
 ): string | undefined {
 	if (!currentPath) return undefined;
 	for (const item of toItems(nav)) {
 		const child = navChildren(item).find((c) => isNavItemActive(c, currentPath));
-		if (child) return child.label;
+		if (child) return `${item.label}${TITLE_SEPARATOR}${child.label}`;
 		if (isNavItemActive(item, currentPath)) return item.label;
 	}
 	return undefined;

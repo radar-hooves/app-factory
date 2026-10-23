@@ -249,9 +249,8 @@
 {:else}
 	{@const c = chat}
 	{@const p = persona}
-	<!-- No space reserved here for the shell's report button: the composer lifts
-	     it clear of Send (`--ds-report-clearance`), and a reserve here as well
-	     lifts Send back under it on a phone (app-factory#29). -->
+	<!-- Nothing of the shell floats over the composer: feedback is the bar's, and
+	     the phone drawer's. -->
 	<div class="flex h-full min-h-0 flex-1">
 		<Conversation
 			turns={c.turns}

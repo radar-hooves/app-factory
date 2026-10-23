@@ -5,7 +5,7 @@ export { default } from './app-shell.svelte';
 export { SHELL_MEASURES, type ShellMeasure } from './measure.js';
 export { SHELL_TEXTURES, type ShellTexture } from './texture.js';
 export {
-	activeNavLabel,
+	activeNavTitle,
 	hasActiveNavChild,
 	isNavGroup,
 	isNavItemActive,

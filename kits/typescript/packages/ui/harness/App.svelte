@@ -1595,6 +1595,7 @@
 		<h1 class="font-display text-display font-semibold">Education</h1>
 		<p class="text-muted-foreground mt-2 text-sm">A section with its own navigation.</p>
 	</AppShell>
+	<ReportWidget />
 {:else if surface === 'measure'}
 	<!-- One page body, four caps, so the only thing that can move a measured
 	     width is the prop. The copy is real running text rather than a filler
@@ -2016,7 +2017,6 @@
 		nav={[{ label: 'Overview', href: '#/overview', icon: LayoutDashboard }]}
 		currentPath={settingsPath}
 		brandTitle="Harness"
-		settingsHref="#/settings"
 		padded={false}
 	>
 		<SettingsShell sections={settingsSections} currentPath={settingsPath}>

@@ -62,7 +62,7 @@
 		entitlements?: string[];
 		/** Required — the whole reason this slot exists is a stamped app rendering no way to sign out. */
 		onSignOut: () => void;
-		/** Optional until the app has an account-settings destination to send it to. */
+		/** The "Settings" item, and Settings' one home: the rail has no row for it. Wire it to the app's settings route; absent renders no item. */
 		onAccountSettings?: () => void;
 		/**
 		 * Reach the workspace's members surface from here. Ignored while
@@ -242,7 +242,9 @@
 		{#if themeToggle}
 			<DropdownMenu.Item onSelect={switchTheme}>Switch theme</DropdownMenu.Item>
 		{/if}
-		<DropdownMenu.Item onSelect={onAccountSettings}>Account settings</DropdownMenu.Item>
+		{#if onAccountSettings}
+			<DropdownMenu.Item onSelect={onAccountSettings}>Settings</DropdownMenu.Item>
+		{/if}
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item class="text-status-error" onSelect={onSignOut}>Sign out</DropdownMenu.Item>
 	</DropdownMenu.Content>

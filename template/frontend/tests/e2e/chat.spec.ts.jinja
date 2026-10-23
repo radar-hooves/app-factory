@@ -331,25 +331,28 @@ test('a person narrows a question to one collection, and a link can too', async 
 });
 
 // The collections persona's composer carries the most, with its picker.
-// On a phone the report button shares its corner with Send (app-factory#29).
-test('on a phone, Send is clear of the report button', async ({ browser }) => {
+// On a phone nothing floats over the composer: feedback is a row in the drawer
+// (app-factory#29 was the report button sharing Send's corner).
+test('on a phone, nothing floats over Send and the report row is in the drawer', async ({
+	browser
+}) => {
 	const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
 	const page = await phone.newPage();
 	try {
 		await page.goto('/chat/outrider');
 		const send = page.getByRole('button', { name: 'Send' });
-		const report = page.getByRole('button', { name: 'Report a problem' });
 		await expect(send).toBeVisible();
-		await expect(report).toBeVisible();
-		const s = await send.boundingBox();
-		const r = await report.boundingBox();
-		if (!s || !r) throw new Error('Send or the report button has no box');
-		const apart =
-			s.y + s.height <= r.y ||
-			r.y + r.height <= s.y ||
-			s.x + s.width <= r.x ||
-			r.x + r.width <= s.x;
-		expect(apart, `Send ${JSON.stringify(s)}, the report button ${JSON.stringify(r)}`).toBe(true);
+		await expect(page.getByRole('button', { name: 'Report a problem' })).toBeHidden();
+		const box = await send.boundingBox();
+		if (!box) throw new Error('Send has no box');
+		const top = await page.evaluate(
+			({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim(),
+			{ x: box.x + box.width / 2, y: box.y + box.height / 2 }
+		);
+		expect(top).toBe('Send');
+		await page.getByTestId('ds-shell-menu').click();
+		await expect(page.getByTestId('ds-shell-drawer-report')).toBeVisible();
+		await page.getByTestId('ds-shell-menu').click();
 
 		await ask(page, 'And on a phone?');
 		await expect(page.getByText(/on 'And on a phone\?': a member accrues/).first()).toBeVisible();

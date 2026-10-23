@@ -103,6 +103,25 @@
 		observer.observe(parent);
 		return () => observer.disconnect();
 	});
+	// Below xl the opener floats over the page's corner, so the shell ends its
+	// padded content with room for it (`--ds-float-reserve`, read by
+	// CONTENT_PADDING) and a list scrolled to its end clears it. The opener's top
+	// edge sits 3.75rem up; 4.5rem leaves a gap, less any lift a page control sets.
+	$effect(() => {
+		if (typeof window === 'undefined' || !window.matchMedia) return;
+		const narrow = window.matchMedia('(max-width: 79.99rem)');
+		const root = document.documentElement;
+		const sync = () =>
+			narrow.matches
+				? root.style.setProperty('--ds-float-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))')
+				: root.style.removeProperty('--ds-float-reserve');
+		sync();
+		narrow.addEventListener('change', sync);
+		return () => {
+			narrow.removeEventListener('change', sync);
+			root.style.removeProperty('--ds-float-reserve');
+		};
+	});
 	/** Room for the document beside the column, not in its place. */
 	const BESIDE = 1250;
 	const beside = $derived(row !== null && row >= BESIDE);
@@ -169,14 +188,12 @@
      package's usual 36px control row: this is the one control whose entire
      job is making otherwise-unreachable content reachable, so it earns the
      full touch-target minimum rather than the shell's ordinary density.
-     The bottom-right corner is the feedback widget's; this sits beside it
-     (`--ds-report-beside`, which the widget publishes) and follows its lift, so
-     neither covers the other and both stay in the band the shell reserves at
-     the content's end. -->
+     It lifts by `--ds-report-clearance` when a page control (the librarian
+     composer) shares the corner. -->
 <button
 	type="button"
 	onclick={() => (sheetOpen = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-[var(--ds-report-beside,1rem)] bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-30 grid size-11 flex-none place-items-center rounded-full border xl:hidden"
+	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-30 grid size-11 flex-none place-items-center rounded-full border xl:hidden"
 	aria-label="Open {name}"
 >
 	<PanelRight class="size-4.5" />

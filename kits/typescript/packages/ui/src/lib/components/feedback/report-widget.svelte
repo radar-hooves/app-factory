@@ -11,24 +11,21 @@
 	import Check from '@lucide/svelte/icons/check';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 	import AppDialog from '../ui/app-dialog/app-dialog.svelte';
 	import { Button } from '../ui/button/index.js';
 	import { Checkbox } from '../ui/checkbox/index.js';
 	import { Label } from '../ui/label/index.js';
 	import Textarea from '../ui/textarea/textarea.svelte';
+	import { shellReport } from '../ui/app-shell/report.svelte.js';
 	import { getSessionId } from '$lib/telemetry';
 
-	// The feedback widget every household app mounts: a fixed bottom-right
-	// trigger opening the one report dialogue. It is deliberately NOT under
+	// The feedback widget every household app mounts: the one report dialogue.
+	// It draws no trigger of its own. While mounted it registers `open` with the
+	// shell, which puts the trigger in the top bar (md and up) and in the phone's
+	// drawer, so nothing floats over a page. It is deliberately NOT under
 	// components/ui — it is app machinery the layout mounts once (alongside
 	// initBrowserTelemetry), not page chrome a route composes from, so it does
 	// not sit in the situation→component registry either.
-	// A page control that shares its corner sets `--ds-report-clearance` on the
-	// document to lift the trigger clear of it (the librarian composer does).
-	// Every other page gets the trigger's footprint, net of that lift, as
-	// `--ds-report-reserve`: the shell ends its padded content with that much
-	// room, so a control under the corner can always scroll clear.
 
 	let {
 		/** Where the report POSTs. The app's own route, defaulting to the one every household app serves. */
@@ -59,19 +56,11 @@
 	const messageId = `feedback-message-${uid}`;
 	const screenshotId = `feedback-screenshot-${uid}`;
 
-	// The trigger's top edge sits 3.75rem up (1rem offset, 2.75rem disc); 4.5rem
-	// leaves a gap above it. Resolved on the document, so a lift set or cleared
-	// later moves it too.
 	$effect(() => {
-		const root = document.documentElement;
-		root.style.setProperty('--ds-report-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))');
-		// The corner is this widget's. Another fixed control in it sits beside the
-		// trigger, this far in from the right edge with the same gap, so it stays
-		// inside the reserve too (ContextColumn's opener does).
-		root.style.setProperty('--ds-report-beside', '4.5rem');
+		const opener = () => (open = true);
+		shellReport.open = opener;
 		return () => {
-			root.style.removeProperty('--ds-report-reserve');
-			root.style.removeProperty('--ds-report-beside');
+			if (shellReport.open === opener) shellReport.open = null;
 		};
 	});
 
@@ -124,20 +113,6 @@
 		phase = 'idle';
 	}
 </script>
-
-<!-- The floating trigger is the same shape the context column's is: a raw
-     button in the house chrome rather than the Button primitive, because a
-     Button's padding and text rhythm are for a row of actions, not a
-     44px disc pinned over the page. -->
-<button
-	type="button"
-	onclick={() => (open = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-50 grid size-11 flex-none place-items-center rounded-full border transition-colors"
-	aria-label="Report a problem"
->
-	<MessageSquarePlus class="size-4.5" />
-	<span class="sr-only">Report a problem</span>
-</button>
 
 <AppDialog
 	bind:open

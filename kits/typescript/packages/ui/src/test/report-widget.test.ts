@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { toPng } from 'html-to-image';
-import ReportWidget from '$lib/components/feedback/report-widget.svelte';
+import ReportWidget from './report-shell.svelte';
 import { getSessionId } from '$lib/telemetry';
 
 vi.mock('html-to-image', () => ({ toPng: vi.fn() }));
@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe('ReportWidget — the trigger and the dialogue', () => {
-	it('renders a floating trigger that opens the labelled report dialogue', async () => {
+	it('opens the labelled report dialogue from the shell’s trigger', async () => {
 		render(ReportWidget);
 
 		const trigger = screen.getByRole('button', { name: 'Report a problem' });
@@ -209,12 +209,53 @@ describe('ReportWidget — the states', () => {
 	});
 });
 
-describe('ReportWidget: the corner', () => {
-	it('publishes the inset beside its trigger for another fixed control, and withdraws it on unmount', () => {
+describe('ReportWidget: feedback has one home', () => {
+	it('draws no trigger of its own and nothing floats: the shell’s bar button opens it', async () => {
+		render(ReportWidget);
+		const bar = screen.getByTestId('ds-shell-report');
+		expect(bar.closest('header')).toBe(document.querySelector('.ds-shell-bar'));
+		expect(bar).toHaveAttribute('aria-label', 'Report a problem');
+		expect(document.querySelector('.fixed.rounded-full')).toBeNull();
+		await fireEvent.click(bar);
+		expect(await screen.findByRole('heading', { name: 'Report a problem' })).toBeInTheDocument();
+	});
+
+	it('sits in the bar’s right group before the app’s own actions and the account menu', () => {
+		render(ReportWidget);
+		const order = ['ds-shell-report', 'probe-action', 'ds-shell-theme', 'probe-identity'].map((id) =>
+			screen.getByTestId(id)
+		);
+		const group = order[0].parentElement!;
+		expect([...group.children].filter((el) => order.includes(el as HTMLElement))).toEqual(order);
+	});
+
+	it('is a row in the phone’s drawer, which closes as the dialogue opens', async () => {
+		render(ReportWidget);
+		expect(screen.queryByTestId('ds-shell-drawer-report')).not.toBeInTheDocument();
+		await fireEvent.click(screen.getByTestId('ds-shell-menu'));
+		const row = await screen.findByTestId('ds-shell-drawer-report');
+		expect(row.closest('[data-testid="ds-shell-drawer"]')).not.toBeNull();
+		await fireEvent.click(row);
+		expect(await screen.findByRole('heading', { name: 'Report a problem' })).toBeInTheDocument();
+		expect(screen.queryByTestId('ds-shell-drawer')).not.toBeInTheDocument();
+	});
+
+	it('shows no trigger without a widget mounted, and withdraws it on unmount', async () => {
+		const { rerender } = render(ReportWidget, { props: { mounted: false } });
+		expect(screen.queryByTestId('ds-shell-report')).not.toBeInTheDocument();
+		await rerender({ mounted: true });
+		await waitFor(() => expect(screen.getByTestId('ds-shell-report')).toBeInTheDocument());
+		await rerender({ mounted: false });
+		await waitFor(() => expect(screen.queryByTestId('ds-shell-report')).not.toBeInTheDocument());
+	});
+
+	it('reserves nothing at the foot of a padded page and publishes no corner properties', () => {
+		render(ReportWidget);
 		const root = document.documentElement;
-		const { unmount } = render(ReportWidget);
-		expect(root.style.getPropertyValue('--ds-report-beside')).toBe('4.5rem');
-		unmount();
+		expect(root.style.getPropertyValue('--ds-report-reserve')).toBe('');
 		expect(root.style.getPropertyValue('--ds-report-beside')).toBe('');
+		expect(document.querySelector('[data-slot="app-shell-content"] > div')!.className).not.toContain(
+			'report-reserve'
+		);
 	});
 });

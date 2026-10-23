@@ -5,7 +5,7 @@
  * first. `initials-of` a display name is unaffected; only the no-display-name
  * fallback changes.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import Shield from '@lucide/svelte/icons/shield';
 import { AppIdentity } from '$lib/components/ui/app-identity';
@@ -146,7 +146,7 @@ describe('AppIdentity — app-supplied links', () => {
 
 		await openMenu();
 
-		expect(menuItemLabels()).toEqual(['Switch theme', 'Account settings', 'Sign out']);
+		expect(menuItemLabels()).toEqual(['Switch theme', 'Sign out']);
 		expect(container.ownerDocument.querySelectorAll('[data-slot="dropdown-menu-group"]')).toHaveLength(
 			0
 		);
@@ -166,7 +166,7 @@ describe('AppIdentity — app-supplied links', () => {
 
 		await openMenu();
 
-		expect(menuItemLabels()).toEqual(['Switch theme', 'Account settings', 'Sign out']);
+		expect(menuItemLabels()).toEqual(['Switch theme', 'Sign out']);
 		expect(container.ownerDocument.querySelectorAll('[data-slot="dropdown-menu-group"]')).toHaveLength(
 			0
 		);
@@ -194,7 +194,7 @@ describe('AppIdentity — app-supplied links', () => {
 
 		await openMenu();
 
-		expect(menuItemLabels()).toEqual(['Admin', 'Switch theme', 'Account settings', 'Sign out']);
+		expect(menuItemLabels()).toEqual(['Admin', 'Switch theme', 'Sign out']);
 		expect(container.ownerDocument.querySelectorAll('[data-slot="dropdown-menu-group"]')).toHaveLength(
 			1
 		);
@@ -229,7 +229,6 @@ describe('AppIdentity — app-supplied links', () => {
 			'Admin',
 			'Support Milton',
 			'Switch theme',
-			'Account settings',
 			'Sign out'
 		]);
 		expect(labels.at(-1)).toBe('Sign out');
@@ -295,6 +294,26 @@ describe('AppIdentity — themeToggle', () => {
 	it('hides Switch theme when themeToggle is false', async () => {
 		render(AppIdentity, { props: { user, onSignOut: () => {}, themeToggle: false } });
 		await openMenu();
-		expect(menuItemLabels()).toEqual(['Account settings', 'Sign out']);
+		expect(menuItemLabels()).toEqual(['Sign out']);
+	});
+});
+
+describe('AppIdentity — Settings', () => {
+	const user = { username: 'jdoe', display_name: null, email: null };
+
+	it('is one plain Settings item, wired by the app, and absent until it is', async () => {
+		const onAccountSettings = vi.fn();
+		const { unmount } = render(AppIdentity, {
+			props: { user, onSignOut: () => {}, onAccountSettings }
+		});
+		await openMenu();
+		expect(menuItemLabels()).toEqual(['Switch theme', 'Settings', 'Sign out']);
+		await fireEvent.click(screen.getByText('Settings'));
+		expect(onAccountSettings).toHaveBeenCalledTimes(1);
+		unmount();
+
+		render(AppIdentity, { props: { user, onSignOut: () => {} } });
+		await openMenu();
+		expect(menuItemLabels()).not.toContain('Settings');
 	});
 });

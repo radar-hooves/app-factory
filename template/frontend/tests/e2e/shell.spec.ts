@@ -157,10 +157,10 @@ test('a link to the API leaves the app for the API', async ({ page }) => {
 	await expect(page.locator('#ds-main')).toHaveCount(0);
 });
 
-// The rail's own Settings row goes to /settings, which must be a page: the
+// The account menu's Settings item goes to /settings, which must be a page: the
 // first settings page this caller can open, or the destination saying there is
 // none. Which one depends on the app and the caller; a 404 is never right.
-test("the rail's Settings row lands on a page", async ({ page }) => {
+test("the account menu's Settings item lands on a page", async ({ page }) => {
 	await page.goto('/settings');
 
 	const heading = page.locator('#ds-main').getByRole('heading').first();

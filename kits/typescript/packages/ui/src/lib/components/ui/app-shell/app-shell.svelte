@@ -85,13 +85,14 @@
 	import Menu from '@lucide/svelte/icons/menu';
 	import X from '@lucide/svelte/icons/x';
 	import Search from '@lucide/svelte/icons/search';
-	import Settings from '@lucide/svelte/icons/settings';
+	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import AppNav from './app-nav.svelte';
-	import { activeNavLabel, matchesPrefix, toItems, type NavSource } from './types.js';
+	import { activeNavTitle, toItems, type NavSource } from './types.js';
+	import { shellReport } from './report.svelte.js';
 	import { provideShellControls, type ShellControlsSlot } from './controls.js';
 	import { cn } from '$lib/utils.js';
 	import ResizeHandle from '../resize-handle/resize-handle.svelte';
@@ -110,8 +111,6 @@
 		context,
 		actions,
 		identity,
-		settingsHref,
-		settingsLabel = 'Settings',
 		onSearch,
 		searchLabel = 'Search…',
 		searchShortcut = '⌘K',
@@ -174,16 +173,6 @@
 		 *  the alternative, rendering it in both, is the duplication this file
 		 *  exists to avoid. */
 		identity?: Snippet;
-		/** Where the Settings row at the rail's foot links. Absent renders no row.
-		 *  Settings sits at the foot because configuring the app is not navigating
-		 *  it, and the split reads without a label.
-		 *
-		 *  The app's version does NOT live beside it. A build string earns rail
-		 *  space only if it saves a trip, and it does not: Settings is on screen
-		 *  at every moment and its About section is one click from here, so the
-		 *  line was permanent furniture duplicating the thing directly above it. */
-		settingsHref?: string;
-		settingsLabel?: string;
 		/** Provide to render the search affordance. Usually opens a CommandPalette. */
 		onSearch?: () => void;
 		searchLabel?: string;
@@ -235,19 +224,11 @@
 
 	const hasNav = $derived(toItems(nav).length > 0);
 
-	// The foot's Settings row owns its subtree, matched exactly as a nav `href`
-	// is, so the row's own current state and the bar's label cannot disagree.
-	const atSettings = $derived(
-		!!settingsHref && !!currentPath && matchesPrefix(currentPath, settingsHref)
-	);
-
 	// Where the user is, in words: the rail is icons when collapsed and a closed
-	// drawer on a phone, so the bar names the section. Settings is a section like
-	// any other and is named the same way — by the foot row's own label, since
-	// the shell knows nothing of the pages inside it.
-	const location = $derived(
-		activeNavLabel(nav, currentPath) ?? (atSettings ? settingsLabel : undefined)
-	);
+	// drawer on a phone, so the bar names the page, "Section › Page" inside a
+	// section and the item's one name otherwise. Settings has no row to name: it
+	// opens from the account menu, and its own page heads itself.
+	const location = $derived(activeNavTitle(nav, currentPath));
 
 	// The page's scope controls, registered by `<ShellControls>` from the route.
 	const controls: ShellControlsSlot = $state({ content: null });
@@ -619,30 +600,25 @@
 			/>
 
 			<!--
-				The rail's foot. `mt-auto` pins it under the nav however short the
-				section list is, so it sits on the rail's bottom edge rather than
-				trailing the last section. Two things live here and nothing else:
-				where you configure the app, and which build you are looking at.
-
-				Settings is a nav row like any other and takes the same active and
-				hover treatment, because it IS a destination — it is last rather
-				than separate because configuring the app is not navigating it.
-				The version is not a row: no icon, no tile, no hover, one muted
-				line, so it reads as metadata and never competes for a click.
+				The drawer's foot: the one place feedback sits on a phone, where nothing
+				floats over the page. From md it is the bar's icon. Settings is the
+				account menu's, never a row here.
 			-->
-			{#if settingsHref}
+			{#if mobileNavOpen && shellReport.open}
 				<div class="ds-shell-rail-foot mt-auto">
-					<a
-						href={settingsHref}
-						class="ds-nav-item"
-						aria-current={atSettings ? 'page' : undefined}
-						onclick={() => (mobileNavOpen = false)}
+					<button
+						type="button"
+						class="ds-nav-item w-full"
+						data-testid="ds-shell-drawer-report"
+						onclick={() => {
+							const open = shellReport.open;
+							closeMobileNav();
+							open?.();
+						}}
 					>
-						<Settings class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
-						<span class={railNarrow && !mobileNavOpen ? 'sr-only' : 'truncate'}>
-							{settingsLabel}
-						</span>
-					</a>
+						<MessageSquarePlus class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+						<span class="truncate">Report a problem</span>
+					</button>
 				</div>
 			{/if}
 			{#if collapsible && !railCollapsed && !mobileNavOpen}
@@ -744,25 +720,33 @@
 			<!-- Where you are, then the page's scope controls. Inline with the
 			     rest of the bar from xl; below that, controls take a second row
 			     of the bar, and a bare label shows from md and not on a phone. -->
+			<!-- Where you are, then the page's scope controls. From sm they share one
+			     row, inline from xl and on the bar's second row below it. On a phone
+			     the wrapper steps aside (`contents`): the title takes the free room
+			     of the first row, truncated, and the controls take the second row
+			     whole. -->
 			{#if location || controls.content}
 				<div
 					class={cn(
-						'flex min-w-0 items-center gap-2 sm:gap-3',
-						controls.content
-							? 'order-last basis-full xl:order-none xl:basis-auto'
-							: 'hidden md:flex'
+						'flex min-w-0 items-center gap-2 max-sm:contents sm:gap-3',
+						controls.content && 'sm:order-last sm:basis-full xl:order-none xl:basis-auto'
 					)}
 					data-testid="ds-shell-location"
 				>
 					{#if location}
 						<span
-							class={cn(
-								'text-shell-muted-foreground max-w-48 flex-none truncate text-sm',
-								controls.content && 'max-sm:hidden'
-							)}>{location}</span
+							class="text-shell-muted-foreground min-w-0 truncate text-sm max-sm:flex-1 max-sm:basis-0 sm:max-w-72"
+							title={location}>{location}</span
 						>
 					{/if}
-					{#if controls.content}{@render controls.content()}{/if}
+					{#if controls.content}
+						<div
+							class="flex min-w-0 items-center gap-2 max-sm:order-last max-sm:basis-full sm:gap-3"
+							data-testid="ds-shell-controls"
+						>
+							{@render controls.content()}
+						</div>
+					{/if}
 				</div>
 			{/if}
 
@@ -777,6 +761,21 @@
 					{@render searchButton(
 						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(180px,18vw,300px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
 					)}
+				{/if}
+
+				<!-- Feedback has one home: here from md, the drawer's foot on a phone.
+				     Shown only while a ReportWidget is mounted to open. -->
+				{#if shellReport.open}
+					<button
+						type="button"
+						onclick={() => shellReport.open?.()}
+						class="border-border text-shell-muted-foreground hover:text-shell-foreground hidden size-9 flex-none place-items-center rounded-md border transition-colors md:grid"
+						aria-label="Report a problem"
+						title="Report a problem"
+						data-testid="ds-shell-report"
+					>
+						<MessageSquarePlus class="size-4" />
+					</button>
 				{/if}
 
 				{#if actions}{@render actions()}{/if}

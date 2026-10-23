@@ -4733,7 +4733,8 @@ for (const density of ['comfortable', 'compact']) {
 	await page.addStyleTag({ content: SETTLE });
 	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
 	const phone = await page.evaluate(() => {
-		const row = document.querySelector('[data-testid="ds-shell-location"]');
+		const row = document.querySelector('[data-testid="ds-shell-controls"]');
+		const title = document.querySelector('[data-testid="ds-shell-location"] > span');
 		const nav = row.querySelector('nav');
 		const vis = (el) => el && el.getBoundingClientRect().width > 0;
 		const last = nav.lastElementChild;
@@ -4742,7 +4743,7 @@ for (const density of ['comfortable', 'compact']) {
 		const l = last.getBoundingClientRect();
 		const trigger = row.querySelector('[data-slot="record-switcher-trigger"]').getBoundingClientRect();
 		return {
-			label: [...row.children].some((c) => c.matches('span') && vis(c)),
+			title: !!title && vis(title) && title.getBoundingClientRect().right <= innerWidth && title.getBoundingClientRect().top < row.getBoundingClientRect().top && getComputedStyle(title).textOverflow === 'ellipsis',
 			slash: [...row.querySelectorAll('[aria-hidden="true"]')].some((c) => c.textContent === '/' && vis(c)),
 			scrolls: nav.scrollWidth > nav.clientWidth,
 			lastInRow: l.right <= r.right + 1 && l.left >= r.left,
@@ -4751,8 +4752,8 @@ for (const density of ['comfortable', 'compact']) {
 		};
 	});
 	check(
-		'RecordSwitcher at 390px: no breadcrumb, the tabs scroll in the row and the last page is reachable',
-		!phone.label && !phone.slash && phone.scrolls && phone.lastInRow && phone.triggerInRow && phone.pageOverflow <= 0,
+		'RecordSwitcher at 390px: the title leads the bar in the first row, no breadcrumb, the tabs scroll in the second row and the last page is reachable',
+		phone.title && !phone.slash && phone.scrolls && phone.lastInRow && phone.triggerInRow && phone.pageOverflow <= 0,
 		JSON.stringify(phone)
 	);
 	// A tab out of sight is never silent: the strip fades the edge that has more, and the fade follows the scroll.
@@ -4823,55 +4824,50 @@ for (const [height, long] of [
 			(error) => error.message.match(/<[^>]+> (from .+ subtree )?intercepts pointer events/)?.[0] ?? error.message.split('\n')[0]
 		);
 	check(`chrome at 1280x${height}: a crowded bar leaves the context control its own`, target === 'clickable', target);
-	const shared = await page.evaluate(() => {
+	const floating = await page.evaluate(() => {
 		const main = document.querySelector('[data-slot="app-shell-content"]');
 		main.scrollTop = main.scrollHeight;
-		const a = document.querySelector('[data-testid="chrome-last"]').getBoundingClientRect();
-		const b = document.querySelector('[aria-label="Report a problem"]').getBoundingClientRect();
-		const across = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
-		const down = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-		return Math.round(across * down);
+		const last = document.querySelector('[data-testid="chrome-last"]');
+		const r = last.getBoundingClientRect();
+		const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+		return {
+			covered: top !== last && !last.contains(top),
+			fixed: [...document.querySelectorAll('body *')].filter((el) => getComputedStyle(el).position === 'fixed' && el.getBoundingClientRect().width > 0 && !el.closest('[role="dialog"]')).map((el) => el.tagName + (el.getAttribute('aria-label') ?? ''))
+		};
 	});
-	check(`chrome at 1280x${height}: scrolled to its end, the last control clears the report button`, shared === 0, `${shared}px² shared`);
+	check(`chrome at 1280x${height}: scrolled to its end, the last control is clear and nothing floats over the page`, !floating.covered && floating.fixed.length === 0, JSON.stringify(floating));
 	check(`chrome at 1280x${height}: no page error`, errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }
 
-// A phone's bottom-right corner holds two floating controls: the feedback
-// widget's and ContextColumn's "At a glance" opener. The widget owns the corner
-// and the opener sits beside it, inside the band the shell reserves at the
-// content's end (godswood#889). Each is hit-tested at its own centre and four
-// inner corners, so neither covers the other's hit area; a list scrolled to its
-// end clears both; the dialogue it opens names itself once.
+// A phone's bottom-right corner holds one floating control: ContextColumn's
+// "At a glance" opener (feedback is in the drawer, never over the page). It is
+// hit-tested at its own centre and four inner corners; a list scrolled to its
+// end clears it through the reserve the column declares; the dialogue it opens
+// names itself once.
 {
 	const { context, page, errors } = await open('surface=records&long=1', { width: 390, height: 780 }, 'light');
 	await page.addStyleTag({ content: SETTLE });
-	await page.waitForSelector('[aria-label="Report a problem"]');
+	await page.waitForSelector('button[aria-label="Open At a glance"]');
 	const tap = await page.evaluate(() => {
-		const reach = (label) => {
-			const el = document.querySelector(`button[aria-label="${label}"]`);
-			const r = el.getBoundingClientRect();
-			const points = [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
-			return {
-				box: [r.left, r.top, r.right, r.bottom].map(Math.round),
-				hit: points.every(([x, y]) => {
-					const top = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y);
-					return top === el || el.contains(top);
-				})
-			};
-		};
+		const el = document.querySelector('button[aria-label="Open At a glance"]');
+		const r = el.getBoundingClientRect();
+		const points = [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
+		const hit = points.every(([x, y]) => {
+			const top = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y);
+			return top === el || el.contains(top);
+		});
 		const scrollers = [...document.querySelectorAll('[data-slot="app-shell-content"], [data-slot="record-rows"]')];
 		for (const el of scrollers) el.scrollTop = el.scrollHeight;
 		const ended = scrollers.some((el) => el.scrollHeight > el.clientHeight) && scrollers.every((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
 		const last = [...document.querySelectorAll('[data-slot="record-row"]')].pop().getBoundingClientRect();
-		return { report: reach('Report a problem'), glance: reach('Open At a glance'), ended, last: [last.left, last.top, last.right, last.bottom].map(Math.round) };
+		const report = [...document.querySelectorAll('[aria-label="Report a problem"]')].filter((b) => b.getBoundingClientRect().width > 0);
+		return { glance: [r.left, r.top, r.right, r.bottom].map(Math.round), hit, ended, last: [last.left, last.top, last.right, last.bottom].map(Math.round), report: report.length };
 	}).catch((error) => ({ error: error.message }));
 	const shared = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
-	check('ContextColumn at 390px: the opener and the report button are both tappable', !tap.error && tap.report.hit && tap.glance.hit, JSON.stringify(tap));
+	check('ContextColumn at 390px: the opener is tappable and no report button floats beside it', !tap.error && tap.hit && tap.report === 0, JSON.stringify(tap));
 	if (!tap.error) {
-		const [a, b] = [tap.report.box, tap.glance.box];
-		check('ContextColumn at 390px: the opener sits beside the report button, on its line, sharing no pixel', shared(a, b) === 0 && b[2] <= a[0] && b[3] === a[3], JSON.stringify(tap));
-		check('ContextColumn at 390px: a list scrolled to its end clears both', tap.ended && shared(tap.last, a) === 0 && shared(tap.last, b) === 0, JSON.stringify(tap));
+		check('ContextColumn at 390px: a list scrolled to its end clears the opener', tap.ended && shared(tap.last, tap.glance) === 0, JSON.stringify(tap));
 	}
 	await page.click('button[aria-label="Open At a glance"]');
 	await page.waitForSelector('[role="dialog"]');
@@ -4890,6 +4886,111 @@ for (const [height, long] of [
 	check('ContextColumn at 390px: a keyboard’s focus opens the info tip', keyed === 'open', keyed);
 	check('ContextColumn at 390px: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
+}
+
+// The bar's title is "Section › Page", and the one home of feedback and of
+// Settings (operator ruling, 24/10/2026: "You don't need to have six places to
+// achieve the same thing"). Driven at the expanded rail, the collapsed rail and
+// the phone drawer, because each lays the same three things out differently.
+{
+	const TITLE = 'Education › Open architecture and autonomy, topic 3';
+	const seen = (page) =>
+		page.evaluate(() => {
+			const visible = (el) => el.getBoundingClientRect().width > 0 && getComputedStyle(el).visibility !== 'hidden';
+			const bar = document.querySelector('.ds-shell-bar');
+			const report = [...document.querySelectorAll('[aria-label="Report a problem"]')].filter(visible);
+			const theme = document.querySelector('[data-testid="ds-shell-theme"]').getBoundingClientRect();
+			const title = document.querySelector('[data-testid="ds-shell-location"] span');
+			const titleBox = title?.getBoundingClientRect();
+			const search = [...document.querySelectorAll('.ds-shell-bar button')].filter(visible);
+			return {
+				report: report.map((b) => ({
+					inBar: bar.contains(b),
+					fixed: getComputedStyle(b).position === 'fixed',
+					left: Math.round(b.getBoundingClientRect().left),
+					right: Math.round(b.getBoundingClientRect().right)
+				})),
+				themeLeft: Math.round(theme.left),
+				title: title?.textContent,
+				titleShown: !!titleBox && titleBox.width > 0,
+				titleInside: !!titleBox && titleBox.right <= innerWidth && titleBox.left >= 0,
+				ellipsis: title ? getComputedStyle(title).textOverflow : null,
+				settingsRow: !!document.querySelector('.ds-shell-rail a[href$="/settings"], .ds-shell-rail-foot a'),
+				floating: [...document.querySelectorAll('body *')].filter((el) => getComputedStyle(el).position === 'fixed' && el.getBoundingClientRect().width > 0 && !el.closest('[role="dialog"]') && !el.matches('.ds-shell-rail, .ds-shell-rail *, [aria-label="Dismiss menu"]')).map((el) => el.tagName),
+				overflow: document.documentElement.scrollWidth - innerWidth,
+				buttons: search.length
+			};
+		});
+	const opens = async (page, target) => {
+		await target.click();
+		return page
+			.waitForSelector('[role="dialog"] h2, [role="dialog"] [data-slot="dialog-title"]', { timeout: 3000 })
+			.then(async () => (await page.getByRole('dialog').getByText('Report a problem').count()) > 0, () => false);
+	};
+
+	for (const collapse of [false, true]) {
+		const label = collapse ? 'collapsed rail' : 'expanded rail';
+		const { context, page, errors } = await open(`surface=nested&collapsible=1`, { width: 1440, height: 900 });
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-testid="ds-shell-report"]');
+		if (collapse) {
+			await page.click('[data-testid="ds-rail-collapse"]');
+			await page.waitForFunction(() => document.querySelector('.ds-shell-rail')?.dataset.collapsed === 'true');
+			await page.mouse.move(900, 600);
+		}
+		const v = await seen(page);
+		check(
+			`${label}: the bar's title is "Section › Page"`,
+			v.title === TITLE && v.titleShown && v.titleInside,
+			JSON.stringify({ title: v.title })
+		);
+		check(
+			`${label}: feedback is one icon in the bar's right group, before the theme toggle, and nothing floats`,
+			v.report.length === 1 && v.report[0].inBar && !v.report[0].fixed && v.report[0].right <= v.themeLeft && v.floating.length === 0,
+			JSON.stringify(v)
+		);
+		check(`${label}: the rail has no Settings row and no foot`, !v.settingsRow, JSON.stringify(v));
+		check(`${label}: the page does not scroll sideways`, v.overflow <= 0, JSON.stringify(v));
+		check(`${label}: the bar's icon opens the report dialogue`, await opens(page, page.getByTestId('ds-shell-report')), 'no dialogue');
+		check(`${label}: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	for (const width of [390, 320]) {
+		const { context, page, errors } = await open('surface=nested', { width, height: 780 });
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-testid="ds-shell-menu"]');
+		const v = await seen(page);
+		check(
+			`phone at ${width}px: the bar shows the title, truncated to what room it has, and nothing reports from the page`,
+			v.titleShown && v.titleInside && v.title === TITLE && v.ellipsis === 'ellipsis' && v.report.length === 0 && v.floating.length === 0 && v.overflow <= 0,
+			JSON.stringify(v)
+		);
+		await page.click('[data-testid="ds-shell-menu"]');
+		await page.waitForSelector('[data-testid="ds-shell-drawer"]');
+		await page.waitForFunction(() => {
+			const row = document.querySelector('[data-testid="ds-shell-drawer-report"]');
+			const drawer = document.querySelector('[data-testid="ds-shell-drawer"]');
+			return row && drawer && Math.abs(drawer.getBoundingClientRect().left) < 1;
+		});
+		const row = await page.evaluate(() => {
+			const row = document.querySelector('[data-testid="ds-shell-drawer-report"]');
+			const drawer = document.querySelector('[data-testid="ds-shell-drawer"]').getBoundingClientRect();
+			const r = row.getBoundingClientRect();
+			return { text: row.textContent.trim(), inside: r.left >= drawer.left && r.right <= drawer.right && r.bottom <= drawer.bottom, height: Math.round(r.height) };
+		});
+		check(
+			`phone at ${width}px: feedback is a row at the drawer's foot`,
+			row.text === 'Report a problem' && row.inside && row.height >= 32,
+			JSON.stringify(row)
+		);
+		await page.getByTestId('ds-shell-drawer-report').click();
+		const opened = await page.getByRole('dialog').getByText('Report a problem').first().waitFor({ timeout: 3000 }).then(() => true, () => false);
+		const drawerGone = (await page.getByTestId('ds-shell-drawer').count()) === 0;
+		check(`phone at ${width}px: the row opens the report dialogue and the drawer steps aside`, opened && drawerGone, JSON.stringify({ opened, drawerGone }));
+		check(`phone at ${width}px: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
 }
 
 // Desktop presentation: assert copied content and failure outcomes, not screenshots.

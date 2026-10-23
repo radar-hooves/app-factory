@@ -36,7 +36,6 @@
 	nav={[{ label: 'Overview', href: '/overview' }]}
 	{currentPath}
 	brandTitle="Harness"
-	settingsHref="/settings"
 	padded={false}
 	themeToggle={false}
 >
