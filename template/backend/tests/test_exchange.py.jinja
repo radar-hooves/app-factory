@@ -6,7 +6,10 @@ and JWKS, minting what the live exchange minted on atlas
 drives this app's real client and verifier rather than a mock of either.
 """
 
+import asyncio
 import logging
+import time
+import types
 from collections.abc import AsyncIterator, Iterator
 
 import jwt
@@ -16,10 +19,11 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 
+from {{ package_name }} import exchange as exchange_module
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.exceptions import AuthenticationError, ServiceUnavailableError, register_exception_handlers
-from {{ package_name }}.exchange import Asker, Asking, CurrentAsker, Exchange
-from tests.support.fake_authentik import FakeAuthentik
+from {{ package_name }}.exchange import REUSE_MARGIN_SECONDS, Asker, Asking, CurrentAsker, Exchange, Issued
+from tests.support.fake_authentik import LIFETIME, FakeAuthentik
 
 APP = "{{ project_name }}"
 SECRET = "fake-exchange-secret-long-enough-for-hs256"
@@ -187,6 +191,76 @@ async def test_one_request_mints_once_per_audience_and_only_for_its_own_person(
     assert authentik.exchanged.count((APP, "library")) == 1
     with pytest.raises(AuthenticationError):
         await Asking(app_side, f"as:{PERSON}", "uid-someone-else").token("library")
+
+
+def _clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """The exchange's monotonic clock, held still until a test moves it."""
+    now = [1000.0]
+    monkeypatch.setattr(exchange_module, "time", types.SimpleNamespace(monotonic=lambda: now[0], time=time.time))
+    return now
+
+
+async def test_a_service_token_is_reused_across_requests_for_the_same_person_only(
+    authentik: FakeAuthentik, app_side: Exchange
+) -> None:
+    first = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    assert await Asking(app_side, f"as:{PERSON}", PERSON).token("library") == first
+    assert authentik.exchanged.count((APP, "library")) == 1
+    other = "uid-asker-0002"
+    assert await Asking(app_side, f"as:{other}", other).token("library") != first
+    assert authentik.exchanged.count((APP, "library")) == 2
+
+
+async def test_a_service_token_is_minted_again_once_under_a_minute_of_it_remains(
+    authentik: FakeAuthentik, app_side: Exchange, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = _clock(monkeypatch)
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    now[0] += LIFETIME - REUSE_MARGIN_SECONDS - 1
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    assert authentik.exchanged.count((APP, "library")) == 1
+    now[0] += 2
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    assert authentik.exchanged.count((APP, "library")) == 2
+
+
+async def test_lapsed_tokens_are_dropped_when_another_is_kept(
+    app_side: Exchange, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = _clock(monkeypatch)
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    now[0] += LIFETIME + 1
+    await Asking(app_side, "as:uid-asker-0002", "uid-asker-0002").token("library")
+    assert list(app_side._issued) == [("uid-asker-0002", "library")]
+
+
+async def test_this_apps_own_token_is_minted_for_every_request(authentik: FakeAuthentik, app_side: Exchange) -> None:
+    await Asking(app_side, f"as:{PERSON}", PERSON).token()
+    await Asking(app_side, f"as:{PERSON}", PERSON).token()
+    assert authentik.exchanged.count((APP, None)) == 2
+
+
+async def test_the_turn_token_and_a_service_token_are_minted_at_the_same_time(
+    app_side: Exchange, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[str | None] = []
+    both = asyncio.Event()
+    real = app_side.issue
+
+    async def issue(subject: str, audience: str | None = None) -> Issued:
+        started.append(audience)
+        if len(started) == 2:
+            both.set()
+        async with asyncio.timeout(5):
+            await both.wait()
+        return await real(subject, audience)
+
+    monkeypatch.setattr(app_side, "issue", issue)
+    asking = Asking(app_side, f"as:{PERSON}", PERSON)
+    async with asyncio.TaskGroup() as group:
+        group.create_task(asking.token())
+        group.create_task(asking.token("library"))
+    assert sorted(started, key=str) == [None, "library"]
 
 
 async def test_an_unreachable_jwks_is_one_read_and_a_503_for_every_caller_until_a_retry(

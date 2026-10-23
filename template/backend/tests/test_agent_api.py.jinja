@@ -23,6 +23,7 @@ import json
 import os
 import stat
 import threading
+import types
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -413,9 +414,28 @@ async def test_a_collection_named_to_a_persona_that_reads_none_is_refused_before
     assert "No such collection" in refused.text
 
 
-async def test_the_scope_is_what_the_library_lists_for_this_person_never_more(
-    client: AsyncClient, library: fake_library.FakeLibrary
+async def test_the_listing_serves_the_page_and_the_ask_and_is_each_persons_own(
+    client: AsyncClient, library: fake_library.FakeLibrary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    now = [1000.0]
+    monkeypatch.setattr(chat, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
+    who, other = _person("chat-manual"), _person("chat-manual")
+    await client.get("/api/agent/manual/collections", headers=who)
+    await client.get("/api/agent/manual/collections", headers=who)
+    await _ask(client, "manual", "How much leave?", who)
+    assert library.listings == [who["x-authentik-uid"]]
+    await client.get("/api/agent/manual/collections", headers=other)
+    assert library.listings == [who["x-authentik-uid"], other["x-authentik-uid"]]
+    now[0] += chat.LISTING_SECONDS + 1
+    await client.get("/api/agent/manual/collections", headers=who)
+    assert library.listings[-1] == who["x-authentik-uid"]
+    assert len(library.listings) == 3
+
+
+async def test_the_scope_is_what_the_library_lists_for_this_person_never_more(
+    client: AsyncClient, library: fake_library.FakeLibrary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(chat, "LISTING_SECONDS", 0.0)
     who = _person("chat-manual")
     library.grants[who["x-authentik-uid"]] = [fake_library.COLLECTION]
     await _ask(client, "manual", "How much leave?", who)
@@ -532,8 +552,8 @@ async def test_the_collections_are_read_as_the_person_with_a_token_minted_for_th
         )
     }
     assert named == {(who["x-authentik-uid"], APP)}
-    assert len(library.bearers) == 5  # the ask lists, searches and opens a document; the page lists and opens one
-    assert (APP, "library") in authentik.exchanged
+    assert len(library.bearers) == 4  # the ask lists, searches and opens a document; the page opens one, its listing held
+    assert authentik.exchanged.count((APP, "library")) == 1  # one token for the ask and every page call after it
     assert conversation
 
 

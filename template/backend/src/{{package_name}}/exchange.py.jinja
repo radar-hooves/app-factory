@@ -27,6 +27,7 @@ import asyncio
 import logging
 import time
 import urllib.parse
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Annotated, Any
 
@@ -61,6 +62,8 @@ _KEYS_UNREACHABLE = "The identity provider's signing keys are unreachable"
 _TIMEOUT_SECONDS = 5.0
 _ISSUER_ENV = "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER"
 _NOT_CARRIED = "This app cannot carry you to that service yet"
+#: A service's token is reused until this little of its life is left, so a call never starts on one about to lapse.
+REUSE_MARGIN_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,14 @@ class Asker:
     entitlements: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class Issued:
+    """A token Authentik issued, and when it lapses on the monotonic clock; `expires` is `now` when it said not."""
+
+    token: str
+    expires: float
+
+
 class Exchange:
     """This app's exchange client and verifier: one per app, on `app.state.exchange`."""
 
@@ -95,6 +106,8 @@ class Exchange:
         self._fetched_at = float("-inf")
         self._fetch_after = 0.0
         self._unreachable = False
+        #: Tokens minted for a service, by (person's uid, audience), reused across requests; never this app's own.
+        self._issued: dict[tuple[str, str], Issued] = {}
 
     @property
     def configured(self) -> bool:
@@ -104,6 +117,21 @@ class Exchange:
         await self._client.aclose()
 
     async def token(self, subject: str, audience: str | None = None) -> str:
+        """As `issue`, the token alone."""
+        return (await self.issue(subject, audience)).token
+
+    def reusable(self, uid: str, audience: str) -> str | None:
+        """The token held for this person and service while `REUSE_MARGIN_SECONDS` of it remain, else None."""
+        held = self._issued.get((uid, audience))
+        return held.token if held and held.expires - time.monotonic() >= REUSE_MARGIN_SECONDS else None
+
+    def keep(self, uid: str, audience: str, issued: Issued) -> None:
+        """Hold `issued` for this person and service, dropping every token that has lapsed so the table stays small."""
+        now = time.monotonic()
+        self._issued = {key: held for key, held in self._issued.items() if held.expires > now}
+        self._issued[uid, audience] = issued
+
+    async def issue(self, subject: str, audience: str | None = None) -> Issued:
         """Trade a person's `X-authentik-jwt` for a token for `audience`, or for this app with none.
 
         Raises:
@@ -130,7 +158,7 @@ class Exchange:
         answer = _json(response)
         issued = answer.get("access_token")
         if response.status_code == 200 and isinstance(issued, str) and issued:
-            return issued
+            return Issued(issued, time.monotonic() + _lifetime(answer.get("expires_in"), issued))
         error = str(answer.get("error") or response.status_code)
         if error == "invalid_grant":
             raise AuthenticationError(
@@ -227,10 +255,15 @@ class Asking:
     #: Their `X-authentik-uid`, which every token minted for them must name.
     uid: str
     _minted: dict[str | None, str] = field(default_factory=dict, repr=False)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    _locks: defaultdict[str | None, asyncio.Lock] = field(default_factory=lambda: defaultdict(asyncio.Lock), repr=False)
 
     async def token(self, audience: str | None = None) -> str:
         """A short-lived token naming this person, for `audience` or for this app with none; one per audience per request.
+
+        A service's token is reused across this person's requests while
+        `REUSE_MARGIN_SECONDS` of it remain. This app's own is minted per
+        request: a persona's turn presents it for as long as it runs. The
+        audiences mint at the same time.
 
         Raises:
             ServiceUnavailableError: no exchange is configured, or this route's
@@ -242,14 +275,19 @@ class Asking:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"unset": _ISSUER_ENV})
         if not self.subject:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"absent": "X-authentik-jwt"})
-        async with self._lock:
+        async with self._locks[audience]:
             if audience not in self._minted:
-                issued = await self.exchange.token(self.subject, audience)
-                if _subject(issued) != self.uid:
-                    raise AuthenticationError(
-                        "Your sign-in does not match this request; sign in again", context={"audience": audience}
-                    )
-                self._minted[audience] = issued
+                held = self.exchange.reusable(self.uid, audience) if audience else None
+                if held is None:
+                    issued = await self.exchange.issue(self.subject, audience)
+                    if _subject(issued.token) != self.uid:
+                        raise AuthenticationError(
+                            "Your sign-in does not match this request; sign in again", context={"audience": audience}
+                        )
+                    if audience:
+                        self.exchange.keep(self.uid, audience, issued)
+                    held = issued.token
+                self._minted[audience] = held
             return self._minted[audience]
 
 
@@ -290,6 +328,17 @@ def _json(response: httpx.Response) -> dict[str, Any]:
     except ValueError:
         return {}
     return body if isinstance(body, dict) else {}
+
+
+def _lifetime(expires_in: object, token: str) -> float:
+    """Seconds a token lives: what Authentik said, else its `exp` read unverified, else none (it is not reused)."""
+    if isinstance(expires_in, (int, float)) and not isinstance(expires_in, bool):
+        return float(expires_in)
+    try:
+        expires = jwt.decode(token, options={"verify_signature": False}).get("exp")
+    except jwt.PyJWTError:
+        return 0.0
+    return max(0.0, float(expires) - time.time()) if isinstance(expires, (int, float)) else 0.0
 
 
 def _subject(token: str) -> str:

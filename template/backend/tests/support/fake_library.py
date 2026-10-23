@@ -65,6 +65,8 @@ class FakeLibrary:
         self.silent: set[str] = set()
         #: Every query as the door received it, with the person who made it.
         self.queries: list[dict[str, Any]] = []
+        #: Every listing as the door received it: the person who asked, in order.
+        self.listings: list[str] = []
         #: Every call's bearer, in order.
         self.bearers: list[str] = []
         self.lock = threading.Lock()
@@ -179,6 +181,8 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         readable = self.fake.readable(person)
         if path == "/collections":
+            with self.fake.lock:
+                self.fake.listings.append(person)
             self._send(200, [_summary(name) for name in readable])
         elif match := re.fullmatch(r"/documents/(\d+)", path):
             held = next((name for name, row in _CATALOGUE.items() if row[3] == int(match[1])), None)
