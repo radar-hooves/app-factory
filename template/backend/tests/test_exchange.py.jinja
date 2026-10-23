@@ -267,7 +267,7 @@ async def test_a_fresh_service_token_is_minted_past_a_held_one_and_becomes_the_o
     authentik: FakeAuthentik, app_side: Exchange, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = _clock(monkeypatch)
-    held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
     now[0] += LIFETIME - REUSE_MARGIN_SECONDS - 1
     await Asking(app_side, f"as:{PERSON}", PERSON).fresh("library")
     assert authentik.exchanged.count((APP, "library")) == 2

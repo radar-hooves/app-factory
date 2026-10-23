@@ -92,6 +92,8 @@ _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\ssrc\s*=)[^>]*>(.+?)</script>", re
 _ORIGIN = re.compile(r"https?://[^\s;,'\"]+")
 #: The directives an app may extend (`app_hooks.content_security_sources`); the rest of the policy is the factory's.
 EXTENDABLE = ("script-src", "style-src", "img-src", "font-src", "connect-src", "frame-src", "media-src", "worker-src")
+# No base entry: naming an origin would otherwise block same-origin media and workers (default-src 'none').
+SELF_FALLBACK = ("media-src", "worker-src")
 
 
 def content_security_policy(
@@ -136,7 +138,7 @@ def content_security_policy(
     }
     for name, declared in (extra or {}).items():
         if name in EXTENDABLE:
-            directives.setdefault(name, ["'self'"]).extend(
+            directives.setdefault(name, ["'self'"] if name in SELF_FALLBACK else []).extend(
                 origin for origin in dict.fromkeys(declared) if _ORIGIN.fullmatch(origin)
             )
     return "; ".join(f"{name} {' '.join(values)}" for name, values in directives.items() if values)

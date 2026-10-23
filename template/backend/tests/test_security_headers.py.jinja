@@ -79,12 +79,18 @@ async def test_an_app_hook_adds_its_own_origins_to_the_directives_it_names(build
     monkeypatch.setattr(
         app_hooks,
         "content_security_sources",
-        lambda: {"img-src": [tiles], "frame-src": [frame], "font-src": ["https://fonts.example.org"]},
+        lambda: {
+            "img-src": [tiles],
+            "frame-src": [frame],
+            "media-src": [frame],
+            "font-src": ["https://fonts.example.org"],
+        },
         raising=False,
     )
     response = await _get("/")
     assert _directive(response, "img-src") == ["'self'", "data:", "blob:", tiles]
     assert _directive(response, "frame-src") == [frame]
+    assert _directive(response, "media-src") == ["'self'", frame]
     assert _directive(response, "font-src") == ["'self'", "data:", "https://fonts.example.org"]
     assert _directive(response, "default-src") == ["'none'"]
 
