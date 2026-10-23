@@ -1237,11 +1237,17 @@ async def _held_library_token(
     return token
 
 
+@pytest.mark.parametrize(("left", "retrieval_reuses"), [(70, True), (30, False)])
 async def test_a_turn_with_a_nearly_lapsed_library_token_held_is_handed_a_freshly_minted_one(
-    app: FastAPI, agent_settings: AgentSettings, authentik: fake_authentik.FakeAuthentik
+    app: FastAPI,
+    agent_settings: AgentSettings,
+    authentik: fake_authentik.FakeAuthentik,
+    left: int,
+    retrieval_reuses: bool,
 ) -> None:
+    """70 s left is reusable for the retrieval but would lapse mid-answer; under 60 s the retrieval takes the fresh one too."""
     who = _person("chat-manual")
-    held = await _held_library_token(app, authentik, who, 70)
+    held = await _held_library_token(app, authentik, who, left)
     persona = chat.get(agent_settings, "manual")
     asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
     agent, collections = await chat.for_turn(agent_settings, persona, asking)
@@ -1250,7 +1256,7 @@ async def test_a_turn_with_a_nearly_lapsed_library_token_held_is_handed_a_freshl
     assert authentik.exchanged.count((APP, "library")) == 1
     assert app.state.exchange.reusable(who["x-authentik-uid"], "library") == env_token
     assert collections is not None
-    assert await collections.token() == env_token
+    assert await collections.token() == (held if retrieval_reuses else env_token)
 
 
 async def test_the_retrieval_reuses_a_held_library_token_while_the_session_gets_a_fresh_one(

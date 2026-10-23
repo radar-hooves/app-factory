@@ -269,15 +269,16 @@ async def test_a_fresh_service_token_is_minted_past_a_held_one_and_becomes_the_o
     now = _clock(monkeypatch)
     held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
     now[0] += LIFETIME - REUSE_MARGIN_SECONDS - 1
-    fresh = await Asking(app_side, f"as:{PERSON}", PERSON).fresh("library")
-    assert fresh != held
+    await Asking(app_side, f"as:{PERSON}", PERSON).fresh("library")
     assert authentik.exchanged.count((APP, "library")) == 2
-    assert await Asking(app_side, f"as:{PERSON}", PERSON).token("library") == fresh
+    now[0] += 5  # the first would now be under the margin; the fresh one is the one held
+    await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    assert authentik.exchanged.count((APP, "library")) == 2
 
 
-async def test_a_reuse_does_not_wait_on_a_mint_in_flight(app_side: Exchange) -> None:
-    held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+async def test_a_reuse_does_not_wait_on_a_mint_in_flight(authentik: FakeAuthentik, app_side: Exchange) -> None:
     asking = Asking(app_side, f"as:{PERSON}", PERSON)
+    held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
     release = asyncio.Event()
     real = app_side.issue
 
@@ -291,7 +292,8 @@ async def test_a_reuse_does_not_wait_on_a_mint_in_flight(app_side: Exchange) -> 
     async with asyncio.timeout(1):
         assert await asking.token("library") == held
     release.set()
-    assert await minting != held
+    await minting
+    assert authentik.exchanged.count((APP, "library")) == 2
 
 
 async def test_an_unreachable_jwks_is_one_read_and_a_503_for_every_caller_until_a_retry(
