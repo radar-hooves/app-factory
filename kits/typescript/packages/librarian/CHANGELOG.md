@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: caspo (the operator, 24/10/2026: Past questions as a column, with Clear all at its foot).
+
+### Added
+
+- **`ChatTransport.clear` and `Chat.clear()`**: every conversation with the persona the server lets go, then the list read again and a new conversation where the open one went; `Chat.clearable` says whether the routes offer it.
+
 ## [2026.10.9] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost like a disco strobe", the search "was a static picture that didn't move", and "it needs to look and feel exactly like claude code, where you can actually see that something is going on"; a briefing written as a document could not be opened).
@@ -14,7 +22,6 @@ Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost lik
 - **`ToolWords.doing`**, the present-tense verb a row shows while its call runs; `describe()` gives one for every call it knows.
 - **`ThinkingRow` takes `reading`**: open while the turn runs, folded once it settles, the reader's own choice held either way.
 - **`ActivityGroup` takes `running`** (the turn has not settled), defaulting to `live`.
-- **`ChatTransport.clear` and `Chat.clear()`**: every conversation with the persona the server lets go, then the list read again and a new conversation where the open one went; `Chat.clearable` says whether the routes offer it.
 - Copy: `stop`, `nowStarting`, `nowPassages`, `nowPassage`, `nowAnswer`, `stepFoundOne`.
 
 ### Changed

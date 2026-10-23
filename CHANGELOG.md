@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: Past questions as a column beside the conversation with Clear all at its foot (the operator, 24/10/2026); consumer: caspo.
+
+### Added
+
+- **`DELETE /api/agent/{persona}/conversations` (`clearConversations`)**: forgets every one of the caller's own conversations with the persona as `delete` forgets one, and leaves one still being answered. The stamped `chatTransport` wires it as `clear`. Migration: regenerate the app's `schema.d.ts`.
+
 ## [2026.10.71] - 2026-10-24
 
 Need: the operator's rulings of 24/10/2026 on caspo's chat page and chrome ("it needs to look and feel exactly like claude code, where you can actually see that something is going on"; the briefing button, "how many times you're gonna click that"; the scope disclosure, which Home and About already say); consumer: caspo.
@@ -20,7 +28,6 @@ Need: the operator's rulings of 24/10/2026 on caspo's chat page and chrome ("it 
 
 ### Added
 
-- **`DELETE /api/agent/{persona}/conversations` (`clearConversations`)**: forgets every one of the caller's own conversations with the persona as `delete` forgets one, and leaves one still being answered. The stamped `chatTransport` wires it as `clear`. Migration: regenerate the app's `schema.d.ts`.
 - **`ChatExtensions.scope`**: what the chat page says a persona answers from, in the app's own words, in place of the page's sentence; an app that says it on its Home or About returns nothing, and the page shows none.
 
 Migration: bump `@poodle64/librarian` to the release that carries this; an app whose own turn (`ChatExtensions.Turn`) drew its own working line renders the package's `Working` with `activityNow` (`@poodle64/librarian/steps`) and `onstop`, and its steps with `ActivityGroup` given `running`; an app whose `copy` overrode `working` with a list passes one string; an app that states its scope elsewhere exports `scope = () => undefined` from `$lib/agent/app`.
