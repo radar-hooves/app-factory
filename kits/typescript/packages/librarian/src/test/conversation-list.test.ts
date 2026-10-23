@@ -105,7 +105,9 @@ describe('ConversationList', () => {
 		expect(ondelete).not.toHaveBeenCalled();
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-		await fireEvent.click(within(screen.getByRole('group')).getByRole('button', { name: 'Delete' }));
+		await fireEvent.click(
+			within(screen.getByRole('group')).getByRole('button', { name: 'Delete' })
+		);
 		expect(ondelete).toHaveBeenCalledWith('c');
 	});
 
@@ -139,5 +141,40 @@ describe('ConversationList', () => {
 	it('has no close of its own in a column', () => {
 		list();
 		expect(screen.queryByRole('button', { name: 'Close past questions' })).not.toBeInTheDocument();
+	});
+
+	it('folds to its edge where the host keeps it as a column', async () => {
+		const oncollapse = vi.fn();
+		list({ oncollapse, onclose: vi.fn() });
+		expect(screen.queryByRole('button', { name: 'Close past questions' })).not.toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: 'Hide past questions' }));
+		expect(oncollapse).toHaveBeenCalledOnce();
+	});
+
+	it('groups by when each was last active, Today, Yesterday and Earlier, each row dated', () => {
+		const now = new Date();
+		const at = (days: number, hours: number) =>
+			new Date(now.getFullYear(), now.getMonth(), now.getDate() - days, hours, 5).toISOString();
+		list({
+			conversations: [
+				{ id: 'old', title: 'Posting order', last_activity_at: '2025-03-04T01:00:00Z' },
+				{ id: 'y', title: 'Field allowance', last_activity_at: at(1, 9) },
+				{ id: 't', title: 'Recreation leave', last_activity_at: at(0, 0) }
+			]
+		});
+		expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+			'Today',
+			'Yesterday',
+			'Earlier'
+		]);
+		const times = [...document.querySelectorAll('time')];
+		expect(times.map((t) => t.getAttribute('datetime'))).toEqual([
+			at(0, 0),
+			at(1, 9),
+			'2025-03-04T01:00:00.000Z'
+		]);
+		// The day itself only where the heading does not say it, with the year where it is not this one.
+		expect(times[2].textContent).toMatch(/2025/);
+		expect(times[0].textContent).not.toMatch(/\d{4}/);
 	});
 });

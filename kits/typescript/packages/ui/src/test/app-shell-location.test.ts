@@ -71,6 +71,15 @@ describe('AppShell — location row', () => {
 describe('AppShell — rail resize', () => {
 	beforeEach(() => localStorage.clear());
 
+	it('carries the page’s own actions at the head of the bar’s right-hand group, and withdraws them', async () => {
+		const { rerender } = render(Harness, { currentPath: '/overview', withActions: true });
+		const action = await screen.findByTestId('probe-action');
+		expect(action.closest('header.ds-shell-bar')).not.toBeNull();
+		expect(action.closest('[data-testid="ds-shell-location"]')).toBeNull();
+		await rerender({ currentPath: '/overview', withActions: false });
+		expect(screen.queryByTestId('probe-action')).toBeNull();
+	});
+
 	it('nudges by keyboard, persists, and Home resets', async () => {
 		render(Harness);
 		const handle = screen.getByTestId('ds-rail-resize');

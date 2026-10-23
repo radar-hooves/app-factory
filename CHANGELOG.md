@@ -10,6 +10,7 @@ Need: Past questions as a column beside the conversation with Clear all at its f
 
 ### Added
 
+- **Past questions is a column beside the conversation from 1024px**, in the page and not the rail, flush against the rail and sized as it is (the shell's `--ds-shell-rail-width` and `-collapsed` tokens), folded to its edge or open as the reader left it: New question at its head, rows dated under Today, Yesterday and Earlier each with its acts, and Clear all at its foot behind an AlertDialog whose action is destructive. Narrower, the bar's own Past questions action (`ShellActions`) opens it in a sheet. The toolbar above the transcript keeps New question only where the column does not show, and the page is unpadded (`padded: false`). Migration: bump `@poodle64/ui` and `@poodle64/librarian` to the releases that carry `ShellActions` and the dated list; an app whose own layout or tests found the toolbar's Past questions button finds the column (`chat-past-column`) or the bar's action (`chat-past-questions`).
 - **`DELETE /api/agent/{persona}/conversations` (`clearConversations`)**: forgets every one of the caller's own conversations with the persona as `delete` forgets one, and leaves one still being answered. The stamped `chatTransport` wires it as `clear`. Migration: regenerate the app's `schema.d.ts`.
 
 ## [2026.10.71] - 2026-10-24

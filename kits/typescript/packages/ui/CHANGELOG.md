@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: caspo (the operator, 24/10/2026: on a phone, past questions open from an action at the right of the bar).
+
+### Added
+
+- **`ShellActions`**: a page's own actions at the head of the bar's right-hand group, registered from the route on the slot `ShellControls` uses (`ShellControlsSlot.actions`), withdrawn on unmount. Renders nothing outside a shell.
+
 ## [2026.10.26] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026, from a page-by-page map of the UI: "You don't need to have six places to achieve the same thing"). One standard for every app.

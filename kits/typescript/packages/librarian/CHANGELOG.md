@@ -8,6 +8,9 @@ Consumer: caspo (the operator, 24/10/2026: Past questions as a column, with Clea
 
 ### Added
 
+- **`ConversationList` groups under Today, Yesterday and Earlier and dates each row**: its time under the first two, its day under Earlier, with the year where it is not this one, by the reader's own clock.
+- **`ConversationList` takes `oncollapse`**, for a host that keeps it as a column: its head is then New question and a fold, the title kept for a screen reader.
+- Copy: `hidePastQuestions`, `showPastQuestions`, `today`, `yesterday`, `earlier`, `clearAll`, `clearAllPrompt`, `clearAllDetail`, `clearAllFailed`.
 - **`ChatTransport.clear` and `Chat.clear()`**: every conversation with the persona the server lets go, then the list read again and a new conversation where the open one went; `Chat.clearable` says whether the routes offer it.
 
 ## [2026.10.9] - 2026-10-24

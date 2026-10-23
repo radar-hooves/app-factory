@@ -231,7 +231,7 @@
 	const location = $derived(activeNavTitle(nav, currentPath));
 
 	// The page's scope controls, registered by `<ShellControls>` from the route.
-	const controls: ShellControlsSlot = $state({ content: null });
+	const controls: ShellControlsSlot = $state({ content: null, actions: null });
 	provideShellControls(controls);
 
 	// Rail width is a personal preference: localStorage, one key across apps.
@@ -757,6 +757,10 @@
 			{/if}
 
 			<div class="ml-auto flex flex-none items-center gap-2 sm:gap-3">
+				<!-- The page's own actions (`<ShellActions>`), before everything the bar
+				     carries on every page. -->
+				{#if controls.actions}{@render controls.actions()}{/if}
+
 				{#if onSearch && searchPlacement === 'trailing'}
 					{@render searchButton(
 						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(180px,18vw,300px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'

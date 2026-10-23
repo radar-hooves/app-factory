@@ -1,6 +1,7 @@
 export { default as AppShell } from './app-shell.svelte';
 export { default as AppNav } from './app-nav.svelte';
 export { default as ShellControls } from './shell-controls.svelte';
+export { default as ShellActions } from './shell-actions.svelte';
 export { default } from './app-shell.svelte';
 export { SHELL_MEASURES, type ShellMeasure } from './measure.js';
 export { SHELL_TEXTURES, type ShellTexture } from './texture.js';

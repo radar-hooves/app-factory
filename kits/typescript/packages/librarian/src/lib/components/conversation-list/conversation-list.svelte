@@ -1,6 +1,7 @@
 <!--
-  A person's past conversations, newest first: each one reopens, and each can
-  be renamed, downloaded or deleted. And a way to start a new one.
+  A person's past conversations, newest first under Today, Yesterday and
+  Earlier, each row dated: each one reopens, and each can be renamed,
+  downloaded or deleted. And a way to start a new one.
 
   From cadmus's Past questions (cadmus#114). Presentation only: the host hands
   it the list and the acts (`Chat`'s own), nothing here fetches, and where it
@@ -15,6 +16,7 @@
 	import DownloadIcon from '@lucide/svelte/icons/download';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import MoreHorizontalIcon from '@lucide/svelte/icons/more-horizontal';
+	import PanelLeftCloseIcon from '@lucide/svelte/icons/panel-left-close';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
@@ -37,6 +39,8 @@
 		onnew: () => void;
 		/** Closes the list, for a host that lays it over the page. */
 		onclose?: () => void;
+		/** Folds the list to its edge, for a host that keeps it as a column. */
+		oncollapse?: () => void;
 		/** Each act offered only when given; each resolves true once done. */
 		onrename?: (id: string, title: string) => Promise<boolean>;
 		ondownload?: (id: string) => Promise<boolean>;
@@ -54,6 +58,7 @@
 		onopen,
 		onnew,
 		onclose,
+		oncollapse,
 		onrename,
 		ondownload,
 		ondelete,
@@ -69,6 +74,38 @@
 			(a, b) => (Date.parse(b.last_activity_at) || 0) - (Date.parse(a.last_activity_at) || 0)
 		)
 	);
+
+	type Day = 'today' | 'yesterday' | 'earlier';
+
+	/** Newest first, under when each was last active, by the reader's own clock. */
+	const groups = $derived.by(() => {
+		const now = new Date();
+		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+		const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+		const byDay: Record<Day, ConversationSummary[]> = { today: [], yesterday: [], earlier: [] };
+		for (const conversation of newestFirst) {
+			const at = Date.parse(conversation.last_activity_at) || 0;
+			byDay[at >= today ? 'today' : at >= yesterday ? 'yesterday' : 'earlier'].push(conversation);
+		}
+		return (['today', 'yesterday', 'earlier'] as const)
+			.map((day) => ({ day, items: byDay[day] }))
+			.filter((group) => group.items.length > 0);
+	});
+
+	/** A row's date: the time under Today and Yesterday, the day itself under Earlier. */
+	function dated(conversation: ConversationSummary, day: Day): { iso: string; text: string } | null {
+		const at = new Date(conversation.last_activity_at);
+		if (Number.isNaN(at.getTime())) return null;
+		const text =
+			day === 'earlier'
+				? at.toLocaleDateString(undefined, {
+						day: 'numeric',
+						month: 'short',
+						...(at.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' })
+					})
+				: at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+		return { iso: at.toISOString(), text };
+	}
 
 	let opened = $state<string | null>(null);
 	let renaming = $state<string | null>(null);
@@ -121,13 +158,25 @@
 </script>
 
 <section class="ds-lib-list" aria-label={words.pastQuestions}>
-	<header class="ds-lib-list-head">
-		<h2 class="ds-lib-list-title">{words.pastQuestions}</h2>
+	<!-- In a column the head is New question and the fold, the column itself
+	     being what says these are past questions; over the page, the title too. -->
+	<header class="ds-lib-list-head" class:is-column={Boolean(oncollapse)}>
+		<h2 class={oncollapse ? 'ds-lib-sr' : 'ds-lib-list-title'}>{words.pastQuestions}</h2>
 		<button type="button" class="ds-lib-list-new" onclick={onnew}>
 			<PlusIcon size={14} />
 			<span>{words.newQuestion}</span>
 		</button>
-		{#if onclose}
+		{#if oncollapse}
+			<button
+				type="button"
+				class="ds-lib-list-close"
+				onclick={oncollapse}
+				aria-label={words.hidePastQuestions}
+				title={words.hidePastQuestions}
+			>
+				<PanelLeftCloseIcon size={16} />
+			</button>
+		{:else if onclose}
 			<button
 				type="button"
 				class="ds-lib-list-close"
@@ -146,9 +195,12 @@
 	{:else if newestFirst.length === 0}
 		<p class="ds-lib-list-note">{words.noPastQuestions}</p>
 	{:else}
+		{#each groups as group (group.day)}
+		<h3 class="ds-lib-list-day">{words[group.day]}</h3>
 		<ul class="ds-lib-list-items">
-			{#each newestFirst as conversation (conversation.id)}
+			{#each group.items as conversation (conversation.id)}
 				{@const id = conversation.id}
+				{@const when = dated(conversation, group.day)}
 				<li class="ds-lib-list-item" class:is-current={id === current}>
 					{#if renaming === id}
 						<form class="ds-lib-list-rename" onsubmit={(event) => submitRename(event, id)}>
@@ -178,6 +230,8 @@
 									<span class="ds-lib-list-live" title={words.stillAnswering}>
 										<span class="ds-lib-sr">{words.stillAnswering}</span>
 									</span>
+								{:else if when}
+									<time class="ds-lib-list-when" datetime={when.iso}>{when.text}</time>
 								{/if}
 							{/snippet}
 							{#if href}
@@ -263,6 +317,7 @@
 				</li>
 			{/each}
 		</ul>
+		{/each}
 	{/if}
 
 	{#if problem}
@@ -311,6 +366,20 @@
 		transition: background-color 150ms ease;
 	}
 
+	.ds-lib-list-new {
+		white-space: nowrap;
+	}
+
+	.is-column {
+		padding-left: 0.25rem;
+	}
+
+	.is-column .ds-lib-list-new {
+		min-height: 2.75rem;
+		flex: 1;
+		justify-content: flex-start;
+	}
+
 	.ds-lib-list-new:hover,
 	.ds-lib-list-act:hover:not(:disabled) {
 		background: var(--ds-color-surface-2);
@@ -342,6 +411,28 @@
 
 	.ds-lib-list-problem {
 		color: var(--ds-color-status-error);
+	}
+
+	.ds-lib-list-day {
+		margin: 0.5rem 0 0;
+		padding: 0.25rem 0.5rem;
+		color: var(--ds-color-muted-foreground);
+		font-family: inherit;
+		font-size: var(--ds-text-2xs);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-list-day:first-of-type {
+		margin-top: 0;
+	}
+
+	.ds-lib-list-when {
+		flex: none;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.ds-lib-list-items {

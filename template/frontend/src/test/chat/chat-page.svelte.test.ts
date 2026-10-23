@@ -16,13 +16,14 @@ const fake = vi.hoisted(() => ({
 			undefined
 	),
 	GET: vi.fn(),
-	PUT: vi.fn()
+	PUT: vi.fn(),
+	DELETE: vi.fn()
 }));
 
 vi.mock('$app/state', async () => ({ page: (await import('./page-state.svelte')).nav }));
 vi.mock('$app/navigation', () => ({ goto: fake.goto, preloadCode: vi.fn(async () => undefined) }));
 vi.mock('$lib/api', () => ({
-	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: vi.fn() },
+	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: fake.DELETE },
 	// The page's ask goes through the global fetch the tests stub.
 	apiFetch: (...args: Parameters<typeof fetch>) => fetch(...args)
 }));
@@ -47,6 +48,7 @@ vi.mock('$lib/agent/app', async () => ({
 import AskHome from '$lib/agent/ask-home.svelte';
 import { forgetAgent, handOff } from '$lib/agent/chat';
 import { nav as page } from './page-state.svelte';
+import Shell from './Shell.svelte';
 import Thinking from './Thinking.svelte';
 import ChatPage from '../../routes/(protected)/chat/[persona]/+page.svelte';
 import SharedPage from '../../routes/(protected)/chat/[persona]/answers/[conversation]/[turn]/+page.svelte';
@@ -137,6 +139,23 @@ function at(address: string, state: { ask?: string; files?: File[]; kind?: strin
 	return render(ChatPage);
 }
 
+/** A screen 1024px wide or more, where past questions are a column. */
+function wideScreen() {
+	vi.mocked(window.matchMedia).mockImplementation(
+		(query: string) =>
+			({
+				matches: query === '(min-width: 1024px)',
+				media: query,
+				onchange: null,
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			}) as unknown as MediaQueryList
+	);
+}
+
 /** A stream that answers once, for a test that asks. */
 function answering(session: string, result: string) {
 	const stream = [
@@ -156,6 +175,22 @@ function answering(session: string, result: string) {
 afterEach(() => {
 	art.Thinking = undefined;
 	art.scope = undefined;
+	vi.mocked(window.matchMedia).mockImplementation(
+		(query: string) =>
+			({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			}) as unknown as MediaQueryList
+	);
+	localStorage.clear();
+	fake.GET.mockImplementation(routes);
+	fake.DELETE.mockReset();
 	forgetAgent();
 	vi.unstubAllGlobals();
 	fake.goto.mockClear();
@@ -216,9 +251,13 @@ describe('A persona page, through the app extension points', () => {
 		).toBeTruthy();
 	});
 
-	it('brings past questions over the page on demand, never as a column beside it', async () => {
-		at('/chat/outrider');
-		const open = await screen.findByRole('button', { name: 'Past questions' });
+	it('on a phone, brings past questions over the page from the bar, never a column', async () => {
+		page.url = new URL('/chat/outrider', 'http://localhost');
+		page.state = {};
+		render(Shell);
+		const open = await screen.findByTestId('chat-past-questions');
+		expect(open.closest('header')).not.toBeNull();
+		expect(screen.queryByTestId('chat-past-column')).toBeNull();
 		expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull();
 		// Nothing to start over from yet.
 		expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
@@ -229,6 +268,47 @@ describe('A persona page, through the app extension points', () => {
 		await fireEvent.click(within(past).getByRole('button', { name: 'Close past questions' }));
 		await waitFor(() =>
 			expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull()
+		);
+	});
+
+	it('from 1024px, keeps past questions as a column beside the conversation, folding to its edge', async () => {
+		wideScreen();
+		at('/chat/outrider');
+		const column = await screen.findByTestId('chat-past-column');
+		const past = within(column).getByRole('region', { name: 'Past questions' });
+		expect(within(past).getByRole('button', { name: 'New question' })).toBeTruthy();
+		expect(screen.queryByTestId('chat-past-questions')).toBeNull();
+
+		await fireEvent.click(within(past).getByRole('button', { name: 'Hide past questions' }));
+		expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull();
+		expect(localStorage.getItem('ds-chat-past-folded')).toBe('1');
+		await fireEvent.click(within(column).getByRole('button', { name: 'Show past questions' }));
+		expect(await screen.findByRole('region', { name: 'Past questions' })).toBeTruthy();
+	});
+
+	it('clears every past question behind a confirmation, from the column’s foot', async () => {
+		wideScreen();
+		fake.GET.mockImplementation(async (path: string) => ({
+			data:
+				path === '/api/agent/{persona}/conversations'
+					? [{ ...CONVERSATION, turns: undefined }]
+					: ROUTES[path],
+			response: new Response(null, { status: 200 })
+		}));
+		fake.DELETE.mockResolvedValue({
+			data: undefined,
+			response: new Response(null, { status: 204 })
+		});
+		at('/chat/outrider');
+		await fireEvent.click(await screen.findByTestId('chat-clear-all'));
+		expect(await screen.findByText('Clear all your past questions?')).toBeTruthy();
+		expect(fake.DELETE).not.toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByTestId('chat-clear-all-confirm'));
+		await waitFor(() =>
+			expect(fake.DELETE).toHaveBeenCalledWith('/api/agent/{persona}/conversations', {
+				params: { path: { persona: 'outrider' } }
+			})
 		);
 	});
 

@@ -1,9 +1,11 @@
 <!--
 	One persona: a person's conversations with it, built from
 	@poodle64/librarian's own `Chat` and components
-	(app-factory docs/design/agent-console.md). The conversation has the whole
-	panel; past questions come over it from the bar above the transcript, on
-	demand, never as a second column beside the rail. The address names the persona,
+	(app-factory docs/design/agent-console.md). Past questions are a column
+	beside the conversation from 1024px, in the page and not the rail, folded to
+	its edge or open as the reader left it, New question at its head and Clear
+	all at its foot; narrower, the bar's own action opens them in a sheet
+	(operator, 24/10/2026). The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), so a link reopens or narrows it on any device,
 	mid-answer included. A question another page hands over waits in the box
@@ -19,7 +21,9 @@
 	import { untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import HistoryIcon from '@lucide/svelte/icons/history';
+	import PanelLeftOpenIcon from '@lucide/svelte/icons/panel-left-open';
 	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
+	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';
@@ -29,6 +33,8 @@
 	import ConversationList from '@poodle64/librarian/conversation-list';
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 	import { defaultVisuals } from '@poodle64/librarian/visuals';
+	import * as AlertDialog from '@poodle64/ui/alert-dialog';
+	import { ShellActions } from '@poodle64/ui/app-shell';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
@@ -63,6 +69,38 @@
 	let listed = $state(false);
 	let missing = $state(false);
 	let listOpen = $state(false);
+	let clearing = $state(false);
+
+	// Past questions are a column beside the conversation from `WIDE`, folded
+	// to its edge or open as the reader last left it; narrower, a sheet the
+	// bar's own action opens (the operator, 24/10/2026).
+	const WIDE = '(min-width: 1024px)';
+	const FOLDED = 'ds-chat-past-folded';
+	let wide = $state(false);
+	let folded = $state(false);
+	$effect(() => {
+		const query = window.matchMedia?.(WIDE);
+		if (!query) return;
+		wide = query.matches;
+		const follow = (event: MediaQueryListEvent) => (wide = event.matches);
+		query.addEventListener('change', follow);
+		return () => query.removeEventListener('change', follow);
+	});
+	$effect(() => {
+		try {
+			folded = localStorage.getItem(FOLDED) === '1';
+		} catch {
+			// No storage: the column opens.
+		}
+	});
+	function fold(next: boolean) {
+		folded = next;
+		try {
+			localStorage.setItem(FOLDED, next ? '1' : '0');
+		} catch {
+			// Remembered for this visit only.
+		}
+	}
 
 	// Derived, so each follows its own value: `page.params` is a new object on
 	// every navigation, a conversation named in the address included.
@@ -237,6 +275,17 @@
 		if (removed && wanted === id) fresh();
 		return removed;
 	}
+
+	/** Every past question but one still being answered; the open one cleared leaves a new one. */
+	async function clearAll() {
+		clearing = false;
+		const open = wanted;
+		if (!(await chat?.clear())) {
+			toast.error(words.clearAllFailed);
+			return;
+		}
+		if (open && !chat?.conversations?.some((c) => c.id === open)) fresh();
+	}
 </script>
 
 {#if missing}
@@ -250,8 +299,64 @@
 	{@const c = chat}
 	{@const p = persona}
 	<!-- Nothing of the shell floats over the composer: feedback is the bar's, and
-	     the phone drawer's. -->
+	     the phone drawer's; so is the way to past questions where their column
+	     does not show. -->
+	{#if !wide}
+		<ShellActions>
+			<Button
+				variant="outline"
+				size="icon"
+				aria-label={words.pastQuestions}
+				title={words.pastQuestions}
+				aria-haspopup="dialog"
+				aria-expanded={listOpen}
+				onclick={() => (listOpen = true)}
+				data-testid="chat-past-questions"
+				class="pointer-coarse:size-11"
+			>
+				<HistoryIcon />
+			</Button>
+		</ShellActions>
+	{/if}
 	<div class="flex h-full min-h-0 flex-1">
+		{#if wide}
+			<!-- A second column flush against the rail, sized as the rail is (the
+			     shell's own tokens, open and folded): no width of its own. -->
+			<div
+				class="border-border flex min-h-0 flex-none flex-col border-r {folded
+					? 'w-(--ds-shell-rail-width-collapsed)'
+					: 'w-(--ds-shell-rail-width)'}"
+				data-testid="chat-past-column"
+			>
+				{#if folded}
+					<div class="flex flex-col items-center gap-1 py-2">
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label={words.showPastQuestions}
+							title={words.showPastQuestions}
+							onclick={() => fold(false)}
+						>
+							<PanelLeftOpenIcon />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label={words.newQuestion}
+							title={words.newQuestion}
+							onclick={fresh}
+						>
+							<SquarePenIcon />
+						</Button>
+					</div>
+				{:else}
+					<div class="min-h-0 flex-1 overflow-y-auto">
+						{@render past(c, () => fold(true))}
+					</div>
+					{@render clearFoot(c)}
+				{/if}
+			</div>
+		{/if}
 		<Conversation
 			turns={c.turns}
 			running={c.busy}
@@ -278,27 +383,10 @@
 			working={extensions.Thinking ? thinking : undefined}
 			retrieves={Boolean(p.collections)}
 			onstop={() => void c.stop()}
+			toolbar={!wide && (c.conversationId || c.turns.length > 0) ? newQuestion : undefined}
 			{formatCost}
 			{copy}
 		>
-			{#snippet toolbar()}
-				{#if c.conversationId || c.turns.length > 0}
-					<Button variant="ghost" size="sm" onclick={fresh}>
-						<SquarePenIcon />
-						{words.newQuestion}
-					</Button>
-				{/if}
-				<Button
-					variant="ghost"
-					size="sm"
-					aria-haspopup="dialog"
-					aria-expanded={listOpen}
-					onclick={() => (listOpen = true)}
-				>
-					<HistoryIcon />
-					{words.pastQuestions}
-				</Button>
-			{/snippet}
 			{#snippet composer()}
 				<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
 				<AskBox
@@ -318,30 +406,89 @@
 			{/snippet}
 		</Conversation>
 	</div>
-	<Sheet.Root bind:open={listOpen}>
+	<Sheet.Root open={listOpen && !wide} onOpenChange={(open) => (listOpen = open)}>
 		<Sheet.Content
 			side="left"
 			showCloseButton={false}
 			aria-label={words.pastQuestions}
-			class="overflow-y-auto"
+			class="gap-0"
 		>
-			<ConversationList
-				conversations={c.conversations}
-				failed={c.listFailed}
-				current={c.conversationId}
-				href={(id) => address(id)}
-				onopen={() => (listOpen = false)}
-				onnew={fresh}
-				onclose={() => (listOpen = false)}
-				onrename={(id, title) => c.rename(id, title)}
-				ondownload={(id) => c.download(id)}
-				ondelete={remove}
-				name={who}
-				{copy}
-			/>
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				{@render past(c)}
+			</div>
+			{@render clearFoot(c)}
 		</Sheet.Content>
 	</Sheet.Root>
+	<AlertDialog.Root
+		open={clearing}
+		onOpenChange={(open) => {
+			if (!open) clearing = false;
+		}}
+	>
+		<AlertDialog.Content>
+			<AlertDialog.Header>
+				<AlertDialog.Title>{words.clearAllPrompt}</AlertDialog.Title>
+				<AlertDialog.Description>{words.clearAllDetail}</AlertDialog.Description>
+			</AlertDialog.Header>
+			<AlertDialog.Footer>
+				<AlertDialog.Cancel>{words.cancel}</AlertDialog.Cancel>
+				<AlertDialog.Action
+					variant="destructive"
+					onclick={() => void clearAll()}
+					data-testid="chat-clear-all-confirm"
+				>
+					{words.clearAll}
+				</AlertDialog.Action>
+			</AlertDialog.Footer>
+		</AlertDialog.Content>
+	</AlertDialog.Root>
 {/if}
+
+<!-- A new conversation, from the bar above the transcript where the column does not show. -->
+{#snippet newQuestion()}
+	<Button variant="ghost" size="sm" onclick={fresh}>
+		<SquarePenIcon />
+		{words.newQuestion}
+	</Button>
+{/snippet}
+
+<!-- Past questions, in the column or the sheet: New question at their head,
+     each row dated under its day, each with its acts. -->
+{#snippet past(c: Chat, oncollapse?: () => void)}
+	<ConversationList
+		conversations={c.conversations}
+		failed={c.listFailed}
+		current={c.conversationId}
+		href={(id) => address(id)}
+		onopen={() => (listOpen = false)}
+		onnew={fresh}
+		onclose={oncollapse ? undefined : () => (listOpen = false)}
+		{oncollapse}
+		onrename={(id, title) => c.rename(id, title)}
+		ondownload={(id) => c.download(id)}
+		ondelete={remove}
+		name={who}
+		{copy}
+	/>
+{/snippet}
+
+<!-- Clear all, at the foot of past questions, behind its confirmation. -->
+{#snippet clearFoot(c: Chat)}
+	{#if c.clearable && (c.conversations?.length ?? 0) > 0}
+		<div class="border-border flex-none border-t p-2">
+			<Button
+				variant="ghost"
+				size="sm"
+				class="text-muted-foreground w-full justify-start"
+				onclick={() => (clearing = true)}
+				data-testid="chat-clear-all"
+			>
+				<TrashIcon />
+				{words.clearAll}
+			</Button>
+		</div>
+	{/if}
+{/snippet}
 
 {#snippet presented(props: AgentTranscriptProps)}
 	{#if extensions.Turn && persona}

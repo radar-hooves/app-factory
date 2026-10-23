@@ -56,11 +56,11 @@ async function ask(page: Page, question: string) {
 	await page.getByRole('button', { name: 'Send' }).click();
 }
 
-/** Past questions come over the page on demand, never as a column beside it. */
+/** Past questions: a column beside the conversation from 1024px (a sheet from the bar's action below it). */
 async function pastQuestions(page: Page) {
-	await expect(page.getByRole('region', { name: 'Past questions' })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Past questions' }).click();
-	return page.getByRole('region', { name: 'Past questions' });
+	const past = page.getByRole('region', { name: 'Past questions' });
+	await expect(past).toBeVisible();
+	return past;
 }
 
 /** Where the next question looks: one control, opened onto its list. */
@@ -103,8 +103,11 @@ test('an ask streams its answer and names the conversation in the address and th
 	await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 15_000 });
 	const past = await pastQuestions(page);
 	await expect(past.getByText('How is recreation leave accrued?')).toBeVisible();
-	await past.getByRole('button', { name: 'Close past questions' }).click();
+	// The column folds to its edge, and opens again from it.
+	await past.getByRole('button', { name: 'Hide past questions' }).click();
 	await expect(past).toHaveCount(0);
+	await page.getByRole('button', { name: 'Show past questions' }).click();
+	await expect(past).toBeVisible();
 	helperConversation = conversationId(page);
 });
 
@@ -353,6 +356,12 @@ test('on a phone, nothing floats over Send and the report row is in the drawer',
 		await page.getByTestId('ds-shell-menu').click();
 		await expect(page.getByTestId('ds-shell-drawer-report')).toBeVisible();
 		await page.getByTestId('ds-shell-menu').click();
+
+		// Past questions are the bar's action here, and open over the page.
+		await expect(page.getByRole('region', { name: 'Past questions' })).toHaveCount(0);
+		await page.getByTestId('chat-past-questions').click();
+		await expect(page.getByRole('region', { name: 'Past questions' })).toBeVisible();
+		await page.keyboard.press('Escape');
 
 		await ask(page, 'And on a phone?');
 		await expect(page.getByText(/on 'And on a phone\?': a member accrues/).first()).toBeVisible();

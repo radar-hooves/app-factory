@@ -181,6 +181,18 @@ export interface ChatCopy {
 	pastQuestions: string;
 	newQuestion: string;
 	closePastQuestions: string;
+	/** A column of past questions folded to its edge, and opened again. */
+	hidePastQuestions: string;
+	showPastQuestions: string;
+	/** The list's groups, by when each conversation was last active. */
+	today: string;
+	yesterday: string;
+	earlier: string;
+	/** Clearing every past question: the control, its confirmation, and a clear that did not go through. */
+	clearAll: string;
+	clearAllPrompt: string;
+	clearAllDetail: string;
+	clearAllFailed: string;
 	readingPastQuestions: string;
 	noPastQuestions: string;
 	pastQuestionsFailed: string;
@@ -339,6 +351,15 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		pastQuestions: 'Past questions',
 		newQuestion: 'New question',
 		closePastQuestions: 'Close past questions',
+		hidePastQuestions: 'Hide past questions',
+		showPastQuestions: 'Show past questions',
+		today: 'Today',
+		yesterday: 'Yesterday',
+		earlier: 'Earlier',
+		clearAll: 'Clear all',
+		clearAllPrompt: 'Clear all your past questions?',
+		clearAllDetail: `Every conversation with ${who} goes, from every device, except one still being answered. This cannot be undone.`,
+		clearAllFailed: "Your past questions couldn't be cleared.",
 		readingPastQuestions: 'Reading your past questions…',
 		noPastQuestions: 'No past questions yet.',
 		pastQuestionsFailed: "Your past questions couldn't be read just now.",
