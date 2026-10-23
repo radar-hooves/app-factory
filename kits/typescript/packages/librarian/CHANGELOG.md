@@ -24,6 +24,7 @@ Consumer: caspo (the operator, 24/10/2026: the working words flashed "almost lik
 - **A library search counts passages** ("8 passages", "1 passage"), from the library's `chunks` as well as `hits` and `results`; its row reads the library's `search_query` argument as well as `query`.
 - **A library document read is named by its title**, from `document_title`, `title` or the page's first heading, read off the text so a conversation's cut-short copy of the result still names it.
 - **"N lines" sits only under a `Read`, `Grep` or `Bash` step**, never under a library, web or write call answering in one line of JSON.
+- **A row names what its call works on while the rest of its input still streams**: a Write's file from its `file_path`, a search's query, from the string fields already complete, so a ten-second Write reads "Writing ghost-bat-minute.md" rather than a bare "Wrote".
 - **A briefing the persona wrote as a document is that document.** `AgentTranscript` shows the prose and the document's card, never the briefing card over the sentence that says it was written; `Conversation` opens the newest version in the column on settle, not the prose.
 
 ### Fixed

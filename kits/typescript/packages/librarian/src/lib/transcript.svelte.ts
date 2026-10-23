@@ -141,14 +141,21 @@ function describeCall(block: ToolBlock): ToolWords {
 			object: str(input.search_query ?? input.query)
 		};
 	}
-	if (block.name === 'mcp__library__document_content' || block.name === 'mcp__library__document_detail') {
+	if (
+		block.name === 'mcp__library__document_content' ||
+		block.name === 'mcp__library__document_detail'
+	) {
 		const title = documentTitle(block.result);
 		return title
 			? { verb: 'Read', doing: 'Reading', object: title }
 			: { verb: 'Read a document', doing: 'Reading a document', object: '' };
 	}
 	if (block.name === 'mcp__supacrawl__supacrawl_search') {
-		return { verb: 'Searched the web for', doing: 'Searching the web for', object: str(input.query) };
+		return {
+			verb: 'Searched the web for',
+			doing: 'Searching the web for',
+			object: str(input.query)
+		};
 	}
 	if (block.name === 'mcp__supacrawl__supacrawl_scrape') {
 		return { verb: 'Read', doing: 'Reading', object: hostOf(str(input.url)) };
@@ -173,7 +180,11 @@ function describeCall(block: ToolBlock): ToolWords {
 			return { verb: 'Looked for', doing: 'Looking for', object: quoted?.[1] ?? 'a phrase' };
 		}
 		if (/\bls\b/.test(command))
-			return { verb: 'Looked through the library', doing: 'Looking through the library', object: '' };
+			return {
+				verb: 'Looked through the library',
+				doing: 'Looking through the library',
+				object: ''
+			};
 		if (/\bfind\b/.test(command))
 			return { verb: 'Looked for documents', doing: 'Looking for documents', object: '' };
 		if (/\bcat\b|\bhead\b|\bsed\b/.test(command)) {
@@ -214,8 +225,27 @@ function parseInput(block: ToolBlock): Record<string, unknown> {
 	try {
 		return JSON.parse(block.rawInput) as Record<string, unknown>;
 	} catch {
-		return {};
+		return partialInput(block.rawInput);
 	}
+}
+
+/**
+ * The string fields a call's input has finished giving while the rest of it
+ * still streams. A Write's `file_path` comes first and its `content` takes the
+ * next ten seconds (measured on caspo 24/10/2026), and the row names the file
+ * the whole while rather than only once it is written.
+ */
+function partialInput(raw: string): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [, key, value] of raw.matchAll(/"(\w+)"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+		if (key in out) continue;
+		try {
+			out[key] = JSON.parse(`"${value}"`);
+		} catch {
+			// A value cut inside an escape is not finished yet.
+		}
+	}
+	return out;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');

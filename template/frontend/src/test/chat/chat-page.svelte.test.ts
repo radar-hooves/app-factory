@@ -252,7 +252,7 @@ describe('A persona page, through the app extension points', () => {
 		expect(screen.queryByTestId('app-home')).toBeNull();
 	});
 
-	it("offers no briefing control, and asks one a Home page handed over as a briefing", async () => {
+	it('offers no briefing control, and asks one a Home page handed over as a briefing', async () => {
 		const asked = answering('c2', '# Leave');
 		at('/chat/outrider', {
 			ask: 'Write a briefing on Outrider, every claim cited.',

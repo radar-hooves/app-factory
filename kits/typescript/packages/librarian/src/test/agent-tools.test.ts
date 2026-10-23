@@ -114,6 +114,31 @@ describe('a tool step in the persona’s words', () => {
 		expect(done('mcp__library__search')).toBeUndefined();
 		expect(done('Write')).toBeUndefined();
 	});
+
+	it('names what a call works on while the rest of its input is still arriving', () => {
+		const writing = words({
+			kind: 'tool',
+			index: 0,
+			name: 'Write',
+			rawInput: '{"file_path": "/chat/ghost-bat-minute.md", "content": "# Ghost Bat\\n\\nBoeing Def'
+		});
+		expect(writing).toMatchObject({ doing: 'Writing', object: 'ghost-bat-minute.md' });
+		const searching = words({
+			kind: 'tool',
+			index: 0,
+			name: 'mcp__library__search',
+			rawInput: '{"search_query": "Ghost Bat sustainment", "top_'
+		});
+		expect(searching.object).toBe('Ghost Bat sustainment');
+		// A value still being typed names nothing yet.
+		const typing = words({
+			kind: 'tool',
+			index: 0,
+			name: 'mcp__library__search',
+			rawInput: '{"search_query": "Ghost B'
+		});
+		expect(typing.object).toBe('');
+	});
 });
 
 describe('a turn with a library search', () => {
