@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.7] - 2026-10-23
+
+Consumer: caspo, caspo-67.
+
+### Changed
+
+- **`Chat.ask` takes the files as a fourth argument**, so a question handed over from another page goes out with its attachments at once.
+- **The composer rests at three lines** of 1.125rem text with 44px controls and a 0.875rem scope label.
+- **The scope control** reads as the composer's own, beside attach and send.
+
 ## [2026.10.6] - 2026-10-23
 
 Consumer: caspo, radar-hooves/caspo#196.

@@ -6,15 +6,38 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [2026.10.67] - 2026-10-23
 
-Need: a persona's chart should draw on the household charting stack (`stacks/svelte-charting.md`: LayerChart), not Vega-Lite through vega-embed, and weigh nothing on a chat page's first load; consumer: caspo, radar-hooves/caspo#196.
+Need: a persona's chart should draw on the household charting stack (`stacks/svelte-charting.md`: LayerChart), not Vega-Lite through vega-embed, and weigh nothing on a chat page's first load; a first answer should start within a second of Enter, a colleague's view should be the whole app's, and a stamped app should ship a default-deny CSP and bounded uploads and turns; consumer: caspo, radar-hooves/caspo#196 and caspo-67.
+
+### Added
+
+- **Home's question box is the chat page's own** (`AskHome`/`AskBox`: attach, briefing, scope, send; no model picker). Its send hands question, files, scope and briefing kind to the chat page, which asks at once. Closes a Home box that dropped files and scope on the way to the chat.
+- **View as colleague** (admin-only, narrowing-only): the account menu keeps a ticked subset of the admin's entitlements for the tab and sends it as `X-View-As`; `/api/users/me` returns `held` and `viewing_as`. `apiFetch` carries the header for the chat's ask and the kit's settings page, report widget and alert bell (each takes a `fetch`). The library's collection cut is not narrowed. Closes previewing the app by signing in as a dummy account.
+- **`@poodle64/ui`**: `AppIdentity` `themeToggle` (default true) hides "Switch theme" for a dark-only app; `SchemaForm` `validate` (default true); `fetch` on `SettingsPage`, `ReportWidget`, `AlertBell`.
 
 ### Changed
 
 - **The `vega-lite` visual is the `chart` visual**: `@poodle64/librarian` 2026.10.6 draws `chart` blocks with LayerChart, `{"title", "type": "bar" | "line" | "area", "x", "y": [fields], "data": [rows]}`, up to five series in `--chart-1` to `--chart-5`, 500 rows, numbers only; a block outside that shows its code. The renderer is a dynamic import, fetched when an answer carries a chart. `vega`, `vega-lite` and `vega-embed` leave the package (the kit lockfile loses about 290 lines) and the template's `ssr.external` workaround goes with them. `agent_common.visuals.FRAGMENTS["chart"]` tells the persona the format.
+- **The Composer rests at three lines** of 1.125rem text, 44px controls and a 0.875rem scope label. Closes a box too small to write a real question in.
+- **Faster first answer**: the exchanged library token is reused per person until 60 s of its life remain (the turn token is still minted per turn, now in parallel); a person's collection listing is held 300 s and shared by the collections route and the ask, so a change to a person's collections can show up to 5 minutes late. The chat page builds `Chat` once the persona is known and sends a handed question at once; `lib/agent/chat.ts` exports memoised `personasOf`/`collectionsOf`, `handOff` and `warmChat`. Modelled on caspo's trace latencies, in-process and local chromium: repeat collections 3.7 s to 0.1-0.2 s; ask to CLI spawn 4.7-4.9 s to 2.8-2.9 s; Enter to ask POST 4.6 s to about 0.15 s.
+- **`@poodle64/librarian` 2026.10.7** (`Chat.ask` takes `files`; the composer's size and scope control) and **`@poodle64/ui` 2026.10.23**. 2026.10.6 was published with the chart renderer, so these ship as the next version.
+
+### Fixed
+
+- **The settings page no longer logs "Error compiling schema" under the CSP**: Ajv compiles with `new Function`, so the page passes `validate={false}` to `SchemaForm` and the server's 422 is the toast. No `'unsafe-eval'`.
+- **A route's own `Content-Security-Policy` survives the middleware**: the artefact download's `sandbox` was overwritten by the app's policy.
+
+### Security
+
+- **Uploads are capped**: 10 files, 20 MB each, 50 MB together, `.png .jpg .jpeg .webp .pdf .docx .txt .md`, refused before reading (413, 415, 400). Closes an ask that read any body into memory.
+- **Turns are bounded**: `<APP>_AGENT_MAX_CONCURRENT_TURNS` (8, across workers; 503 with `Retry-After`) and a per-person `<APP>_AGENT_ASK_RATE_LIMIT` (6/minute). Closes one person starting unlimited CLI processes.
+- **A default-deny CSP**: script hashes computed at startup from the built shell, the `dark_first` seed now `static/dark-seed.js`, `/docs` exempt, `style-src 'unsafe-inline'` for mode-watcher and SvelteKit. Closes a page that ran any injected script.
+- **`/mcp` holds a person to each tool's declared entitlement** (`meta=requires(...)`, FastMCP `AuthMiddleware`). An undeclared tool is refused to persons: an app with its own tools must declare each. Closes a person reaching a tool whose REST route they could not.
 
 ### Migration
 
 A consumer on `vega-lite` changes `visuals: [vega-lite, ...]` to `[chart, ...]` in `chat.yaml` (an unknown language fails the app's start, not a request), pins `@poodle64/librarian` 2026.10.6 and deletes `ssr: { external: ['vega-embed'] }` from `vite.config.ts` (`copier update` moves the pin and the config). A conversation already saved with a `vega-lite` block shows that block's code. An app's own `visuals/vega-lite.md` fragment and renderer, if any, stay its own.
+
+A consumer's own `/mcp` tools each declare `meta=requires(...)` or persons are refused them. A consumer that overrides `copy().allCollections` deletes it to take the factory's "All your collections" (the odd label was its own override; no factory change). Any new bare `fetch` in an app passes `apiFetch`.
 
 ## [2026.10.66] - 2026-10-22
 

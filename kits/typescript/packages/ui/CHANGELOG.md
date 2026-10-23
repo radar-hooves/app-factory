@@ -14,6 +14,14 @@ Consumer: godswood, radar-hooves/godswood#889 (its F2 review, measured at 390 an
 - **An info tip opens by hover or a keyboard's focus, never by focus a script moves** (`InfoTip` sets bits-ui's `ignoreNonKeyboardFocus`), so a dialogue whose first control is a tip opens with it shut.
 - **A page strip with more tabs than room says so.** `RecordSwitcher`'s tab strip scrolls the open page into view, fades the edge that has more beyond it (`data-more-before` / `data-more-after`), and the fade follows the scroll and the tabs' own width.
 
+Consumer: caspo, caspo-67.
+
+### Added
+
+- **`AppIdentity` `themeToggle`** (default true): false hides "Switch theme" for a dark-only app.
+- **`fetch` on `SettingsPage`, `ReportWidget` and `AlertBell`**: the app's own request function, so a client that stamps every call (a workspace, View as colleague) reaches these too.
+- **`validate` on `SchemaForm`** (default true): false compiles nothing with Ajv, for a page under a Content-Security-Policy without `'unsafe-eval'`. `SettingsPage` passes false; the server's refusal is its toast.
+
 ## [2026.10.22] - 2026-10-19
 
 Consumer: caspo, radar-hooves/caspo#177.
