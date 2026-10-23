@@ -3,5 +3,10 @@
 	let { status, message }: { status: number; message: string } = $props();
 </script>
 
-<svg role="img" aria-label="Art for {status}: {message}" data-testid="error-art" width="8" height="8"
+<svg
+	role="img"
+	aria-label="Art for {status}: {message}"
+	data-testid="error-art"
+	width="8"
+	height="8"
 ></svg>

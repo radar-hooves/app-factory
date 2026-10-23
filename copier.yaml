@@ -188,6 +188,7 @@ _migrations:
       - frontend/tests/e2e/rooms.spec.ts
       - frontend/tests/e2e/rooms
       - frontend/src/test/chat
+      - frontend/src/test/art
       - frontend/tests/e2e/chat.spec.ts
       - frontend/tests/e2e/chat
       - frontend/src/routes/(protected)/layout.test.ts
