@@ -282,3 +282,19 @@ describe('AppIdentity — app-supplied links', () => {
 		expect(menuItemLabels().at(-1)).toBe('Sign out');
 	});
 });
+
+describe('AppIdentity — themeToggle', () => {
+	const user = { username: 'jdoe', display_name: null, email: null };
+
+	it('shows Switch theme by default', async () => {
+		render(AppIdentity, { props: { user, onSignOut: () => {} } });
+		await openMenu();
+		expect(menuItemLabels()).toContain('Switch theme');
+	});
+
+	it('hides Switch theme when themeToggle is false', async () => {
+		render(AppIdentity, { props: { user, onSignOut: () => {}, themeToggle: false } });
+		await openMenu();
+		expect(menuItemLabels()).toEqual(['Account settings', 'Sign out']);
+	});
+});

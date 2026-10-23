@@ -51,6 +51,7 @@
 		onAccountSettings,
 		onManageMembers,
 		onSwitchTheme,
+		themeToggle = true,
 		links = []
 	}: {
 		user: { username: string; display_name: string | null; email: string | null };
@@ -78,6 +79,12 @@
 		onManageMembers?: () => void;
 		/** Override the theme action. Defaults to mode-watcher's toggleMode, matching AppShell. */
 		onSwitchTheme?: () => void;
+		/**
+		 * Show the "Switch theme" row. Same name and default as AppShell's
+		 * `themeToggle`; set both false in a dark-only (or light-only) app, so no
+		 * theme control is left that does nothing.
+		 */
+		themeToggle?: boolean;
 		/**
 		 * App destinations the fixed entries have no room for, rendered in their
 		 * own group.
@@ -232,7 +239,9 @@
 			</DropdownMenu.Group>
 		{/if}
 		<DropdownMenu.Separator />
-		<DropdownMenu.Item onSelect={switchTheme}>Switch theme</DropdownMenu.Item>
+		{#if themeToggle}
+			<DropdownMenu.Item onSelect={switchTheme}>Switch theme</DropdownMenu.Item>
+		{/if}
 		<DropdownMenu.Item onSelect={onAccountSettings}>Account settings</DropdownMenu.Item>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item class="text-status-error" onSelect={onSignOut}>Sign out</DropdownMenu.Item>
