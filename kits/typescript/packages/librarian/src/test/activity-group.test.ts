@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import ActivityGroup from '$lib/components/activity-group/activity-group.svelte';
-import { segment, type ActivityGroup as ActivityGroupType, type Block } from '$lib/transcript.svelte';
+import {
+	segment,
+	type ActivityGroup as ActivityGroupType,
+	type Block
+} from '$lib/transcript.svelte';
 
 const blocks: Block[] = [
 	{ kind: 'thinking', index: 0, text: 'Which clause covers this?' },
@@ -24,13 +28,16 @@ const blocks: Block[] = [
 const [group] = segment(blocks) as ActivityGroupType[];
 
 const unfold = () => fireEvent.click(document.querySelector('.ds-lib-steps-head') as Element);
+/** Each row's words, without the glyph a live one turns (it is hidden from a reader). */
 const rows = () =>
-	[...document.querySelectorAll('.ds-lib-tool-row, .ds-lib-thinking-row')].map((r) =>
-		r.textContent?.replace(/\s+/g, ' ').trim()
-	);
+	[...document.querySelectorAll('.ds-lib-tool-row, .ds-lib-thinking-row')].map((r) => {
+		const words = r.cloneNode(true) as Element;
+		for (const glyph of words.querySelectorAll('.ds-lib-spinner')) glyph.remove();
+		return words.textContent?.replace(/\s+/g, ' ').trim();
+	});
 
 describe('ActivityGroup', () => {
-	it('folds the steps behind one line, and lists each as its own collapsed row, in order, when opened', async () => {
+	it('settled, folds the steps behind one line, and lists each as its own collapsed row, in order, when opened', async () => {
 		render(ActivityGroup, { props: { group, live: false } });
 
 		const head = screen.getByRole('button', { name: /3 steps$/ });
@@ -41,7 +48,7 @@ describe('ActivityGroup', () => {
 		expect(head).toHaveAttribute('aria-expanded', 'true');
 		expect(rows()).toEqual([
 			'Thought',
-			'Searched the library for recreation leave 0 found',
+			'Searched the library for recreation leave 0 passages',
 			'Searched the library for recreation leave Failed'
 		]);
 		for (const row of document.querySelectorAll('.ds-lib-tool-row, .ds-lib-thinking-row'))
@@ -61,15 +68,7 @@ describe('ActivityGroup', () => {
 		expect(document.body.textContent).toContain('{"hits":[]}');
 	});
 
-	it('says what is happening now while it runs, and Thought once the step is done', async () => {
-		const { unmount } = render(ActivityGroup, {
-			props: { group: segment([blocks[0]]).at(0) as ActivityGroupType, live: true }
-		});
-		expect(screen.getByRole('button', { name: 'Thinking…' })).toBeInTheDocument();
-		await unfold();
-		expect(screen.getAllByText('Thinking…')).toHaveLength(2);
-		unmount();
-
+	it('while the turn runs, shows each step as its own row as it starts, the one under way in the present', () => {
 		const unanswered: Block = {
 			kind: 'tool',
 			index: 3,
@@ -78,6 +77,40 @@ describe('ActivityGroup', () => {
 		};
 		const running = segment([...blocks.slice(0, 2), unanswered]).at(0) as ActivityGroupType;
 		render(ActivityGroup, { props: { group: running, live: true } });
-		expect(screen.getByRole('button', { name: 'Searching the web…' })).toBeInTheDocument();
+
+		// No fold to open: the rows are the turn's own lines.
+		expect(document.querySelector('.ds-lib-steps-head')).toBeNull();
+		expect(rows()).toEqual([
+			'Thought',
+			'Searched the library for recreation leave 0 passages',
+			'Searching the web for pay'
+		]);
+		// The step under way turns its glyph in place of its icon.
+		const live = document.querySelectorAll('.ds-lib-tool-row')[1];
+		expect(live.querySelector('.ds-lib-spinner')).not.toBeNull();
+		expect(
+			document.querySelectorAll('.ds-lib-tool-row')[0].querySelector('.ds-lib-spinner')
+		).toBeNull();
+	});
+
+	it('shows the working-out as it is written, and folds it once the turn settles', async () => {
+		const thinking = segment([blocks[0]]).at(0) as ActivityGroupType;
+		const { rerender } = render(ActivityGroup, { props: { group: thinking, live: true } });
+		expect(screen.getByRole('button', { name: 'Thinking…' })).toHaveAttribute(
+			'aria-expanded',
+			'true'
+		);
+		expect(screen.getByText('Which clause covers this?')).toBeInTheDocument();
+
+		await rerender({ group: thinking, live: false });
+		expect(screen.queryByText('Which clause covers this?')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^Thought\s*· 1 step$/ })).toBeInTheDocument();
+	});
+
+	it('keeps the rows open while the answer streams beneath them, live or not', () => {
+		render(ActivityGroup, { props: { group, live: false, running: true } });
+		expect(document.querySelector('.ds-lib-steps-head')).toBeNull();
+		expect(rows()).toHaveLength(3);
+		expect(document.querySelector('.ds-lib-spinner')).toBeNull();
 	});
 });

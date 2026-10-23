@@ -10,9 +10,9 @@
  * A host that passes nothing still reads as the neutral default, which is the
  * difference between a default and a hardcoding.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRawSnippet } from 'svelte';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import type { AgentTranscriptProps } from '$lib/components/agent-transcript';
 import Conversation from '$lib/components/conversation/conversation.svelte';
 import type { Turn } from '$lib/transcript.svelte';
@@ -59,10 +59,35 @@ describe('Conversation name', () => {
 		expect(screen.getByText('The boardroom is offline.')).toBeInTheDocument();
 	});
 
-	it('names the persona while a question is still being worked on', () => {
+	it('says what a question is waiting on before the first word, and never in another persona’s name', () => {
 		const turns: Turn[] = [{ id: '1', question: 'q', blocks: [], outcome: null }];
-		conversation({ turns, running: true, name: 'penny' });
-		expect(screen.getByText('Penny is looking…')).toBeInTheDocument();
+		conversation({ turns, running: true, name: 'penny', retrieves: true });
+		expect(screen.getByText('Searching the library…')).toBeInTheDocument();
+		expect(screen.queryByText(/Assistant/)).not.toBeInTheDocument();
+	});
+
+	it('offers Stop on the working line of the answer being written', async () => {
+		const turns: Turn[] = [{ id: '1', question: 'q', blocks: [], outcome: null }];
+		const onstop = vi.fn();
+		conversation({ turns, running: true, onstop });
+		expect(screen.getByText('Starting…')).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+		expect(onstop).toHaveBeenCalledOnce();
+	});
+
+	it('keeps the working line at the foot of the turn, under the answer as it streams', () => {
+		const turns: Turn[] = [
+			{
+				id: '1',
+				question: 'q',
+				blocks: [{ kind: 'text', index: 0, text: 'Leave accrues' }],
+				outcome: null
+			}
+		];
+		conversation({ turns, running: true });
+		const line = screen.getByText('Writing the answer…');
+		const prose = screen.getByText('Leave accrues');
+		expect(prose.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	it("draws the host's own working line in place of the package's", () => {
@@ -70,7 +95,7 @@ describe('Conversation name', () => {
 		const working = createRawSnippet(() => ({ render: () => '<p>Kettle on</p>' }));
 		conversation({ turns, running: true, working });
 		expect(screen.getByText('Kettle on')).toBeInTheDocument();
-		expect(screen.queryByText('Assistant is looking…')).not.toBeInTheDocument();
+		expect(screen.queryByText('Starting…')).not.toBeInTheDocument();
 	});
 
 	it('names the persona in the scope statement it renders for the host', () => {
@@ -242,7 +267,12 @@ describe("Conversation in the host's own words", () => {
 
 	it('waits docked and says nothing while a conversation is read back', () => {
 		const composer = createRawSnippet(() => ({ render: () => '<textarea></textarea>' }));
-		conversation({ composer, reopening: true, welcome: 'Ask about pay.', examples: ['How much leave?'] });
+		conversation({
+			composer,
+			reopening: true,
+			welcome: 'Ask about pay.',
+			examples: ['How much leave?']
+		});
 		expect(screen.queryByText('Ask about pay.')).not.toBeInTheDocument();
 		expect(screen.queryByText('How much leave?')).not.toBeInTheDocument();
 		expect(

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_COPY } from '$lib/copy';
-import { stepKind, stepMeta, stepsNow, stepsSummary } from '$lib/steps';
+import { activityNow, stepKind, stepMeta, stepsNow, stepsSummary } from '$lib/steps';
 import { segment, type ActivityGroup, type Block } from '$lib/transcript.svelte';
 import type { Written } from '$lib/written';
 
@@ -110,11 +110,44 @@ describe('a step’s kind and its count', () => {
 	});
 
 	it('counts what a search found where the result shows it, and nothing where it does not', () => {
-		expect(stepMeta(turn[2], DEFAULT_COPY)).toBe('3 found');
+		expect(stepMeta(turn[2], DEFAULT_COPY)).toBe('3 passages');
 		expect(stepMeta(turn[4], DEFAULT_COPY)).toBe('2 pages read');
 		expect(stepMeta(tool('mcp__library__search', {}, 'not json'), DEFAULT_COPY)).toBe('');
-		expect(stepMeta(tool('mcp__library__search', {}, '{"hits":[]}'), DEFAULT_COPY)).toBe('0 found');
+		expect(stepMeta(tool('mcp__library__search', {}, '{"hits":[]}'), DEFAULT_COPY)).toBe('0 passages');
+		// The library's own shape, measured on caspo 24/10/2026.
+		expect(stepMeta(tool('mcp__library__search', {}, '{"chunks":[{}]}'), DEFAULT_COPY)).toBe(
+			'1 passage'
+		);
 		expect(stepMeta(tool('mcp__library__search', {}, undefined), DEFAULT_COPY)).toBe('');
 		expect(stepMeta(turn[1], DEFAULT_COPY)).toBe('');
+	});
+});
+
+describe('the working line’s verb', () => {
+	it('before the first word: the app’s search, then the passages it found, or starting', () => {
+		expect(activityNow([], [], DEFAULT_COPY, { retrieves: true })).toBe('Searching the library…');
+		expect(activityNow([], [], DEFAULT_COPY, { retrieves: true, citations: 7 })).toBe(
+			'Reading 7 passages…'
+		);
+		expect(activityNow([], [], DEFAULT_COPY, { citations: 1 })).toBe('Reading 1 passage…');
+		expect(activityNow([], [], DEFAULT_COPY)).toBe('Starting…');
+		expect(activityNow([], [], DEFAULT_COPY, { resumed: true, retrieves: true })).toBe(
+			'Assistant is still answering'
+		);
+	});
+
+	it('after it: the step under way, thinking, the answer, or working on it between', () => {
+		expect(activityNow([tool('mcp__library__search', { search_query: 'q' })], [], DEFAULT_COPY)).toBe(
+			'Searching the library…'
+		);
+		expect(activityNow([{ kind: 'thinking', index: 0, text: '' }], [], DEFAULT_COPY)).toBe(
+			'Thinking…'
+		);
+		expect(activityNow([{ kind: 'text', index: 0, text: 'The' }], [], DEFAULT_COPY)).toBe(
+			'Writing the answer…'
+		);
+		expect(activityNow([tool('mcp__library__search', {}, '{"chunks":[]}')], [], DEFAULT_COPY)).toBe(
+			'Working on it…'
+		);
 	});
 });

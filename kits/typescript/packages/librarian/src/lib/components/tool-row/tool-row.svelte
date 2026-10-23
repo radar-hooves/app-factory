@@ -1,9 +1,11 @@
 <!--
-  One tool call, as a row in the turn's fold.
+  One tool call, as a row in the turn's steps.
 
   Not a card: the kind of step as an icon, an action in bold, its target
-  beside it, and at the right hand what the result counted ("9 found") and a
-  chevron. The row says what the persona DID, in a reader's own words — never
+  beside it, and at the right hand what the result counted ("9 passages") and
+  a chevron. While the call runs the icon is the turning glyph and the action
+  is in the present ("Searching the library for"); its result turns it to
+  the past ("Searched the library for … 9 passages"). The row says what the persona DID, in a reader's own words — never
   the tool's name or the raw command it ran: the host's `DescribeTool`, or the
   package's own `describe()`. Expanding it shows what went in and what came
   back, the way Claude Code's own panel does; a web search shows the pages it
@@ -22,6 +24,7 @@
 	import { resolveCopy, type ChatCopy } from '../../copy';
 	import { stepKind, stepMeta, type StepKind } from '../../steps';
 	import { searchPages } from '../../web-sources';
+	import Spinner from '../spinner/spinner.svelte';
 
 	interface Props {
 		block: ToolBlock;
@@ -52,6 +55,8 @@
 	const meta = $derived(stepMeta(block, label));
 	const pages = $derived(searchPages(block));
 	const tone = $derived(block.isError ? 'error' : settled ? 'success' : 'info');
+	const live = $derived(!settled && running);
+	const verb = $derived(live ? (said.doing ?? said.verb) : said.verb);
 	// Pretty while it parses; the raw text while it is still arriving.
 	const input = $derived.by(() => {
 		try {
@@ -72,11 +77,11 @@
 		onclick={() => (open = !open)}
 		aria-expanded={open}
 	>
-		<span class="ds-lib-tool-icon" data-tone={tone} class:is-live={!settled && running} aria-hidden="true">
-			<Icon size={14} />
+		<span class="ds-lib-tool-icon" data-tone={tone} aria-hidden="true">
+			{#if live}<Spinner />{:else}<Icon size={14} />{/if}
 		</span>
 		<span class="ds-lib-tool-said">
-			<span class="ds-lib-tool-verb">{said.verb}</span>
+			<span class="ds-lib-tool-verb">{verb}</span>
 			{#if said.object}<span class="ds-lib-tool-object">{said.object}</span>{/if}
 		</span>
 		{#if block.isError}<span class="ds-lib-tool-failed">{label.stepFailed}</span>{/if}
@@ -138,16 +143,14 @@
 
 	.ds-lib-tool-icon {
 		display: flex;
+		width: 14px;
 		flex: none;
+		justify-content: center;
 		color: var(--ds-color-muted-foreground);
 	}
 
 	.ds-lib-tool-icon[data-tone='error'] {
 		color: var(--ds-color-status-error);
-	}
-
-	.ds-lib-tool-icon.is-live {
-		animation: ds-lib-tool-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 	}
 
 	.ds-lib-tool-chevron {
@@ -278,17 +281,7 @@
 		font-size: var(--ds-text-2xs);
 	}
 
-	@keyframes ds-lib-tool-pulse {
-		50% {
-			opacity: 0.4;
-		}
-	}
-
 	@media (prefers-reduced-motion: reduce) {
-		.ds-lib-tool-icon.is-live {
-			animation: none;
-		}
-
 		.ds-lib-tool-chevron {
 			transition: none;
 		}

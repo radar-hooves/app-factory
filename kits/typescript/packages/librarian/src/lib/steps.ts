@@ -1,10 +1,12 @@
 /**
- * A turn's steps, said in one sentence.
+ * A turn's steps, said in one sentence, and what it is doing now.
  *
- * The turn folds its steps behind one line composed from them ("Read your
- * attachment, searched the library and the web, and wrote a minute"), the way
- * Claude.ai folds its own. Composed here from what each step IS (its tool and,
- * for a document, the document's own kind), never from the persona's words.
+ * While the turn runs its steps are rows, one each as it starts, under the
+ * working line's verb (`activityNow`). Settled, the turn folds them behind one
+ * line composed from them ("Read your attachment, searched the library and the
+ * web, and wrote a minute"), the way Claude.ai folds its own. Composed here
+ * from what each step IS (its tool and, for a document, the document's own
+ * kind), never from the persona's words.
  */
 
 import { fill, type ChatCopy } from './copy';
@@ -126,6 +128,44 @@ export function stepsSummary(
 	};
 }
 
+/** What a turn's working line knows beyond its blocks. */
+export interface ActivityContext {
+	/** How many passages the app retrieved for the question (its `citations` frame). */
+	citations?: number;
+	/** The app searches its collections for the question before the persona starts. */
+	retrieves?: boolean;
+	/** An answer this page did not start, still being written. */
+	resumed?: boolean;
+}
+
+/**
+ * The working line's verb: what the turn is doing now, in one plain phrase.
+ *
+ * Before the persona's first word: the app's search of its collections, then
+ * the passages it found, read; or, for an app that searches nothing, starting.
+ * After it: the step running, thinking, the answer being written, or, between
+ * a step's result and the next word, working on it. It changes when the work
+ * does and never on a timer.
+ */
+export function activityNow(
+	blocks: Block[],
+	written: Written[],
+	words: ChatCopy,
+	context: ActivityContext = {}
+): string {
+	const last = blocks.at(-1);
+	if (!last) {
+		if (context.resumed) return words.stillAnswering;
+		const n = context.citations ?? 0;
+		if (n > 0) return n === 1 ? words.nowPassage : fill(words.nowPassages, { n });
+		return context.retrieves ? words.nowLibrary : words.nowStarting;
+	}
+	if (last.kind === 'thinking') return words.nowThought;
+	if (last.kind === 'text') return words.nowAnswer;
+	if (last.result === undefined) return stepsNow([{ block: last }], written, words);
+	return words.nowOther;
+}
+
 /** What is happening now: the step still running, or the latest one. */
 export function stepsNow(steps: ActivityStep[], written: Written[], words: ChatCopy): string {
 	const step = steps.findLast(({ block }) => block.kind === 'tool' && block.result === undefined)
@@ -158,9 +198,14 @@ function parse(text: string | undefined): unknown {
 export function stepMeta(block: Block, words: ChatCopy): string {
 	if (block.kind !== 'tool' || block.isError || block.result === undefined) return '';
 	if (block.name === 'mcp__library__search') {
-		const found = parse(block.result) as { hits?: unknown; results?: unknown } | unknown[] | undefined;
-		const list = Array.isArray(found) ? found : (found?.hits ?? found?.results);
-		return Array.isArray(list) ? fill(words.stepFound, { n: list.length }) : '';
+		// The library answers with `chunks`; `hits` and `results` are older shapes.
+		const found = parse(block.result) as
+			| { chunks?: unknown; hits?: unknown; results?: unknown }
+			| unknown[]
+			| undefined;
+		const list = Array.isArray(found) ? found : (found?.chunks ?? found?.hits ?? found?.results);
+		if (!Array.isArray(list)) return '';
+		return list.length === 1 ? words.stepFoundOne : fill(words.stepFound, { n: list.length });
 	}
 	if (block.name === 'mcp__supacrawl__supacrawl_search') {
 		const found = (parse(block.result) as { results?: unknown } | undefined)?.results;

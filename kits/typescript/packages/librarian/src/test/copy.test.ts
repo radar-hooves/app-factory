@@ -39,7 +39,7 @@ describe('copyFor', () => {
 		expect(words.conversationLabel).toContain('Penny');
 		expect(words.collectionsLabel).toContain('Penny');
 		expect(words.longConversation).toContain('Penny');
-		for (const word of words.working) expect(word).toContain('Penny');
+		expect(words.working).toContain('Penny');
 	});
 
 	it('speaks of a persona without guessing its pronouns', () => {

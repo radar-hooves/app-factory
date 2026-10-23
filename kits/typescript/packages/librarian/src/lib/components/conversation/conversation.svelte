@@ -21,6 +21,7 @@
 	import type { Verdict } from '../../chat.svelte';
 	import type { Citation, LoadDocument } from '../../citations';
 	import {
+		newestPerName,
 		writtenKey,
 		writtenVersions,
 		type LoadWritten,
@@ -140,6 +141,11 @@
 		/** Drawn in place of each answer's "working" line before it shows anything
 		 *  (`AgentTranscriptProps.working`). */
 		working?: AgentTranscriptProps['working'];
+		/** The persona searches its collections for each question before it
+		 *  starts (`AgentTranscriptProps.retrieves`). */
+		retrieves?: boolean;
+		/** Stops the answer being written, from its working line. */
+		onstop?: () => void;
 	}
 
 	let {
@@ -172,7 +178,9 @@
 		lead,
 		toolbar,
 		formatCost,
-		working
+		working,
+		retrieves = false,
+		onstop
 	}: Props = $props();
 
 	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
@@ -238,10 +246,12 @@
 	// Asking for a briefing puts its card in the transcript AND opens the
 	// artefact in the column, closing whatever document was there — a
 	// colleague who just asked for one is asking to read it, not merely to
-	// see that it exists. Fires on the RUNNING → settled transition only, so
-	// reopening a past conversation whose last turn happens to be an
-	// artefact does not reopen a pane the reader may have since closed. A
-	// host that opens artefacts itself decides this for itself.
+	// see that it exists. A briefing the persona wrote as a document opens
+	// that document, not the line of prose that says it was written. Fires on
+	// the RUNNING → settled transition only, so reopening a past conversation
+	// whose last turn happens to be an artefact does not reopen a pane the
+	// reader may have since closed. A host that opens artefacts itself
+	// decides this for itself.
 	//
 	// Plain, not `$state`: read and written in the same effect, which would
 	// otherwise re-trigger itself forever (the pattern this file's `seen`
@@ -256,7 +266,9 @@
 			last?.artefact?.isAnswer &&
 			!last.outcome?.isError
 		) {
-			column = { kind: 'artefact', turn: last };
+			const document = newestPerName(last.written ?? []).at(-1);
+			if (!document) column = { kind: 'artefact', turn: last };
+			else if (loadWritten) openWritten(document);
 		}
 		wasRunning = running;
 	});
@@ -397,6 +409,8 @@
 										: undefined,
 								formatCost,
 								working,
+								retrieves,
+								onstop: last && running ? onstop : undefined,
 								oncite: oncite || loadDocument ? cite : undefined,
 								onregenerate: last && !running ? onregenerate : undefined,
 								onmark:

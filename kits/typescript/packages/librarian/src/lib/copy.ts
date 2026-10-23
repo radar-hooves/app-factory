@@ -56,8 +56,8 @@ export interface ChatCopy {
 	 *  start over — a follow-up re-reads the whole conversation, so each one
 	 *  costs more than the last. */
 	longConversation: string;
-	/** The pre-first-token words, cycled one every 2.6s. */
-	working: string[];
+	/** The working line's words when nothing more is known of what is happening. */
+	working: string;
 	/** The scroll region's accessible name. */
 	conversationLabel: string;
 	copyAnswer: string;
@@ -71,6 +71,8 @@ export interface ChatCopy {
 	showingArtefact: string;
 	/** Beside the clock on an answer this page did not start. */
 	stillAnswering: string;
+	/** The working line's control that stops the answer. */
+	stop: string;
 	/** An expanded tool step: what went in, what came back, and a call that failed. */
 	stepInput: string;
 	stepResult: string;
@@ -103,10 +105,18 @@ export interface ChatCopy {
 	nowEdit: string;
 	nowThought: string;
 	nowOther: string;
+	/** Before the persona's first word: starting, and reading the passages the
+	 *  app retrieved for the question (`{n}`). */
+	nowStarting: string;
+	nowPassages: string;
+	nowPassage: string;
+	/** The answer itself being written. */
+	nowAnswer: string;
 	stepCount: string;
 	stepCountOne: string;
-	/** The right-hand count of a step's row. */
+	/** The right-hand count of a step's row: what a library search found. */
 	stepFound: string;
+	stepFoundOne: string;
 	stepPagesRead: string;
 	stepPageRead: string;
 	/** A thinking row: while it streams, once done, and with its duration. */
@@ -235,7 +245,7 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		findCollection: 'Search',
 		noCollectionMatch: 'Nothing matches that.',
 		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
-		working: [`${who} is looking`, `${who} is reading`],
+		working: `${who} is working`,
 		conversationLabel: `Conversation with ${who}`,
 		copyAnswer: 'Copy',
 		copiedAnswer: 'Copied',
@@ -246,6 +256,7 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		openArtefact: 'Open',
 		showingArtefact: 'Showing',
 		stillAnswering: `${who} is still answering`,
+		stop: 'Stop',
 		stepInput: 'Input',
 		stepResult: 'Result',
 		stepFailed: 'Failed',
@@ -270,9 +281,14 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		nowEdit: 'Editing the {kind}…',
 		nowThought: 'Thinking…',
 		nowOther: 'Working on it…',
+		nowStarting: 'Starting…',
+		nowPassages: 'Reading {n} passages…',
+		nowPassage: 'Reading 1 passage…',
+		nowAnswer: 'Writing the answer…',
 		stepCount: '{n} steps',
 		stepCountOne: '1 step',
-		stepFound: '{n} found',
+		stepFound: '{n} passages',
+		stepFoundOne: '1 passage',
 		stepPagesRead: '{n} pages read',
 		stepPageRead: '1 page read',
 		thinking: 'Thinking…',

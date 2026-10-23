@@ -1,9 +1,9 @@
 /**
-* A document the persona wrote, in the reading column: Markdown through the
-* sanitising renderer on a paper surface, HTML only in an empty-sandbox frame,
-* every version reachable and marked against the one before, and the visuals
-* a persona's fenced blocks are drawn by.
-*/
+ * A document the persona wrote, in the reading column: Markdown through the
+ * sanitising renderer on a paper surface, HTML only in an empty-sandbox frame,
+ * every version reachable and marked against the one before, and the visuals
+ * a persona's fenced blocks are drawn by.
+ */
 import { FRAME_CSP, framed } from '$lib/written';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
@@ -58,7 +58,9 @@ describe('the pane on a written document', () => {
 		});
 		expect(frame.getAttribute('sandbox')).toBe('');
 		const srcdoc = frame.getAttribute('srcdoc') ?? '';
-		expect(srcdoc.startsWith('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'')).toBe(true);
+		expect(
+			srcdoc.startsWith('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'')
+		).toBe(true);
 		expect(srcdoc).toContain('<h1>');
 		// Nothing of it reached the page itself.
 		expect(container.querySelector('h1')).toBeNull();
@@ -111,7 +113,10 @@ describe('the pane on a written document', () => {
 			'href',
 			'/a?brief.md&2&source'
 		);
-		expect(screen.getByRole('menuitem', { name: 'PDF' })).toHaveAttribute('href', '/a?brief.md&2&pdf');
+		expect(screen.getByRole('menuitem', { name: 'PDF' })).toHaveAttribute(
+			'href',
+			'/a?brief.md&2&pdf'
+		);
 		// A phone's bar offers the one download directly: the source, with no Word copy.
 		expect(screen.getByRole('link', { name: 'Markdown' })).toHaveAttribute(
 			'href',
@@ -167,6 +172,48 @@ describe('Conversation with a written document', () => {
 		render(Conversation, { props: { turns, running: false, writtenUrl: url } });
 		expect(screen.queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
 		expect(screen.getAllByRole('link', { name: /brief\.md/ })).toHaveLength(2);
+	});
+});
+
+describe('a briefing the persona wrote as a document', () => {
+	// Measured on caspo 24/10/2026: asked for a briefing, Outrider wrote it to a
+	// file and answered with the sentence that says so, and the card over that
+	// sentence was all the reader could open.
+	const SAID = 'I have written the briefing to `brief.md`.';
+	const briefing = (running: boolean): Turn => ({
+		id: '1',
+		question: 'Write a briefing on leave.',
+		blocks: [{ kind: 'text', index: 0, text: SAID }],
+		outcome: running ? null : { durationMs: 20000 },
+		written: running ? [] : [v1],
+		artefact: { title: 'Briefing', isAnswer: true }
+	});
+
+	it('is that document: its card, and the prose that says so, never a card over that sentence', () => {
+		render(Conversation, {
+			props: { turns: [briefing(false)], running: false, writtenUrl: url, loadWritten: vi.fn() }
+		});
+		expect(screen.getByText(/I have written the briefing/)).toBeInTheDocument();
+		expect(screen.getByText('Brief: leave')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /^Briefing/ })).not.toBeInTheDocument();
+	});
+
+	it('opens the document in the column once it is written', async () => {
+		const load = vi.fn(async () => ({ text: '# The briefing itself', mediaType: 'text/markdown' }));
+		const { rerender } = render(Conversation, {
+			props: { turns: [briefing(true)], running: true, loadWritten: load, writtenUrl: url }
+		});
+		await rerender({
+			turns: [briefing(false)],
+			running: false,
+			loadWritten: load,
+			writtenUrl: url
+		});
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { name: 'The briefing itself' })).toBeInTheDocument()
+		);
+		expect(load).toHaveBeenCalledWith('brief.md', 1);
+		expect(screen.queryByRole('complementary', { name: 'Study artefact' })).not.toBeInTheDocument();
 	});
 });
 
@@ -227,7 +274,9 @@ describe('the pane on a version of a document', () => {
 			props: { versions: [v1, v2], loadWritten: load, onclose: () => {} }
 		});
 
-		expect(screen.getByText('Changed since v1: through your CO, and enclosure 2')).toBeInTheDocument();
+		expect(
+			screen.getByText('Changed since v1: through your CO, and enclosure 2')
+		).toBeInTheDocument();
 		await waitFor(() => expect(container.querySelector('[data-changed]')).not.toBeNull());
 		const marked = [...container.querySelectorAll('[data-changed]')].map((el) =>
 			el.textContent?.replace(/\s+/g, ' ').trim()
@@ -250,7 +299,10 @@ describe('the pane on a version of a document', () => {
 
 	it('copies the document as shown', async () => {
 		const write = vi.fn(async () => {});
-		Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+		Object.defineProperty(navigator, 'clipboard', {
+			value: { writeText: write },
+			configurable: true
+		});
 		render(ArtefactPane, { props: { versions: [v1], loadWritten: load, onclose: () => {} } });
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument());
 		await fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
@@ -348,7 +400,9 @@ describe('visuals a persona’s fenced blocks are drawn by', () => {
 
 describe('a written page in its frame', () => {
 	it('loses a refresh, which would navigate the frame past any policy, and keeps the rest', () => {
-		const shown = framed('<html><head><META HTTP-EQUIV="Refresh" content="0;url=https://evil.example/?d=1"></head><body><p>Kept</p></body></html>');
+		const shown = framed(
+			'<html><head><META HTTP-EQUIV="Refresh" content="0;url=https://evil.example/?d=1"></head><body><p>Kept</p></body></html>'
+		);
 		expect(shown.startsWith(FRAME_CSP)).toBe(true);
 		expect(shown.toLowerCase()).not.toContain('refresh');
 		expect(shown).toContain('<p>Kept</p>');

@@ -85,6 +85,9 @@ export function readerQuestion(question: string): string {
 export interface ToolWords {
 	/** What it did: "Read", "Looked for". */
 	verb: string;
+	/** What it is doing, while the call runs: "Reading", "Looking for".
+	 *  Absent, `verb` reads throughout. */
+	doing?: string;
 	/** What it did it to, beside the verb. */
 	object: string;
 	/** One dimmed line under the row. */
@@ -109,9 +112,14 @@ export type DescribeTool = (block: ToolBlock) => ToolWords | undefined;
  */
 export function describe(block: ToolBlock): ToolWords {
 	const said = describeCall(block);
-	const lines = block.result ? block.result.split('\n').length : 0;
+	// Lines are what a file read or a shell command returns; a library or web
+	// call answers in one line of JSON, and "1 line" under it says nothing.
+	const lines = block.result && LINE_COUNTED.has(block.name) ? block.result.split('\n').length : 0;
 	return lines ? { ...said, detail: lines === 1 ? '1 line' : `${lines} lines` } : said;
 }
+
+/** The calls whose result is text a reader would count in lines. */
+const LINE_COUNTED = new Set(['Read', 'Grep', 'Bash']);
 
 function describeCall(block: ToolBlock): ToolWords {
 	const input = parseInput(block);
@@ -119,46 +127,82 @@ function describeCall(block: ToolBlock): ToolWords {
 
 	if (block.name === 'Read') {
 		const path = str(input.file_path ?? input.path);
-		return { verb: 'Read', object: documentName(path) };
+		return { verb: 'Read', doing: 'Reading', object: documentName(path) };
 	}
-	if (block.name === 'Write') return { verb: 'Wrote', object: baseName(str(input.file_path)) };
-	if (block.name === 'Edit') return { verb: 'Edited', object: baseName(str(input.file_path)) };
+	if (block.name === 'Write')
+		return { verb: 'Wrote', doing: 'Writing', object: baseName(str(input.file_path)) };
+	if (block.name === 'Edit')
+		return { verb: 'Edited', doing: 'Editing', object: baseName(str(input.file_path)) };
 	if (block.name === 'mcp__library__search') {
-		return { verb: 'Searched the library for', object: str(input.query) };
+		// The library's own argument is `search_query`; `query` is an older shape.
+		return {
+			verb: 'Searched the library for',
+			doing: 'Searching the library for',
+			object: str(input.search_query ?? input.query)
+		};
 	}
 	if (block.name === 'mcp__library__document_content' || block.name === 'mcp__library__document_detail') {
-		return { verb: 'Read a document', object: '' };
+		const title = documentTitle(block.result);
+		return title
+			? { verb: 'Read', doing: 'Reading', object: title }
+			: { verb: 'Read a document', doing: 'Reading a document', object: '' };
 	}
 	if (block.name === 'mcp__supacrawl__supacrawl_search') {
-		return { verb: 'Searched the web for', object: str(input.query) };
+		return { verb: 'Searched the web for', doing: 'Searching the web for', object: str(input.query) };
 	}
 	if (block.name === 'mcp__supacrawl__supacrawl_scrape') {
-		return { verb: 'Read', object: hostOf(str(input.url)) };
+		return { verb: 'Read', doing: 'Reading', object: hostOf(str(input.url)) };
 	}
 	if (block.name.startsWith('mcp__') && block.name.endsWith('__ocr')) {
 		const file = str(input.file_path ?? input.path ?? input.file ?? input.filename ?? input.url);
-		return { verb: 'Read the scanned pages of', object: baseName(file) };
+		return {
+			verb: 'Read the scanned pages of',
+			doing: 'Reading the scanned pages of',
+			object: baseName(file)
+		};
 	}
 	if (block.name === 'Grep') {
-		return { verb: 'Looked for', object: str(input.pattern) };
+		return { verb: 'Looked for', doing: 'Looking for', object: str(input.pattern) };
 	}
 	if (block.name === 'Glob') {
-		return { verb: 'Looked for documents', object: '' };
+		return { verb: 'Looked for documents', doing: 'Looking for documents', object: '' };
 	}
 	if (block.name === 'Bash') {
 		if (/\bgrep\b|\brg\b/.test(command)) {
 			const quoted = command.match(/["']([^"']{2,60})["']/);
-			return { verb: 'Looked for', object: quoted?.[1] ?? 'a phrase' };
+			return { verb: 'Looked for', doing: 'Looking for', object: quoted?.[1] ?? 'a phrase' };
 		}
-		if (/\bls\b/.test(command)) return { verb: 'Looked through the library', object: '' };
-		if (/\bfind\b/.test(command)) return { verb: 'Looked for documents', object: '' };
+		if (/\bls\b/.test(command))
+			return { verb: 'Looked through the library', doing: 'Looking through the library', object: '' };
+		if (/\bfind\b/.test(command))
+			return { verb: 'Looked for documents', doing: 'Looking for documents', object: '' };
 		if (/\bcat\b|\bhead\b|\bsed\b/.test(command)) {
-			return { verb: 'Read', object: documentName(lastPath(command)) };
+			return { verb: 'Read', doing: 'Reading', object: documentName(lastPath(command)) };
 		}
-		if (/\bwc\b/.test(command)) return { verb: 'Checked', object: '' };
-		return { verb: 'Looked into it', object: '' };
+		if (/\bwc\b/.test(command)) return { verb: 'Checked', doing: 'Checking', object: '' };
+		return { verb: 'Looked into it', doing: 'Looking into it', object: '' };
 	}
-	return { verb: 'Looked into it', object: '' };
+	return { verb: 'Looked into it', doing: 'Looking into it', object: '' };
+}
+
+/**
+ * The title of a document a library call read, from its result: the
+ * library's own `document_title` or `title`, else the page's first heading.
+ * Read off the text rather than parsed, since the copy a conversation keeps
+ * of a result is cut short and no longer JSON.
+ */
+function documentTitle(result: string | undefined): string {
+	if (!result) return '';
+	const found =
+		/"document_title":"((?:[^"\\]|\\.)+)"/.exec(result)?.[1] ??
+		/"title":"((?:[^"\\]|\\.)+)"/.exec(result)?.[1] ??
+		/"markdown":"#+ ((?:[^"\\]|\\[^n])+)/.exec(result)?.[1];
+	if (!found) return '';
+	try {
+		return (JSON.parse(`"${found}"`) as string).trim();
+	} catch {
+		return found.trim();
+	}
 }
 
 /** The host's words for a call, or the package's where it has none. */

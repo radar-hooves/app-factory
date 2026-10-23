@@ -59,6 +59,10 @@
 			"types": "./dist/follow-scroll.svelte.d.ts",
 			"svelte": "./dist/follow-scroll.svelte.js"
 		},
+		"./steps": {
+			"types": "./dist/steps.d.ts",
+			"svelte": "./dist/steps.js"
+		},
 		"./*": {
 			"types": "./dist/components/*/index.d.ts",
 			"svelte": "./dist/components/*/index.js"

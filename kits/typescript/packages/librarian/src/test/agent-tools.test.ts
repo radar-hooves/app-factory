@@ -58,9 +58,9 @@ describe('a tool step in the persona’s words', () => {
 			verb: 'Searched the web for',
 			object: 'pay'
 		});
-		expect(tool('mcp__supacrawl__supacrawl_scrape', { url: 'https://www.example.org/a' })).toMatchObject(
-			{ verb: 'Read', object: 'example.org' }
-		);
+		expect(
+			tool('mcp__supacrawl__supacrawl_scrape', { url: 'https://www.example.org/a' })
+		).toMatchObject({ verb: 'Read', object: 'example.org' });
 		expect(tool('Write', { file_path: '/chat/notes/brief.md' })).toMatchObject({
 			verb: 'Wrote',
 			object: 'brief.md'
@@ -74,6 +74,46 @@ describe('a tool step in the persona’s words', () => {
 			object: 'scan.pdf'
 		});
 	});
+
+	it('reads the library’s own argument, the title of what it read, and what it is doing while it runs', () => {
+		// The library's shapes, measured on caspo 24/10/2026: the search takes
+		// `search_query`; a document read answers with its page's markdown, and
+		// the conversation's copy of it is cut short.
+		expect(tool('mcp__library__search', { search_query: 'Ghost Bat sustainment' })).toMatchObject({
+			verb: 'Searched the library for',
+			doing: 'Searching the library for',
+			object: 'Ghost Bat sustainment'
+		});
+		const read = (result?: string) =>
+			words({
+				kind: 'tool',
+				index: 0,
+				name: 'mcp__library__document_content',
+				rawInput: '{"document_id":28661}',
+				result
+			});
+		expect(read()).toMatchObject({
+			verb: 'Read a document',
+			doing: 'Reading a document',
+			object: ''
+		});
+		expect(
+			read(
+				'{"document_id":28661,"document_title":null,"markdown":"# Ghost Bat given the go-ahead\\n\\n*Source'
+			)
+		).toMatchObject({ verb: 'Read', object: 'Ghost Bat given the go-ahead' });
+		expect(
+			read('{"document_id":1,"document_title":"Air Force\\u2019s plan","markdown":"# x')
+		).toMatchObject({ object: 'Air Force’s plan' });
+	});
+
+	it('counts lines only for what a reader would count in lines', () => {
+		const done = (name: string) =>
+			words({ kind: 'tool', index: 0, name, rawInput: '{}', result: 'one\ntwo' }).detail;
+		expect(done('Read')).toBe('2 lines');
+		expect(done('mcp__library__search')).toBeUndefined();
+		expect(done('Write')).toBeUndefined();
+	});
 });
 
 describe('a turn with a library search', () => {
@@ -82,9 +122,11 @@ describe('a turn with a library search', () => {
 		render(AgentTranscript, { props: props(t) });
 
 		expect(rows()).toEqual([]);
-		expect(screen.getByRole('button', { name: /^Searched the library.*1 step$/ })).toBeInTheDocument();
+		expect(
+			screen.getByRole('button', { name: /^Searched the library.*1 step$/ })
+		).toBeInTheDocument();
 		await unfold();
-		expect(rows()).toEqual(['Searched the library for recreation leave 1 found']);
+		expect(rows()).toEqual(['Searched the library for recreation leave 1 passage']);
 		await fireEvent.click(screen.getByRole('button', { name: /Searched the library for/ }));
 		expect(document.body.textContent).toContain('"query": "recreation leave"');
 		expect(document.body.textContent).toContain('Leave manual');
@@ -116,7 +158,19 @@ describe('web sources', () => {
 		const failed = live([
 			WEB_TURN[0],
 			WEB_TURN[1],
-			{ ...WEB_TURN[2], message: { content: [{ type: 'tool_result', tool_use_id: 'w1', content: '{"url":"https://x.test"}', is_error: true }] } }
+			{
+				...WEB_TURN[2],
+				message: {
+					content: [
+						{
+							type: 'tool_result',
+							tool_use_id: 'w1',
+							content: '{"url":"https://x.test"}',
+							is_error: true
+						}
+					]
+				}
+			}
 		]);
 		expect(webSources(failed.blocks, 'see [a](javascript:alert(1))')).toEqual([]);
 		expect(webSources(live(LIBRARY_SEARCH).blocks, '')).toEqual([]);
@@ -212,7 +266,11 @@ describe('a thinking block', () => {
 		});
 		streaming.apply({
 			type: 'stream_event',
-			event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }
+			event: {
+				type: 'content_block_delta',
+				index: 0,
+				delta: { type: 'thinking_delta', thinking: 'Hmm' }
+			}
 		});
 		render(AgentTranscript, { props: props(streaming, { running: true }) });
 		expect(screen.getAllByRole('button', { name: 'Thinking…' })).not.toHaveLength(0);
@@ -229,7 +287,11 @@ describe('a thinking block', () => {
 			});
 			timed.apply({
 				type: 'stream_event',
-				event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }
+				event: {
+					type: 'content_block_delta',
+					index: 0,
+					delta: { type: 'thinking_delta', thinking: 'Hmm' }
+				}
 			});
 			vi.advanceTimersByTime(8200);
 			timed.apply({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 } });
@@ -239,7 +301,11 @@ describe('a thinking block', () => {
 			});
 			timed.apply({
 				type: 'stream_event',
-				event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Done.' } }
+				event: {
+					type: 'content_block_delta',
+					index: 1,
+					delta: { type: 'text_delta', text: 'Done.' }
+				}
 			});
 			render(AgentTranscript, { props: props(timed) });
 			await unfold();
@@ -255,10 +321,28 @@ describe('a document the persona wrote', () => {
 
 	it('folds each artefact frame into the turn, in order, with its title, kind, changes and pages', () => {
 		expect(
-			t.written.map((w) => [w.name, w.version, w.media_type, w.formats, w.title, w.kind, w.changes, w.pages])
+			t.written.map((w) => [
+				w.name,
+				w.version,
+				w.media_type,
+				w.formats,
+				w.title,
+				w.kind,
+				w.changes,
+				w.pages
+			])
 		).toEqual([
 			['brief.md', 1, 'text/markdown', ['docx', 'pdf'], 'Brief: leave', 'minute', null, 1],
-			['brief.md', 2, 'text/markdown', ['docx', 'pdf'], 'Brief: leave', 'minute', 'through your CO', 1]
+			[
+				'brief.md',
+				2,
+				'text/markdown',
+				['docx', 'pdf'],
+				'Brief: leave',
+				'minute',
+				'through your CO',
+				1
+			]
 		]);
 		const into = { blocks: [], outcome: null } as Parameters<typeof fold>[0];
 		fold(into, foldState(), WRITE_TURN[3]);
@@ -302,7 +386,7 @@ describe('a document the persona wrote', () => {
 			pages: 0
 		};
 		render(AgentTranscript, {
-			props: props({ blocks: [] , written: [html] }, { writtenUrl: () => '/x' })
+			props: props({ blocks: [], written: [html] }, { writtenUrl: () => '/x' })
 		});
 		expect(screen.getByText('Document · v1')).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: /page\.html/ })).toHaveTextContent('HTML · v1');
@@ -334,7 +418,13 @@ describe('a turn read back', () => {
 				result: 'nothing held',
 				is_error: false
 			},
-			{ id: 's2', name: 'Write', input: { file_path: '/chat/brief.md' }, result: 'denied', is_error: true }
+			{
+				id: 's2',
+				name: 'Write',
+				input: { file_path: '/chat/brief.md' },
+				result: 'denied',
+				is_error: true
+			}
 		]
 	});
 
@@ -366,7 +456,9 @@ describe('a turn read back', () => {
 
 describe('the sent question', () => {
 	it('shows a chip for each file that went with it', () => {
-		render(AgentTranscript, { props: { ...props({ blocks: [] }), question: 'Read these', files: ['a.pdf', 'b.docx'] } });
+		render(AgentTranscript, {
+			props: { ...props({ blocks: [] }), question: 'Read these', files: ['a.pdf', 'b.docx'] }
+		});
 		expect(screen.getByText('a.pdf')).toBeInTheDocument();
 		expect(screen.getByText('b.docx')).toBeInTheDocument();
 	});

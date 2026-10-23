@@ -39,6 +39,7 @@
 	import { DEFAULT_PERSONA, fill, personaName, resolveCopy, type ChatCopy } from '../../copy';
 	import { webKey, webSources } from '../../web-sources';
 	import { newestPerName, writtenKey, type Written, type WrittenUrl } from '../../written';
+	import { activityNow } from '../../steps';
 	import type { Visual } from '../../visuals';
 	import type { Verdict } from '../../chat.svelte';
 	import AnswerMark from '../answer-mark/answer-mark.svelte';
@@ -120,6 +121,11 @@
 		/** Drawn in place of the package's own "working" line while the answer has
 		 *  shown nothing yet; given the line's `label` and `since`. */
 		working?: Snippet<[{ label?: string; since?: number }]>;
+		/** The app searches its collections for the question before the persona
+		 *  starts, so the working line says so until the passages arrive. */
+		retrieves?: boolean;
+		/** Stops this answer, from the working line. Omit and it offers no Stop. */
+		onstop?: () => void;
 	}
 
 	let {
@@ -150,12 +156,15 @@
 		shared,
 		onshare,
 		formatCost,
-		working
+		working,
+		retrieves = false,
+		onstop
 	}: AgentTranscriptProps = $props();
 
 	// The prose IS the artefact: it reads in the column, and the transcript
-	// shows the card alone.
-	const isArtefact = $derived(artefact?.isAnswer === true);
+	// shows the card alone. A briefing the persona wrote as a document is that
+	// document, and the prose is the line that says so.
+	const isArtefact = $derived(artefact?.isAnswer === true && written.length === 0);
 
 	const words = $derived(resolveCopy(copy, name));
 	const who = $derived(personaName(name));
@@ -179,9 +188,9 @@
 		};
 	});
 
-	// An activity group stays live — and therefore labelled "Working…" — only
-	// while it is the last thing in the turn. As soon as prose arrives, it
-	// settles into its count.
+	// An activity group is live (its last step the one under way) only while it
+	// is the last thing in the turn; its rows stay open until the turn settles,
+	// and then fold into its sentence.
 	const segments = $derived(segment(blocks, describeTool));
 	const lastIndex = $derived(segments.at(-1)?.index ?? -1);
 
@@ -239,6 +248,17 @@
 	});
 
 	const cards = $derived(newestPerName(written));
+
+	// The working line's verb, while the turn runs.
+	const doing = $derived(
+		running
+			? activityNow(blocks, written, words, {
+					citations: citations.length,
+					retrieves,
+					resumed: answering !== undefined
+				})
+			: ''
+	);
 
 	const fileType = (file: string): string => {
 		const ext = /\.([A-Za-z0-9]{1,5})$/.exec(file)?.[1];
@@ -394,26 +414,12 @@
 			{/if}
 		</header>
 
-		{#if running && segments.length === 0}
-			{#if working}
-				{@render working({
-					label: answering !== undefined ? words.stillAnswering : undefined,
-					since: answering
-				})}
-			{:else}
-				<Working
-					copy={words}
-					label={answering !== undefined ? words.stillAnswering : undefined}
-					since={answering}
-				/>
-			{/if}
-		{/if}
-
 		{#each segments as seg (seg.index)}
 			{#if seg.kind === 'activity'}
 				<ActivityGroup
 					group={seg}
 					live={running && seg.index === lastIndex}
+					{running}
 					{written}
 					copy={words}
 				/>
@@ -436,7 +442,17 @@
 			{/if}
 		{/each}
 
-		{#if artefact && settled}
+		<!-- The one live line, under everything the turn has shown so far, as
+		     Claude Code keeps its own at the foot of the work. -->
+		{#if running}
+			{#if working && segments.length === 0}
+				{@render working({ label: doing, since: answering })}
+			{:else}
+				<Working copy={words} label={doing} since={answering} {onstop} />
+			{/if}
+		{/if}
+
+		{#if artefact && settled && (isArtefact || !artefact.isAnswer)}
 			<ArtefactCard {artefact} open={artefactOpen} onopen={onopenartefact} copy={words} />
 		{/if}
 

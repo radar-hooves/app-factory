@@ -1,5 +1,6 @@
 <!--
-  One line of the persona's working-out, behind a chevron.
+  One line of the persona's working-out, behind a chevron: open while the
+  turn runs, so it can be read as it is written, folded once it settles.
 
   Two different blocks render as this row and deliberately read the same. A
   real `thinking` block is one; the other is a `text` block written BETWEEN two
@@ -20,11 +21,17 @@
 		block: ThinkingBlock | TextBlock;
 		/** Still being written: "Thinking…" rather than "Thought". */
 		active: boolean;
+		/** The turn is still running: the words show until a reader folds them
+		 *  or the turn settles, so what is being worked through can be read as
+		 *  it happens. */
+		reading?: boolean;
 		copy?: Partial<ChatCopy>;
 	}
 
-	let { block, active, copy }: Props = $props();
-	let open = $state(false);
+	let { block, active, reading = false, copy }: Props = $props();
+	// Null until the reader chooses; then their choice holds.
+	let chosen = $state<boolean | null>(null);
+	const open = $derived(chosen ?? reading);
 
 	const words = $derived(resolveCopy(copy));
 	const seconds = $derived(thoughtSeconds(block));
@@ -41,7 +48,7 @@
 	<button
 		type="button"
 		class="ds-lib-thinking-row"
-		onclick={() => (open = !open)}
+		onclick={() => (chosen = !open)}
 		aria-expanded={open}
 	>
 		<span class="ds-lib-thinking-icon" aria-hidden="true"><LightbulbIcon size={14} /></span>
