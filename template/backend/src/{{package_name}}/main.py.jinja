@@ -56,7 +56,12 @@ from {{ package_name }}.exchange import Exchange
 from {{ package_name }}.logging import app_version, configure_logging
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from {{ package_name }}.mcp.server import create_mcp_server
-from {{ package_name }}.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
+from {{ package_name }}.middleware import (
+    RequestIDMiddleware,
+    RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
+    content_security_policy,
+)
 from {{ package_name }}.rate_limit import RateLimitExceeded, enforce_default_rate_limit, limiter, rate_limit_handler
 
 _log = logging.getLogger(__name__)
@@ -326,7 +331,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    app.add_middleware(SecurityHeadersMiddleware, is_production=not settings.debug)
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        is_production=not settings.debug,
+        csp=content_security_policy(_FRONTEND_BUILD, settings.element_origins_list),
+    )
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
 

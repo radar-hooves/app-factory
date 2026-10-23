@@ -122,6 +122,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/settings/page.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/params.test.ts{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_elements.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_security_headers.py{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/elements/index.test.ts{% endif %}"
   # Not a test, the element those tests and tests/elements/ prove the capability on.
   - "{% if not factory_selftest %}frontend/src/elements/selftest-card.svelte{% endif %}"
@@ -189,6 +190,7 @@ _migrations:
       - frontend/src/lib/settings/sections.test.ts
       - frontend/src/params.test.ts
       - backend/tests/test_elements.py
+      - backend/tests/test_security_headers.py
       - frontend/src/lib/elements/index.test.ts
       - frontend/src/elements/selftest-card.svelte
       - frontend/src/routes/(protected)/settings/page.test.ts

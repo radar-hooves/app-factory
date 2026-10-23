@@ -1,0 +1,78 @@
+"""The Content-Security-Policy `SecurityHeadersMiddleware` sends, and the hashes it learns from the built shell."""
+
+import base64
+import hashlib
+import re
+from pathlib import Path
+
+import pytest
+from httpx import ASGITransport, AsyncClient, Response
+
+from {{ package_name }} import main
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.main import create_app
+
+BOOTSTRAP = "{ __sveltekit_x = { base: '' }; import('./_app/immutable/entry/start.js'); }"
+SEED = "document.documentElement.classList.add('dark');"
+LIBRARY = "https://library.example.org"
+
+
+def _hash(body: str) -> str:
+    return "'sha256-" + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + "'"
+
+
+@pytest.fixture
+def build(monkeypatch, tmp_path: Path) -> Path:
+    """A built shell with one inline script and one external; the app reads it at construction."""
+    (tmp_path / "index.html").write_text(
+        f'<html><head><script src="/seed.js"></script><script>{BOOTSTRAP}</script></head></html>'
+    )
+    monkeypatch.setattr(main, "_FRONTEND_BUILD", tmp_path)
+    return tmp_path
+
+
+async def _get(path: str, **overrides) -> Response:
+    app = create_app(settings=get_settings().model_copy(update=overrides))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.get(path)
+
+
+def _directive(response: Response, name: str) -> list[str]:
+    policy = response.headers["content-security-policy"]
+    return next(part.split()[1:] for part in policy.split("; ") if part.split()[0] == name)
+
+
+async def test_the_shell_and_the_api_carry_a_default_deny_policy(build):
+    for path in ("/", "/some/client/route", "/api/system/health", "/api/no-such-route"):
+        response = await _get(path)
+        assert _directive(response, "default-src") == ["'none'"], path
+        assert _directive(response, "frame-ancestors") == ["'none'"], path
+        assert _directive(response, "object-src") == ["'none'"], path
+        assert response.headers["x-frame-options"] == "DENY", path
+
+
+async def test_script_src_trusts_the_shell_s_own_inline_script_by_hash_and_never_unsafe_inline(build):
+    scripts = _directive(await _get("/"), "script-src")
+    assert scripts == ["'self'", _hash(BOOTSTRAP)]
+    assert not re.search(r"unsafe-inline", " ".join(scripts))
+
+
+async def test_style_src_allows_no_inline_style(build):
+    assert _directive(await _get("/"), "style-src") == ["'self'"]
+
+
+async def test_each_declared_element_origin_is_admitted_to_scripts_and_connections_and_nothing_else(build):
+    response = await _get("/", element_origins=f"{LIBRARY}/, https://x.example.org;script-src *")
+    assert _directive(response, "script-src") == ["'self'", _hash(BOOTSTRAP), LIBRARY]
+    assert _directive(response, "connect-src") == ["'self'", LIBRARY]
+    assert _directive(response, "style-src") == ["'self'"]
+
+
+async def test_no_declared_origin_adds_nothing(build):
+    assert _directive(await _get("/"), "connect-src") == ["'self'"]
+
+
+async def test_the_interactive_api_documents_are_exempt_and_only_they_are(build):
+    for path in ("/docs", "/redoc"):
+        assert "content-security-policy" not in (await _get(path)).headers, path
+    assert "content-security-policy" in (await _get("/openapi.json")).headers

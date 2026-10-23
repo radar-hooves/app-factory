@@ -20,18 +20,9 @@
 		     text and every page rendered the placeholder above the app shell.)
 		     It seeds the same key mode-watcher reads ('mode-watcher-mode') and the
 		     same class it toggles ('dark'), only when no preference is stored — a
-		     user who has toggled to light keeps their choice across reloads. From
-		     hydration on, mode-watcher owns the class; this only closes the
-		     pre-hydration gap. -->
-		<script>
-			(function () {
-				try {
-					var key = 'mode-watcher-mode';
-					if (!localStorage.getItem(key)) localStorage.setItem(key, 'dark');
-					if (localStorage.getItem(key) === 'dark') document.documentElement.classList.add('dark');
-				} catch (e) {}
-			})();
-		</script>
+		     user who has toggled to light keeps their choice across reloads (static/dark-seed.js, a file rather than
+		     inline so the CSP allows no inline script). -->
+		<script src="/dark-seed.js"></script>
 {%- endif %}
 		<!-- Every element this page may place: this app's own, then each ELEMENT_ORIGINS app's (backend elements.py). -->
 		<script type="module" src="/elements/placed.js"></script>

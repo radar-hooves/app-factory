@@ -6,9 +6,13 @@ required ordering.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
+import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
+from pathlib import Path
 from uuid import uuid4
 
 from api_common.correlation import clear_correlation_id, set_correlation_id
@@ -82,20 +86,71 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# An inline script has no `src`; SvelteKit's bootstrap in the built shell is the only one.
+_INLINE_SCRIPT = re.compile(r"<script(?![^>]*\ssrc\s*=)[^>]*>(.+?)</script>", re.DOTALL | re.IGNORECASE)
+# A scheme and host only: an origin from the environment must not be able to end a directive.
+_ORIGIN = re.compile(r"https?://[^\s;,'\"]+")
+
+
+def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()) -> str:
+    """The one policy the app sends, computed once at startup.
+
+    Default-deny, same-origin. `script-src` also names the sha256 of each inline
+    script in the built shell (SvelteKit's bootstrap, whose body changes every
+    build), so there is no `'unsafe-inline'` for scripts and no build-time step.
+    Each origin in ELEMENT_ORIGINS is admitted for its `/elements.js` (a module
+    import, then its own chunks) and for the API reads its elements make as the
+    viewer; nothing declared adds nothing. `frame-ancestors` is here because a
+    `<meta>` policy cannot carry it.
+    """
+    hashes = {
+        "'sha256-" + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + "'"
+        for page in build_dir.rglob("*.html")
+        for body in _INLINE_SCRIPT.findall(page.read_text(encoding="utf-8"))
+    }
+    origins = [origin for origin in element_origins if _ORIGIN.fullmatch(origin)]
+    scripts = " ".join(["'self'", *sorted(hashes), *origins])
+    connect = " ".join(["'self'", *origins])
+    return "; ".join(
+        [
+            "default-src 'none'",
+            f"script-src {scripts}",
+            "style-src 'self'",
+            "img-src 'self' data: blob:",
+            "font-src 'self' data:",
+            f"connect-src {connect}",
+            "manifest-src 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+        ]
+    )
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add OWASP-recommended security headers to every response.
 
     Set in Python rather than left to a reverse proxy: the app must be safe
     standalone, whatever sits in front of it. Does not set X-XSS-Protection
-    (deprecated; CSP supersedes it).
+    (deprecated; CSP supersedes it). The CSP is given whole (`content_security_policy`)
+    and withheld from the interactive API documents only: Swagger UI and ReDoc load
+    their scripts from a CDN and run inline, and are served only where
+    OPENAPI_ENABLED leaves them on.
     """
 
-    def __init__(self, app: ASGIApp, *, is_production: bool = False) -> None:
+    def __init__(self, app: ASGIApp, *, is_production: bool = False, csp: str = "") -> None:
         super().__init__(app)
         self.is_production = is_production
+        self.csp = csp
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
+        documents = {
+            getattr(request.app, name, None) for name in ("docs_url", "redoc_url", "swagger_ui_oauth2_redirect_url")
+        }
+        if self.csp and request.url.path not in documents:
+            response.headers["Content-Security-Policy"] = self.csp
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
