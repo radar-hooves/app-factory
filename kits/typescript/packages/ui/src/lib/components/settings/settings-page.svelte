@@ -139,14 +139,8 @@
 	<LoadingState message="Loading…" class="mt-16" />
 {:else}
 	<Panel title="Settings">
-		<!-- Not validated here: Ajv compiles with eval, which the app's CSP refuses. The server validates each PATCH and its refusal is the toast. -->
-		<SchemaForm
-			schema={formSchema!}
-			uischema={formLayout}
-			value={formValue}
-			onChange={handleChange}
-			validate={false}
-		/>
+		<!-- Not validated in the browser (SchemaForm's default): the server validates each PATCH and its refusal is the toast. -->
+		<SchemaForm schema={formSchema!} uischema={formLayout} value={formValue} onChange={handleChange} />
 	</Panel>
 
 	{#if overridden.length}

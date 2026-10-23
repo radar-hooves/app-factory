@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient, Response
 
-from {{ package_name }} import main
+from {{ package_name }} import app_hooks, main
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
 
@@ -72,6 +72,38 @@ async def test_each_declared_element_origin_is_admitted_to_scripts_and_connectio
 
 async def test_no_declared_origin_adds_nothing(build):
     assert _directive(await _get("/"), "connect-src") == ["'self'"]
+
+
+async def test_an_app_hook_adds_its_own_origins_to_the_directives_it_names(build, monkeypatch):
+    tiles, frame = "https://tile.example.org", "https://embed.example.org"
+    monkeypatch.setattr(
+        app_hooks,
+        "content_security_sources",
+        lambda: {"img-src": [tiles], "frame-src": [frame], "font-src": ["https://fonts.example.org"]},
+        raising=False,
+    )
+    response = await _get("/")
+    assert _directive(response, "img-src") == ["'self'", "data:", "blob:", tiles]
+    assert _directive(response, "frame-src") == [frame]
+    assert _directive(response, "font-src") == ["'self'", "data:", "https://fonts.example.org"]
+    assert _directive(response, "default-src") == ["'none'"]
+
+
+async def test_an_app_hook_cannot_add_a_keyword_or_a_directive_the_factory_owns(build, monkeypatch):
+    monkeypatch.setattr(
+        app_hooks,
+        "content_security_sources",
+        lambda: {
+            "script-src": ["'unsafe-eval'", "'unsafe-inline'", "*", "https://cdn.example.org;frame-ancestors *"],
+            "frame-ancestors": ["https://evil.example.org"],
+            "default-src": ["https://evil.example.org"],
+        },
+        raising=False,
+    )
+    response = await _get("/")
+    assert _directive(response, "script-src") == ["'self'", _hash(BOOTSTRAP)]
+    assert _directive(response, "frame-ancestors") == ["'none'"]
+    assert _directive(response, "default-src") == ["'none'"]
 
 
 async def test_the_interactive_api_documents_are_exempt_and_only_they_are(build):

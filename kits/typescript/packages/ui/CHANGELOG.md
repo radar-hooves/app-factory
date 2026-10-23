@@ -20,7 +20,7 @@ Consumer: caspo, caspo-67.
 
 - **`AppIdentity` `themeToggle`** (default true): false hides "Switch theme" for a dark-only app.
 - **`fetch` on `SettingsPage`, `ReportWidget` and `AlertBell`**: the app's own request function, so a client that stamps every call (a workspace, View as colleague) reaches these too.
-- **`validate` on `SchemaForm`** (default true): false compiles nothing with Ajv, for a page under a Content-Security-Policy without `'unsafe-eval'`. `SettingsPage` passes false; the server's refusal is its toast.
+- **`validate` on `SchemaForm`** (default false): the browser compiles nothing with Ajv, as a page under a Content-Security-Policy without `'unsafe-eval'` (every factory app's) requires; the server's refusal is the toast. Pass `true` on a host without that policy.
 
 ## [2026.10.22] - 2026-10-19
 

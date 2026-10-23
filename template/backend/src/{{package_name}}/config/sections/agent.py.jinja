@@ -117,6 +117,8 @@ class AgentSettings(BaseSettings):
     # worker and every person, and the next ask is refused 503 until one settles;
     # 0 turns it off. And how often one person may ask, per minute by default
     # (slowapi's form), admins included; it follows `<APP>_RATE_LIMIT_ENABLED`.
+    # Per person, per worker unless `<APP>_RATE_LIMIT_STORAGE_URI` names a shared
+    # store; the turn ceiling is the host-wide guard.
     max_concurrent_turns: int = Field(default=8, ge=0)
     ask_rate_limit: str = "6/minute"
     # Where a person whose allowance is spent is pointed; empty shows none.

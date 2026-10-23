@@ -261,8 +261,9 @@ class Asking:
         """A short-lived token naming this person, for `audience` or for this app with none; one per audience per request.
 
         A service's token is reused across this person's requests while
-        `REUSE_MARGIN_SECONDS` of it remain. This app's own is minted per
-        request: a persona's turn presents it for as long as it runs. The
+        `REUSE_MARGIN_SECONDS` of it remain, and a reuse never waits on a mint in
+        flight. This app's own is minted per request: a persona's turn presents
+        it for as long as it runs (`fresh` is the same for a service). The
         audiences mint at the same time.
 
         Raises:
@@ -275,20 +276,44 @@ class Asking:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"unset": _ISSUER_ENV})
         if not self.subject:
             raise ServiceUnavailableError(_NOT_CARRIED, context={"absent": "X-authentik-jwt"})
+        if audience in self._minted:
+            return self._minted[audience]
+        if (held := self.held(audience)) is not None:
+            return self._minted.setdefault(audience, held)
         async with self._locks[audience]:
             if audience not in self._minted:
-                held = self.exchange.reusable(self.uid, audience) if audience else None
-                if held is None:
-                    issued = await self.exchange.issue(self.subject, audience)
-                    if _subject(issued.token) != self.uid:
-                        raise AuthenticationError(
-                            "Your sign-in does not match this request; sign in again", context={"audience": audience}
-                        )
-                    if audience:
-                        self.exchange.keep(self.uid, audience, issued)
-                    held = issued.token
-                self._minted[audience] = held
+                self._minted[audience] = await self._mint(audience)
             return self._minted[audience]
+
+    def held(self, audience: str | None) -> str | None:
+        """The token this request already holds for `audience`, else one the exchange has held for this person; never waits."""
+        if audience in self._minted:
+            return self._minted[audience]
+        return self.exchange.reusable(self.uid, audience) if audience and self.subject else None
+
+    async def fresh(self, audience: str) -> str:
+        """A token for `audience` minted now, held as the freshest, for a turn that presents it for as long as it runs.
+
+        A cached token can have `REUSE_MARGIN_SECONDS` left; a persona's session
+        would meet 401 part-way through its answer. Raises as `token`.
+        """
+        if not self.exchange.configured:
+            raise ServiceUnavailableError(_NOT_CARRIED, context={"unset": _ISSUER_ENV})
+        if not self.subject:
+            raise ServiceUnavailableError(_NOT_CARRIED, context={"absent": "X-authentik-jwt"})
+        async with self._locks[audience]:
+            self._minted[audience] = await self._mint(audience)
+            return self._minted[audience]
+
+    async def _mint(self, audience: str | None) -> str:
+        issued = await self.exchange.issue(self.subject, audience)
+        if _subject(issued.token) != self.uid:
+            raise AuthenticationError(
+                "Your sign-in does not match this request; sign in again", context={"audience": audience}
+            )
+        if audience:
+            self.exchange.keep(self.uid, audience, issued)
+        return issued.token
 
 
 def get_asking(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> Asking:

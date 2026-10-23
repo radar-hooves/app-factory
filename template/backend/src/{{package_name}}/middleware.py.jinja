@@ -11,7 +11,7 @@ import hashlib
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from pathlib import Path
 from uuid import uuid4
 
@@ -90,9 +90,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\ssrc\s*=)[^>]*>(.+?)</script>", re.DOTALL | re.IGNORECASE)
 # A scheme and host only: an origin from the environment must not be able to end a directive.
 _ORIGIN = re.compile(r"https?://[^\s;,'\"]+")
+#: The directives an app may extend (`app_hooks.content_security_sources`); the rest of the policy is the factory's.
+EXTENDABLE = ("script-src", "style-src", "img-src", "font-src", "connect-src", "frame-src", "media-src", "worker-src")
 
 
-def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()) -> str:
+def content_security_policy(
+    build_dir: Path, element_origins: Iterable[str] = (), extra: Mapping[str, Iterable[str]] | None = None
+) -> str:
     """The one policy the app sends, computed once at startup.
 
     Default-deny, same-origin. `script-src` also names the sha256 of each inline
@@ -104,7 +108,11 @@ def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()
     only that: mode-watcher inserts a `<style>` that switches transitions off
     while the mode changes, and SvelteKit's own markup carries `style` attributes
     (its screen-reader announcer, the `display: contents` wrapper), each measured
-    as a violation in Chromium; a style cannot run script. `frame-ancestors` is here because a
+    as a violation in Chromium; a style cannot run script. `extra` is the app's own
+    origins by directive (a map tile server in `img-src`, an iframe in `frame-src`),
+    each checked as an element origin is: only an `http(s)` origin passes, so no
+    keyword (`'unsafe-eval'`, `'unsafe-inline'`) reaches any directive, and only
+    the directives in EXTENDABLE are read. `frame-ancestors` is here because a
     `<meta>` policy cannot carry it.
     """
     hashes = {
@@ -113,23 +121,25 @@ def content_security_policy(build_dir: Path, element_origins: Iterable[str] = ()
         for body in _INLINE_SCRIPT.findall(page.read_text(encoding="utf-8"))
     }
     origins = [origin for origin in element_origins if _ORIGIN.fullmatch(origin)]
-    scripts = " ".join(["'self'", *sorted(hashes), *origins])
-    connect = " ".join(["'self'", *origins])
-    return "; ".join(
-        [
-            "default-src 'none'",
-            f"script-src {scripts}",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob:",
-            "font-src 'self' data:",
-            f"connect-src {connect}",
-            "manifest-src 'self'",
-            "base-uri 'self'",
-            "form-action 'self'",
-            "frame-ancestors 'none'",
-            "object-src 'none'",
-        ]
-    )
+    directives = {
+        "default-src": ["'none'"],
+        "script-src": ["'self'", *sorted(hashes), *origins],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "blob:"],
+        "font-src": ["'self'", "data:"],
+        "connect-src": ["'self'", *origins],
+        "manifest-src": ["'self'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+        "frame-ancestors": ["'none'"],
+        "object-src": ["'none'"],
+    }
+    for name, declared in (extra or {}).items():
+        if name in EXTENDABLE:
+            directives.setdefault(name, []).extend(
+                origin for origin in dict.fromkeys(declared) if _ORIGIN.fullmatch(origin)
+            )
+    return "; ".join(f"{name} {' '.join(values)}" for name, values in directives.items() if values)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

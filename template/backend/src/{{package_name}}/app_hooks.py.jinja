@@ -30,6 +30,12 @@ none of them behaves exactly as it does today.
   - `rate_limit_key(request)` — the limiter's `key_func` (`rate_limit.py`), for
     an app that can key on something stronger than an address, so one noisy
     consumer cannot throttle another.
+  - `content_security_sources() -> dict[str, list[str]]` — `main.py` merges the
+    origins it returns into the Content-Security-Policy once at startup, by
+    directive (`img-src`, `frame-src`, `font-src`, `connect-src`, `media-src`,
+    `worker-src`, `style-src`, `script-src`), for an app that shows a map tile
+    server, an iframe or a font host. Only `http(s)` origins are taken, so
+    `'unsafe-eval'` and `'unsafe-inline'` can be added to nothing.
   - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
     after every worker is dead, for an app supervising a child process or a
     process-local session a worker must not end.

@@ -7,6 +7,9 @@ effective set is what the proxy granted intersected with what was asked for.
 
 from httpx import AsyncClient
 
+from {{ package_name }}.api.users.dependencies import Identity
+from {{ package_name }}.api.users.models import User
+
 GRANTED = "admin|reports|reports:write|example"
 
 
@@ -89,3 +92,9 @@ async def test_a_narrowed_admin_loses_a_module_gate_too(client: AsyncClient) -> 
     # Kept only a chat's grant: admitted to chat alone, as a colleague invited to chat is.
     chat_only = _headers(GRANTED + "|chat-helper", "chat-helper")
     assert (await client.get("/api/users/", headers=chat_only)).status_code == 403
+
+
+def test_an_identity_built_without_held_holds_its_entitlements() -> None:
+    identity = Identity(user=User(authentik_uid="u", username="u"), entitlements=("admin", "reports"))
+    assert identity.held == ("admin", "reports")
+    assert Identity(user=identity.user, entitlements=("reports",), held=("admin", "reports")).held == ("admin", "reports")

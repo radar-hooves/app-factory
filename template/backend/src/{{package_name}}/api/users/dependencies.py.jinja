@@ -41,6 +41,11 @@ class Identity:
     #: True when an admin asked to see the app as a colleague does (``VIEW_AS_HEADER``).
     viewing_as: bool = False
 
+    def __post_init__(self) -> None:
+        # Narrowing only removes, so a held set smaller than the entitlements was never given.
+        if not self.held:
+            object.__setattr__(self, "held", self.entitlements)
+
 
 #: The browser's request to see the app with fewer entitlements: the names to keep, pipe-delimited.
 #: Honoured only for an account that really holds ``admin``, and only ever narrows.

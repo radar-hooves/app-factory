@@ -263,6 +263,37 @@ async def test_the_turn_token_and_a_service_token_are_minted_at_the_same_time(
     assert sorted(started, key=str) == [None, "library"]
 
 
+async def test_a_fresh_service_token_is_minted_past_a_held_one_and_becomes_the_one_held(
+    authentik: FakeAuthentik, app_side: Exchange, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = _clock(monkeypatch)
+    held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    now[0] += LIFETIME - REUSE_MARGIN_SECONDS - 1
+    fresh = await Asking(app_side, f"as:{PERSON}", PERSON).fresh("library")
+    assert fresh != held
+    assert authentik.exchanged.count((APP, "library")) == 2
+    assert await Asking(app_side, f"as:{PERSON}", PERSON).token("library") == fresh
+
+
+async def test_a_reuse_does_not_wait_on_a_mint_in_flight(app_side: Exchange) -> None:
+    held = await Asking(app_side, f"as:{PERSON}", PERSON).token("library")
+    asking = Asking(app_side, f"as:{PERSON}", PERSON)
+    release = asyncio.Event()
+    real = app_side.issue
+
+    async def issue(subject: str, audience: str | None = None) -> Issued:
+        await release.wait()
+        return await real(subject, audience)
+
+    app_side.issue = issue  # type: ignore[method-assign]
+    minting = asyncio.create_task(asking.fresh("library"))
+    await asyncio.sleep(0.05)
+    async with asyncio.timeout(1):
+        assert await asking.token("library") == held
+    release.set()
+    assert await minting != held
+
+
 async def test_an_unreachable_jwks_is_one_read_and_a_503_for_every_caller_until_a_retry(
     authentik: FakeAuthentik, app_side: Exchange
 ) -> None:

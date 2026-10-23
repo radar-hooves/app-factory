@@ -10,7 +10,7 @@
 		uischema,
 		initial = {},
 		disabled = false,
-		validate = true,
+		validate,
 		onchange
 	}: {
 		schema: JsonSchema;

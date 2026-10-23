@@ -11,6 +11,7 @@ Consumer: caspo, caspo-67.
 - **`Chat.ask` takes the files as a fourth argument**, so a question handed over from another page goes out with its attachments at once.
 - **The composer rests at three lines** of 1.125rem text with 44px controls and a 0.875rem scope label.
 - **The scope control** reads as the composer's own, beside attach and send.
+- **A handed question that is refused or not sent** (the server's 429 or 409, or the page busy or the allowance spent) goes back into the box with its files, as a typed one does.
 
 ## [2026.10.6] - 2026-10-23
 

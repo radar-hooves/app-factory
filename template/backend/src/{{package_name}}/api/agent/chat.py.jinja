@@ -6,7 +6,7 @@ entitlement lets a person in. A persona with `collections: true` first
 retrieves passages from the library as the person asking, and answers from
 them; one without answers from its own files. Which collections a person may
 read is the library's answer, never this app's, so the file names none. The
-same token reaches the persona's own session as `LIBRARY_TOKEN`, with the
+library token, minted afresh for the turn, reaches the persona's own session as `LIBRARY_TOKEN`, with the
 library's caller mount as `LIBRARY_URL`, so a persona whose `.mcp.json` names
 the library's reader door (`${LIBRARY_URL}/mcp/`, `Bearer ${LIBRARY_TOKEN}`)
 searches it again as the same person when its passages fall short.
@@ -153,23 +153,24 @@ async def collections(settings: AgentSettings, persona: Persona, asking: Asking)
 async def for_turn(settings: AgentSettings, persona: Persona, asking: Asking) -> tuple[LocalAgent, Collections | None]:
     """The persona's agent and, for one that reads collections, the library as the person: both tokens minted at once.
 
-    The library's token reaches the agent's session too (`LIBRARY_TOKEN`).
+    The agent's session gets a library token minted now (`LIBRARY_TOKEN`), since
+    it presents it for the whole turn; the retrieval reuses a held one.
 
     Raises:
         ServiceUnavailableError: as `collections`.
         AuthenticationError: as `agent` and `collections`.
     """
+    cached = asking.held(settings.library_audience) if persona.collections and settings.library_url else None
     try:
         async with asyncio.TaskGroup() as group:
             asked = group.create_task(agent(settings, persona, asking, turn=True))
-            token = group.create_task(_library_token(settings, persona, asking)) if persona.collections else None
+            token = group.create_task(_library_token(settings, persona, asking, fresh=True)) if persona.collections else None
     except ExceptionGroup as failed:
         raise failed.exceptions[0] from None
     if token is None:
         return asked.result(), None
-    library = token.result()
-    reading = {**asked.result().run_env, LIBRARY_URL: settings.library_url, LIBRARY_TOKEN: library}
-    return dataclasses.replace(asked.result(), run_env=reading), _reader(settings, library, asking.uid)
+    reading = {**asked.result().run_env, LIBRARY_URL: settings.library_url, LIBRARY_TOKEN: token.result()}
+    return dataclasses.replace(asked.result(), run_env=reading), _reader(settings, cached or token.result(), asking.uid)
 
 
 def documents(settings: AgentSettings, persona: Persona) -> Path:
@@ -177,12 +178,12 @@ def documents(settings: AgentSettings, persona: Persona) -> Path:
     return settings.personas_dir / persona.id / DOCUMENTS
 
 
-async def _library_token(settings: AgentSettings, persona: Persona, asking: Asking) -> str:
+async def _library_token(settings: AgentSettings, persona: Persona, asking: Asking, *, fresh: bool = False) -> str:
     if not settings.library_url:
         raise ServiceUnavailableError(
             "Collections are not available here yet", context={"persona": persona.id, "unset": _LIBRARY_URL}
         )
-    return await asking.token(settings.library_audience)
+    return await (asking.fresh if fresh else asking.token)(settings.library_audience)
 
 
 def _reader(settings: AgentSettings, token: str, uid: str) -> Collections:

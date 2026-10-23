@@ -36,7 +36,7 @@
 		value,
 		onChange,
 		disabled = false,
-		validate = true,
+		validate = false,
 		idPrefix = 'sf',
 		class: className
 	}: SchemaFormProps = $props();

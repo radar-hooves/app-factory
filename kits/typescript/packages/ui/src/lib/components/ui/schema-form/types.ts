@@ -75,11 +75,11 @@ export interface SchemaFormProps {
 	/** Disable every control in the form. */
 	disabled?: boolean;
 	/**
-	 * Validate the value against the schema in the browser. Ajv compiles a schema
-	 * with `new Function`, which a Content-Security-Policy without
-	 * `'unsafe-eval'` refuses (every factory app's), so a page under one passes
-	 * `false` and shows its server's refusals instead. No violation is then
-	 * marked, and nothing is compiled.
+	 * Validate the value against the schema in the browser; default false. Ajv
+	 * compiles a schema with `new Function`, which a Content-Security-Policy
+	 * without `'unsafe-eval'` refuses (every factory app's), so the form compiles
+	 * nothing and marks no violation, and the page shows its server's refusals.
+	 * Pass `true` on a host without that policy.
 	 */
 	validate?: boolean;
 	/** Prefix for generated element ids, when two forms share a page. */

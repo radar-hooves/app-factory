@@ -585,6 +585,42 @@ describe('Chat allowance', () => {
 		await vi.waitFor(() => expect(c.quota?.reached).toBe(true));
 	});
 
+	it('puts a handed question and its files into the box when the server refuses it', async () => {
+		for (const status of [429, 409]) {
+			const { transport, asks } = persona();
+			const c = chat(transport);
+			const file = new File(['x'], 'scan.pdf');
+			const asked = c.ask('Read this', undefined, undefined, [file]);
+			asks[0].pipe.push({ type: 'agent_error', status });
+			asks[0].pipe.end();
+			expect(await asked).toBe(false);
+			expect(c.turns).toEqual([]);
+			expect(c.draft).toBe('Read this');
+			expect(c.files).toEqual([file]);
+		}
+	});
+
+	it('puts a handed question and its files into the box when it is not sent here', async () => {
+		const file = new File(['x'], 'scan.pdf');
+		const quota = vi
+			.fn<ChatTransport['quota']>()
+			.mockResolvedValue({ ...QUOTA, remaining: 0, reached: true });
+		const spent = chat(persona({ quota }).transport);
+		await spent.refreshQuota();
+		expect(await spent.ask('Read this', undefined, undefined, [file])).toBe(false);
+		expect(spent.draft).toBe('Read this');
+		expect(spent.files).toEqual([file]);
+
+		const { transport, asks } = persona();
+		const busy = chat(transport);
+		void busy.ask('first');
+		expect(await busy.ask('Read that', undefined, undefined, [file])).toBe(false);
+		expect(busy.draft).toBe('Read that');
+		expect(busy.files).toEqual([file]);
+		expect(asks).toHaveLength(1);
+		asks[0].pipe.end();
+	});
+
 	it('shows the conversation still answering when another device is already asking it', async () => {
 		const { transport, asks } = persona({
 			read: vi.fn(async () => conversation({ answering_since: '2026-09-30T01:58:00Z' }))

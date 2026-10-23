@@ -23,6 +23,7 @@ import json
 import os
 import stat
 import threading
+import time
 import types
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -48,7 +49,7 @@ from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.db.session import get_session_factory
-from {{ package_name }}.exchange import Asker, Asking, Exchange
+from {{ package_name }}.exchange import Asker, Asking, Exchange, Issued
 from {{ package_name }}.rate_limit import limiter
 from tests.support import fake_agent_cli, fake_authentik, fake_library
 
@@ -1225,6 +1226,66 @@ async def test_a_persona_that_reads_collections_carries_the_library_into_its_ses
 
     assert f"library={agent_settings.library_url}" in said
     assert "library_token=set" in said
+
+
+async def _held_library_token(app: FastAPI, authentik: fake_authentik.FakeAuthentik, who: dict[str, str], left: float) -> str:
+    """A library token the exchange already holds for `who`, with `left` seconds of it remaining."""
+    token = authentik.mint("library", who["x-authentik-uid"], asked_by=APP, lifetime=int(left))
+    app.state.exchange.keep(
+        who["x-authentik-uid"], "library", Issued(token, time.monotonic() + left)
+    )
+    return token
+
+
+async def test_a_turn_with_a_nearly_lapsed_library_token_held_is_handed_a_freshly_minted_one(
+    app: FastAPI, agent_settings: AgentSettings, authentik: fake_authentik.FakeAuthentik
+) -> None:
+    who = _person("chat-manual")
+    held = await _held_library_token(app, authentik, who, 70)
+    persona = chat.get(agent_settings, "manual")
+    asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
+    agent, collections = await chat.for_turn(agent_settings, persona, asking)
+    env_token = agent.run_env[chat.LIBRARY_TOKEN]
+    assert env_token != held
+    assert authentik.exchanged.count((APP, "library")) == 1
+    assert app.state.exchange.reusable(who["x-authentik-uid"], "library") == env_token
+    assert collections is not None
+    assert await collections.token() == env_token
+
+
+async def test_the_retrieval_reuses_a_held_library_token_while_the_session_gets_a_fresh_one(
+    app: FastAPI, agent_settings: AgentSettings, authentik: fake_authentik.FakeAuthentik
+) -> None:
+    who = _person("chat-manual")
+    held = await _held_library_token(app, authentik, who, 400)
+    persona = chat.get(agent_settings, "manual")
+    asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
+    agent, collections = await chat.for_turn(agent_settings, persona, asking)
+    assert agent.run_env[chat.LIBRARY_TOKEN] != held
+    assert collections is not None
+    assert await collections.token() == held
+
+
+async def test_the_session_tokens_for_the_app_and_the_library_are_minted_at_the_same_time(
+    app: FastAPI, agent_settings: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    who = _person("chat-manual")
+    started: list[str | None] = []
+    both = asyncio.Event()
+    real = app.state.exchange.issue
+
+    async def issue(subject: str, audience: str | None = None) -> Any:
+        started.append(audience)
+        if len(started) == 2:
+            both.set()
+        async with asyncio.timeout(5):
+            await both.wait()
+        return await real(subject, audience)
+
+    monkeypatch.setattr(app.state.exchange, "issue", issue)
+    asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
+    await chat.for_turn(agent_settings, chat.get(agent_settings, "manual"), asking)
+    assert sorted(started, key=str) == [None, "library"]
 
 
 async def test_a_persona_with_visuals_lists_them_and_is_told_their_format(

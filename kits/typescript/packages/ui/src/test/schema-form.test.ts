@@ -244,10 +244,25 @@ describe('SchemaForm — no UI schema', () => {
 
 describe('SchemaForm — schema validation', () => {
 	it('surfaces a violation against the field it belongs to', async () => {
-		render(Harness, { schema, uischema, initial: { ...initial, name: undefined } });
+		render(Harness, {
+			schema,
+			uischema,
+			initial: { ...initial, name: undefined },
+			validate: true
+		});
 		await waitFor(() => {
 			expect(screen.getByText('Required')).toBeInTheDocument();
 		});
+	});
+
+	it('compiles nothing and marks nothing by default, as under a CSP without eval', () => {
+		const { container } = render(Harness, {
+			schema,
+			uischema,
+			initial: { ...initial, name: undefined }
+		});
+		expect(screen.queryByText('Required')).toBeNull();
+		expect(container.querySelector('[data-schema-form]')).toBeTruthy();
 	});
 
 	it('compiles nothing and marks nothing when validate is off, as under a CSP without eval', () => {

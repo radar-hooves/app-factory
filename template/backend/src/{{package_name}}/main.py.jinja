@@ -334,7 +334,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         SecurityHeadersMiddleware,
         is_production=not settings.debug,
-        csp=content_security_policy(_FRONTEND_BUILD, settings.element_origins_list),
+        csp=content_security_policy(
+            _FRONTEND_BUILD,
+            settings.element_origins_list,
+            getattr(app_hooks, "content_security_sources", lambda: {})(),
+        ),
     )
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)

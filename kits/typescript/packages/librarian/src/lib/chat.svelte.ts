@@ -310,8 +310,8 @@ export class Chat {
 	 * a plain question, narrowed to one `collection` by name when given. A
 	 * question handed in carries `files` with it, the box's own going with a
 	 * typed one. Resolves once the turn settles: true if it was asked, false if
-	 * it was refused, here or by the server, in which case typed words go back
-	 * into the box.
+	 * it was refused, here or by the server, in which case the question and its
+	 * files go back into the box, handed or typed.
 	 */
 	async ask(
 		question?: string,
@@ -323,7 +323,11 @@ export class Chat {
 		const text = (question ?? this.draft).trim();
 		if (!text) return false;
 		if (this.#job) return this.#message(text, typed);
-		if (this.busy || this.quota?.reached) return false;
+		if (this.busy || this.quota?.reached) {
+			// A handed question has no other home: the box takes it, as it takes a refused one.
+			if (!typed) this.#restore(text, files);
+			return false;
+		}
 		const sent = typed ? this.files : files;
 		if (typed) {
 			this.draft = '';
@@ -580,10 +584,7 @@ export class Chat {
 		if (ending === 'refused' || ending === 'answering') {
 			const at = this.#turns.findIndex((t) => t.id === live.id);
 			if (at >= 0) this.#turns.splice(at, 1);
-			if (typed) {
-				this.draft = text;
-				this.files = files;
-			}
+			this.#restore(text, files);
 			this.#finish();
 			// Asked elsewhere and still being answered: show that instead.
 			if (ending === 'answering' && id) await this.#settle(id, mine);
@@ -722,6 +723,12 @@ export class Chat {
 		}
 	}
 
+	/** A question that was not asked goes back into the box with its files, ahead of anything typed since. */
+	#restore(text: string, files: File[]): void {
+		this.draft = this.draft ? `${text}\n\n${this.draft}` : text;
+		this.files = [...files, ...this.files];
+	}
+
 	async #message(text: string, typed: boolean): Promise<boolean> {
 		const id = this.conversationId;
 		if (!id) return false;
@@ -730,6 +737,7 @@ export class Chat {
 			await this.#job!.message(id, text);
 		} catch {
 			if (typed) this.draft = text;
+			else this.#restore(text, []);
 			return false;
 		}
 		// A settled job takes it as a new run, already started when the
