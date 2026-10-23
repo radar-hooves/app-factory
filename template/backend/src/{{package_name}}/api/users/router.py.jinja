@@ -36,4 +36,6 @@ def read_current_user(identity: CurrentIdentity) -> CurrentUserRead:
     return CurrentUserRead(
         **UserRead.model_validate(identity.user).model_dump(),
         entitlements=list(identity.entitlements),
+        held=list(identity.held),
+        viewing_as=identity.viewing_as,
     )

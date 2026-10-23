@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ACTIVE_WORKSPACE_STORAGE_KEY } from './auth.svelte';
+import { ACTIVE_WORKSPACE_STORAGE_KEY, VIEW_AS_STORAGE_KEY } from './auth.svelte';
 
 // The store holds module-level state, so each case imports it fresh.
 const setActiveWorkspaceId = vi.fn();
+const setViewAs = vi.fn();
 const GET = vi.fn();
 
 vi.mock('./api/client', () => ({
 	api: {
 		GET: (...args: unknown[]) => GET(...args)
 	},
-	setActiveWorkspaceId: (...args: unknown[]) => setActiveWorkspaceId(...args)
+	setActiveWorkspaceId: (...args: unknown[]) => setActiveWorkspaceId(...args),
+	setViewAs: (...args: unknown[]) => setViewAs(...args)
 }));
 
 const USER = { id: 1, username: 'someone', display_name: null, email: null, last_seen_at: null };
@@ -34,6 +36,7 @@ async function freshAuth() {
 
 beforeEach(() => {
 	localStorage.clear();
+	sessionStorage.clear();
 	vi.clearAllMocks();
 });
 
@@ -306,5 +309,60 @@ describe('auth store — entitlement grades', () => {
 		expect(auth.can('travel')).toBe(true);
 		expect(auth.can('travel', true)).toBe(true);
 		expect(auth.can('securities')).toBe(false);
+	});
+});
+
+describe('auth store — view as colleague', () => {
+	const ME = { ...USER, entitlements: ['reports'], held: ['admin', 'reports'], viewing_as: true };
+
+	it('restores the kept set for the first request and reports the real one', async () => {
+		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, JSON.stringify(['reports']));
+		respondWith(ME, [membership(7, 'w')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		const firstCall = (fn: typeof GET) => fn.mock.invocationCallOrder.at(0) ?? Infinity;
+		expect(firstCall(setViewAs)).toBeLessThan(firstCall(GET));
+		expect(setViewAs).toHaveBeenCalledWith(['reports']);
+		expect(auth.viewingAs).toBe(true);
+		expect(auth.entitlements).toEqual(['reports']);
+		expect(auth.held).toEqual(['admin', 'reports']);
+		// admin is narrowed away, but the real set still offers the way back.
+		expect(auth.can('admin')).toBe(false);
+		expect(auth.canViewAs).toBe(true);
+	});
+
+	it('applies only names the account really holds, per tab', async () => {
+		respondWith({ ...ME, entitlements: ['admin', 'reports'], viewing_as: false }, [
+			membership(7, 'w')
+		]);
+		const auth = await freshAuth();
+		await auth.init();
+		auth.viewAsColleague(['reports', 'payroll']);
+
+		expect(setViewAs).toHaveBeenLastCalledWith(['reports']);
+		expect(sessionStorage.getItem(VIEW_AS_STORAGE_KEY)).toBe('["reports"]');
+		expect(localStorage.getItem(VIEW_AS_STORAGE_KEY)).toBeNull();
+	});
+
+	it('stops by forgetting the set', async () => {
+		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, '["reports"]');
+		respondWith(ME, [membership(7, 'w')]);
+		const auth = await freshAuth();
+		await auth.init();
+		auth.stopViewingAs();
+
+		expect(setViewAs).toHaveBeenLastCalledWith(null);
+		expect(sessionStorage.getItem(VIEW_AS_STORAGE_KEY)).toBeNull();
+	});
+
+	it('drops a stored set the server did not honour', async () => {
+		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, '["reports"]');
+		respondWith({ ...ME, held: ['reports'], viewing_as: false }, [membership(7, 'w')]);
+		const auth = await freshAuth();
+		await auth.init();
+
+		expect(auth.canViewAs).toBe(false);
+		expect(sessionStorage.getItem(VIEW_AS_STORAGE_KEY)).toBeNull();
 	});
 });

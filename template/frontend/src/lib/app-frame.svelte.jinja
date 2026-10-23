@@ -32,9 +32,12 @@
 	import { CommandPalette } from '@poodle64/ui/command-palette';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import Eye from '@lucide/svelte/icons/eye';
 	import House from '@lucide/svelte/icons/house';
 	import { auth } from '$lib/auth.svelte';
 	import AdminAlertBell from '$lib/alerts/admin-alert-bell.svelte';
+	import ViewAsBanner from '$lib/view-as/view-as-banner.svelte';
+	import ViewAsDialog from '$lib/view-as/view-as-dialog.svelte';
 	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -73,6 +76,12 @@
 	// exactly one) — so renaming the members route stays a one-line change
 	// rather than two call sites drifting apart.
 	const membersHref = '/workspace';
+
+	// "View as colleague": an admin previews the app with fewer entitlements
+	// (docs/design/exchange.md §View as colleague). Offered to whoever really
+	// holds `admin` (`auth.canViewAs`, not `auth.can`, which reads the narrowed
+	// set), and the banner below is the way back once admin itself is narrowed away.
+	let viewAsOpen = $state(false);
 </script>
 
 <!-- One `nav` feeds BOTH the shell and the palette below: a palette handed none
@@ -128,6 +137,9 @@
 				workspace={auth.activeWorkspace?.name}
 				role={auth.activeRole}
 				entitlements={auth.entitlements}
+				links={auth.canViewAs
+					? [{ label: 'View as colleague', icon: Eye, onSelect: () => (viewAsOpen = true) }]
+					: []}
 				onManageMembers={auth.canSwitchWorkspace ? undefined : () => goto(membersHref)}
 				onAccountSettings={() => goto('/settings')}
 				onSignOut={() => void auth.logout()}
@@ -135,8 +147,11 @@
 		{/if}
 	{/snippet}
 
+	<ViewAsBanner />
 	{@render children()}
 </AppShell>
+
+<ViewAsDialog bind:open={viewAsOpen} />
 
 <!-- An app with palette ACTIONS as well as pages adds them as a child command
      group right here. -->

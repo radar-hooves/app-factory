@@ -1,4 +1,11 @@
-export { api, redirectToAuthentik, getActiveWorkspaceId, setActiveWorkspaceId } from './client';
+export {
+	api,
+	redirectToAuthentik,
+	getActiveWorkspaceId,
+	setActiveWorkspaceId,
+	getViewAs,
+	setViewAs
+} from './client';
 export { extractApiError, describeApiError, formatErrorDetails, type ApiErrorInfo } from './error';
 export { toastApiError } from './error-toast';
 // This app's own API modules (frontend/src/lib/api/app.ts) — the one seam on

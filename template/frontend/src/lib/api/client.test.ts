@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api } from './client';
+import { api, setViewAs } from './client';
 
 /**
  * The middleware stack's failure paths, driven through the real client rather
@@ -140,5 +140,29 @@ describe('the sign-in redirect', () => {
 		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
 		redirectToAuthentik('/settings');
 		expect(went).toHaveLength(2);
+	});
+});
+
+describe('the X-View-As header', () => {
+	const sent = async () => {
+		const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+		await api.GET('/api/users/me', { baseUrl: BASE_URL, fetch });
+		return (fetch.mock.calls.at(0)?.at(0) as Request).headers.get('X-View-As');
+	};
+
+	afterEach(() => setViewAs(null));
+
+	it('is sent on every request while a set is kept, empty included', async () => {
+		setViewAs(['reports', 'example']);
+		expect(await sent()).toBe('reports|example');
+		setViewAs([]);
+		expect(await sent()).toBe('');
+	});
+
+	it('is not sent before a set is kept or after it is stopped', async () => {
+		expect(await sent()).toBeNull();
+		setViewAs(['reports']);
+		setViewAs(null);
+		expect(await sent()).toBeNull();
 	});
 });

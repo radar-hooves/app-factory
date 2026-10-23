@@ -1106,6 +1106,16 @@ export interface components {
             last_seen_at: string | null;
             /** Entitlements */
             entitlements: string[];
+            /**
+             * Held
+             * @description What the identity provider granted, whether or not an admin is viewing as a colleague.
+             */
+            held: string[];
+            /**
+             * Viewing As
+             * @description True while ``entitlements`` is narrowed from ``held`` by the caller's own request.
+             */
+            viewing_as: boolean;
         };
         /**
          * DatabaseEnvironmentResponse

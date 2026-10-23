@@ -36,6 +36,32 @@ class Identity:
 
     user: User
     entitlements: tuple[str, ...]
+    #: What the proxy granted, before any narrowing. Equal to ``entitlements`` unless ``viewing_as``.
+    held: tuple[str, ...] = ()
+    #: True when an admin asked to see the app as a colleague does (``VIEW_AS_HEADER``).
+    viewing_as: bool = False
+
+
+#: The browser's request to see the app with fewer entitlements: the names to keep, pipe-delimited.
+#: Honoured only for an account that really holds ``admin``, and only ever narrows.
+VIEW_AS_HEADER = "x-view-as"
+
+
+def _narrowed(request: Request, held: tuple[str, ...]) -> tuple[tuple[str, ...], bool]:
+    """The entitlements to act with, and whether they were narrowed on request.
+
+    "View as colleague" lets an admin check what a colleague sees without a
+    second account. The effective set is the INTERSECTION of what the proxy
+    granted and what was asked for, so the header can only remove: a name the
+    caller does not truly hold is dropped, and a caller without ``admin`` has the
+    header ignored altogether. A present but empty header keeps nothing. Only the
+    human ``/api`` surface reads this; the token exchange and ``/mcp`` do not.
+    """
+    raw = request.headers.get(VIEW_AS_HEADER)
+    if raw is None or not ("admin" in held or "admin:write" in held):
+        return held, False
+    asked = {part.strip() for part in raw.split("|") if part.strip()}
+    return tuple(grant for grant in held if grant in asked), True
 
 
 def _parse_entitlements(request: Request, identity_settings: IdentitySettings) -> tuple[str, ...]:
@@ -142,7 +168,9 @@ def get_identity(
     # to handle. The org-of-one is the default condition, not an edge case.
     workspaces_service.ensure_personal_workspace(session, user)
 
-    return Identity(user=user, entitlements=_parse_entitlements(request, identity_settings))
+    held = _parse_entitlements(request, identity_settings)
+    entitlements, viewing_as = _narrowed(request, held)
+    return Identity(user=user, entitlements=entitlements, held=held, viewing_as=viewing_as)
 
 
 CurrentIdentity = Annotated[Identity, Depends(get_identity)]

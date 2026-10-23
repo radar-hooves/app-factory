@@ -51,3 +51,7 @@ class CurrentUserRead(UserRead):
     """
 
     entitlements: list[str]
+    #: What the identity provider granted, whether or not an admin is viewing as a colleague.
+    held: list[str]
+    #: True while ``entitlements`` is narrowed from ``held`` by the caller's own request.
+    viewing_as: bool

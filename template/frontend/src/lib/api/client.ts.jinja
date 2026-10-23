@@ -44,6 +44,28 @@ const workspaceMiddleware: Middleware = {
 	}
 };
 
+// The entitlements an admin has chosen to keep while previewing the app as a
+// colleague sees it. null sends no header (the ordinary case). An empty list is
+// sent as an empty header and means "keep nothing". The backend honours it only
+// for an account that really holds `admin`, and only to narrow
+// (`api/users/dependencies.py`). Held here for the same reason as the workspace.
+let viewAs: string[] | null = null;
+
+export function setViewAs(kept: string[] | null) {
+	viewAs = kept;
+}
+
+export function getViewAs(): string[] | null {
+	return viewAs;
+}
+
+const viewAsMiddleware: Middleware = {
+	async onRequest({ request }) {
+		if (viewAs !== null) request.headers.set('X-View-As', viewAs.join('|'));
+		return request;
+	}
+};
+
 // Track timeout IDs by request identity (survives request.clone()).
 const timeoutIds = new WeakMap<Request, ReturnType<typeof setTimeout>>();
 
@@ -164,6 +186,7 @@ const authMiddleware: Middleware = {
 };
 
 api.use(workspaceMiddleware);
+api.use(viewAsMiddleware);
 api.use(timeoutMiddleware);
 api.use(authMiddleware);
 // Last: it turns a throw into a Response, so every middleware above sees a

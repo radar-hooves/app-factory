@@ -14,10 +14,13 @@
  * every request is answered 409 with the choices — deliberately, because a
  * silent default is how one workspace's data lands in another.
  */
-import { api, setActiveWorkspaceId } from './api/client';
+import { api, setActiveWorkspaceId, setViewAs } from './api/client';
 import type { components } from './api/schema';
 
 export const ACTIVE_WORKSPACE_STORAGE_KEY = '{{ project_name }}.activeWorkspaceId';
+
+/** The entitlements an admin keeps while viewing as a colleague; per browser tab. */
+export const VIEW_AS_STORAGE_KEY = '{{ project_name }}.viewAs';
 
 /**
  * Whoever `/api/users/me` says you are — the backend's own schema, not a second
@@ -44,6 +47,8 @@ export interface Membership {
 
 let user = $state<User | null>(null);
 let entitlements = $state<string[]>([]);
+let held = $state<string[]>([]);
+let viewingAs = $state(false);
 let memberships = $state<Membership[]>([]);
 let activeWorkspace = $state<Workspace | null>(null);
 let isLoading = $state(true);
@@ -90,6 +95,31 @@ function rememberWorkspaceId(id: number | null) {
 		else localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(id));
 	} catch {
 		// A browser refusing storage costs the preference, never the session.
+	}
+}
+
+/**
+ * The set an admin chose to keep, from this tab's sessionStorage (so a new tab
+ * is never narrowed), or null. sessionStorage can be absent or throw; that is
+ * simply "not viewing as anyone".
+ */
+function restoreViewAs(): string[] | null {
+	try {
+		const raw = sessionStorage.getItem(VIEW_AS_STORAGE_KEY);
+		const kept: unknown = raw === null ? null : JSON.parse(raw);
+		return Array.isArray(kept) && kept.every((k) => typeof k === 'string') ? kept : null;
+	} catch {
+		return null;
+	}
+}
+
+function rememberViewAs(kept: string[] | null) {
+	setViewAs(kept);
+	try {
+		if (kept === null) sessionStorage.removeItem(VIEW_AS_STORAGE_KEY);
+		else sessionStorage.setItem(VIEW_AS_STORAGE_KEY, JSON.stringify(kept));
+	} catch {
+		// Without storage the preview lasts until the page is reloaded.
 	}
 }
 
@@ -141,8 +171,21 @@ export const auth = {
 	get failure() {
 		return failure;
 	},
+	/** What this session acts with: narrowed while an admin is viewing as a colleague. */
 	get entitlements() {
 		return entitlements;
+	},
+	/** What the identity provider granted, narrowed or not. */
+	get held() {
+		return held;
+	},
+	/** True while an admin is previewing the app with fewer entitlements. */
+	get viewingAs() {
+		return viewingAs;
+	},
+	/** Whether the caller may use "View as colleague": they really hold `admin`. */
+	get canViewAs() {
+		return held.includes('admin') || held.includes('admin:write');
 	},
 	get workspaces() {
 		return memberships;
@@ -177,6 +220,8 @@ export const auth = {
 	async init() {
 		isLoading = true;
 		failure = null;
+		// Before the first request, so /me is already asked for the narrowed view.
+		setViewAs(restoreViewAs());
 		try {
 			const [me, mine] = await Promise.all([
 				// Not followed: a redirect here is the proxy sending a lapsed
@@ -192,7 +237,12 @@ export const auth = {
 				return;
 			}
 			user = me.data;
-			entitlements = (me.data as { entitlements?: string[] }).entitlements ?? [];
+			entitlements = me.data.entitlements ?? [];
+			held = me.data.held ?? entitlements;
+			viewingAs = me.data.viewing_as ?? false;
+			// A stored set the server did not honour (the account is no longer an
+			// admin) must not keep being sent.
+			if (!viewingAs) rememberViewAs(null);
 			memberships = (mine.data as Membership[]) ?? [];
 
 			reconcileActiveWorkspace(restoreStoredWorkspaceId());
@@ -250,10 +300,28 @@ export const auth = {
 			: entitlements.includes(module) || entitlements.includes(`${module}:write`);
 	},
 
+	/**
+	 * Keep only these of the caller's own entitlements, for this tab. Narrows
+	 * only: the server intersects it with what is truly held. State changes
+	 * here; the caller reloads the page so /me and every page's data are read
+	 * again under it.
+	 */
+	viewAsColleague(kept: string[]) {
+		rememberViewAs(kept.filter((name) => held.includes(name)));
+	},
+
+	/** Go back to the caller's own entitlements; the caller reloads, as above. */
+	stopViewingAs() {
+		rememberViewAs(null);
+	},
+
 	/** Sign out at the identity provider; the app holds no session to clear. */
 	async logout() {
 		user = null;
 		entitlements = [];
+		held = [];
+		viewingAs = false;
+		rememberViewAs(null);
 		memberships = [];
 		selectWorkspace(null);
 		rememberWorkspaceId(null);
