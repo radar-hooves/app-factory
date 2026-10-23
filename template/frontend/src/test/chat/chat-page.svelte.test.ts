@@ -18,7 +18,9 @@ const fake = vi.hoisted(() => ({
 vi.mock('$app/state', async () => ({ page: (await import('./page-state.svelte')).nav }));
 vi.mock('$app/navigation', () => ({ goto: fake.goto, preloadCode: vi.fn(async () => undefined) }));
 vi.mock('$lib/api', () => ({
-	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: vi.fn() }
+	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: vi.fn() },
+	// The page's ask goes through the global fetch the tests stub.
+	apiFetch: (...args: Parameters<typeof fetch>) => fetch(...args)
 }));
 // Every member the page reads, the test app's unset ones included: a mock
 // refuses a read of a name it was not given.
