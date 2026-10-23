@@ -6,6 +6,10 @@ All notable changes to this package are documented here. Format follows [Keep a 
 
 Consumer: caspo, caspo-67.
 
+### Added
+
+- **`Conversation` and `AgentTranscript` take a `working` snippet**, drawn in place of the "working" line before an answer shows anything; it is given the line's `label` and `since`.
+
 ### Changed
 
 - **`Chat.ask` takes the files as a fourth argument**, so a question handed over from another page goes out with its attachments at once.

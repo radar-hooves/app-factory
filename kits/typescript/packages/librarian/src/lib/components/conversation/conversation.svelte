@@ -137,6 +137,9 @@
 		 *  transcript. It stays put while the transcript scrolls and narrows
 		 *  with it when a pane opens. */
 		toolbar?: Snippet;
+		/** Drawn in place of each answer's "working" line before it shows anything
+		 *  (`AgentTranscriptProps.working`). */
+		working?: AgentTranscriptProps['working'];
 	}
 
 	let {
@@ -168,7 +171,8 @@
 		turn: presentTurn,
 		lead,
 		toolbar,
-		formatCost
+		formatCost,
+		working
 	}: Props = $props();
 
 	// Resolved ONCE, here, and handed down whole: every child takes `copy` and
@@ -392,6 +396,7 @@
 										? (text: string) => onedit(index, text)
 										: undefined,
 								formatCost,
+								working,
 								oncite: oncite || loadDocument ? cite : undefined,
 								onregenerate: last && !running ? onregenerate : undefined,
 								onmark:

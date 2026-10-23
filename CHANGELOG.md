@@ -13,6 +13,7 @@ Need: a persona's chart should draw on the household charting stack (`stacks/sve
 - **Home's question box is the chat page's own** (`AskHome`/`AskBox`: attach, briefing, scope, send; no model picker). Its send hands question, files, scope and briefing kind to the chat page, which asks at once. Closes a Home box that dropped files and scope on the way to the chat.
 - **View as colleague** (admin-only, narrowing-only): the account menu keeps a ticked subset of the admin's entitlements for the tab and sends it as `X-View-As`; `/api/users/me` returns `held` and `viewing_as`. `apiFetch` carries the header for the chat's ask and the kit's settings page, report widget and alert bell (each takes a `fetch`). The library's collection cut is not narrowed. Closes previewing the app by signing in as a dummy account.
 - **`@poodle64/ui`**: `AppIdentity` `themeToggle` (default true) hides "Switch theme" for a dark-only app; `SchemaForm` `validate` (default false: no client-side Ajv compile, which the CSP refuses); `fetch` on `SettingsPage`, `ReportWidget`, `AlertBell`.
+- **An app's own art in three state surfaces**: `ChatExtensions.Thinking` (`lib/agent/app.ts`) replaces the chat's "working" line (`@poodle64/librarian` `working` snippet on `Conversation`), and the new app-owned `lib/art.ts` exports `ErrorArt` (given `status` and `message`, above the error page's words) and `LoadingArt` (in place of the layout's spinner). All default to none.
 
 ### Changed
 

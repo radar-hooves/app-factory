@@ -6,6 +6,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const art = vi.hoisted(() => ({ Thinking: undefined as unknown }));
 const fake = vi.hoisted(() => ({
 	goto: vi.fn(
 		async (_href: string, _options?: { state?: { ask?: string; files?: File[]; kind?: string } }) =>
@@ -30,12 +31,17 @@ vi.mock('$lib/agent/app', async () => ({
 	copy: undefined,
 	formatCost: undefined,
 	visuals: undefined,
-	...(await import('./app'))
+	...(await import('./app')),
+	// The page reads it on each render, so a test sets it before rendering.
+	get Thinking() {
+		return art.Thinking;
+	}
 }));
 
 import AskHome from '$lib/agent/ask-home.svelte';
 import { forgetAgent, handOff } from '$lib/agent/chat';
 import { nav as page } from './page-state.svelte';
+import Thinking from './Thinking.svelte';
 import ChatPage from '../../routes/(protected)/chat/[persona]/+page.svelte';
 import SharedPage from '../../routes/(protected)/chat/[persona]/answers/[conversation]/[turn]/+page.svelte';
 
@@ -142,6 +148,7 @@ function answering(session: string, result: string) {
 }
 
 afterEach(() => {
+	art.Thinking = undefined;
 	forgetAgent();
 	vi.unstubAllGlobals();
 	fake.goto.mockClear();
@@ -263,6 +270,29 @@ describe('A persona page, through the app extension points', () => {
 		expect(fake.GET).toHaveBeenCalledWith('/api/agent/{persona}/documents/{document_id}', {
 			params: { path: { persona: 'outrider', document_id: 1042 } }
 		});
+	});
+});
+
+describe('While an answer has shown nothing yet', () => {
+	/** An ask whose stream never starts, so the page sits on its working line. */
+	async function waiting() {
+		const asked = vi.fn(() => new Promise<Response>(() => undefined));
+		vi.stubGlobal('fetch', asked);
+		at('/chat/outrider', { ask: 'How much leave?' });
+		await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+	}
+
+	it("draws the package's own working line when the app supplies no Thinking", async () => {
+		await waiting();
+		expect(await screen.findByText(/Outrider is (looking|reading)/)).toBeInTheDocument();
+		expect(screen.queryByTestId('app-thinking')).toBeNull();
+	});
+
+	it("draws the app's Thinking in its place, given the persona", async () => {
+		art.Thinking = Thinking;
+		await waiting();
+		expect(await screen.findByText('Outrider has the kettle on')).toBeInTheDocument();
+		expect(screen.queryByText(/Outrider is (looking|reading)/)).toBeNull();
 	});
 });
 

@@ -57,6 +57,9 @@ _skip_if_exists:
   # factory owns: what a citation opens, how an answer reads, what sits on a
   # persona's home. App-owned by definition (docs/design/agent-console.md).
   - frontend/src/lib/agent/app.ts
+  # THE extension point for the factory's state surfaces (the protected error page and
+  # the protected layout's loading state): the app's own illustration.
+  - frontend/src/lib/art.ts
   # THE extension point for frontend/src/routes/(protected)/+layout.svelte: this app's
   # shell, nav and top bar. Stamped with the factory's composition, then the
   # app's — an update must never overwrite the nav it has declared.
@@ -115,6 +118,7 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/lib/api/error-toast.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/auth.svelte.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/test/chat{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/test/art{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/chat.spec.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/tests/e2e/chat{% endif %}"
   - "{% if not factory_selftest %}frontend/src/routes/(protected)/layout.test.ts{% endif %}"

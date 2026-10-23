@@ -65,6 +65,14 @@ describe('Conversation name', () => {
 		expect(screen.getByText('Penny is looking…')).toBeInTheDocument();
 	});
 
+	it("draws the host's own working line in place of the package's", () => {
+		const turns: Turn[] = [{ id: '1', question: 'q', blocks: [], outcome: null }];
+		const working = createRawSnippet(() => ({ render: () => '<p>Kettle on</p>' }));
+		conversation({ turns, running: true, working });
+		expect(screen.getByText('Kettle on')).toBeInTheDocument();
+		expect(screen.queryByText('Assistant is looking…')).not.toBeInTheDocument();
+	});
+
 	it('names the persona in the scope statement it renders for the host', () => {
 		conversation({ name: 'penny', scope: 'Bills, quotes and the project register.' });
 		expect(screen.getByRole('button', { name: /What Penny answers from/ })).toBeInTheDocument();

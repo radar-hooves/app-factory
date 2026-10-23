@@ -3,6 +3,7 @@ import { createRawSnippet } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Layout from './+layout.svelte';
+import LoadingArt from '../../test/art/LoadingArt.svelte';
 
 // The signed-in app's layout, rendered with the factory's own stamped frame:
 // what every route under (protected)/ gets, which is the reason a route the factory
@@ -26,6 +27,14 @@ const route = vi.hoisted(() => ({
 }));
 
 vi.mock('$app/state', () => ({ page: route }));
+
+const art = vi.hoisted(() => ({ LoadingArt: undefined as unknown }));
+
+vi.mock('$lib/art', () => ({
+	get LoadingArt() {
+		return art.LoadingArt;
+	}
+}));
 
 const init = vi.hoisted(() => vi.fn());
 
@@ -92,6 +101,7 @@ beforeEach(() => {
 		activeWorkspace: null
 	});
 	route.data = {};
+	art.LoadingArt = undefined;
 });
 
 function signIn() {
@@ -207,6 +217,16 @@ describe('the signed-in app layout', () => {
 		expect(screen.getByRole('status')).toBeInTheDocument();
 		expect(screen.queryByTestId('the-page')).toBeNull();
 		expect(redirectToAuthentik).not.toHaveBeenCalled();
+	});
+
+	it("draws the app's LoadingArt in place of the spinner while the caller loads", () => {
+		art.LoadingArt = LoadingArt;
+		session.isLoading = true;
+		render(Layout, { props: { children } });
+
+		const status = screen.getByRole('status');
+		expect(status).toContainElement(screen.getByTestId('loading-art'));
+		expect(screen.queryByText('Loading…')).toBeNull();
 	});
 
 	it('asks which workspace, never a silent default, when two are held and none chosen', () => {

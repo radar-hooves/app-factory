@@ -90,6 +90,9 @@ export interface ChatExtensions {
 	 *  and throws on a block that is invalid (the page then shows the code). Its
 	 *  source need not be JSON. */
 	visuals?: Record<string, Visual>;
+	/** Drawn in place of the package's own "working" line while an answer has
+	 *  shown nothing yet; `label` and `since` are that line's own. */
+	Thinking?: Component<{ persona: Persona; label?: string; since?: number }>;
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? '';

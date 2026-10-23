@@ -11,7 +11,9 @@
  * composer's briefing control asks, and the card it reads as) and
  * `formatCost` (an answer's cost in this app's own currency and words, from
  * US dollars, "about A$0.34") and `visuals` (a renderer for a
- * fence's language beside the package's own, `{ openui: { component, parse } }`). The factory's copy
+ * fence's language beside the package's own, `{ openui: { component, parse } }`)
+ * and `Thinking` (a component drawn in place of the "working" line before an
+ * answer shows anything). The factory's copy
  * exports none, and the page is the package's own.
  */
 export {};

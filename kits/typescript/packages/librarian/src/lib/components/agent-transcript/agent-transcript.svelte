@@ -18,6 +18,7 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import type { Snippet } from 'svelte';
 	import {
 		outcomeLine,
 		readerQuestion,
@@ -116,6 +117,9 @@
 		 *  ("about A$0.34"). The package never converts currency itself,
 		 *  and a zero-cost run (a local model) shows no cost regardless. */
 		formatCost?: (usd: number) => string;
+		/** Drawn in place of the package's own "working" line while the answer has
+		 *  shown nothing yet; given the line's `label` and `since`. */
+		working?: Snippet<[{ label?: string; since?: number }]>;
 	}
 
 	let {
@@ -145,7 +149,8 @@
 		onmark,
 		shared,
 		onshare,
-		formatCost
+		formatCost,
+		working
 	}: AgentTranscriptProps = $props();
 
 	// The prose IS the artefact: it reads in the column, and the transcript
@@ -390,11 +395,18 @@
 		</header>
 
 		{#if running && segments.length === 0}
-			<Working
-				copy={words}
-				label={answering !== undefined ? words.stillAnswering : undefined}
-				since={answering}
-			/>
+			{#if working}
+				{@render working({
+					label: answering !== undefined ? words.stillAnswering : undefined,
+					since: answering
+				})}
+			{:else}
+				<Working
+					copy={words}
+					label={answering !== undefined ? words.stillAnswering : undefined}
+					since={answering}
+				/>
+			{/if}
 		{/if}
 
 		{#each segments as seg (seg.index)}

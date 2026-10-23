@@ -271,6 +271,7 @@
 			describeTool={extensions.describeTool}
 			turn={extensions.Turn ? presented : undefined}
 			lead={extensions.Home && !c.conversationId ? home : undefined}
+			working={extensions.Thinking ? thinking : undefined}
 			{formatCost}
 			{copy}
 		>
@@ -340,6 +341,12 @@
 {#snippet presented(props: AgentTranscriptProps)}
 	{#if extensions.Turn && persona}
 		<extensions.Turn {...props} {persona} />
+	{/if}
+{/snippet}
+
+{#snippet thinking(line: { label?: string; since?: number })}
+	{#if extensions.Thinking && persona}
+		<extensions.Thinking {persona} {...line} />
 	{/if}
 {/snippet}
 

@@ -22,10 +22,14 @@
 	import { page } from '$app/state';
 	import { apiFetch, redirectToAuthentik } from '$lib/api';
 	import AppFrame, { workspaceLabel } from '$lib/app-frame.svelte';
+	import * as app from '$lib/art';
 	import { auth } from '$lib/auth.svelte';
+	import type { StateArt } from '$lib/state-art';
 	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
 
 	let { children }: { children: Snippet } = $props();
+
+	const art: StateArt = app;
 
 	// Load the caller and their workspace memberships once
 	// (rules-library/platform/authentication.md §Frontend Auth Store Contract).
@@ -92,7 +96,13 @@
 		/>
 	{:else if auth.isLoading || !auth.isAuthenticated}
 		<!-- Loading, a lapsed session on its way to sign in, or signing out. -->
-		<LoadingState />
+		{#if art.LoadingArt}
+			<div role="status" aria-label="Loading…" class="flex justify-center p-8">
+				<art.LoadingArt />
+			</div>
+		{:else}
+			<LoadingState />
+		{/if}
 	{:else if auth.needsWorkspaceChoice}
 		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
 		<WorkspaceChooser label={workspaceLabel} />
