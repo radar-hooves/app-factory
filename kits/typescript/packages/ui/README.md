@@ -489,7 +489,7 @@ How wide the page body may get, chosen once in the layout from a scale of four:
 
 | Value   | Width    | Reach for it when the page is                                        |
 | ------- | -------- | -------------------------------------------------------------------- |
-| `prose` | `72ch`   | long-form running text: documentation, an article, a policy, a guide |
+| `prose` | `40rem`  | long-form running text: documentation, an article, a policy, a guide |
 | `page`  | `80rem`  | an everyday page: a form, a detail view, settings, a wizard          |
 | `wide`  | `120rem` | an index or a dashboard: card grids, tables, charts, board columns   |
 | `full`  | no cap   | a canvas that should use the whole panel: a map, a diagram, a board  |
@@ -512,16 +512,17 @@ names cannot drift like that.
 span a large display would be worse than what it replaces, and worse everywhere
 at once. Measured in Chromium at 2560px: the same paragraph runs to **311
 characters per line** uncapped, against an accepted band of 45–90 for continuous
-text. `prose` puts it at 80. It is stated in `ch` rather than `rem` deliberately —
-a reading measure is a count of characters, not a length, so it has to track
-whatever face and size the app actually set.
+text. `prose` puts it at about 70. It is stated in `rem`, not `ch`: `ch` resolves
+against each element's own font size, so a lead, a paragraph and a small intro in
+one column ended at three right edges. A root-relative length gives every block
+the same one.
 
 Every tier is a CSS custom property, so an app retunes one without waiting on a
 release of this package:
 
 ```css
 :root {
-	--ds-shell-measure-prose: 66ch;
+	--ds-shell-measure-prose: 36rem;
 	--ds-shell-measure-page: 72rem;
 	--ds-shell-measure-wide: 100rem;
 }
@@ -532,10 +533,9 @@ Two things worth knowing before you set it:
 - **The cap is a ceiling, never a floor.** `page` caps at 80rem; a 1440px laptop
   has less than that available, so nothing changes there. A measure never narrows
   a window that was already narrower than the tier.
-- **`prose` moves when the font does.** A webfont arriving after first paint
-  reflows the column, because `ch` is measured in the face that actually
-  rendered. That is the tier doing its job rather than a bug; `page` and `wide`
-  are lengths and never move.
+- **`prose` is a length, so it does not follow the font.** Text set larger or
+  smaller than the body fits more or fewer characters in the same column and
+  ends at the same right edge as its neighbours; that is the point of it.
 - **The cap is the border box, so `padded` spends its padding inside it.**
   `measure="page"` with the default padding is 80rem of box holding 78rem of
   content, which is the same arithmetic as the `mx-auto max-w-4xl px-6` idiom it
@@ -562,9 +562,9 @@ measure. Cap the block, not the route:
 
 Same attribute and same custom properties as the shell's own measure, so the
 block retunes when the scale does. That is the point of it: the alternative an
-app reaches for is a local `max-w-prose` or `max-w-[72ch]`, a number typed once
+app reaches for is a local `max-w-prose` or `max-w-[72ch]` (both in `ch`, so blocks of different sizes end at different edges), a number typed once
 that never hears about a retune — four apps had written ten of them between
-them and not one matched this package's own `72ch`.
+them and not one matched this package's own measure.
 
 `.ds-measure` caps and nothing else. `.ds-shell-measure`, which the shell puts
 on its own content box, is that plus `margin-inline: auto` — right for a content

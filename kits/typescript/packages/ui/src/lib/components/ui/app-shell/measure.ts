@@ -14,7 +14,7 @@
  */
 
 /**
- * - `prose` — a genuine reading measure (`72ch`) for long-form running text.
+ * - `prose` — a genuine reading measure (`40rem`, about 70 characters) for long-form running text.
  * - `page` — everyday pages: forms, detail views, settings (`80rem`).
  * - `wide` — indexes, card grids, tables, dashboards (`120rem`).
  * - `full` — no cap. The default, so omitting `measure` changes nothing.

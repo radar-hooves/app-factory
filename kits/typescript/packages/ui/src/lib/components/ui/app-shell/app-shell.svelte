@@ -202,7 +202,7 @@
 		onToggleTheme?: () => void;
 		padded?: boolean;
 		/**
-		 * How wide the page body may get, from a named scale: `prose` (72ch, for
+		 * How wide the page body may get, from a named scale: `prose` (40rem, for
 		 * long-form running text), `page` (80rem — forms, detail views,
 		 * settings), `wide` (120rem — indexes, grids, tables, dashboards), or
 		 * `full` (no cap).

@@ -313,8 +313,8 @@
 	// widget over the last row of a page `?long=1` makes scroll.
 	const chromeLong = params.get('long') === '1';
 	// `?surface=measure&measure=<tier>` drives the content measure. Every claim
-	// it makes is a resolved length — `80rem` against the root font size, `72ch`
-	// against the body face, a cap that binds only once the viewport is wide
+	// it makes is a resolved length — `80rem` and `40rem` against the root font size,
+	// a cap that binds only once the viewport is wide
 	// enough to reach it, and a box centred by auto margins inside a flex
 	// column. jsdom resolves none of those: it reports `max-width` as the
 	// unresolved literal and every rect as zero, so a unit test there would pass
@@ -1638,10 +1638,24 @@
 		</div>
 
 		<!-- A prose block INSIDE the page, on a route that may legitimately be
-		     `wide` (design-system#22). `.ds-measure` caps it at the same 72ch the
+		     `wide` (design-system#22). `.ds-measure` caps it at the same measure the
 		     shell would use and leaves it where it is; `.ds-shell-measure` would
 		     also centre it, which is right for the content box and wrong here. -->
 		<div data-probe="measure-block-wrap" class="mt-6">
+			<p data-probe="measure-size-lead" class="ds-measure text-xl" data-measure="prose">
+				A lead paragraph set larger than the body, long enough to wrap at the reading measure and
+				end exactly where the smaller blocks under it end, whatever its own font size.
+			</p>
+			<p data-probe="measure-size-intro" class="ds-measure text-sm" data-measure="prose">
+				An intro set smaller than the body, long enough to wrap at the reading measure and end
+				exactly where the larger blocks above it end, whatever its own font size, so a column of
+				mixed sizes keeps one right edge.
+			</p>
+			<p data-probe="measure-size-note" class="ds-measure text-xs" data-measure="prose">
+				A note set smaller still, long enough to wrap at the reading measure and end exactly where
+				the larger blocks above it end, whatever its own font size, so a column of mixed sizes
+				keeps one right edge, which is the whole point of stating the measure in rem.
+			</p>
 			<p data-probe="measure-block" class="ds-measure text-sm" data-measure="prose">
 				A block set to the reading measure inside a page whose own measure is wider. The cap
 				comes from the same custom property the shell reads, so retuning the scale moves this

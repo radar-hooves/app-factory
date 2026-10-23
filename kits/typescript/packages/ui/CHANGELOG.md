@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.24] - 2026-10-23
+
+Consumer: caspo (a lead, a paragraph and an intro in one column ended at three right edges).
+
+### Changed
+
+- **The `prose` measure is `40rem`, not `72ch`.** `ch` resolves against each element's own font size, so under `.ds-measure` blocks of 20, 16 and 14px stopped at 982, 770 and 674px on a 1673px page. `--ds-shell-measure-prose` is now root-relative: every block in a column ends at one edge, about 70 characters of body text (69 in the padded shell box, measured). At a 16px body the width is within 5% of the old one. `AppShell` `measure="prose"`, `.ds-measure[data-measure="prose"]` and `DocumentReader` follow the property; `CollectionDetail`'s description moves from `max-w-prose` (65ch, the same flaw) to `.ds-measure`. An app that retuned the property in `ch` keeps its value; an app's own `--measure-prose` or `max-w-prose` for this purpose can go.
+
 ## [2026.10.23] - 2026-10-23
 
 Consumer: godswood, radar-hooves/godswood#889 (its F2 review, measured at 390 and 3360 px).

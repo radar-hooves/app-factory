@@ -1551,7 +1551,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 // ── The content measure ─────────────────────────────────────────────────────
 // This is the check the feature exists for, and it is a WIDTH, so it can only
 // be made here. Every claim the scale makes is a resolved length: `80rem`
-// against the root font size, `72ch` against the body face as loaded, a cap
+// and `40rem` against the root font size, a cap
 // that binds only once the viewport is wide enough to reach it, and a box
 // centred by auto margins inside a flex column. jsdom resolves none of them —
 // it hands back the unresolved `var()` literal for `max-width` and zero for
@@ -1585,22 +1585,10 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			const mainRect = main.getBoundingClientRect();
 			const style = getComputedStyle(box);
 
-			// What `72ch` MEANS in this box, measured rather than assumed: a probe
-			// sized in the unit under test, in the box's own inherited font. If the
-			// face or size ever changes, this moves with it, which is the whole
-			// argument for stating a reading measure in characters.
-			const probe = document.createElement('div');
-			probe.style.cssText = 'position:absolute;visibility:hidden;width:72ch';
-			box.appendChild(probe);
-			const oneProseMeasure = probe.getBoundingClientRect().width;
-			probe.remove();
-
 			// How many characters of the app's ACTUAL running text land on a line.
-			// This is the claim `prose` makes, and it is not the same number as
-			// `72ch`: `ch` resolves against the box's own font, while the copy
-			// inside it is a step smaller, so the real line is longer than 72
-			// characters. Measured off a sample in the paragraph's own font rather
-			// than assumed from the unit.
+			// This is the claim `prose` makes, in the terms it is made in rather
+			// than as a pixel threshold. Measured off a sample in the paragraph's
+			// own font.
 			const copy = document.querySelector('[data-probe="measure-copy"]');
 			let charsPerLine = null;
 			if (copy) {
@@ -1623,7 +1611,6 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 				hasAttribute: box.hasAttribute('data-measure'),
 				hasClass: box.classList.contains('ds-shell-measure'),
 				rootFontSize: parseFloat(getComputedStyle(document.documentElement).fontSize),
-				oneProseMeasure: Math.round(oneProseMeasure * 100) / 100,
 				charsPerLine,
 				face: copy ? getComputedStyle(copy).fontFamily.split(',')[0].replace(/"/g, '') : 'n/a',
 				mainScroll: main.scrollWidth,
@@ -1657,6 +1644,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		// against a number typed twice: 80rem and 120rem at the root font size
 		// this document actually resolved.
 		for (const [measure, rem] of [
+			['prose', 40],
 			['page', 80],
 			['wide', 120]
 		]) {
@@ -1667,15 +1655,6 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 				`box ${at[measure].boxWidth}px vs ${rem}rem = ${expected}px (root ${at[measure].rootFontSize}px), max-width ${at[measure].maxWidth}`
 			);
 		}
-
-		// `prose` is stated in characters, so it is checked in characters: the box
-		// must be exactly what `72ch` measures in its own font. A `rem` slipped in
-		// here would pass a "narrower than page" test and fail this one.
-		check(
-			'measure @2560px, prose: the rendered width is 72ch in the box’s own face',
-			Math.abs(at.prose.boxWidth - at.prose.oneProseMeasure) < 1,
-			`box ${at.prose.boxWidth}px vs a 72ch probe at ${at.prose.oneProseMeasure}px`
-		);
 
 		// A reading measure that spanned a 4K panel would be worse than the
 		// per-page guesses it replaces, which is the entire reason `prose` exists
@@ -1895,7 +1874,10 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			headingLeft: Math.round(heading.getBoundingClientRect().left),
 			marginInline: getComputedStyle(block).marginInlineStart,
 			resolvedCap: getComputedStyle(block).maxWidth,
-			family: getComputedStyle(block).fontFamily
+			family: getComputedStyle(block).fontFamily,
+			edges: [...document.querySelectorAll('[data-probe^="measure-size-"]')].map(
+				(el) => el.getBoundingClientRect().right
+			)
 		};
 	});
 
@@ -1913,15 +1895,20 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	);
 	// It has to track the package's own property, or an app has gained nothing
 	// over the `max-w-[72ch]` it would otherwise have typed.
-	await page.addStyleTag({ content: ':root { --ds-shell-measure-prose: 40ch; }' });
+	await page.addStyleTag({ content: ':root { --ds-shell-measure-prose: 20rem; }' });
 	await page.evaluate(() => document.fonts.ready);
 	const retuned = await page.evaluate(
 		() => document.querySelector('[data-probe="measure-block"]').getBoundingClientRect().width
 	);
 	check(
+		'.ds-measure ends blocks of different type sizes at one right edge',
+		measured.edges.every((e) => Math.abs(e - measured.edges[0]) < 1),
+		`right edges ${measured.edges.map((e) => e.toFixed(0)).join(' / ')}px for a 20px, 14px and 12px block`
+	);
+	check(
 		'.ds-measure retunes with --ds-shell-measure-prose',
 		retuned < measured.blockWidth,
-		`${measured.blockWidth.toFixed(0)}px at 72ch -> ${retuned.toFixed(0)}px at 40ch`
+		`${measured.blockWidth.toFixed(0)}px at 40rem -> ${retuned.toFixed(0)}px at 20rem`
 	);
 	await context.close();
 }

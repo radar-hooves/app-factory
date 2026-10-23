@@ -357,14 +357,14 @@
 	   for the same reason the rail width is one: an app retunes a tier in one
 	   declaration instead of waiting on a release of this package.
 
-	   `prose` is in `ch` deliberately, where the other two are in `rem`. A
-	   reading measure is a count of CHARACTERS, not a length — the whole claim
-	   is "a line the eye can track back from", and that is a function of the
-	   face and size the app actually set, not of a number someone typed once.
-	   `page` and `wide` are page frames rather than reading measures, so they
-	   are lengths and stay in rem.
+	   `prose` is in `rem`, like the other two, though it is a reading measure.
+	   `ch` resolves against each element's OWN font size, so blocks of 20, 16
+	   and 14px in one column stopped at three different right edges (982, 770
+	   and 674px measured). A root-relative length gives them one edge. 40rem
+	   is about 70 characters of body text in the household face; a caller that
+	   wants a different count retunes the property.
 	   ──────────────────────────────────────────────────────────────────────── */
-	--ds-shell-measure-prose: 72ch;
+	--ds-shell-measure-prose: 40rem;
 	--ds-shell-measure-page: 80rem;
 	--ds-shell-measure-wide: 120rem;
 }
@@ -1161,7 +1161,7 @@
 	   rather than drifting from it. That is the whole point: the alternative an
 	   app reaches for is a local `max-w-prose` or `max-w-[72ch]`, which is a
 	   number typed once that never hears about a retune — four apps had written
-	   ten of them between them, and not one matched this package's own 72ch. */
+	   ten of them between them, and not one matched this package's own measure. */
 	.ds-measure[data-measure='prose'],
 	.ds-shell-measure[data-measure='prose'] {
 		max-width: var(--ds-shell-measure-prose);

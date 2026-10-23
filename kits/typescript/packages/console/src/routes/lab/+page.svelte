@@ -181,7 +181,7 @@
 		fill: '',
 		wide: 'max-w-[120rem]',
 		page: 'max-w-[80rem]',
-		prose: 'max-w-[72ch]'
+		prose: 'max-w-[40rem]'
 	};
 
 	function pickSection(i: number) {

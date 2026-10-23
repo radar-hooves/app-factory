@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.69] - 2026-10-23
+
+Need: prose blocks of different font sizes in one column should end at the same right edge; consumer: caspo.
+
+### Changed
+
+- **`.ds-measure` and `--ds-shell-measure-prose` are `40rem`, not `72ch`** (`@poodle64/ui` 2026.10.24, which stamped apps now pin). Migration: bump `@poodle64/ui` to `^2026.10.24` and delete any local prose-measure variant (`--measure-prose`, `.measure-prose`, `max-w-prose`, `max-w-[72ch]`) in favour of `class="ds-measure" data-measure="prose"`. Nothing else changes.
+
 ## [2026.10.68] - 2026-10-23
 
 Need: close the gaps in factory-owned code that caspo's self-assessment against the ASD ISM found, before its colleagues arrive: a bearer minted for another app replayed at `/mcp`, uploads never checked by content, the running app holding the database owner role, and no record of privileged actions; consumer: caspo.
