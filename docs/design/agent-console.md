@@ -82,6 +82,8 @@ Published to the household index at each factory release tag; the stamp pins it 
 - `conversations.py`: `agent_conversations` (`persona`, `session_id`, `turns`, `answering_since`, `stop_requested`, `shared`). Each turn's record keeps the question, its `kind`, the `collection` it was narrowed to, the `citations` the page was shown and the asker's `mark`; the persona's transcript keeps the answer.
 - `quota.py`: one question, one charge, per person per local day (`<APP>_AGENT_DAILY_QUESTIONS`, admins exempt).
 - `ask.py`: the turn (§The turn).
+- A flood guard, not a quota: at most `<APP>_AGENT_MAX_CONCURRENT_TURNS` (8; 0 off) turns in flight across every worker, counted from the stamped rows under an advisory lock, the next ask refused 503 with `Retry-After`; and `<APP>_AGENT_ASK_RATE_LIMIT` (`6/minute`) asks per person on `POST /{persona}/ask`, admins included, off with `<APP>_RATE_LIMIT_ENABLED=false`.
+- An ask carries at most 10 files, 20 MB each and 50 MB together, of `.png .jpg .jpeg .webp .pdf .docx .txt .md`, refused unread (413 too large, 415 type, 400 count); the body is cut off at that size plus 1 MB whatever its Content-Length says.
 - `router.py`, under `/api/agent`:
 
 | Method and path | operationId | Gate |

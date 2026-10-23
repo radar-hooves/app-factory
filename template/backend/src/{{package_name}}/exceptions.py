@@ -113,6 +113,20 @@ class AllowanceSpentError(BackendBaseException):
         self.retry_after = retry_after
 
 
+class PayloadTooLargeError(BackendBaseException):
+    """The request, or a file in it, is larger than this service takes (413)."""
+
+    status_code = 413
+    error_code = "payload_too_large"
+
+
+class UnsupportedMediaTypeError(BackendBaseException):
+    """A file in the request is of a type this service does not read (415)."""
+
+    status_code = 415
+    error_code = "unsupported_media_type"
+
+
 class UpstreamServiceError(BackendBaseException):
     """A dependent external service failed or returned an unusable response (502)."""
 
@@ -125,6 +139,16 @@ class ServiceUnavailableError(BackendBaseException):
 
     status_code = 503
     error_code = "service_unavailable"
+
+
+class BusyError(ServiceUnavailableError):
+    """This service is at its ceiling of work in flight (503); try again in `retry_after` seconds."""
+
+    error_code = "busy"
+
+    def __init__(self, message: str, *, retry_after: int, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message, context={**(context or {}), "retry_after": retry_after})
+        self.retry_after = retry_after
 
 
 def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] | None = None) -> JSONResponse:
@@ -264,6 +288,21 @@ async def allowance_spent_error_handler(request: Request, exc: AllowanceSpentErr
     return _build_error_response(exc, headers={"Retry-After": str(exc.retry_after)})
 
 
+async def payload_too_large_error_handler(request: Request, exc: PayloadTooLargeError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc)
+
+
+async def unsupported_media_type_error_handler(request: Request, exc: UnsupportedMediaTypeError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc)
+
+
+async def busy_error_handler(request: Request, exc: BusyError) -> JSONResponse:
+    _log_exception(request, exc)
+    return _build_error_response(exc, headers={"Retry-After": str(exc.retry_after)})
+
+
 async def upstream_service_error_handler(request: Request, exc: UpstreamServiceError) -> JSONResponse:
     _log_exception(request, exc)
     return _build_error_response(exc)
@@ -314,6 +353,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register(app, ForbiddenError, forbidden_error_handler)
     _register(app, ConflictError, conflict_error_handler)
     _register(app, AllowanceSpentError, allowance_spent_error_handler)
+    _register(app, PayloadTooLargeError, payload_too_large_error_handler)
+    _register(app, UnsupportedMediaTypeError, unsupported_media_type_error_handler)
     _register(app, UpstreamServiceError, upstream_service_error_handler)
     _register(app, ServiceUnavailableError, service_unavailable_error_handler)
+    _register(app, BusyError, busy_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

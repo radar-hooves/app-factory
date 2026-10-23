@@ -18,6 +18,7 @@ ask left running is a task (`_asking`), and cancelling it is the tab closing.
 """
 
 import asyncio
+import datetime
 import json
 import os
 import stat
@@ -30,14 +31,16 @@ from typing import Any
 
 import jwt
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import select, update
+from starlette.datastructures import UploadFile
 
 from {{ package_name }} import app_hooks
 from {{ package_name }}.api.agent import ask as ask_module
 from {{ package_name }}.api.agent import chat, conversations
+from {{ package_name }}.api.agent import router as router_module
 from {{ package_name }}.api.agent.conversations import AgentConversation
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.config import Settings, get_settings
@@ -45,6 +48,7 @@ from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exchange import Asker, Asking, Exchange
+from {{ package_name }}.rate_limit import limiter
 from tests.support import fake_agent_cli, fake_authentik, fake_library
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
@@ -1255,9 +1259,223 @@ async def test_two_files_of_one_name_both_reach_the_question(client: AsyncClient
     assert stored["turns"][0]["files"] == ["notes.txt", "notes (2).txt"]
 
 
-async def test_more_files_than_a_question_may_carry_are_refused(client: AsyncClient) -> None:
-    many = [("files[]", (f"{n}.txt", b"x")) for n in range(11)]
-    refused = await client.post(
-        "/api/agent/helper/ask", data={"question": "all of these"}, files=many, headers=_person("chat-helper")
+# ── What a question may carry, and how much may be in flight ─────────────
+
+
+@pytest.fixture
+def reads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every attachment read into memory, by name: a refused question must leave this empty."""
+    read: list[str] = []
+    original = UploadFile.read
+
+    async def counting(self: UploadFile, size: int = -1) -> bytes:
+        read.append(self.filename or "")
+        return await original(self, size)
+
+    monkeypatch.setattr(UploadFile, "read", counting)
+    return read
+
+
+@pytest.fixture
+def small_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Limits a test can cross with bytes: 1000 a file, 2500 together, 5000 for the whole body."""
+    monkeypatch.setattr(router_module, "ATTACHMENT_BYTES", 1000)
+    monkeypatch.setattr(router_module, "ATTACHMENTS_BYTES", 2500)
+    monkeypatch.setattr(router_module, "BODY_OVERHEAD", 2500)
+
+
+async def _attached(client: AsyncClient, files: list[tuple[str, bytes]]) -> Any:
+    return await client.post(
+        "/api/agent/helper/ask",
+        data={"question": "these"},
+        files=[("files[]", (name, content)) for name, content in files],
+        headers=_person("chat-helper"),
     )
-    assert refused.status_code == 422
+
+
+@pytest.mark.parametrize("count", [11, 12])
+async def test_more_files_than_a_question_may_carry_are_refused_400(
+    client: AsyncClient, reads: list[str], count: int
+) -> None:
+    refused = await _attached(client, [(f"{n}.txt", b"x") for n in range(count)])
+    assert refused.status_code == 400
+    assert "at most 10 files" in refused.json()["message"]
+    assert reads == []
+
+
+async def test_a_file_over_the_per_file_limit_is_refused_413_naming_it_and_the_limit(
+    client: AsyncClient, reads: list[str]
+) -> None:
+    refused = await _attached(client, [("small.txt", b"x"), ("big.pdf", b"x" * (20 * 2**20 + 1))])
+    assert refused.status_code == 413
+    assert "big.pdf" in refused.json()["message"]
+    assert "20 MB" in refused.json()["message"]
+    assert reads == []
+
+
+@pytest.mark.usefixtures("small_limits")
+async def test_files_each_within_the_limit_but_over_it_together_are_refused_413(
+    client: AsyncClient, reads: list[str]
+) -> None:
+    refused = await _attached(client, [(f"{n}.txt", b"x" * 900) for n in range(3)])
+    assert refused.status_code == 413
+    assert "together" in refused.json()["message"]
+    assert reads == []
+
+
+async def test_a_file_of_a_type_the_persona_cannot_read_is_refused_415_naming_it_and_what_is_taken(
+    client: AsyncClient, reads: list[str]
+) -> None:
+    for name in ("setup.exe", "archive.zip", "noextension"):
+        refused = await _attached(client, [("fine.txt", b"x"), (name, b"x")])
+        assert refused.status_code == 415
+        assert name in refused.json()["message"]
+        assert ".pdf" in refused.json()["message"]
+    assert reads == []
+
+
+async def test_every_type_the_composer_offers_is_taken_whatever_its_case(client: AsyncClient) -> None:
+    names = ["a.png", "b.JPG", "c.jpeg", "d.webp", "e.PDF", "f.docx", "g.txt", "h.md"]
+    assert (await _attached(client, [(name, b"x") for name in names])).status_code == 200
+
+
+@pytest.mark.usefixtures("small_limits")
+async def test_a_body_over_the_limit_is_refused_before_it_is_parsed(
+    client: AsyncClient, reads: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def never(*_: object, **__: object) -> None:
+        raise AssertionError("the body was parsed")
+
+    monkeypatch.setattr(Request, "form", never)
+    refused = await _attached(client, [("big.txt", b"x" * 6000)])
+    assert refused.status_code == 413
+    assert reads == []
+
+
+@pytest.mark.usefixtures("small_limits")
+@pytest.mark.parametrize("claimed", [None, "10"])
+async def test_a_body_that_lies_about_its_length_or_has_none_is_cut_off_at_the_limit(
+    client: AsyncClient, reads: list[str], claimed: str | None
+) -> None:
+    pulled = 0
+    chunk = 1000
+
+    async def body() -> AsyncIterator[bytes]:
+        nonlocal pulled
+        yield b'--b\r\nContent-Disposition: form-data; name="files[]"; filename="big.txt"\r\n\r\n'
+        for _ in range(1000):
+            pulled += chunk
+            yield b"x" * chunk
+        yield b"\r\n--b--\r\n"
+
+    headers = {**_person("chat-helper"), "content-type": "multipart/form-data; boundary=b"}
+    if claimed:
+        headers["content-length"] = claimed
+    refused = await client.post("/api/agent/helper/ask", content=body(), headers=headers)
+
+    assert refused.status_code == 413
+    assert pulled <= 5000 + 2 * chunk
+    assert reads == []
+
+
+async def test_a_json_body_is_bounded_too(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(router_module, "BODY_OVERHEAD", 500)
+    refused = await client.post("/api/agent/helper/ask", json={"question": "x" * 2000}, headers=_person("chat-helper"))
+    assert refused.status_code == 413
+
+
+async def test_the_turn_ceiling_refuses_503_with_retry_after_and_starts_nothing(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    agent_settings.max_concurrent_turns = 1
+    first = _person("chat-helper")
+    asking, conversation = await _asking(client, "helper", fake_agent_cli.HANG_TRIGGER, first)
+
+    second = _person("chat-helper")
+    refused = await _ask(client, "helper", "and me?", second)
+    assert refused.status_code == 503
+    assert int(refused.headers["retry-after"]) > 0
+    assert "busy" in refused.json()["message"]
+    assert _latest(second) is None
+    assert (await client.get("/api/agent/quota", headers=second)).json()["remaining"] == 3
+
+    assert (await client.post(f"/api/agent/conversations/{conversation}/stop", headers=first)).status_code == 204
+    await asyncio.wait_for(asking, timeout=10)
+    assert (await _ask(client, "helper", "now?", second)).status_code == 200
+
+
+async def test_two_asks_racing_for_the_last_place_are_not_both_given_it(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    agent_settings.max_concurrent_turns = 1
+    people = [_person("chat-helper"), _person("chat-helper")]
+    racing = [asyncio.create_task(_ask(client, "helper", fake_agent_cli.HANG_TRIGGER, who)) for who in people]
+    done, pending = await asyncio.wait(racing, timeout=10, return_when=asyncio.FIRST_COMPLETED)
+    assert len(done) == 1 and len(pending) == 1
+    assert done.pop().result().status_code == 503
+
+    held = next(who for who in people if _latest(who))
+    assert (await client.post(f"/api/agent/conversations/{_latest(held)}/stop", headers=held)).status_code == 204
+    await asyncio.wait_for(pending.pop(), timeout=10)
+
+
+async def test_the_turn_ceiling_counts_the_whole_database_not_this_process(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    """A turn held by another worker is a stamped row here, and is counted; a dead worker's is not."""
+    agent_settings.max_concurrent_turns = 1
+    away = _person("chat-helper")
+    asking, conversation = await _asking(client, "helper", fake_agent_cli.HANG_TRIGGER, away)
+    ours = ask_module._turns.copy()
+    ask_module._turns.clear()  # as if its task lived in another process
+    try:
+        assert (await _ask(client, "helper", "me too", _person("chat-helper"))).status_code == 503
+        with get_session_factory()() as db:
+            db.execute(
+                update(AgentConversation)
+                .where(AgentConversation.id == conversation)
+                .values(
+                    last_activity_at=conversations.now() - datetime.timedelta(seconds=conversations.STALE_SECONDS + 1)
+                )
+            )
+            db.commit()
+        assert (await _ask(client, "helper", "and me", _person("chat-helper"))).status_code == 200
+    finally:
+        ask_module._turns.update(ours)
+    assert (await client.post(f"/api/agent/conversations/{conversation}/stop", headers=away)).status_code == 204
+    await asyncio.wait_for(asking, timeout=10)
+
+
+@pytest.fixture
+def ask_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The limiter on, as the app runs it (the suite turns it off), at two asks a minute."""
+    monkeypatch.setattr(limiter, "enabled", True)
+    monkeypatch.setattr(get_settings().agent, "ask_rate_limit", "2/minute")
+
+
+@pytest.mark.usefixtures("ask_rate_limited")
+async def test_one_person_asking_too_often_is_refused_429_and_another_is_not(client: AsyncClient) -> None:
+    flood = _person("chat-helper", "admin")  # an admin is not exempt: this guards the host
+    for question in ("one", "two"):
+        assert (await _ask(client, "helper", question, flood)).status_code == 200
+    refused = await _ask(client, "helper", "three", flood)
+    assert refused.status_code == 429
+    assert int(refused.headers["retry-after"]) > 0
+
+    assert (await _ask(client, "helper", "hello", _person("chat-helper"))).status_code == 200
+
+
+@pytest.mark.usefixtures("ask_rate_limited")
+async def test_the_ask_limit_is_per_person_even_from_one_address(client: AsyncClient) -> None:
+    for _ in range(3):
+        assert (await _ask(client, "helper", "hello", _person("chat-helper", "admin"))).status_code == 200
+
+
+async def test_the_ask_limit_follows_the_rate_limit_switch(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings().agent, "ask_rate_limit", "1/minute")
+    assert limiter.enabled is False  # the suite's own setting, `<APP>_RATE_LIMIT_ENABLED=false`
+    admin = _person("chat-helper", "admin")
+    for question in ("one", "two", "three"):
+        assert (await _ask(client, "helper", question, admin)).status_code == 200

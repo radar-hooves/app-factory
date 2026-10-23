@@ -116,6 +116,16 @@ def answering(conversation: AgentConversation) -> datetime.datetime | None:
     return since
 
 
+def in_flight(db: Session) -> int:
+    """How many turns are being answered, on every worker: stamped, and its worker still beating."""
+    stale = now() - datetime.timedelta(seconds=STALE_SECONDS)
+    return db.execute(
+        select(func.count())
+        .select_from(AgentConversation)
+        .where(AgentConversation.answering_since.is_not(None), AgentConversation.last_activity_at >= stale)
+    ).scalar_one()
+
+
 def begin(
     db: Session,
     *,

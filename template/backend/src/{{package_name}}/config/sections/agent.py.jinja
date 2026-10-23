@@ -112,6 +112,13 @@ class AgentSettings(BaseSettings):
     # 0 turns the allowance off. The day is local to `quota_timezone`.
     daily_questions: int = 40
     quota_timezone: str = "Australia/Brisbane"
+    # A flood guard on the host, not a quota: each turn is a Claude Code process
+    # of a few hundred MB, so this many chat turns may be in flight across every
+    # worker and every person, and the next ask is refused 503 until one settles;
+    # 0 turns it off. And how often one person may ask, per minute by default
+    # (slowapi's form), admins included; it follows `<APP>_RATE_LIMIT_ENABLED`.
+    max_concurrent_turns: int = Field(default=8, ge=0)
+    ask_rate_limit: str = "6/minute"
     # Where a person whose allowance is spent is pointed; empty shows none.
     support_url: str = ""
 
