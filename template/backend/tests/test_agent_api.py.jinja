@@ -51,7 +51,8 @@ from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exchange import Asker, Asking, Exchange, Issued
 from {{ package_name }}.rate_limit import limiter
-from tests.support import fake_agent_cli, fake_authentik, fake_library
+from tests.support import attachments, fake_agent_cli, fake_authentik, fake_library
+from tests.support.fake_clamd import FakeClamd
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
 APP = "{{ project_name }}"
@@ -1166,7 +1167,7 @@ async def test_the_files_a_question_came_with_are_named_on_its_turn(client: Asyn
     asked = await client.post(
         "/api/agent/helper/ask",
         data={"question": "what is in this?"},
-        files=[("files[]", ("../leave.txt", b"x"))],
+        files=[("files[]", ("../leave.txt", attachments.TEXT))],
         headers=who,
     )
     conversation = _conversation(_events(asked.text))
@@ -1395,7 +1396,7 @@ async def test_more_files_than_a_question_may_carry_are_refused_400(
 async def test_a_file_over_the_per_file_limit_is_refused_413_naming_it_and_the_limit(
     client: AsyncClient, reads: list[str]
 ) -> None:
-    refused = await _attached(client, [("small.txt", b"x"), ("big.pdf", b"x" * (20 * 2**20 + 1))])
+    refused = await _attached(client, [("small.txt", b"x"), ("big.pdf", attachments.PDF + b"x" * (20 * 2**20))])
     assert refused.status_code == 413
     assert "big.pdf" in refused.json()["message"]
     assert "20 MB" in refused.json()["message"]
@@ -1425,7 +1426,29 @@ async def test_a_file_of_a_type_the_persona_cannot_read_is_refused_415_naming_it
 
 async def test_every_type_the_composer_offers_is_taken_whatever_its_case(client: AsyncClient) -> None:
     names = ["a.png", "b.JPG", "c.jpeg", "d.webp", "e.PDF", "f.docx", "g.txt", "h.md"]
-    assert (await _attached(client, [(name, b"x") for name in names])).status_code == 200
+    assert (await _attached(client, [(name, attachments.genuine(name)) for name in names])).status_code == 200
+
+
+async def test_a_file_that_is_not_what_its_name_says_is_refused_415(client: AsyncClient) -> None:
+    refused = await _attached(client, [("fine.txt", b"x"), ("photo.png", b"MZ\x90\x00")])
+    assert refused.status_code == 415
+    assert "photo.png" in refused.json()["message"]
+
+
+async def test_a_scanner_that_flags_a_file_refuses_422_and_one_that_is_down_refuses_503(
+    client: AsyncClient, agent_settings: AgentSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    flagged = FakeClamd(b"stream: Win.Test.EICAR_HDB-1 FOUND\0")
+    try:
+        monkeypatch.setattr(agent_settings, "clamd_host", "127.0.0.1")
+        monkeypatch.setattr(agent_settings, "clamd_port", flagged.port)
+        refused = await _attached(client, [("notes.txt", b"x")])
+        assert refused.status_code == 422
+        assert "Win.Test.EICAR_HDB-1" in refused.json()["message"]
+    finally:
+        flagged.close()
+    down = await _attached(client, [("notes.txt", b"x")])
+    assert down.status_code == 503
 
 
 @pytest.mark.usefixtures("small_limits")

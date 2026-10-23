@@ -26,17 +26,27 @@ from the issuer's JWKS with no userinfo call and no fallback, and hands the
 verified person to the tool layer on the request scope (``scope["asker"]``),
 where no client can write. No ``x-client-id`` is written for it.
 
+Authentik serves one userinfo endpoint for the whole instance, so a token minted
+for any other application's client validates there too. The gate therefore also
+requires the token to have been issued for THIS app: its ``aud`` claim must name
+one of ``audiences`` (the app's client id, or the shared gateway client's). The
+token is already proven genuine by userinfo, which Authentik answers from its own
+record of the issued token, so reading ``aud`` from the payload needs no second
+signature check. With no audience configured, or a token that is not a JWT or
+carries another audience, the request is a 401.
+
 The stdio transport never enters this ASGI app, so in-process / local stdio
 access is unaffected.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Protocol, cast
 
 import httpx
@@ -96,6 +106,7 @@ def require_bearer_auth(
     *,
     userinfo_url: str,
     identity_claim: str = "preferred_username",
+    audiences: Collection[str] = (),
     resource_metadata_url: str = "",
     asker: AskerTokens | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
@@ -113,6 +124,8 @@ def require_bearer_auth(
             against. An empty string fails every request closed (401).
         identity_claim: The userinfo claim used as the client identity;
             falls back to ``sub`` when the claim is absent.
+        audiences: The ``aud`` values that mean "issued for this app". Empty
+            fails every machine request closed (401), like an empty ``userinfo_url``.
         resource_metadata_url: Protected-resource metadata URL advertised in
             the 401 ``WWW-Authenticate`` header (RFC 9728); omitted when empty.
         asker: This app's exchange; a bearer it issued is verified by it and
@@ -125,6 +138,7 @@ def require_bearer_auth(
         An ASGI callable that enforces bearer-token auth before delegating to ``app``.
     """
     cache = _TokenCache()
+    accepted = frozenset(audiences)
     client = httpx.AsyncClient(transport=transport, timeout=_USERINFO_TIMEOUT_SECONDS)
 
     async def gated_app(scope: dict[str, object], receive: object, send: object) -> None:
@@ -136,7 +150,7 @@ def require_bearer_auth(
         if token is not None and asker is not None and asker.issued_here(token):
             await _admit_asker(app, asker, token, scope, receive, send, resource_metadata_url)
             return
-        if token is None or not userinfo_url:
+        if token is None or not userinfo_url or not accepted:
             await _drain_body(receive)
             await _send_unauthorized(send, resource_metadata_url)
             return
@@ -145,6 +159,7 @@ def require_bearer_auth(
             token,
             userinfo_url=userinfo_url,
             identity_claim=identity_claim,
+            audiences=accepted,
             cache=cache,
             client=client,
         )
@@ -241,6 +256,7 @@ async def _resolve_identity(
     *,
     userinfo_url: str,
     identity_claim: str,
+    audiences: Collection[str],
     cache: _TokenCache,
     client: httpx.AsyncClient,
 ) -> tuple[int, str | None]:
@@ -248,9 +264,13 @@ async def _resolve_identity(
 
     Returns:
         (200, identity) on success, (401, None) when the token does not
-        validate or the response carries no usable identity claim, or
-        (503, None) when the userinfo endpoint is unreachable.
+        validate, was not issued for this app or the response carries no usable
+        identity claim, or (503, None) when the userinfo endpoint is unreachable.
     """
+    if not _issued_for(token, audiences):
+        logger.warning("MCP HTTP request rejected: the bearer was not issued for this app")
+        return 401, None
+
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     cached = cache.get(token_hash)
     if cached is not None:
@@ -279,6 +299,20 @@ async def _resolve_identity(
     resolved = str(identity)
     cache.set(token_hash, resolved)
     return 200, resolved
+
+
+def _issued_for(token: str, audiences: Collection[str]) -> bool:
+    """Whether the JWT ``token`` names one of ``audiences``; an opaque token or a missing ``aud`` is not."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    except ValueError, RecursionError:
+        return False
+    aud = payload.get("aud") if isinstance(payload, dict) else None
+    named = [aud] if isinstance(aud, str) else aud if isinstance(aud, list) else []
+    return any(isinstance(name, str) and name in audiences for name in named)
 
 
 async def _drain_body(receive: object) -> None:

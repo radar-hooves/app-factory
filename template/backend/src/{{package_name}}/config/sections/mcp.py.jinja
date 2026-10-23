@@ -15,6 +15,7 @@ trustworthy there; see ``rules-library/platform/proxy-delegated-auth.md``
 Env vars (all prefixed ``{{ project_name | upper | replace('-', '_') }}_``):
     {{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL
     {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM
+    {{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE
     {{ project_name | upper | replace('-', '_') }}_OIDC_RESOURCE_METADATA_URL
     {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH
 """
@@ -54,6 +55,20 @@ class MCPSettings(BaseSettings):
     # Deployments behind the shared mcp-gateway client set this to mcp_actor.
     # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM
     oidc_identity_claim: str = "preferred_username"
+
+    # The `aud` values a machine bearer must carry to be taken as issued for THIS
+    # app, comma-separated: this app's Authentik client id (or the shared gateway
+    # client's). Authentik's userinfo answers for a token minted for ANY
+    # application on the instance, so without this a bearer issued for another
+    # household app's client could be replayed here. Empty -> every machine
+    # request 401s, like an empty userinfo URL.
+    # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE
+    oidc_audience: str = ""
+
+    @property
+    def oidc_audiences(self) -> tuple[str, ...]:
+        """The configured audiences, split and trimmed."""
+        return tuple(part.strip() for part in self.oidc_audience.split(",") if part.strip())
 
     # Protected-resource metadata URL advertised in the 401 WWW-Authenticate
     # header (RFC 9728), e.g. https://app.example.org/.well-known/oauth-protected-resource.

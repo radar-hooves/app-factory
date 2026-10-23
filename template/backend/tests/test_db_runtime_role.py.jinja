@@ -1,0 +1,165 @@
+"""The least-privilege runtime role: what the grants give it, and what it never gets.
+
+The grant routine runs against the suite's ephemeral Postgres, on a throwaway
+role created here with a password generated here -- never a vended credential.
+"""
+
+import secrets
+import uuid
+from collections.abc import Iterator
+from urllib.parse import quote_plus
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.config import vend as vend_module
+from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, DatabaseSettings
+from {{ package_name }}.db.grants import grant_runtime_role
+
+
+@pytest.fixture
+def owner_engine() -> Iterator[Engine]:
+    engine = create_engine(get_settings().database.database_url)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def runtime_role(owner_engine: Engine) -> Iterator[tuple[str, Engine]]:
+    """A fresh login role with the grants applied, and an engine that connects as it."""
+    settings = get_settings().database
+    role = f"rt_{uuid.uuid4().hex[:12]}"
+    password = secrets.token_urlsafe(24)
+    with owner_engine.begin() as connection:
+        connection.execute(text(f"CREATE ROLE {role} LOGIN PASSWORD '{password}'"))
+        grant_runtime_role(connection, role, owner=settings.postgres_user)
+    url = (
+        f"{SQLALCHEMY_SCHEME}://{role}:{quote_plus(password)}"
+        f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
+    )
+    engine = create_engine(url)
+    yield role, engine
+    engine.dispose()
+    with owner_engine.begin() as connection:
+        connection.execute(text(f"DROP OWNED BY {role}"))
+        connection.execute(text(f"DROP ROLE {role}"))
+
+
+def _refused(engine: Engine, statement: str) -> bool:
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(statement))
+    except ProgrammingError as exc:
+        return "permission denied" in str(exc) or "must be owner" in str(exc)
+    return False
+
+
+def test_the_runtime_role_reads_and_writes_an_app_table(runtime_role: tuple[str, Engine]) -> None:
+    _, engine = runtime_role
+    with engine.begin() as connection:
+        connection.execute(text("SELECT id FROM users LIMIT 1"))
+        connection.execute(
+            text("UPDATE deployment_environment SET stamped_at = stamped_at"),
+        )
+        connection.execute(text("DELETE FROM deployment_environment WHERE FALSE"))
+        connection.execute(
+            text(
+                "INSERT INTO deployment_environment (id, environment, stamped_at) VALUES (TRUE, 'local', NOW()) "
+                "ON CONFLICT (id) DO UPDATE SET environment = EXCLUDED.environment"
+            )
+        )
+
+
+def test_the_runtime_role_cannot_run_ddl(runtime_role: tuple[str, Engine]) -> None:
+    _, engine = runtime_role
+    assert _refused(engine, "CREATE TABLE runtime_probe (id integer)")
+    assert _refused(engine, "DROP TABLE deployment_environment")
+    assert _refused(engine, "ALTER TABLE deployment_environment ADD COLUMN probe integer")
+    assert _refused(engine, "TRUNCATE deployment_environment")
+    assert _refused(engine, "CREATE INDEX runtime_probe_idx ON deployment_environment (environment)")
+
+
+def test_the_runtime_role_has_no_business_in_the_migration_table(runtime_role: tuple[str, Engine]) -> None:
+    _, engine = runtime_role
+    assert _refused(engine, "SELECT version_num FROM alembic_version")
+    assert _refused(engine, "DELETE FROM alembic_version")
+    assert _refused(engine, "TRUNCATE alembic_version")
+
+
+def test_a_table_the_owner_creates_later_is_data_accessible_but_not_droppable(
+    owner_engine: Engine, runtime_role: tuple[str, Engine]
+) -> None:
+    """Default privileges: a later migration needs no second grant run."""
+    _, engine = runtime_role
+    table = f"later_{uuid.uuid4().hex[:8]}"
+    with owner_engine.begin() as connection:
+        connection.execute(text(f"CREATE TABLE {table} (id serial PRIMARY KEY, label text)"))
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f"INSERT INTO {table} (label) VALUES ('a')"))
+            connection.execute(text(f"UPDATE {table} SET label = 'b'"))
+            assert connection.execute(text(f"SELECT label FROM {table}")).scalar() == "b"
+            connection.execute(text(f"DELETE FROM {table}"))
+        assert _refused(engine, f"DROP TABLE {table}")
+    finally:
+        with owner_engine.begin() as connection:
+            connection.execute(text(f"DROP TABLE {table}"))
+
+
+def test_the_grants_are_idempotent(owner_engine: Engine, runtime_role: tuple[str, Engine]) -> None:
+    role, _ = runtime_role
+    with owner_engine.begin() as connection:
+        grant_runtime_role(connection, role, owner=get_settings().database.postgres_user)
+
+
+def test_a_missing_role_fails_naming_it_and_the_host(owner_engine: Engine) -> None:
+    with owner_engine.begin() as connection, pytest.raises(RuntimeError, match="does not exist") as caught:
+        grant_runtime_role(connection, "no_such_role_here", owner="postgres")
+    assert "no_such_role_here" in str(caught.value)
+    assert "database host" in str(caught.value)
+
+
+def test_a_role_name_is_quoted_not_interpolated(owner_engine: Engine) -> None:
+    hostile = 'x"; DROP TABLE users; --'
+    with owner_engine.begin() as connection, pytest.raises(RuntimeError, match="does not exist"):
+        grant_runtime_role(connection, hostile, owner="postgres")
+
+
+def test_the_url_uses_the_owner_when_no_runtime_user_is_set() -> None:
+    settings = DatabaseSettings(postgres_user="owner", postgres_password="pw")
+    assert settings.runtime_database_url == settings.database_url
+    assert "owner:" in settings.runtime_database_url
+
+
+def test_the_url_uses_the_runtime_user_when_set_and_percent_encodes_it() -> None:
+    settings = DatabaseSettings(
+        postgres_user="owner",
+        postgres_password="owner-pw",
+        postgres_runtime_user="app",
+        postgres_runtime_password="p@ss:w/rd",
+    )
+    assert settings.runtime_database_url.startswith(f"{SQLALCHEMY_SCHEME}://app:p%40ss%3Aw%2Frd@")
+    assert settings.database_url.startswith(f"{SQLALCHEMY_SCHEME}://owner:owner-pw@")
+
+
+def test_no_runtime_credential_is_vended_without_a_runtime_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)  # conftest defaults it off for the suite
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(vend_module, "vend", lambda credential, field: calls.append((credential, field)) or "vended")
+    settings = DatabaseSettings(postgres_password="pw")
+    assert calls == []
+    assert settings.postgres_runtime_password == ""
+
+
+def test_the_runtime_password_vends_under_its_own_credential_when_a_runtime_user_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(vend_module, "vend", lambda credential, field: calls.append((credential, field)) or "vended")
+    settings = DatabaseSettings(postgres_password="pw", postgres_runtime_user="app")
+    assert calls == [("{{ project_name }}-db-runtime", "password")]
+    assert settings.postgres_runtime_password == "vended"

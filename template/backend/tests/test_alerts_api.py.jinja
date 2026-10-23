@@ -21,6 +21,7 @@ from {{ package_name }}.api.alerts import service
 from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.mcp.dispatchers import alerts as alerts_dispatcher
 from {{ package_name }}.mcp.server import create_mcp_server
+from tests.support.machine_token import AUDIENCE, machine_token
 
 ADMIN = {"x-authentik-uid": "the-admin", "x-authentik-username": "the-admin", "x-authentik-entitlements": "admin:write"}
 READ_ONLY_ADMIN = {**ADMIN, "x-authentik-entitlements": "admin"}
@@ -210,6 +211,7 @@ async def test_one_stateless_tools_call_is_the_whole_producer_contract(
 
     configured = get_settings().model_copy(deep=True)
     configured.mcp.oidc_userinfo_url = USERINFO_URL
+    configured.mcp.oidc_audience = AUDIENCE
     monkeypatch.setattr(main_module, "get_settings", lambda: configured)
 
     app = main_module.create_app()
@@ -221,7 +223,7 @@ async def test_one_stateless_tools_call_is_the_whole_producer_contract(
         response = await http.post(
             "/mcp/",
             headers={
-                "Authorization": "Bearer n8n-client-credentials",
+                "Authorization": f"Bearer {machine_token('n8n-client-credentials')}",
                 "Accept": "application/json, text/event-stream",
                 "Content-Type": "application/json",
             },

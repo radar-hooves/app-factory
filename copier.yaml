@@ -91,10 +91,12 @@ _skip_if_exists:
 _exclude:
   - "{% if not factory_selftest %}backend/tests/test_admin_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_api.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_agent_content.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_jobs_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_agent_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_app_posture.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_db_runtime_role.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_explicit_test_server_guard.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_exchange.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
@@ -105,6 +107,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_mcp_auth.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_mcp_stateless.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_rate_limit.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_security_events.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_settings_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_storage.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_system_health.py{% endif %}"
@@ -158,10 +161,12 @@ _migrations:
       - .github/workflows/security.yaml
       - backend/tests/test_admin_api.py
       - backend/tests/test_agent_api.py
+      - backend/tests/test_agent_content.py
       - backend/tests/test_agent_jobs_api.py
       - backend/tests/test_agent_settings.py
       - backend/tests/test_app_posture.py
       - backend/tests/test_database_settings.py
+      - backend/tests/test_db_runtime_role.py
       - backend/tests/test_explicit_test_server_guard.py
       - backend/tests/test_exchange.py
       - backend/tests/test_fanout.py
@@ -172,6 +177,7 @@ _migrations:
       - backend/tests/test_mcp_auth.py
       - backend/tests/test_mcp_stateless.py
       - backend/tests/test_rate_limit.py
+      - backend/tests/test_security_events.py
       - backend/tests/test_settings_api.py
       - backend/tests/test_storage.py
       - backend/tests/test_system_health.py

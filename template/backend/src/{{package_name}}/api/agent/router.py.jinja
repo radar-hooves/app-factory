@@ -37,7 +37,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import Message
 
 from {{ package_name }}.api.agent import ask as ask_module
-from {{ package_name }}.api.agent import chat, conversations, quota
+from {{ package_name }}.api.agent import chat, content, conversations, quota
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent.chat import Persona
@@ -59,6 +59,7 @@ from {{ package_name }}.api.agent.schemas import (
     StoredTurn,
 )
 from {{ package_name }}.config import get_settings
+from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.deps import CurrentIdentity, CurrentWorkspace, Identity, SessionDep, SettingsDep
 from {{ package_name }}.entitlements import gate, has_module, require_module
@@ -327,9 +328,11 @@ async def ask(
     is spent or this person asks too often; 503 with `Retry-After` while
     the ceiling on turns in flight is reached. Attachments are refused
     unread: 413 for a body or a file too large, 415 for a type not read,
-    400 for too many.
+    400 for too many. Read, they are then checked by their bytes (`content`):
+    415 for a file that is not what its name says, 422 for one the
+    scanner names, 503 when a scanner is configured and cannot answer.
     """
-    body, files = await _asked(request)
+    body, files = await _asked(request, settings.agent)
     agent, collections = await chat.for_turn(settings.agent, persona, asking)
     return await ask_module.ask(
         get_session_factory(),
@@ -504,7 +507,7 @@ def _unique(name: str, taken: dict[str, bytes]) -> str:
     return found
 
 
-async def _asked(request: Request) -> tuple[AskRequest, dict[str, bytes]]:
+async def _asked(request: Request, settings: AgentSettings) -> tuple[AskRequest, dict[str, bytes]]:
     """The question, as JSON or as multipart with its attachments, refused unread when over what a question may carry."""
     multipart = request.headers.get("content-type", "").startswith("multipart/form-data")
     cap = ATTACHMENTS_BYTES + BODY_OVERHEAD if multipart else BODY_OVERHEAD
@@ -537,6 +540,7 @@ async def _asked(request: Request) -> tuple[AskRequest, dict[str, bytes]]:
                 files: dict[str, bytes] = {}
                 for upload in uploads:
                     files[_unique(upload.filename or "attachment", files)] = await upload.read()
+                await content.checked(settings, files)
                 return body, files
             finally:
                 await form.close()

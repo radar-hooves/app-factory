@@ -1,0 +1,155 @@
+"""What an attachment's bytes are, checked after it is read: its type, its structure, and optionally a malware scan.
+
+The router has already refused a name of a type not read and a file too large;
+this refuses a file whose bytes are not what its name says, because the agent
+reads them with tools that parse formats, not names.
+
+Type, by bytes (415): images by signature (a webp is `RIFF....WEBP`), a PDF by
+`%PDF-` in its first KB, a docx by being a zip holding `[Content_Types].xml`
+and `word/document.xml` and no `vbaProject.bin` (macros), a txt or md by being
+UTF-8 with no NUL. A docx is a zip bomb, and refused, above 100 MB uncompressed
+or when a member of 1 MB or more compresses past 50:1; the central directory is
+read and nothing is extracted. A PDF carrying a `/JavaScript`, `/JS` or
+`/Launch` name is refused, which covers an `/OpenAction` that runs script. That
+is a byte search of the raw file, BEST EFFORT: a name written with `#` escapes
+or sitting inside a compressed object stream is not seen. The scanner is the
+backstop.
+
+Malware scan (`AgentSettings.clamd_host`): the clamd INSTREAM protocol over TCP.
+OFF BY DEFAULT because this repo provisions no network-reachable clamd for a
+stamped app, and a container cannot reach the host's clamd socket; the host
+must expose one and name it. On, it FAILS CLOSED: a signature is a 422 naming
+it, and a clamd that cannot be reached or answers ERROR is a retryable 503,
+never a pass; set the daemon's `StreamMaxLength` to at least the 20 MB file cap, or a large file is that 503 forever. Off is logged once per process.
+"""
+
+import asyncio
+import io
+import logging
+import re
+import socket
+import struct
+import zipfile
+from pathlib import PurePosixPath
+
+from {{ package_name }}.config.sections.agent import AgentSettings
+from {{ package_name }}.exceptions import ServiceUnavailableError, UnsupportedMediaTypeError, ValidationError
+
+logger = logging.getLogger(__name__)
+
+ZIP_TOTAL_BYTES = 100 * 2**20
+ZIP_RATIO = 50
+#: Below this a member that compresses well is a repetitive document, not a bomb the total cap would miss.
+ZIP_RATIO_FROM_BYTES = 2**20
+PDF_HEAD_BYTES = 1024
+CHUNK = 64 * 1024
+
+_PDF_SCRIPT = re.compile(rb"/(JavaScript|JS|Launch)(?![A-Za-z0-9])")
+_IMAGES = {".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
+
+_scan_off_logged = False
+
+
+async def checked(settings: AgentSettings, files: dict[str, bytes]) -> None:
+    """Refuse the first of `files` (name to bytes) that is not what its name says, or that clamd flags.
+
+    Raises:
+        UnsupportedMediaTypeError: the bytes are not the type the name claims, or are unsafe for it.
+        ValidationError: clamd names a signature in the file.
+        ServiceUnavailableError: a scan is configured and clamd could not answer.
+    """
+    await asyncio.to_thread(_verify_all, files)
+    if not settings.clamd_host:
+        _note_scan_off()
+        return
+    for name, data in files.items():
+        await asyncio.to_thread(scan, settings, name, data)
+
+
+def _verify_all(files: dict[str, bytes]) -> None:
+    for name, data in files.items():
+        verify(name, data)
+
+
+def verify(name: str, data: bytes) -> None:
+    """Raise `UnsupportedMediaTypeError` unless `data` is what the suffix of `name` says it is."""
+    suffix = PurePosixPath(name.lower()).suffix
+    label = name[:100]
+    if suffix in _IMAGES:
+        ok = data.startswith(_IMAGES[suffix])
+    elif suffix == ".webp":
+        ok = data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    elif suffix == ".pdf":
+        ok = b"%PDF-" in data[:PDF_HEAD_BYTES]
+        if ok and _PDF_SCRIPT.search(data):
+            raise UnsupportedMediaTypeError(f"{label} carries script or a launch action, which is not read")
+    elif suffix == ".docx":
+        _docx(label, data)
+        return
+    else:  # .txt, .md
+        ok = b"\x00" not in data and _utf8(data)
+    if not ok:
+        raise UnsupportedMediaTypeError(f"{label} is not a {suffix} file")
+
+
+def _utf8(data: bytes) -> bool:
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def _docx(label: str, data: bytes) -> None:
+    try:
+        members = zipfile.ZipFile(io.BytesIO(data)).infolist()
+    except zipfile.BadZipFile as exc:
+        raise UnsupportedMediaTypeError(f"{label} is not a .docx file") from exc
+    names = {member.filename for member in members}
+    if not {"[Content_Types].xml", "word/document.xml"} <= names:
+        raise UnsupportedMediaTypeError(f"{label} is not a .docx file")
+    if any(PurePosixPath(n).name.lower() == "vbaproject.bin" for n in names):
+        raise UnsupportedMediaTypeError(f"{label} carries macros, which are not read")
+    bomb = sum(m.file_size for m in members) > ZIP_TOTAL_BYTES or any(
+        m.file_size >= ZIP_RATIO_FROM_BYTES and m.file_size > ZIP_RATIO * max(m.compress_size, 1) for m in members
+    )
+    if bomb:
+        raise UnsupportedMediaTypeError(f"{label} expands far beyond its size and is not read")
+
+
+def _note_scan_off() -> None:
+    global _scan_off_logged
+    if not _scan_off_logged:
+        _scan_off_logged = True
+        logger.warning("Attachments are not scanned for malware: no clamd host is configured (AGENT_CLAMD_HOST)")
+
+
+def scan(settings: AgentSettings, name: str, data: bytes) -> None:
+    """Stream `data` to clamd (blocking); return when it is clean.
+
+    Raises:
+        ValidationError: clamd found a signature.
+        ServiceUnavailableError: clamd was unreachable, timed out or answered an error.
+    """
+    try:
+        with socket.create_connection((settings.clamd_host, settings.clamd_port), settings.clamd_timeout_seconds) as s:
+            s.settimeout(settings.clamd_timeout_seconds)
+            s.sendall(b"zINSTREAM\0")
+            for start in range(0, len(data), CHUNK):
+                chunk = data[start : start + CHUNK]
+                s.sendall(struct.pack(">I", len(chunk)) + chunk)
+            s.sendall(struct.pack(">I", 0))
+            reply = bytearray()
+            while not reply.endswith(b"\0") and (more := s.recv(4096)):
+                reply += more
+    except OSError as exc:  # refused, timed out, reset, unresolvable
+        logger.warning("clamd could not scan an attachment: %s", exc)
+        raise ServiceUnavailableError("Attachments cannot be scanned just now; try again shortly") from exc
+    verdict = reply.decode("utf-8", "replace").strip("\0 \n")
+    if verdict.endswith(" OK"):
+        return
+    if verdict.endswith(" FOUND"):
+        signature = verdict.removeprefix("stream:").removesuffix("FOUND").strip()[:100]
+        raise ValidationError(f"{name[:100]} was refused: the scanner found {signature}")
+    logger.warning("clamd answered an attachment scan with: %s", verdict[:200])
+    raise ServiceUnavailableError("Attachments cannot be scanned just now; try again shortly")

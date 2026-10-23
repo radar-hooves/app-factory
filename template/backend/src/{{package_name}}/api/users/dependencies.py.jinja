@@ -9,13 +9,14 @@ that this module spells out its own session annotation rather than using
 on which module Python reached first.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
+from {{ package_name }} import security_events
 from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces import service as workspaces_service
@@ -40,6 +41,10 @@ class Identity:
     held: tuple[str, ...] = ()
     #: True when an admin asked to see the app as a colleague does (``VIEW_AS_HEADER``).
     viewing_as: bool = False
+    #: The request that carried it and whether the provider declared the caller a machine, for the
+    #: security events a gate records on refusing it (``security_events.record``).
+    request: Request | None = field(default=None, repr=False, compare=False)
+    machine: bool = False
 
     def __post_init__(self) -> None:
         # Narrowing only removes, so a held set smaller than the entitlements was never given.
@@ -147,7 +152,8 @@ def get_identity(
     # Deliberately narrow: it refuses only MINTING, and only when the provider
     # positively says "machine". An unset header means person, so a provider that
     # sends nothing behaves exactly as before.
-    if _is_machine_principal(request, identity_settings) and users_service.get_by_uid(session, uid) is None:
+    machine = _is_machine_principal(request, identity_settings)
+    if machine and users_service.get_by_uid(session, uid) is None:
         raise AuthenticationError(
             "A machine principal has no user in this app. Link one, or call the /mcp surface.",
         )
@@ -175,7 +181,37 @@ def get_identity(
 
     held = _parse_entitlements(request, identity_settings)
     entitlements, viewing_as = _narrowed(request, held)
-    return Identity(user=user, entitlements=entitlements, held=held, viewing_as=viewing_as)
+    identity = Identity(
+        user=user, entitlements=entitlements, held=held, viewing_as=viewing_as, request=request, machine=machine
+    )
+    _record_view_as(request, identity)
+    return identity
+
+
+#: The most names of an ``X-View-As`` a security event carries, so a header cannot size a log line.
+_VIEW_AS_LOGGED_MAX = 64
+
+
+def _record_view_as(request: Request, identity: Identity) -> None:
+    """Record an ``X-View-As`` header: honoured for an admin, ignored for anyone else.
+
+    One event per (user, asked set) in ten minutes, so a page's burst of requests is one line.
+    """
+    raw = request.headers.get(VIEW_AS_HEADER)
+    if raw is None:
+        return
+    asked = sorted({part.strip() for part in raw.split("|") if part.strip()})[:_VIEW_AS_LOGGED_MAX]
+    used = identity.viewing_as
+    if not security_events.first_within("view-as", used, identity.user.id, tuple(asked)):
+        return
+    security_events.record(
+        "view_as_used" if used else "view_as_denied",
+        "allowed" if used else "denied",
+        identity=identity,
+        reason=None if used else "the caller does not hold admin, so the header was ignored",
+        held=list(identity.held),
+        asked=asked,
+    )
 
 
 CurrentIdentity = Annotated[Identity, Depends(get_identity)]

@@ -34,6 +34,7 @@ grows — this module has no domain knowledge of its own.
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 from functools import lru_cache
 
 import mcp.types as mt
@@ -42,7 +43,9 @@ from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_context, get_http_headers, get_http_request
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
+from starlette.requests import Request
 
+from {{ package_name }} import security_events
 from {{ package_name }}.entitlements import admitted, has_module
 from {{ package_name }}.exceptions import AuthenticationError
 from {{ package_name }}.exchange import Asker
@@ -58,6 +61,10 @@ logger = logging.getLogger(__name__)
 # instance whose claim happened to equal this string would otherwise arrive
 # here and resolve to the principal actor. Reserved for stdio below.
 _LOCAL_CONSOLE = "local-console"
+
+# True inside a tool CALL (set by ActorGateMiddleware, the outermost middleware), so
+# ``person_may`` can tell a refused call, always recorded, from a refused LIST entry.
+_calling: ContextVar[bool] = ContextVar("mcp_calling", default=False)
 
 
 @lru_cache(maxsize=1)
@@ -104,15 +111,38 @@ async def person_may(ctx: AuthContext) -> bool:
         return True
     name = ctx.component.name
     if not admitted(asker.entitlements):
+        _denied(asker, name, "chat-only")
         raise AuthorizationError(f"This person is admitted to this app's chat alone, not its tool {name}")
     meta = ctx.component.meta or {}
     if "requires" not in meta:
+        _denied(asker, name, "undeclared")
         raise AuthorizationError(f"The tool {name} declares no entitlement, so a person may not call it")
     need = meta["requires"]
     if not need or has_module(asker.entitlements, need["module"], write=need["write"]):
         return True
     grade = f"{need['module']}:write" if need["write"] else need["module"]
+    _denied(asker, name, f"missing {grade}")
     raise AuthorizationError(f"You do not have the {grade} entitlement the tool {name} needs")
+
+
+def _denied(asker: Asker, tool: str, reason: str) -> None:
+    """Record a refusal as ``mcp_tool_denied``: every refused call, a refused list entry once in ten minutes.
+
+    ``person_may`` also runs when a person LISTS tools (a refusal hides the tool), so without the
+    dedupe one listing would log every tool they may not call.
+    """
+    if _calling.get() or security_events.first_within("mcp-tool", asker.sub, tool, reason):
+        security_events.record(
+            "mcp_tool_denied", "denied", asker=asker, request=_http_request(), target=tool, reason=reason
+        )
+
+
+def _http_request() -> Request | None:
+    """The HTTP request behind this call; None over stdio."""
+    try:
+        return get_http_request()
+    except RuntimeError:
+        return None
 
 
 def resolve_actor() -> Actor:
@@ -207,6 +237,17 @@ class ActorGateMiddleware(Middleware):
         call_next: CallNext[mt.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
         """Resolve the caller's actor and refuse an unregistered HTTP caller."""
+        marker = _calling.set(True)
+        try:
+            return await self._gated(context, call_next)
+        finally:
+            _calling.reset(marker)
+
+    async def _gated(
+        self,
+        context: MiddlewareContext[mt.CallToolRequestParams],
+        call_next: CallNext[mt.CallToolRequestParams, ToolResult],
+    ) -> ToolResult:
         if not get_http_headers():
             return await call_next(context)
 

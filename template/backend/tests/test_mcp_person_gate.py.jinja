@@ -19,6 +19,7 @@ from fastmcp import Client
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.auth import requires
 from tests.support.fake_authentik import FakeAuthentik
+from tests.support.machine_token import AUDIENCE, machine_token, token_label
 
 APP = "{{ project_name }}"
 USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
@@ -37,7 +38,7 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeAuthentik]:
     async def _get(self, url, *, headers=None, **kwargs):
         if str(url) != USERINFO_URL:
             return await real_get(self, url, headers=headers, **kwargs)
-        presented = (headers or {}).get("Authorization", "")[7:].strip()
+        presented = token_label((headers or {}).get("Authorization", "")[7:].strip())
         request = httpx.Request("GET", url)
         if presented != "machine":
             return httpx.Response(401, request=request)
@@ -50,6 +51,7 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeAuthentik]:
 
     configured = get_settings().model_copy(deep=True)
     configured.mcp.oidc_userinfo_url = USERINFO_URL
+    configured.mcp.oidc_audience = AUDIENCE
     configured.exchange = ExchangeSettings(
         issuer=authentik.issuer(APP), client_id=APP, client_secret="fake-exchange-secret"
     )
@@ -172,7 +174,7 @@ async def test_a_person_admitted_to_chat_alone_sees_and_calls_nothing(fake):
 @pytest.mark.integration
 async def test_a_machine_caller_is_unchanged(fake):
     """The machine path keeps its rules: actors.yaml admits it and no declaration narrows it, undeclared tool included."""
-    listed, refusals = await _drive("machine")
+    listed, refusals = await _drive(machine_token("machine"))
     assert listed == HERE
     assert refusals == dict.fromkeys(HERE)
 

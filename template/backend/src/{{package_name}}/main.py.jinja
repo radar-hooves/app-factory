@@ -242,6 +242,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raw_mcp_app,
             userinfo_url=settings.mcp.oidc_userinfo_url,
             identity_claim=settings.mcp.oidc_identity_claim,
+            audiences=settings.mcp.oidc_audiences,
             resource_metadata_url=settings.mcp.oidc_resource_metadata_url,
             asker=exchange,
         )
@@ -249,6 +250,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             _log.warning(
                 "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset: the /mcp surface is closed "
                 "to machine callers (each one 401s). Set it to your Authentik userinfo endpoint to open it."
+            )
+        elif not settings.mcp.oidc_audiences:
+            _log.error(
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE is unset: the /mcp surface is closed "
+                "to machine callers (each one 401s), because a bearer issued for another application would "
+                "otherwise be accepted. Set it to this app's Authentik client id."
             )
 
     @asynccontextmanager

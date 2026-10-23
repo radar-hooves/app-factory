@@ -38,6 +38,7 @@ from typing import Any
 
 from fastapi import params
 
+from {{ package_name }} import security_events
 from {{ package_name }}.api.users.dependencies import CurrentIdentity, Identity
 from {{ package_name }}.exceptions import ForbiddenError
 
@@ -92,6 +93,14 @@ def require_module(module: str, *, write: bool = False) -> Callable[[Identity], 
             )
 
         grade = "write" if write else "read"
+        security_events.record(
+            "entitlement_denied",
+            "denied",
+            identity=identity,
+            reason=f"no {grade} grade for the {module} module",
+            gated_module=module,
+            grade=grade,
+        )
         raise ForbiddenError(
             f"You do not have {grade} access to the {module} module",
             details={"module": module, "grade": grade},
@@ -130,6 +139,14 @@ def require_app_module(identity: CurrentIdentity) -> Identity:
     """
     if admitted(identity.entitlements):
         return identity
+    security_events.record(
+        "entitlement_denied",
+        "denied",
+        identity=identity,
+        reason="admitted to a chat alone, not the app itself",
+        gated_module="any module but a chat",
+        grade="read",
+    )
     raise ForbiddenError("You do not have access to the people in this app")
 
 

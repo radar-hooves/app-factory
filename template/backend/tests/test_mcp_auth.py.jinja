@@ -29,6 +29,7 @@ from {{ package_name }}.mcp.actors import Actor, ActorRegistry
 from {{ package_name }}.mcp.auth import requires
 from {{ package_name }}.mcp.http_auth import require_bearer_auth
 from tests.support.fake_authentik import FakeAuthentik
+from tests.support.machine_token import AUDIENCE, machine_token, token_label
 
 USERINFO_URL = "https://auth.example.test/application/o/userinfo/"
 
@@ -120,7 +121,10 @@ async def _call(gated, headers: dict[str, str] | None = None) -> httpx.Response:
 async def test_no_token_is_refused():
     """A request with no Authorization header never reaches the inner app."""
     gated = require_bearer_auth(
-        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+        _inner_app,
+        audiences=(AUDIENCE,),
+        userinfo_url=USERINFO_URL,
+        transport=_userinfo_transport({"preferred_username": "mcp-service"}),
     )
     response = await _call(gated)
     assert response.status_code == 401
@@ -129,21 +133,65 @@ async def test_no_token_is_refused():
 
 
 @pytest.mark.unit
+async def test_a_token_issued_for_another_app_is_refused_before_userinfo():
+    """Userinfo vouches for every application's tokens on the instance; only this app's audience passes."""
+    asked: list[str] = []
+    gated = require_bearer_auth(
+        _inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_recording_userinfo(asked)
+    )
+    for token in (
+        machine_token("elsewhere", aud="another-app-client"),
+        machine_token("no-aud", aud=None),
+        machine_token("empty-list", aud=[]),
+        "opaque-token-no-dots",
+    ):
+        response = await _call(gated, {"Authorization": _bearer(token)})
+        assert response.status_code == 401, token
+    assert asked == []
+
+
+@pytest.mark.unit
+async def test_a_token_naming_this_app_among_several_audiences_passes():
+    gated = require_bearer_auth(
+        _inner_app,
+        audiences=("other-accepted", AUDIENCE),
+        userinfo_url=USERINFO_URL,
+        transport=_userinfo_transport({"preferred_username": "mcp-service"}),
+    )
+    for aud in (AUDIENCE, ["another-app-client", AUDIENCE]):
+        response = await _call(gated, {"Authorization": _bearer(machine_token("ok", aud=aud))})
+        assert response.status_code == 200
+
+
+@pytest.mark.unit
+async def test_no_configured_audience_fails_closed():
+    gated = require_bearer_auth(
+        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+    )
+    response = await _call(gated, {"Authorization": _bearer(machine_token("ok"))})
+    assert response.status_code == 401
+
+
+@pytest.mark.unit
 async def test_unset_userinfo_url_fails_closed():
     """An unconfigured identity provider closes the surface; it does not open it.
 
     This is the shipped default, so a freshly stamped app is never open.
     """
-    gated = require_bearer_auth(_inner_app, userinfo_url="", transport=_userinfo_transport({"sub": "anyone"}))
-    response = await _call(gated, {"Authorization": "Bearer any-token"})
+    gated = require_bearer_auth(
+        _inner_app, audiences=(AUDIENCE,), userinfo_url="", transport=_userinfo_transport({"sub": "anyone"})
+    )
+    response = await _call(gated, {"Authorization": _bearer(machine_token("any-token"))})
     assert response.status_code == 401
 
 
 @pytest.mark.unit
 async def test_rejected_token_is_refused():
     """A token the identity provider rejects is refused."""
-    gated = require_bearer_auth(_inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport(None, status=401))
-    response = await _call(gated, {"Authorization": "Bearer bad-token"})
+    gated = require_bearer_auth(
+        _inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_userinfo_transport(None, status=401)
+    )
+    response = await _call(gated, {"Authorization": _bearer(machine_token("bad-token"))})
     assert response.status_code == 401
 
 
@@ -151,9 +199,12 @@ async def test_rejected_token_is_refused():
 async def test_valid_token_passes_and_injects_identity():
     """A valid token reaches the inner app with the resolved identity attached."""
     gated = require_bearer_auth(
-        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+        _inner_app,
+        audiences=(AUDIENCE,),
+        userinfo_url=USERINFO_URL,
+        transport=_userinfo_transport({"preferred_username": "mcp-service"}),
     )
-    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
     assert response.status_code == 200
     assert response.text == "mcp-service"
 
@@ -162,9 +213,14 @@ async def test_valid_token_passes_and_injects_identity():
 async def test_client_supplied_identity_is_stripped():
     """A caller cannot self-declare an identity; the gate is the sole writer."""
     gated = require_bearer_auth(
-        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"preferred_username": "mcp-service"})
+        _inner_app,
+        audiences=(AUDIENCE,),
+        userinfo_url=USERINFO_URL,
+        transport=_userinfo_transport({"preferred_username": "mcp-service"}),
     )
-    response = await _call(gated, {"Authorization": "Bearer good-token", "x-client-id": "local-console"})
+    response = await _call(
+        gated, {"Authorization": _bearer(machine_token("good-token")), "x-client-id": "local-console"}
+    )
     assert response.status_code == 200
     assert response.text == "mcp-service"
 
@@ -173,9 +229,12 @@ async def test_client_supplied_identity_is_stripped():
 async def test_missing_claim_falls_back_to_sub():
     """The configured claim is preferred; `sub` is the fallback."""
     gated = require_bearer_auth(
-        _inner_app, userinfo_url=USERINFO_URL, transport=_userinfo_transport({"sub": "fallback-identity"})
+        _inner_app,
+        audiences=(AUDIENCE,),
+        userinfo_url=USERINFO_URL,
+        transport=_userinfo_transport({"sub": "fallback-identity"}),
     )
-    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
     assert response.status_code == 200
     assert response.text == "fallback-identity"
 
@@ -183,8 +242,10 @@ async def test_missing_claim_falls_back_to_sub():
 @pytest.mark.unit
 async def test_unreachable_provider_is_503_not_open():
     """An unreachable identity provider fails closed with 503, never open."""
-    gated = require_bearer_auth(_inner_app, userinfo_url=USERINFO_URL, transport=_unreachable_transport())
-    response = await _call(gated, {"Authorization": "Bearer good-token"})
+    gated = require_bearer_auth(
+        _inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_unreachable_transport()
+    )
+    response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
     assert response.status_code == 503
 
 
@@ -224,9 +285,13 @@ async def test_unreachable_signing_keys_are_503_not_open():
 async def test_a_machines_bearer_still_goes_to_userinfo_beside_the_exchange():
     asked: list[str] = []
     gated = require_bearer_auth(
-        _inner_app, userinfo_url=USERINFO_URL, asker=_Askers(), transport=_recording_userinfo(asked)
+        _inner_app,
+        audiences=(AUDIENCE,),
+        userinfo_url=USERINFO_URL,
+        asker=_Askers(),
+        transport=_recording_userinfo(asked),
     )
-    response = await _call(gated, {"Authorization": _bearer("a-machine-token")})
+    response = await _call(gated, {"Authorization": _bearer(machine_token("a-machine-token"))})
     assert (response.status_code, response.text, asked) == (200, "mcp-service", [USERINFO_URL])
 
 
@@ -383,7 +448,7 @@ def _configured_idp(monkeypatch, _probe_tool):
     """
 
     async def _get(self, url, *, headers=None, **kwargs):
-        presented = (headers or {}).get("Authorization", "")[7:].strip()
+        presented = token_label((headers or {}).get("Authorization", "")[7:].strip())
         claims = {
             "valid-registered": "mcp-service",
             "valid-unregistered": "nobody-in-the-allow-list",
@@ -401,6 +466,7 @@ def _configured_idp(monkeypatch, _probe_tool):
 
     configured = get_settings().model_copy(deep=True)
     configured.mcp.oidc_userinfo_url = USERINFO_URL
+    configured.mcp.oidc_audience = AUDIENCE
     monkeypatch.setattr(main_module, "get_settings", lambda: configured)
 
 
@@ -417,7 +483,7 @@ async def test_registered_identity_reaches_the_tool(_configured_idp):
 
     app = create_app()
     async with app.router.lifespan_context(app), _client(app) as client:
-        result = await _drive_probe(client, "valid-registered")
+        result = await _drive_probe(client, machine_token("valid-registered"))
     assert result["isError"] is False, result
     assert result["structuredContent"]["client_id"] == "mcp-service"
 
@@ -482,7 +548,7 @@ async def test_valid_bearer_for_unregistered_identity_is_refused(_configured_idp
 
     app = create_app()
     async with app.router.lifespan_context(app), _client(app) as client:
-        result = await _drive_probe(client, "valid-unregistered")
+        result = await _drive_probe(client, machine_token("valid-unregistered"))
     assert result["isError"] is True, result
     assert "not registered" in str(result["content"])
 
@@ -501,7 +567,7 @@ async def test_local_console_identity_is_not_reachable_over_http(_configured_idp
 
     app = create_app()
     async with app.router.lifespan_context(app), _client(app) as client:
-        result = await _drive_probe(client, "valid-local-console")
+        result = await _drive_probe(client, machine_token("valid-local-console"))
     assert result["isError"] is True, result
     assert "reserved for local in-process callers" in str(result["content"])
 
@@ -528,7 +594,7 @@ async def test_proxy_headers_do_not_open_the_mcp_surface():
 
 # ── A persona presents its asker's token: the tool sees the person ─────────
 
-APP = "{{ project_name }}"
+APP = "factory-selftest"
 PERSON = "uid-asker-0001"
 
 

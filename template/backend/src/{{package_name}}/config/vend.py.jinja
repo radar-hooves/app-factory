@@ -313,6 +313,10 @@ class Vended:
     field: str
     file_field: str | None = None
     credential_field: str | None = None
+    requires: str | None = None
+    # ``requires`` names a sibling field that must be non-empty before the broker
+    # is asked at all: an opt-in credential (the runtime database role's) that a
+    # deployment not using it must never be made to hold.
 
 
 def resolve_vended_fields(settings: BaseSettings, only: Collection[str] | None = None) -> None:
@@ -335,6 +339,8 @@ def resolve_vended_fields(settings: BaseSettings, only: Collection[str] | None =
     for name, info in type(settings).model_fields.items():
         spec = next((meta for meta in info.metadata if isinstance(meta, Vended)), None)
         if spec is None or (only is not None and name not in only):
+            continue
+        if spec.requires and not getattr(settings, spec.requires, ""):
             continue
         current = getattr(settings, name)
         is_secret = isinstance(current, SecretStr)

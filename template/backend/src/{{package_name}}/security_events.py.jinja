@@ -1,0 +1,120 @@
+"""Security events: a privileged action, or a refusal of one, as one structured log line.
+
+The household telemetry contract is one JSON line per event through a named stdlib
+logger, shipped by ``api_common.telemetry.configure()`` (`rules-library/platform/telemetry.md`).
+This is that logger and one helper, nothing more: no store, handler or formatter. Find
+the events in Loki with ``{service_name="{{ project_name }}"} | json | event_class="security"``.
+
+Fields: ``security_event``, ``outcome`` (allowed | denied), ``event_class`` (always
+"security"), ``actor_id`` (local user id), ``actor_uid`` (identity provider uid),
+``actor_username``, ``actor_type`` (person | machine), ``actor_entitlements`` (what was held,
+on a denial), ``source_ip`` (``proxy_trust.client_ip``), ``http_method``, ``http_path`` (path
+only), ``target``, ``reason``, and any ``detail``. Never pass a credential, token or body.
+
+WARNING for a denial, INFO for an allowed privileged action.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
+
+    from {{ package_name }}.api.users.dependencies import Identity
+    from {{ package_name }}.exchange import Asker
+
+logger = logging.getLogger("{{ package_name }}.security")
+
+EVENT_CLASS = "security"
+
+#: A repeat of the same event inside this window is one event (``first_within``).
+DEDUPE_SECONDS = 600.0
+_DEDUPE_MAX = 1024
+_seen: dict[tuple[Any, ...], float] = {}
+_seen_lock = threading.Lock()
+
+# An ``extra`` key naming one of these raises KeyError (LogRecord attributes) or is overwritten
+# (the telemetry contract's own fields), so a colliding detail key is logged as ``detail_<key>``.
+_RESERVED = frozenset(logging.makeLogRecord({}).__dict__) | {
+    "message",
+    "asctime",
+    "timestamp",
+    "level",
+    "service_name",
+    "service_version",
+    "logger",
+    "correlation_id",
+    "trace_id",
+    "span_id",
+}
+
+
+def first_within(*key: Any) -> bool:
+    """True the first time ``key`` is seen in :data:`DEDUPE_SECONDS`, False for every repeat.
+
+    A small bounded in-process dict, so a browser's burst of requests carrying one header is one
+    event rather than hundreds. Oldest entries go first when it fills.
+    """
+    now = time.monotonic()
+    with _seen_lock:
+        last = _seen.get(key)
+        if last is not None and now - last < DEDUPE_SECONDS:
+            return False
+        _seen.pop(key, None)
+        _seen[key] = now
+        while len(_seen) > _DEDUPE_MAX:
+            _seen.pop(next(iter(_seen)))
+        return True
+
+
+def record(
+    event: str,
+    outcome: str,
+    *,
+    identity: Identity | None = None,
+    asker: Asker | None = None,
+    request: Request | None = None,
+    target: str | None = None,
+    reason: str | None = None,
+    **detail: Any,
+) -> None:
+    """Log one security event: who (``identity`` or ``asker``), from where (``request``), what, and why.
+
+    ``request`` defaults to the identity's own. Fields that are unknown are left out.
+    """
+    fields: dict[str, Any] = {"security_event": event, "outcome": outcome, "event_class": EVENT_CLASS}
+    denied = outcome == "denied"
+    if identity is not None:
+        request = request or identity.request
+        fields |= {
+            "actor_id": str(identity.user.id),
+            "actor_uid": identity.user.authentik_uid,
+            "actor_username": identity.user.username,
+            "actor_type": "machine" if identity.machine else "person",
+        }
+        if denied:
+            fields["actor_entitlements"] = list(identity.held)
+    elif asker is not None:
+        fields |= {"actor_uid": asker.sub, "actor_username": asker.username, "actor_type": "person"}
+        if denied:
+            fields["actor_entitlements"] = list(asker.entitlements)
+    if request is not None:
+        from {{ package_name }}.config import get_settings
+        from {{ package_name }}.proxy_trust import client_ip
+
+        fields |= {
+            "source_ip": client_ip(request, get_settings()),
+            "http_method": request.method,
+            "http_path": request.url.path,
+        }
+    if target is not None:
+        fields["target"] = target
+    if reason is not None:
+        fields["reason"] = reason
+    for key, value in detail.items():
+        fields[f"detail_{key}" if key in _RESERVED or key in fields else key] = value
+    logger.log(logging.WARNING if denied else logging.INFO, event, extra=fields)

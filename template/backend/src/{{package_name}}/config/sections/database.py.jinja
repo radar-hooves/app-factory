@@ -44,6 +44,24 @@ class DatabaseSettings(VendedSettings):
         str,
         Vended("{{ project_name }}-db", "password", file_field="postgres_password_file"),
     ] = ""
+    # Opt-in least privilege (ISM): the role the RUNNING app connects as, one that
+    # can read and write its own tables and nothing else. Empty means the app
+    # connects as `postgres_user`, the owner, as before. Set, migrations still run
+    # as the owner and `db/grants.py` grants this role DML on the schema. The role
+    # itself is provisioned on the database host, never created here.
+    postgres_runtime_user: str = ""
+    # Vended only when a runtime user is set (`requires`), from its own credential:
+    # a deployment that does not opt in never needs a second one.
+    postgres_runtime_password: Annotated[
+        str,
+        Vended(
+            "{{ project_name }}-db-runtime",
+            "password",
+            file_field="postgres_runtime_password_file",
+            requires="postgres_runtime_user",
+        ),
+    ] = ""
+    postgres_runtime_password_file: str | None = None
     # The answered fleet-host address, NOT localhost: there is no development
     # database, so every consumer of this default — the dev server, the debugger,
     # a script — points at the app's real Postgres. This lived only in `.envrc`
@@ -95,6 +113,19 @@ class DatabaseSettings(VendedSettings):
         produce one of those characters, which is exactly when nobody is looking
         for a parsing bug.
         """
-        user = quote_plus(self.postgres_user)
-        password = quote_plus(self.postgres_password)
-        return f"{SQLALCHEMY_SCHEME}://{user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return self._url(self.postgres_user, self.postgres_password)
+
+    @property
+    def runtime_database_url(self) -> str:
+        """The URL the running app's engine connects with: the runtime role when
+        `postgres_runtime_user` is set, else the owner (`database_url`). Migrations
+        never use this; they need the owner's DDL rights."""
+        if not self.postgres_runtime_user:
+            return self.database_url
+        return self._url(self.postgres_runtime_user, self.postgres_runtime_password)
+
+    def _url(self, user: str, password: str) -> str:
+        return (
+            f"{SQLALCHEMY_SCHEME}://{quote_plus(user)}:{quote_plus(password)}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )

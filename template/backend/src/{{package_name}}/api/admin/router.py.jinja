@@ -12,8 +12,10 @@ import uuid
 
 from fastapi import APIRouter, Query
 
+from {{ package_name }} import security_events
 from {{ package_name }}.api.admin import service
 from {{ package_name }}.api.admin.schemas import AdminUserList, AdminUserRead, AdminUserUpdate
+from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.deps import CurrentIdentity, SessionDep
 from {{ package_name }}.entitlements import module_dependency
 
@@ -62,6 +64,19 @@ def update_user(
     session: SessionDep,
     identity: CurrentIdentity,
 ) -> AdminUserRead:
-    """Update a user's local standing — today, only the active flag."""
+    """Update a user's local standing — today, only the active flag.
+
+    Records ``admin_user_updated`` as a security event. This is the app's only admin mutation:
+    entitlement changes are made at the identity provider, which records them. The app records
+    what the app does.
+    """
+    was_active = users_service.get_by_id(session, user_id).is_active
     user = service.set_user_active(session, user_id=user_id, is_active=data.is_active, acting_user_id=identity.user.id)
+    security_events.record(
+        "admin_user_updated",
+        "allowed",
+        identity=identity,
+        target=str(user_id),
+        change=f"is_active {was_active} -> {user.is_active}",
+    )
     return AdminUserRead.model_validate(user)
