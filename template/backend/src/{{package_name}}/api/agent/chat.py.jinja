@@ -164,7 +164,11 @@ async def for_turn(settings: AgentSettings, persona: Persona, asking: Asking) ->
     try:
         async with asyncio.TaskGroup() as group:
             asked = group.create_task(agent(settings, persona, asking, turn=True))
-            token = group.create_task(_library_token(settings, persona, asking, fresh=True)) if persona.collections else None
+            token = (
+                group.create_task(_library_token(settings, persona, asking, fresh=True))
+                if persona.collections
+                else None
+            )
     except ExceptionGroup as failed:
         raise failed.exceptions[0] from None
     if token is None:

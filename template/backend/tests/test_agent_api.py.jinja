@@ -1228,12 +1228,12 @@ async def test_a_persona_that_reads_collections_carries_the_library_into_its_ses
     assert "library_token=set" in said
 
 
-async def _held_library_token(app: FastAPI, authentik: fake_authentik.FakeAuthentik, who: dict[str, str], left: float) -> str:
+async def _held_library_token(
+    app: FastAPI, authentik: fake_authentik.FakeAuthentik, who: dict[str, str], left: float
+) -> str:
     """A library token the exchange already holds for `who`, with `left` seconds of it remaining."""
     token = authentik.mint("library", who["x-authentik-uid"], asked_by=APP, lifetime=int(left))
-    app.state.exchange.keep(
-        who["x-authentik-uid"], "library", Issued(token, time.monotonic() + left)
-    )
+    app.state.exchange.keep(who["x-authentik-uid"], "library", Issued(token, time.monotonic() + left))
     return token
 
 

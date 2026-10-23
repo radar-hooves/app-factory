@@ -97,4 +97,5 @@ async def test_a_narrowed_admin_loses_a_module_gate_too(client: AsyncClient) -> 
 def test_an_identity_built_without_held_holds_its_entitlements() -> None:
     identity = Identity(user=User(authentik_uid="u", username="u"), entitlements=("admin", "reports"))
     assert identity.held == ("admin", "reports")
-    assert Identity(user=identity.user, entitlements=("reports",), held=("admin", "reports")).held == ("admin", "reports")
+    narrowed = Identity(user=identity.user, entitlements=("reports",), held=("admin", "reports"))
+    assert narrowed.held == ("admin", "reports")
