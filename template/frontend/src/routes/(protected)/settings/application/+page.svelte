@@ -11,4 +11,5 @@
 
 <SettingsPage
 	fetch={apiFetch}
-	onunauthorized={() => redirectToAuthentik(page.url.pathname + page.url.search)} />
+	onunauthorized={() => redirectToAuthentik(page.url.pathname + page.url.search)}
+/>

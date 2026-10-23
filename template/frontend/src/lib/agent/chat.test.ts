@@ -8,11 +8,18 @@ const persona = { id: 'guide', name: 'Ask Guide' } as Persona;
 
 describe('the chat transport while an admin views as a colleague', () => {
 	const sent = async () => {
-		const fetch = vi.fn().mockResolvedValue(
-			new Response('', { status: 200, headers: { 'content-type': 'text/event-stream' } })
-		);
+		const fetch = vi
+			.fn()
+			.mockResolvedValue(
+				new Response('', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+			);
 		vi.stubGlobal('fetch', fetch);
-		const events = chatTransport(persona).ask({ question: 'hello', files: [] });
+		const events = chatTransport(persona).ask({
+			question: 'hello',
+			files: [],
+			resume: null,
+			signal: new AbortController().signal
+		});
 		for await (const _ of events) void _;
 		const init = fetch.mock.calls.at(0)?.at(1) as RequestInit;
 		return new Headers(init.headers).get('X-View-As');
