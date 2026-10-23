@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.8] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: "we don't need the second supporting line... most names are too long... search by groups of collections, and then allow selection of a whole group or just one collection").
+
+### Added
+
+- **`CollectionChoice` takes `shortTitle` and `group` (`{ name, title }`), both optional.** `shortTitle` is the row's label where present, else the title. When any choice has a `group`, the picker lists them under group headings in order of first appearance (choices with none follow), and each heading is itself a row that picks all of that group.
+- **`Composer` takes `group` and `ongroup`.** A pick calls both `oncollection` and `ongroup`, one with the value and the other with `undefined` (both `undefined` for all of them), so a host's two values never disagree; a host that never groups reads `oncollection` as before. `collection` and `group` are never both set.
+
+### Changed
+
+- **A row is one line: its label, with the full title as its tooltip.** The description line is gone, and `description` is no longer a field of `CollectionChoice`.
+- **Search matches the short title, the full title, the name and the group title.** A group whose own title matches keeps all its collections; otherwise only the matching ones show under it.
+
 ## [2026.10.7] - 2026-10-23
 
 Consumer: caspo, caspo-67.

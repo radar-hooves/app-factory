@@ -49,12 +49,19 @@
 		/** The collection the next question is narrowed to, by name; undefined
 		 *  asks across all of them. */
 		collection?: string;
+		/** The group the next question is narrowed to, by name: all of that
+		 *  group's collections. Set only when no `collection` is. */
+		group?: string;
 		/** Files to send with the next question. Cleared by the caller on send. */
 		files?: File[];
 		/** Hides the paperclip for a host whose ask route takes no files. */
 		attachments?: boolean;
-		/** The person picked a collection by name, or all of them (undefined). */
+		/** The person picked a collection by name, or all of them (undefined).
+		 *  Called with undefined as well when they pick a group. */
 		oncollection?: (collection: string | undefined) => void;
+		/** The person picked a group by name. Called with undefined when they
+		 *  pick a collection or all of them, so the two never disagree. */
+		ongroup?: (group: string | undefined) => void;
 		onsubmit: () => void;
 		onstop: () => void;
 		/** Asks for a study artefact instead of an ordinary answer. Omit and no
@@ -92,9 +99,11 @@
 		running,
 		collections = [],
 		collection,
+		group,
 		files = $bindable([]),
 		attachments = true,
 		oncollection,
+		ongroup,
 		onsubmit,
 		onstop,
 		onbriefing,
@@ -125,7 +134,8 @@
 	// had the list shows the collection its address names, and the control stays
 	// put as the rest of the list arrives.
 	const hasChoice = $derived(
-		collections.length > 1 || (collection !== undefined && collections.length > 0)
+		collections.length > 1 ||
+			((collection !== undefined || group !== undefined) && collections.length > 0)
 	);
 
 	let box = $state<HTMLElement | null>(null);
@@ -333,10 +343,12 @@
 				<ScopePicker
 					{collections}
 					{collection}
+					{group}
 					{words}
 					anchor={box}
-					onchoose={(name) => {
-						oncollection?.(name);
+					onchoose={(pick) => {
+						oncollection?.(pick.collection);
+						ongroup?.(pick.group);
 						textarea?.focus();
 					}}
 				/>

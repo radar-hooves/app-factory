@@ -16,7 +16,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import type { ChatCopy } from '../../copy';
-	import { titleOf, type CollectionChoice } from './choices';
+	import { labelOf, titleOf, type CollectionChoice, type CollectionGroup } from './choices';
 
 	/** From this many choices a search field heads the list. */
 	const SEARCH_FROM = 8;
@@ -27,13 +27,16 @@
 		collections: CollectionChoice[];
 		/** The chosen collection's name; undefined is all of them. */
 		collection?: string;
+		/** The chosen group's name: all of that group's collections. */
+		group?: string;
 		words: ChatCopy;
 		/** The composer's box, which the list is placed against. */
 		anchor: HTMLElement | null;
-		onchoose: (collection: string | undefined) => void;
+		/** Exactly one of the two is set, or neither for all of them. */
+		onchoose: (pick: { collection?: string; group?: string }) => void;
 	}
 
-	let { collections, collection, words, anchor, onchoose }: Props = $props();
+	let { collections, collection, group, words, anchor, onchoose }: Props = $props();
 
 	const id = $props.id();
 	const listId = `${id}-list`;
@@ -51,29 +54,77 @@
 	const searchable = $derived(collections.length >= SEARCH_FROM);
 	const current = $derived.by(() => {
 		const chosen = collections.find((c) => c.name === collection);
-		return chosen ? titleOf(chosen) : words.allCollections;
+		if (chosen) return labelOf(chosen);
+		const set = collections.find((c) => c.group?.name === group)?.group;
+		return set ? set.title : words.allCollections;
 	});
 
+	/** One row: everything, a group's heading, or one collection. */
 	interface Option {
+		key: string;
+		kind: 'all' | 'group' | 'collection';
 		name: string | undefined;
+		label: string;
+		/** The full title, for the row's tooltip. */
 		title: string;
-		description?: string;
+		/** Under a heading, so indented. */
+		grouped: boolean;
 	}
 
-	// While a search is typed, "all of them" steps aside so Enter takes the
-	// first match rather than the reset.
-	const options = $derived.by((): Option[] => {
-		const each = collections.map((c) => ({
-			name: c.name,
-			title: titleOf(c),
-			description: c.description?.trim() || undefined
-		}));
-		const typed = query.trim().toLocaleLowerCase();
-		if (!typed) return [{ name: undefined, title: words.allCollections }, ...each];
-		return each.filter((o) =>
-			[o.title, o.name, o.description ?? ''].some((text) => text.toLocaleLowerCase().includes(typed))
-		);
+	const collectionOption = (c: CollectionChoice): Option => ({
+		key: `c:${c.name}`,
+		kind: 'collection',
+		name: c.name,
+		label: labelOf(c),
+		title: titleOf(c),
+		grouped: c.group !== undefined
 	});
+	const groupOption = (g: CollectionGroup): Option => ({
+		key: `g:${g.name}`,
+		kind: 'group',
+		name: g.name,
+		label: g.title,
+		title: g.title,
+		grouped: false
+	});
+	const matches = (typed: string, ...texts: (string | undefined)[]) =>
+		texts.some((text) => text?.toLocaleLowerCase().includes(typed));
+
+	// Groups head their collections in the order each first appears; what has
+	// no group follows. While a search is typed, "all of them" steps aside so
+	// Enter takes the first match rather than the reset; a group whose own
+	// title matches keeps all its collections, otherwise only the ones that do.
+	const options = $derived.by((): Option[] => {
+		const typed = query.trim().toLocaleLowerCase();
+		const groups = new Map<string, { group: CollectionGroup; members: CollectionChoice[] }>();
+		const loose: CollectionChoice[] = [];
+		for (const c of collections) {
+			if (!c.group) loose.push(c);
+			else {
+				const entry = groups.get(c.group.name) ?? { group: c.group, members: [] };
+				entry.members.push(c);
+				groups.set(c.group.name, entry);
+			}
+		}
+		const hit = (c: CollectionChoice) => matches(typed, c.shortTitle, titleOf(c), c.name);
+		const rows: Option[] = [];
+		for (const { group: g, members } of groups.values()) {
+			const shown = !typed || matches(typed, g.title, g.name) ? members : members.filter(hit);
+			if (shown.length === 0) continue;
+			rows.push(groupOption(g), ...shown.map(collectionOption));
+		}
+		for (const c of loose) if (!typed || hit(c)) rows.push(collectionOption(c));
+		if (typed) return rows;
+		const everything = words.allCollections;
+		return [
+			{ key: 'all', kind: 'all', name: undefined, label: everything, title: everything, grouped: false },
+			...rows
+		];
+	});
+	const isChosen = (o: Option) =>
+		o.kind === 'all'
+			? collection === undefined && group === undefined
+			: o.name === (o.kind === 'group' ? group : collection);
 	const activeId = $derived(options[active] ? `${listId}-${active}` : undefined);
 
 	/** How far the anchor can open each way inside whatever clips it. */
@@ -104,7 +155,7 @@
 			};
 		}
 		query = '';
-		active = Math.max(0, options.findIndex((o) => o.name === collection));
+		active = Math.max(0, options.findIndex(isChosen));
 		open = true;
 		await tick();
 		(search ?? list)?.focus();
@@ -119,7 +170,13 @@
 	function choose(option: Option | undefined) {
 		if (!option) return;
 		open = false;
-		onchoose(option.name);
+		onchoose(
+			option.kind === 'group'
+				? { group: option.name }
+				: option.kind === 'collection'
+					? { collection: option.name }
+					: {}
+		);
 	}
 
 	/** The active option in view, scrolling the list alone: `scrollIntoView`
@@ -245,7 +302,7 @@
 				onmousedown={(event) => event.preventDefault()}
 				class="ds-lib-scope-list"
 			>
-				{#each options as option, index (option.name ?? '')}
+				{#each options as option, index (option.key)}
 					<!-- The keyboard drives the list from the field or the listbox
 					     itself, by reference; an option never takes focus. -->
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -253,19 +310,17 @@
 						id="{listId}-{index}"
 						role="option"
 						tabindex="-1"
-						aria-selected={option.name === collection}
+						title={option.title}
+						aria-selected={isChosen(option)}
 						class="ds-lib-scope-option"
+						class:is-group={option.kind === 'group'}
+						class:is-grouped={option.grouped}
 						class:is-active={index === active}
 						onclick={() => choose(option)}
 						onpointermove={() => (active = index)}
 					>
-						<span class="ds-lib-scope-option-text">
-							<span class="ds-lib-scope-option-title">{option.title}</span>
-							{#if option.description}
-								<span class="ds-lib-scope-option-description">{option.description}</span>
-							{/if}
-						</span>
-						{#if option.name === collection}<CheckIcon size={14} />{/if}
+						<span class="ds-lib-scope-option-title">{option.label}</span>
+						{#if isChosen(option)}<CheckIcon size={14} />{/if}
 					</li>
 				{/each}
 			</ul>
@@ -391,23 +446,25 @@
 		background: var(--ds-color-surface-2);
 	}
 
-	.ds-lib-scope-option-text {
-		display: flex;
+	.ds-lib-scope-option-title {
 		min-width: 0;
 		flex: 1;
-		flex-direction: column;
-	}
-
-	.ds-lib-scope-option-title,
-	.ds-lib-scope-option-description {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.ds-lib-scope-option-description {
+	/* A heading is a row that asks across its collections, so it reads as one. */
+	.ds-lib-scope-option.is-group {
 		color: var(--ds-color-muted-foreground);
 		font-size: var(--ds-text-2xs);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.ds-lib-scope-option.is-grouped {
+		padding-left: 1.25rem;
 	}
 
 	.ds-lib-scope-none {

@@ -10,8 +10,17 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
 const COLLECTIONS = [
-	{ name: 'adf-pay', title: 'ADF pay and conditions', description: 'Rates and leave' },
+	{ name: 'adf-pay', title: 'ADF pay and conditions' },
 	{ name: 'housing', title: 'Defence housing and relocation' }
+];
+
+const PAY = { name: 'pay', title: 'Pay and conditions' };
+const HOME = { name: 'home', title: 'Housing' };
+const GROUPED = [
+	{ name: 'adf-pay', title: 'ADF pay and conditions: the full instrument', shortTitle: 'ADF pay', group: PAY },
+	{ name: 'leave', title: 'Leave entitlements under the determination', shortTitle: 'Leave', group: PAY },
+	{ name: 'housing', title: 'Defence housing and relocation', group: HOME },
+	{ name: 'loose', title: 'Something unfiled' }
 ];
 
 const MANY = Array.from({ length: 27 }, (_, n) => ({
@@ -55,7 +64,7 @@ describe('Composer collection picker', () => {
 		expect(control()).toHaveAttribute('aria-expanded', 'true');
 		expect(within(list).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual([
 			'All your collections',
-			'ADF pay and conditions Rates and leave',
+			'ADF pay and conditions',
 			'Defence housing and relocation'
 		]);
 		expect(within(list).getByRole('option', { name: /All your collections/ })).toHaveAttribute(
@@ -147,6 +156,67 @@ describe('Composer collection picker', () => {
 		expect(
 			screen.getByRole('button', { name: 'Where Outrider looks: All your collections' })
 		).toBeInTheDocument();
+	});
+});
+
+describe('Composer collection picker, grouped', () => {
+	it('shows the short title, keeps the full one as the tooltip, and no second line', async () => {
+		render(Composer, { props: base({ collections: GROUPED }) });
+		const list = await opened();
+		const row = within(list).getByRole('option', { name: 'ADF pay' });
+		expect(row).toHaveAttribute('title', 'ADF pay and conditions: the full instrument');
+		expect(row.textContent?.trim()).toBe('ADF pay');
+		expect(within(list).getByRole('option', { name: 'Defence housing and relocation' })).toBeInTheDocument();
+	});
+
+	it('heads each group in order, then what has none', async () => {
+		render(Composer, { props: base({ collections: GROUPED }) });
+		const list = await opened();
+		expect(within(list).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual([
+			'All your collections',
+			'Pay and conditions',
+			'ADF pay',
+			'Leave',
+			'Housing',
+			'Defence housing and relocation',
+			'Something unfiled'
+		]);
+	});
+
+	it('takes a whole group, telling the host the group and no collection', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
+		await fireEvent.click(within(await opened()).getByRole('option', { name: 'Pay and conditions' }));
+		expect(ongroup).toHaveBeenLastCalledWith('pay');
+		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+
+		await fireEvent.click(within(await opened()).getByRole('option', { name: 'Leave' }));
+		expect(oncollection).toHaveBeenLastCalledWith('leave');
+		expect(ongroup).toHaveBeenLastCalledWith(undefined);
+	});
+
+	it('shows a chosen group on the control and marks its heading', async () => {
+		render(Composer, { props: base({ collections: GROUPED, group: 'pay' }) });
+		expect(control()).toHaveTextContent('Pay and conditions');
+		const list = await opened();
+		expect(within(list).getByRole('option', { name: 'Pay and conditions' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		expect(within(list).getByRole('option', { name: /All your/ })).toHaveAttribute('aria-selected', 'false');
+	});
+
+	it('searches the short title, the full title and the group title', async () => {
+		render(Composer, { props: base({ collections: [...GROUPED, ...MANY] }) });
+		const type = async (value: string) => {
+			await fireEvent.input(screen.getByRole('combobox'), { target: { value } });
+			return screen.getAllByRole('option').map((o) => o.textContent?.trim());
+		};
+		await fireEvent.click(control());
+		expect(await type('adf')).toEqual(['Pay and conditions', 'ADF pay']);
+		expect(await type('determination')).toEqual(['Pay and conditions', 'Leave']);
+		expect(await type('pay and')).toEqual(['Pay and conditions', 'ADF pay', 'Leave']);
 	});
 });
 

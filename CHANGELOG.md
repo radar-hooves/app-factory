@@ -4,6 +4,15 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.70] - 2026-10-24
+
+Need: two changes to caspo's chrome, the operator's rulings of 24/10/2026; consumer: caspo.
+
+### Changed
+
+- **`AppShell`'s collapse toggle leads the top bar** (`@poodle64/ui` 2026.10.25, which stamped apps now pin): first in the bar, before the page's title, with a thin separator after it, where the shadcn sidebar blocks put `Sidebar.Trigger`. The rail's header holds the brand alone. Same label, `aria-pressed`, `[` shortcut, test id and icons; md and up only. Migration: bump `@poodle64/ui` to `^2026.10.25`; an app's own test that found `ds-rail-collapse` inside `.ds-shell-rail` finds it in `header.ds-shell-bar`.
+- **The scope picker's rows are one line, and group** (`@poodle64/librarian` 2026.10.8, which stamped apps now pin). `CollectionChoice` loses `description` and takes optional `shortTitle` and `group: { name, title }`; with groups, headings are rows that pick all of a group. `Composer` takes `group` and `ongroup` beside `collection` and `oncollection`; a pick calls both, one with `undefined`. Migration: bump `@poodle64/librarian` to `2026.10.8`, drop `description` from the choices, pass `shortTitle` and `group` where the host has them, and map a `group` selection onto the ask route's collections.
+
 ## [2026.10.69] - 2026-10-23
 
 Need: prose blocks of different font sizes in one column should end at the same right edge; consumer: caspo.
