@@ -21,6 +21,14 @@ import type { Component } from 'svelte';
 /** A Lucide (or equivalent) icon component: takes a class, renders an SVG. */
 export type IconComponent = Component<{ class?: string }>;
 
+/**
+ * A row's trailing mark. A string or number is a text chip (an unread count, a
+ * "beta" tag). `{ icon, label }` is a compact icon-only pill whose `label` is its
+ * tooltip and accessible name: the choice whenever a text chip could collide with
+ * the row's own label or its submenu chevron at the rail's width.
+ */
+export type NavBadge = string | number | { icon: IconComponent; label: string };
+
 /** One navigable destination. */
 export interface NavItem {
 	/** The visible text. Also the accessible name when the rail is collapsed. */
@@ -29,8 +37,14 @@ export interface NavItem {
 	href: string;
 	/** Optional leading icon. Omit it for a label-only row; alignment is kept. */
 	icon?: IconComponent;
-	/** Optional trailing count or short tag (an unread count, a "beta" tag). */
-	badge?: string | number;
+	/**
+	 * Optional trailing mark: a count or short tag (`3`, `'beta'`), or an icon
+	 * pill (`{ icon: Lock, label: 'Only you' }`). The label is the content and
+	 * never truncates: a text chip that does not fit takes the label's room and
+	 * the label wraps. So use the icon form whenever a label could collide, a
+	 * wordy tag, or a row that also carries `children`.
+	 */
+	badge?: NavBadge;
 	/**
 	 * Match the current path exactly rather than by prefix. Prefix is the
 	 * default because a section root should stay lit while you are inside it;

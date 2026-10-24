@@ -21,6 +21,7 @@ export {
 	toGroups,
 	toItems,
 	type IconComponent,
+	type NavBadge,
 	type NavChildItem,
 	type NavEntry,
 	type NavGroup,

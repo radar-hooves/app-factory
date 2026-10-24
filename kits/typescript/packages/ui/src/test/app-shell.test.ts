@@ -607,6 +607,24 @@ describe('AppShell — active state', () => {
 		const badge = document.querySelector('.ds-shell-rail a[href="/credentials"] .ds-nav-badge');
 		expect(badge).toHaveTextContent('3');
 	});
+
+	it('renders an icon badge as a labelled pill with no text', async () => {
+		const { default: Lock } = await import('@lucide/svelte/icons/lock');
+		const { default: AppNav } = await import('$lib/components/ui/app-shell/app-nav.svelte');
+		render(AppNav, {
+			props: {
+				currentPath: '/',
+				nav: [{ label: 'Strategy paper', href: '/strategy', badge: { icon: Lock, label: 'Only you' } }]
+			}
+		});
+		const link = screen.getByRole('link', { name: /Strategy paper/ });
+		const pill = link.querySelector('.ds-nav-badge')!;
+		expect(pill).toHaveAttribute('aria-label', 'Only you');
+		expect(pill).toHaveAttribute('title', 'Only you');
+		expect(pill.textContent?.trim()).toBe('');
+		expect(pill.querySelector('svg')).not.toBeNull();
+		expect(link).toHaveAccessibleName(/Only you/);
+	});
 });
 
 describe('CommandPalette', () => {

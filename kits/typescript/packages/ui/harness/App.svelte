@@ -114,6 +114,7 @@
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
 	import Package from '@lucide/svelte/icons/package';
 	import KeySquare from '@lucide/svelte/icons/key-square';
+	import Lock from '@lucide/svelte/icons/lock';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import Users from '@lucide/svelte/icons/users';
@@ -155,6 +156,24 @@
 				},
 				{ label: 'Identities', href: '#/identities', icon: KeySquare }
 			]
+		}
+	];
+
+	// `?surface=badges`: the rail's label, its badge and its chevron on one row.
+	const badgeNav: NavSource = [
+		{
+			label: 'Strategy paper',
+			href: '#/strategy',
+			icon: ScrollText,
+			badge: { icon: Lock, label: 'Only you' },
+			children: [{ label: 'Drafts', href: '#/strategy/drafts' }]
+		},
+		{
+			label: 'Intelligence picture',
+			href: '#/intelligence',
+			icon: Package,
+			badge: 'Only you',
+			children: [{ label: 'Sources', href: '#/intelligence/sources' }]
 		}
 	];
 
@@ -1582,6 +1601,10 @@
 				</Table.Root>
 			</section>
 		</div>
+	</AppShell>
+{:else if surface === 'badges'}
+	<AppShell nav={badgeNav} currentPath="#/overview" brandTitle="Harness">
+		<h1 class="font-display text-display font-semibold">Badges</h1>
 	</AppShell>
 {:else if surface === 'nested'}
 	<!-- The path is inside the Education section, so the group is open on first

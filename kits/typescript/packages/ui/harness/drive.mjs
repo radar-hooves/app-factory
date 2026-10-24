@@ -1288,6 +1288,52 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
+	// A label, a badge and a chevron share the rail's width, and the label is the
+	// content: it is never clipped. An icon badge also leaves it on one line.
+	{
+		const { context, page } = await open('surface=badges');
+		await page.waitForSelector('.ds-nav-branch');
+		const rows = await page.evaluate(() =>
+			[...document.querySelectorAll('.ds-nav-branch')].map((branch) => {
+				const link = branch.querySelector('.ds-nav-item');
+				const label = link.querySelector('.ds-nav-label');
+				const badge = link.querySelector('.ds-nav-badge');
+				const lineHeight = parseFloat(getComputedStyle(label).lineHeight);
+				return {
+					text: label.textContent,
+					clipped: label.scrollWidth > label.clientWidth,
+					ellipsis: getComputedStyle(label).textOverflow === 'ellipsis',
+					lines: Math.round(label.getBoundingClientRect().height / lineHeight),
+					iconBadge: badge.hasAttribute('data-icon'),
+					badgeName: badge.getAttribute('aria-label'),
+					badgeTitle: badge.getAttribute('title'),
+					glyph: badge.querySelector('svg')?.getBoundingClientRect().width ?? null,
+					rail: document.querySelector('.ds-shell-rail').getBoundingClientRect().width,
+					chevron: branch.querySelector('[data-ds-nav-disclosure]').getBoundingClientRect().width
+				};
+			})
+		);
+		for (const row of rows) {
+			check(
+				`rail badge: "${row.text}" is not clipped beside its ${row.iconBadge ? 'icon' : 'text'} badge and chevron`,
+				!row.clipped && !row.ellipsis,
+				`scrollWidth > clientWidth: ${row.clipped}, ellipsis: ${row.ellipsis}, ${row.lines} line(s), rail ${row.rail}px`
+			);
+		}
+		const [icon, text] = rows;
+		check(
+			'rail badge: the icon form is a 12px glyph with a tooltip and an aria-label, and leaves the label on one line',
+			icon.iconBadge && icon.glyph === 12 && icon.badgeName === 'Only you' && icon.badgeTitle === 'Only you' && icon.lines === 1,
+			JSON.stringify(icon)
+		);
+		check(
+			'rail badge: the plain-string form still renders as a text chip',
+			!text.iconBadge && text.badgeName === null,
+			JSON.stringify(text)
+		);
+		await context.close();
+	}
+
 	// The phone. 360px is where a nested tree breaks if it is going to.
 	for (const width of [360, 320]) {
 		const { context, page } = await open('surface=nested', { width, height: 780 });

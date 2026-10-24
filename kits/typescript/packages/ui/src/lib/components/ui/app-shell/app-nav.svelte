@@ -201,9 +201,22 @@
 				>{item.label.slice(0, 1).toUpperCase()}</span
 			>
 		{/if}
-		<span class={iconOnly ? 'sr-only' : 'truncate'}>{item.label}</span>
+		<span class={iconOnly ? 'sr-only' : 'ds-nav-label'}>{item.label}</span>
 		{#if item.badge !== undefined && !iconOnly}
-			<span class="ds-nav-badge">{item.badge}</span>
+			{#if typeof item.badge === 'object'}
+				{@const Mark = item.badge.icon}
+				<span
+					class="ds-nav-badge"
+					data-icon
+					role="img"
+					title={item.badge.label}
+					aria-label={item.badge.label}
+				>
+					<Mark class="size-3 flex-none" />
+				</span>
+			{:else}
+				<span class="ds-nav-badge">{item.badge}</span>
+			{/if}
 		{/if}
 	{/snippet}
 	{#if stateful}

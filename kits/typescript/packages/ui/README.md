@@ -281,6 +281,21 @@ belongs in the page too, as a sibling of the article it serves, and not in the
 shell: it is part of that page's own reading surface, it wants that page's
 breakpoints, and no other route should be paying rail width for it.
 
+**A row's `badge`, and a label that never truncates.** The label is the content:
+it wraps, never ends in an ellipsis, and the badge and the chevron keep their
+size. A text badge (`badge: 3`, `badge: 'beta'`) is a chip that costs the label
+room: at 15.5rem, a label, a wordy chip and a chevron do not share one line, so
+the label takes a second. Pass the icon form wherever a label could collide
+(a tag with words in it, any row that also has `children`):
+
+```ts
+import Lock from '@lucide/svelte/icons/lock';
+{ label: 'Strategy paper', href: '/strategy', icon: FileText, badge: { icon: Lock, label: 'Only you' } }
+```
+
+It draws as a compact pill holding only the icon (12px, muted), with `label` as
+its tooltip and accessible name. `NavBadge` is the type.
+
 `NavItem` / `NavGroup` are exported so an app types its own config against them.
 They carry **no notion of who may see an item**: two surveyed apps gate
 navigation on admin or per-module permission, and both do it with their own auth

@@ -676,8 +676,8 @@
 		   `auto` too (CSSOM's "if one axis is visible and the other is not, the
 		   visible one becomes auto" rule), so a row wider than the nav — a long
 		   label, a wide badge — got its own sideways scrollbar inside the drawer.
-		   The drawer scrolls vertically only; a row that doesn't fit truncates
-		   (`.ds-nav-item`'s label already carries `.truncate`) rather than
+		   The drawer scrolls vertically only; a row that doesn't fit wraps its label
+		   (`.ds-nav-label`) rather than
 		   growing a second scroll axis on top of the menu's own (design-system#111). */
 		overflow-x: hidden;
 	}
@@ -790,12 +790,31 @@
 		color: var(--ds-nav-ink-muted);
 	}
 
+	/* The label is the content: it wraps, never truncates, and the badge and the
+	   chevron keep their own size (a chip that does not fit costs the label a
+	   line, not its letters). `anywhere` also breaks a single word wider than the
+	   rail. */
+	.ds-nav-label {
+		min-width: 0;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	/* The icon form: a pill the size of its glyph, no text to collide. */
+	.ds-nav-badge[data-icon] {
+		display: inline-grid;
+		place-items: center;
+		padding: 0.1875rem 0.375rem;
+		color: var(--ds-nav-ink-muted);
+	}
+
 	/* A count badge is small text on a tint, so it carries the 4.5:1 text floor
 	   with the least margin of anything in the nav — and it was the worst of the
 	   three (#11): 1.73:1 under a warm amber, and 3.72:1 even on the package
 	   default, because it sits on the active row's tint AND its own. Same fix,
 	   same reason: the ink is the chrome's, the brand stays in the chip. */
 	.ds-nav-badge {
+		flex: none;
 		margin-left: auto;
 		border-radius: 9999px;
 		padding: 0 0.375rem;
