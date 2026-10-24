@@ -376,10 +376,37 @@ describe('Composer collection picker, names in full', () => {
 	});
 });
 
+describe('Composer collection picker, in the top layer', () => {
+	const real = HTMLElement.prototype.showPopover;
+	afterEach(() => {
+		HTMLElement.prototype.showPopover = real;
+	});
+
+	it('draws the popover in the top layer, on an opaque surface, so nothing the page paints covers it', async () => {
+		const shown: string[] = [];
+		HTMLElement.prototype.showPopover = function (this: HTMLElement) {
+			shown.push(this.getAttribute('role') ?? this.className);
+		};
+		render(Composer, { props: base({ collections: GROUPED }) });
+		await fireEvent.click(control());
+		const dialog = screen.getByRole('dialog', { hidden: true });
+		expect(dialog).toHaveAttribute('popover', 'manual');
+		expect(shown).toContain('dialog');
+		const source = readFileSync(
+			join(process.cwd(), 'src/lib/components/composer/scope-picker.svelte'),
+			'utf8'
+		);
+		expect(source).toMatch(/\.ds-lib-scope-pop \{[^}]*background: var\(--popover, var\(--ds-color-surface-3\)\)/);
+		expect(source).not.toMatch(/z-index|document\.body\.appendChild/);
+	});
+});
+
 describe('Composer collection picker, on a phone', () => {
 	const real = window.matchMedia;
+	const realShow = HTMLElement.prototype.showPopover;
 	afterEach(() => {
 		window.matchMedia = real;
+		HTMLElement.prototype.showPopover = realShow;
 	});
 	function phone() {
 		window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -393,6 +420,15 @@ describe('Composer collection picker, on a phone', () => {
 			dispatchEvent: vi.fn()
 		}));
 	}
+
+	it('puts its sheet and scrim in the top layer', async () => {
+		phone();
+		HTMLElement.prototype.showPopover = () => {};
+		render(Composer, { props: base({ collections: GROUPED }) });
+		await fireEvent.click(control());
+		expect(screen.getByRole('dialog', { hidden: true })).toHaveAttribute('popover', 'manual');
+		expect(document.querySelector('.ds-lib-scope-scrim')).toHaveAttribute('popover', 'manual');
+	});
 
 	it('shows the subjects first, then a tap goes into one under a back control with its name', async () => {
 		phone();

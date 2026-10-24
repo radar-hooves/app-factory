@@ -68,7 +68,7 @@
 	/** Which part holds focus: only that part's active row is lit, so a row lit
 	 *  by an arrow is never read as the chosen one (second read, 24/10/2026). */
 	let focused = $state<'search' | 'subjects' | 'contents' | 'flat' | null>(null);
-	let place = $state({ up: true, left: 0, width: WIDEST, height: TALLEST });
+	let place = $state({ up: true, left: 0, edge: 0, width: WIDEST, height: TALLEST });
 
 	let root = $state<HTMLElement | null>(null);
 	/** What opens: inside `root` on a desktop, in `<body>` on a phone. */
@@ -233,13 +233,27 @@
 		return { box, above: box.top - top, below: bottom - box.bottom };
 	}
 
-	/** A sheet is fixed to the screen, and a fixed element inside a transformed
-	 *  ancestor (the composer lifts with the keyboard) is fixed to that instead:
-	 *  so on a phone the layer moves to `<body>`. */
-	function lift(node: HTMLElement, toBody: boolean) {
-		if (!toBody) return;
-		document.body.appendChild(node);
-		return { destroy: () => node.remove() };
+	/** The scrim and the popover are drawn in the browser's top layer, not
+	 *  inside the composer's stacking context: nothing the page paints later (a
+	 *  card with a transform or its own stacking order) can land over the open picker, and a
+	 *  sheet is fixed to the screen even when the composer lifts with the keyboard. */
+	function topLayer(node: HTMLElement) {
+		try {
+			node.showPopover();
+		} catch {
+			// No Popover API: an unshown popover is display: none, so it is a plain
+			// fixed element instead.
+			node.removeAttribute('popover');
+		}
+		return {
+			destroy: () => {
+				try {
+					node.hidePopover();
+				} catch {
+					// Already gone.
+				}
+			}
+		};
 	}
 
 	const inside = (target: Node | null) =>
@@ -261,7 +275,8 @@
 			place = {
 				up,
 				width,
-				left: Math.max(8, Math.min(at.left - box.left - anchor.clientLeft, box.width - width - 8)),
+				left: box.left + Math.max(8, Math.min(at.left - box.left - anchor.clientLeft, box.width - width - 8)),
+				edge: up ? window.innerHeight - box.top + 6 : box.bottom + 6,
 				height: Math.max(200, Math.min(TALLEST, (up ? above : below) - 12))
 			};
 		}
@@ -455,11 +470,18 @@
 		const resized = () => {
 			if (window.innerWidth !== width) close(false);
 		};
+		// The popover is placed against the window, so a scroll of the page under
+		// it puts it away rather than leaving it where the composer was.
+		const scrolled = (event: Event) => {
+			if (!inside(event.target as Node)) close(false);
+		};
 		document.addEventListener('pointerdown', outside, true);
 		window.addEventListener('resize', resized);
+		window.addEventListener('scroll', scrolled, true);
 		return () => {
 			document.removeEventListener('pointerdown', outside, true);
 			window.removeEventListener('resize', resized);
+			window.removeEventListener('scroll', scrolled, true);
 		};
 	});
 </script>
@@ -521,11 +543,13 @@
 	</button>
 
 	{#if open}
-		<div class="ds-lib-scope-layer" bind:this={layer} use:lift={narrow}>
+		<div class="ds-lib-scope-layer" bind:this={layer}>
 			{#if narrow}
 				<button
 					type="button"
 					class="ds-lib-scope-scrim"
+					popover="manual"
+					use:topLayer
 					tabindex="-1"
 					aria-hidden="true"
 					onclick={() => close(true)}
@@ -538,10 +562,13 @@
 				tabindex="-1"
 				aria-label={words.collectionsLabel}
 				class="ds-lib-scope-pop"
+				popover="manual"
+				use:topLayer
 				class:is-sheet={narrow}
-				class:is-up={place.up && !narrow}
 				class:is-flat={flat}
-				style={narrow ? undefined : `left: ${place.left}px; width: ${place.width}px; max-height: ${place.height}px`}
+				style={narrow
+					? undefined
+					: `left: ${place.left}px; width: ${place.width}px; max-height: ${place.height}px; ${place.up ? 'bottom' : 'top'}: ${place.edge}px`}
 				onkeydown={popKey}
 				onfocusin={(event) => {
 					const at = event.target;
@@ -733,22 +760,21 @@
 		}
 	}
 
+	/* In the top layer, so fixed to the window: the script gives it left, width and
+	   top or bottom. An opaque surface, the one every popover of the package takes. */
 	.ds-lib-scope-pop {
-		position: absolute;
-		z-index: 20;
-		top: calc(100% + 0.375rem);
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 		border: 1px solid var(--ds-color-border);
 		border-radius: var(--ds-radius-lg);
-		background: var(--ds-color-surface-1);
+		background: var(--popover, var(--ds-color-surface-3));
+		color: var(--popover-foreground, var(--ds-color-foreground));
 		box-shadow: 0 12px 28px color-mix(in oklab, var(--ds-color-foreground) 22%, transparent);
-	}
-
-	.ds-lib-scope-pop.is-up {
-		top: auto;
-		bottom: calc(100% + 0.375rem);
 	}
 
 	/* The layer adds no box of its own on a desktop. */
@@ -759,16 +785,16 @@
 	/* A phone: a sheet from the bottom, over a scrim. */
 	.ds-lib-scope-scrim {
 		position: fixed;
-		z-index: 30;
 		inset: 0;
+		width: auto;
+		height: auto;
+		margin: 0;
 		border: 0;
 		padding: 0;
 		background: color-mix(in oklab, var(--ds-color-foreground) 40%, transparent);
 	}
 
 	.ds-lib-scope-pop.is-sheet {
-		position: fixed;
-		z-index: 31;
 		inset: auto 0 0 0;
 		width: auto;
 		max-height: min(85dvh, 36rem);
