@@ -42,6 +42,8 @@ on:
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
+      - 'tests/arbitrary-values/**'
+      - 'kits/typescript/packages/design-tokens/bin/**'
       - 'tests/elements/**'
       - 'kits/python/**'
       - 'kits/typescript/packages/ui/**'
@@ -126,6 +128,9 @@ jobs:
 
       - name: Retirement migration — holds copier.yaml's list to its `_exclude`
         run: uv run --frozen pytest -q tests/migrations
+
+      - name: Arbitrary-values ratchet — the wrapper against the real bin
+        run: node --test tests/arbitrary-values/ratchet.test.mjs
 
       - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike

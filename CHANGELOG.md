@@ -4,9 +4,13 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.10.72] - 2026-10-24
 
 Need: Past questions as a column beside the conversation with Clear all at its foot (the operator, 24/10/2026); consumer: caspo.
+
+### Changed
+
+- **The `design-arbitrary-values` hook fails on a NEW colour or size literal only**, through `frontend/scripts/check-arbitrary-values.mjs`, which runs `ds-check-arbitrary-values src` and ratchets its hits against `frontend/.arbitrary-values-baseline.json` (`{"<file> [<value>]": count}`, no line numbers). The bin scans the whole of `src` with no baseline, so an app with literals from before the gate failed every frontend commit on files it never touched. A banked count may fall and never rise; a clean app needs no baseline file; `pnpm lint:arbitrary` runs it. The baseline is app-owned (`_skip_if_exists`). Need: pebblestone could not commit a frontend change against 232 literals in 36 files (pebblestone-51, 24/10/2026); consumer: pebblestone. Migration: after `copier update`, run `node scripts/check-arbitrary-values.mjs --baseline` in `frontend/` once and commit `.arbitrary-values-baseline.json`; with the file present `--baseline` only drops what was fixed.
 
 ### Added
 

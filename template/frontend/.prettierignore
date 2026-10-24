@@ -18,6 +18,7 @@ src/lib/elements/placed.d.ts
 
 # The design gates rewrite these with their own JSON layout on `--baseline`.
 # Reformatting them turns every banked finding into a two-tool diff.
+.arbitrary-values-baseline.json
 .design-craft-baseline.json
 .ui-drift-baseline.json
 

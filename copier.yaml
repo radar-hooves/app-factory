@@ -11,6 +11,7 @@ _subdirectory: "{{ 'template' if skeleton == 'web' else 'skeletons/' ~ skeleton 
 _skip_if_exists:
   - README.md
   - DESIGN.md
+  - frontend/.arbitrary-values-baseline.json
   - frontend/.design-craft-baseline.json
   - frontend/.ui-drift-baseline.json
   # App-owned lint debt (frontend/eslint.config.js spreads it). Template-shipped

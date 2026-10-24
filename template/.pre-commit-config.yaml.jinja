@@ -228,15 +228,18 @@ repos:
         files: '^frontend/.*\.(svelte|ts|js|mjs|cjs)$'
 
   # The colour/size-literal block (`text-[#ff0000]`, `h-[12px]`): @poodle64/
-  # design-tokens' own bin, master-project#309. The change pipeline runs only
-  # check and test, so this hook is the one place the gate runs. Whole `src`,
-  # as the bin's default, since a literal's breach is per tree, not per file;
-  # `files` still gates WHETHER it runs.
+  # design-tokens' own bin, master-project#309, ratcheted by
+  # scripts/check-arbitrary-values.mjs against frontend/.arbitrary-values-
+  # baseline.json. The bin scans the whole of `src` and has no baseline of its
+  # own, so run bare it fails every commit on literals an app never touched; the
+  # wrapper fails on a NEW one only. The change pipeline runs only check and
+  # test, so this hook is the one place the gate runs. `files` still gates
+  # WHETHER it runs.
   - repo: local
     hooks:
       - id: design-arbitrary-values
-        name: 'design - No colour/size literal in an arbitrary Tailwind value'
-        entry: bash -c 'cd frontend && exec node_modules/.bin/ds-check-arbitrary-values src'
+        name: 'design - No new colour/size literal in an arbitrary Tailwind value'
+        entry: node frontend/scripts/check-arbitrary-values.mjs
         language: system
         files: '^frontend/src/.*\.(svelte|ts|js|css)$'
         pass_filenames: false

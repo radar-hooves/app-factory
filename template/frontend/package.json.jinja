@@ -20,6 +20,7 @@
 		"lint:design": "node scripts/check-design-craft.mjs",
 		"lint:design:live": "node scripts/check-design-craft.mjs --live",
 		"lint:colour": "node scripts/check-colour-surface.mjs",
+		"lint:arbitrary": "node scripts/check-arbitrary-values.mjs",
 		"lint:drift": "node scripts/check-ui-drift.mjs",
 		"generate:api": "openapi-typescript http://localhost:{{ backend_port }}/openapi.json -o src/lib/api/schema.d.ts",
 		"generate:elements": "node scripts/generate-elements.mjs",
