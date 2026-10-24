@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.81] - 2026-10-24
+
+Need: the operator's "Transparency on the front page does not work" (24/10/2026); consumer: caspo.
+
+### Fixed
+
+- **The composer's collection picker is never painted over** (`@poodle64/librarian` 2026.10.13, which stamped apps now pin): it draws in the top layer on an opaque surface, so cards below it no longer cut its rows. Migration: bump `@poodle64/librarian` to 2026.10.13.
+
 ## [2026.10.80] - 2026-10-24
 
 Consumer: caspo. The 2026.10.78 rubric line about a "More actions" button made the judge fail every phone page whose scope controls or body toolbar are not bar actions.

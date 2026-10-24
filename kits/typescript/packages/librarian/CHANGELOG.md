@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.13] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: "Transparency on the front page does not work"). On Home the composer's collection picker opened over the cards, and their line-art drawings painted on top of it, cutting letters off its rows.
+
+### Fixed
+
+- **The collection picker draws in the top layer.** The popover, the phone sheet and its scrim are `popover="manual"` elements shown with `showPopover()`, placed against the window, so nothing a page paints later can cover them, whatever the composer sits inside. The surface is the package's popover surface (`--popover`, else `--ds-color-surface-3`), opaque. The open direction, up or down, is unchanged; a scroll of the page under the open picker puts it away.
+
 ## [2026.10.12] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: text that breaks or cuts for no reason). Every past-question row read "What is AIR 60…": its time and a permanent "···" menu took the row.
