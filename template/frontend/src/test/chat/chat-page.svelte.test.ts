@@ -435,13 +435,16 @@ describe('Choosing where a persona looks', () => {
 		try {
 			at('/chat/outrider');
 			await fireEvent.click(await screen.findByRole('button', { name: /^Where Outrider looks/ }));
-			const list = screen.getByRole('listbox', { name: 'Where Outrider looks' });
-			expect(
+			const names = (list: HTMLElement) =>
 				within(list)
 					.getAllByRole('option')
-					.map((o) => o.textContent?.trim())
-			).toEqual(['All your collections', 'Pay matters', 'Manual', 'Conditions of service']);
-			await fireEvent.click(within(list).getByRole('option', { name: 'Pay matters' }));
+					.map((o) => o.getAttribute('aria-label'));
+			const subjects = screen.getByRole('listbox', { name: 'Subjects' });
+			expect(names(subjects)).toEqual(['All your collections', 'Pay matters, 2 to choose from']);
+			await fireEvent.click(within(subjects).getByRole('option', { name: /^Pay matters/ }));
+			const contents = screen.getByRole('listbox', { name: 'Pay matters' });
+			expect(names(contents)).toEqual(['All of Pay matters', 'Manual', 'Conditions of service']);
+			await fireEvent.click(within(contents).getByRole('option', { name: 'All of Pay matters' }));
 			await waitFor(() =>
 				expect(fake.goto).toHaveBeenCalledWith(
 					'?group=pay',
