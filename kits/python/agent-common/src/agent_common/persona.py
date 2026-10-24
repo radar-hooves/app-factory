@@ -28,7 +28,9 @@ SOURCE_FILES = ("CLAUDE.md", "settings.json", ".mcp.json")
 #: How many hops deep Claude Code follows a CLAUDE.md import; `expand` refuses a deeper one.
 IMPORT_DEPTH = 5
 
-_IMPORT = re.compile(r"[ \t]*@(\S+)[ \t]*")
+_TOKEN = re.compile(r"(?<!\S)@(\S+)")
+_STANDALONE = re.compile(r"[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?@\S+[ \t]*")
+_CODE_SPAN = re.compile(r"(`+).*?\1")
 _FENCE = re.compile(r"[ \t]*(`{3,}|~{3,})")
 
 
@@ -40,15 +42,34 @@ class ImportUnreadable(ValueError):
     """A CLAUDE.md import names a file that cannot be read, imports itself, or nests past `IMPORT_DEPTH`."""
 
 
-def expand(text: str, source: Path, *, _within: tuple[Path, ...] = ()) -> str:
-    """`text`, read from `source`, with each import line replaced by the file it names, expanded the same way.
+def _imported(raw: str, source: Path, within: tuple[Path, ...], *, required: bool) -> str | None:
+    """The file `@raw` names from `source`, expanded; None for a prose mention that names no file."""
+    target = Path(raw).expanduser()
+    target = target if target.is_absolute() else source.parent / target
+    if not required and not target.is_file():
+        return None
+    if len(within) > IMPORT_DEPTH:
+        raise ImportUnreadable(f"{source}: @{raw} is more than {IMPORT_DEPTH} imports deep")
+    if target.resolve() in within:
+        raise ImportUnreadable(f"{source}: @{raw} imports itself")
+    try:
+        content = target.read_text()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ImportUnreadable(f"{source}: @{raw} cannot be read ({exc})") from exc
+    return expand(content, target, _within=within).rstrip("\n")
 
-    An import is a line that is only `@<path>`, outside a fenced code block, the
-    path relative to `source`'s directory unless absolute or `~/`: the import a
-    Claude Code CLAUDE.md makes, which a restricted session never follows
-    itself (`Persona.brief`). Resolve against the file the session would read,
-    so a seeded home's `../../../company/x.md` names what it named when the CLI
-    followed it.
+
+def expand(text: str, source: Path, *, _within: tuple[Path, ...] = ()) -> str:
+    """`text`, read from `source`, with each `@<path>` import replaced by the file it names, expanded the same way.
+
+    An import is `@<path>` at a line's start or after whitespace, outside a code
+    span or fence, the path relative to `source`'s directory unless absolute or
+    `~/`: the import a Claude Code CLAUDE.md makes, which a restricted session
+    never follows itself (`Persona.brief`). Resolve against the file the session
+    would read, so a seeded home's `../../../company/x.md` names what it named
+    when the CLI followed it. A line that is only an import, or a list item of
+    one, must name a readable file; a mention in prose that names none (`ask
+    @someone`) stays text, as Claude Code leaves it.
 
     Raises:
         ImportUnreadable: an import cannot be read, is a cycle, or is more than `IMPORT_DEPTH` hops deep.
@@ -64,19 +85,17 @@ def expand(text: str, source: Path, *, _within: tuple[Path, ...] = ()) -> str:
                 fence = ""
         elif opened:
             fence = opened.group(1)
-        elif imported := _IMPORT.fullmatch(body):
-            raw = imported.group(1)
-            target = Path(raw).expanduser()
-            target = target if target.is_absolute() else source.parent / target
-            if len(within) > IMPORT_DEPTH:
-                raise ImportUnreadable(f"{source}: @{raw} is more than {IMPORT_DEPTH} imports deep")
-            if target.resolve() in within:
-                raise ImportUnreadable(f"{source}: @{raw} imports itself")
-            try:
-                content = target.read_text()
-            except (OSError, UnicodeDecodeError) as exc:
-                raise ImportUnreadable(f"{source}: @{raw} cannot be read ({exc})") from exc
-            out.append(expand(content, target, _within=within).rstrip("\n") + line[len(body) :])
+        elif "@" in body:
+            required = _STANDALONE.fullmatch(body) is not None
+            spans = [span.span() for span in _CODE_SPAN.finditer(body)]
+
+            def replace(token: re.Match[str], spans: list[tuple[int, int]] = spans, required: bool = required) -> str:
+                if any(start <= token.start() < end for start, end in spans):
+                    return token.group(0)
+                got = _imported(token.group(1), source, within, required=required)
+                return token.group(0) if got is None else got
+
+            out.append(_TOKEN.sub(replace, body) + line[len(body) :])
             continue
         out.append(line)
     return "".join(out)

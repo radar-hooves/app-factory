@@ -134,9 +134,34 @@ def test_a_thin_claude_md_is_expanded_from_the_file_its_seeded_home_names(tmp_pa
     assert loaded.brief() == "# Peggy\n\nYou file documents.\nSpeak plainly.\n"
 
 
-def test_an_import_inside_a_fence_or_mid_line_is_text(tmp_path: Path) -> None:
-    text = "Mail @someone about it.\n```\n@absent.md\n```\n~~~~\n@absent.md\n~~~\n~~~~\n`@absent.md`\n"
+def test_a_nested_brief_imports_its_siblings_as_list_items(tmp_path: Path) -> None:
+    penny = tmp_path / "app" / "company" / "agents" / "penny"
+    penny.mkdir(parents=True)
+    (penny / "A02-system-prompt.md").write_text(
+        "Read with:\n- @A01-agent-intent.md\n- @A03-authority.md\n\nTriage the accounts@ mailbox.\n"
+    )
+    (penny / "A01-agent-intent.md").write_text("Intent.\n")
+    (penny / "A03-authority.md").write_text("Authority.\n")
+    loaded = _seeded_with_import(tmp_path, "# Penny\n\n@../../../company/agents/penny/A02-system-prompt.md\n")
+    assert loaded.brief() == "# Penny\n\nRead with:\n- Intent.\n- Authority.\n\nTriage the accounts@ mailbox.\n"
+
+
+def test_an_import_in_prose_is_followed_where_it_names_a_file(tmp_path: Path) -> None:
+    company = tmp_path / "app" / "company"
+    company.mkdir(parents=True)
+    (company / "tone.md").write_text("plainly\n")
+    loaded = _seeded_with_import(tmp_path, "Speak @../../../company/tone.md and ask @someone.\n")
+    assert loaded.brief() == "Speak plainly and ask @someone.\n"
+
+
+def test_an_import_inside_a_fence_or_a_code_span_is_text(tmp_path: Path) -> None:
+    text = "Mail @someone about it.\n```\n@absent.md\n```\n~~~~\n@absent.md\n~~~\n~~~~\n`@absent.md`\nRun ` @absent.md ` here.\n"
     assert _seeded_with_import(tmp_path, text).brief() == text
+
+
+def test_an_unreadable_list_item_import_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(persona.ImportUnreadable, match="absent"):
+        _seeded_with_import(tmp_path, "- @absent.md\n").brief()
 
 
 def test_an_unreadable_import_is_refused_naming_it(tmp_path: Path) -> None:
