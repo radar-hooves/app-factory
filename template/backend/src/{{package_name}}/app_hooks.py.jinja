@@ -53,6 +53,12 @@ none of them behaves exactly as it does today.
     or failed included, in the worker that held it, for an app that files
     something against an answer. `turn` is the question's place in the
     conversation as the page reads it, the number an answer mark takes.
+  - `agent_turn_settings(persona: str, effort: str, thinking: bool) -> tuple[str, bool]` —
+    `api/agent/chat.py` calls this at the start of every chat turn with the
+    deployment's chat effort and thinking, and runs the turn at the
+    `(effort, thinking)` it returns, for an app that lets an admin change them
+    live. Read each turn, so a change reaches the next question. A hook that
+    raises is logged and the turn runs at the given pair.
   - `agent_job_settled(outcome: JobOutcome) -> None` — `api/agent/jobs.py`
     calls this each time a job's run settles, a resumed one included, in
     whichever worker process settled it, for an app that acts on a job's

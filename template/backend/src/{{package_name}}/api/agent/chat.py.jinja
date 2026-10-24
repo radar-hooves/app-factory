@@ -39,6 +39,7 @@ from agent_common import persona as agent_persona
 from agent_common import visuals
 from agent_common.agent import LocalAgent
 from agent_common.collections import Collection, Collections
+from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -125,6 +126,7 @@ def get(settings: AgentSettings, persona_id: str) -> Persona:
 async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, turn: bool = False) -> LocalAgent:
     """The persona's agent for the person `asking` names, at the chat effort.
 
+    A `turn` asks `app_hooks.agent_turn_settings` for its effort and thinking.
     A `turn` carries a token minted for this app in its environment as
     `ASKER_TOKEN`, which its `.mcp.json` presents to this app's `/mcp`. A
     deployment with no exchange runs its personas without one.
@@ -133,11 +135,28 @@ async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, tu
         AuthenticationError: Authentik refused the person.
     """
     run_env = {ASKER_TOKEN: await asking.token()} if turn and asking.exchange.configured else {}
-    driver = dataclasses.replace(settings.driver(), effort=settings.chat_effort)
+    effort, thinking = settings.chat_effort, settings.thinking
+    if turn:
+        effort, thinking = await _turn_settings(persona.id, effort, thinking)
+    driver = dataclasses.replace(settings.driver(), effort=effort, thinking=thinking)
     guidance = (
         visuals.guidance(persona.visuals, settings.personas_dir / persona.id / VISUALS) if persona.visuals else ""
     )
     return LocalAgent(driver, persona_module.load(settings, persona.id), run_env=run_env, guidance=guidance)
+
+
+async def _turn_settings(persona_id: str, effort: str, thinking: bool) -> tuple[str, bool]:
+    """`app_hooks.agent_turn_settings(persona, effort, thinking)`, if this app defines one; the given pair if it raises."""
+    from {{ package_name }} import app_hooks
+
+    hook = getattr(app_hooks, "agent_turn_settings", None)
+    if hook is None:
+        return effort, thinking
+    try:
+        return await run_in_threadpool(hook, persona_id, effort, thinking)
+    except Exception:
+        logger.exception("app_hooks.agent_turn_settings failed for persona %s", persona_id)
+        return effort, thinking
 
 
 async def collections(settings: AgentSettings, persona: Persona, asking: Asking) -> Collections:

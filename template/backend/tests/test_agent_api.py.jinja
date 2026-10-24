@@ -1295,6 +1295,37 @@ async def test_a_turn_with_a_nearly_lapsed_library_token_held_is_handed_a_freshl
     assert await collections.token() == (held if retrieval_reuses else env_token)
 
 
+async def test_a_turn_runs_at_the_effort_and_thinking_the_app_hook_returns(
+    app: FastAPI,
+    agent_settings: AgentSettings,
+    authentik: fake_authentik.FakeAuthentik,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    who = _person("chat-helper")
+    persona = chat.get(agent_settings, "helper")
+    asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
+    given: list[tuple[str, str, bool]] = []
+
+    def settings(persona_id: str, effort: str, thinking: bool) -> tuple[str, bool]:
+        given.append((persona_id, effort, thinking))
+        return "max", True
+
+    plain = await chat.agent(agent_settings, persona, asking, turn=True)
+    assert (plain.settings.effort, plain.settings.thinking) == (agent_settings.chat_effort, agent_settings.thinking)
+
+    monkeypatch.setattr(app_hooks, "agent_turn_settings", settings, raising=False)
+    hooked = await chat.agent(agent_settings, persona, asking, turn=True)
+    assert (hooked.settings.effort, hooked.settings.thinking) == ("max", True)
+    assert given == [("helper", agent_settings.chat_effort, agent_settings.thinking)]
+
+    def broken(*_: object) -> tuple[str, bool]:
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(app_hooks, "agent_turn_settings", broken, raising=False)
+    failed = await chat.agent(agent_settings, persona, asking, turn=True)
+    assert (failed.settings.effort, failed.settings.thinking) == (agent_settings.chat_effort, agent_settings.thinking)
+
+
 async def test_the_retrieval_reuses_a_held_library_token_while_the_session_gets_a_fresh_one(
     app: FastAPI, agent_settings: AgentSettings, authentik: fake_authentik.FakeAuthentik
 ) -> None:
