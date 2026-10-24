@@ -105,6 +105,10 @@ async function openAt(browser: Browser, baseURL: string, vp: { width: number; he
 }
 
 async function settle(page: Page): Promise<void> {
+	// A fresh context leaves the pointer at (0,0), inside the rail: a collapsed
+	// rail peeks open and covers its own toggle, and a capture shows the peek.
+	const size = page.viewportSize();
+	if (size) await page.mouse.move(size.width - 1, size.height - 1);
 	await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 	await page
 		.waitForFunction(

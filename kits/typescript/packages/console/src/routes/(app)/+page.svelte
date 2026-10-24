@@ -34,7 +34,7 @@
 
 <PageHeader
 	title="Design system"
-	subtitle="The console for @poodle64/design-tokens and @poodle64/ui, built from them."
+	subtitle="The console built from the design system."
 />
 
 <PageSection
