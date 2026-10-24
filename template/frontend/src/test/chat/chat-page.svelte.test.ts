@@ -504,10 +504,12 @@ describe('Choosing where a persona looks', () => {
 });
 
 describe('A persona that takes no files', () => {
-	it('is offered with Attach for one that does, and without it for one that does not', async () => {
-		const first = at('/chat/outrider');
+	it('is offered with Attach where it takes them', async () => {
+		at('/chat/outrider');
 		expect(await screen.findByRole('button', { name: 'Attach a file' })).toBeTruthy();
-		first.unmount();
+	});
+
+	it('is offered without Attach where it takes none', async () => {
 		ROUTES['/api/agent/personas'] = [{ ...PERSONA, attachments: false }];
 		try {
 			at('/chat/outrider');
