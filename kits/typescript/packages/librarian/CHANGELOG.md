@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.11] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: "filter by group and then pick a collection from within that", and long names still truncating).
 
