@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Harness for the settings destination, in the shape a consuming app uses it:
-	// inside AppShell with `padded={false}`, one group with no personal sections
+	// inside AppShell on a panel page, one group with no personal sections
 	// yet (left in the list, empty, and therefore not rendered), and a section
 	// whose own sub-page exercises the prefix match.
 	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
@@ -36,7 +36,7 @@
 	nav={[{ label: 'Overview', href: '/overview' }]}
 	{currentPath}
 	brandTitle="Harness"
-	padded={false}
+	pageType="panel"
 	themeToggle={false}
 >
 	<SettingsShell {sections} {currentPath}>

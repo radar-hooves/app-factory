@@ -1,6 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
-import type { ShellMeasure } from '@poodle64/ui/app-shell';
+import type { PageType } from '@poodle64/ui/app-shell';
 
 declare global {
 	namespace App {
@@ -8,12 +8,10 @@ declare global {
 		// interface Locals {}
 		/** What a route's load says about its page, read by the root layout and the frame. */
 		interface PageData {
-			/** The tab title's page part. */
+			/** The tab title's page part, and the bar's name for a page the rail has no row for. */
 			title?: string;
-			/** How wide the page body may get (AppShell `measure`). */
-			measure?: ShellMeasure;
-			/** False for a route that pads its own panes. */
-			padded?: boolean;
+			/** What the page is (AppShell `pageType`): `reading` unless it says otherwise. */
+			pageType?: PageType;
 		}
 		/** Navigation state a page hands the next one; a pasted link cannot carry it. */
 		interface PageState {

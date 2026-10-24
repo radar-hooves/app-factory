@@ -5,9 +5,8 @@
  * that does not opt in may render one pixel differently. The permanent gates
  * hold half of that — `src/test/*.test.ts` pins the DOM contract, `drive.mjs`
  * pins the resolved paint — but neither can compare against a build that no
- * longer exists, so the cross-build half was done by hand for `level` (2026.7),
- * for `children` (2026.8.1) and for `measure` (2026.8.3), and written up as
- * prose each time.
+ * longer exists, so the cross-build half was done by hand for `level` (2026.7)
+ * and for `children` (2026.8.1), and written up as prose each time.
  *
  * Prose is where that claim went to die. `drive.md` carried "all nine pairs
  * identical on all ten fields" with no way for the next reader to re-derive it,
@@ -21,7 +20,9 @@
  *     node harness/additivity.mjs                # against the previous commit
  *     node harness/additivity.mjs "$(npm view @poodle64/ui@2026.9.22 gitHead)"   # against a release
  *
- * Exits non-zero on any difference. It is deliberately NOT wired into
+ * Exits non-zero on any difference. A change that replaces the layout, as the
+ * page types did, is not additive: against any ref before it every surface differs,
+ * and `drive.mjs`'s page-type claims are its gate. It is deliberately NOT wired into
  * `pnpm test`: it builds a second copy of the package and installs into a
  * worktree, which is minutes rather than seconds, and it is meaningful only on
  * a change claiming to be additive. Run it before releasing one.
@@ -52,7 +53,7 @@ const baseRef = process.argv[2] ?? 'HEAD~1';
 const PORT = 4186;
 
 /** The surfaces an existing consumer already renders, at the widths that bite. */
-const SURFACES = ['shell', 'shell&pagenav=1', 'overflow', 'nested', 'measure&measure=page'];
+const SURFACES = ['shell', 'shell&pagenav=1', 'overflow', 'nested'];
 const WIDTHS = [2560, 1440, 360];
 
 const MIME = {
@@ -70,7 +71,7 @@ const run = (command, args, cwd) =>
  *
  * Everything read here is something an additive change could plausibly move: the
  * markup, both attribute sets, the scroller's whole background shorthand (the
- * surface THIS feature touches), the box properties `measure` touches, the
+ * surface THIS feature touches), the box properties a width change touches, the
  * geometry, and the pixels. A field is cheap; a missed field is a false green.
  */
 async function capture(distDir, browser) {

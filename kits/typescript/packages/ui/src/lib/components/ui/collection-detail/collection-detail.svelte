@@ -110,7 +110,7 @@
 				<p class="text-muted-foreground text-sm">{collection.subtitle}</p>
 			{/if}
 			{#if collection.description}
-				<p class="ds-measure mt-2 text-sm" data-measure="prose">{collection.description}</p>
+				<p class="mt-2 text-sm" data-prose>{collection.description}</p>
 			{/if}
 			{#if !collection.subtitle && !collection.description}
 				<p class="text-muted-foreground text-sm">No description recorded.</p>

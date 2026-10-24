@@ -399,7 +399,7 @@ const QUOTA: Quota = {
 /** The collections the person may read, as the app lists them: as many as
  *  caspo's operator holds, so the picker is seen searching. */
 export const COLLECTIONS: CollectionChoice[] = [
-	{ name: 'adf-pay', title: 'ADF pay and conditions', description: 'Rates, allowances and leave' },
+	{ name: 'adf-pay', title: 'ADF pay and conditions', shortTitle: 'ADF pay' },
 	{ name: 'defence-housing', title: 'Defence housing and relocation' },
 	{ name: 'travel' },
 	...[

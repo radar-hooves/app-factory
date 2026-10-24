@@ -291,12 +291,12 @@
     {
       "key": "page-frame",
       "title": "The frame every route shares",
-      "description": "The standing chrome — the app shell and its nav, the one page-title treatment and its trail, the page's own container and sections, the persistent right-hand context column, a foldable working list beside the page's own content.",
+      "description": "The standing chrome — the app shell and its nav, the one page-title treatment and its trail, the page's own container and sections — and the page type a route declares (`pageType`: reading, panel or tool), which decides every width, gutter and second column so a page writes none.",
       "components": [
         {
           "name": "AppShell",
-          "props": "nav, currentPath, brandTitle?, actions?, context?, children",
-          "insteadOf": "a bespoke nav rail + header layout per app"
+          "props": "nav, currentPath, pageType?, title?, brandTitle?, actions?, context?, children",
+          "insteadOf": "a bespoke nav rail + header layout per app, and any width, padding or measure a page sets for itself"
         },
         {
           "name": "ShellControls",
@@ -334,14 +334,19 @@
           "insteadOf": "a bare record name beside a small chevrons button in the top bar, and a dropdown of names with no search, groups or thumbnails; the record's own page tabs come with it"
         },
         {
-          "name": "ContextColumn",
-          "props": "stats?, statsTitle?, statsInfo?, detail?, title?, subtitle?, onClose?, children?, documentPane?, ariaLabel?",
-          "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane; on a record page, the one opened item (title, close, an inner scroll) and its DocumentPane, in the column's place or beside it once the page's row has room"
+          "name": "PagePane",
+          "props": "label, body, icon?, location?, remember?, fill?, foot?, folded?",
+          "insteadOf": "a module hand-rolling a second column flush against the rail (past questions, a queue, a working list), its width, fold and phone sheet"
         },
         {
-          "name": "ListShell",
-          "props": "title, children, label?, open?, actions?",
-          "insteadOf": "a module hand-rolling its own foldable second column beside the rail — a queue, an inbox, a working list"
+          "name": "PageAside",
+          "props": "label, children?, body?, icon?",
+          "insteadOf": "a hand-placed right-hand column or a sticky sidebar beside a page's content, with its own width and breakpoint"
+        },
+        {
+          "name": "ContextColumn",
+          "props": "stats?, statsTitle?, statsInfo?, detail?, title?, subtitle?, onClose?, children?, documentPane?, ariaLabel?",
+          "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane; on a record page, the one opened item (title, close, an inner scroll) and its DocumentPane; the page aside places it"
         },
         {
           "name": "AppIdentity",
@@ -353,11 +358,11 @@
     {
       "key": "settings-destination",
       "title": "The settings destination",
-      "description": "The one settings surface: a grouped section list beside the section you are reading, inside AppShell’s content area (give AppShell padded={false}). Sections are grouped by whose setting it is — the person’s, then the workspace’s. The sections themselves are Panels.",
+      "description": "The one settings surface: a grouped section list as a panel page's pane beside the section you are reading (the route declares pageType 'panel'). Sections are grouped by whose setting it is — the person's, then the workspace's. The sections themselves are Panels.",
       "components": [
         {
           "name": "SettingsShell",
-          "props": "sections, children, currentPath?, selected?, onSelect?, listLabel?",
+          "props": "sections, children, currentPath?, selected?, onSelect?, listLabel?, title?",
           "insteadOf": "a hand-built two-pane settings layout, or a card of tab links in a grid, per app"
         },
         {

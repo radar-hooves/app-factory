@@ -32,10 +32,10 @@ test('catches a hand-rolled tint — the color-mix() the grep had no pattern for
 	assert.equal(caught(source).length, 1);
 });
 
-test('catches a ch measure — the value .ds-measure exists to supply', () => {
+test('catches a ch measure — the value a reading page supplies', () => {
 	// core-memory carried eleven `max-w-[70ch]`; the grep's unit list was px/rem/em.
 	assert.deepEqual(caught('<p class="max-w-[70ch]">'), ['70ch']);
-	assert.match(violationsIn('<p class="max-w-[70ch]">')[0].advice, /ds-measure/);
+	assert.match(violationsIn('<p class="max-w-[70ch]">')[0].advice, /reading. page/);
 });
 
 test('catches an arbitrary PROPERTY, which has no dash before the bracket', () => {
@@ -50,7 +50,7 @@ test('catches a leading-dot and a negative length', () => {
 
 test('passes a value that IS the token layer', () => {
 	assert.deepEqual(caught('<p class="bg-[var(--ds-color-primary)]">'), []);
-	assert.deepEqual(caught('<p class="max-w-[--ds-shell-measure-prose]">'), []);
+	assert.deepEqual(caught('<p class="max-w-[--ds-page-reading]">'), []);
 	assert.deepEqual(caught('<p class="[color:var(--ds-color-primary)]">'), []);
 });
 

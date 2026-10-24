@@ -5,7 +5,9 @@
 	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
 	import CommandPalette from '$lib/components/ui/command-palette/command-palette.svelte';
 	import type { NavSource } from '$lib/components/ui/app-shell/types.js';
-	import type { ShellMeasure } from '$lib/components/ui/app-shell/measure.js';
+	import type { PageColumnState, PageType } from '$lib/components/ui/app-shell/page.js';
+import PagePane from '$lib/components/ui/app-shell/page-pane.svelte';
+import PageAside from '$lib/components/ui/app-shell/page-aside.svelte';
 	import type { ShellTexture } from '$lib/components/ui/app-shell/texture.js';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import Package from '@lucide/svelte/icons/package';
@@ -14,27 +16,32 @@
 		currentPath = $bindable('/overview'),
 		collapsible,
 		navLabel,
-		measure,
+		pageType,
+		title,
 		texture,
-		mainClass,
-		searchPlacement
+		searchPlacement,
+		pane,
+		aside
 	}: {
 		currentPath?: string;
 		/** Undefined by default, so the harness drives the package's own default
 		    rather than a value the harness chose — same contract as measure/texture. */
 		collapsible?: boolean;
 		navLabel?: string;
-		/** Left undefined by default, so the additivity gate drives the shell
-		    exactly as a consumer who never heard of the prop does. */
-		measure?: ShellMeasure;
-		/** Undefined by default, for the same reason `measure` is. */
+		/** Undefined by default, so the harness drives the shell's own default type. */
+		pageType?: PageType;
+		/** The bar's fallback name; undefined by default. */
+		title?: string;
+		/** Undefined by default, for the same reason `pageType` is. */
 		texture?: ShellTexture;
-		/** The pre-existing seam, so the texture is driven composed with an app's
-		    own class rather than only on its own. */
-		mainClass?: string;
 		/** Undefined by default, so the leading default is what the unset harness
 		    drives — same additivity contract as measure/texture. */
 		searchPlacement?: 'leading' | 'trailing';
+		/** Mounts a PagePane in the page. `location` names the bar on a panel page;
+		    `folded` gives it a folded snippet; `remember` is its storage key. */
+		pane?: { location?: string; folded?: boolean; remember?: string; fill?: boolean };
+		/** Mounts a PageAside in the page. */
+		aside?: boolean;
 	} = $props();
 
 	const nav: NavSource = [
@@ -65,14 +72,22 @@
 <div data-testid="probe-asked">{asked}</div>
 <div data-testid="probe-palette">{paletteOpen ? 'open' : 'closed'}</div>
 
+{#snippet paneBody({ fold }: PageColumnState)}
+	<div data-testid="pane-body">Pane body</div>
+	<button type="button" onclick={fold}>Fold pane</button>
+{/snippet}
+{#snippet paneFolded({ unfold }: PageColumnState)}
+	<button type="button" data-testid="pane-folded" onclick={unfold}>Unfold pane</button>
+{/snippet}
+
 <AppShell
 	{nav}
 	{navLabel}
 	{currentPath}
 	{collapsible}
-	{measure}
+	{pageType}
+	{title}
 	{texture}
-	{mainClass}
 	{searchPlacement}
 	bind:collapsed
 	brandTitle="Harness"
@@ -88,6 +103,31 @@
 	{#snippet actions()}
 		<button data-testid="action">Support</button>
 	{/snippet}
+	{#if pane}
+		{#if pane.folded}
+			<PagePane
+				label="Sections"
+				location={pane.location}
+				remember={pane.remember}
+				fill={pane.fill}
+				body={paneBody}
+				folded={paneFolded}
+			/>
+		{:else}
+			<PagePane
+				label="Sections"
+				location={pane.location}
+				remember={pane.remember}
+				fill={pane.fill}
+				body={paneBody}
+			/>
+		{/if}
+	{/if}
+	{#if aside}
+		<PageAside label="Context">
+			<div data-testid="aside-body">Aside body</div>
+		</PageAside>
+	{/if}
 	<p>Page body</p>
 </AppShell>
 

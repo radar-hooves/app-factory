@@ -2,13 +2,32 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.10.27] - 2026-10-24
 
-Consumer: caspo (the operator, 24/10/2026: on a phone, past questions open from an action at the right of the bar).
+Consumer: caspo (the operator, 24/10/2026: "the app factory is the right place to own this, and that way, each app, like CASPO, doesn't need to think about what it needs to do on the page, it just chooses the page type that it wants"). Page width and placement had been set in five competing places, and every fix to one broke another: Settings centred 168px off its rail, Security's aside pinned to the far edge past a 540px void, the Library scrolling the page by 40px.
 
 ### Added
 
-- **`ShellActions`**: a page's own actions at the head of the bar's right-hand group, registered from the route on the slot `ShellControls` uses (`ShellControlsSlot.actions`), withdrawn on unmount. Renders nothing outside a shell.
+- **Page types.** `AppShell` takes `pageType`: `reading` (the default), `panel` or `tool`, and lays the page out itself. `reading` is one 44rem column, centred, with the page's aside beside it (20rem, a 3rem gap), the pair centred, the aside following the column below 66rem of content region and sticky beside it above; every block in the column ends at its one right edge. `panel` is a pane flush against the rail, as wide as the rail (folded, as narrow as it), and the content beside it left-aligned, each block at 52rem, or filling the frame (`fill`). `tool` is the whole frame and the page never scrolls: its blocks keep their own height, its fill (a block marked `data-fill`, which a `Panel` with `scroll` now sets, or the `PageContainer` holding one) takes the rest of the frame's height exactly, never under 24rem, and scrolls inside itself, and a page taller than the frame scrolls in the frame; its aside is a column at the frame's right edge behind a rule. Gutters are one scale for every type (1, 2, 3rem by content region). Every width is a `--ds-page-*` custom property. The frame is `.ds-page[data-page]` inside the content region, a `ds-page` container. The design is Gemini's (google/pro), from caspo's pages at 1673 and 390px; where it differs, `README.md` §Page types says why.
+- **`PagePane`** (`@poodle64/ui/app-shell`): registers a panel page's pane. `label`, `icon`, `body` (taking the column's state: `mode`, `fold`, `unfold`, `close`), `foot` (pinned; an empty one draws nothing), `folded` (given, the pane folds), `remember` (the fold's localStorage key), `location` (the bar's name when the rail has none) and `fill`; `column` binds whether it is drawn as a column. Below 64rem of window the shell opens it as a sheet from a bar button (`ds-page-pane-open`); the column is `ds-page-pane`.
+- **`PageAside`** (`@poodle64/ui/app-shell`): registers the page's aside, `label`, `description`, `icon`, and `children` or `body(state)`. A reading page's stands beside the column or after it; a tool or panel page's is a column from 80rem of window and a sheet from a bar button (`ds-page-aside-open`) below it. Both render in place outside a shell.
+- **`AppShell`'s `title`**: the bar's name for a page the rail has no row for, after the pane's `location`.
+- `PAGE_TYPES`, `PageType`, `PageColumnState`, `PagePaneRegistration`, `PageAsideRegistration` from `@poodle64/ui/app-shell`.
+
+### Changed
+
+- **`SettingsShell` is a panel page's pane.** Its sections are a `PagePane` (AppNav, as before), the section is the page beside it, and the bar reads "Settings › Account" (`title`, default `Settings`). Below 64rem of window the sections open as a sheet from the bar instead of stacking above the content. It renders no element of its own: `class`, `ref` and rest props are gone. Its route declares `pageType: 'panel'`.
+- **`ContextColumn` is the page's aside.** It registers through `PageAside`, so the page type places it: no hidden-below-xl column, no floating opener, no dialogue. On a tool or panel page it is a column at the frame's right edge, and below 80rem of window a sheet from the bar headed by its name and the record's subtitle or the stat card's info; on a reading page it stands beside the column, and follows it below 66rem of content region. Its `documentPane` takes the item's place and never stands beside it as a third pane. `class`, `ref` and rest props are gone.
+- **`DocumentReader` in a shell puts its contents list and `aside` in the page's aside**, folding the list into the disclosure above the body wherever the aside is not beside the column; outside a shell it lays them out itself as before. Its body has no measure of its own: the column is the measure.
+- `PageSection`'s and `CollectionDetail`'s descriptions and `ContentSkeleton`'s prose mark themselves `data-prose`, capped at the reading measure only in a frame wider than it.
+
+### Removed
+
+- **`AppShell`'s `measure`, `padded` and `mainClass`**, `ShellMeasure`, `SHELL_MEASURES`, `CONTENT_PADDING`, `.ds-shell-measure`, `.ds-measure` with `data-measure`, the `--ds-shell-measure-*` properties, `.ds-settings` / `.ds-settings-pane` and `--ds-float-reserve`.
+- **`ListShell`**: a second column beside the rail is a `PagePane`.
+- **`ShellActions`** (unreleased): the shell draws the opener of a page's pane or aside itself.
+
+Migration: pass `pageType={page.data.pageType}` and `title={page.data.title}` to `AppShell` in place of `measure` and `padded`; each route returns `pageType` from its load (`reading` needs nothing); delete every page-level `mx-auto`, `max-w-*`, page padding and negative margin, and every `.ds-measure`; give the settings route group `pageType: 'panel'`; move a hand-placed right-hand column into `PageAside`, and a `ListShell` into `PagePane`; a test that found `ContextColumn`'s floating "Open …" button clicks `ds-page-aside-open`.
 
 ## [2026.10.26] - 2026-10-24
 

@@ -3,9 +3,13 @@
 // outcome read from a non-visual probe; the purely declarative components are
 // asserted on the branch logic they actually own (a status maps to a chip class,
 // a muted stat suppresses its dot), not on the fact that they rendered.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import ChromeHarness from './composed-chrome.svelte';
+import { windowWidth } from './window-width.js';
+
+// The column is a tool page's aside, which the shell stands beside the content from 80rem.
+beforeEach(() => windowWidth(100));
 
 describe('AppDialog', () => {
 	it('is closed until the trigger is pressed, then shows its frame', async () => {
@@ -109,6 +113,14 @@ describe('DetailPanel', () => {
 });
 
 describe('ContextColumn', () => {
+	it('renders in the aside of a tool page, with no floating opener of its own', () => {
+		render(ChromeHarness);
+		const aside = document.querySelector('aside.ds-page-aside')!;
+		expect(aside.textContent).toContain('record-42');
+		expect(aside.textContent).toContain('Active');
+		expect(screen.queryByRole('button', { name: /^Open Record context/ })).toBeNull();
+	});
+
 	it('flows the detail panel in and out without disturbing the stat card', async () => {
 		render(ChromeHarness);
 		expect(screen.getByText('record-42')).toBeInTheDocument();
@@ -383,12 +395,13 @@ describe('rest props (design-system#14)', () => {
 		}
 	});
 
-	it('ContextColumn takes ariaLabel, so its <aside> is a named landmark rather than a bare "complementary"', () => {
+	it('ContextColumn takes ariaLabel, so the page’s <aside> is a named landmark rather than a bare "complementary"', () => {
 		render(ChromeHarness);
 		// Queryable by role+name is the actual accessibility-tree claim; a bare
-		// data-testid check would pass on an <aside> with no name at all.
+		// class check would pass on an <aside> with no name at all.
 		const region = screen.getByRole('complementary', { name: 'Record context' });
-		expect(region).toHaveAttribute('data-testid', 'context-column-root');
+		expect(region).toHaveClass('ds-page-aside');
+		expect(region.querySelector('[data-slot="context-column"]')).not.toBeNull();
 	});
 });
 

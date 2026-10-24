@@ -339,9 +339,17 @@
 
 {#if surface === 'records'}
 	{@const here = list === 'managers' ? '#/property/managers' : list === 'pnl' ? '#/property/pnl' : list === 'tools' ? '#/property/tools' : '#/property'}
-	<AppShell {nav} currentPath={here} brandTitle="Godswood" onSearch={() => {}} searchPlacement="trailing" texture="grid">
-		<div class="flex min-h-0 flex-1 gap-5">
-			<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+	<AppShell {nav} currentPath={here} brandTitle="Godswood" onSearch={() => {}} searchPlacement="trailing" texture="grid" pageType="tool">
+		<ContextColumn
+			stats={[
+				{ label: 'Value', value: '$2,085,000', sub: '3 properties' },
+				{ label: 'Loans', value: '$976,350' },
+				{ label: 'Equity', value: '$1,108,650' },
+				{ label: 'Needs you', value: 2, status: 'warning', sub: 'properties' }
+			]}
+			statsInfo="The owned properties, today."
+		/>
+		<div class="flex min-h-0 min-w-0 flex-col" data-fill>
 				{#if list === 'managers'}
 					<RecordList
 						rows={managers}
@@ -393,20 +401,10 @@
 						data-probe="record-list"
 					/>
 				{/if}
-			</div>
-			<ContextColumn
-				stats={[
-					{ label: 'Value', value: '$2,085,000', sub: '3 properties' },
-					{ label: 'Loans', value: '$976,350' },
-					{ label: 'Equity', value: '$1,108,650' },
-					{ label: 'Needs you', value: 2, status: 'warning', sub: 'properties' }
-				]}
-				statsInfo="The owned properties, today."
-			/>
 		</div>
 	</AppShell>
 {:else}
-	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" location="Property" onSearch={() => {}} searchPlacement="trailing" texture="grid">
+	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" title="Property" onSearch={() => {}} searchPlacement="trailing" texture="grid" pageType="tool">
 		<ShellControls>
 			<RecordSwitcher
 				name="4. Banksia"
@@ -425,8 +423,7 @@
 				bind:open={switcherOpen}
 			/>
 		</ShellControls>
-		<div class="flex min-h-0 flex-1 gap-5" data-probe="record-row">
-			<div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+		<div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto" data-fill data-probe="record-row">
 				<Panel title="12 Banksia Place, Tarragindi" subtitle="House and granny flat 2B · held by Owner A 50% · Owner B 50%">
 					<FactGrid
 						facts={[
@@ -501,6 +498,5 @@
 					</div>
 				{/if}
 			</ContextColumn>
-		</div>
 	</AppShell>
 {/if}

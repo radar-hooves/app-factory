@@ -25,6 +25,11 @@ const documents: LibraryDocument[] = [
 ];
 
 describe('CollectionDetail — identity', () => {
+	it('marks the description as a line of prose, for the page type to cap', () => {
+		render(CollectionDetail, { collection, documents });
+		expect(screen.getByText(/Deeds, agreements and notices/)).toHaveAttribute('data-prose');
+	});
+
 	it('renders the name, meta line, description and mapped state', () => {
 		render(CollectionDetail, { collection, documents });
 		expect(screen.getByText('household-legal')).toBeInTheDocument();

@@ -1,9 +1,16 @@
 export { default as AppShell } from './app-shell.svelte';
 export { default as AppNav } from './app-nav.svelte';
 export { default as ShellControls } from './shell-controls.svelte';
-export { default as ShellActions } from './shell-actions.svelte';
 export { default } from './app-shell.svelte';
-export { SHELL_MEASURES, type ShellMeasure } from './measure.js';
+export { default as PagePane } from './page-pane.svelte';
+export { default as PageAside } from './page-aside.svelte';
+export {
+	PAGE_TYPES,
+	type PageAsideRegistration,
+	type PageColumnState,
+	type PagePaneRegistration,
+	type PageType
+} from './page.js';
 export { SHELL_TEXTURES, type ShellTexture } from './texture.js';
 export {
 	activeNavTitle,

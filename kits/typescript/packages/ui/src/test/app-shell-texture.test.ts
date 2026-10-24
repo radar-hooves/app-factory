@@ -44,8 +44,8 @@ describe('AppShell — the texture is additive', () => {
 
 		expect(main.classList.contains('ds-shell-texture')).toBe(true);
 		expect(main.getAttribute('data-texture')).toBe('grid');
-		// Still the scroller it always was, and still the element `measure`'s box
-		// hangs off — the texture rides the region rather than replacing it.
+		// Still the scroller it always was, and still the element the page frame
+		// sits in — the texture rides the region rather than replacing it.
 		expect(main.className).toContain('overflow-y-auto');
 		expect(main.className).toContain('relative');
 	});
@@ -67,8 +67,8 @@ describe('AppShell — the texture is additive', () => {
 		// a nullable route field still delivers it — and unlike an omitted prop,
 		// `null` does NOT fall back to the default. Svelte's two halves are
 		// asymmetric: an attribute whose value is null is omitted while a class
-		// token under the same test survives. Guarded once for `measure` (2026.8.3)
-		// and the same shape here, because a class with no matching rule is exactly
+		// token under the same test survives. The same shape is guarded for every
+		// optional prop here, because a class with no matching rule is exactly
 		// the DOM contract the gate above states.
 		const { container } = render(ShellHarness, {
 			props: { texture: null as unknown as undefined }
@@ -124,39 +124,25 @@ describe('AppShell — the texture is additive', () => {
 		);
 	});
 
-	it('paints on the scrolling region, not on the measured content box', () => {
-		// Which element carries it is the whole feature. The content box is capped
-		// by `measure`, so a texture painted there would stop at the measure and
-		// read as a stripe down the middle of the page rather than as the floor the
-		// page sits on.
-		const { container } = render(ShellHarness, {
-			props: { texture: 'grid', measure: 'page' }
-		});
-		const main = contentRegion(container);
-		const box = main.firstElementChild as HTMLElement;
+	it('paints on the scrolling region, not on the page frame', () => {
+		// Which element carries it is the whole feature. The frame is capped by the
+		// page type, so a texture painted there would stop at the column and read as
+		// a stripe down the middle of the page rather than as the floor it sits on.
+		for (const pageType of ['reading', 'panel', 'tool'] as const) {
+			const { container, unmount } = render(ShellHarness, {
+				props: { texture: 'grid', pageType }
+			});
+			const main = contentRegion(container);
+			const frame = main.firstElementChild as HTMLElement;
 
-		expect(main.classList.contains('ds-shell-texture')).toBe(true);
-		expect(box.classList.contains('ds-shell-texture')).toBe(false);
-		expect(box.hasAttribute('data-texture')).toBe(false);
-		// The two props are independent: naming a texture must not disturb the
-		// measure's own contract on the box below it.
-		expect(box.getAttribute('data-measure')).toBe('page');
-		expect(box.classList.contains('ds-shell-measure')).toBe(true);
-	});
-
-	it('composes with mainClass rather than replacing it', () => {
-		// `mainClass` is the pre-existing seam on this element and stayed exactly
-		// what it was. An app carrying its own class there must keep it, and must
-		// keep it LAST, so a utility it wrote still wins the merge.
-		const { container } = render(ShellHarness, {
-			props: { texture: 'grid', mainClass: 'app-own-class' }
-		});
-		const main = contentRegion(container);
-		const tokens = main.className.split(/\s+/);
-
-		expect(tokens).toContain('ds-shell-texture');
-		expect(tokens).toContain('app-own-class');
-		expect(tokens.indexOf('app-own-class')).toBeGreaterThan(tokens.indexOf('ds-shell-texture'));
+			expect(main.classList.contains('ds-shell-texture'), pageType).toBe(true);
+			expect(frame.classList.contains('ds-page'), pageType).toBe(true);
+			expect(frame.classList.contains('ds-shell-texture'), pageType).toBe(false);
+			expect(frame.hasAttribute('data-texture'), pageType).toBe(false);
+			// The two are independent: naming a texture does not disturb the type.
+			expect(frame.getAttribute('data-page'), pageType).toBe(pageType);
+			unmount();
+		}
 	});
 });
 

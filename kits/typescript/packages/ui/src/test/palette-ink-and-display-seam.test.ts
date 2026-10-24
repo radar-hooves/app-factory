@@ -37,7 +37,6 @@ describe('the display face is set by the palette', () => {
 	it.each([
 		'components/ui/app-dialog/app-dialog.svelte',
 		'components/ui/app-shell/app-shell.svelte',
-		'components/ui/list-shell/list-shell.svelte',
 		'components/ui/page-header/page-header.svelte'
 	])('%s tracks its display title through the token', (file) => {
 		expect(read(file)).toContain('tracking-[var(--ds-font-display-tracking,');

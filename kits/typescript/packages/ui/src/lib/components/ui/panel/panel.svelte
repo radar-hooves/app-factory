@@ -85,6 +85,7 @@
 <section
 	bind:this={ref}
 	data-tone={tone === 'default' ? undefined : tone}
+	data-fill={scroll ? '' : undefined}
 	class={cn(
 		'bg-card ds-edge flex flex-col overflow-hidden rounded-lg border',
 		destructive ? 'border-destructive/40' : 'border-border',

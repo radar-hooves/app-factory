@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.2] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: an app chooses a page type and writes no width of its own).
+
+### Changed
+
+- **`ds-check-arbitrary-values` advises a `reading` page for a `ch` measure**, where it named `.ds-measure`, which `@poodle64/ui` 2026.10.27 retires: a reading page's column is the measure, and the block sets no width.
+
 ## [2026.10.1] - 2026-10-16
 
 ### Added

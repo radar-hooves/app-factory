@@ -37,10 +37,11 @@
 	 * URL fragment, because a fragment cannot find an element inside a shadow
 	 * root, and this reader appears inside elements too.
 	 *
-	 * It centres itself and carries its own measure, so its route's `measure`
-	 * only needs to leave room: `page` or wider shows the contents beside the
-	 * body, and the shift from beside to above is a container query on the
-	 * reader's own width, not the window's.
+	 * In a shell it is a `reading` page's column, and its contents list and
+	 * `aside` are the page's aside (`PageAside`), so the shell places them:
+	 * beside the column with room, the contents folded into a disclosure above
+	 * the body without it. Outside a shell (inside an element) it lays the same
+	 * two columns out itself, by a container query on its own width.
 	 */
 	import { untrack, type Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
@@ -52,6 +53,8 @@
 	import ContentSkeleton from '../content-skeleton/content-skeleton.svelte';
 	import ErrorState from '../error-state/error-state.svelte';
 	import LoadingState from '../loading-state/loading-state.svelte';
+	import PageAside from '../app-shell/page-aside.svelte';
+	import { onThePage } from '../app-shell/page.js';
 
 	let {
 		title,
@@ -95,6 +98,10 @@
 		error?: string | null;
 		onRetry?: () => void;
 	} = $props();
+
+	// On a shell's page, the page's aside holds the side column; outside a shell,
+	// or inside a column or a dialogue, this does.
+	const hosted = onThePage();
 
 	let article = $state<HTMLElement | null>(null);
 	let disclosure = $state<HTMLDetailsElement | null>(null);
@@ -245,6 +252,22 @@
 	</nav>
 {/snippet}
 
+{#snippet sideColumn()}
+	{#if showContents}
+		<!-- Hosted, its display is styles.css's, so the page frame can hide it. -->
+		<div
+			data-slot="document-reader-contents"
+			class={cn(!hosted && 'hidden flex-col gap-2 @5xl:flex')}
+		>
+			<p class="text-sm font-medium" aria-hidden="true">{contentsLabel}</p>
+			{@render contentsList()}
+		</div>
+	{/if}
+	{#if aside}
+		<div class={cn(!hosted && 'mt-10 @5xl:mt-0')}>{@render aside()}</div>
+	{/if}
+{/snippet}
+
 <div
 	bind:this={ref}
 	data-slot="document-reader"
@@ -264,8 +287,9 @@
 	{:else}
 		<div
 			class={cn(
-				'mx-auto w-full max-w-(--ds-shell-measure-prose)',
-				side && '@5xl:max-w-[calc(var(--ds-shell-measure-prose)+16.5rem)]'
+				'w-full',
+				!hosted && 'mx-auto max-w-(--ds-page-reading)',
+				!hosted && side && '@5xl:max-w-[calc(var(--ds-page-reading)+16.5rem)]'
 			)}
 		>
 			{#if title || breadcrumbs?.length || meta || actions}
@@ -274,15 +298,21 @@
 			{#if loading}
 				<ContentSkeleton shape="prose" label="Loading the document…" />
 			{:else}
-				<!-- One column, then two from 64rem of reader. The side column is
-				     rendered once: below 64rem it follows the body and shows only
-				     `aside`, since the contents fold into the disclosure above. -->
-				<div class="flex flex-col @5xl:flex-row @5xl:items-start @5xl:gap-10">
+				<!-- Outside a shell: one column, then two from 64rem of reader, the
+				     side column rendered once and below 64rem showing only `aside`,
+				     since the contents fold into the disclosure above. In a shell the
+				     side column is the page's aside, and the disclosure shows only
+				     where that aside is not beside the column (styles.css). -->
+				<div class={cn('flex flex-col', !hosted && '@5xl:flex-row @5xl:items-start @5xl:gap-10')}>
 					<div class="min-w-0 flex-1">
 						{#if showContents}
 							<details
 								bind:this={disclosure}
-								class="group bg-card border-border ds-edge mb-6 rounded-lg border @5xl:hidden"
+								data-slot="document-reader-disclosure"
+								class={cn(
+									'group bg-card border-border ds-edge mb-6 rounded-lg border',
+									!hosted && '@5xl:hidden'
+								)}
 							>
 								<summary
 									class="focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden"
@@ -298,8 +328,7 @@
 						{/if}
 						<article
 							bind:this={article}
-							class="ds-prose ds-measure [&_:is(h2,h3)]:scroll-mt-4 [&_:is(h2,h3)]:outline-none"
-							data-measure="prose"
+							class="ds-prose [&_:is(h2,h3)]:scroll-mt-4 [&_:is(h2,h3)]:outline-none"
 						>
 							{#if html !== undefined}
 								{@html html}
@@ -308,29 +337,32 @@
 							{/if}
 						</article>
 					</div>
-					{#if side}
+					{#if side && !hosted}
 						<div
 							data-slot="document-reader-side"
 							class="flex flex-col gap-8 @5xl:sticky @5xl:top-4 @5xl:max-h-[calc(100dvh-6rem)] @5xl:w-56 @5xl:shrink-0 @5xl:overflow-y-auto"
 						>
-							{#if showContents}
-								<div class="hidden flex-col gap-2 @5xl:flex">
-									<p class="text-sm font-medium" aria-hidden="true">{contentsLabel}</p>
-									{@render contentsList()}
-								</div>
-							{/if}
-							{#if aside}
-								<div class="mt-10 @5xl:mt-0">{@render aside()}</div>
-							{/if}
+							{@render sideColumn()}
 						</div>
 					{/if}
 				</div>
 				{#if footer}
-					<div class="ds-measure border-border mt-12 border-t pt-6" data-measure="prose">
+					<div class="border-border mt-12 border-t pt-6">
 						{@render footer()}
 					</div>
 				{/if}
 			{/if}
 		</div>
+		{#if side && hosted}
+			<PageAside label={contentsLabel}>
+				<div
+					data-slot="document-reader-side"
+					data-only-contents={aside ? undefined : ''}
+					class="flex flex-col gap-8"
+				>
+					{@render sideColumn()}
+				</div>
+			</PageAside>
+		{/if}
 	{/if}
 </div>

@@ -352,21 +352,24 @@
 	--ds-shell-rail-width: 15.5rem;
 	--ds-shell-rail-width-collapsed: 3.5rem;
 
-	/* ── Content measure ──────────────────────────────────────────────────────
-	   The scale AppShell's `measure` prop selects between, as custom properties
-	   for the same reason the rail width is one: an app retunes a tier in one
-	   declaration instead of waiting on a release of this package.
+	/* ── Page types ───────────────────────────────────────────────────────────
+	   The widths a route's page type (AppShell `pageType`) lays its page out
+	   with, as custom properties for the reason the rail's width is one: an app
+	   retunes one in one declaration, and never writes a width of its own.
 
-	   `prose` is in `rem`, like the other two, though it is a reading measure.
-	   `ch` resolves against each element's OWN font size, so blocks of 20, 16
-	   and 14px in one column stopped at three different right edges (982, 770
-	   and 674px measured). A root-relative length gives them one edge. 40rem
-	   is about 70 characters of body text in the household face; a caller that
-	   wants a different count retunes the property.
+	   The reading column is in `rem`, not `ch`: `ch` resolves against each
+	   element's own font size, so blocks of 20, 16 and 14px in one column ended
+	   at three right edges. 44rem is about 75 characters of body text in the
+	   household face. The pane is the rail's own width, open and folded, so the
+	   two columns at the left edge read as one system.
 	   ──────────────────────────────────────────────────────────────────────── */
-	--ds-shell-measure-prose: 40rem;
-	--ds-shell-measure-page: 80rem;
-	--ds-shell-measure-wide: 120rem;
+	--ds-page-reading: 44rem;
+	--ds-page-aside: 20rem;
+	--ds-page-aside-tool: clamp(20rem, 24cqi, 28rem);
+	--ds-page-aside-gap: 3rem;
+	--ds-page-pane: var(--ds-shell-rail-width);
+	--ds-page-pane-folded: var(--ds-shell-rail-width-collapsed);
+	--ds-page-panel: 52rem;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -931,64 +934,6 @@
 		padding-inline: calc((var(--ds-shell-rail-width-collapsed) - 1.5rem - 1.125rem) / 2) 0.625rem;
 	}
 
-	/* The settings destination's two panes (SettingsShell).
-
-	   Only the SHAPE is here; the list's width, tint and rule are utilities on the
-	   AppNav element itself, because AppNav declares `flex-1` there and a
-	   base-layer `flex: none` would lose to it by layer order rather than by
-	   position — the cascade trap recorded against `.ds-nav`'s ink. What is left is
-	   the axis swap and the scroll bounding, which nothing else declares.
-
-	   48rem is Tailwind's own --breakpoint-md, written literally for the reason
-	   `.ds-shell-rail` writes it literally: a media query cannot read a custom
-	   property, so an app that retunes md retunes this with it. */
-	.ds-settings {
-		display: flex;
-		flex-direction: column;
-		flex: 1 1 auto;
-	}
-
-	/* `min-height: 0` is what buys the two independent scrollers, and it is
-	   deliberately NOT set below md. A flex item is floored at its content height
-	   unless it is allowed to shrink past it, so without this neither pane ever
-	   scrolls and the whole content area does instead. Below md that floor is
-	   exactly what is wanted: the list stacks above the content and the page
-	   scrolls as one, which is the only sane arrangement on a phone — two nested
-	   scrollers at 375px is the sideways-scroll hazard this package already carries
-	   a gate for. */
-	@media (min-width: 48rem) {
-		.ds-settings {
-			flex-direction: row;
-			min-height: 0;
-		}
-	}
-
-	.ds-settings-pane {
-		flex: 1 1 auto;
-		min-width: 0;
-	}
-
-	/* The pane stacks its sections itself, so a settings page writes a run of
-	   Panels and no wrapper — the framing markup this surface exists to stop a
-	   consumer writing. 1.25rem is the package's existing section rhythm, the same
-	   gap `.ds-dialog-section` puts between adjacent sections.
-
-	   A margin rule rather than `display: flex; gap`, because at md and up this box
-	   is a height-bounded scroller: as a flex column its children carry
-	   `flex-shrink: 1` and get squashed toward min-content before the scrollbar is
-	   ever reached, so a tall section would compress instead of scrolling. Block
-	   flow overflows, which is what a scroller wants. */
-	.ds-settings-pane > * + * {
-		margin-top: 1.25rem;
-	}
-
-	@media (min-width: 48rem) {
-		.ds-settings-pane {
-			min-height: 0;
-			overflow-y: auto;
-		}
-	}
-
 	/* A hard ceiling on the whole shell, in the one unit that names the actual
 	   drawn surface rather than a percentage of an ancestor. `.ds-shell` is
 	   already `flex` with `overflow-hidden` in the component markup, which
@@ -1126,58 +1071,245 @@
 		outline: none;
 	}
 
-	/* The content measure: the shell's content box is ONE element in four
-	   states, the same shape as the rail above it.
+	/* ── The page frame (AppShell `pageType`, page.ts) ─────────────────────────
+	   One element, `.ds-page`, inside the scrolling content region, laid out by
+	   the type its route declared; nothing on a page sets a width, a gutter or
+	   a scroller of its own. The content region is the container every rule
+	   here queries, so a folded rail or a narrow window is read as the room the
+	   page actually has, never the window's.
 
-	   Real declarations here rather than a `max-w-[var(--ds-shell-measure-page)]`
-	   utility on the component, for the reason the rail's width is here too: an
-	   arbitrary utility only exists if the CONSUMER's Tailwind build happened to
-	   scan the file that spells it, whereas this stylesheet is imported by every
-	   consumer as a condition of using the package at all. Whoever writes the
-	   utility owns whatever makes it real.
-
-	   `full` writes no attribute and matches nothing here, so a shell that never
-	   asked for a measure carries no class, no attribute and no declaration —
-	   which is what makes the prop additive rather than a default anyone has to
-	   opt out of.
-
-	   The cap is the BORDER box, so `padded` spends its inline padding inside
-	   the measure rather than outside it. That is the same arithmetic as the
-	   `mx-auto max-w-4xl px-6` idiom this replaces, and keeping it means one
-	   element rather than a second wrapper nobody asked for. */
-	/* Two classes, because the MEASURE and the CENTRING are two decisions and
-	   only the shell's content box wants both (design-system#22).
-
-	   `.ds-measure` caps the width and nothing else. It is for a block INSIDE a
-	   page — the paragraph of explanatory prose on a route legitimately set to
-	   `wide`, which would otherwise inherit a 120rem measure and run to ~123
-	   characters a line. `.ds-shell-measure` is that plus `margin-inline: auto`,
-	   which is right for the content box and wrong for a block within a page:
-	   applied to a set of left-anchored paragraphs it indented them ~207px away
-	   from their own label, measured in a consumer and reverted.
-
-	   Same attribute, same custom properties, so a block retunes with the shell
-	   rather than drifting from it. That is the whole point: the alternative an
-	   app reaches for is a local `max-w-prose` or `max-w-[72ch]`, which is a
-	   number typed once that never hears about a retune — four apps had written
-	   ten of them between them, and not one matched this package's own measure. */
-	.ds-measure[data-measure='prose'],
-	.ds-shell-measure[data-measure='prose'] {
-		max-width: var(--ds-shell-measure-prose);
+	   Gutters: one scale for every type, so a page's first column starts on the
+	   same line whatever it is. A reading page breathes more above and below
+	   than a tool, which spends its height on the thing it shows. */
+	.ds-shell-main {
+		container: ds-page / inline-size;
 	}
 
-	.ds-measure[data-measure='page'],
-	.ds-shell-measure[data-measure='page'] {
-		max-width: var(--ds-shell-measure-page);
+	.ds-page {
+		--ds-page-gutter: 1rem;
+		--ds-page-block: 1.5rem;
+		--ds-page-tool-block: 1rem;
+		min-width: 0;
 	}
 
-	.ds-measure[data-measure='wide'],
-	.ds-shell-measure[data-measure='wide'] {
-		max-width: var(--ds-shell-measure-wide);
+	@container ds-page (min-width: 40rem) {
+		.ds-page {
+			--ds-page-gutter: 2rem;
+			--ds-page-block: 2.5rem;
+			--ds-page-tool-block: 1.5rem;
+		}
 	}
 
-	.ds-shell-measure {
-		margin-inline: auto;
+	@container ds-page (min-width: 64rem) {
+		.ds-page {
+			--ds-page-gutter: 3rem;
+			--ds-page-block: 3.5rem;
+			--ds-page-tool-block: 1.75rem;
+		}
+	}
+
+	@container ds-page (min-width: 100rem) {
+		.ds-page {
+			--ds-page-block: 4.5rem;
+		}
+	}
+
+	/* Reading: one centred column, and the aside beside it with the PAIR
+	   centred, so neither is pinned to an edge. Every block in the column ends
+	   at the column's one right edge. Below 66rem of region the aside follows
+	   the column; from there it stands beside it, and stays in view as the page
+	   scrolls. */
+	.ds-page[data-page='reading'] {
+		display: grid;
+		grid-template-columns: minmax(0, var(--ds-page-reading));
+		justify-content: center;
+		align-content: start;
+		row-gap: 2.5rem;
+		column-gap: var(--ds-page-aside-gap);
+		padding: var(--ds-page-block) var(--ds-page-gutter)
+			calc(var(--ds-page-block) + env(safe-area-inset-bottom));
+	}
+
+	@container ds-page (min-width: 66rem) {
+		.ds-page[data-page='reading'][data-aside] {
+			grid-template-columns: minmax(0, var(--ds-page-reading)) var(--ds-page-aside);
+		}
+
+		.ds-page[data-page='reading'] > .ds-page-aside {
+			position: sticky;
+			top: var(--ds-page-block);
+			align-self: start;
+			max-height: calc(100dvh - 3.5rem - 2 * var(--ds-page-block));
+			overflow-y: auto;
+		}
+	}
+
+	/* A page's own top-level blocks stack at the page rhythm, by margin rather
+	   than flex gap: where this box is a height-bounded scroller (a panel's
+	   content), flex children carry `flex-shrink: 1` and a tall one would
+	   compress instead of scrolling. */
+	.ds-page:is([data-page='reading'], [data-page='panel']:not([data-fill])) > .ds-page-main {
+		display: flow-root;
+		min-width: 0;
+	}
+
+	.ds-page:is([data-page='reading'], [data-page='panel']:not([data-fill])) > .ds-page-main > * + * {
+		margin-top: 1.5rem;
+	}
+
+	.ds-page > .ds-page-aside {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		min-width: 0;
+	}
+
+	/* Tool and panel: the frame is exactly the content region, so the page
+	   itself never scrolls. What scrolls is the content (and the pane, and the
+	   aside, each on its own), padded inside its own scroller so the scrollbar
+	   sits at the frame's edge. */
+	.ds-page:is([data-page='tool'], [data-page='panel']) {
+		display: flex;
+		flex: 1 1 0%;
+		min-height: 0;
+	}
+
+	.ds-page:is([data-page='tool'], [data-page='panel']) > .ds-page-main {
+		flex: 1 1 0%;
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding: var(--ds-page-tool-block) var(--ds-page-gutter)
+			calc(var(--ds-page-tool-block) + env(safe-area-inset-bottom));
+	}
+
+	/* A tool's blocks keep their own height, so a page taller than the frame
+	   (a dashboard) scrolls in its own box with nothing squeezed. Its fill — a
+	   block that says so (`data-fill`: a Panel that scrolls, a graph, a table,
+	   an embedded library), or the PageContainer holding one — takes the rest of
+	   the frame's height and scrolls inside itself, never shorter than 24rem.
+	   A panel page's `fill` content is its one block, filling the frame. */
+	.ds-page[data-page='tool'] > .ds-page-main,
+	.ds-page[data-page='panel'][data-fill] > .ds-page-main {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.ds-page[data-page='tool'] :is(.ds-page-main, [data-slot='page-container']) > * {
+		flex-shrink: 0;
+	}
+
+	.ds-page[data-page='tool'] :is(.ds-page-main, [data-slot='page-container']) > :is([data-fill], [data-slot='page-container']:has([data-fill])) {
+		flex: 1 1 0%;
+		min-height: min(100%, 24rem);
+	}
+
+	.ds-page[data-page='panel'][data-fill] > .ds-page-main > :last-child {
+		flex: 1 1 0%;
+		min-height: 0;
+	}
+
+	/* Panel: the content beside the pane is left-aligned to it, each block at
+	   the panel measure; `fill` content (a transcript) takes the whole frame and
+	   keeps its own gutters. */
+	.ds-page[data-page='panel']:not([data-fill]) > .ds-page-main > * {
+		max-width: var(--ds-page-panel);
+	}
+
+	.ds-page[data-page='panel'][data-fill] > .ds-page-main {
+		padding: 0;
+		overflow: hidden;
+	}
+
+	/* A tool's aside is a column of the frame, the pane's mirror: flush against
+	   the frame's right edge behind its own rule, so a short card in it reads as
+	   the column's head rather than a card stranded at the edge. */
+	.ds-page:is([data-page='tool'], [data-page='panel']) > .ds-page-aside {
+		flex: none;
+		width: var(--ds-page-aside-tool);
+		min-height: 0;
+		overflow-y: auto;
+		border-inline-start: 1px solid var(--border);
+		padding: var(--ds-page-tool-block) 1rem
+			calc(var(--ds-page-tool-block) + env(safe-area-inset-bottom));
+	}
+
+	/* The pane: flush against the rail, as wide as the rail and folded as
+	   narrow as it, its body scrolling above a pinned foot. The same body and
+	   foot fill the sheet below 64rem of window. */
+	.ds-page-pane {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		width: var(--ds-page-pane);
+		min-height: 0;
+		border-inline-end: 1px solid var(--border);
+	}
+
+	.ds-page-pane[data-folded='true'] {
+		width: var(--ds-page-pane-folded);
+	}
+
+	.ds-page-pane-body {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+	}
+
+	.ds-page-pane-foot {
+		flex: none;
+		border-top: 1px solid var(--border);
+		padding: 0.5rem;
+	}
+
+	.ds-page-pane-foot:empty {
+		display: none;
+	}
+
+	.ds-page-aside-sheet {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		gap: 1.25rem;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 1rem;
+	}
+
+	/* DocumentReader in a shell: its contents list is the page's aside, and the
+	   disclosure above the body stands in for it wherever that aside is not
+	   beside the column. */
+	.ds-page [data-slot='document-reader-contents'] {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.ds-page[data-aside='column'] [data-slot='document-reader-disclosure'] {
+		display: none;
+	}
+
+	@container ds-page (min-width: 66rem) {
+		.ds-page[data-page='reading'][data-aside] [data-slot='document-reader-disclosure'] {
+			display: none;
+		}
+	}
+
+	@container ds-page not (min-width: 66rem) {
+		.ds-page[data-page='reading'] > .ds-page-aside [data-slot='document-reader-contents'] {
+			display: none;
+		}
+
+		.ds-page[data-page='reading'] > .ds-page-aside:has(> [data-only-contents]) {
+			display: none;
+		}
+	}
+
+	/* A line of explanation a component sets (a section's description) keeps a
+	   reading length where its frame is wider than the reading column. */
+	.ds-page:is([data-page='tool'], [data-page='panel'][data-fill]) [data-prose] {
+		max-width: var(--ds-page-reading);
 	}
 
 	/* ── The prose face (design-system#32) ────────────────────────────────────
@@ -1195,10 +1327,7 @@
 	   a security boundary, and a package cannot see the inputs the boundary is
 	   protecting. The app owns the markdown-to-HTML seam and hands the result in.
 
-	   It carries no measure. A reading measure and a reading face are two
-	   decisions, and an app composes them:
-
-	       <div class="ds-prose ds-measure" data-measure="prose">…</div>
+	   It carries no measure: a `reading` page's column is the measure.
 
 	   Nothing here reaches for a colour or a length that is not a --ds-* token,
 	   so a palette or a retune moves the whole face with it. */

@@ -14,8 +14,8 @@
  *   arbitrary properties   `[color:#f00]` has no `-` before the bracket, so the
  *                          `-\[` anchor missed the whole idiomatic v4 form.
  *   `ch`                   the unit list was px/rem/em only, so every
- *                          `max-w-[70ch]` passed — the exact value `.ds-measure`
- *                          exists to supply, hand-written in four apps.
+ *                          `max-w-[70ch]` passed — a reading measure, which a
+ *                          `reading` page's column supplies, hand-written in four apps.
  *   `color-mix()`          not in the function list, so a hand-rolled tint
  *                          ladder (4%/5%/10%/12%/16% in one app) read as clean.
  *   viewport units         `h-[55vh]`, `max-h-[85dvh]` and friends, unlisted.
@@ -115,7 +115,7 @@ const MEASURE = /(?:\d+\.?\d*|\.\d+)(?:ch|ex)\b/i;
 function adviceFor(residue, colour) {
 	if (colour) return COLOUR_ADVICE;
 	if (MEASURE.test(residue)) {
-		return 'a reading measure is `.ds-measure` with data-measure="prose" (@poodle64/ui >= 2026.8.17)';
+		return "a reading measure is the page's: a `reading` page (AppShell `pageType`, the default) sizes its column, so the route declares it and the block sets no width (@poodle64/ui >= 2026.10.27)";
 	}
 	return 'use the spacing/size scale (p-4, text-sm, gap-2) rather than a literal';
 }

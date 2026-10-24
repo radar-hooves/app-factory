@@ -79,7 +79,7 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="ds-measure flex flex-col gap-5" data-measure="prose" aria-hidden="true">
+		<div class="flex flex-col gap-5" data-prose aria-hidden="true">
 			{#each { length: n }, i (i)}
 				<div class="flex flex-col">
 					{#each { length: 4 }, line (line)}

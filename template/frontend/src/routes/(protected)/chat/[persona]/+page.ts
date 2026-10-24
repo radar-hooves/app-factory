@@ -1,5 +1,4 @@
 import type { PageLoad } from './$types';
 
-// Unpadded: past questions are a column flush against the rail, full height,
-// and the conversation keeps its own gutters.
-export const load: PageLoad = () => ({ title: 'Ask', padded: false });
+// A panel page: past questions are its pane, the conversation the page.
+export const load: PageLoad = () => ({ title: 'Ask', pageType: 'panel' });

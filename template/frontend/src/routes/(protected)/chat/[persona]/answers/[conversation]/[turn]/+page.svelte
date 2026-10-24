@@ -72,20 +72,18 @@
 	<LoadingState />
 {:else}
 	{@const p = persona}
-	<div class="flex h-full min-h-0 flex-1 flex-col">
-		<Conversation
-			turns={[turn]}
-			running={false}
-			name={who}
-			loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
-			oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
-			describeTool={extensions.describeTool}
-			turn={extensions.Turn ? presented : undefined}
-			lead={origin}
-			{visuals}
-			{copy}
-		/>
-	</div>
+	<Conversation
+		turns={[turn]}
+		running={false}
+		name={who}
+		loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
+		oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
+		describeTool={extensions.describeTool}
+		turn={extensions.Turn ? presented : undefined}
+		lead={origin}
+		{visuals}
+		{copy}
+	/>
 {/if}
 
 {#snippet origin()}

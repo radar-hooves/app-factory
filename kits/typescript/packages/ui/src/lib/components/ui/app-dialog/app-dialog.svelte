@@ -2,6 +2,7 @@
 	import type { Snippet, Component } from 'svelte';
 	import * as Dialog from '../dialog/index.js';
 	import InfoTip from '../info-tip/info-tip.svelte';
+	import ColumnScope from '../app-shell/column-scope.svelte';
 	import X from '@lucide/svelte/icons/x';
 
 	// The one dialogue frame: a titled header with optional icon and subtitle, a
@@ -110,7 +111,7 @@
 			</Dialog.Close>
 		</header>
 		<div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-			{@render children()}
+			<ColumnScope>{@render children()}</ColumnScope>
 		</div>
 		{#if footer}
 			<footer

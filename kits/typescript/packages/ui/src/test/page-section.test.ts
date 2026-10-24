@@ -24,6 +24,11 @@ describe('PageSection', () => {
 		);
 	});
 
+	it('marks its description as a line of prose, for the page type to cap', () => {
+		render(Harness);
+		expect(screen.getByText('What came in lately.')).toHaveAttribute('data-prose');
+	});
+
 	it('defaults to an h2', () => {
 		render(Harness);
 		expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Recent');

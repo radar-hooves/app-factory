@@ -116,19 +116,27 @@ describe('the signed-in app layout', () => {
 
 		expect(screen.getByRole('main')).toContainElement(screen.getByTestId('the-page'));
 		expect(screen.getByTestId('ds-shell-search')).toBeInTheDocument();
-		expect(screen.getByTestId('the-page').parentElement).toHaveClass('pt-5');
+		// A reading page unless the route says otherwise, in the frame the shell owns.
+		expect(screen.getByTestId('the-page').parentElement).toHaveClass('ds-page-main');
+		expect(screen.getByTestId('the-page').closest('.ds-page')).toHaveAttribute(
+			'data-page',
+			'reading'
+		);
 		expect(redirectToAuthentik).not.toHaveBeenCalled();
 		// Already loaded this page load (a route outside (protected)/ and back): no second ask.
 		expect(init).not.toHaveBeenCalled();
 	});
 
-	it('drops the shell padding for a route whose data says it pads its own panes', () => {
+	it('lays a page out as the type its route declares', () => {
 		// What (protected)/settings/+layout.ts returns, for SettingsShell.
 		signIn();
-		route.data = { padded: false };
+		route.data = { pageType: 'panel' };
 		render(Layout, { props: { children } });
 
-		expect(screen.getByTestId('the-page').parentElement).not.toHaveClass('pt-5');
+		expect(screen.getByTestId('the-page').closest('.ds-page')).toHaveAttribute(
+			'data-page',
+			'panel'
+		);
 	});
 
 	it('sends a lapsed session back for the page it asked for, and never renders it', () => {

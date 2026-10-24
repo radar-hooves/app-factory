@@ -359,7 +359,7 @@ test('on a phone, nothing floats over Send and the report row is in the drawer',
 
 		// Past questions are the bar's action here, and open over the page.
 		await expect(page.getByRole('region', { name: 'Past questions' })).toHaveCount(0);
-		await page.getByTestId('chat-past-questions').click();
+		await page.getByTestId('ds-page-pane-open').click();
 		await expect(page.getByRole('region', { name: 'Past questions' })).toBeVisible();
 		await page.keyboard.press('Escape');
 

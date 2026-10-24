@@ -28,7 +28,8 @@
 		"test:run": "vitest run",
 		"test:e2e": "playwright test",
 		"test:e2e:ci": "playwright test --pass-with-no-tests",
-		"test:e2e:debug": "playwright test --debug"
+		"test:e2e:debug": "playwright test --debug",
+		"layout-gate": "playwright test --config playwright.layout.config.ts"
 	},
 	"devDependencies": {
 {% if 'display' in factory_fonts %}		"@fontsource-variable/fraunces": "^5.1.0",
@@ -68,8 +69,8 @@
 	},
 	"dependencies": {
 		"@poodle64/design-tokens": "^2026.10.1",
-		"@poodle64/librarian": "2026.10.9",
-		"@poodle64/ui": "^2026.10.26",
+		"@poodle64/librarian": "2026.10.10",
+		"@poodle64/ui": "^2026.10.27",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
 		"mode-watcher": "^1.1.0",

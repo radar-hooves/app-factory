@@ -96,7 +96,7 @@ rather than rebuilding it:
 | `breadcrumbs`                                   | The trail: `items` of `{ label, href? }`, a named landmark, chevrons, each step truncating rather than wrapping. PageHeader draws it from `breadcrumbs={[…]}`. See [The page](#the-page-container-sections-and-the-type-scale). |
 | `page-container`                                | A route's page at the one rhythm: header, sections and panels 1.5rem apart, filling the content box. |
 | `page-section`                                  | A section of a page: `title` at `level` 2 or 3, an optional `description`, `count` and `actions`, and its content at one distance below. |
-| `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose` at the reading measure, and a contents list from its own headings. See [A document to read](#a-document-to-read). |
+| `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose`, and a contents list from its own headings, which a shell places as the page's aside. See [A document to read](#a-document-to-read). |
 | `content-skeleton`                              | A region loading, shaped like what replaces it: `rows`, `tiles` or `prose`. A whole page waiting is LoadingState. |
 | `panel`                                         | The generic titled card, and the settings section: optional icon, a short `subtitle` or a longer `description`, both wrapping, trailing `action`s, a body that can opt out of padding or scroll inside the card (`scroll`), an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
 | `list-toolbar`                                  | The bar above a list, on the page ground: title, count (both wrap when crowded, after the controls drop to their own line), icon actions named by their tooltips, one labelled action. The Ledger and the RecordList draw theirs with it. |
@@ -105,8 +105,8 @@ rather than rebuilding it:
 | `document-pane`                                 | One document beside what it belongs to: titled, closable, its page fitted, with paging and zoom (a `PageCanvas` in a `Panel`). |
 | `detail-panel`                                  | The entity-detail surface: header with icon/eyebrow/title/`StatusBadge`/close, scrollable body, footer of actions.                                                                                                                                                                                                                                                      |
 | `about` | About content for a page or dialogue: `name`, `version`, optional `description`/`brand`/`links`, and explicitly selected non-sensitive `diagnostics`. Never pass settings or environment objects. `writeClipboard` accepts the host clipboard API directly; otherwise the browser API is used. Mount the shared Toaster once for copy success/failure. |
-| `settings-shell`                                | The settings destination: a grouped section list of `NavItem` rows beside the section you are reading, both scrolling independently from `md`, stacked below it. Render it inside `AppShell` with `padded={false}`.                                                                                                                                                     |
-| `context-column`                                | The persistent right-hand column. A list page's: a standing `StatList` plus an optional detail that flows in on select. A record page's (`title`, `children`): the one opened item, closable, scrolling inside itself, and its `documentPane` beside it once the page's row has room. Below `xl` (1280px) the same content opens from a floating trigger instead of disappearing. See [A record's page](#a-records-page). |
+| `settings-shell`                                | The settings destination: its grouped section list of `NavItem` rows is a `panel` page's pane (`PagePane`), the section you are reading the page beside it, and the bar names "Settings › Section". The route declares `pageType: 'panel'`. See [The settings destination](#the-settings-destination). |
+| `context-column`                                | The page's right-hand context, as its aside (`PageAside`). A list page's: a standing `StatList` plus an optional detail that flows in on select. A record page's (`title`, `children`): the one opened item, closable, scrolling inside itself, and its `documentPane` in the item's place. The page type places it; below the aside's width it opens from the bar as a sheet. See [A record's page](#a-records-page). |
 | `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                                       |
 | `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                            |
 | `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
@@ -143,8 +143,8 @@ a permanent side rail on `md`+ (an overlay drawer below it) carrying primary
 navigation and the brand, **plus** a real top navbar (the collapse toggle at
 its leading edge, search,
 leading/trailing slots, theme toggle, identity), always both together, with
-content that is always full-width. Apps do not choose variants, content modes,
-or spacing.
+the content laid out by the page's type (`reading`, `panel` or `tool`; see
+[Page types](#page-types)). Apps do not choose variants, widths or spacing.
 
 Everything the apps otherwise differed on turned out to be a slot, not a variant.
 The package therefore imports no app store, no app route and no app brand:
@@ -180,9 +180,9 @@ That is the whole minimum. Everything below is optional.
 | `banner`                                          | Full-width region under the bar: reconnect notices, trial warnings.                                                     |
 | `onSearch`, `searchLabel`, `searchShortcut`       | Provide `onSearch` to render the search affordance at all.                                                              |
 | `themeToggle`, `onToggleTheme`                    | Defaults to `mode-watcher`. Set `themeToggle={false}` when the app puts theming inside its own user menu.               |
-| `measure`                                         | How wide the page body may get, from a named scale. Defaults to `full` (no cap).                                        |
+| `pageType`                                        | What the route is: `reading` (the default), `panel` or `tool`. Apps pass `page.data.pageType`; see [Page types](#page-types). |
 | `texture`                                         | The house atmosphere on the content region. Defaults to `grid`; `none` is the opt-out.                                  |
-| `padded`, `mainClass`                             | Padding, and extra classes on the scrolling content container.                                                          |
+| `title`                                           | The bar's name for a page the rail has no row for. Apps pass `page.data.title`.                                        |
 
 The bar also names where you are, read off `nav` and `currentPath`: "Section ›
 Page" inside a section that has `children` ("Securities › Trading"), the item's
@@ -329,9 +329,11 @@ page's ink, so inverting the rail does not drag it along.
 
 ### The settings destination
 
-Settings is the one destination with a second column, and it takes one shape in
-every app. `SettingsShell` is that shape: a grouped section list beside the
-section you are reading, both panes scrolling independently from `md`.
+Settings takes one shape in every app. `SettingsShell` is that shape: a `panel`
+page whose pane is a grouped section list, flush against the rail, beside the
+section you are reading. The route declares `pageType: 'panel'`; the shell draws
+the pane and the content beside it, each scrolling on its own, and names
+"Settings › Account" in the bar.
 
 ```svelte
 <script lang="ts">
@@ -358,20 +360,18 @@ section you are reading, both panes scrolling independently from `md`.
 	];
 </script>
 
-<!-- padded={false}: the list's rule and tint have to reach the content area's
-     edges, and SettingsShell pads its own content pane to the same rhythm. -->
-<AppShell {nav} currentPath={page.url.pathname} padded={false}>
-	<SettingsShell {sections} currentPath={page.url.pathname}>
-		{@render children()}
-	</SettingsShell>
-</AppShell>
+<!-- routes/(protected)/settings/+layout.ts returns { pageType: 'panel' }. -->
+<SettingsShell {sections} currentPath={page.url.pathname}>
+	{@render children()}
+</SettingsShell>
 ```
 
 | Prop          | Purpose                                                                        |
 | ------------- | ------------------------------------------------------------------------------ |
 | `sections`    | Groups of `NavItem`, bare items, or a mix: the rail's own vocabulary.         |
 | `currentPath` | Which row is the page. Prefix-matched on the segment boundary, as the rail is. |
-| `listLabel`   | The list's accessible name. Defaults to `Settings sections`.                   |
+| `listLabel`   | The list's accessible name, and the bar action's that opens it as a sheet. Defaults to `Settings sections`. |
+| `title`       | What the bar and the sheet call the destination. Defaults to `Settings`.       |
 | `selected`, `onSelect` | A single-route app (no `/settings/*` routes): instead of `currentPath`, pass sections as `{ id, label, icon? }`, the current `id` and a callback. Rows become buttons; the app owns the state. |
 
 A setting inside a section is a `SettingsRow`: `label`, optional `description`, the control as children (a Switch, a Select, a Button), and `controlId` to tie the label to the control. Use it in `<Panel pad={false}>`; the row carries its own padding and the rule between rows.
@@ -398,12 +398,9 @@ ellipsis and told the reader less than the label already did.
 **There is no "Settings" heading above the list.** The bar already names the
 section you are on, so a heading here is the same word twice.
 
-**Below `md` the list stacks above the content and the page scrolls as one.** A
-horizontally scrollable strip of the same rows was the alternative and loses on
-the requirement it was meant to serve: it fits about two and a half rows at
-375px, so the rest are behind a sideways swipe with no scrollbar advertising
-them — a swipe _then_ a tap, where a stack is a scroll the reader is already
-doing. It also has to drop the group labels for width.
+**Below 64rem of window the list opens as a sheet from the bar**, the one place
+every panel page's pane goes when it does not fit, so the section you opened
+fills a phone and every section is a tap on the bar away.
 
 Density works here as it does in the rail, because the list _is_ the rail's
 list: the controls inside a section ride the `--ds-control-*` ramp and shrink
@@ -439,148 +436,110 @@ all three serve any route:
 is the short qualifier under the title. Carry one or the other. A page writes a run of `Panel`s and no
 wrapper: the pane stacks them on the package's section rhythm itself.
 
-### A working list beside a page's own content
+### A pane beside a page's own content
+
+A `panel` page's second column — past questions, a queue, a working list — is
+its pane. The page registers it with `PagePane` and the shell draws it, flush
+against the rail and as wide as the rail, so the two read as one system; it
+folds to the rail's collapsed width when the page gives it a `folded` body, and
+remembers the fold under `remember`. Below 64rem of window it opens as a sheet
+from the bar instead.
 
 ```svelte
 <script lang="ts">
-	import AppShell from '@poodle64/ui/app-shell';
-	import ListShell from '@poodle64/ui/list-shell';
-
-	// Bind it to whatever already persists a user preference for this module:
-	// a module-scoped `.svelte.ts` store backed by localStorage, or the app's
-	// own settings. ListShell holds no storage of its own.
-	let listOpen = $state(true);
+	import { PagePane } from '@poodle64/ui/app-shell';
+	import History from '@lucide/svelte/icons/history';
 </script>
 
-<!-- padded={false}: the list has to reach the content area's edge, flush
-     against the rail, or it reads as a floating card. -->
-<AppShell {nav} currentPath={page.url.pathname} padded={false}>
-	<div class="flex min-h-0 flex-1">
-		<ListShell title="Waiting on you" bind:open={listOpen}>
-			{#snippet actions()}
-				<Button size="icon" variant="outline" aria-label="Add documents"><Plus /></Button>
-			{/snippet}
-			<!-- tabs, group headings, rows: entirely this module's own -->
-		</ListShell>
-		<div class="min-w-0 flex-1">
-			{#if !listOpen}
-				<!-- The reopen control is this module's own markup, at whatever
-				     position it chooses; ListShell never places it. -->
-				<Button onclick={() => (listOpen = true)} aria-expanded={listOpen}>
-					Waiting on you <Badge>{waitingCount}</Badge>
-				</Button>
-			{/if}
-			<!-- the module's own content -->
-		</div>
-	</div>
-</AppShell>
+<!-- +page.ts returns { pageType: 'panel' } -->
+<PagePane label="Past questions" icon={History} remember="chat-past-folded" fill>
+	{#snippet body({ mode, fold, close })}<ConversationList … />{/snippet}
+	{#snippet foot()}<Button …>Clear all</Button>{/snippet}
+	{#snippet folded({ unfold })}<Button aria-label="Show past questions" onclick={unfold}>…</Button>{/snippet}
+</PagePane>
+<Conversation … />
 ```
 
 | Prop       | Purpose                                                                      |
 | ---------- | ----------------------------------------------------------------------------- |
-| `title`    | The list's heading, in the shell's display face.                              |
-| `open`     | Bindable. Not persisted by this component; bind it to what already persists a preference for this module. |
-| `label`    | The landmark's accessible name. Defaults to `title`.                          |
-| `actions`  | Leading header actions beside the title: an "Add" button, a filter.           |
+| `label`    | The pane's name: the bar action's, and the sheet's.                           |
+| `body`     | The column. It takes the column's state: `mode` (`column` or `sheet`), `fold`, `unfold`, `close`. |
+| `foot`     | Pinned at the pane's foot; an empty foot draws nothing.                       |
+| `folded`   | What the pane shows folded to its edge. Given, the pane folds.               |
+| `remember` | The localStorage key the fold is kept under.                                  |
+| `location` | What the bar names when the rail has no row for the page ("Settings › Account"). |
+| `fill`     | The content beside the pane fills the frame (a transcript keeping its own gutters) rather than sitting at the panel measure. |
+| `column`   | Bindable: true while the shell draws the pane as a column, so the page can drop what the column already offers. |
 
-### The content measure
+### Page types
 
-How wide the page body may get, chosen once in the layout from a scale of four:
+A route says what it is, and the shell lays it out: width, centring, gutters,
+the second columns and which part scrolls. An app writes no width, padding or
+measure of its own (operator, 24/10/2026: "each app ... just chooses the page
+type that it wants"). The route declares it in its load data, and the stamped
+frame passes it to the shell:
 
-```svelte
-<AppShell {nav} currentPath={page.url.pathname} measure="page">
-	{@render children()}
-</AppShell>
+```ts
+// routes/(protected)/library/+page.ts
+export const load = () => ({ title: 'Library', pageType: 'tool' });
 ```
 
-| Value   | Width    | Reach for it when the page is                                        |
-| ------- | -------- | -------------------------------------------------------------------- |
-| `prose` | `40rem`  | long-form running text: documentation, an article, a policy, a guide |
-| `page`  | `80rem`  | an everyday page: a form, a detail view, settings, a wizard          |
-| `wide`  | `120rem` | an index or a dashboard: card grids, tables, charts, board columns   |
-| `full`  | no cap   | a canvas that should use the whole panel: a map, a diagram, a board  |
+| Type      | What it is | Reach for it for |
+| --------- | ---------- | ---------------- |
+| `reading` | The default. One column of 44rem, centred; a `PageAside` stands beside it (20rem, a 3rem gap), the pair centred so neither is pinned to an edge, and follows the column below 66rem of content region. Every block in the column ends at the column's one right edge. The page scrolls. | A page you read or fill in: an about page, a security statement, a record, a form, a members list, a document. |
+| `panel`   | A `PagePane` flush against the rail, as wide as the rail, and the content beside it left-aligned to it, each block at 52rem. Below 64rem of window the pane is a sheet from the bar. | Settings; a chat and its past questions; a module's working list beside its work. |
+| `tool`    | The whole frame; the page never scrolls. Its blocks keep their own height, and its fill — a block marked `data-fill` (a `Panel` that scrolls sets it), or the `PageContainer` holding one — takes the rest of the frame's height exactly (never under 24rem) and scrolls inside itself; a page taller than the frame scrolls in the frame. An aside is a column at the frame's right edge behind its own rule (20–28rem), and below 80rem of window a sheet from the bar. | A library, a table, a graph, a map, a dashboard. |
 
-`full` is the default, so a shell that does not mention `measure` renders exactly
-as it did before the prop existed — verified, not assumed: the content region's
-markup and geometry were diffed against the pre-change build across three
-surfaces at three viewports and are identical on every field (`harness/drive.md`).
-Adoption is deliberate, one app at a time.
+Gutters are one scale for every type, read off the content region (a container,
+so a folded rail or a narrow window counts as the room the page has): 1rem
+below 40rem of region, 2rem to 64rem, 3rem above. A reading page breathes
+3.5rem above and below on a desktop (4.5rem past 100rem); a tool or a panel's
+content 1.75rem, spending its height on what it shows.
 
-It exists because "content is always full-width" did not remove the width
-decision, it pushed it into every page. Surveyed at 2560px, one consumer had six
-distinct caps across nine routes — each a hand-written `mx-auto max-w-*` at the
-top of a `+page.svelte`, none wrong on its own, no two agreeing — using between
-15% and 79% of the width available. Across the estate that is 42 hand-rolled caps
-in 34 page files, spanning eight different `max-w-*` values. A scale with four
-names cannot drift like that.
+The design is Gemini's (google/pro), read off the CASPO app's pages at 1673 and
+390px; three numbers differ. The pane is the rail's own width (15.5rem, not
+17.5rem), so the two columns at the left edge read as one system. A tool keeps
+the gutters (Gemini's tool ran edge to edge, each part padding itself), so a
+page's first column starts on one line whatever its type and no component pads
+itself per page. A tool's aside stands behind a rule, the pane's mirror, which
+the layout gate's judge read as composed where a bare card at the edge read as
+stranded. And the pane is a sheet on a phone rather than a drill-down, one
+behaviour for every panel page.
 
-**Why `prose` is a tier at all.** Because a shared measure that let running text
-span a large display would be worse than what it replaces, and worse everywhere
-at once. Measured in Chromium at 2560px: the same paragraph runs to **311
-characters per line** uncapped, against an accepted band of 45–90 for continuous
-text. `prose` puts it at about 70. It is stated in `rem`, not `ch`: `ch` resolves
-against each element's own font size, so a lead, a paragraph and a small intro in
-one column ended at three right edges. A root-relative length gives every block
-the same one.
-
-Every tier is a CSS custom property, so an app retunes one without waiting on a
-release of this package:
+Every width is a custom property, so an app retunes one in one declaration:
 
 ```css
 :root {
-	--ds-shell-measure-prose: 36rem;
-	--ds-shell-measure-page: 72rem;
-	--ds-shell-measure-wide: 100rem;
+	--ds-page-reading: 42rem;
+	--ds-page-aside: 18rem;
 }
 ```
 
-Two things worth knowing before you set it:
+`--ds-page-reading`, `--ds-page-aside`, `--ds-page-aside-tool`,
+`--ds-page-aside-gap`, `--ds-page-pane` (the rail's width), `--ds-page-pane-folded`
+and `--ds-page-panel`. The frame is `.ds-page[data-page]` inside the content
+region, with `.ds-page-pane`, `.ds-page-main` and `.ds-page-aside`; a component
+that sets a line of explanation (a section's description) marks it `data-prose`,
+and only a frame wider than the reading column caps it.
 
-- **The cap is a ceiling, never a floor.** `page` caps at 80rem; a 1440px laptop
-  has less than that available, so nothing changes there. A measure never narrows
-  a window that was already narrower than the tier.
-- **`prose` is a length, so it does not follow the font.** Text set larger or
-  smaller than the body fits more or fewer characters in the same column and
-  ends at the same right edge as its neighbours; that is the point of it.
-- **The cap is the border box, so `padded` spends its padding inside it.**
-  `measure="page"` with the default padding is 80rem of box holding 78rem of
-  content, which is the same arithmetic as the `mx-auto max-w-4xl px-6` idiom it
-  replaces. An app running `padded={false}` and its own page padding gets the cap
-  flush, which is usually what it wanted.
+#### An aside: `PageAside`
 
-A route declares it in its load data and the app's frame passes it on: the
-stamped frame renders `measure={page.data.measure ?? 'wide'}`, and a route group
-returns `{ measure: 'page' }` from its `+layout.ts`, one route from its
-`+page.ts`. Three apps had each written a table of path regexes mapping routes
-to tiers in their frame (22 rows in one); route data puts the decision on the
-route it belongs to, and SvelteKit merges a layout's answer into every page
-under it. `padded` travels the same way.
-
-#### A block inside the page: `.ds-measure`
-
-A route legitimately set to `wide` — a dashboard, a table, a card grid — often
-also carries a paragraph of explanatory prose, and that prose inherits the wide
-measure. Cap the block, not the route:
+What stands beside a page's content registers as its aside, and the type
+places it:
 
 ```svelte
-<p class="ds-measure" data-measure="prose">Explanatory running text…</p>
+<PageAside label="Work under way">
+	<Panel title="Work under way">…</Panel>
+</PageAside>
 ```
 
-Same attribute and same custom properties as the shell's own measure, so the
-block retunes when the scale does. That is the point of it: the alternative an
-app reaches for is a local `max-w-prose` or `max-w-[72ch]` (both in `ch`, so blocks of different sizes end at different edges), a number typed once
-that never hears about a retune — four apps had written ten of them between
-them and not one matched this package's own measure.
+`label` names its landmark and, where it is a sheet, the bar action and the
+sheet's head (`description` a line under it). The body takes the column's
+state as `{#snippet body(state)}` when it must close the sheet after a choice.
+`ContextColumn` and `DocumentReader`'s contents list are asides; outside a shell
+(inside an element) both render in place.
 
-`.ds-measure` caps and nothing else. `.ds-shell-measure`, which the shell puts
-on its own content box, is that plus `margin-inline: auto` — right for a content
-box, wrong for a block within a page, where it indented a set of left-anchored
-paragraphs ~207px away from their own label. Both halves are gated in
-`harness/drive.mjs` at 2560px on a `wide` route: the cap binds, the block stays
-on the page's own left edge, and it follows a retune of
-`--ds-shell-measure-prose`.
-
-**Large screens.** The measures, the type and the rail are all rem, and past
+**Large screens.** The page widths, the type and the rail are all rem, and past
 2560px the root size grows (1px per 160px of width, to 24px at 3840px), so a
 page fills a 4K screen as it fills a laptop's. At 2560px and below nothing
 moves. An app sets no per-page variant; one that sets its own root size does it
@@ -643,10 +602,11 @@ head, and as a heading it is the generated-UI tell `eyebrow` warns about.
 The body is the app's HTML, already sanitised, for the reason `.ds-prose` gives;
 strip the body's own leading `# Title`, since the header carries it. The
 contents list is the body's `h2` and `h3`, shown once there are two; a heading
-without an id gets one from its text. From a reader 64rem wide the list stands
-beside the body and stays in view; narrower, it folds into an "On this page"
-disclosure above it. That is a container query on the reader, so a route at
-`measure="page"` or wider shows it beside the body on a laptop. A link scrolls
+without an id gets one from its text. In a shell the reader is a `reading`
+page's column and the list is the page's aside: beside the body and in view
+where the aside stands beside the column, and folded into an "On this page"
+disclosure above the body where it does not. Outside a shell (inside an
+element) the reader lays the two out itself, from 64rem of its own width. A link scrolls
 to its heading and moves focus there, without the URL fragment, which cannot
 reach into a shadow root.
 
@@ -834,7 +794,7 @@ Rendered markdown, an extracted document body, a rich-text field — content who
 tags the app did not write and cannot style at the call site:
 
 ```svelte
-<div class="ds-prose ds-measure" data-measure="prose">
+<div class="ds-prose">
 	{@html sanitised}
 </div>
 ```
@@ -846,9 +806,7 @@ a table wider than the measure **scrolls in its own box rather than taking the
 page sideways** — gated at 360px, and driven red by removing its `overflow-x`,
 which pushes 901px into the content region.
 
-The face carries no measure. A reading width and a reading face are two
-decisions, so compose it with [`.ds-measure`](#a-block-inside-the-page-ds-measure)
-as above.
+The face carries no measure: a `reading` page's column is the measure.
 
 **The package styles this content; it does not render it.** Sanitising untrusted
 HTML is a security boundary, and a package cannot see the inputs the boundary is
@@ -929,8 +887,8 @@ hover — see `packages/design-tokens/README.md`.
 
 ### Measuring the content region
 
-About overflow, not width — for how wide the body is allowed to get, see
-[The content measure](#the-content-measure) above.
+About overflow, not width — for how wide the body is laid out, see
+[Page types](#page-types) above.
 
 `<main>` is the scrolling content region and carries
 `data-slot="app-shell-content"`. A consuming app's "no horizontal overflow" check
@@ -1105,8 +1063,9 @@ in a real engine at 390, 1440 and 3360px (`harness/drive.mjs`, `?surface=records
 
 ## A record's page
 
-The record's whole name is the top bar's control; its column holds the one item
-the page opened; that item's document stands beside it (`?surface=record`).
+The record's whole name is the top bar's control; its aside holds the one item
+the page opened, or that item's document (`?surface=record`). A record page is
+a `tool` page, so the aside is a column at the frame's right edge.
 
 ```svelte
 <ShellControls>
@@ -1116,13 +1075,11 @@ the page opened; that item's document stands beside it (`?surface=record`).
 		pages={[{ label: 'Overview', href: '/property/4', current: true }, …]} />
 </ShellControls>
 
-<div class="flex min-h-0 flex-1 gap-5">
-	<div class="min-w-0 flex-1"><!-- header card, one line a section --></div>
-	<ContextColumn title={opened.title} subtitle="Opened on what needs you"
-		onClose={reopenWhatNeedsYou} documentPane={lease ? leaseDoc : undefined}>
-		<!-- the opened section -->
-	</ContextColumn>
-</div>
+<PageContainer><!-- header card, one line a section --></PageContainer>
+<ContextColumn title={opened.title} subtitle="Opened on what needs you"
+	onClose={reopenWhatNeedsYou} documentPane={lease ? leaseDoc : undefined}>
+	<!-- the opened section -->
+</ContextColumn>
 
 {#snippet leaseDoc()}
 	<DocumentPane title="Residential tenancy agreement" subtitle={lease.span} pages={lease.pages}
@@ -1140,15 +1097,12 @@ the page opened; that item's document stands beside it (`?surface=record`).
 - **ContextColumn's record form** holds one item, never none: the page opens it
   on what needs the viewer first and `onClose` reopens that. The item is as tall
   as what it holds up to the column, then scrolls inside itself; a new `title`
-  swaps it in from the top. Its `documentPane` takes the column's place, and
-  stands beside the column as a third pane once the page's row is 1250px wide,
-  which a 1600px screen gives with the rail open. The row decides, not the
-  screen, so a folded rail or a narrow window is read as the room there is.
+  swaps it in from the top. Its `documentPane` takes the item's place. Below
+  80rem of window the aside opens from the bar as a sheet headed by its name.
 - **DocumentPane** fills the height it is given: `pages` as one image URL a page,
   or `page` and `pageCount` to draw them yourself, as `PageCanvas` takes them. A
   page that fails to load says so and keeps its place. Another document swapped
-  into the same pane opens on its first page, fitted; so does one the column
-  moves beside itself as the row crosses 1250px.
+  into the same pane opens on its first page, fitted.
 
 ## A graph of relations
 

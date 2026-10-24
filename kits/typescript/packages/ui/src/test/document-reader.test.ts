@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import DocumentReader, { slugify } from '$lib/components/ui/document-reader/document-reader.svelte';
 import { createRawSnippet } from 'svelte';
+import InShell from './document-reader-in-shell.svelte';
 
 const asideFacts = createRawSnippet(() => ({ render: () => '<p>Owner: Pay policy</p>' }));
 
@@ -237,5 +238,21 @@ describe('DocumentReader — the side column and the disclosure', () => {
 		details.open = true;
 		await fireEvent.click(within(details).getByRole('link', { name: 'Install it' }));
 		expect(details.open).toBe(false);
+	});
+});
+
+describe('DocumentReader — inside the shell', () => {
+	it('hands its contents list to the page’s aside rather than laying it out beside itself', async () => {
+		const { container } = render(InShell, { props: { html: body } });
+		const aside = await waitFor(() => {
+			const el = container.querySelector<HTMLElement>('aside.ds-page-aside');
+			if (!el) throw new Error('no aside yet');
+			return el;
+		});
+		expect(within(aside).getAllByRole('navigation', { name: 'On this page' }).length).toBeGreaterThan(0);
+		// The side column exists once, and inside the aside.
+		const sides = container.querySelectorAll('[data-slot="document-reader-side"]');
+		expect(sides).toHaveLength(1);
+		expect(aside.contains(sides[0])).toBe(true);
 	});
 });

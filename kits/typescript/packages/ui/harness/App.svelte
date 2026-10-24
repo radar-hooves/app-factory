@@ -54,7 +54,6 @@
 	import Sparkline from '../dist/components/ui/sparkline/sparkline.svelte';
 	import StatusBadge from '../dist/components/ui/status-badge/status-badge.svelte';
 	import type { NavSource } from '../dist/components/ui/app-shell/types.js';
-	import { SHELL_MEASURES, type ShellMeasure } from '../dist/components/ui/app-shell/measure.js';
 	import { SHELL_TEXTURES, type ShellTexture } from '../dist/components/ui/app-shell/texture.js';
 	import Button from '../dist/components/ui/button/button.svelte';
 	import PageContainer from '../dist/components/ui/page-container/page-container.svelte';
@@ -82,7 +81,9 @@
 	import { AppIdentity } from '../dist/components/ui/app-identity/index.js';
 	import ShellControls from '../dist/components/ui/app-shell/shell-controls.svelte';
 	import { Segmented } from '../dist/components/ui/segmented/index.js';
-	import ListShell from '../dist/components/ui/list-shell/list-shell.svelte';
+	import PagePane from '../dist/components/ui/app-shell/page-pane.svelte';
+	import PageAside from '../dist/components/ui/app-shell/page-aside.svelte';
+	import { PAGE_TYPES, type PageType } from '../dist/components/ui/app-shell/page.js';
 	import { ReportWidget } from '../dist/components/feedback/index.js';
 	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
 	import Records from './Records.svelte';
@@ -94,9 +95,6 @@
 		LedgerRow
 	} from '../dist/components/ui/ledger/index.js';
 	import Plus from '@lucide/svelte/icons/plus';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	let auditYear = $state('FY26');
 	import { DataTableTanstack } from '../dist/components/ui/data-table-tanstack/index.js';
 	import type { ColumnDef } from '../dist/components/ui/data-table-tanstack/index.js';
@@ -312,18 +310,23 @@
 	// controls: a bar crowded past one row beside a wide `context`, and the report
 	// widget over the last row of a page `?long=1` makes scroll.
 	const chromeLong = params.get('long') === '1';
-	// `?surface=measure&measure=<tier>` drives the content measure. Every claim
-	// it makes is a resolved length — `80rem` and `40rem` against the root font size,
-	// a cap that binds only once the viewport is wide
-	// enough to reach it, and a box centred by auto margins inside a flex
-	// column. jsdom resolves none of those: it reports `max-width` as the
-	// unresolved literal and every rect as zero, so a unit test there would pass
-	// against a build whose stylesheet was never imported at all.
+	// `?surface=pages&type=reading|panel|tool` drives the page types. Every claim
+	// it makes is a resolved length (a column's width and centring, a pane flush
+	// against the rail, a frame exactly the content region's height, a gutter
+	// that steps with the region), which jsdom cannot hold: it reports every rect
+	// as zero. `aside=1` registers a page aside, `pane=1` a panel's pane (folding
+	// to the rail's collapsed width), `collapsed=1` starts the rail collapsed.
 	//
 	// Validated back onto the union rather than cast, so a typo in the query
-	// string renders the default instead of a class with no rule behind it.
-	const measureParam: ShellMeasure =
-		SHELL_MEASURES.find((m) => m === params.get('measure')) ?? 'full';
+	// string renders the default instead of a page with no rule behind it.
+	const pageTypeParam: PageType =
+		PAGE_TYPES.find((t) => t === params.get('type')) ?? 'reading';
+	const pagesAside = params.get('aside') === '1';
+	const pagesPane = params.get('pane') === '1';
+	// `blocks=1` swaps a tool page's fill for three 400px blocks, none of which opts in to filling.
+	const pagesBlocks = params.get('blocks') === '1';
+	const PANE_ITEMS = Array.from({ length: 12 }, (_, i) => `Section ${String.fromCharCode(65 + i)}`);
+	const TOOL_ROWS = Array.from({ length: 200 }, (_, i) => `Row ${i + 1}`);
 	// `?surface=texture&texture=<grid|none>` drives the content texture. Every
 	// claim it makes needs an engine and most need a compositor: the gradients are
 	// `color-mix()` over the app's own palette, the picture is a resolved
@@ -692,8 +695,7 @@
 	let phase: 'idle' | 'loading' | 'failed' | 'empty' = $state('idle');
 
 	let paletteOpen = $state(false);
-	let collapsed = $state(false);
-	let listOpen = $state(true);
+	let collapsed = $state(params.get('collapsed') === '1');
 	const currentPath = '#/credentials';
 
 	// `?surface=mobile-audit&identity=bare` swaps the fixture below for a
@@ -1596,30 +1598,12 @@
 		<p class="text-muted-foreground mt-2 text-sm">A section with its own navigation.</p>
 	</AppShell>
 	<ReportWidget />
-{:else if surface === 'measure'}
-	<!-- One page body, four caps, so the only thing that can move a measured
-	     width is the prop. The copy is real running text rather than a filler
-	     block because `prose` is stated in `ch` — a claim about how many
-	     characters land on a line, which only means anything against characters
-	     in the face the app actually set. -->
-	<AppShell {nav} currentPath="#/overview" brandTitle="Harness" measure={measureParam}>
-		<h1 class="font-display text-display font-semibold">Measure</h1>
-		<p data-probe="measure-copy" class="text-muted-foreground mt-2 text-sm">
-			The shell owns the content measure so that pages stop each deciding their own. A cap
-			written at the top of a page is invisible to every other page, which is how one app ended
-			up with six different answers to the same question and no way to tell which was
-			deliberate.
-		</p>
-
-		<!-- HTML the app did not author, wearing the shared reading face
-		     (design-system#32). Composed with `.ds-measure` rather than the face
-		     baking a measure in: a reading face and a reading width are two
-		     decisions. -->
-		<div
-			data-probe="prose"
-			class="ds-prose ds-measure mt-8"
-			data-measure="prose"
-		>
+{:else if surface === 'prose'}
+	<!-- HTML the app did not author, wearing the shared reading face
+	     (design-system#32), in a default reading page. -->
+	<AppShell {nav} currentPath="#/overview" brandTitle="Harness">
+		<h1 class="font-display text-display font-semibold">Prose</h1>
+		<div data-probe="prose" class="ds-prose">
 			<h2 data-probe="prose-h2">An extracted heading</h2>
 			<p>Body copy as it arrives from a document, with <code data-probe="prose-code">inline code</code> and a <a href="#/overview" data-probe="prose-link">link</a>.</p>
 			<ul data-probe="prose-list">
@@ -1637,32 +1621,86 @@
 				</table>
 			</div>
 		</div>
+	</AppShell>
+{:else if surface === 'pages'}
+	<!-- One shell, the page type the only variable. The nav has no row for the
+	     panel's path, so the bar can only name it through the pane's `location`. -->
+	<AppShell
+		{nav}
+		collapsible
+		bind:collapsed
+		currentPath={pageTypeParam === 'panel' ? '#/sections' : '#/overview'}
+		brandTitle="Harness"
+		pageType={pageTypeParam}
+	>
+		{#if pageTypeParam === 'panel' && pagesPane}
+			<PagePane label="Sections" location="Sections › Section A" remember="harness-pages-pane">
+				{#snippet body({ fold })}
+					<div class="flex flex-col gap-1 p-3" data-probe="pane-list">
+						<button type="button" class="text-left text-xs" data-probe="pane-fold" onclick={fold}>Fold</button>
+						{#each PANE_ITEMS as item (item)}
+							<button type="button" class="rounded-md px-2 py-1.5 text-left text-sm" data-probe="pane-item">{item}</button>
+						{/each}
+					</div>
+				{/snippet}
+				{#snippet folded({ unfold })}
+					<button type="button" class="p-2 text-xs" data-probe="pane-unfold" onclick={unfold}>Open</button>
+				{/snippet}
+			</PagePane>
+		{/if}
+		{#if pagesAside}
+			<PageAside label="Context">
+				<Panel title="Context" data-probe="page-aside-card">
+					<p class="text-sm">What stands beside the page.</p>
+				</Panel>
+			</PageAside>
+		{/if}
 
-		<!-- A prose block INSIDE the page, on a route that may legitimately be
-		     `wide` (design-system#22). `.ds-measure` caps it at the same measure the
-		     shell would use and leaves it where it is; `.ds-shell-measure` would
-		     also centre it, which is right for the content box and wrong here. -->
-		<div data-probe="measure-block-wrap" class="mt-6">
-			<p data-probe="measure-size-lead" class="ds-measure text-xl" data-measure="prose">
-				A lead paragraph set larger than the body, long enough to wrap at the reading measure and
+		{#if pageTypeParam === 'tool'}
+			<h1 class="font-display text-display font-semibold" data-probe="page-first">Tool</h1>
+			{#if pagesBlocks}
+				{#each [1, 2, 3] as n (n)}
+					<div class="border-border h-[400px] rounded-md border p-3 text-sm" data-probe="tool-block">Block {n}</div>
+				{/each}
+			{:else}
+				<div class="border-border overflow-y-auto rounded-md border" data-fill data-probe="tool-fill">
+					{#each TOOL_ROWS as row (row)}
+						<div class="border-border h-8 border-b px-3 text-sm leading-8">{row}</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if pageTypeParam === 'panel'}
+			<h1 class="font-display text-display font-semibold" data-probe="page-first">Panel</h1>
+			{#each [1, 2, 3] as n (n)}
+				<section data-probe="panel-block" class="border-border rounded-md border p-4">
+					<h2 class="text-lg font-semibold">Block {n}</h2>
+					<p class="text-sm">
+						A block of the panel, stretching to the panel measure and no further, however much
+						room the window has to give it. The pane sits flush against the rail beside it, and
+						this content starts one gutter from the pane's edge.
+					</p>
+				</section>
+			{/each}
+		{:else}
+			<h1 class="font-display text-display font-semibold" data-probe="page-first">Reading</h1>
+			<!-- Three type sizes in one column: the right edge is the column's, not each
+			     block's own. -->
+			<p data-probe="reading-block" class="text-xl">
+				A lead paragraph set larger than the body, long enough to wrap at the reading column and
 				end exactly where the smaller blocks under it end, whatever its own font size.
 			</p>
-			<p data-probe="measure-size-intro" class="ds-measure text-sm" data-measure="prose">
-				An intro set smaller than the body, long enough to wrap at the reading measure and end
-				exactly where the larger blocks above it end, whatever its own font size, so a column of
+			<p data-probe="reading-block" class="text-sm">
+				An intro set smaller than the body, long enough to wrap at the reading column and end
+				exactly where the larger block above it ends, whatever its own font size, so a column of
 				mixed sizes keeps one right edge.
 			</p>
-			<p data-probe="measure-size-note" class="ds-measure text-xs" data-measure="prose">
-				A note set smaller still, long enough to wrap at the reading measure and end exactly where
+			<p data-probe="reading-block" class="text-xs">
+				A note set smaller still, long enough to wrap at the reading column and end exactly where
 				the larger blocks above it end, whatever its own font size, so a column of mixed sizes
-				keeps one right edge, which is the whole point of stating the measure in rem.
+				keeps one right edge, which is the whole point of stating the column in rem.
 			</p>
-			<p data-probe="measure-block" class="ds-measure text-sm" data-measure="prose">
-				A block set to the reading measure inside a page whose own measure is wider. The cap
-				comes from the same custom property the shell reads, so retuning the scale moves this
-				paragraph too, which a locally written max-width would not.
-			</p>
-		</div>
+			<div style="height: 1600px; flex: none" data-probe="reading-spacer"></div>
+		{/if}
 	</AppShell>
 {:else if surface === 'texture'}
 	<!-- One shell, one very tall page, the texture the only variable. The body is
@@ -1697,7 +1735,7 @@
 		bind:collapsed
 		currentPath="#/reports"
 		brandTitle="Cadmus"
-		measure="wide"
+		pageType="tool"
 		onSearch={() => (paletteOpen = true)}
 	>
 		{#snippet actions()}
@@ -1739,8 +1777,9 @@
 				size="sm"
 			/>
 		</ShellControls>
-		<div class="flex min-h-0 flex-1 gap-6">
-			<div class="min-w-0 flex-1">
+		<ContextColumn stats={AUDIT_STATS} ariaLabel="Report context" />
+		<div class="min-w-0" style="flex: none">
+			<div class="min-w-0">
 				<h1 class="font-display text-display font-semibold">Reports</h1>
 				<p class="text-muted-foreground mt-1 mb-6 text-sm" data-probe="audit-table-caption">
 					Eight columns, fourteen rows.
@@ -1761,7 +1800,6 @@
 					{/each}
 				</TileGrid>
 			</div>
-			<ContextColumn stats={AUDIT_STATS} ariaLabel="Report context" />
 		</div>
 	</AppShell>
 
@@ -1771,7 +1809,7 @@
 		onNavigate={(href) => (location.hash = href.slice(1))}
 	/>
 {:else if surface === 'page-kit'}
-	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness" measure="wide">
+	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness">
 		<PageContainer>
 			<PageHeader
 				title="Allowances"
@@ -1836,7 +1874,7 @@
 		</Sheet.Content>
 	</Sheet.Root>
 {:else if surface === 'document-reader'}
-	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness" measure="page">
+	<AppShell nav={kitNav} currentPath="#/policy/allowances" brandTitle="Harness">
 		<DocumentReader
 			title="Allowances while deployed"
 			breadcrumbs={[{ label: 'Policy', href: '#/policy' }, { label: 'Allowances while deployed' }]}
@@ -1902,122 +1940,13 @@
 		</Ledger>
 		<output class="hidden" data-probe="ledger-label-clicked">{ledgerLabelClicked}</output>
 	</div>
-{:else if surface === 'list-shell'}
-	<!--
-		design-system: the working-list companion to SettingsShell
-		(radar-hooves/godswood#839). `padded={false}` for the same reason
-		SettingsShell needs it — ListShell has to reach the content area's edge,
-		flush against the rail, or it reads as a floating card. `?open=0` drives
-		the folded state directly (a real click is also exercised, but a
-		reload-survival claim needs the closed state reachable on first paint).
-	-->
-	<AppShell
-		nav={[{ label: 'Home', href: '#/overview', icon: LayoutDashboard }]}
-		currentPath="#/overview"
-		brandTitle="Godswood"
-		padded={false}
-	>
-		<div class="flex min-h-0 flex-1">
-			<ListShell title="Waiting on you" bind:open={listOpen}>
-				{#snippet actions()}
-					<button
-						type="button"
-						aria-label="Add documents"
-						title="Add documents"
-						class="border-border grid size-9 flex-none place-items-center rounded-md border"
-					>
-						<Plus class="size-4" />
-					</button>
-				{/snippet}
-				<div class="px-5 pb-3.5">
-					<div role="tablist" aria-label="Which documents" class="bg-muted/40 flex gap-1 rounded-lg p-1">
-						<button type="button" role="tab" aria-selected="true" class="bg-card flex-1 rounded-md py-1.5 text-sm font-semibold">
-							Waiting <span class="text-muted-foreground font-normal">338</span>
-						</button>
-						<button type="button" role="tab" aria-selected="false" class="text-muted-foreground flex-1 rounded-md py-1.5 text-sm">
-							Filed <span class="font-normal">1500</span>
-						</button>
-					</div>
-				</div>
-				<div class="text-shell-muted-foreground px-5 pt-2 pb-1.5 text-xs font-semibold">
-					Needs an answer <span class="font-normal">118</span>
-				</div>
-				{#each [{ t: 'eBay purchase history', s: 'Which property are these purchases for?', d: '25/12/2021' }, { t: 'Vehicle registration renewal', s: 'A 2016 renewal reminder for a 2004 Ford sedan…', d: '16/04/2016' }] as row (row.t)}
-					<button type="button" class="border-border flex w-full gap-3.5 border-t px-5 py-3 text-left">
-						<span class="min-w-0 flex-1">
-							<span class="block font-medium">{row.t}</span>
-							<span class="text-muted-foreground mt-0.5 block truncate text-xs">{row.s}</span>
-						</span>
-						<span class="text-shell-muted-foreground shrink-0 text-xs">{row.d}</span>
-					</button>
-				{/each}
-				<div class="text-shell-muted-foreground px-5 pt-3 pb-1.5 text-xs font-semibold">
-					Ready to file <span class="font-normal">214</span>
-				</div>
-				{#each [{ t: 'Aldi receipt', s: 'Grocery receipt · 1 page', d: '18/09/2026', active: true }, { t: 'Gas rates change notice', s: 'Document · 2 pages', d: '20/06/2024', active: false }] as row (row.t)}
-					<button
-						type="button"
-						aria-current={row.active ? 'true' : undefined}
-						class="border-border flex w-full gap-3.5 border-t px-5 py-3 text-left {row.active ? 'bg-card' : ''}"
-					>
-						<span class="min-w-0 flex-1">
-							<span class="block font-medium">{row.t}</span>
-							<span class="text-shell-muted-foreground mt-0.5 block truncate text-xs">{row.s}</span>
-						</span>
-						<span class="text-shell-muted-foreground shrink-0 text-xs">{row.d}</span>
-					</button>
-				{/each}
-			</ListShell>
-
-			<div class="flex min-w-0 flex-1 flex-col gap-4 p-6">
-				<div class="flex items-center gap-2.5">
-					{#if !listOpen}
-						<!-- The reopen control: entirely this page's own markup, driving
-						     the same bound `listOpen` — ListShell renders nothing while
-						     closed, by design. -->
-						<button
-							type="button"
-							onclick={() => (listOpen = true)}
-							aria-expanded={listOpen}
-							class="border-border flex h-9 items-center gap-2 rounded-md border px-3 text-sm"
-							data-probe="list-shell-reopen"
-						>
-							<PanelLeftOpen class="size-4" />
-							Waiting on you <span class="text-muted-foreground">338</span>
-						</button>
-						<div class="text-muted-foreground ml-auto flex items-center gap-1.5 text-sm">
-							<button type="button" aria-label="Previous" class="border-border grid size-9 place-items-center rounded-md border">
-								<ChevronLeft class="size-4" />
-							</button>
-							<span>1 of 214 ready to file</span>
-							<button type="button" aria-label="Next" class="border-border grid size-9 place-items-center rounded-md border">
-								<ChevronRight class="size-4" />
-							</button>
-						</div>
-					{/if}
-				</div>
-				<h1 class="font-display text-display font-semibold" data-probe="list-shell-page-title">
-					Grocery Receipt
-				</h1>
-				<p class="text-muted-foreground text-sm">
-					The module's own content, beside the list — {listOpen ? 'open' : 'folded'}.
-				</p>
-			</div>
-		</div>
-	</AppShell>
 {:else if surface === 'settings'}
-	<!--
-		`padded={false}` is not incidental: the section list's rule and tint have to
-		reach the content area's edges or the two panes read as a floating card, and
-		SettingsShell pads its own content pane to the shell's own rhythm instead.
-		The shell is what bounds the height the panes scroll inside, so the surface
-		has to be driven through it rather than standalone.
-	-->
+	<!-- Settings is a panel page: the sections are its pane, flush against the rail. -->
 	<AppShell
 		nav={[{ label: 'Overview', href: '#/overview', icon: LayoutDashboard }]}
 		currentPath={settingsPath}
 		brandTitle="Harness"
-		padded={false}
+		pageType="panel"
 	>
 		<SettingsShell sections={settingsSections} currentPath={settingsPath}>
 			<Panel

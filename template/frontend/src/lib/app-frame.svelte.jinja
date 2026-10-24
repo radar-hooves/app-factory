@@ -7,8 +7,8 @@
 	layout owns the session, the workspace and the guard, and this file owns what
 	the app looks like around them. Stamped once and never overwritten, so this
 	is where the app declares its nav, points the brand at its real landing page
-	(`homeHref`), picks its `measure`, and adds its own top-bar actions and
-	palette groups — never by editing the factory's layout.
+	(`homeHref`), and adds its own top-bar actions and palette groups — never by
+	editing the factory's layout. It sets no width: a route says what it is.
 
 	`children` is the factory's guarded page: render it inside the shell, once.
 	The frame renders from the first paint, before the session is confirmed:
@@ -89,19 +89,18 @@
 <!-- The house floor and the rail's collapse control arrive by default from
      @poodle64/ui — do not pass `texture` or `collapsible` to ask for them, and
      do not hand-roll a dot-grid class in app.css. -->
-<!-- `measure` and `padded` are the route's to say, in its load data (app.d.ts
-     types both): a route group returns `{ measure: 'page' }` from its
-     +layout.ts, one route from its +page.ts, and a route that pads its own
-     panes (the factory's settings destination) returns `padded: false`. Keep
-     both lines if you compose the shell differently, or the routes lose what
-     they asked for. `wide` is the default every app had chosen by hand. -->
+<!-- What a page is, `pageType`, is the route's to say in its load data
+     (app.d.ts types it): `reading` by default, `panel` or `tool` from a route
+     group's +layout.ts or one route's +page.ts. The shell does the rest. Keep
+     both page lines if you compose the shell differently, or the routes lose
+     what they asked for; `title` names a page the rail has no row for. -->
 
 <AppShell
 	{nav}
 	brandTitle="{% endraw %}{{ project_title }}{% raw %}"
 	currentPath={page.url.pathname}
-	measure={page.data.measure ?? 'wide'}
-	padded={page.data.padded ?? true}
+	pageType={page.data.pageType}
+	title={page.data.title}
 	onSearch={() => (paletteOpen = true)}
 >
 	<!-- The workspace switch, for whoever has more than one to switch between —

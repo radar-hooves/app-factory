@@ -60,5 +60,7 @@ describe('ContentSkeleton', () => {
 		render(ContentSkeleton, { props: { shape: 'prose' } });
 		expect(screen.getByRole('status')).toHaveAttribute('data-shape', 'prose');
 		expect(hiddenBlock()).toHaveAttribute('aria-hidden', 'true');
+		// The page type caps the line; the skeleton only says it is prose.
+		expect(hiddenBlock()).toHaveAttribute('data-prose');
 	});
 });

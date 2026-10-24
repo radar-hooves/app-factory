@@ -144,7 +144,7 @@ function wideScreen() {
 	vi.mocked(window.matchMedia).mockImplementation(
 		(query: string) =>
 			({
-				matches: query === '(min-width: 1024px)',
+				matches: query === '(min-width: 64rem)',
 				media: query,
 				onchange: null,
 				addListener: vi.fn(),
@@ -255,9 +255,9 @@ describe('A persona page, through the app extension points', () => {
 		page.url = new URL('/chat/outrider', 'http://localhost');
 		page.state = {};
 		render(Shell);
-		const open = await screen.findByTestId('chat-past-questions');
+		const open = await screen.findByTestId('ds-page-pane-open');
 		expect(open.closest('header')).not.toBeNull();
-		expect(screen.queryByTestId('chat-past-column')).toBeNull();
+		expect(screen.queryByTestId('ds-page-pane')).toBeNull();
 		expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull();
 		// Nothing to start over from yet.
 		expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
@@ -273,11 +273,13 @@ describe('A persona page, through the app extension points', () => {
 
 	it('from 1024px, keeps past questions as a column beside the conversation, folding to its edge', async () => {
 		wideScreen();
-		at('/chat/outrider');
-		const column = await screen.findByTestId('chat-past-column');
+		page.url = new URL('/chat/outrider', 'http://localhost');
+		page.state = {};
+		render(Shell);
+		const column = await screen.findByTestId('ds-page-pane');
 		const past = within(column).getByRole('region', { name: 'Past questions' });
 		expect(within(past).getByRole('button', { name: 'New question' })).toBeTruthy();
-		expect(screen.queryByTestId('chat-past-questions')).toBeNull();
+		expect(screen.queryByTestId('ds-page-pane-open')).toBeNull();
 
 		await fireEvent.click(within(past).getByRole('button', { name: 'Hide past questions' }));
 		expect(screen.queryByRole('region', { name: 'Past questions' })).toBeNull();
@@ -313,7 +315,10 @@ describe('A persona page, through the app extension points', () => {
 	});
 
 	it('offers a new question from the bar once a conversation is open', async () => {
-		at('/chat/outrider?c=c1');
+		// In the shell, as the page always is: on a phone its pane is a closed sheet.
+		page.url = new URL('/chat/outrider?c=c1', 'http://localhost');
+		page.state = {};
+		render(Shell);
 		await screen.findAllByTestId('app-turn');
 		fake.goto.mockClear();
 		await fireEvent.click(screen.getByRole('button', { name: 'New question' }));

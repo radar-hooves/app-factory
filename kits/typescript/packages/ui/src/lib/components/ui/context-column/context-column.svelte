@@ -1,18 +1,17 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
 	import StatList from '../stat-list/stat-list.svelte';
 	import type { StatItem } from '../stat-list/stat-list.svelte';
-	import AppDialog from '../app-dialog/app-dialog.svelte';
 	import Panel from '../panel/panel.svelte';
 	import * as Tooltip from '../tooltip/index.js';
 	import IconAction from '../list-toolbar/icon-action.svelte';
-	import PanelRight from '@lucide/svelte/icons/panel-right';
+	import PageAside from '../app-shell/page-aside.svelte';
 	import X from '@lucide/svelte/icons/x';
 
-	// The persistent right-hand context column, identical on every route, in
-	// one of two forms.
+	// The page's context, in one of two forms, as the page's aside: the shell
+	// places it by the route's page type (`PageAside`), at a tool page's right
+	// edge or opened from the bar as a sheet below 80rem of window, so this sets
+	// no width and no breakpoint of its own.
 	//
 	// A list page's: one standing "At a glance" stat card and, beneath it, a
 	// Find or the selected row's detail (the `detail` snippet). The stat card
@@ -21,25 +20,10 @@
 	//
 	// A record page's (`title` and `children`): the one item the page has
 	// opened, a card with its title and a close button whose body scrolls
-	// inside it, as tall as what it holds up to the column. A click elsewhere
-	// on the page swaps it, and it is never empty: the page opens it on what
-	// needs the viewer first, and a close reopens that. An opened item's
-	// document (`documentPane`, a DocumentPane) takes the column's place, and
-	// stands beside it as a third pane once the page's row has room for three:
-	// 1250px of row, which a 1600px screen gives with the rail open. The row,
-	// not the screen, decides, so a folded rail or a narrow window is read
-	// as the room the page actually has.
-	//
-	// Width is clamped (shared-design-language §6) so a wide screen earns
-	// information, not emptiness. The column is a flex child of the page body row;
-	// the stat card is shrink-0 and any detail takes the remaining height with its
-	// own inner scroll.
-	//
-	// Below xl (1280px) a fixed nav rail plus a ~400px column would crush the
-	// primary pane, so the standing `<aside>` stays hidden there — but its content
-	// does not vanish with it. A floating trigger opens the identical content in a
-	// dialogue instead: the column's shape is a desktop affordance, the
-	// information inside it is not.
+	// inside it. A click elsewhere on the page swaps it, and it is never empty:
+	// the page opens it on what needs the viewer first, and a close reopens
+	// that. An opened item's document (`documentPane`, a DocumentPane) takes
+	// the item's place.
 	type ListForm = {
 		stats: StatItem[];
 		statsTitle?: string;
@@ -60,7 +44,7 @@
 		onClose?: () => void;
 		/** The opened item. */
 		children: Snippet;
-		/** The opened item's document: a DocumentPane, in the column's place or beside it. */
+		/** The opened item's document: a DocumentPane, in the item's place. */
 		documentPane?: Snippet;
 		stats?: never;
 		statsTitle?: never;
@@ -78,55 +62,13 @@
 		onClose,
 		children,
 		documentPane,
-		/** The column's name: its landmark's, its opener's and its dialogue's.
+		/** The column's name: its landmark's, its opener's and its sheet's.
 		    Defaults to the opened item's title, else the stat card's. */
-		ariaLabel,
-		ref = $bindable(null),
-		class: className,
-		...restProps
-	}: Omit<WithElementRef<HTMLAttributes<HTMLElement>>, 'title' | 'children'> &
-		(ListForm | RecordForm) & { ariaLabel?: string } = $props();
+		ariaLabel
+	}: (ListForm | RecordForm) & { ariaLabel?: string } = $props();
 
-	let sheetOpen = $state(false);
-	/**
-	 * The page row the column stands in, by its width; null until read, so a
-	 * document is placed once rather than mounted in the column and moved.
-	 * Crossing the threshold later moves it, opening it afresh.
-	 */
-	let row = $state<number | null>(null);
-	$effect(() => {
-		const parent = ref?.parentElement;
-		if (!parent) return;
-		row = parent.clientWidth;
-		if (typeof ResizeObserver === 'undefined') return;
-		const observer = new ResizeObserver(([entry]) => (row = entry?.contentRect.width ?? 0));
-		observer.observe(parent);
-		return () => observer.disconnect();
-	});
-	// Below xl the opener floats over the page's corner, so the shell ends its
-	// padded content with room for it (`--ds-float-reserve`, read by
-	// CONTENT_PADDING) and a list scrolled to its end clears it. The opener's top
-	// edge sits 3.75rem up; 4.5rem leaves a gap, less any lift a page control sets.
-	$effect(() => {
-		if (typeof window === 'undefined' || !window.matchMedia) return;
-		const narrow = window.matchMedia('(max-width: 79.99rem)');
-		const root = document.documentElement;
-		const sync = () =>
-			narrow.matches
-				? root.style.setProperty('--ds-float-reserve', 'calc(4.5rem - var(--ds-report-clearance, 0px))')
-				: root.style.removeProperty('--ds-float-reserve');
-		sync();
-		narrow.addEventListener('change', sync);
-		return () => {
-			narrow.removeEventListener('change', sync);
-			root.style.removeProperty('--ds-float-reserve');
-		};
-	});
-	/** Room for the document beside the column, not in its place. */
-	const BESIDE = 1250;
-	const beside = $derived(row !== null && row >= BESIDE);
 	const name = $derived(ariaLabel ?? title ?? statsTitle);
-	/** The dialogue's title is the body's own heading, so the body leaves it to the dialogue. */
+	/** The sheet's title is the body's own heading, so the body leaves it to the sheet. */
 	const headed = $derived(name === (children ? title : statsTitle));
 </script>
 
@@ -136,77 +78,36 @@
 	</Tooltip.Provider>
 {/snippet}
 
-{#snippet item(framed: boolean)}
-	{#key title}
-		<Panel
-			title={framed ? undefined : title}
-			subtitle={framed ? undefined : subtitle}
-			action={onClose && !framed ? close : undefined}
-			pad={false}
-			scroll
-			class="max-h-full min-h-0"
-			data-slot="context-column-item"
-		>
-			{@render children?.()}
-		</Panel>
-	{/key}
-{/snippet}
-
-<!-- `framed`: the dialogue's own header carries the name, with its subtitle or
-     info, so the body leaves its heading out rather than repeat it. -->
-{#snippet body(framed: boolean)}
-	{#if children}
-		{#if documentPane && row !== null && !beside}{@render documentPane()}{:else}{@render item(framed)}{/if}
-	{:else}
-		<StatList items={stats ?? []} title={statsTitle} info={statsInfo} bare={framed} />
-		{#if detail}
-			{@render detail()}
-		{/if}
-	{/if}
-{/snippet}
-
-<aside
-	bind:this={ref}
-	aria-label={name}
-	class={cn(
-		'hidden max-h-full min-h-0 w-[clamp(360px,28vw,460px)] shrink-0 flex-col gap-5 xl:flex',
-		className
-	)}
-	data-slot="context-column"
-	{...restProps}
->
-	{@render body(false)}
-</aside>
-
-{#if children && documentPane && beside}
-	<div class="hidden min-h-0 min-w-0 flex-1 flex-col xl:flex" data-slot="context-column-document">
-		{@render documentPane()}
-	</div>
-{/if}
-
-<!-- The reachable stand-in below xl. `size-11` (44px) rather than this
-     package's usual 36px control row: this is the one control whose entire
-     job is making otherwise-unreachable content reachable, so it earns the
-     full touch-target minimum rather than the shell's ordinary density.
-     It lifts by `--ds-report-clearance` when a page control (the librarian
-     composer) shares the corner. -->
-<button
-	type="button"
-	onclick={() => (sheetOpen = true)}
-	class="border-border bg-card text-muted-foreground hover:text-foreground ds-edge fixed right-4 bottom-[calc(1rem+var(--ds-report-clearance,0px)+env(safe-area-inset-bottom))] z-30 grid size-11 flex-none place-items-center rounded-full border xl:hidden"
-	aria-label="Open {name}"
->
-	<PanelRight class="size-4.5" />
-</button>
-
-<AppDialog
-	bind:open={sheetOpen}
-	title={name}
-	subtitle={headed && children ? subtitle : undefined}
-	info={headed && !children ? statsInfo : undefined}
-	size="sm"
->
-	<div class={cn('flex flex-col gap-5', children && documentPane && 'h-[70dvh]')}>
-		{@render body(headed)}
-	</div>
-</AppDialog>
+<!-- In the sheet the header names the column, so a body headed by the same
+     name leaves its heading to it, and the line under the heading goes with it. -->
+<PageAside label={name} description={headed ? (children ? subtitle : statsInfo) : undefined}>
+	{#snippet body(state)}
+		{@const framed = state.mode === 'sheet' && headed}
+		<div class="flex min-h-0 flex-1 flex-col gap-5" data-slot="context-column">
+			{#if children}
+				{#if documentPane}
+					{@render documentPane()}
+				{:else}
+					{#key title}
+						<Panel
+							title={framed ? undefined : title}
+							subtitle={framed ? undefined : subtitle}
+							action={onClose && !framed ? close : undefined}
+							pad={false}
+							scroll
+							class="max-h-full min-h-0"
+							data-slot="context-column-item"
+						>
+							{@render children?.()}
+						</Panel>
+					{/key}
+				{/if}
+			{:else}
+				<StatList items={stats ?? []} title={statsTitle} info={statsInfo} bare={framed} />
+				{#if detail}
+					{@render detail()}
+				{/if}
+			{/if}
+		</div>
+	{/snippet}
+</PageAside>

@@ -85,7 +85,7 @@
 			{/if}
 		</div>
 		{#if description}
-			<p class="text-muted-foreground ds-measure text-sm" data-measure="prose">{description}</p>
+			<p class="text-muted-foreground text-sm" data-prose>{description}</p>
 		{/if}
 	</header>
 	{@render children?.()}

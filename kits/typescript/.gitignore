@@ -11,3 +11,5 @@ build/
 # shipped through the package's "files"; never edited by hand. dist/ is ignored
 # repo-wide.
 packages/ui/registry/
+# The layout gate's screenshots and report (`pnpm layout-gate` in the console).
+packages/console/test-results/

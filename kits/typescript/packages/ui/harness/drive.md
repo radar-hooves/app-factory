@@ -1,15 +1,15 @@
 # Real-browser verification
 
-Twelve surfaces, selected by `?surface=`: the default `shell` (AppShell,
-below), plus `states` (the async-outcome surfaces), `card` (CardTitle's
-heading mode), `overlays`, `overflow`, `avatar`, `palette` (the palette
-catalogue), `theming`, `detail-panel`, `nested` (nested navigation),
-`console` (the console-dashboard primitives) and `mobile-audit` (a realistic
-composed page, driven by eye at phone/tablet/desktop) — each in its own
-section at the end. (This count predates several later additions —
-`page-canvas` and `fact-grid` among them — that were never folded back into
-the tally; read the `{#if surface === '…'}` chain in `App.svelte` for the
-actual list.)
+Surfaces, selected by `?surface=`: the default `shell` (AppShell, below), plus
+`pages` (the three page types, with an aside and a pane), `prose` (rendered
+HTML in a reading page), `settings` (a panel page), `records` and `record`
+(tool pages with a ContextColumn aside), `states` (the async-outcome surfaces),
+`card` (CardTitle's heading mode), `overlays`, `overflow`, `avatar`, `palette`
+(the palette catalogue), `theming`, `detail-panel`, `nested` (nested
+navigation), `texture`, `console` (the console-dashboard primitives),
+`mobile-audit` (a realistic composed page, driven by eye at phone/tablet/desktop)
+and the page-kit, reader, canvas, ledger and graph surfaces — each in its own
+section. The `{#if surface === '…'}` chain in `App.svelte` is the list.
 
 ## Two ways to drive it
 
@@ -20,7 +20,8 @@ pnpm run test:browser        # harness:build + drive.mjs, exits non-zero on fail
 ```
 
 It covers the claims a machine can make unattended — the overlay animations, the
-shell's content-region measurements at two phone widths, the nav's contrast
+shell's content-region measurements at two phone widths, the page types' widths,
+gutters and columns at laptop, desktop and phone widths, the nav's contrast
 against its chrome across three palettes and both themes, and the avatar's real
 load-state swap — and prints every observed value beside its verdict, passing or
 failing. Everything else in this file is driven by hand (the household's
@@ -662,7 +663,7 @@ completeness but carry no scripted check of their own.
 
 ## Phone/tablet chrome, driven by eye (`?surface=mobile-audit`)
 
-A realistic composed page — a nine-section rail with two branches, the
+A realistic composed page (a `tool` page) — a nine-section rail with two branches, the
 `actions` slot carrying two StatusBadges, the real `AppIdentity` (its
 dropdown carrying both an identity row and a `workspace` row) in the
 `identity` slot, an eight-column `DataTableTanstack`, a six-card `TileGrid`
@@ -685,8 +686,10 @@ crowding, not one component in isolation:
   read "S". It is icon-only below `sm`, matching the menu and theme-toggle
   buttons either side of it.
 - `ContextColumn` hid outright below `xl` (1280px) — tablet included — with
-  no way to reach the stats or the selected-row detail inside it. It now
-  opens the same content in an `AppDialog` from a floating trigger.
+  no way to reach the stats or the selected-row detail inside it. It is now the
+  page's aside: a column at the frame's right edge from 80rem of window, and a
+  sheet opened from a bar button below it (no floating trigger, no dialog of
+  its own). The surface is a `tool` page.
 - Nothing in the shell accounted for a device notch or a home-indicator
   gesture bar: `env(safe-area-inset-*)` reached none of the sticky bar, the
   full-height drawer or the scrolling content's own bottom padding.
@@ -823,90 +826,44 @@ measuring, which is what makes the 0 meaningful rather than tuned. The same wait
 was then needed on the collapsed rail, whose 200ms width transition was being
 read at 243px and read as though the collapse had not happened.
 
-## The content measure (`?surface=measure&measure=<tier>`)
+## Page types (`?surface=pages&type=reading|panel|tool`)
 
-One page body rendered at each of the four tiers, so the only thing that can
-move a measured width is the prop. Driven at 2560px (the viewport that motivated
-the feature), 1440px (where the wide tiers must be inert) and 360px. Scripted in
-`drive.mjs`.
+A route declares what it is, `reading` (the default), `panel` or `tool`, and the
+shell owns every width, gutter and column that follows (`app-shell/page.ts`,
+`.ds-page*` in `styles.css`). Query: `aside=1` registers a page aside, `pane=1` a
+panel's pane (it folds to the rail's collapsed width), `collapsed=1` starts the
+rail collapsed. Scripted in `drive.mjs`, measured with `getBoundingClientRect`
+at window widths **1280, 1673 and 1920** (the rail expanded and collapsed where
+the region it leaves decides the outcome) and **390**.
 
-Every claim here is a resolved LENGTH, which is why none of it can be made under
-jsdom: `max-width` comes back as the unresolved `var(--ds-shell-measure-*)`
-literal, `ch` resolves against a font that was never loaded, and every rect is
-zero, so a unit test would pass against a build whose stylesheet was never
-imported. A class-name assertion is not a width measurement.
+Every claim is a resolved length: jsdom reports `max-width` as the unresolved
+`var()` literal and every rect as zero, so a unit test there would pass against a
+build whose stylesheet was never imported. The container queries read the
+CONTENT REGION (`main`), not the window, so a collapsed rail changes the answer
+at the same window width.
 
-| Claim                                                                          | Why jsdom cannot make it                                                                    | Observed                                                    |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `full` leaves the box at the whole available width                             | no layout; `max-width: none` and a bound cap measure identically                            | 2312 of 2312px, `max-width: none`                           |
-| `page` renders at 80rem, against the root font size the document resolved      | rem resolution is a cascade fact                                                            | 1280px vs 80 × 16px                                         |
-| `wide` renders at 120rem                                                       | same                                                                                        | 1920px vs 120 × 16px                                        |
-| `prose` renders at 40rem against the root font size the document resolved       | rem resolution is a cascade fact                                                            | 640px vs 40 × 16px                                          |
-| `prose` puts running text in the readable 45–90 character band                 | characters-per-line is text layout, the thing jsdom most completely lacks                   | **70 characters per line, against 283 at `full`**           |
-| The scale widens strictly, narrowest first                                     | no layout                                                                                   | 640 < 1280 < 1920 < 2312                                 |
-| A capped box is centred, not flush left                                        | auto margins inside a flex column resolve only in an engine                                 | gaps equal to 0.01px at every tier (836/836 at prose) |
-| A cap is a ceiling, never a floor — `page`/`wide` change nothing at 1440px     | whether a cap binds depends on available width, which requires layout                       | 1192px at `page`, `wide` and `full` alike                   |
-| No tier introduces sideways scroll at 360px                                    | the content region is its own scroller, so the document-level number cannot move (see `#5`) | 0 offenders, `main` overflow 0px, all four tiers            |
+| Claim | Why jsdom cannot make it | Observed |
+| --- | --- | --- |
+| Reading: the column is 44rem (704px), centred in the region | rem resolution and grid centring are layout | 704px at every width and rail state; centre equal to the region's |
+| Reading: the aside stands beside the column from a 1056px region, the pair (704 + 48 + 320) centred, its top on the column's | a container query on the region | beside at regions 1224, 1425, 1617, 1672, 1864; following at 1032 (1280px, rail open) |
+| Reading: below 1056px the aside follows the column, same left edge | same | aside left 412px = column left 412px; aside top 2038px below column bottom 1998px |
+| Reading: three paragraphs of 20, 14 and 12px type end at the column's one right edge | `rem` is why the column is not `ch`: `ch` resolves per element | every box at the column's right edge (1116px at 1280, rail open); no line reaches past it |
+| Panel: the pane's left edge is the rail's right edge, its width the rail token (248px) even beside a collapsed rail | flush layout, a token resolved against the root size | pane left = rail right (248px, or 56px collapsed); width 248px in both |
+| Panel: the first block starts at the pane's right edge plus the gutter (1/2/3rem at <40/40/64rem of region) and no block is wider than 52rem (832px) | gutter scale and cap are container-query and rem facts | gutter 48px; blocks 832px, or 688px where the region leaves no more (1280px, rail open) |
+| Panel: folded, the pane is the rail's collapsed width (56px) and the content follows | same | pane 56px, flush; first block one gutter (48px) past it |
+| Panel: the pane is a column from 1024px of window and a sheet from the bar below it | `matchMedia` | 1024 column, 1023 sheet |
+| Panel at 390: no pane in the page; the bar's `ds-page-pane-open` opens a sheet with the 12-row list; the bar names the pane's `location` | a sheet is a layout fact | pane absent; 12 rows; sheet at left 0; "Sections › Section A" |
+| Tool: `<main>` does not scroll with a 200-row fill | scroll heights are 0 in jsdom | scrollHeight = clientHeight (844 of 844px at 1280x900) at five window sizes |
+| Tool: the frame is the region's height; the fill's bottom sits one block-padding above the frame's, and the rows scroll inside the fill | same | fill bottom 872px, frame bottom 900px, padding 28px (16px at 390) |
+| Tool: with an aside at ≥1280px the aside is flush with the frame's right edge, full height, behind a 1px left rule, 20-28rem wide | flush layout | right edges equal; 1px solid; 320px at 1280, 342-447px above |
+| Tool: below 1280px the aside is gone from the page and `ds-page-aside-open` opens it as a sheet on the right | `matchMedia` and a sheet's box | 1279, 1024, 390 |
+| Phone 390: no sideways scroll on the document or on `[data-slot=app-shell-content]`, for each type | the region is its own scroller, so the document-level number is blind (see `#5`) | 0px on both, all five combinations |
+| Large screens: nothing changes up to 2560px; 3840px grows the root to 24px and the column with it | rem resolution | root 16px to 24px; column 704px to 1056px |
 
-### Additivity, measured against the pre-change build
-
-The operator's hard constraint on this feature was that no consumer omitting
-`measure` may render one pixel differently. That is asserted permanently in two
-places — `src/test/app-shell-measure.test.ts` holds the DOM half, and the three
-`a shell that never names measure is uncapped and unmoved` checks above hold the
-pixel half at 2560/1440/360px — but neither can compare against a build that no
-longer exists, so the cross-build diff was done out of band.
-
-`dist` and the harness were built at the pre-change commit, the `shell`,
-`overflow` and `nested` surfaces captured at 2560px, 1440px and 360px, and the
-same capture repeated on this build. Compared per surface/viewport pair: the
-whole `<main>` subtree's `outerHTML`, the content box's class string, its full
-attribute set, its measured width, its offset inside `<main>`, and its computed
-`max-width`, `margin-left`, `margin-right` and padding.
-
-All nine pairs identical on all ten fields — not "no visible difference", but the
-same markup and the same numbers. `measure="full"` passed explicitly is checked
-against the omitted case in the same run, since a consumer adopting the scale and
-then wanting one layout uncapped must land back where they started.
-
-### The character band is font-robust, measured across faces
-
-A fixed character band would be a fragile assertion if the number moved with
-whatever face the runner happened to resolve — CI is `ubuntu-latest` and picks a
-different fallback than a Mac. So it was driven across eight faces at 2560px,
-including the metric extremes:
-
-| Face                                                                      | Box width | Characters per line |
-| ------------------------------------------------------------------------- | --------- | ------------------- |
-| harness default (Avenir Next)                                             | 668.16px  | 80                  |
-| DejaVu Sans / Liberation Sans / Ubuntu / Arial / monospace / `sans-serif` | 640.69px  | 80                  |
-| Times New Roman                                                           | 576px     | 75                  |
-
-The BOX moves by 92px across that set; the characters on a line move by five.
-That is the property that makes `ch` the right unit for this tier rather than a
-coincidence: the cap and the glyph advance scale together, so the measure holds
-its meaning in a face nobody anticipated. The 45–90 band has margin on both
-sides at every face tried, so it is a real bound rather than one tuned to the
-number this machine happens to produce.
-
-`readGeometry` awaits `document.fonts.ready` before measuring, and prints the
-resolved family beside the count. The harness ships no `@font-face` at all —
-it compiles the consumer's stylesheet over the built package, and the body stack
-falls through to a locally available face — so that await is a no-op today. It
-is there because the day this harness self-hosts a face, every number here would
-begin being read a frame early, and that would surface as a CI flake rather than
-as anything a reader could diagnose.
-
-### Why `prose` is a tier rather than the narrow end of `page`
-
-The measurement above is the argument. At 2560px with no cap, the same paragraph
-runs to **311 characters per line**; the accepted band for continuous text is
-45–90. A shared measure that shipped one page-frame width and let running text
-span a 4K panel would be worse than the fifteen hand-written caps it replaces,
-because it would be worse _everywhere at once_ and no page could opt out without
-going back to writing its own width. `prose` is stated in `ch` rather than `rem`
-for the same reason: a reading measure is a count of characters, so it has to
-track whatever face and size the app actually set.
+The same surfaces serve the `settings` claims (a `panel` page whose pane is
+`SettingsShell`'s section list: 248px, flush, the content scrolling inside itself
+and `<main>` not, the bar naming "Settings › Users", a sheet on a phone) and the
+`records` and `record` ones below.
 
 ## The content texture (`?surface=texture&texture=<grid|none>`)
 
@@ -927,7 +884,7 @@ it. "Does not print" is a media state.
 | A named texture resolves to two real gradient layers on the content region | `background-image` is empty in jsdom whether or not the CSS loaded  | 2 `radial-gradient` layers                                         |
 | Both inks resolve through their `var()`/`color-mix()` fallbacks            | no cascade; an unresolvable chain is silently invalid, not an error | no `var(` and no `color-mix(` survive: `oklch(0.5 0.155 250/0.06)` |
 | The floor travels with the content, not with the box                       | `background-attachment` has no DOM trace at all                     | `local, local`; measured by photograph below                       |
-| The scroller carries it; the measured box does not                         | needs the resolved background on each element                       | `main` class+`data-texture`, box `background-image: none`          |
+| The scroller carries it; the page frame does not                           | needs the resolved background on each element                       | `main` class+`data-texture`, frame `background-image: none`          |
 | No element is added, and the region still scrolls                          | jsdom has no layout, so it reports 0 scroll either way              | 1 child, `overflow-y: auto`, 2570px of scroll                      |
 | An app override of `--ds-shell-texture-grid-ink` reaches the painted grid  | custom-property resolution at the point of use is a cascade fact    | `rgb(11, 22, 33)` present in the computed value                    |
 | An override of `--ds-shell-texture-grid-pitch` reaches the tile size       | same                                                                | `background-size: … 48px 48px`                                     |
@@ -981,14 +938,14 @@ opens no stacking context.
 
 ### Additivity, measured against the pre-change build — now a script
 
-The operator's hard constraint, the same one `measure` was held to: no consumer
+The operator's hard constraint, the same one `level` was held to: no consumer
 that does not ask for a texture may render one pixel differently. Asserted
 permanently in `src/test/app-shell-texture.test.ts` (the DOM half) and in the
 three `a shell that never names texture paints none` checks above (the resolved-
 background half), but neither can compare against a build that no longer exists.
 
 That cross-build half used to be done by hand and written up here as a
-paragraph — for `level`, for `children` and for `measure` — and a paragraph is
+paragraph — for `level` and for `children` — and a paragraph is
 where the claim went to die: "all nine pairs identical on all ten fields" gave
 the next reader no way to re-derive it, which adversarial review correctly called
 an unverifiable claim as shipped. So the procedure is now `additivity.mjs`:
@@ -1001,8 +958,8 @@ node harness/additivity.mjs "$(npm view @poodle64/ui@2026.9.22 gitHead)"   # aga
 It builds the package at the base ref in a throwaway git worktree (a full
 install, deliberately: borrowing this checkout's `node_modules` would resolve the
 workspace links back into current sources and silently build the "base" from the
-new code), renders the five surfaces an existing consumer already has — `shell`,
-`shell&pagenav=1`, `overflow`, `nested`, `measure&measure=page` — at 2560px,
+new code), renders the four surfaces an existing consumer already has — `shell`,
+`shell&pagenav=1`, `overflow`, `nested` — at 2560px,
 1440px and 360px, and diffs, per pair: the whole `<main>` subtree's `outerHTML`,
 its full attribute set, the content box's attribute set, `<main>`'s computed
 `background-image`, `background-color`, `background-size`, `background-repeat`,
@@ -1020,7 +977,7 @@ attributes them to `nested` and `measure`, which is exactly what those two
 releases changed.
 
 The surfaces are deliberately the opt-in-free ones. Adding a surface that names
-`texture` or `measure` would defeat the point: the only question this asks is
+`texture` would defeat the point: the only question this asks is
 what happens to somebody who did not ask for anything.
 
 It is not wired into `pnpm test` — it installs and builds a second copy of the
@@ -1339,7 +1296,7 @@ its shadow shows no ring; all four fail. Unwindowed, the same 5,000 rows mounted
 ## Lists that are not money, and a record's page (`?surface=records`, `?surface=record`) — radar-hooves/godswood, 08/10/2026
 
 The RecordList wears the ledger's look and the record page holds one opened item
-beside its document; `src/test/record-list.test.ts` and
+in its aside, its document taking the item's place; `src/test/record-list.test.ts` and
 `src/test/context-column-record.test.ts` hold the behaviour, this the layout.
 The data is invented (this repo is public). Query: `list=<properties|managers|pnl|tools>`
 on `records`; `doc=1` opens a lease, `open=<section>` a section, `switcher=1`
@@ -1352,10 +1309,10 @@ the switcher's menu, on `record`.
 | 390px: the phone's list, nothing sideways | layout `phone`, 0px overflow |
 | A click on a row's cells reaches its link; a control in a cell takes its own | `#/property/3`; the tool's own handler ran |
 | Grouped, the rows scroll under a head that stays, each label on the ground above its card | head drift 0px after a 200px scroll |
-| The opened item is as tall as what it holds, and in a short window stops at the column and scrolls inside | 698px in a 988px column; bottom 572 on 572, scrolling |
+| The opened item is as tall as what it holds, and in a short window stops at the aside and scrolls inside | 718px in a 1044px aside; bottom 572 inside 600, scrolling |
 | A section's click swaps the column and marks its line, and nothing in the left pane moves | title Insurance, the line `aria-current`, top unmoved |
-| With no room for three panes the document fills the column's place, its page inside it | pane 788px in a 788px column |
-| With a 1576px row (1920px screen) the document is a third pane beside the column, nothing sideways | primary, column, document left to right; 0px overflow |
+| The document takes the item's place in the aside, filling it to its padding, its page inside it | pane height + the aside's block padding = the aside's height (844px) |
+| At 1920px the document is still in the one aside, never a third pane; nothing sideways | page, aside left to right; 0px overflow |
 | The switcher is raised with its chevron inside, opens on the open record with its search focused, and goes where the keyboard chooses | border 1px; highlighted 4. Banksia; `eum` then Enter reached `#/property/1` |
 
 ## GraphCanvas (`?surface=graph`) — `harness/graph.mjs`

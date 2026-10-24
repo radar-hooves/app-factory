@@ -1,11 +1,11 @@
 <!--
 	One persona: a person's conversations with it, built from
 	@poodle64/librarian's own `Chat` and components
-	(app-factory docs/design/agent-console.md). Past questions are a column
-	beside the conversation from 1024px, in the page and not the rail, folded to
-	its edge or open as the reader left it, New question at its head and Clear
-	all at its foot; narrower, the bar's own action opens them in a sheet
-	(operator, 24/10/2026). The address names the persona,
+	(app-factory docs/design/agent-console.md). A `panel` page: past questions
+	are its pane, flush against the rail from 1024px, folded to its edge or open
+	as the reader left it, New question at its head and Clear all at its foot;
+	narrower, the bar's own action opens them in a sheet (operator, 24/10/2026).
+	The shell draws all of that; this page says what goes in it. The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), or the subject (`?group=<name>`, every collection
 	under it), so a link reopens or narrows it on any device,
@@ -35,11 +35,10 @@
 	import FairUseNotice from '@poodle64/librarian/fair-use-notice';
 	import { defaultVisuals } from '@poodle64/librarian/visuals';
 	import * as AlertDialog from '@poodle64/ui/alert-dialog';
-	import { ShellActions } from '@poodle64/ui/app-shell';
+	import { PagePane, type PageColumnState } from '@poodle64/ui/app-shell';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
-	import * as Sheet from '@poodle64/ui/sheet';
 	import { toast } from 'svelte-sonner';
 	import * as app from '$lib/agent/app';
 	import AskBox from '$lib/agent/ask-box.svelte';
@@ -69,39 +68,10 @@
 	// False until the library's list has arrived (or the persona reads none).
 	let listed = $state(false);
 	let missing = $state(false);
-	let listOpen = $state(false);
 	let clearing = $state(false);
-
-	// Past questions are a column beside the conversation from `WIDE`, folded
-	// to its edge or open as the reader last left it; narrower, a sheet the
-	// bar's own action opens (the operator, 24/10/2026).
-	const WIDE = '(min-width: 1024px)';
-	const FOLDED = 'ds-chat-past-folded';
-	let wide = $state(false);
-	let folded = $state(false);
-	$effect(() => {
-		const query = window.matchMedia?.(WIDE);
-		if (!query) return;
-		wide = query.matches;
-		const follow = (event: MediaQueryListEvent) => (wide = event.matches);
-		query.addEventListener('change', follow);
-		return () => query.removeEventListener('change', follow);
-	});
-	$effect(() => {
-		try {
-			folded = localStorage.getItem(FOLDED) === '1';
-		} catch {
-			// No storage: the column opens.
-		}
-	});
-	function fold(next: boolean) {
-		folded = next;
-		try {
-			localStorage.setItem(FOLDED, next ? '1' : '0');
-		} catch {
-			// Remembered for this visit only.
-		}
-	}
+	// Whether past questions show as their column (the shell decides, by width);
+	// where they do not, the bar above the transcript keeps New question.
+	let column = $state(false);
 
 	// Derived, so each follows its own value: `page.params` is a new object on
 	// every navigation, a conversation named in the address included.
@@ -175,7 +145,6 @@
 		collections = [];
 		listed = false;
 		missing = false;
-		listOpen = false;
 		// Read beside the personas, and waited on by nothing: a persona that
 		// reads no collections has its answer discarded.
 		const pending = id ? collectionsOf({ id }).catch((): Collection[] => []) : null;
@@ -272,7 +241,6 @@
 	}
 
 	function fresh() {
-		listOpen = false;
 		void goto(address(), { keepFocus: true, noScroll: true });
 	}
 
@@ -326,128 +294,90 @@
 	{@const c = chat}
 	{@const p = persona}
 	<!-- Nothing of the shell floats over the composer: feedback is the bar's, and
-	     the phone drawer's; so is the way to past questions where their column
+	     the phone drawer's; so is the way to past questions where their pane
 	     does not show. -->
-	{#if !wide}
-		<ShellActions>
-			<Button
-				variant="outline"
-				size="icon"
-				aria-label={words.pastQuestions}
-				title={words.pastQuestions}
-				aria-haspopup="dialog"
-				aria-expanded={listOpen}
-				onclick={() => (listOpen = true)}
-				data-testid="chat-past-questions"
-				class="pointer-coarse:size-11"
-			>
-				<HistoryIcon />
-			</Button>
-		</ShellActions>
-	{/if}
-	<div class="flex h-full min-h-0 flex-1">
-		{#if wide}
-			<!-- A second column flush against the rail, sized as the rail is (the
-			     shell's own tokens, open and folded): no width of its own. -->
-			<div
-				class="border-border flex min-h-0 flex-none flex-col border-r {folded
-					? 'w-(--ds-shell-rail-width-collapsed)'
-					: 'w-(--ds-shell-rail-width)'}"
-				data-testid="chat-past-column"
-			>
-				{#if folded}
-					<div class="flex flex-col items-center gap-1 py-2">
-						<Button
-							variant="ghost"
-							size="icon"
-							aria-label={words.showPastQuestions}
-							title={words.showPastQuestions}
-							onclick={() => fold(false)}
-						>
-							<PanelLeftOpenIcon />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							aria-label={words.newQuestion}
-							title={words.newQuestion}
-							onclick={fresh}
-						>
-							<SquarePenIcon />
-						</Button>
-					</div>
-				{:else}
-					<div class="min-h-0 flex-1 overflow-y-auto">
-						{@render past(c, () => fold(true))}
-					</div>
-					{@render clearFoot(c)}
-				{/if}
+	<PagePane
+		label={words.pastQuestions}
+		icon={HistoryIcon}
+		remember="ds-chat-past-folded"
+		fill
+		bind:column
+	>
+		{#snippet body(state)}{@render past(c, state)}{/snippet}
+		{#snippet foot()}{@render clearFoot(c)}{/snippet}
+		{#snippet folded({ unfold })}
+			<div class="flex flex-col items-center gap-1 py-2" data-testid="chat-past-folded">
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={words.showPastQuestions}
+					title={words.showPastQuestions}
+					onclick={unfold}
+				>
+					<PanelLeftOpenIcon />
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={words.newQuestion}
+					title={words.newQuestion}
+					onclick={fresh}
+				>
+					<SquarePenIcon />
+				</Button>
 			</div>
-		{/if}
-		<Conversation
-			turns={c.turns}
-			running={c.busy}
-			version={c.version}
-			answering={c.answering}
-			reopening={Boolean(c.conversationId) && c.turns.length === 0}
-			name={who}
-			welcome={p.blurb || undefined}
-			examples={p.examples}
-			onexample={(question) => (c.draft = question)}
-			{scope}
-			onregenerate={() => void c.again()}
-			onmark={(turn, verdict) => c.mark(turn, verdict)}
-			onshare={(turn, share) => c.share(turn, share)}
-			onedit={(position, text) => c.edit(position, text)}
-			loadWritten={(name, version) => c.loadArtefact(name, version)}
-			writtenUrl={(name, version, format) => c.artefactUrl(name, version, format)}
-			{visuals}
-			loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
-			oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
-			describeTool={extensions.describeTool}
-			turn={extensions.Turn ? presented : undefined}
-			lead={extensions.Home && !c.conversationId ? home : undefined}
-			working={extensions.Thinking ? thinking : undefined}
-			retrieves={Boolean(p.collections)}
-			onstop={() => void c.stop()}
-			toolbar={!wide && (c.conversationId || c.turns.length > 0) ? newQuestion : undefined}
-			{formatCost}
-			{copy}
-		>
-			{#snippet composer()}
-				<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
-				<AskBox
-					persona={p}
-					bind:value={c.draft}
-					bind:files={c.files}
-					running={c.busy}
-					sendWhileRunning={c.sendWhileRunning}
-					collections={choices}
-					{collection}
-					{group}
-					oncollection={(name) => narrow({ collection: name })}
-					ongroup={(name) => narrow({ group: name })}
-					turnCount={c.turns.length}
-					onnewquestion={fresh}
-					onsubmit={() => void c.ask(undefined, undefined, collection, [], group)}
-					onstop={() => void c.stop()}
-				/>
-			{/snippet}
-		</Conversation>
-	</div>
-	<Sheet.Root open={listOpen && !wide} onOpenChange={(open) => (listOpen = open)}>
-		<Sheet.Content
-			side="left"
-			showCloseButton={false}
-			aria-label={words.pastQuestions}
-			class="gap-0"
-		>
-			<div class="min-h-0 flex-1 overflow-y-auto">
-				{@render past(c)}
-			</div>
-			{@render clearFoot(c)}
-		</Sheet.Content>
-	</Sheet.Root>
+		{/snippet}
+	</PagePane>
+	<Conversation
+		turns={c.turns}
+		running={c.busy}
+		version={c.version}
+		answering={c.answering}
+		reopening={Boolean(c.conversationId) && c.turns.length === 0}
+		name={who}
+		welcome={p.blurb || undefined}
+		examples={p.examples}
+		onexample={(question) => (c.draft = question)}
+		{scope}
+		onregenerate={() => void c.again()}
+		onmark={(turn, verdict) => c.mark(turn, verdict)}
+		onshare={(turn, share) => c.share(turn, share)}
+		onedit={(position, text) => c.edit(position, text)}
+		loadWritten={(name, version) => c.loadArtefact(name, version)}
+		writtenUrl={(name, version, format) => c.artefactUrl(name, version, format)}
+		{visuals}
+		loadDocument={p.collections && !extensions.oncite ? personaDocuments(p) : undefined}
+		oncite={extensions.oncite ? (citation) => extensions.oncite!(p, citation) : undefined}
+		describeTool={extensions.describeTool}
+		turn={extensions.Turn ? presented : undefined}
+		lead={extensions.Home && !c.conversationId ? home : undefined}
+		working={extensions.Thinking ? thinking : undefined}
+		retrieves={Boolean(p.collections)}
+		onstop={() => void c.stop()}
+		toolbar={!column && (c.conversationId || c.turns.length > 0) ? newQuestion : undefined}
+		{formatCost}
+		{copy}
+	>
+		{#snippet composer()}
+			<FairUseNotice quota={c.quota} supportHref={c.quota?.support_url ?? undefined} {copy} />
+			<AskBox
+				persona={p}
+				bind:value={c.draft}
+				bind:files={c.files}
+				running={c.busy}
+				sendWhileRunning={c.sendWhileRunning}
+				collections={choices}
+				{collection}
+				{group}
+				oncollection={(name) => narrow({ collection: name })}
+				ongroup={(name) => narrow({ group: name })}
+				turnCount={c.turns.length}
+				onnewquestion={fresh}
+				onsubmit={() => void c.ask(undefined, undefined, collection, [], group)}
+				onstop={() => void c.stop()}
+			/>
+		{/snippet}
+	</Conversation>
 	<AlertDialog.Root
 		open={clearing}
 		onOpenChange={(open) => {
@@ -482,17 +412,21 @@
 {/snippet}
 
 <!-- Past questions, in the column or the sheet: New question at their head,
-     each row dated under its day, each with its acts. -->
-{#snippet past(c: Chat, oncollapse?: () => void)}
+     each row dated under its day, each with its acts. The column folds; the
+     sheet closes, and does so on a choice too. -->
+{#snippet past(c: Chat, state: PageColumnState)}
 	<ConversationList
 		conversations={c.conversations}
 		failed={c.listFailed}
 		current={c.conversationId}
 		href={(id) => address(id)}
-		onopen={() => (listOpen = false)}
-		onnew={fresh}
-		onclose={oncollapse ? undefined : () => (listOpen = false)}
-		{oncollapse}
+		onopen={state.close}
+		onnew={() => {
+			state.close();
+			fresh();
+		}}
+		onclose={state.mode === 'sheet' ? state.close : undefined}
+		oncollapse={state.mode === 'column' ? state.fold : undefined}
 		onrename={(id, title) => c.rename(id, title)}
 		ondownload={(id) => c.download(id)}
 		ondelete={remove}
@@ -504,18 +438,16 @@
 <!-- Clear all, at the foot of past questions, behind its confirmation. -->
 {#snippet clearFoot(c: Chat)}
 	{#if c.clearable && (c.conversations?.length ?? 0) > 0}
-		<div class="border-border flex-none border-t p-2">
-			<Button
-				variant="ghost"
-				size="sm"
-				class="text-muted-foreground w-full justify-start"
-				onclick={() => (clearing = true)}
-				data-testid="chat-clear-all"
-			>
-				<TrashIcon />
-				{words.clearAll}
-			</Button>
-		</div>
+		<Button
+			variant="ghost"
+			size="sm"
+			class="text-muted-foreground w-full justify-start"
+			onclick={() => (clearing = true)}
+			data-testid="chat-clear-all"
+		>
+			<TrashIcon />
+			{words.clearAll}
+		</Button>
 	{/if}
 {/snippet}
 

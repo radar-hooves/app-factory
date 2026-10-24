@@ -30,19 +30,11 @@
 	 * carries route content the global affordance reads as global rather than as
 	 * part of the switcher next to it.
 	 *
-	 * Content WIDTH is the one dimension that came back, as `measure`, and it
-	 * came back on a measurement rather than on taste. "Always full-width" did
-	 * not remove the decision, it pushed it down into every page: a consumer was
-	 * surveyed at 2560px and had six distinct caps across nine routes, every one
-	 * of them a hand-written `mx-auto max-w-*` at the top of a `+page.svelte`,
-	 * between them using 15% to 79% of the width actually available. That is
-	 * fifteen independent guesses, not a shell shape.
-	 *
-	 * `measure` is a small named scale, chosen once in the layout, and it is not
-	 * the old `content` prop returning. It defaults to `full`, so a shell that
-	 * never mentions it renders byte-identically; its tiers are CSS custom
-	 * properties an app retunes without a release; and it exists to REPLACE
-	 * per-page width decisions rather than to offer an app a look.
+	 * Content WIDTH is not a prop. A route declares what it is (`pageType`:
+	 * `reading`, `panel` or `tool`, see page.ts) and the shell owns everything
+	 * that follows from it: the column's width and centring, the gutters, the
+	 * pane flush against the rail, the aside beside the content, and which of
+	 * them scrolls. The less an app decides, the better (operator, 24/10/2026).
 	 *
 	 * Content TEXTURE came back the same way, on the same kind of evidence. Two
 	 * apps had separately built one picture — a faint dot-grid floor with a soft
@@ -78,8 +70,15 @@
 	 *     </AppShell>
 	 */
 	import type { Snippet } from 'svelte';
-	import type { ShellMeasure } from './measure.js';
-	import { CONTENT_PADDING } from './padding.js';
+	import {
+		providePageSlots,
+		type PageAsideRegistration,
+		type PageColumnState,
+		type PagePaneRegistration,
+		type PageSlots,
+		type PageType
+	} from './page.js';
+	import ColumnScope from './column-scope.svelte';
 	import type { ShellTexture } from './texture.js';
 	import { toggleMode } from 'mode-watcher';
 	import Menu from '@lucide/svelte/icons/menu';
@@ -90,6 +89,9 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
+	import PanelLeft from '@lucide/svelte/icons/panel-left';
+	import PanelRight from '@lucide/svelte/icons/panel-right';
+	import * as Sheet from '../sheet/index.js';
 	import AppNav from './app-nav.svelte';
 	import { activeNavTitle, toItems, type NavSource } from './types.js';
 	import { shellReport } from './report.svelte.js';
@@ -117,10 +119,9 @@
 		searchPlacement = 'leading',
 		themeToggle = true,
 		onToggleTheme,
-		padded = true,
-		measure = 'full',
+		pageType = 'reading',
+		title,
 		texture = 'grid',
-		mainClass,
 		children
 	}: {
 		/** Navigation: bare items, groups, or a mix. Filter for permissions first. */
@@ -189,19 +190,17 @@
 		themeToggle?: boolean;
 		/** Override the theme action. Defaults to mode-watcher's toggleMode. */
 		onToggleTheme?: () => void;
-		padded?: boolean;
 		/**
-		 * How wide the page body may get, from a named scale: `prose` (40rem, for
-		 * long-form running text), `page` (80rem — forms, detail views,
-		 * settings), `wide` (120rem — indexes, grids, tables, dashboards), or
-		 * `full` (no cap).
-		 *
-		 * Defaults to `full`, so a shell that does not mention it is unchanged.
-		 * Set it in the layout, once: the point is that pages stop each deciding
-		 * their own width. The cap is the content box's border box, so `padded`
-		 * spends its padding inside the measure.
+		 * What the route is: `reading` (the default), `panel` or `tool`
+		 * (page.ts). The route declares it; the shell owns every width, gutter
+		 * and column that follows. Apps pass `page.data.pageType`.
 		 */
-		measure?: ShellMeasure;
+		pageType?: PageType;
+		/**
+		 * The page's own name, for the bar when neither the rail nor the page's
+		 * pane names where the reader is. Apps pass `page.data.title`.
+		 */
+		title?: string;
 		/**
 		 * The house atmosphere on the content region: `grid` (a dot-grid floor
 		 * plus a corner vignette) or `none`.
@@ -217,41 +216,143 @@
 		 * declaration; `none` turns it off.
 		 */
 		texture?: ShellTexture;
-		/** Extra classes on the scrolling content container. */
-		mainClass?: string;
 		children: Snippet;
 	} = $props();
 
 	const hasNav = $derived(toItems(nav).length > 0);
 
+	// The page's own columns, registered by `<PagePane>` and `<PageAside>`.
+	// Raw, not deep: a registration is stored as given, so the page that made it
+	// can find it again to withdraw it (a deep proxy would never equal it).
+	class Slots implements PageSlots {
+		pane = $state.raw<PagePaneRegistration | null>(null);
+		aside = $state.raw<PageAsideRegistration | null>(null);
+	}
+	const slots = new Slots();
+	providePageSlots(slots);
+
+	// A page that registers a pane is a panel page, whatever its route forgot to
+	// say: the pane is never dropped for a missing declaration.
+	const type = $derived<PageType>(slots.pane ? 'panel' : pageType);
+
 	// Where the user is, in words: the rail is icons when collapsed and a closed
 	// drawer on a phone, so the bar names the page, "Section › Page" inside a
-	// section and the item's one name otherwise. Settings has no row to name: it
-	// opens from the account menu, and its own page heads itself.
-	const location = $derived(activeNavTitle(nav, currentPath));
+	// section and the item's one name otherwise. A page the rail has no row for
+	// is named by its pane ("Settings › Account") or, failing that, its title.
+	const location = $derived(
+		activeNavTitle(nav, currentPath) ??
+			(type === 'panel' ? slots.pane?.location : undefined) ??
+			title
+	);
 
 	// The page's scope controls, registered by `<ShellControls>` from the route.
-	const controls: ShellControlsSlot = $state({ content: null, actions: null });
+	const controls: ShellControlsSlot = $state({ content: null });
 	provideShellControls(controls);
+
+	// A pane is a column from 64rem of window and a sheet below it; a tool or
+	// panel page's aside is a column from 80rem. A reading page's aside never
+	// becomes a sheet: below 66rem of content region it follows the column (CSS).
+	const PANE_WIDE = '(min-width: 64rem)';
+	const ASIDE_WIDE = '(min-width: 80rem)';
+	let paneWide = $state(true);
+	let asideWide = $state(true);
+	$effect(() => {
+		if (typeof window === 'undefined' || !window.matchMedia) return;
+		const pane = window.matchMedia(PANE_WIDE);
+		const aside = window.matchMedia(ASIDE_WIDE);
+		const sync = () => {
+			paneWide = pane.matches;
+			asideWide = aside.matches;
+		};
+		sync();
+		pane.addEventListener('change', sync);
+		aside.addEventListener('change', sync);
+		return () => {
+			pane.removeEventListener('change', sync);
+			aside.removeEventListener('change', sync);
+		};
+	});
+
+	const pane = $derived(type === 'panel' ? slots.pane : null);
+	const aside = $derived(slots.aside);
+	const paneColumn = $derived(pane !== null && paneWide);
+	const asideMode = $derived<PageColumnState['mode'] | null>(
+		aside === null
+			? null
+			: type === 'reading'
+				? 'stacked'
+				: asideWide
+					? 'column'
+					: 'sheet'
+	);
+
+	// The page may arrange itself around where its pane is drawn.
+	$effect(() => {
+		pane?.onmode?.(paneColumn ? 'column' : 'sheet');
+	});
+
+	// The fold is the reader's, remembered under the pane's own key.
+	let paneFolded = $state(false);
+	const foldKey = $derived(pane?.folded ? pane.remember : undefined);
+	$effect(() => {
+		const key = foldKey;
+		if (!key) {
+			paneFolded = false;
+			return;
+		}
+		try {
+			paneFolded = localStorage.getItem(key) === '1';
+		} catch {
+			paneFolded = false;
+		}
+	});
+	function setFolded(next: boolean) {
+		paneFolded = next;
+		const key = pane?.remember;
+		if (!key) return;
+		try {
+			localStorage.setItem(key, next ? '1' : '0');
+		} catch {
+			// Remembered for this visit only.
+		}
+	}
+
+	let paneSheetOpen = $state(false);
+	let asideSheetOpen = $state(false);
+	// A navigation puts a sheet away, and so does the window widening into a column.
+	$effect(() => {
+		void currentPath;
+		paneSheetOpen = false;
+		asideSheetOpen = false;
+	});
+	$effect(() => {
+		if (paneColumn || !pane) paneSheetOpen = false;
+		if (asideMode !== 'sheet') asideSheetOpen = false;
+	});
+
+	const paneState = $derived<PageColumnState>({
+		mode: paneColumn ? 'column' : 'sheet',
+		folded: paneColumn && Boolean(pane?.folded) && paneFolded,
+		fold: () => setFolded(true),
+		unfold: () => setFolded(false),
+		close: () => (paneSheetOpen = false)
+	});
+	const asideState = $derived<PageColumnState>({
+		mode: asideMode ?? 'stacked',
+		folded: false,
+		fold: () => {},
+		unfold: () => {},
+		close: () => (asideSheetOpen = false)
+	});
 
 	// Rail width is a personal preference: localStorage, one key across apps.
 	// A drag below RAIL_SNAP collapses; the width survives and returns on expand.
 	let railWidth = $state<number | null>(null);
 	let resizing = $state(false);
 
-	// The measure is resolved ONCE, and the class and the attribute both read
-	// that one answer. Two independently-worded conditionals looked symmetric
-	// and were not: Svelte omits an attribute whose value is `null`, while a
-	// class token under the same test survives, so `measure={null}` — which the
-	// type forbids but a loosely-typed prop bag or a nullable route field can
-	// still deliver — produced the class with no attribute and therefore no
-	// matching rule. Harmless to look at, but it breaks the DOM contract the
-	// additivity gate states, and a guarantee with a hole in it is not one.
-	const capped = $derived(measure != null && measure !== 'full' ? measure : null);
-
-	// The texture resolves the same way, and for the same reason: one answer
-	// feeding both the class and the attribute, so `texture={null}` from a
-	// loosely-typed prop bag cannot produce a class with no matching rule.
+	// The texture is resolved ONCE, one answer feeding both the class and the
+	// attribute, so `texture={null}` from a loosely-typed prop bag cannot
+	// produce a class with no matching rule.
 	const textured = $derived(texture != null && texture !== 'none' ? texture : null);
 
 	// The disclosure toggle and the region it opens have to be programmatically
@@ -757,9 +858,39 @@
 			{/if}
 
 			<div class="ml-auto flex flex-none items-center gap-2 sm:gap-3">
-				<!-- The page's own actions (`<ShellActions>`), before everything the bar
+				<!-- The page's own columns where they do not fit beside it: the pane
+				     and the aside open as sheets from here, before everything the bar
 				     carries on every page. -->
-				{#if controls.actions}{@render controls.actions()}{/if}
+				{#if pane && !paneColumn}
+					{@const Icon = pane.icon ?? PanelLeft}
+					<button
+						type="button"
+						onclick={() => (paneSheetOpen = true)}
+						class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border transition-colors pointer-coarse:size-11"
+						aria-label={pane.label}
+						title={pane.label}
+						aria-haspopup="dialog"
+						aria-expanded={paneSheetOpen}
+						data-testid="ds-page-pane-open"
+					>
+						<Icon class="size-4" />
+					</button>
+				{/if}
+				{#if aside && asideMode === 'sheet'}
+					{@const Icon = aside.icon ?? PanelRight}
+					<button
+						type="button"
+						onclick={() => (asideSheetOpen = true)}
+						class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border transition-colors pointer-coarse:size-11"
+						aria-label={aside.label}
+						title={aside.label}
+						aria-haspopup="dialog"
+						aria-expanded={asideSheetOpen}
+						data-testid="ds-page-aside-open"
+					>
+						<Icon class="size-4" />
+					</button>
+				{/if}
 
 				{#if onSearch && searchPlacement === 'trailing'}
 					{@render searchButton(
@@ -822,9 +953,9 @@
 			<!--
 				`texture` paints the house atmosphere HERE, on the scroller itself,
 				through `.ds-shell-texture` in styles.css. It is this element rather
-				than the content box below because the texture is the FLOOR the page
-				sits on: capped by `measure`, that box is narrower than the region, and
-				a floor that stopped at the measure would be a stripe.
+				than the page frame below because the texture is the FLOOR the page
+				sits on: a reading column is narrower than the region, and a floor that
+				stopped at the column would be a stripe.
 
 				It is a background rather than a layer, and that is the whole design
 				rather than an implementation detail. An absolutely positioned child
@@ -852,62 +983,81 @@
 				data-slot="app-shell-content"
 				tabindex="-1"
 				class={cn(
-					'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto',
-					textured && 'ds-shell-texture',
-					mainClass
+					'ds-shell-main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto',
+					textured && 'ds-shell-texture'
 				)}
 				data-texture={textured ?? undefined}
 			>
 				<!--
-					`min-w-0` on a flex child, for the same reason `<main>` and both
-					boxes above it carry it: a flex item's default `min-width: auto` can
-					size it by its own min-content rather than by its container.
-
-					Measured rather than assumed, and the measurement is worth writing
-					down because it contradicts the obvious reading: in THIS structure
-					the declaration is currently INERT. The automatic minimum size
-					applies to a flex item's MAIN axis, and `<main>` is a column, so this
-					box's width is already cross-axis stretch and cannot grow past its
-					container. Driving the harness at 375px and 320px, with and without
-					the declaration, against a plain page wrapper and an `mx-auto` one,
-					moved nothing — `harness/drive.mjs` pins that.
-
-					It stays because it is the correct declaration for the box, and
-					because the day this container becomes a row item the omission would
-					be invisible all over again. What it is NOT is the cause of the
-					sideways scroll in #5: that comes from a child with no scroller of
-					its own, which no sizing rule here can prevent — only the child
-					carrying its own scroller can, as this package's Table does. The half
-					of that defect the shell genuinely owns is on `<main>` above.
-				-->
-				<!--
-					`measure` caps and centres this box, through `.ds-shell-measure`
-					in styles.css rather than a utility here — an arbitrary max-width
-					utility only exists if the consumer's Tailwind build scanned the
-					file spelling it, and a cap that silently does not compile is the
-					failure mode this package gates against everywhere else. (Never
-					write the utility's class name in a comment: Tailwind scans
-					comments too, and compiles the placeholder it finds there.)
-
-					At `full` the class and the attribute are both ABSENT, not set to
-					a no-op value. That is what makes the prop additive: a consumer
-					who never names it gets the same element, the same class string
-					and the same declarations as before it existed, so there is
-					nothing for the cascade to resolve differently. Both read the
-					single `capped` answer above, so they cannot disagree.
+					The page's frame: one element whose type the route declared. Every
+					width, gutter and column is `.ds-page` in styles.css, read from
+					`data-page`, and no utility here: an arbitrary utility only exists if
+					the consumer's Tailwind build scanned this file. `data-aside` says
+					where the aside stands, `data-fill` that the content beside a pane
+					fills the frame.
 				-->
 				<div
-					class={cn(
-						'flex min-h-0 min-w-0 flex-1 flex-col',
-						'w-full',
-						capped && 'ds-shell-measure',
-						padded && CONTENT_PADDING
-					)}
-					data-measure={capped ?? undefined}
+					class="ds-page"
+					data-page={type}
+					data-aside={asideMode === 'sheet' ? undefined : (asideMode ?? undefined)}
+					data-fill={pane?.fill ? '' : undefined}
 				>
-					{@render children()}
+					{#if pane && paneColumn}
+						<!-- The body names itself (a list's own section, AppNav's nav). -->
+						<div
+							class="ds-page-pane"
+							data-folded={paneState.folded ? 'true' : undefined}
+							data-testid="ds-page-pane"
+						>
+							<ColumnScope>
+								{#if paneState.folded && pane.folded}
+									{@render pane.folded(paneState)}
+								{:else}
+									<div class="ds-page-pane-body">{@render pane.body(paneState)}</div>
+									{#if pane.foot}
+										<div class="ds-page-pane-foot">{@render pane.foot(paneState)}</div>
+									{/if}
+								{/if}
+							</ColumnScope>
+						</div>
+					{/if}
+					<div class="ds-page-main" data-slot="page-main">
+						{@render children()}
+					</div>
+					{#if aside && asideMode !== 'sheet'}
+						<aside class="ds-page-aside" aria-label={aside.label} data-testid="ds-page-aside">
+							<ColumnScope>{@render aside.body(asideState)}</ColumnScope>
+						</aside>
+					{/if}
 				</div>
 			</main>
 		</div>
 	</div>
 </div>
+
+<!-- The page's columns as sheets, where they do not fit beside the content. -->
+{#if pane && !paneColumn}
+	<Sheet.Root open={paneSheetOpen} onOpenChange={(open) => (paneSheetOpen = open)}>
+		<Sheet.Content side="left" showCloseButton={false} aria-label={pane.label} class="gap-0">
+			<ColumnScope>
+				<div class="ds-page-pane-body">{@render pane.body(paneState)}</div>
+				{#if pane.foot}
+					<div class="ds-page-pane-foot">{@render pane.foot(paneState)}</div>
+				{/if}
+			</ColumnScope>
+		</Sheet.Content>
+	</Sheet.Root>
+{/if}
+{#if aside && asideMode === 'sheet'}
+	<Sheet.Root open={asideSheetOpen} onOpenChange={(open) => (asideSheetOpen = open)}>
+		<Sheet.Content side="right" aria-label={aside.label} class="gap-0">
+			<Sheet.Header>
+				<Sheet.Title>{aside.label}</Sheet.Title>
+				{#if aside.description}<Sheet.Description>{aside.description}</Sheet.Description>{/if}
+			</Sheet.Header>
+			<div class="ds-page-aside-sheet">
+				<ColumnScope>{@render aside.body(asideState)}</ColumnScope>
+			</div>
+		</Sheet.Content>
+	</Sheet.Root>
+{/if}

@@ -6,6 +6,7 @@
 	import DetailPanel from '$lib/components/ui/detail-panel/detail-panel.svelte';
 	import AppDialog from '$lib/components/ui/app-dialog/app-dialog.svelte';
 	import DialogSection from '$lib/components/ui/dialog-section/dialog-section.svelte';
+	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
 	import ContextColumn from '$lib/components/ui/context-column/context-column.svelte';
 	import EmptyState from '$lib/components/ui/empty-state/empty-state.svelte';
 	import ErrorState from '$lib/components/ui/error-state/error-state.svelte';
@@ -60,33 +61,35 @@
 	{/snippet}
 </AppDialog>
 
-<ContextColumn
-	stats={[
-		{ label: 'Active', value: 3, status: 'success' },
-		{ label: 'Failed', value: 0, muted: true, status: 'error' }
-	]}
-	statsInfo="What these count."
-	ariaLabel="Record context"
-	data-testid="context-column-root"
->
-	{#snippet detail()}
-		{#if showDetail}
-			<DetailPanel
-				eyebrow="Record"
-				title="record-42"
-				status="warning"
-				statusLabel="Expiring"
-				onClose={() => (panelClosed = true)}
-				data-testid="detail-panel-root"
-			>
-				<p>Detail body</p>
-				{#snippet footer()}
-					<button type="button">Revoke</button>
-				{/snippet}
-			</DetailPanel>
-		{/if}
-	{/snippet}
-</ContextColumn>
+<!-- The column is the page's aside, so it is composed in a shell on a tool page. -->
+<AppShell nav={[]} currentPath="/" brandTitle="Harness" pageType="tool">
+	<ContextColumn
+		stats={[
+			{ label: 'Active', value: 3, status: 'success' },
+			{ label: 'Failed', value: 0, muted: true, status: 'error' }
+		]}
+		statsInfo="What these count."
+		ariaLabel="Record context"
+	>
+		{#snippet detail()}
+			{#if showDetail}
+				<DetailPanel
+					eyebrow="Record"
+					title="record-42"
+					status="warning"
+					statusLabel="Expiring"
+					onClose={() => (panelClosed = true)}
+					data-testid="detail-panel-root"
+				>
+					<p>Detail body</p>
+					{#snippet footer()}
+						<button type="button">Revoke</button>
+					{/snippet}
+				</DetailPanel>
+			{/if}
+		{/snippet}
+	</ContextColumn>
+</AppShell>
 
 <button type="button" onclick={() => (showDetail = !showDetail)}>Toggle detail</button>
 

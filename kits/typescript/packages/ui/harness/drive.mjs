@@ -1606,405 +1606,509 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	}
 }
 
-// ── The content measure ─────────────────────────────────────────────────────
-// This is the check the feature exists for, and it is a WIDTH, so it can only
-// be made here. Every claim the scale makes is a resolved length: `80rem`
-// and `40rem` against the root font size, a cap
-// that binds only once the viewport is wide enough to reach it, and a box
-// centred by auto margins inside a flex column. jsdom resolves none of them —
-// it hands back the unresolved `var()` literal for `max-width` and zero for
-// every rect — so a unit test there would pass against a build whose
-// stylesheet was never imported. A class-name assertion is not a measurement.
-//
-// 2560px is the case that motivated the feature: on a real 4K panel the
-// surveyed consumer was using 15-79% of the width available, and the shell had
-// no opinion to offer.
+// ── Page types ──────────────────────────────────────────────────────────────
+// A route declares what it is (`reading`, `panel`, `tool`) and the shell owns
+// every width, gutter and column that follows. Every claim is a resolved
+// length measured with getBoundingClientRect against the engine's own layout,
+// because jsdom reports every rect as zero and would pass against a build
+// whose stylesheet was never imported. Window widths 1280, 1673 and 1920 are
+// the laptop, the common desktop and the wide desktop; 390 is the phone. The
+// rail is measured expanded and collapsed where the region it leaves decides
+// the outcome (the reading aside's 66rem threshold is a REGION width, not a
+// window's).
 {
-	// Every tier, measured under one page body, so the only variable is the prop.
-	const MEASURES = ['prose', 'page', 'wide', 'full'];
+	const WIDTHS = [1280, 1673, 1920];
+	const r2 = (n) => Math.round(n * 100) / 100;
+	const near = (a, b, tolerance = 0.5) => Math.abs(a - b) <= tolerance;
 
-	/** Read the content box's geometry, plus what the browser resolved the cap to. */
-	const readGeometry = async (page) => {
-		// `ch` is a font metric, so nothing here may be measured before the font
-		// is settled. This harness ships no `@font-face` at all — it compiles the
-		// consumer's stylesheet over the built package and the body stack falls
-		// through to a locally available face — so `fonts.ready` resolves
-		// immediately today. It is awaited anyway: the day this harness self-hosts
-		// a face, every number below would start being read a frame early, and
-		// that failure would show up as a flake in CI rather than as an error
-		// anyone could read. The resolved family is reported with the numbers for
-		// the same reason — a Linux runner resolves a different fallback than a
-		// Mac, and a check about characters should say which characters.
-		await page.evaluate(() => document.fonts.ready);
-		return page.evaluate(() => {
-			const main = document.querySelector('#ds-main');
-			const box = main.firstElementChild;
-			const rect = box.getBoundingClientRect();
-			const mainRect = main.getBoundingClientRect();
-			const style = getComputedStyle(box);
-
-			// How many characters of the app's ACTUAL running text land on a line.
-			// This is the claim `prose` makes, in the terms it is made in rather
-			// than as a pixel threshold. Measured off a sample in the paragraph's
-			// own font.
-			const copy = document.querySelector('[data-probe="measure-copy"]');
-			let charsPerLine = null;
-			if (copy) {
-				const sample = document.createElement('span');
-				const SAMPLE = 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz';
-				sample.textContent = SAMPLE;
-				sample.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
-				copy.appendChild(sample);
-				const advance = sample.getBoundingClientRect().width / SAMPLE.length;
-				sample.remove();
-				charsPerLine = Math.round(copy.clientWidth / advance);
-			}
-
-			return {
-				boxWidth: Math.round(rect.width * 100) / 100,
-				available: main.clientWidth,
-				gapLeft: Math.round((rect.left - mainRect.left) * 100) / 100,
-				gapRight: Math.round((mainRect.right - rect.right) * 100) / 100,
-				maxWidth: style.maxWidth,
-				hasAttribute: box.hasAttribute('data-measure'),
-				hasClass: box.classList.contains('ds-shell-measure'),
-				rootFontSize: parseFloat(getComputedStyle(document.documentElement).fontSize),
-				charsPerLine,
-				face: copy ? getComputedStyle(copy).fontFamily.split(',')[0].replace(/"/g, '') : 'n/a',
-				mainScroll: main.scrollWidth,
-				mainClient: main.clientWidth
-			};
-		});
+	/** A page of the `pages` surface, settled: styles applied, fonts ready, columns registered. */
+	const openPages = async (query, width, height = 900) => {
+		const opened = await open(`surface=pages&${query}`, { width, height });
+		// The pointer starts at the origin, over the rail, and a collapsed rail
+		// peeks open under it; park it on the page's far corner.
+		await opened.page.mouse.move(width - 2, height - 2);
+		await opened.page.waitForSelector('.ds-page[data-page]');
+		await opened.page.addStyleTag({ content: SETTLE });
+		await opened.page.evaluate(() => document.fonts.ready);
+		if (query.includes('collapsed=1')) {
+			await opened.page.waitForSelector('.ds-shell-rail[data-collapsed="true"]');
+		}
+		return opened;
 	};
 
-	// ── At 2560px, where every cap binds ────────────────────────────────────
-	{
-		const at = {};
-		for (const measure of MEASURES) {
-			const { context, page } = await open(`surface=measure&measure=${measure}`, {
-				width: 2560,
-				height: 1440
-			});
-			await page.waitForSelector('#ds-main');
-			at[measure] = await readGeometry(page);
-			await context.close();
-		}
-
-		// `full` is the anchor: no cap, so the box IS the available width. If this
-		// ever stops holding, the additivity claim below is measuring nothing.
-		check(
-			'measure @2560px, full: the content box is the whole available width',
-			at.full.boxWidth === at.full.available && at.full.maxWidth === 'none',
-			`box ${at.full.boxWidth}px of ${at.full.available}px available, max-width ${at.full.maxWidth}`
-		);
-
-		// The rem tiers, against the arithmetic the README states rather than
-		// against a number typed twice: 80rem and 120rem at the root font size
-		// this document actually resolved.
-		for (const [measure, rem] of [
-			['prose', 40],
-			['page', 80],
-			['wide', 120]
-		]) {
-			const expected = rem * at[measure].rootFontSize;
-			check(
-				`measure @2560px, ${measure}: the rendered width is ${rem}rem`,
-				Math.abs(at[measure].boxWidth - expected) < 1,
-				`box ${at[measure].boxWidth}px vs ${rem}rem = ${expected}px (root ${at[measure].rootFontSize}px), max-width ${at[measure].maxWidth}`
-			);
-		}
-
-		// A reading measure that spanned a 4K panel would be worse than the
-		// per-page guesses it replaces, which is the entire reason `prose` exists
-		// as a tier of its own rather than as the narrow end of `page`. So the
-		// claim is asserted in the terms it is actually made in — characters on a
-		// line, the typographic criterion — rather than as a pixel threshold
-		// someone picked. 45-90 is the accepted band for continuous text; the
-		// same paragraph at `full` on this viewport is what the tier exists to
-		// prevent, so it is measured beside it.
-		check(
-			'measure @2560px, prose: running text lands in a readable 45-90 character band',
-			at.prose.charsPerLine >= 45 && at.prose.charsPerLine <= 90,
-			`prose ${at.prose.charsPerLine} characters per line (box ${at.prose.boxWidth}px, face ${at.prose.face}), against ${at.full.charsPerLine} at full on the same viewport`
-		);
-
-		// The scale is monotonic, in the order it is documented in. A tier that
-		// sorted out of order would make the vocabulary a lie at the call site.
-		check(
-			'measure @2560px: the scale widens strictly, narrowest first',
-			at.prose.boxWidth < at.page.boxWidth &&
-				at.page.boxWidth < at.wide.boxWidth &&
-				at.wide.boxWidth < at.full.boxWidth,
-			MEASURES.map((m) => `${m} ${at[m].boxWidth}`).join(' < ')
-		);
-
-		// Capped means CENTRED, not left-aligned with dead space on one side.
-		// Auto margins inside a flex column are the mechanism, and whether they
-		// resolve is exactly the kind of thing only a layout engine knows.
-		for (const measure of ['prose', 'page', 'wide']) {
-			check(
-				`measure @2560px, ${measure}: the capped box is centred, not flush left`,
-				Math.abs(at[measure].gapLeft - at[measure].gapRight) <= 1 && at[measure].gapLeft > 0,
-				`gaps ${at[measure].gapLeft}px / ${at[measure].gapRight}px`
-			);
-		}
-
-		// The number the whole feature was argued from, restated as evidence.
-		checks.push({
-			name: 'measure @2560px: width used, per tier (the survey number)',
-			ok: true,
-			detail: MEASURES.map(
-				(m) => `${m} ${Math.round((at[m].boxWidth / at[m].available) * 100)}%`
-			).join(', ')
-		});
-	}
-
-	// ── At 1440px, where the wide tiers must be inert ────────────────────────
-	// A ceiling, never a floor. `page` caps at 80rem and a laptop has less than
-	// that available, so it must change NOTHING there — a measure that narrowed
-	// a laptop to make a 4K panel tidy would be a regression for the common case.
-	{
-		const at = {};
-		for (const measure of MEASURES) {
-			const { context, page } = await open(`surface=measure&measure=${measure}`, {
-				width: 1440,
-				height: 900
-			});
-			await page.waitForSelector('#ds-main');
-			at[measure] = await readGeometry(page);
-			await context.close();
-		}
-
-		for (const measure of ['page', 'wide']) {
-			check(
-				`measure @1440px, ${measure}: the cap is out of reach and changes nothing`,
-				at[measure].boxWidth === at.full.boxWidth,
-				`${measure} ${at[measure].boxWidth}px vs full ${at.full.boxWidth}px (${at[measure].available}px available)`
-			);
-		}
-		check(
-			'measure @1440px, prose: a reading measure still binds on a laptop',
-			at.prose.boxWidth < at.full.boxWidth,
-			`prose ${at.prose.boxWidth}px vs full ${at.full.boxWidth}px`
-		);
-	}
-
-	// ── Additivity, in the browser ───────────────────────────────────────────
-	// The operator's hard constraint: no consumer that omits `measure` may render
-	// one pixel differently. `surface=shell` passes no `measure` prop at all —
-	// it is the shell every existing consumer gets — so it must carry no
-	// attribute, no class, no cap, and no margin, at every width.
-	for (const width of [2560, 1440, 360]) {
-		const { context, page } = await open('surface=shell', { width, height: 900 });
-		await page.waitForSelector('#ds-main');
-		const bare = await readGeometry(page);
-		await context.close();
-
-		check(
-			`measure @${width}px: a shell that never names measure is uncapped and unmoved`,
-			!bare.hasAttribute &&
-				!bare.hasClass &&
-				bare.maxWidth === 'none' &&
-				bare.boxWidth === bare.available &&
-				bare.gapLeft === 0,
-			`attribute ${bare.hasAttribute}, class ${bare.hasClass}, max-width ${bare.maxWidth}, box ${bare.boxWidth}px of ${bare.available}px, left gap ${bare.gapLeft}px`
-		);
-	}
-
-	// `full` passed explicitly has to land in the same place as omitting it, or
-	// an app adopting the scale and then deciding one layout wants no cap would
-	// get something subtly different from where it started.
-	{
-		const { context: c1, page: p1 } = await open('surface=shell', { width: 2560, height: 1440 });
-		await p1.waitForSelector('#ds-main');
-		const omitted = await readGeometry(p1);
-		await c1.close();
-		const { context: c2, page: p2 } = await open('surface=measure&measure=full', {
-			width: 2560,
-			height: 1440
-		});
-		await p2.waitForSelector('#ds-main');
-		const explicit = await readGeometry(p2);
-		await c2.close();
-
-		check(
-			'measure @2560px: measure="full" renders where omitting it renders',
-			omitted.boxWidth === explicit.boxWidth &&
-				omitted.maxWidth === explicit.maxWidth &&
-				omitted.gapLeft === explicit.gapLeft &&
-				explicit.hasAttribute === false,
-			`omitted ${omitted.boxWidth}px/${omitted.maxWidth}, explicit ${explicit.boxWidth}px/${explicit.maxWidth}`
-		);
-	}
-
-	// ── At 360px, where nothing may overflow ─────────────────────────────────
-	// No tier caps anything this narrow, so the interesting failure is the
-	// opposite one: a `min-width` typed for a `max-width`, or a `ch` value that
-	// forces a floor, would push the page sideways here and nowhere else. The
-	// DOM walk is the assertion for the reason #5 and the nested nav both
-	// established — the content region is its own scroller, so the document
-	// level number cannot move.
-	for (const measure of MEASURES) {
-		const { context, page } = await open(`surface=measure&measure=${measure}`, {
-			width: 360,
-			height: 780
-		});
-		await page.waitForSelector('#ds-main');
-
-		const measured = await page.evaluate((viewport) => {
-			/**
-			 * Content inside a box that scrolls sideways is CONTAINED, not
-			 * overflowing — a wide table in rendered prose is the intended
-			 * behaviour, and its cells legitimately sit past the viewport while
-			 * the page does not move. The exemption is narrow on purpose: the
-			 * scroller itself must fit, so a scroller that is ITSELF too wide is
-			 * still an offender and its contents are still counted through it.
-			 */
-			const containedByAScroller = (el) => {
-				for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
-					const overflowX = getComputedStyle(node).overflowX;
-					if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
-					const box = node.getBoundingClientRect();
-					if (box.right <= viewport + 0.5 && box.left >= -0.5) return true;
-				}
-				return false;
+	/** The geometry every claim below reads, from one pass over the settled page. */
+	const readPage = (page) =>
+		page.evaluate(() => {
+			const rect = (el) => {
+				if (!el) return null;
+				const b = el.getBoundingClientRect();
+				return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width, height: b.height };
 			};
-
-			const offenders = [];
-			for (const el of document.querySelectorAll('body *')) {
-				const rect = el.getBoundingClientRect();
-				if (rect.width === 0 && rect.height === 0) continue;
-				if (rect.right > viewport + 0.5 || rect.left < -0.5) {
-					if (containedByAScroller(el)) continue;
-					offenders.push({
-						tag: el.tagName.toLowerCase(),
-						cls: (el.getAttribute('class') ?? '').slice(0, 60),
-						right: Math.round(rect.right)
-					});
-				}
-			}
-			const main = document.querySelector('#ds-main');
+			const px = (value) => {
+				const probe = document.createElement('div');
+				probe.style.cssText = `position:absolute;visibility:hidden;width:${value}`;
+				document.body.appendChild(probe);
+				const width = probe.getBoundingClientRect().width;
+				probe.remove();
+				return width;
+			};
+			const main = document.querySelector('[data-slot="app-shell-content"]');
+			const frame = main.querySelector('.ds-page');
+			const column = main.querySelector('.ds-page-main');
+			const aside = main.querySelector('aside.ds-page-aside');
+			const pane = main.querySelector('[data-testid="ds-page-pane"]');
+			const fill = document.querySelector('[data-probe="tool-fill"]');
+			const first = document.querySelector('[data-probe="page-first"]');
+			const mainRect = rect(main);
 			return {
-				offenderCount: offenders.length,
-				worst: offenders[0] ? `${offenders[0].tag}.${offenders[0].cls} right ${offenders[0].right}` : 'none',
-				mainOverflow: main.scrollWidth - main.clientWidth,
-				documentScroll: document.documentElement.scrollWidth
+				main: { ...mainRect, clientWidth: main.clientWidth, clientHeight: main.clientHeight, scrollHeight: main.scrollHeight, scrollWidth: main.scrollWidth },
+				rail: rect(document.querySelector('.ds-shell-rail')),
+				frame: rect(frame),
+				frameAttrs: { page: frame.dataset.page, aside: frame.dataset.aside ?? null, fill: frame.hasAttribute('data-fill') },
+				column: rect(column),
+				columnPadding: {
+					left: parseFloat(getComputedStyle(column).paddingLeft),
+					right: parseFloat(getComputedStyle(column).paddingRight),
+					bottom: parseFloat(getComputedStyle(column).paddingBottom)
+				},
+				aside: rect(aside),
+				asideRule: aside ? { width: getComputedStyle(aside).borderInlineStartWidth, style: getComputedStyle(aside).borderInlineStartStyle } : null,
+				pane: rect(pane),
+				first: rect(first),
+				fill: fill ? { ...rect(fill), scrollHeight: fill.scrollHeight, clientHeight: fill.clientHeight } : null,
+				blocks: [...document.querySelectorAll('[data-probe="panel-block"]')].map((el) => rect(el)),
+				readingBlocks: [...document.querySelectorAll('[data-probe="reading-block"]')].map((el) => {
+					// The right-most pixel a line of text actually reaches, beside the box it sits in.
+					const range = document.createRange();
+					range.selectNodeContents(el);
+					const lines = [...range.getClientRects()];
+					return {
+						right: el.getBoundingClientRect().right,
+						textRight: Math.max(...lines.map((line) => line.right)),
+						fontSize: parseFloat(getComputedStyle(el).fontSize)
+					};
+				}),
+				tokens: {
+					reading: px('var(--ds-page-reading)'),
+					aside: px('var(--ds-page-aside)'),
+					gap: px('var(--ds-page-aside-gap)'),
+					panel: px('var(--ds-page-panel)'),
+					pane: px('var(--ds-page-pane)'),
+					paneFolded: px('var(--ds-page-pane-folded)'),
+					railCollapsed: px('var(--ds-shell-rail-width-collapsed)'),
+					railOpen: px('var(--ds-shell-rail-width)'),
+					root: parseFloat(getComputedStyle(document.documentElement).fontSize)
+				},
+				location: document.querySelector('[data-testid="ds-shell-location"]')?.textContent?.trim() ?? null,
+				documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
 			};
-		}, 360);
+		});
 
+	/** The gutter the page scale gives a region this wide: 1rem, 2rem from 40rem, 3rem from 64rem. */
+	const gutterFor = (region, root) => (region >= 64 * root ? 3 * root : region >= 40 * root ? 2 * root : root);
+
+	// ── Reading: one centred column, the aside beside it with the pair centred ──
+	for (const width of WIDTHS) {
+		for (const collapsed of [false, true]) {
+			const where = `reading @${width}px, rail ${collapsed ? 'collapsed' : 'expanded'}`;
+			const { context, page, errors } = await openPages(
+				`type=reading&aside=1${collapsed ? '&collapsed=1' : ''}`,
+				width
+			);
+			await page.waitForSelector('aside.ds-page-aside');
+			const m = await readPage(page);
+			const region = m.main.clientWidth;
+			const mid = (m.main.left + m.main.right) / 2;
+			const beside = m.aside.left > m.column.right;
+
+			check(
+				`${where}: the column is 44rem (704px)`,
+				near(m.column.width, 704) && near(m.tokens.reading, 704),
+				`column ${r2(m.column.width)}px, --ds-page-reading ${r2(m.tokens.reading)}px, region ${region}px`
+			);
+			check(
+				`${where}: the content region begins at the rail's edge`,
+				near(m.main.left, m.rail.right),
+				`region left ${r2(m.main.left)}px, rail right ${r2(m.rail.right)}px`
+			);
+			check(
+				`${where}: the aside ${region >= 1056 ? 'stands beside' : 'follows'} the column (region ${region}px, threshold 1056px)`,
+				beside === region >= 1056,
+				beside
+					? `aside left ${r2(m.aside.left)}px, column right ${r2(m.column.right)}px`
+					: `aside left ${r2(m.aside.left)}px = column left ${r2(m.column.left)}px, aside top ${r2(m.aside.top)}px, column bottom ${r2(m.column.bottom)}px`
+			);
+			if (beside) {
+				const pairLeft = m.column.left;
+				const pairRight = m.aside.right;
+				check(
+					`${where}: the pair (704 + 48 + 320) is centred in the region`,
+					near(pairRight - pairLeft, 1072) &&
+						near(m.aside.left - m.column.right, 48) &&
+						near(m.aside.width, 320) &&
+						near((pairLeft + pairRight) / 2, mid, 1),
+					`pair ${r2(pairRight - pairLeft)}px, gap ${r2(m.aside.left - m.column.right)}px, aside ${r2(m.aside.width)}px, pair centre ${r2((pairLeft + pairRight) / 2)}px vs region centre ${r2(mid)}px`
+				);
+				check(
+					`${where}: the aside's top aligns with the column's`,
+					near(m.aside.top, m.column.top),
+					`aside top ${r2(m.aside.top)}px, column top ${r2(m.column.top)}px`
+				);
+			} else {
+				check(
+					`${where}: the stacked aside keeps the column's left edge and sits below it`,
+					near(m.aside.left, m.column.left) && m.aside.top >= m.column.bottom - 0.5,
+					`aside left ${r2(m.aside.left)}px vs column ${r2(m.column.left)}px, aside top ${r2(m.aside.top)}px vs column bottom ${r2(m.column.bottom)}px`
+				);
+				check(
+					`${where}: the column alone is centred in the region`,
+					near((m.column.left + m.column.right) / 2, mid, 1),
+					`column centre ${r2((m.column.left + m.column.right) / 2)}px vs region centre ${r2(mid)}px`
+				);
+			}
+			check(
+				`${where}: every text block ends at the column's one right edge (20px, 14px and 12px type)`,
+				m.readingBlocks.length === 3 &&
+					m.readingBlocks.every((b) => near(b.right, m.column.right) && b.textRight <= m.column.right + 0.5),
+				m.readingBlocks
+					.map((b) => `${b.fontSize}px box ${r2(b.right)} text ${r2(b.textRight)}`)
+					.join(' / ') + ` vs column right ${r2(m.column.right)}px`
+			);
+			check(`${where}: no page error`, errors.length === 0, JSON.stringify(errors));
+			await context.close();
+		}
+	}
+
+	// A reading page with no aside: the column alone, centred, whatever the window.
+	for (const width of WIDTHS) {
+		const { context, page } = await openPages('type=reading', width);
+		const m = await readPage(page);
 		check(
-			`measure @360px, ${measure}: nothing in the document exceeds the viewport`,
-			measured.offenderCount === 0,
-			`${measured.offenderCount} offender(s); worst: ${measured.worst}`
-		);
-		check(
-			`measure @360px, ${measure}: the content region does not scroll sideways`,
-			measured.mainOverflow <= 0,
-			`main scrollWidth − clientWidth = ${measured.mainOverflow}px (document-level, blind: ${measured.documentScroll})`
+			`reading @${width}px, no aside: the column is 704px and centred`,
+			near(m.column.width, 704) &&
+				near((m.column.left + m.column.right) / 2, (m.main.left + m.main.right) / 2, 1) &&
+				m.aside === null,
+			`column ${r2(m.column.width)}px, centre ${r2((m.column.left + m.column.right) / 2)}px vs region ${r2((m.main.left + m.main.right) / 2)}px`
 		);
 		await context.close();
 	}
-}
 
-// ── The measure, on a block INSIDE a page (#22) ─────────────────────────────
-// The shell's own content box wants the measure AND the centring. A block
-// within a page wants only the measure: `.ds-shell-measure` applied to a set of
-// left-anchored paragraphs indented them ~207px from their own label in a
-// consuming app. Both halves of that are widths, so both are measured here.
-{
-	// `wide` on purpose — the route this is FOR is one legitimately set wide
-	// (a dashboard, a table) that also carries explanatory running text.
-	const { context, page } = await open('surface=measure&measure=wide', {
-		width: 2560,
-		height: 1440
-	});
-	await page.waitForSelector('[data-probe="measure-block"]');
-	await page.evaluate(() => document.fonts.ready);
+	// ── Panel: the pane flush against the rail, the content beside it ───────────
+	for (const width of WIDTHS) {
+		for (const collapsed of [false, true]) {
+			const where = `panel @${width}px, rail ${collapsed ? 'collapsed' : 'expanded'}`;
+			const { context, page, errors } = await openPages(
+				`type=panel&pane=1${collapsed ? '&collapsed=1' : ''}`,
+				width
+			);
+			await page.waitForSelector('[data-testid="ds-page-pane"]');
+			const m = await readPage(page);
+			const region = m.main.clientWidth;
+			const gutter = gutterFor(region, m.tokens.root);
 
-	const measured = await page.evaluate(() => {
-		const block = document.querySelector('[data-probe="measure-block"]');
-		const wrap = document.querySelector('[data-probe="measure-block-wrap"]');
-		const heading = document.querySelector('h1');
-		return {
-			blockWidth: block.getBoundingClientRect().width,
-			wrapWidth: wrap.getBoundingClientRect().width,
-			blockLeft: Math.round(block.getBoundingClientRect().left),
-			headingLeft: Math.round(heading.getBoundingClientRect().left),
-			marginInline: getComputedStyle(block).marginInlineStart,
-			resolvedCap: getComputedStyle(block).maxWidth,
-			family: getComputedStyle(block).fontFamily,
-			edges: [...document.querySelectorAll('[data-probe^="measure-size-"]')].map(
-				(el) => el.getBoundingClientRect().right
-			)
-		};
-	});
+			check(
+				`${where}: the pane's left edge is the rail's right edge, no gap`,
+				near(m.pane.left, m.rail.right),
+				`pane left ${r2(m.pane.left)}px, rail right ${r2(m.rail.right)}px`
+			);
+			check(
+				`${where}: the pane is as wide as the rail's width token (15.5rem), even beside a collapsed rail`,
+				near(m.pane.width, m.tokens.railOpen) && near(m.pane.width, 248),
+				`pane ${r2(m.pane.width)}px, token ${r2(m.tokens.railOpen)}px, rail now ${r2(m.rail.width)}px`
+			);
+			check(
+				`${where}: the content's first block starts at the pane's right edge plus the gutter`,
+				near(m.first.left, m.pane.right + gutter) && near(m.columnPadding.left, gutter),
+				`first block left ${r2(m.first.left)}px = pane right ${r2(m.pane.right)}px + ${r2(m.columnPadding.left)}px (scale gives ${gutter}px at a ${region}px region)`
+			);
+			const available = region - m.pane.width - 2 * gutter;
+			const cap = Math.min(832, available);
+			check(
+				`${where}: every block is no wider than 52rem (832px)`,
+				near(m.tokens.panel, 832) &&
+					m.blocks.length === 3 &&
+					[m.first, ...m.blocks].every((b) => near(b.width, cap, 1)),
+				`blocks ${[m.first, ...m.blocks].map((b) => r2(b.width)).join(' / ')}px vs min(832, ${r2(available)}) = ${r2(cap)}px`
+			);
+			check(
+				`${where}: the frame is the region's height and the page does not scroll`,
+				near(m.frame.height, m.main.clientHeight) && m.main.scrollHeight <= m.main.clientHeight,
+				`frame ${r2(m.frame.height)}px, region ${m.main.clientHeight}px, scrollHeight ${m.main.scrollHeight}px`
+			);
+			check(
+				`${where}: the bar names the pane's location, since the nav has no row`,
+				m.location === 'Sections › Section A',
+				`bar: ${JSON.stringify(m.location)}`
+			);
+			check(`${where}: no page error`, errors.length === 0, JSON.stringify(errors));
+			await context.close();
+		}
+	}
 
-	check(
-		'.ds-measure caps a block inside a page',
-		measured.blockWidth < measured.wrapWidth &&
-			Math.abs(measured.blockWidth - parseFloat(measured.resolvedCap)) < 1,
-		`block ${measured.blockWidth.toFixed(0)}px inside a ${measured.wrapWidth.toFixed(0)}px page, cap resolved to ${measured.resolvedCap} (${measured.family})`
-	);
-	// The whole reason it is a second class. A centred block is the defect.
-	check(
-		'.ds-measure does NOT centre it — it stays on the page\'s own left edge',
-		measured.blockLeft === measured.headingLeft && measured.marginInline === '0px',
-		`block left ${measured.blockLeft}px vs heading left ${measured.headingLeft}px, margin-inline-start ${measured.marginInline}`
-	);
-	// It has to track the package's own property, or an app has gained nothing
-	// over the `max-w-[72ch]` it would otherwise have typed.
-	await page.addStyleTag({ content: ':root { --ds-shell-measure-prose: 20rem; }' });
-	await page.evaluate(() => document.fonts.ready);
-	const retuned = await page.evaluate(
-		() => document.querySelector('[data-probe="measure-block"]').getBoundingClientRect().width
-	);
-	check(
-		'.ds-measure ends blocks of different type sizes at one right edge',
-		measured.edges.every((e) => Math.abs(e - measured.edges[0]) < 1),
-		`right edges ${measured.edges.map((e) => e.toFixed(0)).join(' / ')}px for a 20px, 14px and 12px block`
-	);
-	check(
-		'.ds-measure retunes with --ds-shell-measure-prose',
-		retuned < measured.blockWidth,
-		`${measured.blockWidth.toFixed(0)}px at 40rem -> ${retuned.toFixed(0)}px at 20rem`
-	);
-	await context.close();
-}
+	// The pane folds to the rail's collapsed width, and the content stays one gutter beside it.
+	{
+		const { context, page } = await openPages('type=panel&pane=1', 1673);
+		await page.waitForSelector('[data-testid="ds-page-pane"]');
+		await page.click('[data-probe="pane-fold"]');
+		await page.waitForSelector('[data-testid="ds-page-pane"][data-folded="true"]');
+		const m = await readPage(page);
+		const gutter = gutterFor(m.main.clientWidth, m.tokens.root);
+		check(
+			'panel @1673px, folded: the pane is the rail\'s collapsed width (3.5rem) and still flush',
+			near(m.pane.width, m.tokens.railCollapsed) && near(m.pane.width, 56) && near(m.pane.left, m.rail.right),
+			`pane ${r2(m.pane.width)}px, collapsed-rail token ${r2(m.tokens.railCollapsed)}px, pane left ${r2(m.pane.left)}px vs rail right ${r2(m.rail.right)}px`
+		);
+		check(
+			'panel @1673px, folded: the content follows the pane, one gutter beside it',
+			near(m.first.left, m.pane.right + gutter),
+			`first block left ${r2(m.first.left)}px vs pane right ${r2(m.pane.right)}px + ${gutter}px`
+		);
+		await context.close();
+	}
 
-// ── Large screens ───────────────────────────────────────────────────────────
-// Past 2560px the root size grows, so type and the measure grow with the
-// screen; at 1440px and 2560px nothing moves. Only an engine resolves rem.
-{
-	const read = async (width, height) => {
-		const { context, page } = await open('surface=measure&measure=page', { width, height });
-		await page.waitForSelector('[data-probe="measure-block"]');
-		await page.evaluate(() => document.fonts.ready);
-		const out = await page.evaluate(() => ({
-			root: parseFloat(getComputedStyle(document.documentElement).fontSize),
-			body: parseFloat(getComputedStyle(document.querySelector('[data-probe="measure-block"]')).fontSize),
-			box: document.querySelector('#ds-main').firstElementChild.getBoundingClientRect().width
+	// The pane is a column from 64rem of WINDOW and a sheet below it.
+	for (const [width, column] of [
+		[1024, true],
+		[1023, false]
+	]) {
+		const { context, page } = await openPages('type=panel&pane=1', width);
+		await page.waitForSelector(
+			column ? '[data-testid="ds-page-pane"]' : '[data-testid="ds-page-pane-open"]'
+		);
+		const seen = await page.evaluate(() => ({
+			pane: document.querySelector('[data-testid="ds-page-pane"]') !== null,
+			opener: document.querySelector('[data-testid="ds-page-pane-open"]') !== null
 		}));
+		check(
+			`panel @${width}px: the pane is a ${column ? 'column' : 'sheet opened from the bar'} (breakpoint 1024px)`,
+			seen.pane === column && seen.opener === !column,
+			`pane in page ${seen.pane}, bar opener ${seen.opener}`
+		);
 		await context.close();
-		return out;
-	};
-	const at1440 = await read(1440, 900);
-	const at2560 = await read(2560, 1440);
-	const at3840 = await read(3840, 2160);
-	check(
-		'large screens: nothing changes at or below 2560px',
-		at1440.root === 16 && at2560.root === 16,
-		`root ${at1440.root}px at 1440, ${at2560.root}px at 2560`
-	);
-	check(
-		'large screens: 3840px grows the root to 24px and the type with it',
-		at3840.root === 24 && at3840.body === at2560.body * 1.5,
-		`root ${at3840.root}px, block type ${at2560.body}px -> ${at3840.body}px`
-	);
-	check(
-		'large screens: the page measure grows (80rem) at 3840px',
-		at2560.box === 1280 && at3840.box === 1920,
-		`measure box ${at2560.box}px at 2560, ${at3840.box}px at 3840`
-	);
+	}
+
+	// Phone: no pane in the page; the bar's button opens it as a sheet with the list.
+	{
+		const { context, page, errors } = await openPages('type=panel&pane=1', 390, 844);
+		await page.waitForSelector('[data-testid="ds-page-pane-open"]');
+		const before = await readPage(page);
+		check(
+			'panel @390px: there is no pane in the page',
+			before.pane === null,
+			`pane element ${before.pane === null ? 'absent' : 'present'}`
+		);
+		check(
+			'panel @390px: the bar names the pane\'s location',
+			before.location === 'Sections › Section A',
+			`bar: ${JSON.stringify(before.location)}`
+		);
+		await page.click('[data-testid="ds-page-pane-open"]');
+		await page.waitForSelector('[role="dialog"] [data-probe="pane-item"]');
+		const sheet = await page.evaluate(() => {
+			const dialog = document.querySelector('[role="dialog"]');
+			const items = [...dialog.querySelectorAll('[data-probe="pane-item"]')];
+			const box = dialog.getBoundingClientRect();
+			return {
+				items: items.length,
+				left: box.left,
+				width: box.width,
+				innerWidth,
+				firstVisible: items[0].getBoundingClientRect().width > 0
+			};
+		});
+		check(
+			'panel @390px: the bar button opens a sheet with the 12-row list',
+			sheet.items === 12 && sheet.firstVisible && sheet.left === 0 && sheet.width <= sheet.innerWidth,
+			`${sheet.items} rows, sheet left ${sheet.left}px width ${sheet.width}px of ${sheet.innerWidth}px`
+		);
+		check('panel @390px: no page error', errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	// ── Tool: the whole frame, the content filling it and scrolling inside itself ──
+	for (const [width, height] of [
+		[1280, 900],
+		[1673, 1000],
+		[1920, 1080],
+		[1673, 560],
+		[390, 844]
+	]) {
+		const where = `tool @${width}x${height}`;
+		const { context, page } = await openPages('type=tool', width, height);
+		await page.waitForSelector('[data-probe="tool-fill"]');
+		const m = await readPage(page);
+		const gutter = gutterFor(m.main.clientWidth, m.tokens.root);
+		check(
+			`${where}: <main> does not scroll, with a 200-row fill`,
+			m.main.scrollHeight === m.main.clientHeight,
+			`scrollHeight ${m.main.scrollHeight}px vs clientHeight ${m.main.clientHeight}px`
+		);
+		check(
+			`${where}: the frame is exactly the content region's height`,
+			near(m.frame.height, m.main.clientHeight) && near(m.frame.top, m.main.top),
+			`frame ${r2(m.frame.height)}px at ${r2(m.frame.top)}px, region ${m.main.clientHeight}px at ${r2(m.main.top)}px`
+		);
+		check(
+			`${where}: the fill's bottom edge sits one block-padding above the frame's bottom, and the 200 rows scroll inside it`,
+			near(m.fill.bottom, m.frame.bottom - m.columnPadding.bottom) &&
+				m.columnPadding.bottom > 0 &&
+				m.fill.scrollHeight > m.fill.clientHeight,
+			`fill bottom ${r2(m.fill.bottom)}px, frame bottom ${r2(m.frame.bottom)}px, padding ${m.columnPadding.bottom}px; fill scrollHeight ${m.fill.scrollHeight}px vs clientHeight ${m.fill.clientHeight}px`
+		);
+		check(
+			`${where}: the content starts one gutter in from the region's edge`,
+			near(m.first.left, m.main.left + gutter),
+			`first block left ${r2(m.first.left)}px vs region left ${r2(m.main.left)}px + ${gutter}px`
+		);
+		await context.close();
+	}
+
+	// Filling is opt-in: three 400px blocks in a 900px window keep their height
+	// and the frame scrolls, none crushed to make them fit.
+	{
+		const { context, page } = await openPages('type=tool&blocks=1', 1673, 900);
+		await page.waitForSelector('[data-probe="tool-block"]');
+		const m = await page.evaluate(() => {
+			const column = document.querySelector('.ds-page-main');
+			return {
+				heights: [...document.querySelectorAll('[data-probe="tool-block"]')].map((el) => el.getBoundingClientRect().height),
+				scrolls: column.scrollHeight > column.clientHeight,
+				mainScrolls: document.querySelector('[data-slot="app-shell-content"]').scrollHeight > document.querySelector('[data-slot="app-shell-content"]').clientHeight
+			};
+		});
+		check(
+			'tool @1673x900: three 400px blocks keep their 400px; the frame scrolls and <main> does not',
+			m.heights.length === 3 && m.heights.every((h) => near(h, 400)) && m.scrolls && !m.mainScrolls,
+			`heights ${m.heights.map(r2).join(' / ')}px, content scrolls ${m.scrolls}, main scrolls ${m.mainScrolls}`
+		);
+		await context.close();
+	}
+
+	// A tool's aside: a column at the frame's right edge from 80rem of window,
+	// a sheet from the bar below it. Rail expanded and collapsed.
+	for (const width of WIDTHS) {
+		for (const collapsed of [false, true]) {
+			const where = `tool aside @${width}px, rail ${collapsed ? 'collapsed' : 'expanded'}`;
+			const { context, page } = await openPages(
+				`type=tool&aside=1${collapsed ? '&collapsed=1' : ''}`,
+				width
+			);
+			await page.waitForSelector('aside.ds-page-aside');
+			const m = await readPage(page);
+			check(
+				`${where}: the aside is flush with the frame's right edge and its full height`,
+				near(m.aside.right, m.frame.right) && near(m.aside.top, m.frame.top) && near(m.aside.bottom, m.frame.bottom),
+				`aside right ${r2(m.aside.right)}px / top ${r2(m.aside.top)}px / bottom ${r2(m.aside.bottom)}px vs frame ${r2(m.frame.right)}px / ${r2(m.frame.top)}px / ${r2(m.frame.bottom)}px`
+			);
+			check(
+				`${where}: the aside has a left rule and a width between 20rem and 28rem`,
+				m.asideRule.width === '1px' &&
+					m.asideRule.style === 'solid' &&
+					m.aside.width >= 320 - 0.5 &&
+					m.aside.width <= 448 + 0.5,
+				`rule ${m.asideRule.width} ${m.asideRule.style}, width ${r2(m.aside.width)}px, frame data-aside ${m.frameAttrs.aside}`
+			);
+			check(
+				`${where}: <main> still does not scroll`,
+				m.main.scrollHeight === m.main.clientHeight,
+				`scrollHeight ${m.main.scrollHeight}px vs clientHeight ${m.main.clientHeight}px`
+			);
+			await context.close();
+		}
+	}
+
+	for (const [width, columnExpected] of [
+		[1280, true],
+		[1279, false],
+		[1024, false],
+		[390, false]
+	]) {
+		const where = `tool aside @${width}px`;
+		const { context, page, errors } = await openPages('type=tool&aside=1', width, width === 390 ? 844 : 900);
+		await page.waitForSelector(
+			columnExpected ? 'aside.ds-page-aside' : '[data-testid="ds-page-aside-open"]'
+		);
+		const seen = await page.evaluate(() => ({
+			aside: document.querySelector('aside.ds-page-aside') !== null,
+			opener: document.querySelector('[data-testid="ds-page-aside-open"]') !== null
+		}));
+		check(
+			`${where}: the aside is ${columnExpected ? 'a column' : 'gone from the page, opened from the bar'} (breakpoint 1280px)`,
+			seen.aside === columnExpected && seen.opener === !columnExpected,
+			`aside in page ${seen.aside}, bar opener ${seen.opener}`
+		);
+		if (!columnExpected) {
+			await page.click('[data-testid="ds-page-aside-open"]');
+			await page.waitForSelector('[role="dialog"]');
+			const sheet = await page.evaluate(() => {
+				const dialog = document.querySelector('[role="dialog"]');
+				const box = dialog.getBoundingClientRect();
+				return {
+					hasAside: dialog.textContent.includes('What stands beside the page.'),
+					right: box.right,
+					innerWidth
+				};
+			});
+			check(
+				`${where}: the bar button opens the aside as a sheet on the right`,
+				sheet.hasAside && near(sheet.right, sheet.innerWidth),
+				`sheet carries the aside ${sheet.hasAside}, right edge ${r2(sheet.right)}px of ${sheet.innerWidth}px`
+			);
+		}
+		check(`${where}: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	// ── Phone: nothing scrolls sideways, whatever the type ──────────────────────
+	// The content region is its own scroller, so the document-level number is
+	// blind to it (the #5 defect); both are read.
+	for (const query of [
+		'type=reading',
+		'type=reading&aside=1',
+		'type=panel&pane=1',
+		'type=tool',
+		'type=tool&aside=1'
+	]) {
+		const { context, page } = await openPages(query, 390, 844);
+		const m = await readPage(page);
+		check(
+			`phone @390px, ${query}: no sideways scroll on the document or on the content region`,
+			m.documentOverflow <= 0 && m.main.scrollWidth - m.main.clientWidth <= 0,
+			`document +${m.documentOverflow}px, [data-slot=app-shell-content] scrollWidth ${m.main.scrollWidth}px vs clientWidth ${m.main.clientWidth}px`
+		);
+		await context.close();
+	}
+
+	// ── Large screens ───────────────────────────────────────────────────────────
+	// Past 2560px the root size grows, so type and the column grow with the
+	// screen; at 1440px and 2560px nothing moves. Only an engine resolves rem.
+	{
+		const read = async (width, height) => {
+			const { context, page } = await openPages('type=reading', width, height);
+			const m = await readPage(page);
+			const out = { root: m.tokens.root, column: m.column.width, body: m.readingBlocks[1].fontSize };
+			await context.close();
+			return out;
+		};
+		const at1440 = await read(1440, 900);
+		const at2560 = await read(2560, 1440);
+		const at3840 = await read(3840, 2160);
+		check(
+			'large screens: nothing changes at or below 2560px',
+			at1440.root === 16 && at2560.root === 16 && at1440.column === 704 && at2560.column === 704,
+			`root ${at1440.root}px at 1440, ${at2560.root}px at 2560; column ${at1440.column}px / ${at2560.column}px`
+		);
+		check(
+			'large screens: 3840px grows the root to 24px and the type with it',
+			at3840.root === 24 && at3840.body === at2560.body * 1.5,
+			`root ${at3840.root}px, block type ${at2560.body}px -> ${at3840.body}px`
+		);
+		check(
+			'large screens: the reading column grows with the root (44rem = 1056px at 24px)',
+			at3840.column === 1056,
+			`column ${at2560.column}px at 2560, ${at3840.column}px at 3840`
+		);
+	}
 }
 
 // ── The content texture ─────────────────────────────────────────────────────
@@ -2070,11 +2174,11 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			`background-attachment ${on.backgroundAttachment}, repeat ${on.backgroundRepeat}, size ${on.backgroundSize}`
 		);
 
-		// Which element carries it is the feature. `measure` caps the box below,
-		// so a texture painted there would stop at the measure and read as a
-		// stripe rather than as the floor the page sits on.
+		// Which element carries it is the feature. The reading column is narrower
+		// than the region, so a texture painted on the page frame would stop at
+		// the column and read as a stripe rather than as the floor the page sits on.
 		check(
-			'texture: the scroller carries it and the measured box does not',
+			'texture: the scroller carries it and the page frame does not',
 			on.hasClass &&
 				on.attribute === 'grid' &&
 				!on.boxHasTexture &&
@@ -2717,7 +2821,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 // content the app did not write, which is the whole case — three consumers had
 // each built one of these and typography degrades worst when re-derived.
 {
-	const { context, page } = await open('surface=measure&measure=wide', {
+	const { context, page } = await open('surface=prose', {
 		width: 2560,
 		height: 1440
 	});
@@ -2764,7 +2868,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		`quote rule ${prose.quoteBorder}, link ${prose.linkColour}`
 	);
 	check(
-		'prose: a table wider than the measure scrolls in its own box',
+		'prose: a table wider than the column scrolls in its own box',
 		prose.tableScrolls && prose.tableOverflowX === 'auto',
 		`table scrollWidth > clientWidth: ${prose.tableScrolls}, overflow-x ${prose.tableOverflowX}`
 	);
@@ -3325,80 +3429,80 @@ for (const scheme of ['light', 'dark']) {
 }
 
 // ---------------------------------------------------------------------------
-// The settings destination (#39).
+// The settings destination (#39): a `panel` page whose pane is the section
+// list (SettingsShell registers it as a PagePane; AppNav is its body).
 //
 // Every claim here is a layout fact, which is exactly why it is not in
-// src/test/: whether the section list is really 240px, whether the two panes
-// scroll INDEPENDENTLY (`overflow-y: auto` does nothing unless a height bounds
-// the box, and jsdom reports every scrollHeight as 0 either way), whether the
-// pane's text lands on the same rhythm as an ordinary page's, and whether the
-// same markup stacks below md instead of crushing the content into a sliver.
+// src/test/: whether the pane is really the rail's width and flush against it,
+// whether the pane and the content scroll INDEPENDENTLY (`overflow-y: auto` does
+// nothing unless a height bounds the box, and jsdom reports every scrollHeight
+// as 0 either way), whether the content sits one gutter from the pane, and
+// whether the same page gives the list up to a sheet on a phone instead of
+// crushing the content into a sliver.
 // ---------------------------------------------------------------------------
 {
 	const { context, page, errors } = await open('surface=settings', { width: 1440, height: 900 });
-	await page.waitForSelector('.ds-settings-pane');
+	await page.waitForSelector('[data-testid="ds-page-pane"]');
 	await page.addStyleTag({ content: SETTLE });
 
 	const desktop = await page.evaluate(() => {
-		const list = document.querySelector('.ds-settings > nav');
-		const pane = document.querySelector('.ds-settings-pane');
-		const active = document.querySelector('.ds-settings a[aria-current="page"]');
+		const rect = (el) => el.getBoundingClientRect();
+		const main = document.querySelector('[data-slot="app-shell-content"]');
+		const pane = document.querySelector('[data-testid="ds-page-pane"]');
+		const body = pane.querySelector('.ds-page-pane-body');
+		const content = main.querySelector('.ds-page-main');
+		const active = pane.querySelector('a[aria-current="page"]');
 		return {
-			listWidth: list.getBoundingClientRect().width,
-			listOverflowY: getComputedStyle(list).overflowY,
-			listScrolls: list.scrollHeight > list.clientHeight,
-			paneOverflowY: getComputedStyle(pane).overflowY,
-			paneScrolls: pane.scrollHeight > pane.clientHeight,
-			// Side by side, not stacked: the pane's top is the list's top.
-			stacked: pane.getBoundingClientRect().top > list.getBoundingClientRect().top + 1,
+			paneWidth: rect(pane).width,
+			paneLeft: rect(pane).left,
+			railRight: rect(document.querySelector('.ds-shell-rail')).right,
+			bodyOverflowY: getComputedStyle(body).overflowY,
+			contentOverflowY: getComputedStyle(content).overflowY,
+			contentScrolls: content.scrollHeight > content.clientHeight,
+			mainScrolls: main.scrollHeight > main.clientHeight,
+			// Side by side, not stacked: the content's top is the pane's top.
+			stacked: rect(content).top > rect(pane).top + 1,
 			// The rule is on the inline-end edge, where a left-to-right reader
 			// expects it, and it is a real resolved width rather than a class that
 			// compiled to nothing.
-			listBorderInlineEnd: getComputedStyle(list).borderInlineEndWidth,
-			listBorderBottom: getComputedStyle(list).borderBottomWidth,
-			// A tint, not transparent: the two panes have to read as two surfaces.
-			listBackground: getComputedStyle(list).backgroundColor,
+			paneBorderInlineEnd: getComputedStyle(pane).borderInlineEndWidth,
+			paneBorderBottom: getComputedStyle(pane).borderBottomWidth,
 			activeIndicatorWidth: active
 				? getComputedStyle(active.querySelector('.ds-nav-indicator')).width
 				: null,
 			// The one row that says which section you are in.
-			activeCount: document.querySelectorAll('.ds-settings a[aria-current="page"]').length,
+			activeCount: pane.querySelectorAll('a[aria-current="page"]').length,
 			// The personal group is present in the data and EMPTY; it must not
 			// render an eyebrow with nothing under it.
-			headings: [...document.querySelectorAll('.ds-settings .ds-nav-heading')].map((h) =>
-				h.textContent.trim()
-			)
+			headings: [...pane.querySelectorAll('.ds-nav-heading')].map((h) => h.textContent.trim()),
+			location: document.querySelector('[data-testid="ds-shell-location"]')?.textContent?.trim()
 		};
 	});
 
 	check(
-		'settings: the section list is 240px wide at 1440',
-		Math.round(desktop.listWidth) === 240,
-		`${desktop.listWidth.toFixed(1)}px`
+		'settings: the section list is the rail\'s width (248px) and flush against it at 1440',
+		Math.round(desktop.paneWidth) === 248 && Math.abs(desktop.paneLeft - desktop.railRight) < 0.5,
+		`pane ${desktop.paneWidth.toFixed(1)}px at ${desktop.paneLeft.toFixed(1)}px, rail right ${desktop.railRight.toFixed(1)}px`
 	);
 	check(
-		'settings: the two panes are side by side, not stacked',
+		'settings: the two columns are side by side, not stacked',
 		!desktop.stacked,
-		desktop.stacked ? 'the pane starts below the list' : 'same top edge'
+		desktop.stacked ? 'the content starts below the list' : 'same top edge'
 	);
-	// The pair that matters: BOTH boxes are their own scroller, so a long
-	// settings page cannot push the section list out of reach. The list is short
-	// here, so its own claim is that it CAN scroll, not that it does.
+	// The pair that matters: BOTH are their own scroller, so a long settings
+	// page cannot push the section list out of reach, and <main> itself never moves.
 	check(
-		'settings: each pane is its own scroller, and the content pane is actually scrolling',
-		desktop.listOverflowY === 'auto' && desktop.paneOverflowY === 'auto' && desktop.paneScrolls,
-		`list ${desktop.listOverflowY}, pane ${desktop.paneOverflowY}, pane scrollable ${desktop.paneScrolls}`
+		'settings: the content scrolls inside itself, the page does not',
+		desktop.bodyOverflowY === 'auto' &&
+			desktop.contentOverflowY === 'auto' &&
+			desktop.contentScrolls &&
+			!desktop.mainScrolls,
+		`list ${desktop.bodyOverflowY}, content ${desktop.contentOverflowY}, content scrollable ${desktop.contentScrolls}, main scrollable ${desktop.mainScrolls}`
 	);
 	check(
 		'settings: the list carries an inline-end rule and no bottom rule',
-		parseFloat(desktop.listBorderInlineEnd) > 0 &&
-			parseFloat(desktop.listBorderBottom) === 0,
-		`inline-end ${desktop.listBorderInlineEnd}, bottom ${desktop.listBorderBottom}`
-	);
-	check(
-		'settings: the list sits on its own tint rather than the page background',
-		desktop.listBackground !== 'rgba(0, 0, 0, 0)' && desktop.listBackground !== 'transparent',
-		desktop.listBackground
+		parseFloat(desktop.paneBorderInlineEnd) > 0 && parseFloat(desktop.paneBorderBottom) === 0,
+		`inline-end ${desktop.paneBorderInlineEnd}, bottom ${desktop.paneBorderBottom}`
 	);
 	// Colour alone never carries the active state (WCAG 1.4.1). The edge bar is
 	// the rail's own element, so this also proves the list is AppNav rather than
@@ -3410,106 +3514,88 @@ for (const scheme of ['light', 'dark']) {
 	);
 	check(
 		'settings: an empty group renders no eyebrow',
-		!desktop.headings.includes('Yours') &&
-			desktop.headings.join('|') === 'This company|About',
+		!desktop.headings.includes('Yours') && desktop.headings.join('|') === 'This company|About',
 		desktop.headings.join(' | ') || '(none)'
+	);
+	check(
+		'settings: the bar names where you are, "Settings › Users", since the rail has no row',
+		desktop.location === 'Settings › Users',
+		`bar: ${JSON.stringify(desktop.location)}`
 	);
 	check('settings: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }
 
-// The content pane's padding is the shell's own. If the two ever drift, the
-// settings destination becomes the one route whose text sits somewhere else —
-// which is invisible until you put the two pages side by side.
+// The content's gutter is the page scale's: 1rem, 2rem from 40rem of region,
+// 3rem from 64rem. If settings ever drifted, it would become the one route
+// whose text sits somewhere else, invisible until two pages sit side by side.
 for (const width of [1440, 800, 375]) {
-	const { context: c1, page: p1 } = await open('surface=settings', { width, height: 900 });
-	await p1.waitForSelector('.ds-settings-pane');
-	const settingsPad = await p1.evaluate(() => {
-		const style = getComputedStyle(document.querySelector('.ds-settings-pane'));
-		return `${style.paddingTop}/${style.paddingRight}/${style.paddingBottom}/${style.paddingLeft}`;
+	const { context, page } = await open('surface=settings', { width, height: 900 });
+	await page.waitForSelector('.ds-page-main');
+	const measured = await page.evaluate(() => {
+		const main = document.querySelector('[data-slot="app-shell-content"]');
+		const style = getComputedStyle(main.querySelector('.ds-page-main'));
+		return { region: main.clientWidth, left: parseFloat(style.paddingLeft), right: parseFloat(style.paddingRight) };
 	});
-	await c1.close();
-
-	const { context: c2, page: p2 } = await open('surface=shell', { width, height: 900 });
-	await p2.waitForSelector('[data-slot="app-shell-content"]');
-	const shellPad = await p2.evaluate(() => {
-		const style = getComputedStyle(
-			document.querySelector('[data-slot="app-shell-content"] > div')
-		);
-		return `${style.paddingTop}/${style.paddingRight}/${style.paddingBottom}/${style.paddingLeft}`;
-	});
-	await c2.close();
-
+	await context.close();
+	const expected = measured.region >= 1024 ? 48 : measured.region >= 640 ? 32 : 16;
 	check(
-		`settings @ ${width}px: the content pane pads exactly as an ordinary page does`,
-		settingsPad === shellPad,
-		`settings ${settingsPad} vs page ${shellPad}`
+		`settings @ ${width}px: the content takes the page scale's gutter (${expected}px)`,
+		measured.left === expected && measured.right === expected,
+		`padding ${measured.left}px / ${measured.right}px in a ${measured.region}px region`
 	);
 }
 
-// The phone. The list stacks above the content and the PAGE scrolls as one —
-// two nested scrollers at 375px is the sideways/nested-scroll hazard this
-// package already carries a gate for, and a 240px column here would leave the
-// content pane a sliver.
+// The phone. The list leaves the page for a sheet opened from the bar: a 248px
+// column here would leave the content a sliver.
 for (const width of [375, 320]) {
 	const { context, page, errors } = await open('surface=settings', { width, height: 780 });
-	await page.waitForSelector('.ds-settings-pane');
+	await page.waitForSelector('[data-testid="ds-page-pane-open"]');
 	await page.addStyleTag({ content: SETTLE });
 
 	const phone = await page.evaluate(() => {
-		const list = document.querySelector('.ds-settings > nav');
-		const pane = document.querySelector('.ds-settings-pane');
 		const main = document.querySelector('[data-slot="app-shell-content"]');
-		const rows = [...document.querySelectorAll('.ds-settings .ds-nav-item')];
+		const content = main.querySelector('.ds-page-main');
 		return {
-			listRect: list.getBoundingClientRect(),
-			paneRect: pane.getBoundingClientRect(),
-			listOverflowY: getComputedStyle(list).overflowY,
-			paneOverflowY: getComputedStyle(pane).overflowY,
-			listScrollsItself: list.scrollHeight > list.clientHeight,
-			paneScrollsItself: pane.scrollHeight > pane.clientHeight,
+			paneInPage: document.querySelector('[data-testid="ds-page-pane"]') !== null,
+			contentWidth: content.getBoundingClientRect().width,
+			contentScrolls: content.scrollHeight > content.clientHeight,
 			mainScrolls: main.scrollHeight > main.clientHeight,
-			listBorderBottom: getComputedStyle(list).borderBottomWidth,
-			listBorderInlineEnd: getComputedStyle(list).borderInlineEndWidth,
 			documentWidth: document.documentElement.scrollWidth,
-			// Every section reachable: each row is in the document, has a real box,
-			// and is inside the viewport horizontally. That is what "one tap" means
-			// once there is no horizontal strip hiding rows behind a swipe.
-			rows: rows.map((row) => {
-				const rect = row.getBoundingClientRect();
-				return { label: row.textContent.trim(), width: rect.width, left: rect.left, right: rect.right };
-			})
+			mainOverflow: main.scrollWidth - main.clientWidth
 		};
 	});
+	check(
+		`settings @ ${width}px: no list in the page, the content takes the whole width`,
+		!phone.paneInPage && Math.round(phone.contentWidth) === width,
+		`pane in page ${phone.paneInPage}, content ${phone.contentWidth.toFixed(1)}px of ${width}px`
+	);
+	check(
+		`settings @ ${width}px: one scroller, the content — the page itself does not scroll`,
+		phone.contentScrolls && !phone.mainScrolls,
+		`content ${phone.contentScrolls}, main ${phone.mainScrolls}`
+	);
+	check(
+		`settings @ ${width}px: nothing scrolls sideways`,
+		phone.documentWidth <= width && phone.mainOverflow <= 0,
+		`document ${phone.documentWidth}px in ${width}px, main +${phone.mainOverflow}px`
+	);
 
+	await page.click('[data-testid="ds-page-pane-open"]');
+	await page.waitForSelector('[role="dialog"] .ds-nav-item');
+	const sheet = await page.evaluate(() => {
+		const dialog = document.querySelector('[role="dialog"]');
+		return [...dialog.querySelectorAll('.ds-nav-item')].map((row) => {
+			const rect = row.getBoundingClientRect();
+			return { label: row.textContent.trim(), width: rect.width, left: rect.left, right: rect.right };
+		});
+	});
+	// Every section reachable: each row is in the sheet, has a real box, and is
+	// inside the viewport horizontally.
 	check(
-		`settings @ ${width}px: the list stacks above the content, full width`,
-		Math.round(phone.listRect.width) === width &&
-			phone.paneRect.top >= phone.listRect.bottom - 0.5,
-		`list ${phone.listRect.width.toFixed(1)}px wide, pane top ${phone.paneRect.top.toFixed(1)} vs list bottom ${phone.listRect.bottom.toFixed(1)}`
-	);
-	check(
-		`settings @ ${width}px: the rule follows the axis — bottom, not inline-end`,
-		parseFloat(phone.listBorderBottom) > 0 && parseFloat(phone.listBorderInlineEnd) === 0,
-		`bottom ${phone.listBorderBottom}, inline-end ${phone.listBorderInlineEnd}`
-	);
-	check(
-		`settings @ ${width}px: one scroller, the page — neither pane scrolls inside itself`,
-		!phone.listScrollsItself && !phone.paneScrollsItself && phone.mainScrolls,
-		`list ${phone.listOverflowY}/${phone.listScrollsItself}, pane ${phone.paneOverflowY}/${phone.paneScrollsItself}, page ${phone.mainScrolls}`
-	);
-	check(
-		`settings @ ${width}px: every section is a real box inside the viewport`,
-		phone.rows.length === 5 &&
-			phone.rows.every((r) => r.width > 0 && r.left >= -0.5 && r.right <= width + 0.5),
-		phone.rows
-			.map((r) => `${r.label} ${r.width.toFixed(0)}px@${r.left.toFixed(0)}`)
-			.join(', ')
-	);
-	check(
-		`settings @ ${width}px: the page does not scroll sideways`,
-		phone.documentWidth <= width,
-		`${phone.documentWidth}px in ${width}px`
+		`settings @ ${width}px: the bar opens a sheet with every section as a real box inside the viewport`,
+		sheet.length === 5 && sheet.every((r) => r.width > 0 && r.left >= -0.5 && r.right <= width + 0.5),
+		sheet.map((r) => `${r.label} ${r.width.toFixed(0)}px@${r.left.toFixed(0)}`).join(', ')
 	);
 	check(`settings @ ${width}px: no page error`, errors.length === 0, JSON.stringify(errors));
 	await context.close();
@@ -3521,11 +3607,11 @@ for (const width of [375, 320]) {
 // colour from the default one.
 {
 	const { context, page, errors } = await open('surface=settings', { width: 900, height: 900 });
-	await page.waitForSelector('.ds-settings-pane section');
+	await page.waitForSelector('.ds-page-main > section');
 	await page.addStyleTag({ content: SETTLE });
 
 	const panels = await page.evaluate(() => {
-		const sections = [...document.querySelectorAll('.ds-settings-pane > section')];
+		const sections = [...document.querySelectorAll('.ds-page-main > section')];
 		const users = sections[0];
 		const danger = sections.find((s) => s.dataset.tone === 'destructive');
 		const description = users.querySelector('header p');
@@ -3534,9 +3620,6 @@ for (const width of [375, 320]) {
 		return {
 			descriptionHeight: description.getBoundingClientRect().height,
 			descriptionLine: line,
-			// The actions row and the title block, so "tops-aligned" is measured
-			// rather than read off a class name.
-			titleTop: users.querySelector('h2').getBoundingClientRect().top,
 			footerTop: footer.getBoundingClientRect().top,
 			bodyBottom: users.querySelector('header').nextElementSibling.getBoundingClientRect().bottom,
 			footerBorderTop: getComputedStyle(footer).borderTopWidth,
@@ -3580,7 +3663,7 @@ for (const width of [375, 320]) {
 // and the two halves of that answer differently, which is worth pinning rather
 // than leaving a consumer to discover:
 //
-//   - the CONTROLS in the content pane ride the `--ds-control-*` ramp, so a
+//   - the CONTROLS in the content ride the `--ds-control-*` ramp, so a
 //     compact app's Save button is 28px here as it is everywhere else;
 //   - the LIST ROWS do not move, because `.ds-nav-item` carries its own padding
 //     and always has. That is not the settings list opting out — it is the rail,
@@ -3594,14 +3677,16 @@ for (const density of ['comfortable', 'compact']) {
 		width: 1440,
 		height: 900
 	});
-	await page.waitForSelector('.ds-settings-pane');
+	await page.waitForSelector('[data-testid="ds-page-pane"]');
 	await page.addStyleTag({ content: SETTLE });
 
 	const measured = await page.evaluate(() => ({
 		railRow: document.querySelector('.ds-shell-rail .ds-nav-item').getBoundingClientRect().height,
-		settingsRow: document.querySelector('.ds-settings .ds-nav-item').getBoundingClientRect().height,
+		settingsRow: document
+			.querySelector('[data-testid="ds-page-pane"] .ds-nav-item')
+			.getBoundingClientRect().height,
 		paneButton: document
-			.querySelector('.ds-settings-pane [data-slot="panel-footer"] button')
+			.querySelector('.ds-page-main [data-slot="panel-footer"] button')
 			.getBoundingClientRect().height
 	}));
 
@@ -3611,7 +3696,7 @@ for (const density of ['comfortable', 'compact']) {
 		`settings ${measured.settingsRow.toFixed(1)}px vs rail ${measured.railRow.toFixed(1)}px`
 	);
 	check(
-		`settings @ density=${density}: a control in the pane takes the density ramp`,
+		`settings @ density=${density}: a control in the content takes the density ramp`,
 		Math.round(measured.paneButton) === (density === 'compact' ? 28 : 36),
 		`${measured.paneButton.toFixed(1)}px`
 	);
@@ -4454,10 +4539,10 @@ for (const density of ['comfortable', 'compact']) {
 // RecordList wears the Ledger's look, so the same layout facts are held: the
 // head card's columns on the rows' to the pixel, nothing sideways at a phone's
 // width, the wide-only columns arriving at the operator's 3360px desk. A
-// record page's column holds one opened item that is as tall as what it holds
-// up to the column and then scrolls inside itself; its document takes the
-// column's place and stands beside it as a third pane once the page's row is
-// 1250px wide, a 1600px screen with the rail open.
+// record page's aside (a `tool` page's, at the frame's right edge) holds one
+// opened item that is as tall as what it holds up to the column and then
+// scrolls inside itself; its document takes the item's place at every width,
+// never a third pane beside the column.
 {
 	const measureRecords = (page) =>
 		page.evaluate(() => {
@@ -4571,15 +4656,15 @@ for (const density of ['comfortable', 'compact']) {
 
 	// godswood, via the master-project orchestrator (app-factory#35): a 1280px
 	// window with the rail open and the ContextColumn standing leaves the list
-	// ~588px, which is a laptop's list, not a phone's.
+	// a laptop's width, which is a laptop's list, not a phone's.
 	({ context, page, errors } = await open('surface=records', { width: 1280, height: 800 }, 'light'));
 	await page.addStyleTag({ content: SETTLE });
 	await page.waitForSelector('[data-slot="record-row"]');
 	m = await measureRecords(page);
-	const columnWidth = await page.evaluate(() => document.querySelector('[data-slot="context-column"]').getBoundingClientRect().width);
+	const columnWidth = await page.evaluate(() => document.querySelector('aside.ds-page-aside').getBoundingClientRect().width);
 	check(
 		'RecordList at 1280px beside the ContextColumn: the desktop layout, head card and columns',
-		columnWidth >= 360 && m.listWidth < 600 && m.layout === 'narrow' && m.heads !== null && m.heads.length >= 4,
+		columnWidth >= 320 && m.layout === 'narrow' && m.heads !== null && m.heads.length >= 4,
 		`list ${m.listWidth}px, column ${columnWidth}px, layout ${m.layout}, heads ${JSON.stringify(m.heads)}`
 	);
 	await context.close();
@@ -4606,9 +4691,10 @@ for (const density of ['comfortable', 'compact']) {
 				const r = el.getBoundingClientRect();
 				return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
 			};
-			const aside = document.querySelector('aside[data-slot="context-column"]');
+			const aside = document.querySelector('aside.ds-page-aside');
 			const item = aside?.querySelector('[data-slot="context-column-item"]');
 			const body = item?.querySelector('[data-slot="panel-body"]');
+			// A third pane beside the column no longer exists; its absence is the claim.
 			const third = document.querySelector('[data-slot="context-column-document"]');
 			const pane = document.querySelector('[data-slot="document-pane"]');
 			const pageImg = pane?.querySelector('img');
@@ -4616,6 +4702,7 @@ for (const density of ['comfortable', 'compact']) {
 			const region = document.querySelector('[data-slot="app-shell-content"]');
 			return {
 				aside: box(aside),
+				asidePad: aside ? parseFloat(getComputedStyle(aside).paddingTop) + parseFloat(getComputedStyle(aside).paddingBottom) : 0,
 				item: box(item),
 				bodyScrolls: body ? body.scrollHeight > body.clientHeight + 1 : null,
 				third: box(third),
@@ -4669,10 +4756,10 @@ for (const density of ['comfortable', 'compact']) {
 	await page.waitForFunction(() => document.querySelector('[data-slot="document-pane"] img')?.getBoundingClientRect().width > 0);
 	r = await measureRecord(page);
 	check(
-		'Record page at 1440px: the document takes the column’s place, fills it, its page fitted inside',
+		'Record page at 1440px: the document takes the item’s place in the aside, fills it to its padding, its page fitted inside',
 		r.paneInAside &&
 			!r.third &&
-			Math.abs(r.pane.height - r.aside.height) < 1 &&
+			Math.abs(r.pane.height + r.asidePad - r.aside.height) < 1 &&
 			r.page.width > 0 &&
 			r.page.left >= r.pane.left &&
 			r.page.right <= r.pane.right &&
@@ -4683,16 +4770,14 @@ for (const density of ['comfortable', 'compact']) {
 
 	({ context, page, errors } = await open('surface=record&doc=1', { width: 1920, height: 1080 }, 'light'));
 	await page.addStyleTag({ content: SETTLE });
-	await page.waitForSelector('[data-slot="context-column-document"] img');
+	await page.waitForSelector('[data-slot="document-pane"] img');
+	await page.waitForFunction(() => document.querySelector('[data-slot="document-pane"] img')?.getBoundingClientRect().width > 0);
 	r = await measureRecord(page);
 	check(
-		'Record page, a 1920px screen: the document is a third pane beside the column, the item kept',
-		!r.paneInAside &&
-			r.third &&
-			r.item &&
+		'Record page, a 1920px screen: the document still takes the item’s place in the one aside, never a third pane beside it',
+		r.paneInAside &&
+			!r.third &&
 			r.primary.right <= r.aside.left &&
-			r.aside.right <= r.third.left &&
-			r.third.width > r.aside.width &&
 			r.overflow <= 0,
 		JSON.stringify({ primary: r.primary, aside: r.aside, third: r.third, overflow: r.overflow })
 	);
@@ -4840,17 +4925,17 @@ for (const [height, long] of [
 	await context.close();
 }
 
-// A phone's bottom-right corner holds one floating control: ContextColumn's
-// "At a glance" opener (feedback is in the drawer, never over the page). It is
-// hit-tested at its own centre and four inner corners; a list scrolled to its
-// end clears it through the reserve the column declares; the dialogue it opens
-// names itself once.
+// A phone has no floating control: ContextColumn is the page's aside, and the
+// bar's button opens it as a sheet (feedback is in the drawer, never over the
+// page). The button is hit-tested at its own centre and four inner corners; a
+// list scrolled to its end has nothing laid over its last row; the dialogue it
+// opens names itself once.
 {
 	const { context, page, errors } = await open('surface=records&long=1', { width: 390, height: 780 }, 'light');
 	await page.addStyleTag({ content: SETTLE });
-	await page.waitForSelector('button[aria-label="Open At a glance"]');
+	await page.waitForSelector('[data-testid="ds-page-aside-open"]');
 	const tap = await page.evaluate(() => {
-		const el = document.querySelector('button[aria-label="Open At a glance"]');
+		const el = document.querySelector('[data-testid="ds-page-aside-open"]');
 		const r = el.getBoundingClientRect();
 		const points = [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
 		const hit = points.every(([x, y]) => {
@@ -4860,30 +4945,35 @@ for (const [height, long] of [
 		const scrollers = [...document.querySelectorAll('[data-slot="app-shell-content"], [data-slot="record-rows"]')];
 		for (const el of scrollers) el.scrollTop = el.scrollHeight;
 		const ended = scrollers.some((el) => el.scrollHeight > el.clientHeight) && scrollers.every((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
-		const last = [...document.querySelectorAll('[data-slot="record-row"]')].pop().getBoundingClientRect();
-		const report = [...document.querySelectorAll('[aria-label="Report a problem"]')].filter((b) => b.getBoundingClientRect().width > 0);
-		return { glance: [r.left, r.top, r.right, r.bottom].map(Math.round), hit, ended, last: [last.left, last.top, last.right, last.bottom].map(Math.round), report: report.length };
+		const lastRow = [...document.querySelectorAll('[data-slot="record-row"]')].pop();
+		const last = lastRow.getBoundingClientRect();
+		const topmost = document.elementFromPoint(last.left + last.width / 2, last.top + last.height / 2);
+		const fixed = [...document.querySelectorAll('body *')].filter((e) => getComputedStyle(e).position === 'fixed' && e.getBoundingClientRect().width > 0 && !e.closest('[role="dialog"]')).length;
+		return { button: [r.left, r.top, r.right, r.bottom].map(Math.round), hit, ended, lastClear: topmost === lastRow || lastRow.contains(topmost), fixed };
 	}).catch((error) => ({ error: error.message }));
-	const shared = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
-	check('ContextColumn at 390px: the opener is tappable and no report button floats beside it', !tap.error && tap.hit && tap.report === 0, JSON.stringify(tap));
+	check('ContextColumn at 390px: the bar’s opener is tappable and nothing floats over the page', !tap.error && tap.hit && tap.fixed === 0, JSON.stringify(tap));
 	if (!tap.error) {
-		check('ContextColumn at 390px: a list scrolled to its end clears the opener', tap.ended && shared(tap.last, tap.glance) === 0, JSON.stringify(tap));
+		check('ContextColumn at 390px: a list scrolled to its end has nothing laid over its last row', tap.ended && tap.lastClear, JSON.stringify(tap));
 	}
-	await page.click('button[aria-label="Open At a glance"]');
+	await page.click('[data-testid="ds-page-aside-open"]');
 	await page.waitForSelector('[role="dialog"]');
 	const names = await page.evaluate(
 		() => [...document.querySelectorAll('[role="dialog"] *')].filter((e) => e.children.length === 0).map((e) => e.textContent.trim())
 	);
 	check('ContextColumn at 390px: the dialogue names itself once', names.filter((n) => n === 'At a glance').length === 1, JSON.stringify(names));
-	// Its info tip, beside the name, is the dialogue's first control: the focus
-	// the dialogue moves there on open leaves it shut, and a keyboard's opens it.
+	// The card's info line is the sheet's description, read in place, so the
+	// dialogue carries no info tip to open and nothing is shut behind a control.
 	await page.waitForTimeout(400);
-	const shut = await page.locator('[data-slot="tooltip-content"]').count();
-	check('ContextColumn at 390px: the dialogue opens with its info tip shut', shut === 0, `${shut} open`);
-	await page.keyboard.press('Tab');
-	await page.keyboard.press('Shift+Tab');
-	const keyed = await page.waitForSelector('[data-slot="tooltip-content"]', { timeout: 2000 }).then(() => 'open', () => 'shut');
-	check('ContextColumn at 390px: a keyboard’s focus opens the info tip', keyed === 'open', keyed);
+	const info = await page.evaluate(() => ({
+		description: document.querySelector('[role="dialog"] [data-slot="sheet-description"]')?.textContent?.trim() ?? null,
+		tips: document.querySelectorAll('[role="dialog"] [data-slot="tooltip-trigger"]').length,
+		open: document.querySelectorAll('[data-slot="tooltip-content"]').length
+	}));
+	check(
+		'ContextColumn at 390px: the info line is the dialogue’s description, with no info tip beside the name',
+		info.description === 'The owned properties, today.' && info.tips === 0 && info.open === 0,
+		JSON.stringify(info)
+	);
 	check('ContextColumn at 390px: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 }

@@ -43,19 +43,36 @@ the comment inline).
 `src/lib/app-frame.svelte` wraps every route under `routes/(protected)/` in
 `AppShell`: one composition in every app, a side rail (a drawer on a phone)
 and a top bar, with no variant to choose. The frame declares the app's `nav`
-and hands the same value to the rail and the command palette. A route says
-how wide its page may get, and whether it pads itself, in its load data:
+and hands the same value to the rail and the command palette. It sets no
+width: a route says what kind of page it is, in its load data, and the shell
+lays it out.
 
 ```ts
-// routes/(protected)/reports/+layout.ts
-import type { LayoutLoad } from './$types';
-export const load: LayoutLoad = () => ({ measure: 'page' });
+// routes/(protected)/library/+page.ts
+export const load = () => ({ title: 'Library', pageType: 'tool' });
 ```
 
-`measure` is `prose`, `page`, `wide` (the frame's default) or `full`; `padded`
-defaults to true. The content texture is on by default. Sidebar and chart
-colours are the one surface the package leaves to each app, declared and
-registered in `app.css` alongside the primary override.
+| `pageType` | What the shell does | For |
+| --- | --- | --- |
+| `reading` (the default) | One centred 44rem column; a `PageAside` beside it, the pair centred, and after it on a narrow screen. The page scrolls. | About, security, a record, a form, a members list, a document |
+| `panel` | A `PagePane` flush against the rail and as wide as it, the content beside it left-aligned at 52rem; a sheet from the bar on a phone. | Settings (`SettingsShell`), a chat's past questions, a working list |
+| `tool` | The whole frame; the page never scrolls. Its fill (a `Panel` with `scroll`, or any block marked `data-fill`) takes the frame's remaining height and scrolls inside itself; an aside stands at the right edge. | A library, a table, a graph, a map, a dashboard |
+
+A page writes no `max-w-*`, `mx-auto`, page padding or negative margin: if a
+page needs one, it is the wrong type, or the factory's types need a change.
+`title` also names a page the rail has no row for. The content texture is on by
+default. Sidebar and chart colours are the one surface the package leaves to
+each app, declared and registered in `app.css` alongside the primary override.
+
+`pnpm layout-gate` renders every route in the rail at 1673 and 390 px, signed
+in as the E2E suite is, and has `google/pro` judge each page through the
+LiteLLM proxy (an OpenAI model only if Gemini errors; the report says which):
+composed as one whole, no void or stranded element, nothing floating over
+content, no page scroll on a tool page, one right edge per text column, thumb
+reach on a phone, and the bar's title. It needs `LITELLM_URL` and
+`LITELLM_VIRTUAL_KEY` (vended from the broker), writes its report to
+`test-results/layout-gate/`, and exits non-zero on any broken page. A layout
+change does not land until it passes.
 
 ## Pages
 
