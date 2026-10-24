@@ -4,6 +4,16 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.74] - 2026-10-24
+
+Need: a persona whose CLAUDE.md is a thin file of `@` imports keeps its identity in a chat turn; consumer: pebblestone (five personas importing their briefs from `company/`, the business's one declarative source, one of them nesting three more).
+
+### Fixed
+
+- **A chat turn's persona brief has its `@` imports expanded** (`agent-common`): `Persona.brief()` (`persona.expand`) replaces each `@<path>` at a line's start or after whitespace, outside a code span or fence, with that file, resolved against the file naming it (the seeded `CLAUDE.md` the session would read first) and followed to Claude Code's five hops; a prose mention naming no file (`accounts@`, `ask @someone`) stays text; `cli.argv` appends it for a restricted turn. Since 2026.10.60 a restricted turn took CLAUDE.md raw, so a persona of imports answered with no brief. An unreadable import standing alone on its line or list item, a cycle or a sixth hop raises `ImportUnreadable` (a `ValueError`), and `INSTRUCTIONS_LIMIT` holds of the expanded text. A job is unchanged: its CLI follows the imports itself. Migration: take `agent-common` 2026.10.74.
+- **The stamped `handOff` passes `svelte/no-navigation-without-resolve`**: `lib/agent/chat.ts` wraps its `goto` target in `resolve()` from `$app/paths`. The rule is off for `.svelte*` files only, and eslint-plugin-svelte 3.22.0 reports this plain `.ts` call. Consumer: pebblestone.
+- **`Publish kits/python` and the self-test's render job run on `atlas`**, not the whole `household` pool: they read atlas's upload password file and its index's LAN address. huginn joined the pool and took v2026.10.72's publish, so `agent-common` 2026.10.72 was never served (2026.10.73's ran on atlas and was).
+
 ## [2026.10.73] - 2026-10-24
 
 Need: the operator's ruling of 24/10/2026, "the app factory is the right place to own this, and that way, each app, like CASPO, doesn't need to think about what it needs to do on the page, it just chooses the page type that it wants. The less that an app has to think, the better; all the thinking should have already occurred in the templates"; consumer: caspo.
@@ -20,8 +30,6 @@ Need: the operator's ruling of 24/10/2026, "the app factory is the right place t
 
 - **A stamp of 2026.10.72 builds**: its chat page imported `ShellActions` and `@poodle64/librarian` APIs (the dated list's `oncollapse`, `Chat.clear`, `ask`'s `group`) that no published release of either package carried, against pins of `@poodle64/ui` `^2026.10.26` and `@poodle64/librarian` `2026.10.9`. This release pins `@poodle64/ui` `^2026.10.27` and `@poodle64/librarian` `2026.10.10`, which carry what the page uses, and the backend `agent-common>=2026.10.72` for the listing's `short_title` and `subject`. Migration: an app at 2026.10.72 takes this release.
 - **A configured actors file that is missing now raises**: `ActorRegistry(path)` raises `FileNotFoundError` naming the path instead of skipping it, which left only `local-console` registered and refused every HTTP caller as unregistered. `ActorRegistry(None)` is the only way to run with no file. Need: an image that left `<APP>_ACTORS_CONFIG_PATH` unset resolved the default into site-packages and the outage hid; consumer: pebblestone.
-- **A chat turn's persona brief has its `@` imports expanded** (`agent-common`): `Persona.brief()` (`persona.expand`) replaces each `@<path>` at a line's start or after whitespace, outside a code span or fence, with that file, resolved against the file naming it (the seeded `CLAUDE.md` the session would read first) and followed to Claude Code's five hops; a prose mention naming no file (`accounts@`, `ask @someone`) stays text; `cli.argv` appends it for a restricted turn. Since 2026.10.60 a restricted turn took CLAUDE.md raw, so a persona of imports answered with no brief. An unreadable import standing alone on its line or list item, a cycle or a sixth hop raises `ImportUnreadable` (a `ValueError`), and `INSTRUCTIONS_LIMIT` holds of the expanded text. A job is unchanged: its CLI follows the imports itself. Need: a persona whose CLAUDE.md is a thin file of imports keeps its identity in a chat turn; consumer: pebblestone (five personas importing their briefs from `company/`). Migration: take the `agent-common` release that carries this.
-- **The Python kits publish again**: `Publish kits/python` and the self-test's render job run on `atlas`, not the whole `household` pool. huginn joined the pool and took v2026.10.72's publish, which found no upload password file and could not reach the index's LAN address, so `agent-common` 2026.10.72 was never served. This release serves the kit that 2026.10.72's stamped `chat.py` imports.
 
 ## [2026.10.72] - 2026-10-24
 

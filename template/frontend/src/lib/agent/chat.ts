@@ -25,6 +25,7 @@ import type { ChatCopy } from '@poodle64/librarian/copy';
 import type { DescribeTool } from '@poodle64/librarian/transcript';
 import type { Visual } from '@poodle64/librarian/visuals';
 import { goto, preloadCode } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { api, apiFetch } from '$lib/api';
 
 /** A persona as `GET /api/agent/personas` lists it. */
@@ -294,7 +295,7 @@ export function handOff(
 		: group
 			? `?${new URLSearchParams({ group })}`
 			: '';
-	return goto(`/chat/${encodeURIComponent(persona)}${query}`, {
+	return goto(resolve(`/chat/${encodeURIComponent(persona)}${query}`), {
 		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
 	});
 }
