@@ -22,6 +22,7 @@ Need: Past questions as a column beside the conversation with Clear all at its f
 ### Fixed
 
 - **The `/mcp` refusal warning names who was refused**: `MCP HTTP tool call rejected: <reason> (client_id=<id>)`. The id is the OIDC `sub`, not a secret; the registered list stays out of the log. Need: an operator could not tell who was refused; consumer: pebblestone.
+- **A configured actors file that is missing now raises**: `ActorRegistry(path)` raises `FileNotFoundError` naming the path instead of skipping it, which left only `local-console` registered and refused every HTTP caller as unregistered. `ActorRegistry(None)` is the only way to run with no file. Need: an image that left `<APP>_ACTORS_CONFIG_PATH` unset resolved the default into site-packages and the outage hid; consumer: pebblestone.
 
 ## [2026.10.71] - 2026-10-24
 

@@ -316,6 +316,15 @@ def test_actor_registry_refuses_unregistered_identity(tmp_path):
 
 
 @pytest.mark.unit
+def test_actor_registry_refuses_a_configured_path_that_is_missing(tmp_path):
+    """A configured-but-missing file is a fault, not an empty registry."""
+    missing = tmp_path / "actors.yaml"
+    with pytest.raises(FileNotFoundError, match="actors.yaml"):
+        ActorRegistry(missing)
+    assert ActorRegistry(None).registered_ids() == ["local-console"]
+
+
+@pytest.mark.unit
 def test_shipped_actors_file_registers_the_gateway_consumer():
     """The stamped config/actors.yaml is valid and carries the expected entries."""
     from {{ package_name }}.config import get_settings

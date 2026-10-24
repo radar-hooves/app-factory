@@ -60,11 +60,18 @@ _DEFAULT_ACTOR = Actor(id="principal", type="principal", display="Local Console"
 
 
 class ActorRegistry:
-    """Map a client identity string to an :class:`Actor`."""
+    """Map a client identity string to an :class:`Actor`.
+
+    ``config_path=None`` is the only way to run with no file. A path that is
+    given but missing raises ``FileNotFoundError``: skipping it would leave only
+    ``local-console`` registered and refuse every HTTP caller as unregistered.
+    """
 
     def __init__(self, config_path: Path | None = None) -> None:
         self._map: dict[str, Actor] = {_DEFAULT_LOCAL_CLIENT: _DEFAULT_ACTOR}
-        if config_path is not None and config_path.exists():
+        if config_path is not None:
+            if not config_path.exists():
+                raise FileNotFoundError(f"actor registry file not found: {config_path}")
             self._load(config_path)
 
     def _load(self, path: Path) -> None:
