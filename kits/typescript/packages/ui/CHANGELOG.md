@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.29] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: text that is cut off for no reason). On a 390px phone the bar read "Security › Overv…" and, on /brand, "B…", because the page's own bar actions took the room.
+
+### Added
+
+- **`ShellActions`** registers a page's status and actions in the bar (`actions={[{ label, icon, href?, download?, onclick?, primary?, detail? }]}`, type `BarAction`). From `sm` each is a labelled button; below it they fold into one "More actions" (`⋯`) menu with each action's icon and name, and the status stands down. Where an app drew these from its own `actions` snippet, register them here instead.
+- **`shortLocation(nav, path, fallback)`**, the phone bar's one name.
+
+### Changed
+
+- **The phone bar shows one name.** Below `sm` the title is the page's own name, not "Section › Page"; a child whose `href` is its section's (an "Overview") reads as the section ("Security"). Desktop keeps the trail. The title (`data-testid="ds-shell-title"`) takes the row's remaining width.
+
 ## [2026.10.28] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: text that breaks or cuts for no reason). In CASPO's rail, "Intelligence" and "Strategy paper" read "Intelligen…" and "Strategy …": the label, a text chip and the submenu chevron did not fit 15.5rem.
