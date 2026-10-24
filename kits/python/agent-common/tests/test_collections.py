@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from agent_common.collections import Collection, Collections, Document, Passage, Source, passages_block
+from agent_common.collections import Collection, Collections, Document, Passage, Source, Subject, passages_block
 from library.exceptions import ApiException
 
 URL = "https://library.test/api/caller"
@@ -99,6 +99,27 @@ async def test_the_collections_a_person_may_read_come_back_with_their_summaries_
         Collection("bare", "", None),
     ]
     assert route.calls.last.request.headers["authorization"] == "Bearer test-bearer"
+
+
+async def test_a_collection_carries_its_short_title_and_its_subject(library: respx.MockRouter) -> None:
+    # The library's listing, measured on caspo 24/10/2026: "DASR" under "Airworthiness".
+    library.get("/collections").respond(
+        200,
+        json=[
+            {
+                **_summary("dasr", profile=None, documents_to=None, title="Defence Aviation Safety Regulation"),
+                "short_title": " DASR ",
+                "subject": {"name": "airworthiness", "title": "Airworthiness"},
+            },
+            {**_summary("untitled", profile=None, documents_to=None), "subject": {"name": "misc"}},
+            {**_summary("loose", profile=None, documents_to=None), "subject": None},
+        ],
+    )
+
+    dasr, untitled, loose = await _collections().list()
+    assert (dasr.short_title, dasr.subject) == ("DASR", Subject("airworthiness", "Airworthiness"))
+    assert untitled.subject == Subject("misc", "misc")
+    assert (loose.short_title, loose.subject) == ("", None)
 
 
 async def test_a_search_names_its_collections_and_numbers_the_documents_in_rank_order(

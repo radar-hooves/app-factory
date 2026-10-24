@@ -51,6 +51,8 @@ export interface StoredTurn {
 	kind?: string | null;
 	/** The collection this question was narrowed to, by name; null asked across them all. */
 	collection?: string | null;
+	/** The subject this question was narrowed to, by name, where it was. */
+	group?: string | null;
 	/** Where this answer's read-only view lives while it is shared. */
 	shared?: string | null;
 	/** The names of the files attached to the question. */
@@ -104,6 +106,8 @@ export interface AskRequest {
 	kind?: string;
 	/** The one collection to ask, by name: `client.ask()`'s `collection`. */
 	collection?: string;
+	/** The one subject to ask, by name: `client.ask()`'s `group`. */
+	group?: string;
 	/** The position of the question this replaces: `client.ask()`'s `edit`. */
 	edit?: number;
 }
@@ -311,7 +315,8 @@ export class Chat {
 
 	/**
 	 * Ask `question`, or what is in the box, as a `kind` of turn when it is not
-	 * a plain question, narrowed to one `collection` by name when given. A
+	 * a plain question, narrowed to one `collection` by name when given, or to
+	 * one subject (`group`), every collection under it. A
 	 * question handed in carries `files` with it, the box's own going with a
 	 * typed one. Resolves once the turn settles: true if it was asked, false if
 	 * it was refused, here or by the server, in which case the question and its
@@ -321,7 +326,8 @@ export class Chat {
 		question?: string,
 		kind?: string,
 		collection?: string,
-		files: File[] = []
+		files: File[] = [],
+		group?: string
 	): Promise<boolean> {
 		const typed = question === undefined;
 		const text = (question ?? this.draft).trim();
@@ -337,15 +343,15 @@ export class Chat {
 			this.draft = '';
 			this.files = [];
 		}
-		return this.#ask(text, sent, typed, kind, collection);
+		return this.#ask(text, sent, typed, kind, { collection, group });
 	}
 
 	/** The last question again, as a new turn: the conversation is append-only,
-	 *  because the agent's transcript is. Same kind, same collection. */
+	 *  because the agent's transcript is. Same kind, same collection or subject. */
 	again(): Promise<boolean> {
 		const last = this.turns.at(-1);
 		return last?.question
-			? this.ask(last.question, last.kind, last.collection)
+			? this.ask(last.question, last.kind, last.collection, [], last.group)
 			: Promise.resolve(false);
 	}
 
@@ -364,7 +370,14 @@ export class Chat {
 		const removed = this.#turns.splice(position);
 		const held = removed.filter((t) => this.#held.delete(t.id)).map((t) => t.id);
 		this.#version += 1;
-		const asked = await this.#ask(body, [], false, was.kind, was.collection, position);
+		const asked = await this.#ask(
+			body,
+			[],
+			false,
+			was.kind,
+			{ collection: was.collection, group: was.group },
+			position
+		);
 		// Refused before the server dropped anything: the page is as it was left.
 		// A conversation found already being answered was shown whole instead.
 		if (!asked && this.#turns.length === position) {
@@ -537,7 +550,7 @@ export class Chat {
 		files: File[],
 		typed: boolean,
 		kind?: string,
-		collection?: string,
+		{ collection, group }: { collection?: string; group?: string } = {},
 		edit?: number
 	): Promise<boolean> {
 		const chat = this.#chat!;
@@ -554,6 +567,7 @@ export class Chat {
 			files: files.map((f) => f.name),
 			kind,
 			collection,
+			group,
 			artefact: this.#card(kind)
 		});
 		const live = this.#turns[this.#turns.length - 1];
@@ -570,6 +584,7 @@ export class Chat {
 			signal: stream.controller.signal,
 			kind,
 			collection,
+			group,
 			edit
 		})) {
 			const named = event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined;
@@ -796,6 +811,7 @@ export function storedTurn(conversation: string, index: number, stored: StoredTu
 		written: stored.artefacts ?? [],
 		kind: stored.kind ?? undefined,
 		collection: stored.collection ?? undefined,
+		group: stored.group ?? undefined,
 		shared: stored.shared ?? undefined
 	};
 }

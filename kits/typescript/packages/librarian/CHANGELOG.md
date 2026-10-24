@@ -8,6 +8,7 @@ Consumer: caspo (the operator, 24/10/2026: Past questions as a column, with Clea
 
 ### Added
 
+- **A question narrows to a subject**: `ask()` sends `group` in either encoding, `Chat.ask` takes it as a fifth argument (`ask(question, kind, collection, files, group)`) and keeps it on the turn (`Turn.group`) for Ask again and an edit, and `StoredTurn.group` reads it back.
 - **`ConversationList` groups under Today, Yesterday and Earlier and dates each row**: its time under the first two, its day under Earlier, with the year where it is not this one, by the reader's own clock.
 - **`ConversationList` takes `oncollapse`**, for a host that keeps it as a column: its head is then New question and a fold, the title kept for a screen reader.
 - Copy: `hidePastQuestions`, `showPastQuestions`, `today`, `yesterday`, `earlier`, `clearAll`, `clearAllPrompt`, `clearAllDetail`, `clearAllFailed`.

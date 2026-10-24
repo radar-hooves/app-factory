@@ -66,6 +66,9 @@ export interface AskOptions {
 	/** The one collection this question is asked of, by name. Absent asks
 	 *  across every collection the person may read. */
 	collection?: string;
+	/** The one subject this question is asked of, by name: every collection
+	 *  the library groups under it. Never with `collection`. */
+	group?: string;
 	/** The position (0-based) of the person's question this one replaces: the
 	 *  server drops that turn and every one after it. Needs `resume`. */
 	edit?: number;
@@ -106,6 +109,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 				question: options.question,
 				resume: options.resume ?? null,
 				collection: options.collection,
+				group: options.group,
 				kind: options.kind,
 				edit: options.edit
 			}),
@@ -117,6 +121,7 @@ function requestInit(options: AskOptions, signal?: AbortSignal): RequestInit {
 	form.append('question', options.question);
 	if (options.resume) form.append('resume', options.resume);
 	if (options.collection) form.append('collection', options.collection);
+	if (options.group) form.append('group', options.group);
 	for (const file of options.files) form.append('files[]', file, file.name);
 	if (options.kind) form.append('kind', options.kind);
 	if (options.edit !== undefined) form.append('edit', String(options.edit));

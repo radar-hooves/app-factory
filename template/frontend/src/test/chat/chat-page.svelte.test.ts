@@ -421,6 +421,46 @@ describe('Choosing where a persona looks', () => {
 		);
 	});
 
+	it('lists each collection by its short title under its subject, and asks a whole subject', async () => {
+		const listed = ROUTES['/api/agent/{persona}/collections'];
+		ROUTES['/api/agent/{persona}/collections'] = [
+			{ ...COLLECTIONS[0], short_title: 'Manual', subject: { name: 'pay', title: 'Pay matters' } },
+			{ ...COLLECTIONS[1], subject: { name: 'pay', title: 'Pay matters' } }
+		];
+		try {
+			at('/chat/outrider');
+			await fireEvent.click(await screen.findByRole('button', { name: /^Where Outrider looks/ }));
+			const list = screen.getByRole('listbox', { name: 'Where Outrider looks' });
+			expect(
+				within(list)
+					.getAllByRole('option')
+					.map((o) => o.textContent?.trim())
+			).toEqual(['All your collections', 'Pay matters', 'Manual', 'Conditions of service']);
+			await fireEvent.click(within(list).getByRole('option', { name: 'Pay matters' }));
+			await waitFor(() =>
+				expect(fake.goto).toHaveBeenCalledWith(
+					'?group=pay',
+					expect.objectContaining({ replaceState: true })
+				)
+			);
+			expect(fake.goto).toHaveBeenCalledTimes(1);
+
+			const asked = answering('c5', 'Four weeks.');
+			at('/chat/outrider?group=pay');
+			await screen.findAllByRole('button', { name: 'Where Outrider looks: Pay matters' });
+			await fireEvent.input(screen.getAllByRole('textbox').at(-1)!, {
+				target: { value: 'How much leave?' }
+			});
+			await fireEvent.click(screen.getAllByRole('button', { name: 'Send' }).at(-1)!);
+			await waitFor(() => expect(asked).toHaveBeenCalled());
+			const [, init] = asked.mock.calls[0] as unknown as [string, RequestInit];
+			expect(JSON.parse(String(init.body))).toMatchObject({ group: 'pay' });
+			expect(JSON.parse(String(init.body)).collection).toBeUndefined();
+		} finally {
+			ROUTES['/api/agent/{persona}/collections'] = listed;
+		}
+	});
+
 	it('narrows the question to the collection a link names', async () => {
 		const asked = answering('c4', 'Four weeks.');
 		at('/chat/outrider?collection=conditions');

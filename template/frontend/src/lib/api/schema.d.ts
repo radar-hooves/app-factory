@@ -214,6 +214,10 @@ export interface paths {
         /**
          * Update User
          * @description Update a user's local standing — today, only the active flag.
+         *
+         *     Records ``admin_user_updated`` as a security event. This is the app's only admin mutation:
+         *     entitlement changes are made at the identity provider, which records them. The app records
+         *     what the app does.
          */
         patch: operations["adminUpdateUser"];
         trace?: never;
@@ -655,7 +659,12 @@ export interface paths {
          *     opens: 404 for a `resume` that is not this person's conversation with
          *     this persona, or any `collection` for a persona that reads none; 409
          *     while that conversation is being answered; 429 once today's allowance
-         *     is spent.
+         *     is spent or this person asks too often; 503 with `Retry-After` while
+         *     the ceiling on turns in flight is reached. Attachments are refused
+         *     unread: 413 for a body or a file too large, 415 for a type not read,
+         *     400 for too many. Read, they are then checked by their bytes (`content`):
+         *     415 for a file that is not what its name says, 422 for one the
+         *     scanner names, 503 when a scanner is configured and cannot answer.
          */
         post: operations["askPersona"];
         delete?: never;
@@ -1055,6 +1064,12 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Short Title
+             * @default
+             */
+            short_title: string;
+            subject?: components["schemas"]["SubjectRead"] | null;
             /** Documents To */
             documents_to?: string | null;
         };
@@ -1113,15 +1128,9 @@ export interface components {
             last_seen_at: string | null;
             /** Entitlements */
             entitlements: string[];
-            /**
-             * Held
-             * @description What the identity provider granted, whether or not an admin is viewing as a colleague.
-             */
+            /** Held */
             held: string[];
-            /**
-             * Viewing As
-             * @description True while ``entitlements`` is narrowed from ``held`` by the caller's own request.
-             */
+            /** Viewing As */
             viewing_as: boolean;
         };
         /**
@@ -1504,6 +1513,8 @@ export interface components {
             kind?: string | null;
             /** Collection */
             collection?: string | null;
+            /** Group */
+            group?: string | null;
             mark?: components["schemas"]["MarkRead"] | null;
             /** Shared */
             shared?: string | null;
@@ -1522,6 +1533,13 @@ export interface components {
              * @default []
              */
             steps: components["schemas"]["StepRead"][];
+        };
+        /** SubjectRead */
+        SubjectRead: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
         };
         /**
          * UserSummary

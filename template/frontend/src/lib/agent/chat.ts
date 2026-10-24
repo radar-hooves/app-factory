@@ -20,6 +20,7 @@ import type {
 	StoredTurn
 } from '@poodle64/librarian/chat';
 import type { Citation, LoadDocument } from '@poodle64/librarian/citations';
+import type { CollectionChoice } from '@poodle64/librarian/composer';
 import type { ChatCopy } from '@poodle64/librarian/copy';
 import type { DescribeTool } from '@poodle64/librarian/transcript';
 import type { Visual } from '@poodle64/librarian/visuals';
@@ -47,8 +48,22 @@ export interface Collection {
 	title: string;
 	/** One line on what it holds, empty where the library has none. */
 	description: string;
+	/** The title a picker row has room for ("DASR"); empty where the library has none. */
+	short_title?: string;
+	/** What it is about, by which the picker groups it and a question may ask the whole group. */
+	subject?: { name: string; title: string } | null;
 	/** When the library last confirmed its documents current. Null until it says. */
 	documents_to?: string | null;
+}
+
+/** A collection as the composer's picker offers it: its short title as the row, under its subject. */
+export function choiceOf(collection: Collection): CollectionChoice {
+	return {
+		name: collection.name,
+		title: collection.title,
+		shortTitle: collection.short_title || undefined,
+		group: collection.subject ?? undefined
+	};
 }
 
 /** A briefing on a persona: what the composer's own control asks, and the card it reads as. */
@@ -126,7 +141,7 @@ function artefactUrl(id: string, name: string, version: number, format: string):
 export function chatTransport(persona: Persona): ChatTransport {
 	const at = (id: string) => ({ params: { path: { conversation_id: id } } });
 	return {
-		ask: ({ question, files, resume, signal, kind, collection, edit }) =>
+		ask: ({ question, files, resume, signal, kind, collection, group, edit }) =>
 			ask({
 				question,
 				files,
@@ -134,6 +149,7 @@ export function chatTransport(persona: Persona): ChatTransport {
 				signal,
 				kind,
 				collection,
+				group,
 				edit,
 				endpoint: `${BASE}/api/agent/${persona.id}/ask`,
 				fetch: apiFetch
@@ -259,6 +275,8 @@ export interface HandedOver {
 	ask: string;
 	files?: File[];
 	collection?: string;
+	/** A subject, every collection under it: never with `collection`. */
+	group?: string;
 	kind?: string;
 }
 
@@ -269,9 +287,13 @@ export interface HandedOver {
  */
 export function handOff(
 	persona: string,
-	{ ask, files, collection, kind }: HandedOver
+	{ ask, files, collection, group, kind }: HandedOver
 ): Promise<void> {
-	const query = collection ? `?${new URLSearchParams({ collection })}` : '';
+	const query = collection
+		? `?${new URLSearchParams({ collection })}`
+		: group
+			? `?${new URLSearchParams({ group })}`
+			: '';
 	return goto(`/chat/${encodeURIComponent(persona)}${query}`, {
 		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
 	});

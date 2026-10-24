@@ -591,6 +591,9 @@ export interface Turn {
 	/** The collection this question was narrowed to, by name, as `client.ask()`
 	 *  sent it. Absent asked across every collection the person may read. */
 	collection?: string;
+	/** The subject this question was narrowed to, by name, as `client.ask()`
+	 *  sent it: every collection under it. */
+	group?: string;
 	/** Where this answer's read-only view lives while it is shared, as the
 	 *  host's own address. Absent while it is not. */
 	shared?: string;

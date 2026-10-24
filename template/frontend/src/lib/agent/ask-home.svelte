@@ -23,6 +23,7 @@
 	let persona = $state<Persona | null>(null);
 	let collections = $state<Collection[]>([]);
 	let collection = $state<string | undefined>();
+	let group = $state<string | undefined>();
 	let value = $state('');
 	let files = $state<File[]>([]);
 
@@ -38,7 +39,7 @@
 	});
 
 	function send(ask: string, kind?: string) {
-		void handOff(id, { ask: ask.trim(), files, collection, kind });
+		void handOff(id, { ask: ask.trim(), files, collection, group, kind });
 	}
 </script>
 
@@ -50,7 +51,9 @@
 		running={false}
 		{collections}
 		{collection}
+		{group}
 		oncollection={(name) => (collection = name)}
+		ongroup={(name) => (group = name)}
 		onsubmit={() => value.trim() && send(value)}
 		onstop={() => undefined}
 		onbriefing={(card) => send(card.question, BRIEFING)}

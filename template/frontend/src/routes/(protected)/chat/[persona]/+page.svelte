@@ -7,7 +7,8 @@
 	all at its foot; narrower, the bar's own action opens them in a sheet
 	(operator, 24/10/2026). The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
-	(`?collection=<name>`), so a link reopens or narrows it on any device,
+	(`?collection=<name>`), or the subject (`?group=<name>`, every collection
+	under it), so a link reopens or narrows it on any device,
 	mid-answer included. A question another page hands over waits in the box
 	(`?q=`), or is asked on arrival, with its files, when it says so in
 	navigation state (`handOff` from `$lib/agent/chat`, which a Home page's
@@ -117,6 +118,13 @@
 		if (!named) return undefined;
 		return !listed || collections.some((c) => c.name === named) ? named : undefined;
 	});
+	// The same for a subject: one no collection listed for this person is under
+	// is no subject.
+	const group = $derived.by(() => {
+		const named = page.url.searchParams.get('group');
+		if (!named || collection) return undefined;
+		return !listed || collections.some((c) => c.subject?.name === named) ? named : undefined;
+	});
 	const choices = $derived<Collection[]>(
 		!listed && collection ? [{ name: collection, title: '', description: '' }] : collections
 	);
@@ -131,17 +139,22 @@
 		// How current, beside what is not held: a miss on yesterday's news then
 		// reads as dated rather than broken. The oldest check among the
 		// collections a question reaches is the one that bounds the answer.
-		const reached = collection ? collections.filter((c) => c.name === collection) : collections;
+		const reached = collection
+			? collections.filter((c) => c.name === collection)
+			: group
+				? collections.filter((c) => c.subject?.name === group)
+				: collections;
 		const dates = reached.map((c) => c.documents_to);
 		const oldest = dates.length > 0 && dates.every(Boolean) ? dates.toSorted()[0] : null;
 		const held = persona.not_held ? `${who} does not hold ${persona.not_held}.` : '';
 		return [held, oldest ? documentsTo(oldest) : ''].filter(Boolean).join(' ') || undefined;
 	});
 
-	/** This page's address with the conversation named (or none), keeping the collection. */
+	/** This page's address with the conversation named (or none), keeping the collection or subject. */
 	function address(conversation?: string | null): string {
 		const query = new SvelteURLSearchParams();
 		if (collection) query.set('collection', collection);
+		else if (group) query.set('group', group);
 		if (conversation) query.set('c', conversation);
 		const text = query.toString();
 		return text ? `?${text}` : page.url.pathname;
@@ -227,7 +240,8 @@
 				ask,
 				typeof kind === 'string' ? kind : undefined,
 				collection,
-				Array.isArray(files) ? files.filter((f) => f instanceof File) : []
+				Array.isArray(files) ? files.filter((f) => f instanceof File) : [],
+				group
 			);
 		});
 	});
@@ -262,12 +276,25 @@
 		void goto(address(), { keepFocus: true, noScroll: true });
 	}
 
-	/** Narrows the next question to one collection, or to all of them, in the address. */
-	function narrow(name: string | undefined) {
-		const query = new SvelteURLSearchParams(page.url.searchParams);
-		if (name) query.set('collection', name);
-		else query.delete('collection');
-		void goto(`?${query}`, { replaceState: true, keepFocus: true, noScroll: true });
+	/**
+	 * Narrows the next question to one collection, one subject, or all of them,
+	 * in the address. The picker calls `oncollection` and `ongroup` together for
+	 * one pick, so the two are taken as one change and the address moves once.
+	 */
+	let picked: { collection?: string; group?: string } | null = null;
+	function narrow(next: { collection?: string } | { group?: string }) {
+		picked = { ...(picked ?? {}), ...next };
+		queueMicrotask(() => {
+			const pick = picked;
+			picked = null;
+			if (!pick) return;
+			const query = new SvelteURLSearchParams(page.url.searchParams);
+			query.delete('collection');
+			query.delete('group');
+			if (pick.collection) query.set('collection', pick.collection);
+			else if (pick.group) query.set('group', pick.group);
+			void goto(`?${query}`, { replaceState: true, keepFocus: true, noScroll: true });
+		});
 	}
 
 	async function remove(id: string): Promise<boolean> {
@@ -397,10 +424,12 @@
 					sendWhileRunning={c.sendWhileRunning}
 					collections={choices}
 					{collection}
-					oncollection={narrow}
+					{group}
+					oncollection={(name) => narrow({ collection: name })}
+					ongroup={(name) => narrow({ group: name })}
 					turnCount={c.turns.length}
 					onnewquestion={fresh}
-					onsubmit={() => void c.ask(undefined, undefined, collection)}
+					onsubmit={() => void c.ask(undefined, undefined, collection, [], group)}
 					onstop={() => void c.stop()}
 				/>
 			{/snippet}

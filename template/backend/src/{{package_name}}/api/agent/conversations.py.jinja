@@ -96,6 +96,8 @@ class Turn:
     artefacts: list[dict[str, Any]] = field(default_factory=list)
     #: Every tool the agent called answering it, from its transcript.
     steps: tuple[Any, ...] = ()
+    #: The one subject the question was narrowed to; None where it was not.
+    group: str | None = None
 
 
 def now() -> datetime.datetime:
@@ -135,6 +137,7 @@ def begin(
     conversation: AgentConversation | None,
     kind: str | None = None,
     collection: str | None = None,
+    group: str | None = None,
     files: list[str] | None = None,
     edit: int | None = None,
 ) -> AgentConversation | None:
@@ -152,6 +155,8 @@ def begin(
         record["kind"] = kind
     if collection:
         record["collection"] = collection
+    if group:
+        record["group"] = group
     if files:
         record["files"] = files
     if edit is not None:
@@ -337,6 +342,7 @@ def merged(conversation: AgentConversation, agent_turns: list[Any]) -> list[Turn
                 list(record.get("files") or []),
                 list(record.get("artefacts") or []),
                 tuple(getattr(agent_turns[index], "steps", ())) if answered else (),
+                record.get("group"),
             )
         )
         index += bool(answered)

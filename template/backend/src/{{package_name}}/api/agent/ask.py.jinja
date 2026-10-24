@@ -79,6 +79,9 @@ NO_COLLECTION = "No such collection"
 #: What a turn says when its question names a collection the library does not list for this person.
 NOT_LISTED = "that collection is not one you can read"
 
+#: What a turn says when its question names a subject none of this person's collections is under.
+NO_SUBJECT = "that subject holds no collection you can read"
+
 #: One answer for a conversation that is another person's and one that never
 #: existed: telling them apart is itself a disclosure.
 DENIAL = "That conversation is not one you can continue; ask again without it to start a new one"
@@ -114,6 +117,8 @@ class _Turn:
     edit: int | None = None
     #: For an edited question, how many of the agent's answers it is asked after; none starts a new session.
     keep: int = 0
+    #: The one subject the question is narrowed to: every collection the library lists under it, for this person.
+    group: str | None = None
 
 
 @dataclass(slots=True)
@@ -141,6 +146,7 @@ async def ask(
     files: dict[str, bytes],
     kind: str | None = None,
     collection: str | None = None,
+    group: str | None = None,
     edit: int | None = None,
 ) -> StreamingResponse:
     """Stamp the conversation answering, start its turn, and stream it; `edit` replaces the question at that place.
@@ -153,7 +159,7 @@ async def ask(
         AllowanceSpentError: today's allowance is spent.
         BusyError: as many turns are in flight, on every worker, as the ceiling allows.
     """
-    if collection is not None and collections is None:
+    if (collection is not None or group is not None) and collections is None:
         raise NotFoundError(NO_COLLECTION)
     question = await run_in_threadpool(redact, persona.id, user_id, question)
     keep = await _kept(db_session_factory, agent, persona, user_id, resume, edit) if edit is not None else 0
@@ -188,6 +194,7 @@ async def ask(
                 conversation=conversation,
                 kind=kind,
                 collection=collection,
+                group=group,
                 files=[Path(name).name or "attachment" for name in files],
                 edit=edit,
             )
@@ -211,9 +218,10 @@ async def ask(
         charged=not exempt,
         collection=collection,
         follow_up=bool(place),
-        earlier=_cited(started.turns[place - 1], collection) if place else (),
+        earlier=_cited(started.turns[place - 1], collection, group) if place else (),
         edit=edit,
         keep=keep,
+        group=group,
     )
     listening: list[asyncio.Queue[dict[str, Any] | None]] = [asyncio.Queue()]
     task = asyncio.create_task(_run(db_session_factory, settings, turn, listening), name=f"agent-turn-{started.id}")
@@ -383,7 +391,9 @@ async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Source]:
     Across every collection the person may read, they are listed first and
     named: the library's search drops the person's cut when given no names.
     A question narrowed to one searches it while the listing confirms the
-    person may read it, so neither waits on the other. A person who can read
+    person may read it, so neither waits on the other. A question narrowed to a
+    subject searches the collections the listing puts under it, the library's
+    own grouping read as this person may read it. A person who can read
     none searches nothing. A follow-up is searched on its own words, never
     glued to the question before it, which drags the search back to the last
     subject after the person has moved on. What the previous turn cited is
@@ -405,8 +415,14 @@ async def _retrieve(settings: AgentSettings, turn: _Turn) -> list[Source]:
     earlier = {document_id: asyncio.ensure_future(reader.document(document_id)) for document_id in turn.earlier}
     try:
         try:
-            names = [found.name for found in await reader.list()]
-            if searching is None:
+            listed = await reader.list()
+            names = [found.name for found in listed]
+            if turn.group is not None:
+                names = [found.name for found in listed if found.subject and found.subject.name == turn.group]
+                if not names:
+                    raise _Unread(NO_SUBJECT)
+                found = await reader.search(query, names, settings.passages)
+            elif searching is None:
                 found = await reader.search(query, names, settings.passages) if names else []
             elif turn.collection not in names:
                 raise _Unread(NOT_LISTED)
@@ -455,15 +471,16 @@ def _citations(sources: list[Source]) -> list[dict[str, Any]]:
     return items
 
 
-def _cited(previous: dict[str, Any], collection: str | None) -> tuple[int, ...]:
+def _cited(previous: dict[str, Any], collection: str | None, group: str | None = None) -> tuple[int, ...]:
     """The library documents a recorded turn cited, in its order, where this question's scope still holds them.
 
     A question across every collection holds whatever an earlier turn cited,
-    as does one narrowed to the collection the earlier turn was narrowed to;
-    a question narrowed anywhere else holds none, so the scope the person
-    chose is never widened by what they read before.
+    as does one narrowed to the collection or the subject the earlier turn was
+    narrowed to; a question narrowed anywhere else holds none, so the scope
+    the person chose is never widened by what they read before.
     """
-    if collection is not None and previous.get("collection") != collection:
+    narrowed = collection is not None or group is not None
+    if narrowed and (previous.get("collection") != collection or previous.get("group") != group):
         return ()
     ids = (item.get("document_id") for item in previous.get("citations") or [] if isinstance(item, dict))
     return tuple(dict.fromkeys(int(i) for i in ids if isinstance(i, str) and i.isdecimal()))

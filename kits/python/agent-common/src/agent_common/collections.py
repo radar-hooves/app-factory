@@ -85,11 +85,33 @@ def _display(summary: Any, key: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class Subject:
+    """What a collection is about, as the library groups its collections: one reader can pick a subject whole."""
+
+    name: str
+    title: str
+
+
+def _subject(summary: Any) -> Subject | None:
+    """A listing row's subject (`{name, title}`): declared on the client's model, else the undeclared key it keeps."""
+    value = getattr(summary, "subject", None) or getattr(summary, "additional_properties", {}).get("subject")
+    if isinstance(value, dict):
+        named, titled = value.get("name"), value.get("title")
+    else:
+        named, titled = getattr(value, "name", None), getattr(value, "title", None)
+    name = str(named or "").strip()
+    return Subject(name, str(titled or "").strip() or name) if name else None
+
+
+@dataclass(frozen=True, slots=True)
 class Collection:
     """A collection the person may read: its id, how it is shown to a reader, and how current it is.
 
     `title` and `description` are the library's reader-facing display title
-    and one-line description, empty where it publishes none. `summary` is its
+    and one-line description, empty where it publishes none; `short_title` is
+    the title a picker row has room for ("DASR"), and `subject` what it is
+    about, by which the library groups collections a reader may pick whole
+    ("Airworthiness"). `summary` is its
     retrieval-pipeline summary: filing history for the model's routing, never
     shown to a reader. `documents_to` is when the library last confirmed a
     document current (a recheck's `unchanged`, or a fetch), never a
@@ -101,6 +123,8 @@ class Collection:
     documents_to: datetime.date | None
     title: str = ""
     description: str = ""
+    short_title: str = ""
+    subject: Subject | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +192,8 @@ class Collections:
                 documents_to=summary.documents_to,
                 title=_display(summary, "title"),
                 description=_display(summary, "description"),
+                short_title=_display(summary, "short_title"),
+                subject=_subject(summary),
             )
             for summary in summaries
         ]

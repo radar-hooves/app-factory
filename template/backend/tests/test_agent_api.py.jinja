@@ -200,8 +200,9 @@ async def _ask(
     who: dict[str, str],
     resume: str | None = None,
     collection: str | None = None,
+    group: str | None = None,
 ) -> Any:
-    body = {"question": question, "resume": resume, "collection": collection}
+    body = {"question": question, "resume": resume, "collection": collection, "group": group}
     return await client.post(f"/api/agent/{persona}/ask", json=body, headers=who)
 
 
@@ -314,7 +315,14 @@ async def test_the_collections_listed_are_the_ones_the_library_lists_for_this_pe
 
     listed = (await client.get("/api/agent/manual/collections", headers=narrow)).json()
     assert listed == [
-        {"name": fake_library.COLLECTION, "title": "", "description": "", "documents_to": fake_library.DOCUMENTS_TO}
+        {
+            "name": fake_library.COLLECTION,
+            "title": "",
+            "description": "",
+            "short_title": "Manual",
+            "subject": {"name": fake_library.PAY, "title": "Pay and leave"},
+            "documents_to": fake_library.DOCUMENTS_TO,
+        }
     ]
     assert fake_library.SUMMARY not in json.dumps(listed)
     names = [c["name"] for c in (await client.get("/api/agent/manual/collections", headers=wide)).json()]
@@ -393,6 +401,27 @@ async def test_a_question_narrowed_to_one_collection_searches_that_one_and_is_re
     assert {item["n"] for item in events[1]["items"]} == {1}
     read = (await client.get(f"/api/agent/conversations/{events[0]['session_id']}", headers=who)).json()
     assert read["turns"][0]["collection"] == fake_library.SECOND
+
+
+async def test_a_question_narrowed_to_a_subject_searches_what_this_person_may_read_under_it(
+    client: AsyncClient, library: fake_library.FakeLibrary
+) -> None:
+    # `RESTRICTED` is under the same subject and this person may not read it: the subject is their listing's.
+    who = _person("chat-manual")
+    events = _events((await _ask(client, "manual", "How much leave?", who, group=fake_library.PAY)).text)
+
+    assert _queries(library, who)[-1]["collections"] == [fake_library.COLLECTION]
+    read = (await client.get(f"/api/agent/conversations/{events[0]['session_id']}", headers=who)).json()
+    assert (read["turns"][0]["group"], read["turns"][0]["collection"]) == (fake_library.PAY, None)
+
+    events = _events((await _ask(client, "manual", "And sick leave?", who, group="nowhere")).text)
+    assert [e["type"] for e in events] == ["system", "agent_error"]
+    assert events[1]["error"] == "that subject holds no collection you can read"
+
+    both = await _ask(client, "manual", "q", who, collection=fake_library.COLLECTION, group=fake_library.PAY)
+    assert both.status_code == 422
+    refused = await _ask(client, "helper", "hi", _person("chat-helper"), group=fake_library.PAY)
+    assert refused.status_code == 404
 
 
 @pytest.mark.parametrize("collection", [fake_library.RESTRICTED, "nowhere"])
@@ -790,17 +819,24 @@ async def test_clearing_forgets_every_settled_conversation_of_this_persons_with_
     theirs = _events((await _ask(client, "helper", "somebody else's", stranger)).text)[0]["session_id"]
     await _settled()
     session = str(_row(settled).session_id)
-    with get_session_factory()() as db:
-        db.execute(
-            update(AgentConversation)
-            .where(AgentConversation.id == answering)
-            .values(answering_since=conversations.now(), last_activity_at=conversations.now())
-        )
-        db.commit()
     agent = await chat.agent(agent_settings, chat.get(agent_settings, "helper"), Asking(app.state.exchange, "", ""))
     assert await agent.read(session) is not None
 
-    assert (await client.delete("/api/agent/helper/conversations", headers=who)).status_code == 204
+    def stamp(since: datetime.datetime | None) -> None:
+        with get_session_factory()() as db:
+            db.execute(
+                update(AgentConversation)
+                .where(AgentConversation.id == answering)
+                .values(answering_since=since, last_activity_at=conversations.now())
+            )
+            db.commit()
+
+    # Answering only for as long as the clear takes: a turn in flight counts against every test's ceiling.
+    stamp(conversations.now())
+    try:
+        assert (await client.delete("/api/agent/helper/conversations", headers=who)).status_code == 204
+    finally:
+        stamp(None)
 
     listed = (await client.get("/api/agent/helper/conversations", headers=who)).json()
     assert [c["id"] for c in listed] == [answering]

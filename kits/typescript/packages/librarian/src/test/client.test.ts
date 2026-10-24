@@ -63,9 +63,7 @@ async function drain(generator: AsyncGenerator<unknown>) {
 describe('ask()', () => {
 	it('sends JSON when there is nothing attached', async () => {
 		const { calls, fetch } = capture();
-		await drain(
-			ask({ question: 'How much leave?', collection: 'adf-pay', endpoint: ASK, fetch })
-		);
+		await drain(ask({ question: 'How much leave?', collection: 'adf-pay', endpoint: ASK, fetch }));
 
 		const [url, init] = calls[0];
 		expect(url).toBe(ASK);
@@ -81,6 +79,23 @@ describe('ask()', () => {
 		const { calls, fetch } = capture();
 		await drain(ask({ question: 'q', endpoint: ASK, fetch }));
 		expect(JSON.parse(calls[0][1].body as string)).not.toHaveProperty('collection');
+		expect(JSON.parse(calls[0][1].body as string)).not.toHaveProperty('group');
+	});
+
+	it('asks of one subject, in either encoding', async () => {
+		const { calls, fetch } = capture();
+		await drain(ask({ question: 'q', group: 'airworthiness', endpoint: ASK, fetch }));
+		expect(JSON.parse(calls[0][1].body as string)).toMatchObject({ group: 'airworthiness' });
+		await drain(
+			ask({
+				question: 'q',
+				group: 'airworthiness',
+				files: [new File(['x'], 'a.png', { type: 'image/png' })],
+				endpoint: ASK,
+				fetch
+			})
+		);
+		expect((calls[1][1].body as FormData).get('group')).toBe('airworthiness');
 	});
 
 	it('sends the position of the question it replaces, zero included, in either encoding', async () => {
@@ -144,7 +159,12 @@ describe('ask()', () => {
 	it('omits an absent resume rather than sending an empty field', async () => {
 		const { calls, fetch } = capture();
 		await drain(
-			ask({ question: 'q', endpoint: ASK, files: [new File(['x'], 'a.png', { type: 'image/png' })], fetch })
+			ask({
+				question: 'q',
+				endpoint: ASK,
+				files: [new File(['x'], 'a.png', { type: 'image/png' })],
+				fetch
+			})
 		);
 		expect((calls[0][1].body as FormData).has('resume')).toBe(false);
 	});
@@ -161,7 +181,9 @@ describe('ask()', () => {
 		// Wordless deliberately: the sentence a reader sees names a persona, and
 		// this layer has no idea which one is speaking.
 		const { fetch } = capture();
-		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch }))).toEqual([{ type: 'agent_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch }))).toEqual([
+			{ type: 'agent_error' }
+		]);
 	});
 
 	it('says which status a route refused with, so a host can read a spent allowance', async () => {
@@ -184,7 +206,9 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
 		}) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([{ type: 'agent_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
+			{ type: 'agent_error' }
+		]);
 	});
 
 	it('refuses a 200 that is not a stream at all', async () => {
@@ -196,7 +220,9 @@ describe('ask()', () => {
 			body: new ReadableStream(),
 			headers: new Headers({ 'content-type': 'text/html; charset=utf-8' })
 		})) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([{ type: 'agent_error' }]);
+		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch }))).toEqual([
+			{ type: 'agent_error' }
+		]);
 	});
 
 	it('ends a stream that dies mid-answer as a failure, not a finished turn', async () => {
@@ -225,7 +251,11 @@ describe('ask()', () => {
 		const fakeFetch = vi.fn(async () => {
 			throw new DOMException('aborted', 'AbortError');
 		}) as unknown as typeof globalThis.fetch;
-		expect(await collect(ask({ question: 'q', endpoint: ASK, fetch: fakeFetch, signal: controller.signal }))).toEqual([]);
+		expect(
+			await collect(
+				ask({ question: 'q', endpoint: ASK, fetch: fakeFetch, signal: controller.signal })
+			)
+		).toEqual([]);
 	});
 
 	it('keeps a last frame the server sent without its blank line', async () => {
@@ -262,7 +292,7 @@ describe('ask()', () => {
 });
 
 describe('watch()', () => {
-	it('opens the session with a GET that carries the reader\'s session', async () => {
+	it("opens the session with a GET that carries the reader's session", async () => {
 		const { calls, fetch } = capture();
 		await drain(watch({ endpoint: '/api/agent/clerk/jobs/j1/watch', fetch }));
 		const [url, init] = calls[0];

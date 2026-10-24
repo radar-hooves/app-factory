@@ -57,6 +57,7 @@ from {{ package_name }}.api.agent.schemas import (
     RenameRequest,
     StepRead,
     StoredTurn,
+    SubjectRead,
 )
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config.sections.agent import AgentSettings
@@ -296,7 +297,12 @@ async def list_collections(
     library = await chat.collections(settings.agent, persona, asking)
     return [
         CollectionRead(
-            name=found.name, title=found.title, description=found.description, documents_to=found.documents_to
+            name=found.name,
+            title=found.title,
+            description=found.description,
+            short_title=found.short_title,
+            subject=SubjectRead(name=found.subject.name, title=found.subject.title) if found.subject else None,
+            documents_to=found.documents_to,
         )
         for found in await _read(library.list())
     ]
@@ -346,6 +352,7 @@ async def ask(
         resume=body.resume,
         kind=body.kind,
         collection=body.collection,
+        group=body.group,
         files=files,
         edit=body.edit,
     )
@@ -487,6 +494,7 @@ def _stored(conversation: AgentConversation, turns: list[conversations.Turn], po
         citations=t.citations,
         kind=t.kind,
         collection=t.collection,
+        group=t.group,
         mark=MarkRead.model_validate(t.mark) if t.mark else None,
         shared=address if position in conversation.shared else None,
         files=t.files,
@@ -557,6 +565,7 @@ async def _asked(request: Request, settings: AgentSettings) -> tuple[AskRequest,
                         "resume": str(form.get("resume") or "") or None,
                         "kind": str(form.get("kind") or "") or None,
                         "collection": str(form.get("collection") or "") or None,
+                        "group": str(form.get("group") or "") or None,
                         "edit": str(form.get("edit") or "") or None,
                     }
                 )

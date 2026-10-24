@@ -13,7 +13,7 @@ something the page renders.
 import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AskRequest(BaseModel):
@@ -29,9 +29,20 @@ class AskRequest(BaseModel):
     #: across that alone; None asks across every one they may read. Its name
     #: is the library's, checked against their listing, never shaped here.
     collection: str | None = Field(default=None, min_length=1, max_length=200)
+    #: One of the subjects the library groups this person's collections by, to
+    #: ask across its collections alone; never with `collection`. Its name is
+    #: the library's, expanded to its collections from their listing.
+    group: str | None = Field(default=None, min_length=1, max_length=200)
     #: The place of the question this one replaces, in the page's count, with
     #: `resume`: it and every turn after it give way to this one.
     edit: int | None = Field(default=None, ge=0, le=999)
+
+    @model_validator(mode="after")
+    def _one_scope(self) -> "AskRequest":
+        """A question is narrowed to one collection or to one subject, never both."""
+        if self.collection is not None and self.group is not None:
+            raise ValueError("a question is narrowed to a collection or a subject, not both")
+        return self
 
 
 class PersonaRead(BaseModel):
@@ -46,6 +57,12 @@ class PersonaRead(BaseModel):
     visuals: list[str]
 
 
+class SubjectRead(BaseModel):
+    #: The library's name for what a collection is about, and how a reader knows it.
+    name: str
+    title: str
+
+
 class CollectionRead(BaseModel):
     name: str
     #: How a reader knows the collection, and one line on what it holds, both
@@ -53,6 +70,11 @@ class CollectionRead(BaseModel):
     #: which is filing history.
     title: str = ""
     description: str = ""
+    #: The title a picker row has room for ("DASR"), empty where the library
+    #: publishes none, and what the collection is about, by which the library
+    #: groups collections a reader may pick whole.
+    short_title: str = ""
+    subject: SubjectRead | None = None
     #: The newest date the library confirmed one of its documents current (a
     #: recheck, or a fetch), for "Checked against the open record on …". When
     #: it was last checked, never a publication date; None where the library
@@ -104,6 +126,8 @@ class StoredTurn(BaseModel):
     kind: str | None = None
     #: The one collection the question was narrowed to; None asked across every one.
     collection: str | None = None
+    #: The one subject the question was narrowed to; None where it was not.
+    group: str | None = None
     mark: MarkRead | None = None
     #: Where the answer is read while it is shared: the page's own address.
     shared: str | None = None

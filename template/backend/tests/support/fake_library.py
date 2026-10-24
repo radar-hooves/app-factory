@@ -54,6 +54,16 @@ _CATALOGUE = {
     RESTRICTED: (3, "Held back.", None, RESTRICTED_ID),
 }
 
+#: What each collection is about, and the title a picker row has room for, as the library groups them.
+#: `RESTRICTED` shares `COLLECTION`'s subject, so a subject is only ever what this person may read of it.
+PAY = "pay"
+SERVICE = "service"
+_SUBJECTS = {
+    COLLECTION: ("Manual", {"name": PAY, "title": "Pay and leave"}),
+    SECOND: ("", {"name": SERVICE, "title": "Conditions of service"}),
+    RESTRICTED: ("Held", {"name": PAY, "title": "Pay and leave"}),
+}
+
 
 class FakeLibrary:
     def __init__(self, verifier: Callable[[str], str] | None = None) -> None:
@@ -108,9 +118,12 @@ def _document(document_id: int, collection: str) -> dict[str, Any]:
 
 def _summary(name: str) -> dict[str, Any]:
     collection_id, summary, documents_to, _ = _CATALOGUE[name]
+    short_title, subject = _SUBJECTS[name]
     return {
         "id": collection_id,
         "name": name,
+        "short_title": short_title,
+        "subject": subject,
         "pipeline": "text",
         "status": "active",
         "owner_project_id": 1,

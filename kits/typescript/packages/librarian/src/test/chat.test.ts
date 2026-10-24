@@ -380,6 +380,31 @@ describe('Chat collection of a question', () => {
 		await c.open(SESSION);
 		expect(c.turns.map((t) => t.collection)).toEqual(['adf-pay', undefined]);
 	});
+
+	it('asks one subject, keeps it on the turn, and asks again of the same one', async () => {
+		const { transport, asks } = persona({
+			read: vi.fn(async () =>
+				conversation({
+					turns: [{ question: 'Who certifies?', answer: ANSWER, at: null, group: 'airworthiness' }]
+				})
+			)
+		});
+		const c = chat(transport);
+		const asked = c.ask('Who certifies an ACP?', undefined, undefined, [], 'airworthiness');
+		expect(asks[0].request).toMatchObject({ group: 'airworthiness', collection: undefined });
+		expect(c.turns[0]).toMatchObject({ group: 'airworthiness' });
+		asks[0].pipe.push(...CHAT);
+		asks[0].pipe.end();
+		await asked;
+
+		const again = c.again();
+		expect(asks[1].request.group).toBe('airworthiness');
+		asks[1].pipe.end();
+		await again;
+
+		await c.open(SESSION);
+		expect(c.turns[0]?.group).toBe('airworthiness');
+	});
 });
 
 describe('Chat stopping', () => {
