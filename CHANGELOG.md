@@ -19,6 +19,7 @@ Need: the operator's ruling of 24/10/2026, "the app factory is the right place t
 ### Fixed
 
 - **A stamp of 2026.10.72 builds**: its chat page imported `ShellActions` and `@poodle64/librarian` APIs (the dated list's `oncollapse`, `Chat.clear`, `ask`'s `group`) that no published release of either package carried, against pins of `@poodle64/ui` `^2026.10.26` and `@poodle64/librarian` `2026.10.9`. This release pins `@poodle64/ui` `^2026.10.27` and `@poodle64/librarian` `2026.10.10`, which carry what the page uses, and the backend `agent-common>=2026.10.72` for the listing's `short_title` and `subject`. Migration: an app at 2026.10.72 takes this release.
+- **A configured actors file that is missing now raises**: `ActorRegistry(path)` raises `FileNotFoundError` naming the path instead of skipping it, which left only `local-console` registered and refused every HTTP caller as unregistered. `ActorRegistry(None)` is the only way to run with no file. Need: an image that left `<APP>_ACTORS_CONFIG_PATH` unset resolved the default into site-packages and the outage hid; consumer: pebblestone.
 
 ## [2026.10.72] - 2026-10-24
 
@@ -39,7 +40,6 @@ Need: Past questions as a column beside the conversation with Clear all at its f
 
 - **The chat's collection listing is shared across the worker pool**: one file per person (a hash of the library and the person's uid, never shared between persons) under the container's temporary directory, held for `LISTING_SECONDS`, so a page load another worker already listed for needs neither the token exchange nor the library (0.9–1.7 s on a miss, measured in Tempo 24/10/2026). An unwritable directory is logged and every load lists afresh, as before. Need: chat page loads of over a second across five workers; consumer: caspo.
 - **The `/mcp` refusal warning names who was refused**: `MCP HTTP tool call rejected: <reason> (client_id=<id>)`. The id is the OIDC `sub`, not a secret; the registered list stays out of the log. Need: an operator could not tell who was refused; consumer: pebblestone.
-- **A configured actors file that is missing now raises**: `ActorRegistry(path)` raises `FileNotFoundError` naming the path instead of skipping it, which left only `local-console` registered and refused every HTTP caller as unregistered. `ActorRegistry(None)` is the only way to run with no file. Need: an image that left `<APP>_ACTORS_CONFIG_PATH` unset resolved the default into site-packages and the outage hid; consumer: pebblestone.
 
 ## [2026.10.71] - 2026-10-24
 
