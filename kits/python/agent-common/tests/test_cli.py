@@ -278,6 +278,24 @@ def test_a_persona_too_long_for_one_argument_is_refused(settings: cli.Settings, 
         cli.argv(settings, long, "q", restricted=True)
 
 
+def test_a_restricted_turn_carries_its_personas_imports_expanded(settings: cli.Settings, milton: Persona) -> None:
+    (milton.home.parent / "brief.md").write_text("You answer leave questions.\n")
+    thin = dataclasses.replace(milton, instructions="# Milton\n\n@../brief.md\n")
+    command = cli.argv(settings, thin, "q", restricted=True)
+    assert command[command.index("--append-system-prompt") + 1].endswith("# Milton\n\nYou answer leave questions.")
+
+
+def test_the_limit_holds_of_the_expanded_brief(settings: cli.Settings, milton: Persona) -> None:
+    (milton.home.parent / "brief.md").write_text("x" * (cli.INSTRUCTIONS_LIMIT + 1))
+    with pytest.raises(ValueError, match=r"CLAUDE\.md"):
+        cli.argv(settings, dataclasses.replace(milton, instructions="@../brief.md"), "q", restricted=True)
+
+
+def test_a_job_leaves_its_imports_to_the_cli(settings: cli.Settings, milton: Persona) -> None:
+    command = cli.argv(settings, dataclasses.replace(milton, instructions="@../absent.md"), "q")
+    assert "absent" not in command[command.index("--append-system-prompt") + 1]
+
+
 def test_a_servers_port_is_read_as_the_cli_reads_its_url() -> None:
     servers = {
         "library": {"type": "http", "url": "${LIBRARY_URL}/mcp/"},

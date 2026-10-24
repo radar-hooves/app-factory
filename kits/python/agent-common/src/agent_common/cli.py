@@ -260,19 +260,21 @@ def argv(
     stream goes to a person, so it does not replay.
 
     `restricted` is a chat turn's: `--restricted` under `dontAsk`, the
-    persona's settings.json passed whole as `--settings` and its CLAUDE.md
-    appended to the system prompt, and `--tools` naming the `CHAT_TOOLS` its
+    persona's settings.json passed whole as `--settings` and its CLAUDE.md,
+    imports expanded (`Persona.brief`), appended to the system prompt, and `--tools` naming the `CHAT_TOOLS` its
     allow list names. `rewind`, with `resume`, is the message the
     conversation is taken back to before this question
     (`--resume-session-at`): an edited question replaces what followed it.
 
     Raises:
-        ValueError: a restricted persona's CLAUDE.md is past `INSTRUCTIONS_LIMIT`,
-            or `rewind` comes without `resume`.
+        ValueError: a restricted persona's CLAUDE.md, imports expanded, is past
+            `INSTRUCTIONS_LIMIT`, or one of its imports cannot be read
+            (`ImportUnreadable`), or `rewind` comes without `resume`.
     """
     if rewind is not None and resume is None:
         raise ValueError("a rewind resumes a session")
-    for named, text in (("CLAUDE.md", persona.instructions), ("settings.json", persona.settings)):
+    brief = persona.brief() if restricted else ""
+    for named, text in (("CLAUDE.md", brief), ("settings.json", persona.settings)):
         if restricted and len(text) > INSTRUCTIONS_LIMIT:
             raise ValueError(f"{persona.name}'s {named} is past {INSTRUCTIONS_LIMIT} characters")
     command = [settings.executable, "-p"]
@@ -323,7 +325,7 @@ def argv(
     # ...", the identity Anthropic's subscription path (a Max seat behind the
     # gateway) requires to serve Sonnet and Opus 5; without it that path 429s.
     identity = f"You are {persona.name}, the {settings.service} service's agent."
-    prompt = [identity, persona.instructions.strip() if restricted else "", append_system_prompt or ""]
+    prompt = [identity, brief.strip(), append_system_prompt or ""]
     command += ["--append-system-prompt", "\n\n".join(part for part in prompt if part)]
     if json_schema is not None:
         command += ["--json-schema", json.dumps(json_schema)]

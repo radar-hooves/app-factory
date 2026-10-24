@@ -110,3 +110,60 @@ def test_a_concurrent_seed_of_one_persona_from_two_threads_leaves_one_intact_hom
     home = tmp_path / "homes" / "milton"
     assert json.loads((home / "settings.json").read_text())["model"] == "sonnet"
     assert (home / "CLAUDE.md").read_text() == "You are milton."
+
+
+# ── imports, expanded app-side for a restricted turn ─────────────────────
+
+
+def _seeded_with_import(tmp_path: Path, claude_md: str) -> Persona:
+    """A persona whose CLAUDE.md imports from a `company/` tree beside `data/`, as a deployed app's does."""
+    source = tmp_path / "app" / "config" / "personas" / "peggy"
+    source.mkdir(parents=True)
+    (source / "CLAUDE.md").write_text(claude_md)
+    return persona.load(tmp_path / "app" / "config" / "personas", "peggy", tmp_path / "app" / "data" / "agent-homes")
+
+
+def test_a_thin_claude_md_is_expanded_from_the_file_its_seeded_home_names(tmp_path: Path) -> None:
+    agents = tmp_path / "app" / "company" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "peggy.md").write_text("You file documents.\n@tone.md\n")
+    (agents / "tone.md").write_text("Speak plainly.\n")
+    loaded = _seeded_with_import(tmp_path, "# Peggy\n\n@../../../company/agents/peggy.md\n")
+
+    assert loaded.instructions == "# Peggy\n\n@../../../company/agents/peggy.md\n"
+    assert loaded.brief() == "# Peggy\n\nYou file documents.\nSpeak plainly.\n"
+
+
+def test_an_import_inside_a_fence_or_mid_line_is_text(tmp_path: Path) -> None:
+    text = "Mail @someone about it.\n```\n@absent.md\n```\n~~~~\n@absent.md\n~~~\n~~~~\n`@absent.md`\n"
+    assert _seeded_with_import(tmp_path, text).brief() == text
+
+
+def test_an_unreadable_import_is_refused_naming_it(tmp_path: Path) -> None:
+    loaded = _seeded_with_import(tmp_path, "@../../../company/absent.md\n")
+    with pytest.raises(persona.ImportUnreadable, match=r"@\.\./\.\./\.\./company/absent\.md"):
+        loaded.brief()
+
+
+def test_an_import_cycle_is_refused(tmp_path: Path) -> None:
+    company = tmp_path / "app" / "company"
+    company.mkdir(parents=True)
+    (company / "a.md").write_text("@b.md\n")
+    (company / "b.md").write_text("@a.md\n")
+    with pytest.raises(persona.ImportUnreadable, match="imports itself"):
+        _seeded_with_import(tmp_path, "@../../../company/a.md\n").brief()
+
+
+def test_imports_are_followed_to_claude_codes_depth_and_no_further(tmp_path: Path) -> None:
+    company = tmp_path / "app" / "company"
+    company.mkdir(parents=True)
+    for hop in range(1, persona.IMPORT_DEPTH):
+        (company / f"{hop}.md").write_text(f"hop {hop}\n@{hop + 1}.md\n")
+    (company / f"{persona.IMPORT_DEPTH}.md").write_text(f"hop {persona.IMPORT_DEPTH}\n")
+    loaded = _seeded_with_import(tmp_path, "@../../../company/1.md\n")
+    assert loaded.brief() == "".join(f"hop {hop}\n" for hop in range(1, persona.IMPORT_DEPTH + 1))
+
+    (company / f"{persona.IMPORT_DEPTH}.md").write_text(f"@{persona.IMPORT_DEPTH + 1}.md\n")
+    (company / f"{persona.IMPORT_DEPTH + 1}.md").write_text("too deep\n")
+    with pytest.raises(persona.ImportUnreadable, match="imports deep"):
+        loaded.brief()

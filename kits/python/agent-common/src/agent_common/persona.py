@@ -14,6 +14,7 @@ caller's: an app passes its own `config/personas/` and a folder under its own
 
 import json
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -24,9 +25,61 @@ from pathlib import Path
 #: marks a directory as a persona at all (`names`).
 SOURCE_FILES = ("CLAUDE.md", "settings.json", ".mcp.json")
 
+#: How many hops deep Claude Code follows a CLAUDE.md import; `expand` refuses a deeper one.
+IMPORT_DEPTH = 5
+
+_IMPORT = re.compile(r"[ \t]*@(\S+)[ \t]*")
+_FENCE = re.compile(r"[ \t]*(`{3,}|~{3,})")
+
 
 class PersonaNotFound(LookupError):
     """No persona directory of that name carries a CLAUDE.md."""
+
+
+class ImportUnreadable(ValueError):
+    """A CLAUDE.md import names a file that cannot be read, imports itself, or nests past `IMPORT_DEPTH`."""
+
+
+def expand(text: str, source: Path, *, _within: tuple[Path, ...] = ()) -> str:
+    """`text`, read from `source`, with each import line replaced by the file it names, expanded the same way.
+
+    An import is a line that is only `@<path>`, outside a fenced code block, the
+    path relative to `source`'s directory unless absolute or `~/`: the import a
+    Claude Code CLAUDE.md makes, which a restricted session never follows
+    itself (`Persona.brief`). Resolve against the file the session would read,
+    so a seeded home's `../../../company/x.md` names what it named when the CLI
+    followed it.
+
+    Raises:
+        ImportUnreadable: an import cannot be read, is a cycle, or is more than `IMPORT_DEPTH` hops deep.
+    """
+    within = (*_within, source.resolve())
+    out: list[str] = []
+    fence = ""
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        opened = _FENCE.match(body)
+        if fence:
+            if opened and body.strip() == fence[0] * len(body.strip()) and len(body.strip()) >= len(fence):
+                fence = ""
+        elif opened:
+            fence = opened.group(1)
+        elif imported := _IMPORT.fullmatch(body):
+            raw = imported.group(1)
+            target = Path(raw).expanduser()
+            target = target if target.is_absolute() else source.parent / target
+            if len(within) > IMPORT_DEPTH:
+                raise ImportUnreadable(f"{source}: @{raw} is more than {IMPORT_DEPTH} imports deep")
+            if target.resolve() in within:
+                raise ImportUnreadable(f"{source}: @{raw} imports itself")
+            try:
+                content = target.read_text()
+            except (OSError, UnicodeDecodeError) as exc:
+                raise ImportUnreadable(f"{source}: @{raw} cannot be read ({exc})") from exc
+            out.append(expand(content, target, _within=within).rstrip("\n") + line[len(body) :])
+            continue
+        out.append(line)
+    return "".join(out)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +101,17 @@ class Persona:
     disallowed_tools: str
     instructions: str = ""
     settings: str = "{}"
+
+    def brief(self) -> str:
+        """`instructions` with its imports expanded (`expand`), as the seeded CLAUDE.md names them.
+
+        Read at call time, so only a restricted turn, which takes it on its
+        command line, reads the imported files; a job's CLI follows them itself.
+
+        Raises:
+            ImportUnreadable: as `expand`.
+        """
+        return expand(self.instructions, self.home / "CLAUDE.md")
 
     @property
     def mcp_config(self) -> Path | None:
