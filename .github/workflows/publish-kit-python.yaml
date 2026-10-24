@@ -32,7 +32,8 @@ concurrency:
 jobs:
   publish:
     if: github.ref_type == 'tag'
-    runs-on: [self-hosted, household]
+    # atlas, not the pool: the upload password file and the index's LAN address are atlas's (huginn failed v2026.10.72).
+    runs-on: [self-hosted, household, atlas]
     env:
       INDEX_URL: http://172.21.0.2:3141/poodle64/prod/
       UPLOAD_PASSWORD_FILE: /var/lib/devpi-ci/upload_password

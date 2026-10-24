@@ -84,7 +84,8 @@ jobs:
   render-and-test:
     name: Render a scratch app and run its own suite
     if: ${{ !github.event.pull_request.head.repo.fork && inputs.macos-signing-identity == '' }}
-    runs-on: ['self-hosted', 'household']
+    # atlas, not the pool: the private index's LAN address resolves only there (huginn timed out, 24/10/2026).
+    runs-on: ['self-hosted', 'household', 'atlas']
     timeout-minutes: 30
     env:
       # Deliberately NOT UV_FROZEN=1. That pin is for a real app's CI, which
