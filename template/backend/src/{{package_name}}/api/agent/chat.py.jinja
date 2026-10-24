@@ -11,6 +11,10 @@ library's caller mount as `LIBRARY_URL`, so a persona whose `.mcp.json` names
 the library's reader door (`${LIBRARY_URL}/mcp/`, `Bearer ${LIBRARY_TOKEN}`)
 searches it again as the same person when its passages fall short.
 
+A persona with `attachments: false` is offered with no attach control, and a
+question to it carrying files is refused unread (a persona that may not read
+what it is handed, or must not be handed it). The default is true.
+
 A persona's `visuals` lists the fence languages its page draws inside an
 answer (`agent_common.visuals`); it is told the format of each, from the
 factory's fragment or its own `visuals/<language>.md`.
@@ -94,6 +98,8 @@ class Persona:
     not_held: str = ""
     collections: bool = False
     visuals: tuple[str, ...] = ()
+    #: Whether a question may carry files; false offers no attach control and refuses any.
+    attachments: bool = True
 
     @property
     def entitlement(self) -> str:
@@ -324,6 +330,9 @@ def _persona(persona_id: str, body: object, directories: set[str], personas_dir:
     collections = body.get("collections", False)
     if not isinstance(collections, bool):
         raise refuse("collections is true or false")
+    attachments = body.get("attachments", True)
+    if not isinstance(attachments, bool):
+        raise refuse("attachments is true or false")
     fences = body.get("visuals") or []
     if not isinstance(fences, list) or not all(isinstance(fence, str) for fence in fences):
         raise refuse("visuals is a list of fence languages")
@@ -340,4 +349,5 @@ def _persona(persona_id: str, body: object, directories: set[str], personas_dir:
         not_held=str(body.get("not_held") or "").strip(),
         collections=collections,
         visuals=tuple(fences),
+        attachments=attachments,
     )

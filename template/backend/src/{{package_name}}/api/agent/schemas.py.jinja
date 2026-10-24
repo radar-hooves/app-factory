@@ -55,6 +55,8 @@ class PersonaRead(BaseModel):
     collections: bool
     #: The fenced block languages this persona is told it may draw in an answer.
     visuals: list[str]
+    #: Whether a question to this persona may carry files.
+    attachments: bool
 
 
 class SubjectRead(BaseModel):

@@ -146,6 +146,7 @@ def list_personas(identity: CurrentIdentity, settings: SettingsDep) -> list[Pers
             not_held=persona.not_held,
             collections=persona.collections,
             visuals=list(persona.visuals),
+            attachments=persona.attachments,
         )
         for persona in chat.load(settings.agent).values()
         if has_module(identity.entitlements, persona.entitlement)
@@ -338,8 +339,12 @@ async def ask(
     unread: 413 for a body or a file too large, 415 for a type not read,
     400 for too many. Read, they are then checked by their bytes (`content`):
     415 for a file that is not what its name says, 422 for one the
-    scanner names, 503 when a scanner is configured and cannot answer.
+    scanner names, 503 when a scanner is configured and cannot answer. A
+    persona that takes none (`attachments: false`) refuses any multipart body
+    unread, 400.
     """
+    if not persona.attachments and request.headers.get("content-type", "").startswith("multipart/form-data"):
+        raise BadRequestError(f"{persona.name} takes no attachments")
     body, files = await _asked(request, settings.agent)
     agent, collections = await chat.for_turn(settings.agent, persona, asking)
     return await ask_module.ask(

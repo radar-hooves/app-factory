@@ -256,6 +256,7 @@ async def test_the_personas_listed_are_the_ones_the_caller_is_granted(client: As
             "not_held": "your own leave balance",
             "collections": True,
             "visuals": [],
+            "attachments": True,
         }
     ]
     both = await client.get("/api/agent/personas", headers=_person("chat-helper", "chat-manual"))
@@ -278,6 +279,7 @@ async def test_an_app_with_no_chat_file_offers_none(client: AsyncClient, agent_s
         ("helper:\n  blurb: X\n", "needs a name"),
         ("helper:\n  name: X\n  collections: yes please\n", "true or false"),
         ("helper:\n  name: X\n  visuals: chart\n", "list of fence languages"),
+        ("helper:\n  name: X\n  attachments: none\n", "attachments is true or false"),
         ("helper:\n  name: X\n  visuals: [pie]\n", "no prompt fragment for the visual 'pie'"),
     ],
 )
@@ -1484,6 +1486,25 @@ async def _attached(client: AsyncClient, files: list[tuple[str, bytes]]) -> Any:
         files=[("files[]", (name, content)) for name, content in files],
         headers=_person("chat-helper"),
     )
+
+
+async def test_a_persona_that_takes_no_files_lists_so_and_refuses_them_unread_and_uncharged(
+    client: AsyncClient, agent_settings: AgentSettings, reads: list[str]
+) -> None:
+    agent_settings.chat_file.write_text("helper:\n  name: Helper\n  attachments: false\n")
+    who = _person("chat-helper")
+    before = (await client.get("/api/agent/quota", headers=who)).json()["remaining"]
+
+    listed = (await client.get("/api/agent/personas", headers=who)).json()
+    refused = await _attached(client, [("drawing.pdf", b"%PDF-1.7")])
+
+    assert listed[0]["attachments"] is False
+    assert refused.status_code == 400
+    assert refused.json()["message"] == "Helper takes no attachments"
+    assert reads == []
+    assert (await client.get("/api/agent/helper/conversations", headers=who)).json() == []
+    assert (await client.get("/api/agent/quota", headers=who)).json()["remaining"] == before
+    assert (await _ask(client, "helper", "hello", who)).status_code == 200
 
 
 @pytest.mark.parametrize("count", [11, 12])

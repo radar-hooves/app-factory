@@ -12,6 +12,10 @@ Need: the collection picker the operator asked for (24/10/2026, subjects then co
 
 - **The collection picker is two steps, subject then collection** (`@poodle64/librarian` 2026.10.11, which stamped apps now pin): subjects on the left each with its count, "All of <subject>" then its collections on the right, search across both, a bottom sheet under 48rem; every name wraps and nothing truncates. New copy keys `subjectsLabel`, `allOfSubject`, `subjectRow`, `inSubject`, `backToSubjects`. Migration: bump `@poodle64/librarian` to 2026.10.11.
 
+### Added
+
+- **A chat persona can take no files** (`attachments: false` on its `config/chat.yaml` row; default true, so no other app changes). `GET /api/agent/personas` carries `attachments`, `AskBox` passes it to the Composer, so neither the chat page nor a Home page's box offers Attach, and `POST /api/agent/{persona}/ask` refuses a multipart body for that persona before reading it (400 "<name> takes no attachments"): nothing stored, no turn charged. Need: a persona whose policy forbids attaching third-party documents, and which may not Read what it is handed, was offered Attach; consumer: pebblestone. Migration: regenerate `schema.d.ts`, and set `attachments: false` on each row that takes none.
+
 ### Fixed
 
 - **`kits/typescript`'s build-and-test job runs on `atlas`** too: on huginn, which has no npm, it failed at Setup pnpm.

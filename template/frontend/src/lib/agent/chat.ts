@@ -40,6 +40,8 @@ export interface Persona {
 	collections: boolean;
 	/** The fence languages the persona was told to draw. */
 	visuals: string[];
+	/** Whether a question may carry files; false offers no attach control. */
+	attachments: boolean;
 }
 
 /** A collection the person may read, as `GET /api/agent/{persona}/collections` lists it. */

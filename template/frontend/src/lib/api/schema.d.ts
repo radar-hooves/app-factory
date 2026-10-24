@@ -1372,6 +1372,8 @@ export interface components {
             collections: boolean;
             /** Visuals */
             visuals: string[];
+            /** Attachments */
+            attachments: boolean;
         };
         /** QuotaRead */
         QuotaRead: {

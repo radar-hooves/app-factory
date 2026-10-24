@@ -55,6 +55,7 @@ outrider:                 # the persona's directory under config/personas/, its 
     - How much recreation leave does a permanent member accrue in a year?
   not_held: your own pay records, your posting order, or anything about your individual case
   collections: true       # default false: each question first retrieves passages from the library as the person
+  attachments: false      # default true: no attach control on the page or a Home box, and a question carrying files is refused unread (400)
 ```
 
 `chat.load` refuses to start on an id that is not a path segment or names one of the slice's own routes (`personas`, `conversations`, `quota`), a row with no `name`, or no such persona directory. No file offers no chat; personas still run jobs.

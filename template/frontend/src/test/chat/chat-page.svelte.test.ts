@@ -59,7 +59,8 @@ const PERSONA = {
 	blurb: '',
 	examples: ['How much leave?'],
 	not_held: '',
-	collections: true
+	collections: true,
+	attachments: true
 };
 const COLLECTIONS = [
 	{
@@ -498,6 +499,22 @@ describe('Choosing where a persona looks', () => {
 		} finally {
 			ROUTES['/api/agent/personas'] = [PERSONA];
 			ROUTES['/api/agent/{persona}/collections'] = COLLECTIONS;
+		}
+	});
+});
+
+describe('A persona that takes no files', () => {
+	it('is offered with Attach for one that does, and without it for one that does not', async () => {
+		const first = at('/chat/outrider');
+		expect(await screen.findByRole('button', { name: 'Attach a file' })).toBeTruthy();
+		first.unmount();
+		ROUTES['/api/agent/personas'] = [{ ...PERSONA, attachments: false }];
+		try {
+			at('/chat/outrider');
+			await screen.findByRole('textbox');
+			expect(screen.queryByRole('button', { name: 'Attach a file' })).toBeNull();
+		} finally {
+			ROUTES['/api/agent/personas'] = [PERSONA];
 		}
 	});
 });
