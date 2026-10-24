@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.28] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: text that breaks or cuts for no reason). In CASPO's rail, "Intelligence" and "Strategy paper" read "Intelligen…" and "Strategy …": the label, a text chip and the submenu chevron did not fit 15.5rem.
+
+### Added
+
+- **`NavItem.badge` takes an icon form**, `{ icon: Component, label: string }` (`NavBadge`): a compact pill holding only the icon (12px, muted), `label` as its tooltip and accessible name. The string and number forms are unchanged. Use the icon form whenever a label could collide with its badge, a tag with words in it or any row that also has `children`.
+
+### Fixed
+
+- **A rail label never truncates.** It is `.ds-nav-label`: it wraps (and breaks a word wider than the rail) instead of ending in an ellipsis, and the badge and chevron keep their size, so a text chip that does not fit costs the label a line, not its letters. A real-engine check (`harness/drive.mjs`, `?surface=badges`) renders "Strategy paper" with a badge and a chevron at 15.5rem and asserts `scrollWidth <= clientWidth`.
+
 ## [2026.10.27] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: "the app factory is the right place to own this, and that way, each app, like CASPO, doesn't need to think about what it needs to do on the page, it just chooses the page type that it wants"). Page width and placement had been set in five competing places, and every fix to one broke another: Settings centred 168px off its rail, Security's aside pinned to the far edge past a 540px void, the Library scrolling the page by 40px.

@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.77] - 2026-10-24
+
+Need: the operator's standing complaint of text that breaks or cuts for no reason (24/10/2026), and app-factory#53; consumer: caspo. v2026.10.76 was tagged on `7ba114f3` while this was in flight, so it does not carry it.
+
+### Changed
+
+- **A rail label never truncates, and `NavItem.badge` takes an icon form** (`@poodle64/ui` 2026.10.28, which stamped apps now pin): `badge: { icon: Lock, label: 'Only you' }` draws a 12px icon pill with `label` as its tooltip and accessible name; the string and number forms still work. The label wraps instead of ending in an ellipsis. Use the icon form wherever a label could collide with its badge (documented in the package README). Migration: bump `@poodle64/ui` to 2026.10.28 and give a wordy badge the icon form.
+- **A past-questions row is its title** (`@poodle64/librarian` 2026.10.12, which stamped apps now pin): the time and the full question are the row's tooltip, the "···" menu shows on hover and keyboard focus (always on touch), and the title wraps to two lines before it cuts. Migration: bump `@poodle64/librarian` to 2026.10.12.
+
+### Fixed
+
+- **`pnpm layout-gate` no longer hangs on an app whose rail starts collapsed** (#53): a fresh browser context leaves the pointer at (0,0), inside the rail, so the collapsed rail peeked open over its own toggle and Playwright retried the click until the test timeout. `settle()` moves the pointer to the frame's far corner before each click and capture. Migration: take `tests/layout/layout-gate.spec.ts` from the render.
+
 ## [2026.10.76] - 2026-10-24
 
 Need: a chat persona can be offered with no attachments; consumer: pebblestone (its portal chat policy forbids attaching third-party documents, and none of its personas may Read). v2026.10.75 was tagged on `9b6e85c` while this was in flight, so it does not carry it.

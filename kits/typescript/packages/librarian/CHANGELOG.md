@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.12] - 2026-10-24
+
+Consumer: caspo (the operator, 24/10/2026: text that breaks or cuts for no reason). Every past-question row read "What is AIR 60…": its time and a permanent "···" menu took the row.
+
+### Changed
+
+- **A `ConversationList` row is its title.** The day headings (Today, Yesterday, Earlier) already date it, so its time is gone from the row and into its tooltip, which holds the full question and the date and time. The "···" menu sits over the row's edge and shows on hover and keyboard focus (and while open), always on touch (`@media (hover: none)`, where the title leaves room for it). The title takes the row's full width and wraps to two lines before it cuts, the full text in the tooltip.
+
 ## [2026.10.11] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: "filter by group and then pick a collection from within that", and long names still truncating).
