@@ -27,18 +27,24 @@ answers 503 until it is set.
 import asyncio
 import builtins
 import dataclasses
+import datetime
 import functools
+import hashlib
+import json
 import logging
+import os
 import re
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 from agent_common import persona as agent_persona
 from agent_common import visuals
 from agent_common.agent import LocalAgent
-from agent_common.collections import Collection, Collections
+from agent_common.collections import Collection, Collections, Subject
 from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import persona as persona_module
@@ -216,25 +222,73 @@ def _reader(settings: AgentSettings, token: str, uid: str) -> Collections:
     return _Listed(settings.library_url, bearer, timeout_seconds=RETRIEVAL_SECONDS, uid=uid)
 
 
-#: Each person's listing and when it lapses, by (library, uid), for the life of the process.
-_listings: dict[tuple[str, str], tuple[float, builtins.list[Collection]]] = {}
+#: Each person's listing, one file per (library, uid) in the container's tmpfs, so the whole worker pool shares it.
+LISTINGS_DIR = Path(tempfile.gettempdir()) / "{{ package_name }}-listings"
+
+
+def _listing_file(library: str, uid: str) -> Path:
+    return LISTINGS_DIR / hashlib.sha256(f"{library}\0{uid}".encode()).hexdigest()
+
+
+def held_listing(settings: AgentSettings, asking: Asking) -> builtins.list[Collection] | None:
+    """The listing some worker fetched for this person within `LISTING_SECONDS`, else None; reading it needs no token."""
+    if not (asking.uid and settings.library_url):
+        return None
+    return _held(_listing_file(settings.library_url, asking.uid))
+
+
+def _held(path: Path) -> builtins.list[Collection] | None:
+    try:
+        if time.time() - path.stat().st_mtime >= LISTING_SECONDS:
+            return None
+        return [_collection(row) for row in json.loads(path.read_text())]
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, TypeError, KeyError):
+        logger.warning("Could not read the held collection listing %s", path.name, exc_info=True)
+        return None
+
+
+def _collection(row: dict[str, Any]) -> Collection:
+    when, subject = row["documents_to"], row["subject"]
+    return Collection(
+        **{
+            **row,
+            "documents_to": datetime.date.fromisoformat(when) if when else None,
+            "subject": Subject(**subject) if subject else None,
+        }
+    )
+
+
+def _keep(path: Path, found: builtins.list[Collection]) -> None:
+    rows = [{**dataclasses.asdict(c), "documents_to": c.documents_to and c.documents_to.isoformat()} for c in found]
+    try:
+        LISTINGS_DIR.mkdir(mode=0o700, exist_ok=True)
+        now = time.time()
+        for other in LISTINGS_DIR.iterdir():
+            if now - other.stat().st_mtime >= LISTING_SECONDS:
+                other.unlink(missing_ok=True)
+        scratch = path.with_suffix(f".{os.getpid()}")
+        scratch.write_text(json.dumps(rows))
+        os.replace(scratch, path)
+    except OSError:
+        logger.warning("Could not hold the collection listing", exc_info=True)
 
 
 @dataclass(frozen=True, slots=True)
 class _Listed(Collections):
-    """The library as `uid` reads it, with its listing held for `LISTING_SECONDS`, so the page and the ask share one call."""
+    """The library as `uid` reads it, with its listing held for `LISTING_SECONDS` across workers, so the page and the ask share one call."""
 
     uid: str = ""
 
     async def list(self) -> builtins.list[Collection]:
-        key, now = (self.url, self.uid), time.monotonic()
-        if self.uid and (held := _listings.get(key)) and held[0] > now:
-            return builtins.list(held[1])
+        if not self.uid:
+            return await Collections.list(self)
+        path = _listing_file(self.url, self.uid)
+        if (held := await run_in_threadpool(_held, path)) is not None:
+            return held
         found = await Collections.list(self)
-        if self.uid:
-            for stale in [k for k, (lapses, _) in _listings.items() if lapses <= now]:
-                del _listings[stale]
-            _listings[key] = (time.monotonic() + LISTING_SECONDS, found)
+        await run_in_threadpool(_keep, path, found)
         return found
 
 

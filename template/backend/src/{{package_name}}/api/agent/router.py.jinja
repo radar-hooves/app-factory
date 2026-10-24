@@ -294,7 +294,9 @@ async def list_collections(
     """The collections this person may read, as the library lists them; none for a persona that chats without any."""
     if not persona.collections:
         return []
-    library = await chat.collections(settings.agent, persona, asking)
+    listed = chat.held_listing(settings.agent, asking)
+    if listed is None:
+        listed = await _read((await chat.collections(settings.agent, persona, asking)).list())
     return [
         CollectionRead(
             name=found.name,
@@ -304,7 +306,7 @@ async def list_collections(
             subject=SubjectRead(name=found.subject.name, title=found.subject.title) if found.subject else None,
             documents_to=found.documents_to,
         )
-        for found in await _read(library.list())
+        for found in listed
     ]
 
 
