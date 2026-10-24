@@ -51,6 +51,27 @@ describe('ConversationList', () => {
 		expect(link).toHaveAttribute('aria-current', 'page');
 	});
 
+	it('keeps a row to its title: the time and the whole question are its tooltip', () => {
+		const long = 'What is AIR 6015 and how does it relate to the other collaborative platforms?';
+		list({
+			conversations: [{ id: 'z', title: long, last_activity_at: '2026-09-30T05:32:00Z' }],
+			onrename: vi.fn()
+		});
+		const row = screen.getByRole('button', { name: new RegExp(`^${long.slice(0, 20)}`) });
+		expect(row.querySelector('time')).toBeNull();
+		expect(row.textContent?.trim()).toBe(long);
+		const tip = row.getAttribute('title') ?? '';
+		expect(tip.split('\n')[0]).toBe(long);
+		expect(tip.split('\n')[1]).toMatch(/\d/);
+	});
+
+	it('keeps a row\'s menu in the document for hover, focus and touch to show', () => {
+		list({ onrename: vi.fn() });
+		const more = screen.getByRole('button', { name: 'More: Leave on posting' });
+		expect(more).toBeVisible();
+		expect(more.closest('.ds-lib-list-row')).toHaveClass('has-acts');
+	});
+
 	it('marks a conversation still being answered', () => {
 		list({ name: 'penny' });
 		const row = screen.getByRole('button', { name: /Field allowance/ });
@@ -167,14 +188,15 @@ describe('ConversationList', () => {
 			'Yesterday',
 			'Earlier'
 		]);
-		const times = [...document.querySelectorAll('time')];
-		expect(times.map((t) => t.getAttribute('datetime'))).toEqual([
-			at(0, 0),
-			at(1, 9),
-			'2025-03-04T01:00:00.000Z'
+		// A row carries no time of its own: the headings date it, and its tooltip holds the stamp.
+		expect(document.querySelectorAll('time')).toHaveLength(0);
+		const tips = screen.getAllByRole('button').map((b) => b.getAttribute('title'));
+		expect(tips.filter(Boolean).map((t) => t!.split('\n')[0])).toEqual([
+			'Recreation leave',
+			'Field allowance',
+			'Posting order'
 		]);
-		// The day itself only where the heading does not say it, with the year where it is not this one.
-		expect(times[2].textContent).toMatch(/2025/);
-		expect(times[0].textContent).not.toMatch(/\d{4}/);
+		// The tooltip's stamp is the full date, so an Earlier row names its year.
+		expect(tips.filter(Boolean)[2]).toMatch(/2025/);
 	});
 });

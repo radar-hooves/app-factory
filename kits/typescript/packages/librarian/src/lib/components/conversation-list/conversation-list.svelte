@@ -1,7 +1,11 @@
 <!--
   A person's past conversations, newest first under Today, Yesterday and
-  Earlier, each row dated: each one reopens, and each can be renamed,
-  downloaded or deleted. And a way to start a new one.
+  Earlier: each one reopens, and each can be renamed, downloaded or deleted.
+  And a way to start a new one.
+
+  A row is its title and nothing else: the day headings date it, its time
+  and its full text are its tooltip, its acts appear on hover and keyboard
+  focus (always on touch), and the title wraps to two lines before it cuts.
 
   From cadmus's Past questions (cadmus#114). Presentation only: the host hands
   it the list and the acts (`Chat`'s own), nothing here fetches, and where it
@@ -92,19 +96,12 @@
 			.filter((group) => group.items.length > 0);
 	});
 
-	/** A row's date: the time under Today and Yesterday, the day itself under Earlier. */
-	function dated(conversation: ConversationSummary, day: Day): { iso: string; text: string } | null {
+	/** A row's tooltip: the whole question, then when it was last active. */
+	function tooltip(conversation: ConversationSummary): string {
 		const at = new Date(conversation.last_activity_at);
-		if (Number.isNaN(at.getTime())) return null;
-		const text =
-			day === 'earlier'
-				? at.toLocaleDateString(undefined, {
-						day: 'numeric',
-						month: 'short',
-						...(at.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' })
-					})
-				: at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-		return { iso: at.toISOString(), text };
+		if (Number.isNaN(at.getTime())) return conversation.title;
+		const when = at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+		return `${conversation.title}\n${when}`;
 	}
 
 	let opened = $state<string | null>(null);
@@ -200,7 +197,6 @@
 		<ul class="ds-lib-list-items">
 			{#each group.items as conversation (conversation.id)}
 				{@const id = conversation.id}
-				{@const when = dated(conversation, group.day)}
 				<li class="ds-lib-list-item" class:is-current={id === current}>
 					{#if renaming === id}
 						<form class="ds-lib-list-rename" onsubmit={(event) => submitRename(event, id)}>
@@ -222,7 +218,7 @@
 							</button>
 						</form>
 					{:else}
-						<div class="ds-lib-list-row">
+						<div class="ds-lib-list-row" class:has-acts={acts}>
 							{#snippet label()}
 								<MessageSquareIcon size={14} class="ds-lib-list-icon" />
 								<span class="ds-lib-list-name">{conversation.title}</span>
@@ -230,14 +226,13 @@
 									<span class="ds-lib-list-live" title={words.stillAnswering}>
 										<span class="ds-lib-sr">{words.stillAnswering}</span>
 									</span>
-								{:else if when}
-									<time class="ds-lib-list-when" datetime={when.iso}>{when.text}</time>
 								{/if}
 							{/snippet}
 							{#if href}
 								<a
 									class="ds-lib-list-open"
 									href={href(id)}
+									title={tooltip(conversation)}
 									aria-current={id === current ? 'page' : undefined}
 									onclick={() => onopen?.(id)}
 								>
@@ -247,6 +242,7 @@
 								<button
 									type="button"
 									class="ds-lib-list-open"
+									title={tooltip(conversation)}
 									aria-current={id === current ? 'true' : undefined}
 									onclick={() => onopen?.(id)}
 								>
@@ -428,13 +424,6 @@
 		margin-top: 0;
 	}
 
-	.ds-lib-list-when {
-		flex: none;
-		color: var(--ds-color-muted-foreground);
-		font-size: var(--ds-text-2xs);
-		font-variant-numeric: tabular-nums;
-	}
-
 	.ds-lib-list-items {
 		display: flex;
 		flex-direction: column;
@@ -453,6 +442,7 @@
 	}
 
 	.ds-lib-list-row {
+		position: relative;
 		display: flex;
 		align-items: center;
 	}
@@ -494,12 +484,17 @@
 		opacity: 0.6;
 	}
 
+	/* The title takes the row and wraps to two lines before it cuts; the
+	   tooltip holds the rest. */
 	.ds-lib-list-name {
+		display: -webkit-box;
 		min-width: 0;
 		flex: 1;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
 	}
 
 	.ds-lib-list-live {
@@ -511,8 +506,8 @@
 		animation: ds-lib-list-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 	}
 
-	.ds-lib-list-more,
-	.ds-lib-list-close {
+	.ds-lib-list-close,
+	.ds-lib-list-more {
 		display: grid;
 		width: 2.75rem;
 		height: 2.75rem;
@@ -523,6 +518,38 @@
 		background: none;
 		color: var(--ds-color-muted-foreground);
 		cursor: pointer;
+	}
+
+	/* The acts sit over the row's right edge and show on hover or keyboard
+	   focus, so the title keeps the whole row; always on touch, where there is
+	   no hover, and the title then leaves room for them. */
+	.ds-lib-list-more {
+		position: absolute;
+		inset-block: 0;
+		inset-inline-end: 0;
+		margin-block: auto;
+		background: var(--ds-color-surface-2);
+		opacity: 0;
+	}
+
+	.ds-lib-list-item:hover .ds-lib-list-more,
+	.ds-lib-list-item:focus-within .ds-lib-list-more,
+	.ds-lib-list-more[aria-expanded='true'] {
+		opacity: 1;
+	}
+
+	.is-current .ds-lib-list-more {
+		background: var(--ds-color-surface-3);
+	}
+
+	@media (hover: none) {
+		.ds-lib-list-more {
+			opacity: 1;
+		}
+
+		.ds-lib-list-row.has-acts .ds-lib-list-open {
+			padding-inline-end: 2.75rem;
+		}
 	}
 
 	.ds-lib-list-more:hover,
