@@ -33,7 +33,8 @@ jobs:
   build:
     name: Build, test and type-check
     # by-exception (2026-09-28): public repo takes fork PRs; fork code must not run on the household runner
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "household"]') }}
+    # atlas, not the pool: huginn has no npm, so Setup pnpm failed there (24/10/2026).
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "household", "atlas"]') }}
     timeout-minutes: 30
     steps:
       - name: Checkout
