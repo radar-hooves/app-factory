@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.80] - 2026-10-24
+
+Consumer: caspo. The 2026.10.78 rubric line about a "More actions" button made the judge fail every phone page whose scope controls or body toolbar are not bar actions.
+
+### Fixed
+
+- **The layout gate's bar-title rubric judges the title alone.** Migration: take `tests/layout/layout-gate.spec.ts` from the render.
+
 ## [2026.10.79] - 2026-10-24
 
 Consumer: caspo. `tests/layout/layout-gate.spec.ts` in 2026.10.78 failed a stamped app's `prettier --check`.

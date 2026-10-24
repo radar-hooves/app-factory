@@ -82,7 +82,7 @@ Rubric:
 - tool-scroll: on a "tool" page the content fills the frame to its bottom edge and scrolls inside itself; the page itself does not scroll (the metrics give mainOverflow).
 - right-edge: one right edge per text column: blocks of running text in one column end at one shared right edge, not each at its own width.
 - thumb: phone thumb reach: at 390 px the page's primary actions are reachable (not stranded at the top corner only, tap targets about 44 px), nothing is cut off or needs sideways scrolling.
-- bar-title: the top bar names the page: its own name, or "Section › Page" on desktop; on a phone one name alone. A bare page name with no section is correct. The name is whole, never cut with an ellipsis. On a phone a page's own actions are folded into one "More actions" button.`;
+- bar-title: the top bar names the page: its own name, or "Section › Page" on desktop; on a phone one name alone. A bare page name with no section is correct. The name is whole, never cut with an ellipsis.`;
 
 const slug = (path: string) =>
 	path === '/' ? 'home' : path.replace(/^\/|\/$/g, '').replace(/[^\w-]+/g, '_');
