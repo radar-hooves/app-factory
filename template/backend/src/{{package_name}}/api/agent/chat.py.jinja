@@ -244,7 +244,7 @@ def _held(path: Path) -> builtins.list[Collection] | None:
         return [_collection(row) for row in json.loads(path.read_text())]
     except FileNotFoundError:
         return None
-    except (OSError, ValueError, TypeError, KeyError):
+    except OSError, ValueError, TypeError, KeyError:
         logger.warning("Could not read the held collection listing %s", path.name, exc_info=True)
         return None
 

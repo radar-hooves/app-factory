@@ -38,7 +38,7 @@ class AskRequest(BaseModel):
     edit: int | None = Field(default=None, ge=0, le=999)
 
     @model_validator(mode="after")
-    def _one_scope(self) -> "AskRequest":
+    def _one_scope(self) -> AskRequest:
         """A question is narrowed to one collection or to one subject, never both."""
         if self.collection is not None and self.group is not None:
             raise ValueError("a question is narrowed to a collection or a subject, not both")
