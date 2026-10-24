@@ -64,7 +64,8 @@
 		'past',
 		'live',
 		'cost',
-		'collections'
+		'collections',
+		'collections-long'
 	];
 
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
@@ -81,6 +82,7 @@
 	// effect; the counter it is set from is a plain variable for that reason.
 	let bump = 0;
 	let collection = $state<string | undefined>(undefined);
+	let group = $state<string | undefined>(undefined);
 	let collections = $state<CollectionChoice[]>([]);
 	// A job surface: the host keeps its own column for the artefact and its
 	// own page viewer, and the package only hands it the taps.
@@ -113,6 +115,7 @@
 		viewing = null;
 		collections = next.collections ?? [];
 		collection = undefined;
+		group = undefined;
 		answering = next.answeringFor === undefined ? null : Date.now() - next.answeringFor;
 		mark = next.mark ?? false;
 		quota = next.quota ?? null;
@@ -291,8 +294,10 @@
 						{running}
 						{collections}
 						{collection}
+						{group}
 						{name}
 						oncollection={(next) => (collection = next)}
+						ongroup={(next) => (group = next)}
 						onsubmit={send}
 						onstop={() => (running = false)}
 						turnCount={requested === 'cost' ? 9 : undefined}

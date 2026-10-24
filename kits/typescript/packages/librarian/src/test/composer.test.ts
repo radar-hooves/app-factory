@@ -5,7 +5,9 @@
  * (a person holding 27 once had a wall of chips taller than the box), and a
  * collection is shown by its title, never by its name or a retrieval summary.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import Composer from '$lib/components/composer/composer.svelte';
 
@@ -53,7 +55,7 @@ describe('Composer collection picker', () => {
 	it('is one control however many there are, saying where the question looks', () => {
 		render(Composer, { props: base({ collections: MANY }) });
 		expect(control()).toHaveTextContent('All your collections');
-		expect(control()).toHaveAttribute('aria-haspopup', 'listbox');
+		expect(control()).toHaveAttribute('aria-haspopup', 'dialog');
 		expect(control()).toHaveAttribute('aria-expanded', 'false');
 		expect(screen.queryByText('Subject 1')).not.toBeInTheDocument();
 	});
@@ -159,64 +161,260 @@ describe('Composer collection picker', () => {
 	});
 });
 
-describe('Composer collection picker, grouped', () => {
-	it('shows the short title, keeps the full one as the tooltip, and no second line', async () => {
-		render(Composer, { props: base({ collections: GROUPED }) });
-		const list = await opened();
-		const row = within(list).getByRole('option', { name: 'ADF pay' });
-		expect(row).toHaveAttribute('title', 'ADF pay and conditions: the full instrument');
-		expect(row.textContent?.trim()).toBe('ADF pay');
-		expect(within(list).getByRole('option', { name: 'Defence housing and relocation' })).toBeInTheDocument();
-	});
+describe('Composer collection picker, by subject', () => {
+	const subjects = () => screen.getByRole('listbox', { name: 'Subjects' });
+	const names = (list: HTMLElement) =>
+		within(list).getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim());
+	/** The pane on the right: named for the subject it shows. */
+	const contents = (subject: string) => screen.getByRole('listbox', { name: subject });
 
-	it('heads each group in order, then what has none', async () => {
+	async function pane() {
+		await fireEvent.click(control());
+		return subjects();
+	}
+
+	it('lists the subjects in order with their counts, then what has none', async () => {
 		render(Composer, { props: base({ collections: GROUPED }) });
-		const list = await opened();
-		expect(within(list).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual([
+		const list = await pane();
+		expect(names(list)).toEqual([
 			'All your collections',
-			'Pay and conditions',
-			'ADF pay',
-			'Leave',
-			'Housing',
-			'Defence housing and relocation',
+			'Pay and conditions 2',
+			'Housing 1',
 			'Something unfiled'
 		]);
+		expect(within(list).getByRole('option', { name: 'Pay and conditions, 2 to choose from' })).toBeInTheDocument();
 	});
 
-	it('takes a whole group, telling the host the group and no collection', async () => {
+	it('opens on the first subject: it taken whole, then each collection by its short title', async () => {
+		render(Composer, { props: base({ collections: GROUPED }) });
+		await pane();
+		const right = contents('Pay and conditions');
+		expect(names(right)).toEqual(['All of Pay and conditions', 'ADF pay', 'Leave']);
+		const row = within(right).getByRole('option', { name: 'ADF pay' });
+		expect(row).toHaveAttribute('title', 'ADF pay and conditions: the full instrument');
+	});
+
+	it('browses a subject without choosing anything', async () => {
 		const oncollection = vi.fn();
 		const ongroup = vi.fn();
 		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
-		await fireEvent.click(within(await opened()).getByRole('option', { name: 'Pay and conditions' }));
-		expect(ongroup).toHaveBeenLastCalledWith('pay');
-		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+		const list = await pane();
+		await fireEvent.pointerMove(within(list).getByRole('option', { name: /^Housing/ }));
+		expect(names(contents('Housing'))).toEqual([
+			'All of Housing',
+			'Defence housing and relocation'
+		]);
+		await fireEvent.click(within(list).getByRole('option', { name: /^Pay and conditions/ }));
+		expect(names(contents('Pay and conditions'))).toContain('Leave');
+		expect(oncollection).not.toHaveBeenCalled();
+		expect(ongroup).not.toHaveBeenCalled();
+		expect(subjects()).toBeInTheDocument();
+		expect(control()).toHaveTextContent('All your collections');
+	});
 
-		await fireEvent.click(within(await opened()).getByRole('option', { name: 'Leave' }));
+	it('picks a collection from the right and closes', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
+		await pane();
+		await fireEvent.click(within(contents('Pay and conditions')).getByRole('option', { name: 'Leave' }));
 		expect(oncollection).toHaveBeenLastCalledWith('leave');
 		expect(ongroup).toHaveBeenLastCalledWith(undefined);
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('textbox')).toHaveFocus();
 	});
 
-	it('shows a chosen group on the control and marks its heading', async () => {
+	it('takes a whole subject, telling the host the subject and no collection', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
+		await pane();
+		await fireEvent.click(
+			within(contents('Pay and conditions')).getByRole('option', { name: 'All of Pay and conditions' })
+		);
+		expect(ongroup).toHaveBeenLastCalledWith('pay');
+		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+	});
+
+	it('asks across everything, and a loose collection is a pick of its own', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
+		await fireEvent.click(within(await pane()).getByRole('option', { name: 'All your collections' }));
+		expect(oncollection).toHaveBeenLastCalledWith(undefined);
+		expect(ongroup).toHaveBeenLastCalledWith(undefined);
+
+		await fireEvent.click(within(await pane()).getByRole('option', { name: 'Something unfiled' }));
+		expect(oncollection).toHaveBeenLastCalledWith('loose');
+	});
+
+	it('shows a chosen subject on the chip and reopens on it, with it ticked', async () => {
 		render(Composer, { props: base({ collections: GROUPED, group: 'pay' }) });
 		expect(control()).toHaveTextContent('Pay and conditions');
-		const list = await opened();
-		expect(within(list).getByRole('option', { name: 'Pay and conditions' })).toHaveAttribute(
-			'aria-selected',
-			'true'
-		);
-		expect(within(list).getByRole('option', { name: /All your/ })).toHaveAttribute('aria-selected', 'false');
+		await pane();
+		expect(
+			within(contents('Pay and conditions')).getByRole('option', { name: 'All of Pay and conditions' })
+		).toHaveAttribute('aria-selected', 'true');
+		expect(within(subjects()).getByRole('option', { name: /^All your/ })).toHaveAttribute('aria-selected', 'false');
 	});
 
-	it('searches the short title, the full title and the group title', async () => {
+	it('reopens on the subject of a chosen collection, with that collection ticked', async () => {
+		render(Composer, { props: base({ collections: GROUPED, collection: 'housing' }) });
+		expect(control()).toHaveTextContent('Defence housing and relocation');
+		await pane();
+		expect(
+			within(contents('Housing')).getByRole('option', { name: 'Defence housing and relocation' })
+		).toHaveAttribute('aria-selected', 'true');
+		expect(within(subjects()).getByRole('option', { name: /^Housing/ })).toHaveAttribute('aria-current', 'true');
+	});
+
+	it('searches short title, full title and subject, one flat list with the subject beside each', async () => {
 		render(Composer, { props: base({ collections: [...GROUPED, ...MANY] }) });
-		const type = async (value: string) => {
-			await fireEvent.input(screen.getByRole('combobox'), { target: { value } });
-			return screen.getAllByRole('option').map((o) => o.textContent?.trim());
-		};
 		await fireEvent.click(control());
-		expect(await type('adf')).toEqual(['Pay and conditions', 'ADF pay']);
-		expect(await type('determination')).toEqual(['Pay and conditions', 'Leave']);
-		expect(await type('pay and')).toEqual(['Pay and conditions', 'ADF pay', 'Leave']);
+		const field = screen.getByRole('combobox');
+		expect(field).toHaveFocus();
+		const type = async (value: string) => {
+			await fireEvent.input(field, { target: { value } });
+			return screen.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim());
+		};
+		expect(await type('adf')).toEqual(['ADF pay Pay and conditions']);
+		expect(screen.getByRole('option', { name: 'ADF pay, in Pay and conditions' })).toBeInTheDocument();
+		expect(await type('determination')).toEqual(['Leave Pay and conditions']);
+		expect(await type('housing')).toEqual([
+			'All of Housing',
+			'Defence housing and relocation Housing'
+		]);
+		expect(screen.queryByRole('listbox', { name: 'Subjects' })).not.toBeInTheDocument();
+
+		await fireEvent.input(field, { target: { value: '' } });
+		expect(screen.getByRole('listbox', { name: 'Subjects' })).toBeInTheDocument();
+	});
+
+	it('picks a search match with Enter, as its subject whole or as the collection', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: [...GROUPED, ...MANY], oncollection, ongroup }) });
+		await fireEvent.click(control());
+		const field = screen.getByRole('combobox');
+		await fireEvent.input(field, { target: { value: 'housing' } });
+		await fireEvent.keyDown(field, { key: 'Enter' });
+		expect(ongroup).toHaveBeenLastCalledWith('home');
+
+		await fireEvent.click(control());
+		await fireEvent.input(screen.getByRole('combobox'), { target: { value: 'leave' } });
+		await fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+		expect(oncollection).toHaveBeenLastCalledWith('leave');
+	});
+
+	it('is driven from the keyboard: arrows browse, Enter goes in, Enter picks, Escape hands back', async () => {
+		const oncollection = vi.fn();
+		const ongroup = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection, ongroup }) });
+		control().focus();
+		await fireEvent.keyDown(control(), { key: 'ArrowDown' });
+		const list = subjects();
+		expect(list).toHaveFocus();
+
+		await fireEvent.keyDown(list, { key: 'ArrowDown' });
+		expect(list.getAttribute('aria-activedescendant')).toBe(
+			within(list).getByRole('option', { name: /^Pay and conditions/ }).id
+		);
+		await fireEvent.keyDown(list, { key: 'ArrowDown' });
+		expect(names(contents('Housing'))).toContain('All of Housing');
+		expect(oncollection).not.toHaveBeenCalled();
+
+		await fireEvent.keyDown(list, { key: 'Enter' });
+		const right = contents('Housing');
+		expect(right).toHaveFocus();
+		await fireEvent.keyDown(right, { key: 'ArrowDown' });
+		await fireEvent.keyDown(right, { key: 'Enter' });
+		expect(oncollection).toHaveBeenLastCalledWith('housing');
+
+		await fireEvent.keyDown(control(), { key: 'ArrowUp' });
+		await fireEvent.keyDown(subjects(), { key: 'Escape' });
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(control()).toHaveFocus();
+	});
+
+	it('puts the search, the subjects and what is in one in the tab order, and names every row', async () => {
+		render(Composer, { props: base({ collections: [...GROUPED, ...MANY] }) });
+		await fireEvent.click(control());
+		expect(screen.getByRole('combobox')).toHaveFocus();
+		expect(subjects()).toHaveAttribute('tabindex', '0');
+		expect(contents('Pay and conditions')).toHaveAttribute('tabindex', '0');
+		for (const row of screen.getAllByRole('option')) {
+			expect(row.getAttribute('aria-label')?.trim()).toBeTruthy();
+		}
+	});
+});
+
+describe('Composer collection picker, names in full', () => {
+	const LONG = 'Defence Aviation Safety Design Requirements Manual and its airworthiness determinations';
+	const COLLS = [
+		{ name: 'dasdrm', title: LONG, group: { name: 'air', title: 'Airworthiness' } },
+		{ name: 'other', title: 'Other', group: { name: 'air', title: 'Airworthiness' } }
+	];
+
+	it('reads a long name to its last word on the row, the pane and the chip', async () => {
+		const { unmount } = render(Composer, { props: base({ collections: COLLS }) });
+		await fireEvent.click(control());
+		const row = screen.getByRole('option', { name: LONG });
+		expect(row.textContent).toContain(LONG);
+		unmount();
+
+		render(Composer, { props: base({ collections: COLLS, collection: 'dasdrm' }) });
+		expect(control()).toHaveTextContent(LONG);
+	});
+
+	it('has no truncation anywhere in the picker', () => {
+		const source = readFileSync(
+			join(process.cwd(), 'src/lib/components/composer/scope-picker.svelte'),
+			'utf8'
+		);
+		expect(source).not.toMatch(/text-overflow|line-clamp|\btruncate\b|ellipsis|nowrap/);
+	});
+});
+
+describe('Composer collection picker, on a phone', () => {
+	const real = window.matchMedia;
+	afterEach(() => {
+		window.matchMedia = real;
+	});
+	function phone() {
+		window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+			matches: /max-width/.test(query),
+			media: query,
+			onchange: null,
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}));
+	}
+
+	it('shows the subjects first, then a tap goes into one under a back control with its name', async () => {
+		phone();
+		const oncollection = vi.fn();
+		render(Composer, { props: base({ collections: GROUPED, oncollection }) });
+		await fireEvent.click(control());
+		expect(screen.getByRole('listbox', { name: 'Subjects' })).toBeInTheDocument();
+		expect(screen.queryByRole('listbox', { name: 'Pay and conditions' })).not.toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('option', { name: /^Pay and conditions/ }));
+		expect(screen.queryByRole('listbox', { name: 'Subjects' })).not.toBeInTheDocument();
+		const back = screen.getByRole('button', { name: 'Back to subjects from Pay and conditions' });
+		expect(back).toHaveTextContent('Pay and conditions');
+		expect(oncollection).not.toHaveBeenCalled();
+
+		await fireEvent.click(back);
+		expect(screen.getByRole('listbox', { name: 'Subjects' })).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('option', { name: /^Pay and conditions/ }));
+		await fireEvent.click(screen.getByRole('option', { name: 'Leave' }));
+		expect(oncollection).toHaveBeenLastCalledWith('leave');
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 	});
 });
 

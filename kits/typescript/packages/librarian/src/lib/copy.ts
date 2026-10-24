@@ -52,6 +52,15 @@ export interface ChatCopy {
 	 *  when nothing matches. */
 	findCollection: string;
 	noCollectionMatch: string;
+	/** The picker's two steps: the subjects' list, a subject taken whole
+	 *  (`{subject}`), a subject's row read aloud (`{subject}`, `{count}`), a
+	 *  collection found by search read with its subject (`{collection}`,
+	 *  `{subject}`), and the sheet's way back from a subject (`{subject}`). */
+	subjectsLabel: string;
+	allOfSubject: string;
+	subjectRow: string;
+	inSubject: string;
+	backToSubjects: string;
 	/** Past a few turns, the quiet line above the composer that offers to
 	 *  start over — a follow-up re-reads the whole conversation, so each one
 	 *  costs more than the last. */
@@ -256,6 +265,11 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		allCollections: 'All your collections',
 		findCollection: 'Search',
 		noCollectionMatch: 'Nothing matches that.',
+		subjectsLabel: 'Subjects',
+		allOfSubject: 'All of {subject}',
+		subjectRow: '{subject}, {count} to choose from',
+		inSubject: '{collection}, in {subject}',
+		backToSubjects: 'Back to subjects from {subject}',
 		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
 		working: `${who} is working`,
 		conversationLabel: `Conversation with ${who}`,

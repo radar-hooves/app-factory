@@ -505,21 +505,21 @@ for (const theme of THEMES) {
 	if ((await control.innerText()).trim() !== 'All your collections') {
 		failures.push('collections: asking across all of them is not the starting choice');
 	}
-	if (await page.getByText('Defence housing and relocation').count()) {
+	if (await page.getByText('Senate Estimates').count()) {
 		failures.push('collections: the choices stand in the composer rather than behind one control');
 	}
 	await control.click();
 	const field = page.getByRole('combobox', { name: 'Where Outrider looks' });
 	await field.waitFor();
 	await page.screenshot({ path: join(out, 'collections-open-1440.png') });
-	await field.fill('housing');
+	await field.fill('senate');
 	await page.keyboard.press('Enter');
-	if ((await control.innerText()).trim() !== 'Defence housing and relocation') {
+	if ((await control.innerText()).trim() !== 'Senate Estimates') {
 		failures.push('collections: a searched pick is not the chosen one');
 	}
 	const focused = await page.evaluate(() => document.activeElement?.tagName);
 	if (focused !== 'TEXTAREA') failures.push(`collections: a pick left focus on ${focused}, not the box`);
-	if (await page.getByText('defence-housing').count()) {
+	if (await page.getByText('senate-estimates-hansard').count()) {
 		failures.push('collections: a collection is shown by its name, not its title');
 	}
 	await context.close();

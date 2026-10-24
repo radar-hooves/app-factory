@@ -12,7 +12,7 @@
 import type { Artefact, Block, DescribeTool, Turn } from '@poodle64/librarian/transcript';
 import type { Citation, LoadedDocument } from '@poodle64/librarian/citations';
 import type { AgentEvent } from '@poodle64/librarian/client';
-import type { CollectionChoice } from '@poodle64/librarian/composer';
+import type { CollectionChoice, CollectionGroup } from '@poodle64/librarian/composer';
 import type { ChatCopy } from '@poodle64/librarian/copy';
 import { Session } from '@poodle64/librarian/session';
 import type {
@@ -241,7 +241,8 @@ export type LabState =
 	| 'past'
 	| 'live'
 	| 'cost'
-	| 'collections';
+	| 'collections'
+	| 'collections-long';
 
 export interface LabScene {
 	turns: Turn[];
@@ -396,39 +397,83 @@ const QUOTA: Quota = {
 	support_url: '/support'
 };
 
-/** The collections the person may read, as the app lists them: as many as
- *  caspo's operator holds, so the picker is seen searching. */
+/** The subjects the library groups caspo's collections under. */
+const SUBJECTS: Record<string, CollectionGroup> = {
+	'people-and-conditions': { name: 'people-and-conditions', title: 'People and Conditions' },
+	'programme-and-acp': { name: 'programme-and-acp', title: 'Programme and ACP' },
+	'audit-and-inquiries': { name: 'audit-and-inquiries', title: 'Audit and Inquiries' },
+	'strategy-and-industry-policy': { name: 'strategy-and-industry-policy', title: 'Strategy and Industry Policy' },
+	'procurement': { name: 'procurement', title: 'Procurement' },
+	'materiel-engineering': { name: 'materiel-engineering', title: 'Materiel Engineering' },
+	'airworthiness': { name: 'airworthiness', title: 'Airworthiness' },
+};
+
+/** The collections caspo's operator reads, as the app lists them: the library's
+ *  committed caspo map (24/10/2026), 57 collections under 7 subjects and one
+ *  with none, so the picker is seen at its real size and with its real names. */
 export const COLLECTIONS: CollectionChoice[] = [
-	{ name: 'adf-pay', title: 'ADF pay and conditions', shortTitle: 'ADF pay' },
-	{ name: 'defence-housing', title: 'Defence housing and relocation' },
-	{ name: 'travel' },
-	...[
-		'Defence policy',
-		'Procurement',
-		'Radar',
-		'Electronic warfare',
-		'Electro optics',
-		'Communications',
-		'Signal processing',
-		'Simulation',
-		'Defence parliamentary',
-		'Defence audit',
-		'Defence doctrine',
-		'Defence personnel',
-		'Defence allied',
-		'Networks',
-		'Export controls',
-		'Digital sourcing',
-		'Marketplace precedent',
-		'Defence security',
-		'Defence aviation safety',
-		'Public governance',
-		'Materiel engineering',
-		'Open architecture',
-		'Asdefcon',
-		'Acp synthesis'
-	].map((title) => ({ name: title.toLowerCase().replaceAll(' ', '-'), title }))
+	{ name: 'pacman', title: 'Pay and Conditions Manual (PACMAN)', shortTitle: 'PACMAN', group: SUBJECTS['people-and-conditions'] },
+	{ name: 'caspo-education-modules', title: 'CASPO Education Modules', shortTitle: 'CASPO education modules', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'writing-manual-brand-guides', title: 'ADF Writing Manual and Brand Guides', shortTitle: 'ADF writing and brand' },
+	{ name: 'adf-superannuation', title: 'ADF Superannuation', shortTitle: 'ADF superannuation', group: SUBJECTS['people-and-conditions'] },
+	{ name: 'adf-pay-benefits-tax-transition', title: 'ADF Pay, Benefits, Tax and Transition Guides', shortTitle: 'Pay, benefits and tax', group: SUBJECTS['people-and-conditions'] },
+	{ name: 'conditions-of-service-law', title: 'Defence Act, Defence Regulations and DFRT Determinations', shortTitle: 'Service law', group: SUBJECTS['people-and-conditions'] },
+	{ name: 'defence-workforce-careers-study', title: 'Defence Workforce, Careers and Sponsored Study', shortTitle: 'Careers and study', group: SUBJECTS['people-and-conditions'] },
+	{ name: 'asx-chess-replacement', title: 'ASX CHESS Replacement', shortTitle: 'ASX CHESS', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'senate-estimates-hansard', title: 'Senate Estimates and Hansard', shortTitle: 'Senate Estimates', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'major-projects-report', title: 'Defence Major Projects Report (MPR)', shortTitle: 'Major Projects Report', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'defence-budget', title: 'Defence Budget (PBS and ASPI Cost of Defence)', shortTitle: 'Defence budget', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'export-control-regimes', title: 'Defence Export Controls and Foreign Military Sales', shortTitle: 'Export controls and FMS', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'aukus-pillar-ii', title: 'AUKUS Pillar II', shortTitle: 'AUKUS Pillar II', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'pspf-dspf', title: 'Protective Security Policy Framework (PSPF) and DSPF', shortTitle: 'PSPF and DSPF', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'asd-cyber-security', title: 'ASD Cyber Security Guidance (ISM and Essential Eight)', shortTitle: 'ISM and Essential Eight', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'disp', title: 'Defence Industry Security Program (DISP)', shortTitle: 'DISP', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'defence-organisation', title: 'Defence Organisation and Groups', shortTitle: 'Defence organisation', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'defence-industry-policy', title: 'Defence Industry Policy (DIDS, SDIP and AIC)', shortTitle: 'Defence industry policy', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'national-defence-strategy', title: 'National Defence Strategy and White Papers', shortTitle: 'Defence strategy', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'autonomous-systems-strategy-doctrine', title: 'Autonomous Systems Strategy and Doctrine', shortTitle: 'Autonomous systems', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'responsible-ai', title: 'Responsible AI in Defence', shortTitle: 'Responsible AI', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'uk-defence-strategy-acquisition', title: 'UK Defence Strategy and Acquisition', shortTitle: 'UK defence acquisition', group: SUBJECTS['strategy-and-industry-policy'] },
+	{ name: 'us-defence-acquisition', title: 'US Defence Acquisition, Budget and Industrial Base', shortTitle: 'US defence acquisition', group: SUBJECTS['procurement'] },
+	{ name: 'test-and-evaluation', title: 'Test and Evaluation Guidance (DOT&E and CDAO)', shortTitle: 'Test and evaluation', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'overseas-audit-reports', title: 'Overseas and State Audit Reports (GAO, NAO, NSW, NATO)', shortTitle: 'Overseas audit reports', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'defence-innovation-marketplaces', title: 'Defence Innovation Marketplaces (Tradewinds, DIU, SBIR)', shortTitle: 'Innovation marketplaces', group: SUBJECTS['procurement'] },
+	{ name: 'secure-software-devsecops', title: 'Secure Software and DevSecOps (Platform One, Iron Bank)', shortTitle: 'Secure software', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'wog-panels-buyict', title: 'Whole-of-Government Panels and BuyICT', shortTitle: 'WoG panels and BuyICT', group: SUBJECTS['procurement'] },
+	{ name: 'other-governments-panels', title: 'Other Governments\' Panels and Schedules (US, UK, NZ, NSW)', shortTitle: 'Other panels', group: SUBJECTS['procurement'] },
+	{ name: 'standards-conformance', title: 'Standards Conformance and Certification Programmes', shortTitle: 'Standards conformance', group: SUBJECTS['procurement'] },
+	{ name: 'market-makers', title: 'Market Makers and Exchange Liquidity', shortTitle: 'Market makers', group: SUBJECTS['procurement'] },
+	{ name: 'platform-markets', title: 'Platform Markets: Economics and Competition Cases', shortTitle: 'Platform markets', group: SUBJECTS['procurement'] },
+	{ name: 'air-power-autonomy-research', title: 'Air Power and Autonomy Research', shortTitle: 'Air power research', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'digital-engineering', title: 'Digital Engineering', shortTitle: 'Digital engineering', group: SUBJECTS['materiel-engineering'] },
+	{ name: 'istari', title: 'Istari Digital Platform', shortTitle: 'Istari', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'mosa-open-standards', title: 'Modular Open Systems and Open Standards (MOSA, FACE, SOSA)', shortTitle: 'MOSA and open standards', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'civil-international-aviation-guidance', title: 'Civil and International Aviation Safety Guidance (FAA, EASA, CASA, JARUS)', shortTitle: 'Civil aviation safety', group: SUBJECTS['airworthiness'] },
+	{ name: 'dasr-dasp-manual', title: 'Defence Aviation Safety Regulation (DASR) and DASP Manual', shortTitle: 'DASR', group: SUBJECTS['airworthiness'] },
+	{ name: 'dasdrm', title: 'Defence Aviation Safety Design Requirements Manual (DASDRM)', shortTitle: 'DASDRM', group: SUBJECTS['airworthiness'] },
+	{ name: 'modelling-and-simulation', title: 'Simulation and Synthetic Environments (JSE, AFSIM)', shortTitle: 'Simulation', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'air-force-open-architectures', title: 'Air Force Open Architectures (A-GRA, OMS, UCI)', shortTitle: 'Open architectures', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'cca-overseas', title: 'Collaborative Combat Aircraft Overseas', shortTitle: 'CCA overseas', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'ghost-bat', title: 'MQ-28A Ghost Bat (AIR 6015)', shortTitle: 'MQ-28A Ghost Bat', group: SUBJECTS['programme-and-acp'] },
+	{ name: 'asdefcon-contracting', title: 'ASDEFCON Contracting Templates', shortTitle: 'ASDEFCON templates', group: SUBJECTS['procurement'] },
+	{ name: 'contractor-insurance-acip', title: 'Contractor Insurance (ACIP and ASDEFCON Insurance Handbook)', shortTitle: 'Contractor insurance', group: SUBJECTS['procurement'] },
+	{ name: 'commonwealth-contracting-suite', title: 'Commonwealth Contracting Suite', shortTitle: 'Contracting suite', group: SUBJECTS['procurement'] },
+	{ name: 'pgpa-finance-rmgs', title: 'PGPA Act and Finance Resource Management Guides', shortTitle: 'PGPA and finance guides', group: SUBJECTS['procurement'] },
+	{ name: 'integrity-conduct-fraud', title: 'Integrity, Conduct and Fraud Control', shortTitle: 'Integrity and fraud', group: SUBJECTS['procurement'] },
+	{ name: 'procurement-rules-manuals', title: 'Procurement Rules and Manuals (CPRs and DPPM)', shortTitle: 'CPRs and DPPM', group: SUBJECTS['procurement'] },
+	{ name: 'records-privacy-whs', title: 'Records, Privacy and Work Health and Safety', shortTitle: 'Records, privacy and WHS', group: SUBJECTS['procurement'] },
+	{ name: 'anao-audits', title: 'ANAO Audits', shortTitle: 'ANAO audits', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'parliamentary-inquiries', title: 'Parliamentary Committee Inquiries', shortTitle: 'Parliamentary inquiries', group: SUBJECTS['audit-and-inquiries'] },
+	{ name: 'naval-seaworthiness', title: 'Naval Seaworthiness and Classification Rules', shortTitle: 'Naval seaworthiness', group: SUBJECTS['materiel-engineering'] },
+	{ name: 'packaging-standard', title: 'ADF Packaging Standard (DEF(AUST)1000C)', shortTitle: 'ADF packaging standard', group: SUBJECTS['materiel-engineering'] },
+	{ name: 'other-materiel-manuals', title: 'Other Materiel Manuals (IPS, Explosive Ordnance, Land Vehicles)', shortTitle: 'Other materiel manuals', group: SUBJECTS['materiel-engineering'] },
+	{ name: 'hosting-certification-framework', title: 'Hosting Certification Framework', shortTitle: 'Hosting certification', group: SUBJECTS['procurement'] },
+	{ name: 'defence-ictpa', title: 'Defence ICT Procurement Arrangements (ICTPA)', shortTitle: 'Defence ICTPA', group: SUBJECTS['procurement'] }
 ];
+
+/** The same collections before the library has given any a short title: the
+ *  full titles are the rows, and every one must be read to its last word. */
+export const COLLECTIONS_LONG: CollectionChoice[] = COLLECTIONS.map(({ shortTitle: _short, ...rest }) => rest);
 
 const at = (n: number) => new Date(minutes(n)).toISOString();
 
@@ -452,6 +497,9 @@ export function scene(state: LabState): LabScene {
 	// words each is known by, never by its name.
 	if (state === 'collections') {
 		return { ...base, collections: COLLECTIONS, turns: [settled()] };
+	}
+	if (state === 'collections-long') {
+		return { ...base, collections: COLLECTIONS_LONG, turns: [settled()] };
 	}
 
 	// The answer footer's cost line: an answer that actually cost something,

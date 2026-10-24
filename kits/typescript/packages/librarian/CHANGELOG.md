@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: caspo (the operator, 24/10/2026: "filter by group and then pick a collection from within that", and long names still truncating).
+
+### Changed
+
+- **The collection picker is two steps, subject then collection** (the operator, 24/10/2026: "filter by group and then pick a collection from within that", and long names still truncating). A popover of about 44rem: a search field, subjects on the left each with its count, and on the right "All of <subject>" then its collections. Pointing at a subject browses it; only a row on the right, a loose collection or everything sets the scope and closes the picker. Typing replaces both panes with one list, each match with its subject under it. Under 48rem it is a bottom sheet, one step at a time, with a back control named for the subject. A list with no subjects stays one searchable list. Every name wraps, on the rows and on the chip: nothing in the picker truncates. Tab moves search, subjects, contents; the active row is lit only in the part holding focus. The trigger now has `aria-haspopup="dialog"`.
+- Copy: `subjectsLabel`, `allOfSubject`, `subjectRow`, `inSubject`, `backToSubjects`.
+
 ## [2026.10.10] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: Past questions as a column, with Clear all at its foot).
