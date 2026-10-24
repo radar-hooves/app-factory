@@ -254,7 +254,7 @@ class ActorGateMiddleware(Middleware):
         try:
             resolve_actor()
         except AuthenticationError as exc:
-            logger.warning("MCP HTTP tool call rejected: %s", exc.message)
+            logger.warning("MCP HTTP tool call rejected: %s (client_id=%s)", exc.message, exc.context.get("client_id"))
             raise ToolError(exc.message) from exc
 
         return await call_next(context)

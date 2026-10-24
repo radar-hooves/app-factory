@@ -13,6 +13,10 @@ Need: Past questions as a column beside the conversation with Clear all at its f
 - **Past questions is a column beside the conversation from 1024px**, in the page and not the rail, flush against the rail and sized as it is (the shell's `--ds-shell-rail-width` and `-collapsed` tokens), folded to its edge or open as the reader left it: New question at its head, rows dated under Today, Yesterday and Earlier each with its acts, and Clear all at its foot behind an AlertDialog whose action is destructive. Narrower, the bar's own Past questions action (`ShellActions`) opens it in a sheet. The toolbar above the transcript keeps New question only where the column does not show, and the page is unpadded (`padded: false`). Migration: bump `@poodle64/ui` and `@poodle64/librarian` to the releases that carry `ShellActions` and the dated list; an app whose own layout or tests found the toolbar's Past questions button finds the column (`chat-past-column`) or the bar's action (`chat-past-questions`).
 - **`DELETE /api/agent/{persona}/conversations` (`clearConversations`)**: forgets every one of the caller's own conversations with the persona as `delete` forgets one, and leaves one still being answered. The stamped `chatTransport` wires it as `clear`. Migration: regenerate the app's `schema.d.ts`.
 
+### Fixed
+
+- **The `/mcp` refusal warning names who was refused**: `MCP HTTP tool call rejected: <reason> (client_id=<id>)`. The id is the OIDC `sub`, not a secret; the registered list stays out of the log. Need: an operator could not tell who was refused; consumer: pebblestone.
+
 ## [2026.10.71] - 2026-10-24
 
 Need: the operator's rulings of 24/10/2026 on caspo's chat page and chrome ("it needs to look and feel exactly like claude code, where you can actually see that something is going on"; the briefing button, "how many times you're gonna click that"; the scope disclosure, which Home and About already say); consumer: caspo.
