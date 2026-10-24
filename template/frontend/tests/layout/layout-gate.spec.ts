@@ -196,7 +196,9 @@ async function measure(page: Page, status: number): Promise<Metrics> {
 				)?.innerText.trim() ?? '',
 			// The title may not end in an ellipsis: a cut name is a name nobody can read.
 			barTitleCut: (() => {
-				const title = document.querySelector('[data-testid="ds-shell-title"]') as HTMLElement | null;
+				const title = document.querySelector(
+					'[data-testid="ds-shell-title"]'
+				) as HTMLElement | null;
 				return title ? title.scrollWidth > title.clientWidth + 1 : false;
 			})(),
 			mainOverflow: main ? main.scrollHeight - main.clientHeight : 0,

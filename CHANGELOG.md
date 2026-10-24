@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.79] - 2026-10-24
+
+Consumer: caspo. `tests/layout/layout-gate.spec.ts` in 2026.10.78 failed a stamped app's `prettier --check`.
+
+### Fixed
+
+- **The layout gate spec is prettier-clean.** Migration: take `tests/layout/layout-gate.spec.ts` from the render.
+
 ## [2026.10.78] - 2026-10-24
 
 Need: the operator's standing complaint of text that is cut off for no reason (24/10/2026); consumer: caspo, whose phone bar read "Security › Overv…" and "B…".
