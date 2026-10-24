@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.76] - 2026-10-24
+
+Need: a chat persona can be offered with no attachments; consumer: pebblestone (its portal chat policy forbids attaching third-party documents, and none of its personas may Read). v2026.10.75 was tagged on `9b6e85c` while this was in flight, so it does not carry it.
+
+### Added
+
+- **A chat persona can take no files** (`attachments: false` on its `config/chat.yaml` row; default true, so no other app changes). `GET /api/agent/personas` carries `attachments`, `AskBox` passes it to the Composer, so neither the chat page nor a Home page's box offers Attach, and `POST /api/agent/{persona}/ask` refuses a multipart body for that persona before reading it (400 "<name> takes no attachments"): nothing stored, no turn charged. No kit release: `@poodle64/librarian`'s Composer already takes `attachments`. Migration: regenerate `schema.d.ts`, and set `attachments: false` on each row that takes none.
+
 ## [2026.10.75] - 2026-10-24
 
 Need: the collection picker the operator asked for (24/10/2026, subjects then collections); consumer: caspo. v2026.10.74 was tagged on `9b49eac6` while this release was in flight, so it does not carry the picker.
@@ -11,10 +19,6 @@ Need: the collection picker the operator asked for (24/10/2026, subjects then co
 ### Changed
 
 - **The collection picker is two steps, subject then collection** (`@poodle64/librarian` 2026.10.11, which stamped apps now pin): subjects on the left each with its count, "All of <subject>" then its collections on the right, search across both, a bottom sheet under 48rem; every name wraps and nothing truncates. New copy keys `subjectsLabel`, `allOfSubject`, `subjectRow`, `inSubject`, `backToSubjects`. Migration: bump `@poodle64/librarian` to 2026.10.11.
-
-### Added
-
-- **A chat persona can take no files** (`attachments: false` on its `config/chat.yaml` row; default true, so no other app changes). `GET /api/agent/personas` carries `attachments`, `AskBox` passes it to the Composer, so neither the chat page nor a Home page's box offers Attach, and `POST /api/agent/{persona}/ask` refuses a multipart body for that persona before reading it (400 "<name> takes no attachments"): nothing stored, no turn charged. Need: a persona whose policy forbids attaching third-party documents, and which may not Read what it is handed, was offered Attach; consumer: pebblestone. Migration: regenerate `schema.d.ts`, and set `attachments: false` on each row that takes none.
 
 ### Fixed
 
