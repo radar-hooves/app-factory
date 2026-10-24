@@ -93,9 +93,16 @@
 	import PanelRight from '@lucide/svelte/icons/panel-right';
 	import * as Sheet from '../sheet/index.js';
 	import AppNav from './app-nav.svelte';
-	import { activeNavTitle, toItems, type NavSource } from './types.js';
+	import { activeNavTitle, shortLocation, toItems, type NavSource } from './types.js';
+	import BarActions from './bar-actions.svelte';
 	import { shellReport } from './report.svelte.js';
-	import { provideShellControls, type ShellControlsSlot } from './controls.js';
+	import {
+		provideShellActions,
+		provideShellControls,
+		type BarActionsSlot,
+		type ShellActionsHolder,
+		type ShellControlsSlot
+	} from './controls.js';
 	import { cn } from '$lib/utils.js';
 	import ResizeHandle from '../resize-handle/resize-handle.svelte';
 
@@ -244,6 +251,18 @@
 			(type === 'panel' ? slots.pane?.location : undefined) ??
 			title
 	);
+
+	// On a phone the bar holds one name, the page's own: a trail does not fit
+	// beside the menu, the brand and the bar's icons, and cut letters help no one.
+	const shortName = $derived(shortLocation(nav, currentPath, location));
+
+	// The page's status and actions, registered by `<ShellActions>` from the route.
+	// Raw, not deep, so the page that registered it can find it again to withdraw it.
+	class PageBar implements ShellActionsHolder {
+		current = $state.raw<BarActionsSlot | null>(null);
+	}
+	const pageBar = new PageBar();
+	provideShellActions(pageBar);
 
 	// The page's scope controls, registered by `<ShellControls>` from the route.
 	const controls: ShellControlsSlot = $state({ content: null });
@@ -837,7 +856,10 @@
 					{#if location}
 						<span
 							class="text-shell-muted-foreground min-w-0 truncate text-sm max-sm:flex-1 max-sm:basis-0 sm:max-w-72"
-							title={location}>{location}</span
+							title={location}
+							data-testid="ds-shell-title"
+							>{#if shortName && shortName !== location}<span class="max-sm:hidden">{location}</span
+								><span class="sm:hidden">{shortName}</span>{:else}{location}{/if}</span
 						>
 					{/if}
 					{#if controls.content}
@@ -911,6 +933,11 @@
 					>
 						<MessageSquarePlus class="size-4" />
 					</button>
+				{/if}
+
+				{#if pageBar.current}
+					<BarActions bar={pageBar.current} />
+					<span class="bg-border hidden h-6 w-px flex-none sm:block" aria-hidden="true"></span>
 				{/if}
 
 				{#if actions}{@render actions()}{/if}

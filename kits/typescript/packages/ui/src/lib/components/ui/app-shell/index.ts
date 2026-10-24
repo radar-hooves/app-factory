@@ -1,6 +1,8 @@
 export { default as AppShell } from './app-shell.svelte';
 export { default as AppNav } from './app-nav.svelte';
 export { default as ShellControls } from './shell-controls.svelte';
+export { default as ShellActions } from './shell-actions.svelte';
+export type { BarAction } from './controls.js';
 export { default } from './app-shell.svelte';
 export { default as PagePane } from './page-pane.svelte';
 export { default as PageAside } from './page-aside.svelte';
@@ -17,6 +19,7 @@ export {
 	hasActiveNavChild,
 	isNavGroup,
 	isNavItemActive,
+	shortLocation,
 	navChildren,
 	toGroups,
 	toItems,

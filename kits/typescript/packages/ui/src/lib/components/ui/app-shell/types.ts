@@ -250,3 +250,24 @@ export function activeNavTitle(
 	}
 	return undefined;
 }
+
+/**
+ * The phone bar's one name for where the user is: the page's own name, never a
+ * trail. A child that is its section's landing page (its `href` is the
+ * section's, an "Overview") is named by the section, since "Overview" says
+ * nothing alone. Off the rail, the last segment of whatever trail was given.
+ */
+export function shortLocation(
+	nav: NavSource | undefined,
+	currentPath: string | undefined,
+	fallback?: string
+): string | undefined {
+	if (currentPath) {
+		for (const item of toItems(nav)) {
+			const child = navChildren(item).find((c) => isNavItemActive(c, currentPath));
+			if (child) return child.href === item.href ? item.label : child.label;
+			if (isNavItemActive(item, currentPath)) return item.label;
+		}
+	}
+	return fallback?.split(TITLE_SEPARATOR).pop();
+}

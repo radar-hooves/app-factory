@@ -33,6 +33,7 @@ interface Metrics {
 	pageType: string | null;
 	shell: boolean;
 	barTitle: string;
+	barTitleCut: boolean;
 	mainOverflow: number;
 	frameOverflow: number;
 	docOverflowX: number;
@@ -81,7 +82,7 @@ Rubric:
 - tool-scroll: on a "tool" page the content fills the frame to its bottom edge and scrolls inside itself; the page itself does not scroll (the metrics give mainOverflow).
 - right-edge: one right edge per text column: blocks of running text in one column end at one shared right edge, not each at its own width.
 - thumb: phone thumb reach: at 390 px the page's primary actions are reachable (not stranded at the top corner only, tap targets about 44 px), nothing is cut off or needs sideways scrolling.
-- bar-title: the top bar names where the reader is ("Section › Page" or the section's name) at both widths.`;
+- bar-title: the top bar names the page: its own name, or "Section › Page" on desktop; on a phone one name alone. A bare page name with no section is correct. The name is whole, never cut with an ellipsis. On a phone a page's own actions are folded into one "More actions" button.`;
 
 const slug = (path: string) =>
 	path === '/' ? 'home' : path.replace(/^\/|\/$/g, '').replace(/[^\w-]+/g, '_');
@@ -110,16 +111,20 @@ async function settle(page: Page): Promise<void> {
 	const size = page.viewportSize();
 	if (size) await page.mouse.move(size.width - 1, size.height - 1);
 	await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+	// The factory's own busy signals: a ContentSkeleton and a LoadingState
+	// carry aria-busy / data-slot, a Skeleton carries data-slot. Nothing is
+	// captured while any of them is on screen, and not before the fonts load.
 	await page
 		.waitForFunction(
 			() =>
+				document.fonts.status === 'loaded' &&
 				!Array.from(
 					document.querySelectorAll(
-						'[role="status"][aria-label="Loading…"], [data-slot="loading-state"]'
+						'[aria-busy="true"], [data-slot="skeleton"], [data-slot="content-skeleton"], [data-slot="loading-state"], [role="status"][aria-label="Loading…"]'
 					)
 				).some((el) => (el as HTMLElement).getClientRects().length > 0),
 			undefined,
-			{ timeout: 10_000 }
+			{ timeout: 15_000 }
 		)
 		.catch(() => {});
 	await page.waitForTimeout(750);
@@ -189,6 +194,11 @@ async function measure(page: Page, status: number): Promise<Metrics> {
 				(
 					document.querySelector('[data-testid="ds-shell-location"]') as HTMLElement | null
 				)?.innerText.trim() ?? '',
+			// The title may not end in an ellipsis: a cut name is a name nobody can read.
+			barTitleCut: (() => {
+				const title = document.querySelector('[data-testid="ds-shell-title"]') as HTMLElement | null;
+				return title ? title.scrollWidth > title.clientWidth + 1 : false;
+			})(),
 			mainOverflow: main ? main.scrollHeight - main.clientHeight : 0,
 			frameOverflow:
 				frameMain && (pageType === 'tool' || pageType === 'panel')
@@ -217,6 +227,7 @@ function deterministic(path: string, origin: string, m: Record<ViewportName, Met
 		if (x.status >= 400) out.push(`${at}server error (HTTP ${x.status})`);
 		if (x.errorOverlay) out.push(`${at}dev error overlay showing`);
 		if (x.shell && !x.barTitle) out.push(`${at}bar title missing`);
+		if (x.barTitleCut) out.push(`${at}bar title is cut off`);
 		if (x.shell && x.pageType === null) out.push(`${at}no page type frame`);
 		if ((x.pageType === 'tool' || x.pageType === 'panel') && x.mainOverflow > 1) {
 			out.push(`${at}page scrolls on a tool/panel page (by ${x.mainOverflow} px)`);

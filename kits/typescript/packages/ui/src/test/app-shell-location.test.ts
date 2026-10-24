@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import Harness from './app-shell-location.svelte';
-import { activeNavTitle } from '$lib/components/ui/app-shell/types.js';
+import { activeNavTitle, shortLocation } from '$lib/components/ui/app-shell/types.js';
 
 const nav = [
 	{ label: 'Overview', href: '/overview' },
@@ -20,6 +20,28 @@ describe('activeNavTitle', () => {
 		expect(activeNavTitle(nav, '/securities/investing/abc')).toBe('Securities › Investing');
 		expect(activeNavTitle(nav, '/elsewhere')).toBeUndefined();
 		expect(activeNavTitle(nav, undefined)).toBeUndefined();
+	});
+});
+
+describe('shortLocation', () => {
+	const nested = [
+		{ label: 'Overview', href: '/overview' },
+		{
+			label: 'Security',
+			href: '/security',
+			children: [
+				{ label: 'Overview', href: '/security', exact: true },
+				{ label: 'Controls', href: '/security/controls' }
+			]
+		}
+	];
+	it('names the page alone, and a section landing page by its section', () => {
+		expect(shortLocation(nested, '/overview')).toBe('Overview');
+		expect(shortLocation(nested, '/security')).toBe('Security');
+		expect(shortLocation(nested, '/security/controls')).toBe('Controls');
+		expect(shortLocation(nested, '/settings', 'Settings › Account')).toBe('Account');
+		expect(shortLocation(nested, '/x', 'Brand')).toBe('Brand');
+		expect(shortLocation(nested, '/x')).toBeUndefined();
 	});
 });
 
@@ -45,6 +67,24 @@ describe('AppShell — location row', () => {
 		expect(row.querySelector('span')).toHaveClass('truncate', 'min-w-0', 'max-sm:flex-1', 'max-sm:basis-0');
 	});
 
+	it('carries the trail wide and the page alone on a phone', () => {
+		render(Harness, { currentPath: '/securities/trading' });
+		const title = screen.getByTestId('ds-shell-title');
+		const [wide, narrow] = Array.from(title.querySelectorAll('span'));
+		expect(wide).toHaveTextContent('Securities › Trading');
+		expect(wide).toHaveClass('max-sm:hidden');
+		expect(narrow).toHaveTextContent('Trading');
+		expect(narrow).toHaveClass('sm:hidden');
+	});
+
+	it('names a section landing page by the section on a phone', () => {
+		render(Harness, { currentPath: '/securities' });
+		const title = screen.getByTestId('ds-shell-title');
+		const [wide, narrow] = Array.from(title.querySelectorAll('span'));
+		expect(wide).toHaveTextContent('Securities › Overview');
+		expect(narrow).toHaveTextContent(/^Securities$/);
+	});
+
 	it('has no Settings row in the rail: Settings is the account menu’s', () => {
 		render(Harness, { currentPath: '/settings/about' });
 		expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
@@ -65,6 +105,31 @@ describe('AppShell — location row', () => {
 			expect(screen.queryByRole('group', { name: 'Financial year' })).not.toBeInTheDocument()
 		);
 		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Securities');
+	});
+});
+
+describe('AppShell — page actions', () => {
+	it('draws labelled buttons wide and folds them into one More menu below sm', async () => {
+		render(Harness, { currentPath: '/overview', withActions: true });
+		const bar = await waitFor(() => screen.getByTestId('ds-shell-page-actions'));
+		expect(bar).toHaveTextContent('Draft 0.1');
+		expect(screen.getByRole('link', { name: 'Brand guide' })).toHaveAttribute('href', '/guide.pdf');
+		expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument();
+		const more = screen.getByTestId('ds-shell-more');
+		expect(more).toHaveAccessibleName('More actions');
+		await fireEvent.click(more);
+		const items = await waitFor(() => screen.getAllByRole('menuitem'));
+		expect(items.map((i) => i.textContent?.trim())).toEqual(['Brand guide', 'Export']);
+		expect(items[0]).toHaveAttribute('href', '/guide.pdf');
+	});
+
+	it('withdraws on unmount and draws nothing when a page registers none', async () => {
+		const { rerender } = render(Harness, { currentPath: '/overview', withActions: true });
+		await waitFor(() => screen.getByTestId('ds-shell-page-actions'));
+		await rerender({ currentPath: '/overview', withActions: false });
+		await waitFor(() =>
+			expect(screen.queryByTestId('ds-shell-page-actions')).not.toBeInTheDocument()
+		);
 	});
 });
 

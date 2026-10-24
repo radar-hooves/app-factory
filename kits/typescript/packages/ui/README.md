@@ -186,8 +186,10 @@ That is the whole minimum. Everything below is optional.
 
 The bar also names where you are, read off `nav` and `currentPath`: "Section ›
 Page" inside a section that has `children` ("Securities › Trading"), the item's
-one name for a top-level page, nothing for a route the nav does not list. It
-shows at every width and truncates on a phone, leading the first row. Settings
+one name for a top-level page, nothing for a route the nav does not list. On a
+phone the bar holds the page's name alone ("Trading"; a section's landing child
+whose `href` is the section's, an "Overview", reads as the section), so it has
+the row's remaining width and does not cut. Settings
 is not in the rail: it is the account menu's one item (`AppIdentity`'s
 `onAccountSettings`, labelled "Settings"), and Sign out lives there only. The
 bar also carries the page's scope controls. A page registers them
@@ -204,6 +206,18 @@ a second row of the bar below that:
 <ShellControls>
 	<Segmented bind:value={year} options={YEARS} label="Financial year" size="sm" />
 </ShellControls>
+```
+
+A page's own actions (a download, an export) register with `ShellActions`.
+From `sm` each is a labelled button in the bar's trailing group; below it they
+fold into one "More actions" (`⋯`) menu listing each with its icon and name,
+and the status stands down. The shell's own icons stay as they are.
+
+```svelte
+<ShellActions
+	status="Draft 0.1"
+	actions={[{ label: 'Brand guide', icon: Download, href, download: true, primary: true }]}
+/>
 ```
 
 A scope control changes the view of the page you are on and never
