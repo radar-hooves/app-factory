@@ -6,7 +6,11 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [2026.10.74] - 2026-10-24
 
-Need: a persona whose CLAUDE.md is a thin file of `@` imports keeps its identity in a chat turn; consumer: pebblestone (five personas importing their briefs from `company/`, the business's one declarative source, one of them nesting three more).
+Need: a persona whose CLAUDE.md is a thin file of `@` imports keeps its identity in a chat turn; consumer: pebblestone (five personas importing their briefs from `company/`, the business's one declarative source, one of them nesting three more). Also the collection picker the operator asked for (24/10/2026); consumer: caspo.
+
+### Changed
+
+- **The collection picker is two steps, subject then collection** (`@poodle64/librarian` 2026.10.11, which stamped apps now pin): subjects on the left each with its count, "All of <subject>" then its collections on the right, search across both, a bottom sheet under 48rem; every name wraps and nothing truncates. New copy keys `subjectsLabel`, `allOfSubject`, `subjectRow`, `inSubject`, `backToSubjects`. Migration: bump `@poodle64/librarian` to 2026.10.11.
 
 ### Fixed
 
