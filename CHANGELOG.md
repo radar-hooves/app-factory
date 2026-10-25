@@ -4,6 +4,23 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.82] - 2026-10-26
+
+Consumer: library#185. A deploy left a browser holding an older cached shell on a blank page, and an app with a userinfo URL but no audience answered every machine bearer with a silent 401.
+
+### Security
+
+- **An app whose bearer gate has no audience started anyway and 401'd every machine caller in silence.** With `<APP>_OIDC_USERINFO_URL` set and `<APP>_OIDC_AUDIENCE` empty, `create_app()` now refuses to start (a `RuntimeError` naming both variables); before, it logged an error. The check is not a settings validator, so a process that reads settings but never serves `/mcp` (a worker) still starts, and an `app_hooks.mcp_auth` replacement gate is exempt. An empty userinfo URL still only warns.
+- **The `entrypoint.sh` comment claimed the deploy runs `migrate` as a pre-flight.** It does not; the comment no longer says so.
+
+### Fixed
+
+- **A browser holding a shell cached from an earlier build rendered blank after a deploy.** Builds before 2026.10.55 sent no `Cache-Control` on the shell, so it was held on heuristic freshness and its entry modules 404'd in the new image (measured on library#207: four blank warm navigations before one rendered). A missing `/_app/immutable/entry/*.js` that the current shell does not name is now answered with a no-store module that reloads the page once per URL, with a 15 s guard; the reload revalidates the no-cache shell. Every other miss keeps its 404, so SvelteKit's own recovery and `hooks.client.ts` still handle a live stale tab's chunks, and a broken build still surfaces. Proven in Chromium, Firefox and WebKit (Playwright 1.58.2) against a heuristically cached shell; with the old 404 all three stayed blank. Chosen over carrying the previous image's assets: it needs no change to the household image build, it covers source-run apps and shells older than one deploy, and it does not leave an old UI on a new API.
+
+### Migration
+
+Before taking 2026.10.82, or any release from 2026.10.68 on, set `<APP>_OIDC_AUDIENCE` to the app's Authentik client id(s) in its production environment wherever `<APP>_OIDC_USERINFO_URL` is set, and in any test fixture that builds `create_app()` with a userinfo URL. Otherwise the new container refuses to start: Watchtower has already replaced the old one, so the app is down for up to the deploy's 300 s watch, then the deploy goes red and rolls back to the prior digest, and every later deploy stays red until the variable is set. The stale-shell reload needs nothing beyond taking the release and its re-stamped parity manifest; an app still on a build before 2026.10.55 should take 2026.10.82 directly at its crossing.
+
 ## [2026.10.81] - 2026-10-24
 
 Need: the operator's "Transparency on the front page does not work" (24/10/2026); consumer: caspo.
