@@ -133,6 +133,9 @@ jobs:
       - name: Arbitrary-values ratchet — the wrapper against the real bin
         run: node --test tests/arbitrary-values/ratchet.test.mjs
 
+      - name: Layout gate — which routes a change names
+        run: node --test tests/layout-gate/routes.test.mjs
+
       - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike
         # the scratch app below. One layer only for each gate: nothing in

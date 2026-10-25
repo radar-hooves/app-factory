@@ -1,8 +1,9 @@
 /**
- * The layout gate. Renders every route in the app's navigation at two
- * viewports, signed in as the E2E suite is, and has a vision model judge each
- * route's pair of screenshots. Any broken page fails the run: a layout change
- * does not land until `pnpm layout-gate` passes. Writes nothing to the app.
+ * The layout gate. Renders each route under test (the app's whole navigation
+ * only when nothing names them) at two viewports, signed in as the E2E suite
+ * is, and has a vision model judge each route's pair of screenshots. Any broken
+ * page fails the run. `pnpm layout-gate` (scripts/layout-gate.mjs) names the
+ * routes a change touches; `--all` is the whole sweep. Writes nothing to the app.
  *
  * Environment:
  * - LAYOUT_GATE_BASE_URL   (config) gate a server already running.

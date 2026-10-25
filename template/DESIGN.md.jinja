@@ -64,15 +64,23 @@ page needs one, it is the wrong type, or the factory's types need a change.
 default. Sidebar and chart colours are the one surface the package leaves to
 each app, declared and registered in `app.css` alongside the primary override.
 
-`pnpm layout-gate` renders every route in the rail at 1673 and 390 px, signed
-in as the E2E suite is, and has `google/pro` judge each page through the
+`pnpm layout-gate` renders the routes a change touches at 1673 and 390 px,
+signed in as the E2E suite is, and has `google/pro` judge each page through the
 LiteLLM proxy (an OpenAI model only if Gemini errors; the report says which):
 composed as one whole, no void or stranded element, nothing floating over
 content, no page scroll on a tool page, one right edge per text column, thumb
 reach on a phone, and the bar's title. It needs `LITELLM_URL` and
 `LITELLM_VIRTUAL_KEY` (vended from the broker), writes its report to
-`test-results/layout-gate/`, and exits non-zero on any broken page. A layout
-change does not land until it passes.
+`test-results/layout-gate/`, and exits non-zero on any broken page.
+
+Run it once, at the end of the change, on the changed routes: `pnpm layout-gate`
+takes them from the `+page` files that differ from `origin/main`, or name them
+(`pnpm layout-gate /library /settings`). A change to a shared file (`src/lib`, a
+`+layout`, `app.css`) names no route, so the run stops and asks for the routes
+that show it: one per page type it reaches. A route costs minutes, so never loop
+it while iterating (`LAYOUT_GATE_JUDGE=off` renders and measures with no model
+call). `pnpm layout-gate --all` is the whole-app sweep, for CI or a release,
+never for attended work.
 
 ## Pages
 

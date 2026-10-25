@@ -29,7 +29,7 @@
 		"test:e2e": "playwright test",
 		"test:e2e:ci": "playwright test --pass-with-no-tests",
 		"test:e2e:debug": "playwright test --debug",
-		"layout-gate": "playwright test --config playwright.layout.config.ts"
+		"layout-gate": "node scripts/layout-gate.mjs"
 	},
 	"devDependencies": {
 {% if 'display' in factory_fonts %}		"@fontsource-variable/fraunces": "^5.1.0",

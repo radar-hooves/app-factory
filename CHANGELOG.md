@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.83] - 2026-10-26
+
+Need: a small UI change must not cost 20 to 70 minutes of hand-run layout gating (master-project#400, Sunset Review Sitting 12); consumer: caspo.
+
+### Changed
+
+- **`pnpm layout-gate` gates the routes a change touches, not every route.** It was a crawl of the whole rail, 9 to 10 minutes a run with the judge on, repeated 7 to 8 times in one session. `pnpm layout-gate` now takes the routes from the `+page` files that differ from `origin/main` (working tree and untracked files included); `pnpm layout-gate /library /settings` names them; `pnpm layout-gate --all` is the whole-app sweep, kept for CI or a release; `--list` prints the routes and stops. A diff of only shared files (`src/lib`, a `+layout`, `app.css`) reaches routes it cannot name, so the run stops and asks for them rather than guessing or sweeping. A `[param]` page asks for a concrete URL. `LAYOUT_GATE_ROUTES` still works under the spec directly. `DESIGN.md` now tells an agent to run it once, at the end, on the changed routes.
+- Measured on the console kit (judge off, so the model's per-route minutes are not in it): a named route ran in 24.6 s against 33.4 s for the four-route crawl, the gap being render and discovery; with the judge on, cost is linear in routes, three at once.
+
+### Migration
+
+Re-stamp (`copier update`): `package.json`'s `layout-gate` script becomes `node scripts/layout-gate.mjs`, which the stamp adds. A caller running `playwright test --config playwright.layout.config.ts` directly still sweeps everything.
+
 ## [2026.10.82] - 2026-10-26
 
 Consumer: library#185. A deploy left a browser holding an older cached shell on a blank page, and an app with a userinfo URL but no audience answered every machine bearer with a silent 401.
