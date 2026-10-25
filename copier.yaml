@@ -4,13 +4,12 @@
 # predates the question, so it takes the default and renders exactly as before.
 _subdirectory: "{{ 'template' if skeleton == 'web' else 'skeletons/' ~ skeleton }}"
 
-# README.md and DESIGN.md are stamped once as skeletons, then owned by the
+# README.md is stamped once as a skeleton, then owned by the
 # app: copier update must never clobber app-authored content in them. The
 # design-craft and ui-drift baselines are each stamped once empty and then grow
 # as the app's own debt register — an update must never wipe the debt banked.
 _skip_if_exists:
   - README.md
-  - DESIGN.md
   - frontend/.arbitrary-values-baseline.json
   - frontend/.design-craft-baseline.json
   - frontend/.ui-drift-baseline.json

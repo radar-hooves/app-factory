@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.85] - 2026-10-26
+
+Need: the per-repo DESIGN.md retires (operator ruling 16/10/2026; master-project#378, #400); consumer: every stamped app.
+
+### Removed
+
+- **The factory no longer stamps `DESIGN.md`.** `template/DESIGN.md.jinja` and its `_skip_if_exists` entry are gone, and so is `@poodle64/design-tokens`' `templates/DESIGN.md.template` (dropped from the package's `files`). The design system lives in Penpot and the token package; an app's rulings live in its product docs. The design-tokens README now carries the `app.css` wiring (font-size, `@source`, primary override) the template's section 8 held.
+
+### Migration
+
+An app's existing `DESIGN.md` is left untouched by `copier update`; its own agent deletes it, moving any rulings into its product docs first.
+
 ## [2026.10.84] - 2026-10-26
 
 Need: numbered handoffs are replaced by one committed root `HANDOFF.md` per repo (master-project#400, Sunset Review Sitting 12); consumer: every stamped app.

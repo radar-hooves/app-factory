@@ -1,6 +1,6 @@
 # kits/typescript
 
-Shared TypeScript app code: the household web design language and the components every SvelteKit app builds from, published to public npm and consumed as ordinary dependencies, never copied into an app. Same rule as [`kits/rust`](../rust/README.md) and [`kits/python`](../python/README.md). It is its own pnpm workspace with its own lock, and every command below runs from this directory. Personality differs by palette only (per-app `DESIGN.md`); everything else comes from here.
+Shared TypeScript app code: the household web design language and the components every SvelteKit app builds from, published to public npm and consumed as ordinary dependencies, never copied into an app. Same rule as [`kits/rust`](../rust/README.md) and [`kits/python`](../python/README.md). It is its own pnpm workspace with its own lock, and every command below runs from this directory. Personality differs by palette only; everything else comes from here.
 
 ## Packages
 
@@ -22,7 +22,7 @@ packages/
                      component gallery (`pnpm dev`, port 9176).
 ```
 
-All three published packages are public on npm under the `@poodle64` scope: no registry config and no token to install. [`DESIGN.md`](DESIGN.md) is the household design language. Background: `docs/master/templates/golden-patterns/app-shape-and-frontend.md` in radar-hooves/master-project (`master-project#174`).
+All three published packages are public on npm under the `@poodle64` scope: no registry config and no token to install. The design system lives in Penpot and the token package. Background: `docs/master/templates/golden-patterns/app-shape-and-frontend.md` in radar-hooves/master-project (`master-project#174`).
 
 ## Scope
 

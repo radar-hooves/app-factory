@@ -226,7 +226,7 @@ for (const mode of ['light', 'dark']) {
 	});
 
 	test(`every palette's accent clears AA (${AA_NORMAL_TEXT}:1) as a fill — ${mode}`, () => {
-		// The constraint the DESIGN.md template already states for a hand-picked
+		// The constraint on a hand-picked
 		// primary, now actually enforced for every catalogued one. Thirteen of the
 		// twenty failed it as lifted from the showcase; papyrus-gold measured
 		// 2.20:1, nile-teal 2.63:1 and scribes-amber 2.71:1, each pairing a light

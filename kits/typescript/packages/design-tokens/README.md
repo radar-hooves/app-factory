@@ -9,8 +9,6 @@ tokens/
   tokens.tokens.json    DTCG 2025.10 token source — the single source of truth
   palettes.json         Palette catalogue: 20 named personalities (accent + tone)
 sd.config.js            Style Dictionary v4 config (css / tw / js platforms)
-templates/
-  DESIGN.md.template    Per-app North Star template (copy → DESIGN.md, fill in)
 test/                   `pnpm test` — compiles real Tailwind against the build
 dist/                   Generated — run `pnpm build`; never edit by hand
   tokens.css            :root (light) + .dark custom properties (--ds-*)
@@ -63,7 +61,7 @@ pnpm add @poodle64/design-tokens
 
 /* then: the per-app primary override, and nothing else.
    An app does NOT hand-write a shadcn alias layer; @poodle64/ui ships it.
-   (full snippet in templates/DESIGN.md.template §8) */
+   (the font-size and primary-override lines are below) */
 ```
 
 TypeScript:
@@ -137,10 +135,17 @@ is `--ds-color-primary-ink`, the accent as text, which every text use of it
 reads (`text-primary`, a prose link, a primary chip); unset it IS the accent,
 and an app whose accent fails 4.5:1 as text sets it once.
 
-1. Copy `templates/DESIGN.md.template` to the app repo as `DESIGN.md`.
-2. Fill in all `REQUIRED` fields (name, description, primary colours).
-3. Add the per-app `:root` override from §8 of the template to `app.css`.
-4. Delete template comments before committing.
+```css
+/* app.css, after the imports above */
+@source "../node_modules/@poodle64/ui/dist"; /* ui ships outside Tailwind's src/ scan */
+html { font-size: var(--ds-font-size-base); } /* never a fixed px value */
+
+/* Skip this block if you adopt a palette: a palette sets primary, foreground and ring. */
+:root  { --ds-color-primary: oklch(0.50 0.155 XXX); --ds-color-primary-foreground: oklch(0.99 0.005 XXX); --ds-color-ring: oklch(0.50 0.155 XXX); }
+.dark  { --ds-color-primary: oklch(0.70 0.140 XXX); --ds-color-primary-foreground: oklch(0.20 0.030 XXX); --ds-color-ring: oklch(0.70 0.140 XXX); }
+```
+
+A palette block is `:root[data-ds-palette='…']`, which outranks a plain `:root` override on specificity: adopting a palette and leaving an old primary override in place leaves a dead declaration, so delete it.
 
 ## The palette catalogue
 
