@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.84] - 2026-10-26
+
+Need: numbered handoffs are replaced by one committed root `HANDOFF.md` per repo (master-project#400, Sunset Review Sitting 12); consumer: every stamped app.
+
+### Changed
+
+- **`.pre-commit-config.yaml` matches master's canonical handoff gates.** `check-handoff-status-chain` and `check-handoff-retention` are gone (master deleted their scripts, so a stamped app declaring them failed any commit staging a handoff). `check-handoff-tracks-work` watches `^HANDOFF\.md$`; `check-handoff-closed-trailer` is added at the `commit-msg` stage, and `commit-msg` joins `default_install_hook_types`.
+
+### Migration
+
+Re-stamp (`copier update`), then run `pre-commit install` once so the `commit-msg` hook is installed. The desktop skeleton carries none of these gates and is unchanged.
+
 ## [2026.10.83] - 2026-10-26
 
 Need: a small UI change must not cost 20 to 70 minutes of hand-run layout gating (master-project#400, Sunset Review Sitting 12); consumer: caspo.
