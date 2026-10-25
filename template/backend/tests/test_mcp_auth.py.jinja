@@ -619,6 +619,50 @@ async def test_proxy_headers_do_not_open_the_mcp_surface():
     assert response.status_code == 401
 
 
+# ── The gate's own configuration: a userinfo URL without an audience refuses to start ─────────
+
+
+def _create_app_with(userinfo_url: str, audience: str):
+    """Build the app under a copy of the real settings, with these two OIDC fields."""
+    from {{ package_name }}.config import get_settings
+    from {{ package_name }}.main import create_app
+
+    configured = get_settings().model_copy(deep=True)
+    configured.mcp.oidc_userinfo_url = userinfo_url
+    configured.mcp.oidc_audience = audience
+    return create_app(settings=configured)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("audience", ["", " , ,"])
+def test_a_userinfo_url_with_no_audience_refuses_to_start(audience):
+    """Every machine bearer would 401 with nothing but a log line to say why, so startup says it instead."""
+    with pytest.raises(RuntimeError, match="{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE"):
+        _create_app_with(USERINFO_URL, audience)
+
+
+@pytest.mark.unit
+def test_a_userinfo_url_with_an_audience_starts():
+    assert _create_app_with(USERINFO_URL, f"{AUDIENCE}, another-client") is not None
+
+
+@pytest.mark.unit
+def test_no_userinfo_url_starts_closed_with_a_warning(caplog):
+    """An empty URL is the deliberate default, so it warns and starts, audience or none."""
+    with caplog.at_level("WARNING"):
+        assert _create_app_with("", "") is not None
+    assert "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset" in caplog.text
+
+
+@pytest.mark.unit
+def test_an_mcp_auth_hook_replaces_the_gate_and_its_refusal(monkeypatch):
+    """An app that gates /mcp itself has no use for the audience, so a missing one stops nothing."""
+    from {{ package_name }} import app_hooks
+
+    monkeypatch.setattr(app_hooks, "mcp_auth", lambda mcp_app: mcp_app, raising=False)
+    assert _create_app_with(USERINFO_URL, "") is not None
+
+
 # ── A persona presents its asker's token: the tool sees the person ─────────
 
 APP = "factory-selftest"

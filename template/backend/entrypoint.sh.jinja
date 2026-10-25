@@ -2,9 +2,8 @@
 # Container entrypoint: migrate, stamp, then start the application server.
 # If the database isn't ready, alembic fails and Docker restarts the container.
 #
-# `entrypoint.sh migrate` stops after the stamp. The deploy runs it with the NEW
-# image while the old container still serves, so a migration that fails against
-# production leaves the old one serving instead of restart-looping the new one.
+# `entrypoint.sh migrate` stops after the stamp, to migrate and stamp a database
+# without starting the server. The household deploy (a merge to main) does not run it.
 
 set -e
 

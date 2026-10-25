@@ -60,8 +60,8 @@ class MCPSettings(BaseSettings):
     # app, comma-separated: this app's Authentik client id (or the shared gateway
     # client's). Authentik's userinfo answers for a token minted for ANY
     # application on the instance, so without this a bearer issued for another
-    # household app's client could be replayed here. Empty -> every machine
-    # request 401s, like an empty userinfo URL.
+    # household app's client could be replayed here. Empty with a userinfo URL
+    # set -> create_app() refuses to start (an app with an mcp_auth hook is exempt).
     # Env: {{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE
     oidc_audience: str = ""
 

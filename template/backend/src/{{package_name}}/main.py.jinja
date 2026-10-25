@@ -261,6 +261,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if app_mcp_auth is not None:
         gated_mcp_app = app_mcp_auth(raw_mcp_app)
     else:
+        # Refused here, not by a Settings validator: only create_app() sees a replacing mcp_auth hook, and a
+        # process that reads settings but never serves /mcp (a worker) must still start.
+        if settings.mcp.oidc_userinfo_url and not settings.mcp.oidc_audiences:
+            raise RuntimeError(
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE is empty while "
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set: the gate would 401 every "
+                "machine caller, because a bearer issued for another application would otherwise be accepted. "
+                "Set it to this app's Authentik client id(s), comma-separated."
+            )
         gated_mcp_app = require_bearer_auth(
             raw_mcp_app,
             userinfo_url=settings.mcp.oidc_userinfo_url,
@@ -273,12 +282,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             _log.warning(
                 "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is unset: the /mcp surface is closed "
                 "to machine callers (each one 401s). Set it to your Authentik userinfo endpoint to open it."
-            )
-        elif not settings.mcp.oidc_audiences:
-            _log.error(
-                "{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE is unset: the /mcp surface is closed "
-                "to machine callers (each one 401s), because a bearer issued for another application would "
-                "otherwise be accepted. Set it to this app's Authentik client id."
             )
 
     @asynccontextmanager
