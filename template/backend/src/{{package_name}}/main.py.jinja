@@ -36,6 +36,7 @@ from api_common.telemetry import instrument_app
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.routing import Match, Mount
@@ -94,12 +95,17 @@ _SHELL_CACHE_CONTROL = "no-cache, max-age=0, must-revalidate"
 _HASHED_ASSET_PREFIX = "_app/immutable/"
 _HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
-# A shell cached from an earlier build (those before 2026.10.55 sent it no Cache-Control) names entry modules this
-# image no longer has. Its inline bootstrap has no catch, so `kit.start` never runs, hooks.client.ts never loads and
-# the page stays blank. A missing hashed script is answered with this module instead: it reloads, and the reload
-# revalidates the no-cache shell. Guarded as hooks.client.ts guards its reload (a 15s cooldown; storage that throws
-# never reloads), but per URL: a person visiting several stale routes sees each recover, while a reload that meets
-# the same missing file again stops.
+# A shell cached from an earlier build (those before 2026.10.55 sent no
+# Cache-Control) imports entry modules this image no longer has. Its inline
+# bootstrap has no catch, so `kit.start` never runs, hooks.client.ts never
+# loads and the page stays blank. A missing entry module the current shell
+# does not name is answered with this one instead: it reloads, and the reload
+# revalidates the no-cache shell. Any other miss keeps its 404, so a stale
+# tab's missing chunk reaches SvelteKit's and hooks.client.ts's own recovery.
+# Guarded as hooks.client.ts guards its reload (15s cooldown; storage that
+# throws never reloads), but per URL: several stale routes each recover, and
+# a reload that meets the same missing file again stops.
+_ENTRY_MODULE_PREFIX = f"{_HASHED_ASSET_PREFIX}entry/"
 _STALE_SHELL_RELOAD = """\
 const key = "{{ project_name }}:stale-shell-reload:" + location.pathname + location.search;
 try {
@@ -133,15 +139,28 @@ class _SPAStaticFiles(StaticFiles):
     into a client route 404s and the app is reachable only from its root.
     Catching the 404 hands the path to the client router instead. A miss under
     the immutable-asset prefix stays a 404, so a broken build surfaces rather
-    than returning HTML to something expecting a script; only a missing hashed
-    script is answered, with the module that reloads a stale shell.
+    than returning HTML to something expecting a script. The one exception is
+    an entry module the current shell does not name: only a shell cached from
+    an earlier build asks for it, and it is answered with a module that reloads.
     """
+
+    def _current_shell_names(self, path: str) -> bool:
+        """Whether the shell this build serves imports `path`; unreadable counts as yes, so a 404."""
+        try:
+            return path in (Path(str(self.directory)) / "index.html").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return True
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if exc.status_code == 404 and path.startswith(_HASHED_ASSET_PREFIX) and path.endswith(".js"):
+            if (
+                exc.status_code == 404
+                and path.startswith(_ENTRY_MODULE_PREFIX)
+                and path.endswith(".js")
+                and not await run_in_threadpool(self._current_shell_names, path)
+            ):
                 return Response(
                     _STALE_SHELL_RELOAD, media_type="text/javascript", headers={"Cache-Control": "no-store"}
                 )
@@ -261,14 +280,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if app_mcp_auth is not None:
         gated_mcp_app = app_mcp_auth(raw_mcp_app)
     else:
-        # Refused here, not by a Settings validator: only create_app() sees a replacing mcp_auth hook, and a
-        # process that reads settings but never serves /mcp (a worker) must still start.
+        # Refused here, not by a Settings validator: only create_app() sees a
+        # replacing mcp_auth hook, and a process that reads settings but never
+        # serves /mcp (a worker) must still start.
         if settings.mcp.oidc_userinfo_url and not settings.mcp.oidc_audiences:
             raise RuntimeError(
-                "{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE is empty while "
-                "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set: the gate would 401 every "
-                "machine caller, because a bearer issued for another application would otherwise be accepted. "
-                "Set it to this app's Authentik client id(s), comma-separated."
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_USERINFO_URL is set but "
+                "{{ project_name | upper | replace('-', '_') }}_OIDC_AUDIENCE is empty: every machine bearer is "
+                "refused until it names this app's Authentik client id(s), comma-separated."
             )
         gated_mcp_app = require_bearer_auth(
             raw_mcp_app,

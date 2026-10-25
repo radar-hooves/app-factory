@@ -84,34 +84,66 @@ async def test_a_deploy_reaches_the_next_load_and_hashed_assets_are_kept(monkeyp
         assert "immutable" not in version.headers.get("cache-control", "")
 
 
-async def test_a_shell_cached_from_an_earlier_build_reloads_instead_of_going_blank(monkeypatch, tmp_path):
-    """The stale shell's bootstrap has no catch, so its missing entry module is answered with one that reloads.
+# The current build's shell, importing its entry module the way SvelteKit's bootstrap does.
+SHELL = '<html><script>import("./_app/immutable/entry/start.named.js")</script></html>'
+ENTRY = "/_app/immutable/entry"
 
-    Only a missing hashed script: a missing stylesheet or any other `_app/` file stays a 404, a file that exists
-    keeps its own body and its cache for good, and a miss outside `_app/` is still the shell.
-    """
-    (tmp_path / "index.html").write_text("<html></html>")
+
+def _built(monkeypatch, tmp_path) -> AsyncClient:
+    """A build whose entry module `app.live.js` exists and whose shell names `start.named.js`, which does not."""
+    (tmp_path / "index.html").write_text(SHELL)
     (tmp_path / "_app" / "immutable" / "entry").mkdir(parents=True)
     (tmp_path / "_app" / "immutable" / "entry" / "app.live.js").write_text("export const live = 1;")
     monkeypatch.setattr(main, "_FRONTEND_BUILD", tmp_path)
-    transport = ASGITransport(app=create_app(settings=get_settings()))
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        gone = await client.get("/_app/immutable/entry/start.gone.js")
-        assert (gone.status_code, gone.headers["content-type"].split(";")[0]) == (200, "text/javascript")
-        assert gone.headers["cache-control"] == "no-store"
-        assert "location.reload()" in gone.text
-        assert "start.gone" not in gone.text
-        # Same-origin script under `script-src 'self'`, and `nosniff` needs the JavaScript type it has.
-        assert "'self'" in gone.headers["content-security-policy"]
-        assert gone.headers["x-content-type-options"] == "nosniff"
-        for path in ("/_app/immutable/assets/0.gone.css", "/_app/gone.js", "/_app/version.json"):
+    return AsyncClient(transport=ASGITransport(app=create_app(settings=get_settings())), base_url="http://test")
+
+
+async def test_a_shell_cached_from_an_earlier_build_reloads_instead_of_going_blank(monkeypatch, tmp_path):
+    """The stale shell's bootstrap has no catch, so its missing entry module is answered with one that reloads."""
+    async with _built(monkeypatch, tmp_path) as client:
+        gone = await client.get(f"{ENTRY}/start.gone.js")
+    assert (gone.status_code, gone.headers["content-type"].split(";")[0]) == (200, "text/javascript")
+    assert gone.headers["cache-control"] == "no-store"
+    assert "start.gone" not in gone.text
+    # The guard is what stops a reload loop and keeps each stale route recoverable: dropping any part fails here.
+    for guard in (
+        "location.reload()",
+        "{{ project_name }}:stale-shell-reload:",
+        "location.pathname + location.search",
+        "< 15000",
+        "sessionStorage.getItem",
+        "sessionStorage.setItem",
+        "try {",
+        "} catch",
+    ):
+        assert guard in gone.text, guard
+    # Same-origin script under `script-src 'self'`, and `nosniff` needs the JavaScript type it has.
+    assert "'self'" in gone.headers["content-security-policy"]
+    assert gone.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_only_an_entry_module_the_current_shell_does_not_name_is_answered(monkeypatch, tmp_path):
+    """Any other miss stays a 404: a stale tab's missing chunk is for SvelteKit's recovery, a broken build must show.
+
+    A missing node or chunk, a stylesheet and any other `_app/` file; the entry module the current shell itself
+    names; a file that exists keeps its own body and its cache for good; and a miss outside `_app/` is the shell.
+    """
+    async with _built(monkeypatch, tmp_path) as client:
+        for path in (
+            "/_app/immutable/nodes/0.gone.js",
+            "/_app/immutable/chunks/gone.js",
+            "/_app/immutable/assets/0.gone.css",
+            "/_app/gone.js",
+            "/_app/version.json",
+            f"{ENTRY}/start.named.js",
+        ):
             assert (await client.get(path)).status_code == 404, path
-        live = await client.get("/_app/immutable/entry/app.live.js")
+        live = await client.get(f"{ENTRY}/app.live.js")
         assert (live.text, live.headers["cache-control"]) == (
             "export const live = 1;",
             "public, max-age=31536000, immutable",
         )
-        assert (await client.get("/gone.js")).text == "<html></html>"
+        assert (await client.get("/gone.js")).text == SHELL
 
 
 async def test_an_api_path_the_spa_declines_is_the_routers(monkeypatch, tmp_path):
