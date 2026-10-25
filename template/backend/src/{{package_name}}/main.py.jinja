@@ -94,6 +94,24 @@ _SHELL_CACHE_CONTROL = "no-cache, max-age=0, must-revalidate"
 _HASHED_ASSET_PREFIX = "_app/immutable/"
 _HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
+# A shell cached from an earlier build (those before 2026.10.55 sent it no Cache-Control) names entry modules this
+# image no longer has. Its inline bootstrap has no catch, so `kit.start` never runs, hooks.client.ts never loads and
+# the page stays blank. A missing hashed script is answered with this module instead: it reloads, and the reload
+# revalidates the no-cache shell. Guarded as hooks.client.ts guards its reload (a 15s cooldown; storage that throws
+# never reloads), but per URL: a person visiting several stale routes sees each recover, while a reload that meets
+# the same missing file again stops.
+_STALE_SHELL_RELOAD = """\
+const key = "{{ project_name }}:stale-shell-reload:" + location.pathname + location.search;
+try {
+  const previous = sessionStorage.getItem(key);
+  const recent = previous && Date.now() - Number(previous) < 15000;
+  if (!recent) {
+    sessionStorage.setItem(key, String(Date.now()));
+    location.reload();
+  }
+} catch {}
+"""
+
 # Every vertical slice mounts under this; an app with an older consumer contract names its own in app_hooks.
 _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
 
@@ -115,13 +133,18 @@ class _SPAStaticFiles(StaticFiles):
     into a client route 404s and the app is reachable only from its root.
     Catching the 404 hands the path to the client router instead. A miss under
     the immutable-asset prefix stays a 404, so a broken build surfaces rather
-    than returning HTML to something expecting a script.
+    than returning HTML to something expecting a script; only a missing hashed
+    script is answered, with the module that reloads a stale shell.
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
+            if exc.status_code == 404 and path.startswith(_HASHED_ASSET_PREFIX) and path.endswith(".js"):
+                return Response(
+                    _STALE_SHELL_RELOAD, media_type="text/javascript", headers={"Cache-Control": "no-store"}
+                )
             if exc.status_code == 404 and path not in _DOCUMENT_ROUTES and not path.startswith(_IMMUTABLE_ASSET_PREFIX):
                 return await super().get_response("index.html", scope)
             raise
