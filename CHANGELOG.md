@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.86] - 2026-10-26
+
+Need: stamped apps check the root handoff in its new form (operator ruling 26/10/2026; master-project#400, Sunset Review Sitting 12); consumer: every stamped app.
+
+### Changed
+
+- **`check-handoff-tracks-work` reads `HANDOFF.html`.** The hook's `files:` in `template/.pre-commit-config.yaml.jinja` is now `^HANDOFF\.html$`; the `check-handoff-closed-trailer` hook is unchanged, and its name now says removals name their ids (`Handoff-closed: <id>, <id>`). A repo with no `HANDOFF.html` still passes.
+
+### Migration
+
+`copier update` carries the hook. Converting an app's own `HANDOFF.md` is that app's session, with master's handoff skill.
+
 ## [2026.10.85] - 2026-10-26
 
 Need: the per-repo DESIGN.md retires (operator ruling 16/10/2026; master-project#378, #400); consumer: every stamped app.

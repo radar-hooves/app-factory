@@ -39,11 +39,11 @@ repos:
         name: 'governance - Handoff open items are tracked'
         entry: household-precommit-handoff-tracking
         language: system
-        files: '^HANDOFF\.md$'
+        files: '^HANDOFF\.html$'
         pass_filenames: true
 
       - id: check-handoff-closed-trailer
-        name: 'governance - Handoff removals are counted'
+        name: 'governance - Handoff removals name their ids'
         entry: household-precommit-handoff-tracking --commit-msg
         language: system
         stages: [commit-msg]
