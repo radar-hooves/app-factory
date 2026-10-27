@@ -33,8 +33,29 @@ name: Factory self-test
 # build, so a fork PR skips it outright rather than running it credential-less
 # and red.
 
+# The factory releases by direct push, so a push to main runs the same paths a pull
+# request does, so a defect in template/ is caught at the push, not by the app
+# that adopts it. The concurrency group below cancels a burst down to one run.
 on:
   pull_request:
+    paths:
+      - 'template/**'
+      - 'copier.yaml'
+      - 'variants.yaml'
+      - 'skeletons/desktop/**'
+      - 'tests/desktop/**'
+      - 'tests/migrations/**'
+      - 'tests/arbitrary-values/**'
+      - 'kits/typescript/packages/design-tokens/bin/**'
+      - 'tests/elements/**'
+      - 'kits/python/**'
+      - 'kits/typescript/packages/ui/**'
+      - 'kits/typescript/packages/librarian/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/factory-selftest.yaml'
+  push:
+    branches: [main]
     paths:
       - 'template/**'
       - 'copier.yaml'
