@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.87] - 2026-10-28
+
+Need: an app commits `frontend/scripts/layout-gate.mjs` as stamped (radar-hooves/app-factory#56); consumer: caspo.
+
+### Fixed
+
+- **`layout-gate.mjs` is formatted to the stamped `.prettierrc`.** Two `console.error` lines ran past the 100-column printWidth, so a stamped app's prettier hook rewrote the file and the template-parity gate refused the rewrite. Every other non-Jinja file under `template/frontend` already passes `prettier --check` with the stamped config.
+
+### Migration
+
+`copier update` carries the file.
+
 ## [2026.10.86] - 2026-10-26
 
 Need: stamped apps check the root handoff in its new form (operator ruling 26/10/2026; master-project#400, Sunset Review Sitting 12); consumer: every stamped app.

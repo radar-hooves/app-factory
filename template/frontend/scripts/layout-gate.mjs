@@ -49,14 +49,18 @@ function main(argv) {
 	const named = argv.filter((a) => a.startsWith('/'));
 	const rest = argv.filter((a) => !a.startsWith('/') && a !== '--all' && a !== '--list');
 	if (rest.length) {
-		console.error(`layout-gate: unknown argument ${rest.join(' ')}. Routes start with /, or --all.`);
+		console.error(
+			`layout-gate: unknown argument ${rest.join(' ')}. Routes start with /, or --all.`
+		);
 		return 2;
 	}
 	let routes = named;
 	if (!all && !named.length) {
 		const found = routesFromChanges(changedFiles());
 		for (const f of found.unresolved) {
-			console.error(`layout-gate: ${f} is a [param] route; name a concrete URL: pnpm layout-gate /x/1`);
+			console.error(
+				`layout-gate: ${f} is a [param] route; name a concrete URL: pnpm layout-gate /x/1`
+			);
 		}
 		if (!found.routes.length) {
 			if (found.shared.length || found.unresolved.length) {
