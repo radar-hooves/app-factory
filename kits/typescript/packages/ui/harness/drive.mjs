@@ -1745,7 +1745,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 					railOpen: px('var(--ds-shell-rail-width)'),
 					root: parseFloat(getComputedStyle(document.documentElement).fontSize)
 				},
-				location: document.querySelector('[data-testid="ds-shell-location"]')?.textContent?.trim() ?? null,
+				location: document.querySelector('[data-testid="ds-shell-title"]')?.innerText.trim() ?? null,
 				documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
 			};
 		});
@@ -1944,8 +1944,8 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			`pane element ${before.pane === null ? 'absent' : 'present'}`
 		);
 		check(
-			'panel @390px: the bar names the pane\'s location',
-			before.location === 'Sections › Section A',
+			'panel @390px: the bar names the pane\'s location, as the one name a phone shows',
+			before.location === 'Section A',
 			`bar: ${JSON.stringify(before.location)}`
 		);
 		await page.click('[data-testid="ds-page-pane-open"]');
@@ -3521,7 +3521,7 @@ for (const scheme of ['light', 'dark']) {
 			// The personal group is present in the data and EMPTY; it must not
 			// render an eyebrow with nothing under it.
 			headings: [...pane.querySelectorAll('.ds-nav-heading')].map((h) => h.textContent.trim()),
-			location: document.querySelector('[data-testid="ds-shell-location"]')?.textContent?.trim()
+			location: document.querySelector('[data-testid="ds-shell-title"]')?.innerText.trim()
 		};
 	});
 
@@ -5036,7 +5036,7 @@ for (const [height, long] of [
 			const bar = document.querySelector('.ds-shell-bar');
 			const report = [...document.querySelectorAll('[aria-label="Report a problem"]')].filter(visible);
 			const theme = document.querySelector('[data-testid="ds-shell-theme"]').getBoundingClientRect();
-			const title = document.querySelector('[data-testid="ds-shell-location"] span');
+			const title = document.querySelector('[data-testid="ds-shell-title"]');
 			const titleBox = title?.getBoundingClientRect();
 			const search = [...document.querySelectorAll('.ds-shell-bar button')].filter(visible);
 			return {
@@ -5047,7 +5047,7 @@ for (const [height, long] of [
 					right: Math.round(b.getBoundingClientRect().right)
 				})),
 				themeLeft: Math.round(theme.left),
-				title: title?.textContent,
+				title: title?.innerText,
 				titleShown: !!titleBox && titleBox.width > 0,
 				titleInside: !!titleBox && titleBox.right <= innerWidth && titleBox.left >= 0,
 				ellipsis: title ? getComputedStyle(title).textOverflow : null,
@@ -5098,8 +5098,8 @@ for (const [height, long] of [
 		await page.waitForSelector('[data-testid="ds-shell-menu"]');
 		const v = await seen(page);
 		check(
-			`phone at ${width}px: the bar shows the title, truncated to what room it has, and nothing reports from the page`,
-			v.titleShown && v.titleInside && v.title === TITLE && v.ellipsis === 'ellipsis' && v.report.length === 0 && v.floating.length === 0 && v.overflow <= 0,
+			`phone at ${width}px: the bar shows the one name, the page's own, truncated to what room it has, and nothing reports from the page`,
+			v.titleShown && v.titleInside && v.title === TITLE.split(' › ').pop() && v.ellipsis === 'ellipsis' && v.report.length === 0 && v.floating.length === 0 && v.overflow <= 0,
 			JSON.stringify(v)
 		);
 		await page.click('[data-testid="ds-shell-menu"]');

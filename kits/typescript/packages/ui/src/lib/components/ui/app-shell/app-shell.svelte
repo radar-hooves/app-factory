@@ -858,8 +858,8 @@
 							class="text-shell-muted-foreground min-w-0 truncate text-sm max-sm:flex-1 max-sm:basis-0 sm:max-w-72"
 							title={location}
 							data-testid="ds-shell-title"
-							>{#if shortName && shortName !== location}<span class="max-sm:hidden">{location}</span
-								><span class="sm:hidden">{shortName}</span>{:else}{location}{/if}</span
+							>{#if shortName && shortName !== location}<span class="contents max-sm:hidden">{location}</span
+								><span class="contents sm:hidden">{shortName}</span>{:else}{location}{/if}</span
 						>
 					{/if}
 					{#if controls.content}
