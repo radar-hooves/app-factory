@@ -134,6 +134,26 @@ export function resolveCitations(fromEvent: Citation[], fromProse: Citation[]): 
 	return fromEvent.length > 0 ? fromEvent : fromProse;
 }
 
+/**
+ * The sources an answer cites, out of everything retrieved for it.
+ *
+ * The wire frame lists every passage the library returned, numbered; the
+ * answer cites some of them. The list under it names what the answer cites —
+ * by a `[n]` in its prose or an entry in its own Sources block — so its count
+ * and numbers are the ones the prose carries, never the retrieval's. An answer
+ * that cites nothing by number lists all of them, as it has nothing narrower
+ * to go on.
+ */
+export function citedSources(
+	sources: Citation[],
+	markers: number[],
+	fromProse: Citation[] = []
+): Citation[] {
+	const named = new Set([...markers, ...fromProse.map((c) => c.n)]);
+	const cited = sources.filter((c) => named.has(c.n));
+	return cited.length > 0 ? cited : sources;
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**

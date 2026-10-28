@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.90] - 2026-10-29
+
+Need: the numbers a colleague sees on an answer agree: the count of sources and the numbers on their rows are the ones the answer cites; consumer: caspo.
+
+### Fixed
+
+- **The sources fold lists the sources the answer cites, not everything retrieved** (`@poodle64/librarian` 2026.10.14, which stamped apps now pin). Migration: bump `@poodle64/librarian` to 2026.10.14; a host with its own citation pane numbers it off `citedSources`.
+
 ## [2026.10.89] - 2026-10-29
 
 Need: every control in the shell's bar and drawer is at least 44px on a phone (radar-hooves/caspo#188); consumer: caspo.

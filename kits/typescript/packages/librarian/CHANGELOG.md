@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.14] - 2026-10-29
+
+Consumer: caspo (colleague walk, 29/10/2026: an answer read "2 sources" while its citation panel read "Source 5 of 7").
+
+### Fixed
+
+- **The sources fold lists what the answer cites.** The `citations` frame carries every passage retrieved for the question; the fold counted and listed all of them, so an answer citing two read "7 sources". It now lists the sources the prose marks `[n]` or names in its own Sources block, under the numbers the prose uses; an answer that cites none by number still lists all. A host that numbers its own pane off the frame should number off the same cited set (`citedSources`, exported from `citations`).
+
 ## [2026.10.13] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: "Transparency on the front page does not work"). On Home the composer's collection picker opened over the cards, and their line-art drawings painted on top of it, cutting letters off its rows.

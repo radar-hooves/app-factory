@@ -136,3 +136,34 @@ describe('a run that ended in error', () => {
 		expect(screen.getByRole('alert')).toHaveTextContent("Penny can't be reached right now.");
 	});
 });
+
+describe('the count of sources an answer shows', () => {
+	const seven: Citation[] = Array.from({ length: 7 }, (_, i) => ({
+		...SOURCE,
+		n: i + 1,
+		document_id: String(400 + i),
+		title: `Document ${i + 1}`
+	}));
+
+	it('is the sources the prose cites, not everything retrieved for it', async () => {
+		answer({
+			citations: seven,
+			blocks: [{ kind: 'text', index: 0, text: 'Twenty days a year [2][5].' }]
+		});
+		expect(screen.getByRole('button', { name: /2 sources/ })).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: /2 sources/ }));
+		const rows = screen.getAllByRole('listitem');
+		expect(rows.map((r) => r.textContent)).toEqual([
+			expect.stringContaining('Document 2'),
+			expect.stringContaining('Document 5')
+		]);
+	});
+
+	it('lists them all when the prose cites none by number', () => {
+		answer({
+			citations: seven,
+			blocks: [{ kind: 'text', index: 0, text: 'Twenty days a year.' }]
+		});
+		expect(screen.getByRole('button', { name: /7 sources/ })).toBeInTheDocument();
+	});
+});

@@ -32,6 +32,7 @@
 	} from '../../transcript.svelte';
 	import {
 		citationMarkers,
+		citedSources,
 		resolveCitations,
 		splitSources,
 		type Citation
@@ -217,6 +218,12 @@
 		texts
 			.map((s) => (s.index === lastTextIndex && split.citations.length > 0 ? split.body : s.text))
 			.join('\n\n')
+	);
+
+	// What the fold lists: the sources the answer cites, so its count and the
+	// numbers on its rows match the chips in the prose.
+	const cited = $derived(
+		running ? sources : citedSources(sources, citationMarkers(answer), split.citations)
 	);
 
 	// Only a number the prose actually marks becomes a chip; a source list may
@@ -467,7 +474,7 @@
 		{/each}
 
 		{#if !isArtefact && (sources.length > 0 || web.length > 0)}
-			<SourceFold library={sources} {web} {words} {oncite} {readWhen} />
+			<SourceFold library={cited} {web} {words} {oncite} {readWhen} />
 		{/if}
 
 		<!-- An empty `notHeld` is a host whose persona answers from no sources,
