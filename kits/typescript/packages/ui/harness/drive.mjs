@@ -5129,6 +5129,91 @@ for (const [height, long] of [
 	}
 }
 
+// ── The shell's touch targets (radar-hooves/caspo#188) ──────────────────────
+// The household's floor is 44 px for every control a thumb reaches. The shell's
+// bar and drawer carried 34–40 px controls, and the one that was fixed
+// (the pane button) sat beside the ones that were not. jsdom has no layout, so
+// the claim is the rendered box under a real coarse pointer: `hasTouch` +
+// `isMobile` is what makes Chromium answer `(pointer: coarse)`, and the check
+// asserts it did, so a context that silently stays fine cannot pass.
+{
+	const FLOOR = 44;
+	const measureChrome = (page) =>
+		page.evaluate(() => {
+			const box = (el) => {
+				const r = el.getBoundingClientRect();
+				return { w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
+			};
+			const bar = document.querySelector('.ds-shell-bar');
+			const drawer = document.querySelector('[data-testid="ds-shell-drawer"]');
+			const named = (root, selector, label) =>
+				[...(root?.querySelectorAll(selector) ?? [])].map((el, i) => ({
+					label: `${label}${i ? ` ${i + 1}` : ''}`,
+					...box(el)
+				}));
+			return {
+				coarse: matchMedia('(pointer: coarse)').matches,
+				controls: [
+					...named(bar, '[data-testid="ds-shell-menu"]', 'bar: menu'),
+					...named(bar, 'a[aria-label]', 'bar: brand link'),
+					...named(bar, '[data-testid="ds-shell-search"]', 'bar: search'),
+					...named(bar, '[data-testid="ds-shell-theme"]', 'bar: theme toggle'),
+					...named(bar, 'button[aria-label="Account"]', 'bar: account'),
+					...named(drawer, 'button[aria-label="Close menu"]', 'drawer: close'),
+					...named(drawer, 'a[aria-label]', 'drawer: brand link'),
+					...named(drawer, '.ds-nav-item', 'drawer: row'),
+					...named(drawer, '.ds-nav-disclosure', 'drawer: disclosure'),
+					...named(drawer, '[data-testid="ds-shell-drawer-report"]', 'drawer: report row')
+				]
+			};
+		});
+
+	const context = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		hasTouch: true,
+		isMobile: true
+	});
+	const page = await context.newPage();
+	const errors = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await page.goto(`http://127.0.0.1:${PORT}/index.html?surface=mobile-audit`, { waitUntil: 'load' });
+	await page.addStyleTag({ content: SETTLE });
+	await page.waitForSelector('[data-testid="ds-shell-menu"]');
+	await page.tap('[data-testid="ds-shell-menu"]');
+	await page.waitForSelector('[data-testid="ds-shell-drawer"]');
+	await page.waitForFunction(
+		() => Math.abs(document.querySelector('[data-testid="ds-shell-drawer"]').getBoundingClientRect().left) < 1
+	);
+	const v = await measureChrome(page);
+	// A collapsed branch's children are display:none (0x0): not a control anyone can press.
+	const small = v.controls.filter((c) => c.w > 0 && (c.w < FLOOR || c.h < FLOOR));
+	check('touch targets @390px: the context really is a coarse pointer', v.coarse, JSON.stringify(v.coarse));
+	check(
+		'touch targets @390px: the bar and the drawer expose their controls (the test sees them)',
+		['bar: menu', 'bar: brand link', 'bar: search', 'bar: theme toggle', 'bar: account', 'drawer: close', 'drawer: row', 'drawer: disclosure'].every((l) =>
+			v.controls.some((c) => c.label.startsWith(l))
+		),
+		JSON.stringify(v.controls.map((c) => c.label))
+	);
+	check(
+		`touch targets @390px: every control in the shell's bar and drawer is at least ${FLOOR}px each way under a coarse pointer`,
+		small.length === 0,
+		JSON.stringify(small)
+	);
+	check('touch targets @390px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	// Desktop density is unchanged: a fine pointer keeps the 36 px bar buttons.
+	const desktop = await open('surface=mobile-audit', { width: 1440, height: 900 });
+	await desktop.page.addStyleTag({ content: SETTLE });
+	const theme = await desktop.page.evaluate(() => {
+		const r = document.querySelector('[data-testid="ds-shell-theme"]').getBoundingClientRect();
+		return { w: r.width, h: r.height, coarse: matchMedia('(pointer: coarse)').matches };
+	});
+	check('touch targets @1440px: a fine pointer keeps the 36px bar buttons', !theme.coarse && theme.w === 36 && theme.h === 36, JSON.stringify(theme));
+	await desktop.context.close();
+}
+
 // Desktop presentation: assert copied content and failure outcomes, not screenshots.
 for (const [label, viewport, theme, scale, rtl] of [
 	['landscape light', { width: 1440, height: 900 }, 'light', 1, false],

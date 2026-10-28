@@ -163,7 +163,7 @@
 			<button
 				{...props}
 				aria-label="Account"
-				class="hover:bg-surface-2 grid size-[34px] cursor-pointer place-items-center rounded-md"
+				class="hover:bg-surface-2 grid size-[34px] cursor-pointer place-items-center rounded-md pointer-coarse:size-11"
 			>
 				<Avatar.Root class="size-6.5 flex-none">
 					<Avatar.Fallback class="bg-primary text-primary-foreground text-[11px] font-bold">

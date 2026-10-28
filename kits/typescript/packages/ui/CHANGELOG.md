@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.30] - 2026-10-29
+
+Consumer: caspo (radar-hooves/caspo#188, phone-first polish). A colleague walk at 390 wide with a coarse pointer measured the bar's Menu button at 36px, Account at 34px, the brand link at 40px and the drawer rows at 36px, under the household's 44px touch floor.
+
+### Fixed
+
+- **Every control in the shell's bar and drawer is at least 44px under a coarse pointer.** The Menu, theme, search, report, collapse and drawer-close buttons, the `AppIdentity` Account button and the brand link take `pointer-coarse:size-11` or `min-h-11 min-w-11`; `.ds-nav-item` rows and `.ds-nav-disclosure` chevrons grow to 2.75rem inside `@media (pointer: coarse)`. A fine pointer keeps today's density. `harness/drive.mjs` measures the rendered boxes at 390 with `hasTouch`, and asserts the context answers `(pointer: coarse)`; it fails on the previous build with every one of those controls named.
+
 ## [2026.10.29] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: text that is cut off for no reason). On a 390px phone the bar read "Security › Overv…" and, on /brand, "B…", because the page's own bar actions took the room.

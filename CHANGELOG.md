@@ -4,6 +4,14 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.89] - 2026-10-29
+
+Need: every control in the shell's bar and drawer is at least 44px on a phone (radar-hooves/caspo#188); consumer: caspo.
+
+### Fixed
+
+- **The shell's touch targets meet the 44px floor** (`@poodle64/ui` 2026.10.30, which stamped apps now pin): Menu, theme, search, Account, brand link and drawer rows at a coarse pointer only; desktop density is unchanged. Migration: bump `@poodle64/ui` to 2026.10.30.
+
 ## [2026.10.88] - 2026-10-29
 
 Need: an app's chat persona answers each caller on a model chosen by who is asking, with no control shown (radar-hooves/caspo#183); consumer: caspo.

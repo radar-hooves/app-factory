@@ -570,7 +570,7 @@
 	<a
 		href={homeHref}
 		class={cn(
-			'flex flex-none items-center gap-2.5',
+			'flex flex-none items-center gap-2.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11',
 			compact ? '' : 'h-14 px-4',
 			railNarrow && !compact && 'justify-center px-0',
 			railCollapsed && !railNarrow && !compact && 'px-3'
@@ -637,7 +637,7 @@
 	<button
 		onclick={onSearch}
 		class={cn(
-			'border-border text-shell-muted-foreground hover:text-shell-foreground flex items-center rounded-md border transition-colors sm:text-sm',
+			'border-border text-shell-muted-foreground hover:text-shell-foreground flex items-center rounded-md border transition-colors pointer-coarse:min-h-11 pointer-coarse:min-w-11 sm:text-sm',
 			sizing
 		)}
 		data-testid="ds-shell-search"
@@ -702,7 +702,7 @@
 				<button
 					bind:this={overlayFirstFocus}
 					onclick={closeMobileNav}
-					class="border-border text-shell-muted-foreground hover:text-shell-foreground absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 grid size-8 place-items-center rounded-md border md:hidden"
+					class="border-border text-shell-muted-foreground hover:text-shell-foreground absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 grid size-8 place-items-center rounded-md border pointer-coarse:size-11 md:hidden"
 					aria-label="Close menu"
 				>
 					<X class="size-4" />
@@ -774,7 +774,7 @@
 				<button
 					bind:this={menuButton}
 					onclick={() => (mobileNavOpen ? closeMobileNav() : (mobileNavOpen = true))}
-					class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border md:hidden"
+					class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border pointer-coarse:size-11 md:hidden"
 					aria-label="Menu"
 					aria-expanded={mobileNavOpen}
 					aria-controls={navRegionId}
@@ -798,7 +798,7 @@
 				<button
 					type="button"
 					onclick={toggleCollapsed}
-					class="text-shell-muted-foreground hover:text-shell-foreground -ml-1 hidden size-8 flex-none place-items-center rounded-md transition-colors md:grid"
+					class="text-shell-muted-foreground hover:text-shell-foreground -ml-1 hidden size-8 flex-none place-items-center rounded-md transition-colors pointer-coarse:size-11 md:grid"
 					aria-label={collapseLabel}
 					aria-pressed={collapsed}
 					title={`${collapseLabel} (press [)`}
@@ -926,7 +926,7 @@
 					<button
 						type="button"
 						onclick={() => shellReport.open?.()}
-						class="border-border text-shell-muted-foreground hover:text-shell-foreground hidden size-9 flex-none place-items-center rounded-md border transition-colors md:grid"
+						class="border-border text-shell-muted-foreground hover:text-shell-foreground hidden size-9 flex-none place-items-center rounded-md border transition-colors pointer-coarse:size-11 md:grid"
 						aria-label="Report a problem"
 						title="Report a problem"
 						data-testid="ds-shell-report"
@@ -945,7 +945,7 @@
 				{#if themeToggle}
 					<button
 						onclick={toggleTheme}
-						class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border transition-colors"
+						class="border-border text-shell-muted-foreground hover:text-shell-foreground grid size-9 flex-none place-items-center rounded-md border transition-colors pointer-coarse:size-11"
 						aria-label="Toggle theme"
 						data-testid="ds-shell-theme"
 					>

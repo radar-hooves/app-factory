@@ -707,6 +707,14 @@
 			background-color 150ms;
 	}
 
+	/* The household's 44 px touch floor, at a coarse pointer only: desktop
+	   density is unchanged. */
+	@media (pointer: coarse) {
+		.ds-nav-item {
+			min-height: 2.75rem;
+		}
+	}
+
 	.ds-nav-item:hover {
 		color: var(--ds-nav-ink);
 		background: color-mix(in oklch, var(--ds-nav-ink) 5%, transparent);
@@ -919,6 +927,13 @@
 		transition:
 			color 150ms,
 			background-color 150ms;
+	}
+
+	@media (pointer: coarse) {
+		.ds-nav-disclosure {
+			width: 2.75rem;
+			height: 2.75rem;
+		}
 	}
 
 	.ds-nav-disclosure:hover {
