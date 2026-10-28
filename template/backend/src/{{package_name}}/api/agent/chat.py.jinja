@@ -19,6 +19,11 @@ A persona's `visuals` lists the fence languages its page draws inside an
 answer (`agent_common.visuals`); it is told the format of each, from the
 factory's fragment or its own `visuals/<language>.md`.
 
+A persona's `models` maps entitlements to model aliases (`admin: saiyan/sonnet`):
+a turn is asked on the first one its caller holds, with no control shown to
+them, and on `model` when they hold none. A persona with neither keeps the
+`model` of its settings.json. `--model` outranks that file, so the row decides.
+
 The file is committed and released like code and has no admin surface, so a
 wrong row is refused at start rather than met by a colleague: `load` raises on
 an id that is not a path segment, a row with no name, or no such persona
@@ -53,7 +58,7 @@ from starlette.concurrency import run_in_threadpool
 
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.config.sections.agent import AgentSettings
-from {{ package_name }}.entitlements import CHAT_PREFIX
+from {{ package_name }}.entitlements import CHAT_PREFIX, has_module
 from {{ package_name }}.exceptions import NotFoundError, ServiceUnavailableError
 from {{ package_name }}.exchange import ASKER_TOKEN, Asking
 
@@ -100,10 +105,22 @@ class Persona:
     visuals: tuple[str, ...] = ()
     #: Whether a question may carry files; false offers no attach control and refuses any.
     attachments: bool = True
+    #: The model alias a caller holding none of `models`' entitlements is answered on; empty keeps settings.json's own.
+    model: str = ""
+    #: Entitlement to model alias, in file order: the first a caller holds answers them (`model_for`).
+    models: tuple[tuple[str, str], ...] = ()
 
     @property
     def entitlement(self) -> str:
         return f"{CHAT_PREFIX}{self.id}"
+
+
+def model_for(persona: Persona, entitlements: tuple[str, ...]) -> str | None:
+    """The model alias to answer a caller holding `entitlements` on: the first of the persona's `models` they hold, else its `model`, else None (settings.json's own)."""
+    for entitlement, alias in persona.models:
+        if has_module(entitlements, entitlement):
+            return alias
+    return persona.model or None
 
 
 def load(settings: AgentSettings) -> dict[str, Persona]:
@@ -135,8 +152,10 @@ def get(settings: AgentSettings, persona_id: str) -> Persona:
     return persona
 
 
-async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, turn: bool = False) -> LocalAgent:
-    """The persona's agent for the person `asking` names, at the chat effort.
+async def agent(
+    settings: AgentSettings, persona: Persona, asking: Asking, *, turn: bool = False, model: str | None = None
+) -> LocalAgent:
+    """The persona's agent for the person `asking` names, at the chat effort, on `model` when given (`model_for`).
 
     A `turn` asks `app_hooks.agent_turn_settings` for its effort and thinking.
     A `turn` carries a token minted for this app in its environment as
@@ -154,7 +173,9 @@ async def agent(settings: AgentSettings, persona: Persona, asking: Asking, *, tu
     guidance = (
         visuals.guidance(persona.visuals, settings.personas_dir / persona.id / VISUALS) if persona.visuals else ""
     )
-    return LocalAgent(driver, persona_module.load(settings, persona.id), run_env=run_env, guidance=guidance)
+    return LocalAgent(
+        driver, persona_module.load(settings, persona.id), run_env=run_env, guidance=guidance, model=model
+    )
 
 
 async def _turn_settings(persona_id: str, effort: str, thinking: bool) -> tuple[str, bool]:
@@ -181,8 +202,10 @@ async def collections(settings: AgentSettings, persona: Persona, asking: Asking)
     return _reader(settings, await _library_token(settings, persona, asking), asking.uid)
 
 
-async def for_turn(settings: AgentSettings, persona: Persona, asking: Asking) -> tuple[LocalAgent, Collections | None]:
-    """The persona's agent and, for one that reads collections, the library as the person: both tokens minted at once.
+async def for_turn(
+    settings: AgentSettings, persona: Persona, asking: Asking, *, model: str | None = None
+) -> tuple[LocalAgent, Collections | None]:
+    """The persona's agent, on `model` when given (`model_for`), and, for one that reads collections, the library as the person: both tokens minted at once.
 
     The agent's session gets a library token minted now (`LIBRARY_TOKEN`), since
     it presents it for the whole turn; the retrieval reuses a held one.
@@ -194,7 +217,7 @@ async def for_turn(settings: AgentSettings, persona: Persona, asking: Asking) ->
     cached = asking.held(settings.library_audience) if persona.collections and settings.library_url else None
     try:
         async with asyncio.TaskGroup() as group:
-            asked = group.create_task(agent(settings, persona, asking, turn=True))
+            asked = group.create_task(agent(settings, persona, asking, turn=True, model=model))
             token = (
                 group.create_task(_library_token(settings, persona, asking, fresh=True))
                 if persona.collections
@@ -336,6 +359,14 @@ def _persona(persona_id: str, body: object, directories: set[str], personas_dir:
     fences = body.get("visuals") or []
     if not isinstance(fences, list) or not all(isinstance(fence, str) for fence in fences):
         raise refuse("visuals is a list of fence languages")
+    model = body.get("model") or ""
+    if not isinstance(model, str):
+        raise refuse("model is a model alias")
+    routed = body.get("models") or {}
+    if not isinstance(routed, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) and v for k, v in routed.items()
+    ):
+        raise refuse("models maps an entitlement to a model alias")
     for fence in fences:
         try:
             visuals.fragment(fence, personas_dir / persona_id / VISUALS)
@@ -350,4 +381,6 @@ def _persona(persona_id: str, body: object, directories: set[str], personas_dir:
         collections=collections,
         visuals=tuple(fences),
         attachments=attachments,
+        model=model.strip(),
+        models=tuple((entitlement, alias.strip()) for entitlement, alias in routed.items()),
     )

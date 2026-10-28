@@ -145,6 +145,8 @@ class LocalAgent:
     persona: Persona
     run_env: Mapping[str, str] = field(default_factory=dict, repr=False)
     guidance: str = ""
+    #: The model alias every turn asks for (`--model`, which outranks the persona's settings.json); None keeps the persona's own.
+    model: str | None = None
 
     async def ask(
         self,
@@ -215,6 +217,7 @@ class LocalAgent:
             cwd=folder,
             run_env=self.run_env,
             append_system_prompt=_system(_brief(self.persona), self.guidance),
+            model=self.model,
             rewind=rewind,
         ):
             yield event

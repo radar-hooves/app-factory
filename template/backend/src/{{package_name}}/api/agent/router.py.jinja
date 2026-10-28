@@ -346,7 +346,9 @@ async def ask(
     if not persona.attachments and request.headers.get("content-type", "").startswith("multipart/form-data"):
         raise BadRequestError(f"{persona.name} takes no attachments")
     body, files = await _asked(request, settings.agent)
-    agent, collections = await chat.for_turn(settings.agent, persona, asking)
+    agent, collections = await chat.for_turn(
+        settings.agent, persona, asking, model=chat.model_for(persona, identity.entitlements)
+    )
     return await ask_module.ask(
         get_session_factory(),
         settings.agent,

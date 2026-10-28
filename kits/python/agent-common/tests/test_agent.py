@@ -104,6 +104,14 @@ async def test_passages_still_being_retrieved_reach_a_cli_already_started_on_std
     assert [turn.question for turn in turns] == ["How much leave?"]
 
 
+async def test_an_agent_asks_on_its_model_and_one_without_leaves_the_persona_its_own(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    routed = _reported(await _ask(LocalAgent(settings, milton, model="credit/sonnet"), "hi"))["argv"]
+    assert routed[routed.index("--model") + 1] == "credit/sonnet"
+    assert "--model" not in _reported(await _ask(LocalAgent(settings, milton), "hi"))["argv"]
+
+
 async def test_passages_that_fail_end_the_turn_unasked(settings: cli.Settings, milton: Persona) -> None:
     async def unreadable() -> str:
         raise ConnectionError("the library is down")

@@ -56,6 +56,9 @@ outrider:                 # the persona's directory under config/personas/, its 
   not_held: your own pay records, your posting order, or anything about your individual case
   collections: true       # default false: each question first retrieves passages from the library as the person
   attachments: false      # default true: no attach control on the page or a Home box, and a question carrying files is refused unread (400)
+  model: credit/sonnet    # optional: the model alias a caller matching none of `models` is answered on; absent keeps settings.json's `model`
+  models:                 # optional: entitlement -> model alias, first held wins; no control is shown, the caller never chooses
+    admin: saiyan/sonnet
 ```
 
 `chat.load` refuses to start on an id that is not a path segment or names one of the slice's own routes (`personas`, `conversations`, `quota`), a row with no `name`, or no such persona directory. No file offers no chat; personas still run jobs.

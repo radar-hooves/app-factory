@@ -4,6 +4,26 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.88] - 2026-10-29
+
+Need: an app's chat persona answers each caller on a model chosen by who is asking, with no control shown (radar-hooves/caspo#183); consumer: caspo.
+
+### Added
+
+- **A chat persona routes its model by the caller's entitlement.** A `config/chat.yaml` row takes `models`, a map of entitlement to model alias, and `model`, the alias for a caller who holds none of them. The first entry of `models` the caller holds answers them (the reserved `admin` among them; `viewing-as` narrowing applies), else `model`, else the `model` of the persona's `settings.json`. The alias reaches the CLI as `--model`, which outranks `settings.json`, so the row decides; the page shows nothing. A malformed `model` or `models` stops the app at start. `agent_common.LocalAgent` takes `model`; `chat.agent` and `chat.for_turn` take `model=`, which `chat.model_for(persona, entitlements)` computes. The stamped floor is `agent-common>=2026.10.88`.
+
+```yaml
+outrider:
+  name: Outrider
+  model: credit/sonnet      # everyone else
+  models:
+    admin: saiyan/sonnet    # first held wins
+```
+
+### Migration
+
+`copier update` carries the code and the floor. An app routes by adding the two keys to its `chat.yaml` row; one that adds neither answers on its `settings.json` model as before. Jobs (`api/agent/jobs`) keep their own model.
+
 ## [2026.10.87] - 2026-10-28
 
 Need: an app commits `frontend/scripts/layout-gate.mjs` as stamped (radar-hooves/app-factory#56); consumer: caspo.

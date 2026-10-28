@@ -280,6 +280,9 @@ async def test_an_app_with_no_chat_file_offers_none(client: AsyncClient, agent_s
         ("helper:\n  name: X\n  collections: yes please\n", "true or false"),
         ("helper:\n  name: X\n  visuals: chart\n", "list of fence languages"),
         ("helper:\n  name: X\n  attachments: none\n", "attachments is true or false"),
+        ("helper:\n  name: X\n  model: [a]\n", "model is a model alias"),
+        ("helper:\n  name: X\n  models: admin\n", "models maps an entitlement to a model alias"),
+        ("helper:\n  name: X\n  models: {admin: ~}\n", "models maps an entitlement to a model alias"),
         ("helper:\n  name: X\n  visuals: [pie]\n", "no prompt fragment for the visual 'pie'"),
     ],
 )
@@ -1414,6 +1417,26 @@ async def test_a_persona_with_visuals_lists_them_and_is_told_their_format(
 
     assert listed[0]["visuals"] == ["chart", "openui"]
     assert "append_system_prompt=" in said and "tagged chart" in said and "Write OpenUI Lang." in said
+
+
+async def test_a_caller_is_answered_on_the_model_their_entitlement_routes_to(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    agent_settings.chat_file.write_text(
+        "helper:\n  name: Helper\n  model: credit/sonnet\n  models:\n    admin: saiyan/sonnet\n"
+    )
+
+    async def model_flag(*grants: str) -> str:
+        said = _answered(_events((await _ask(client, "helper", "hi", _person("chat-helper", *grants))).text))
+        return next(part for part in said.split(" | ") if part.startswith("model_flag="))
+
+    assert await model_flag("admin") == "model_flag=saiyan/sonnet"
+    assert await model_flag() == "model_flag=credit/sonnet"
+
+
+async def test_a_persona_with_no_model_routing_keeps_its_settings_model(client: AsyncClient) -> None:
+    said = _answered(_events((await _ask(client, "helper", "hi", _person("chat-helper", "admin"))).text))
+    assert "model_flag=None" in said
 
 
 async def test_a_persona_with_no_visuals_is_told_none(client: AsyncClient) -> None:
