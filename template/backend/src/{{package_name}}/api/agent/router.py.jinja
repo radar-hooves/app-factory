@@ -37,7 +37,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import Message
 
 from {{ package_name }}.api.agent import ask as ask_module
-from {{ package_name }}.api.agent import chat, content, conversations, quota
+from {{ package_name }}.api.agent import chat, content, conversations, quota, retention
 from {{ package_name }}.api.agent import jobs as jobs_module
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent.chat import Persona
@@ -171,16 +171,10 @@ def rename(owned: OwnedConversation, body: RenameRequest, db: SessionDep) -> Con
 
 
 @router.delete("/conversations/{conversation_id}", operation_id="deleteConversation", status_code=204)
-async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep, asking: CurrentAsking) -> None:
-    """Forget the conversation: the agent's transcript first, then the row, so a failure leaves it listed."""
-    if owned.conversation.session_id:
-        await (await chat.agent(settings.agent, owned.persona, asking)).forget(owned.conversation.session_id)
-
-    def forget() -> None:
-        db.delete(owned.conversation)
-        db.commit()
-
-    await run_in_threadpool(forget)
+async def delete(owned: OwnedConversation, settings: SettingsDep, db: SessionDep) -> None:
+    """Forget the conversation: the agent's transcript and files first, then the row, so a failure leaves it listed."""
+    if not await retention.erase(db, settings.agent, [owned.conversation]):
+        raise ServiceUnavailableError("That conversation could not be deleted just now")
 
 
 @router.get("/conversations/{conversation_id}/export", operation_id="exportConversation")
@@ -375,7 +369,7 @@ def list_conversations(persona: EnteredPersona, identity: CurrentIdentity, db: S
 
 @router.delete("/{persona}/conversations", operation_id="clearConversations", status_code=204)
 async def clear_conversations(
-    persona: EnteredPersona, identity: CurrentIdentity, settings: SettingsDep, db: SessionDep, asking: CurrentAsking
+    persona: EnteredPersona, identity: CurrentIdentity, settings: SettingsDep, db: SessionDep
 ) -> None:
     """Forget every one of this person's conversations with the persona, as `delete` forgets one.
 
@@ -383,20 +377,7 @@ async def clear_conversations(
     writing to it, and it stays listed until it settles.
     """
     listed = await run_in_threadpool(conversations.listed, db, identity.user.id, persona.id)
-    settled = [conversation for conversation in listed if conversations.answering(conversation) is None]
-    if not settled:
-        return
-    agent = await chat.agent(settings.agent, persona, asking)
-    for conversation in settled:
-        if conversation.session_id:
-            await agent.forget(conversation.session_id)
-
-    def forget() -> None:
-        for conversation in settled:
-            db.delete(conversation)
-        db.commit()
-
-    await run_in_threadpool(forget)
+    await retention.erase(db, settings.agent, [row for row in listed if conversations.answering(row) is None])
 
 
 @router.get("/{persona}/documents/{document_id}", operation_id="getDocument")

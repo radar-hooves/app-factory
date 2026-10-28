@@ -169,6 +169,23 @@ async def test_forget_takes_the_transcript_and_the_attachments(settings: cli.Set
     assert not (milton.home / CHATS / session).exists()
 
 
+async def test_forget_takes_what_the_cli_filed_under_the_session_and_not_another_sessions(
+    settings: cli.Settings, milton: Persona
+) -> None:
+    agent = LocalAgent(settings, milton)
+    session = _session(await _ask(agent, "keep this?"))
+    other = _session(await _ask(agent, "and this"))
+    for name in (f"todos/{session}-agent-{session}.json", f"file-history/{session}/v1", f"debug/{session}.txt"):
+        (milton.home / name).parent.mkdir(parents=True, exist_ok=True)
+        (milton.home / name).write_text("x")
+    (milton.home / "todos" / f"{other}.json").write_text("x")
+
+    await agent.forget(session)
+
+    assert [path for path in milton.home.rglob("*") if session in str(path)] == []
+    assert (milton.home / "todos" / f"{other}.json").exists()
+
+
 @pytest.mark.parametrize("resume", ["../x", "..", "."])
 async def test_a_resume_that_is_not_a_session_id_is_refused(
     settings: cli.Settings, milton: Persona, resume: str

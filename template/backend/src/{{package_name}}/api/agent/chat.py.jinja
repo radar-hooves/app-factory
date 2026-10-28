@@ -178,6 +178,15 @@ async def agent(
     )
 
 
+def keeper(settings: AgentSettings, persona_id: str) -> LocalAgent:
+    """The persona's agent to forget a session with: no person is asking, so it holds no token.
+
+    Raises:
+        NotFoundError: the persona's directory is gone.
+    """
+    return LocalAgent(settings.driver(), persona_module.load(settings, persona_id))
+
+
 async def _turn_settings(persona_id: str, effort: str, thinking: bool) -> tuple[str, bool]:
     """`app_hooks.agent_turn_settings(persona, effort, thinking)`, if this app defines one; the given pair if it raises."""
     from {{ package_name }} import app_hooks

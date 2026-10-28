@@ -4,6 +4,21 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.91] - 2026-10-29
+
+Need: an app's conversations have a retention period the operator sets, and a delete that leaves nothing behind (radar-hooves/caspo#180); consumer: caspo.
+
+### Added
+
+- **`agent.conversation_retention_days`, a setting on the settings page under This deployment.** Whole days, 0 to 3650; the default 0 keeps every conversation until its owner deletes it, so no period is a code default. When set, `retention.sweep` (run by `jobs.supervise` on every worker, each minute, 100 a pass) deletes each conversation idle longer than the period, skipping one still being answered. An app reads it with `app_slices.settings.get_value(db, "agent.conversation_retention_days")` (`api/agent/settings.py` declares it) and sets nothing: the operator sets it on `/settings`.
+
+### Changed
+
+- **One delete for a conversation, however it goes.** The owner's delete, "Delete all" and the sweep share `retention.erase`: the agent's files first, then the row, so a failure leaves it listed. A deleted conversation leaves no turn row, no stored answer or share, and nothing on disk. `agent_common.LocalAgent.forget` now also removes what the CLI filed under the session id in the persona's home (todos, file history, debug log), which it left before.
+- **"Delete all" names the count and focuses Cancel** (`@poodle64/librarian` 2026.10.15, which stamped apps now pin): "Delete all 43 questions? This can't be undone." The route is the existing `DELETE /api/agent/{persona}/conversations`, one persona at a time; it spares a conversation still being answered.
+
+Migration: `copier update` carries the code, the stamped floors (`agent-common>=2026.10.91`, `@poodle64/librarian` 2026.10.15) and the new `api/agent/settings.py`. An app that overrode `clearAllPrompt` or `clearAllDetail` adds `{count}` and `clearAllPromptOne`. Nothing is deleted until the operator sets a period.
+
 ## [2026.10.90] - 2026-10-29
 
 Need: the numbers a colleague sees on an answer agree: the count of sources and the numbers on their rows are the ones the answer cites; consumer: caspo.

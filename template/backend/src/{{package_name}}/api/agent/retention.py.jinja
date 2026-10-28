@@ -1,0 +1,84 @@
+"""Forgetting conversations: one deleted by its owner, and the sweep that ages them out.
+
+A conversation is the row, the agent's transcript, and the folders the agent
+wrote answering it (`agent_common.LocalAgent.forget`). All three go, the
+agent's first, so a failure leaves the row listed to be deleted again.
+
+The sweep is `retention.sweep`, run by `jobs.supervise` on every worker. The
+period is the operator's setting (`agent.conversation_retention_days`); at 0
+nothing ages out.
+"""
+
+import datetime
+import logging
+from collections.abc import Iterable
+
+from app_slices.settings import get_value
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
+
+from {{ package_name }}.api.agent import chat, conversations
+from {{ package_name }}.api.agent.conversations import AgentConversation
+from {{ package_name }}.api.agent.settings import CONVERSATION_RETENTION_DAYS
+from {{ package_name }}.config.sections.agent import AgentSettings
+
+logger = logging.getLogger(__name__)
+
+#: Conversations aged out per sweep, so a first sweep over years of rows cannot hold a worker.
+SWEEP_BATCH = 100
+
+
+async def erase(db: Session, settings: AgentSettings, rows: Iterable[AgentConversation]) -> int:
+    """Forget each of `rows`, the agent's files first and the row after; how many went.
+
+    A conversation whose files cannot be removed is logged and stays listed.
+    """
+    gone: list[str] = []
+    for row in rows:
+        if row.session_id:
+            try:
+                await chat.keeper(settings, row.persona).forget(row.session_id)
+            except Exception:
+                logger.exception("Could not forget the files of conversation %s; it stays listed", row.id)
+                continue
+        gone.append(row.id)
+
+    def remove() -> None:
+        db.execute(delete(AgentConversation).where(AgentConversation.id.in_(gone)))
+        db.commit()
+
+    if gone:
+        await run_in_threadpool(remove)
+    return len(gone)
+
+
+def _aged(db: Session, days: int) -> list[AgentConversation]:
+    cutoff = conversations.now() - datetime.timedelta(days=days)
+    return [
+        row
+        for row in db.execute(
+            select(AgentConversation)
+            .where(AgentConversation.last_activity_at < cutoff)
+            .order_by(AgentConversation.last_activity_at)
+            .limit(SWEEP_BATCH)
+        ).scalars()
+        if conversations.answering(row) is None
+    ]
+
+
+async def sweep(db_session_factory: sessionmaker[Session], settings: AgentSettings) -> int:
+    """Delete every conversation idle longer than the retention setting, a batch at a time; how many went."""
+
+    def aged() -> list[AgentConversation]:
+        with db_session_factory() as db:
+            days = int(get_value(db, CONVERSATION_RETENTION_DAYS.key))
+            return _aged(db, days) if days > 0 else []
+
+    rows = await run_in_threadpool(aged)
+    if not rows:
+        return 0
+    with db_session_factory() as db:
+        count = await erase(db, settings, rows)
+    logger.info("Deleted %d conversation(s) idle past the retention period", count)
+    return count

@@ -3,7 +3,7 @@
 	@poodle64/librarian's own `Chat` and components
 	(app-factory docs/design/agent-console.md). A `panel` page: past questions
 	are its pane, flush against the rail from 1024px, folded to its edge or open
-	as the reader left it, New question at its head and Clear all at its foot;
+	as the reader left it, New question at its head and Delete all at its foot;
 	narrower, the bar's own action opens them in a sheet (operator, 24/10/2026).
 	The shell draws all of that; this page says what goes in it. The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
@@ -69,6 +69,8 @@
 	let listed = $state(false);
 	let missing = $state(false);
 	let clearing = $state(false);
+	/** The Cancel button of the delete-all confirmation, which takes focus when it opens. */
+	let cancel = $state<HTMLElement | null>(null);
 	// Whether past questions show as their column (the shell decides, by width);
 	// where they do not, the bar above the transcript keeps New question.
 	let column = $state(false);
@@ -384,13 +386,24 @@
 			if (!open) clearing = false;
 		}}
 	>
-		<AlertDialog.Content>
+		<AlertDialog.Content
+			onOpenAutoFocus={(event) => {
+				event.preventDefault();
+				cancel?.focus();
+			}}
+		>
 			<AlertDialog.Header>
-				<AlertDialog.Title>{words.clearAllPrompt}</AlertDialog.Title>
+				<AlertDialog.Title>
+					{#if (chat?.conversations?.length ?? 0) === 1}
+						{words.clearAllPromptOne}
+					{:else}
+						{words.clearAllPrompt.replace('{count}', String(chat?.conversations?.length ?? 0))}
+					{/if}
+				</AlertDialog.Title>
 				<AlertDialog.Description>{words.clearAllDetail}</AlertDialog.Description>
 			</AlertDialog.Header>
 			<AlertDialog.Footer>
-				<AlertDialog.Cancel>{words.cancel}</AlertDialog.Cancel>
+				<AlertDialog.Cancel bind:ref={cancel}>{words.cancel}</AlertDialog.Cancel>
 				<AlertDialog.Action
 					variant="destructive"
 					onclick={() => void clearAll()}
@@ -435,7 +448,7 @@
 	/>
 {/snippet}
 
-<!-- Clear all, at the foot of past questions, behind its confirmation. -->
+<!-- Delete all, at the foot of past questions, behind its confirmation. -->
 {#snippet clearFoot(c: Chat)}
 	{#if c.clearable && (c.conversations?.length ?? 0) > 0}
 		<Button

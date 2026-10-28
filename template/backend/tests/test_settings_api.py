@@ -39,4 +39,8 @@ async def test_a_change_records_the_signed_in_user(client: AsyncClient) -> None:
 
 async def test_each_domains_declared_settings_are_on_the_page(client: AsyncClient) -> None:
     document = (await client.get("/api/settings/", headers=_headers("an-admin", "admin"))).json()
-    assert {"example.new_item_button_enabled", "example.max_items_per_page"} <= document["schema"]["properties"].keys()
+    assert {
+        "example.new_item_button_enabled",
+        "example.max_items_per_page",
+        "agent.conversation_retention_days",
+    } <= document["schema"]["properties"].keys()

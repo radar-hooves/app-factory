@@ -88,6 +88,7 @@ Published to the household index at each factory release tag; the stamp pins it 
 - `ask.py`: the turn (§The turn).
 - A flood guard, not a quota: at most `<APP>_AGENT_MAX_CONCURRENT_TURNS` (8; 0 off) turns in flight across every worker, counted from the stamped rows under an advisory lock, the next ask refused 503 with `Retry-After`; and `<APP>_AGENT_ASK_RATE_LIMIT` (`6/minute`) asks per person, per worker unless `<APP>_RATE_LIMIT_STORAGE_URI` names a shared store (the turn ceiling is the host-wide guard), on `POST /{persona}/ask`, admins included, off with `<APP>_RATE_LIMIT_ENABLED=false`.
 - An ask carries at most 10 files, 20 MB each and 50 MB together, of `.png .jpg .jpeg .webp .pdf .docx .txt .md`, refused unread (413 too large, 415 type, 400 count); the body is cut off at that size plus 1 MB whatever its Content-Length says.
+- `retention.py`, `settings.py`: `erase` forgets conversations (the agent's files, then the rows) for the owner's delete, Delete all and the sweep alike. `sweep`, run by `jobs.supervise`, deletes those idle past the operator's `agent.conversation_retention_days` (settings page, This deployment; default 0 keeps them).
 - `router.py`, under `/api/agent`:
 
 | Method and path | operationId | Gate |

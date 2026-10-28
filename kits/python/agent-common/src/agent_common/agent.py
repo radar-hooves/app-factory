@@ -18,6 +18,7 @@ a version back.
 """
 
 import asyncio
+import glob
 import json
 import logging
 import math
@@ -450,3 +451,9 @@ def _forget(home: Path, session: str) -> None:
             home / ARTEFACTS / session,
         ):
             shutil.rmtree(gone, ignore_errors=True)
+        # What the CLI itself files per session (todos, file history, debug log), named by its id.
+        for path in home.glob(f"*/*{glob.escape(session)}*"):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)

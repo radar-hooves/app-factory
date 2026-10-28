@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.15] - 2026-10-29
+
+Consumer: caspo (radar-hooves/caspo#180: colleagues ask about their own pay, leave and medical).
+
+### Changed
+
+- **Clearing past questions reads as the delete it is, and names how many.** `clearAll` is "Delete all"; `clearAllPrompt` is "Delete all {count} questions?" (the host fills `{count}`); the new `clearAllPromptOne` is "Delete your question?" for a single one; `clearAllDetail` ends "This can't be undone." A host that overrides these keys adds `clearAllPromptOne` and the `{count}` placeholder.
+
 ## [2026.10.14] - 2026-10-29
 
 Consumer: caspo (colleague walk, 29/10/2026: an answer read "2 sources" while its citation panel read "Source 5 of 7").

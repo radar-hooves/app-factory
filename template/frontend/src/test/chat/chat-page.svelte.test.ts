@@ -289,7 +289,36 @@ describe('A persona page, through the app extension points', () => {
 		expect(await screen.findByRole('region', { name: 'Past questions' })).toBeTruthy();
 	});
 
-	it('clears every past question behind a confirmation, from the column’s foot', async () => {
+	it('deletes every past question behind a confirmation naming the count, focused on Cancel', async () => {
+		wideScreen();
+		fake.GET.mockImplementation(async (path: string) => ({
+			data:
+				path === '/api/agent/{persona}/conversations'
+					? ['c1', 'c2', 'c3'].map((id) => ({ ...CONVERSATION, id, turns: undefined }))
+					: ROUTES[path],
+			response: new Response(null, { status: 200 })
+		}));
+		fake.DELETE.mockResolvedValue({
+			data: undefined,
+			response: new Response(null, { status: 204 })
+		});
+		at('/chat/outrider');
+		await fireEvent.click(await screen.findByTestId('chat-clear-all'));
+		expect(await screen.findByText('Delete all 3 questions?')).toBeTruthy();
+		await waitFor(() =>
+			expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+		);
+		expect(fake.DELETE).not.toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByTestId('chat-clear-all-confirm'));
+		await waitFor(() =>
+			expect(fake.DELETE).toHaveBeenCalledWith('/api/agent/{persona}/conversations', {
+				params: { path: { persona: 'outrider' } }
+			})
+		);
+	});
+
+	it('asks about one past question in the singular', async () => {
 		wideScreen();
 		fake.GET.mockImplementation(async (path: string) => ({
 			data:
@@ -304,14 +333,9 @@ describe('A persona page, through the app extension points', () => {
 		});
 		at('/chat/outrider');
 		await fireEvent.click(await screen.findByTestId('chat-clear-all'));
-		expect(await screen.findByText('Clear all your past questions?')).toBeTruthy();
-		expect(fake.DELETE).not.toHaveBeenCalled();
-
-		await fireEvent.click(screen.getByTestId('chat-clear-all-confirm'));
+		expect(await screen.findByText('Delete your question?')).toBeTruthy();
 		await waitFor(() =>
-			expect(fake.DELETE).toHaveBeenCalledWith('/api/agent/{persona}/conversations', {
-				params: { path: { persona: 'outrider' } }
-			})
+			expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
 		);
 	});
 

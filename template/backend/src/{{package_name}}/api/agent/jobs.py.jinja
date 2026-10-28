@@ -60,7 +60,7 @@ from agent_common.persona import Persona
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from {{ package_name }}.api.agent import jobs_models
+from {{ package_name }}.api.agent import jobs_models, retention
 from {{ package_name }}.api.agent import lessons as lessons_module
 from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent.jobs_models import STREAM_EVENT, AgentJob, JobOutcome, RunSpec
@@ -922,7 +922,8 @@ async def supervise(
     rather than cancelled, so a sweep in flight finishes on its database
     thread before the lifespan disposes the engine under it.
 
-    `lessons.retry_unsettled` rides the same sweep (`app-factory docs/design/agent-lessons.md`).
+    `lessons.retry_unsettled` rides the same sweep (`app-factory docs/design/agent-lessons.md`), and so does
+    `retention.sweep`, which deletes conversations idle past the operator's retention setting.
     """
     while not stopping.is_set():
         try:
@@ -933,6 +934,10 @@ async def supervise(
             await lessons_module.retry_unsettled(db_session_factory, settings, stopping)
         except Exception:
             logger.exception("Retrying unsettled lesson reports failed; retrying in %.0fs", _SWEEP_SECONDS)
+        try:
+            await retention.sweep(db_session_factory, settings)
+        except Exception:
+            logger.exception("Deleting conversations past retention failed; retrying in %.0fs", _SWEEP_SECONDS)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stopping.wait(), timeout=_SWEEP_SECONDS)
 

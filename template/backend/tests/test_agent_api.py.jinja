@@ -40,7 +40,8 @@ from starlette.datastructures import UploadFile
 
 from {{ package_name }} import app_hooks
 from {{ package_name }}.api.agent import ask as ask_module
-from {{ package_name }}.api.agent import chat, conversations
+from {{ package_name }}.api.agent import chat, conversations, retention
+from {{ package_name }}.api.agent import persona as persona_module
 from {{ package_name }}.api.agent import router as router_module
 from {{ package_name }}.api.agent.conversations import AgentConversation
 from {{ package_name }}.api.users.models import User
@@ -853,6 +854,90 @@ async def test_clearing_forgets_every_settled_conversation_of_this_persons_with_
     # A persona the person may not enter refuses; one with nothing to clear is no error.
     assert (await client.delete("/api/agent/manual/conversations", headers=stranger)).status_code == 403
     assert (await client.delete("/api/agent/helper/conversations", headers=_person("chat-helper"))).status_code == 204
+
+
+def _traces(session: str) -> list[Path]:
+    """Everything under the personas' homes whose path carries the agent's session id."""
+    return [path for path in persona_module.homes().rglob("*") if session in str(path)]
+
+
+async def _written(client: AsyncClient, who: dict[str, str]) -> tuple[str, str]:
+    """A conversation whose turn wrote a document, as its row id and the agent's session."""
+    events = _events((await _ask(client, "helper", "__write__:brief.md:# Brief", who)).text)
+    conversation = events[0]["session_id"]
+    await _settled()
+    session = str(_row(conversation).session_id)
+    assert _traces(session), "the turn left nothing on disk to delete"
+    return conversation, session
+
+
+async def test_a_deleted_conversation_leaves_no_row_and_no_file(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    conversation, session = await _written(client, who)
+    kept, kept_session = await _written(client, who)
+
+    assert (await client.delete(f"/api/agent/conversations/{conversation}", headers=who)).status_code == 204
+
+    with get_session_factory()() as db:
+        assert db.get(AgentConversation, conversation) is None
+    assert _traces(session) == []
+    assert _traces(kept_session) and _row(kept).session_id == kept_session
+
+
+async def test_clearing_leaves_no_row_and_no_file(client: AsyncClient) -> None:
+    who = _person("chat-helper")
+    first, first_session = await _written(client, who)
+    second, second_session = await _written(client, who)
+
+    assert (await client.delete("/api/agent/helper/conversations", headers=who)).status_code == 204
+
+    with get_session_factory()() as db:
+        assert db.get(AgentConversation, first) is None and db.get(AgentConversation, second) is None
+    assert _traces(first_session) == [] and _traces(second_session) == []
+
+
+async def _retain(client: AsyncClient, days: int) -> None:
+    admin = {
+        "x-authentik-uid": "the-operator",
+        "x-authentik-username": "the-operator",
+        "x-authentik-entitlements": "admin:write",
+    }
+    written = await client.patch("/api/settings/agent.conversation_retention_days", json={"value": days}, headers=admin)
+    assert written.status_code == 200
+
+
+def _idle(conversation: str, days: int) -> None:
+    with get_session_factory()() as db:
+        db.execute(
+            update(AgentConversation)
+            .where(AgentConversation.id == conversation)
+            .values(last_activity_at=conversations.now() - datetime.timedelta(days=days))
+        )
+        db.commit()
+
+
+async def test_the_sweep_deletes_what_is_idle_past_the_operators_period_and_nothing_before_it_is_set(
+    client: AsyncClient, agent_settings: AgentSettings
+) -> None:
+    who = _person("chat-helper")
+    old, old_session = await _written(client, who)
+    recent, recent_session = await _written(client, who)
+    _idle(old, 40)
+    _idle(recent, 5)
+
+    # Unset keeps everything: there is no default period.
+    assert await retention.sweep(get_session_factory(), agent_settings) == 0
+    assert _traces(old_session)
+
+    await _retain(client, 30)
+    assert await retention.sweep(get_session_factory(), agent_settings) == 1
+
+    with get_session_factory()() as db:
+        assert db.get(AgentConversation, old) is None
+        assert db.get(AgentConversation, recent) is not None
+    assert _traces(old_session) == []
+    assert _traces(recent_session)
+    await _retain(client, 0)
 
 
 async def test_a_revoked_grant_closes_the_persons_old_conversations(client: AsyncClient) -> None:

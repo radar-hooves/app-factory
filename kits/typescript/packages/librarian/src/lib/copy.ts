@@ -199,7 +199,9 @@ export interface ChatCopy {
 	earlier: string;
 	/** Clearing every past question: the control, its confirmation, and a clear that did not go through. */
 	clearAll: string;
+	/** Names how many go: `{count}`. `clearAllPromptOne` is the one question's. */
 	clearAllPrompt: string;
+	clearAllPromptOne: string;
 	clearAllDetail: string;
 	clearAllFailed: string;
 	readingPastQuestions: string;
@@ -370,10 +372,11 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		today: 'Today',
 		yesterday: 'Yesterday',
 		earlier: 'Earlier',
-		clearAll: 'Clear all',
-		clearAllPrompt: 'Clear all your past questions?',
-		clearAllDetail: `Every conversation with ${who} goes, from every device, except one still being answered. This cannot be undone.`,
-		clearAllFailed: "Your past questions couldn't be cleared.",
+		clearAll: 'Delete all',
+		clearAllPrompt: 'Delete all {count} questions?',
+		clearAllPromptOne: 'Delete your question?',
+		clearAllDetail: `Every conversation with ${who} goes, from every device, except one still being answered. This can't be undone.`,
+		clearAllFailed: "Your past questions couldn't be deleted.",
 		readingPastQuestions: 'Reading your past questions…',
 		noPastQuestions: 'No past questions yet.',
 		pastQuestionsFailed: "Your past questions couldn't be read just now.",

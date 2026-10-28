@@ -1,0 +1,17 @@
+"""The agent slice's declared settings: how long a conversation is kept."""
+
+from app_slices.settings import SettingType, declare_setting
+
+#: The key an app reads back with `app_slices.settings.get_value(db, CONVERSATION_RETENTION_DAYS.key)`.
+CONVERSATION_RETENTION_DAYS = declare_setting(
+    "agent.conversation_retention_days",
+    type=SettingType.integer,
+    default=0,
+    minimum=0,
+    maximum=3650,
+    title="Keep conversations for (days)",
+    description=(
+        "A conversation with no activity for this many days is deleted, with its answers and every file it "
+        "wrote. 0 keeps conversations until the person who asked deletes them."
+    ),
+)
