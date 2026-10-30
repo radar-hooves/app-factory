@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toItems } from '@poodle64/ui/app-shell';
+
 import { firstSettingsHref, settingsSections } from './sections';
 
 const held = vi.hoisted(() => ({ entitlements: [] as string[] }));
@@ -40,16 +42,15 @@ describe('the settings destination', () => {
 		expect(firstSettingsHref(settingsSections())).toBe('/settings/profile');
 	});
 
-	it('sends a caller with no settings of the app\'s own to the members', () => {
+	it("sends a caller with no settings of the app's own to the members", () => {
 		held.entitlements = ['admin'];
 		expect(firstSettingsHref(settingsSections())).toBe('/settings/members');
 	});
 
 	it('lists the deployment only to an admin', () => {
-		const headings = () =>
-			settingsSections().map((group) => ('heading' in group ? group.heading : ''));
-		expect(headings()).not.toContain('This deployment');
+		const hrefs = () => toItems(settingsSections()).map((item) => item.href);
+		expect(hrefs()).not.toContain('/settings/application');
 		held.entitlements = ['admin'];
-		expect(headings()).toContain('This deployment');
+		expect(hrefs()).toContain('/settings/application');
 	});
 });

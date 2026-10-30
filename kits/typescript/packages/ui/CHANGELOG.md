@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.32] - 2026-10-30
+
+Consumer: caspo (the operator's walk of the app, 30/10/2026: the collapse button "is on the top rail instead of the sidebar").
+
+### Changed
+
+- **`AppShell`'s collapse toggle sits in the rail's foot, not the top bar.** Same `ds-rail-collapse` control, `aria-pressed`, `[` shortcut and `collapsed` binding; it is a rail row now ("Collapse" / "Expand", icon alone on the slim rail), and the bar's leading separator (`ds-rail-collapse-separator`) is gone. The phone's drawer has none, as before. Grafana's docked menu and LiteLLM's sidebar put theirs on the rail for the same reason. `harness/drive.mjs` measures it inside the rail, at its foot, centred on the slim rail.
+
 ## [2026.10.31] - 2026-10-30
 
 Consumer: caspo. The operator ruled the report trigger is "a bug report or feedback button" drawn with the standard picture (30/10/2026).

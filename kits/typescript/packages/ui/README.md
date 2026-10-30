@@ -140,9 +140,8 @@ be the same thing.
 There is now exactly one shell shape, no prop to choose a different one.
 Operator ruling, 31/07/2026: every household app renders the same composition,
 a permanent side rail on `md`+ (an overlay drawer below it) carrying primary
-navigation and the brand, **plus** a real top navbar (the collapse toggle at
-its leading edge, search,
-leading/trailing slots, theme toggle, identity), always both together, with
+navigation, the brand and the collapse toggle (in the rail's foot), **plus** a
+real top navbar (search, leading/trailing slots, theme toggle, identity), always both together, with
 the content laid out by the page's type (`reading`, `panel` or `tool`; see
 [Page types](#page-types)). Apps do not choose variants, widths or spacing.
 
@@ -173,7 +172,7 @@ That is the whole minimum. Everything below is optional.
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `nav`                                             | Bare `NavItem`s, `NavGroup`s, or a mix. Consecutive bare items collapse into one run; an emptied group renders nothing. |
 | `currentPath`                                     | Active state, and closing the mobile nav on navigation.                                                                 |
-| `collapsible`, `collapsed`                        | An icon-only rail collapse toggle whose state binds out so an app can persist it. `collapsible` defaults to `true`.     |
+| `collapsible`, `collapsed`                        | The collapse toggle in the rail's foot, whose state binds out so an app can persist it. `collapsible` defaults to `true`.     |
 | `brand` / `brandTitle` + `brandMark` / `homeHref` | Full control of the lockup, or the wordmark-plus-mark shorthand.                                                        |
 | `identity`                                        | The signed-in surface. Rendered once, at the end of the top bar.                                                        |
 | `context`, `actions`                              | Leading and trailing top-bar slots: a store/tenant switcher, app-level action buttons.                                  |

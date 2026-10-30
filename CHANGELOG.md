@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.93] - 2026-10-30
+
+Need: the shell's three faults the operator found walking caspo (30/10/2026); consumer: caspo.
+
+### Changed
+
+- **The rail's collapse toggle is in the rail** (`@poodle64/ui` 2026.10.32, floor `^2026.10.32`), at its foot, not in the top bar.
+- **Members is a settings section, not a page of its own.** The route moves from `/workspace` to `/settings/members`, inside the settings layout, so it is drawn in the same panel frame and `PageHeader` as every other setting. `settingsSections()` lists it in a "This workspace" group (named from the frame's `workspaceLabel`) between the app's own groups and "This deployment", so `/settings` now opens on the first section the app declares and, for an app with none, on Members.
+
+### Consumer must change
+
+- In `src/lib/app-frame.svelte`, set `membersHref` to `'/settings/members'` (the template's default moved; an app-owned frame is not rewritten by `copier update`). Any app link, test or redirect to `/workspace` moves with it; the old route is gone, not redirected.
+- A section's pages live in the rail (`NavItem.children`) and nowhere else: a bar control that navigates between them (a `Segmented` or tabs in `ShellControls`, the rule's "scope control" being only what changes the view and never navigates) duplicates the rail and is the app's to remove.
+
 ## [2026.10.92] - 2026-10-30
 
 Needs: the report trigger is drawn as the bug the operator ruled it should be (30/10/2026), and a chat page can say where a person's question goes; consumer: caspo.
