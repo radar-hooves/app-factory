@@ -341,10 +341,10 @@ function renderMarkdown(model) {
 	);
 	L.push('');
 	L.push(
-		'**Read this before writing a `<div>`.** Find the SITUATION you are in below, then compose the component named for it — do not hand-build it from raw `Card` or utility classes. Import is `import { Name } from \'<import path>\'`. Props marked `?` are optional. This map is the retrieval step the [`frontend-design` skill] makes mandatory; the [CHI 2026 study] measured composing-from-a-registry at 95% design-system compliance against 71% for writing the CSS from a prose style guide.'
+		'**Read this before writing a `<div>`.** Find the SITUATION you are in below, then compose the component named for it — do not hand-build it from raw `Card` or utility classes. Import is `import { Name } from \'<import path>\'`. Props marked `?` are optional. This map is the retrieval step the [`design-frontend` skill] makes mandatory; the [CHI 2026 study] measured composing-from-a-registry at 95% design-system compliance against 71% for writing the CSS from a prose style guide.'
 	);
 	L.push('');
-	L.push('[`frontend-design` skill]: the household rule that loads before any UI code.');
+	L.push('[`design-frontend` skill]: the household rule that loads before any UI code.');
 	L.push('[CHI 2026 study]: 10.1145/3772363.3798616');
 	L.push('');
 
