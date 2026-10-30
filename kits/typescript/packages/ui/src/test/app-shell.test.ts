@@ -73,7 +73,6 @@ describe('AppShell — mobile navigation', () => {
 		await waitFor(() => expect(screen.getByTestId('ds-shell-drawer')).toBeInTheDocument());
 
 		expect(screen.getAllByTestId('identity')).toHaveLength(1);
-		expect(screen.getAllByTestId('ds-rail-collapse')).toHaveLength(1);
 		// One navigation landmark, not two competing ones with the same name.
 		expect(document.querySelectorAll('nav[aria-label="Primary"]')).toHaveLength(1);
 	});
@@ -319,28 +318,21 @@ describe('AppShell — rail collapse', () => {
 		});
 	});
 
-	it('sits at the leading edge of the top bar, before the title — not in the rail', () => {
-		// The shadcn sidebar blocks' `Sidebar.Trigger` place: first in the bar, a
-		// thin separator after it, the rail's header left holding the brand alone.
+	it('sits in the rail, after the nav — not in the top bar', () => {
+		// A control that works the sidebar is the sidebar's (operator, 30/10/2026).
 		// Proven by DOM order, since jsdom applies no layout.
 		render(ShellHarness, { props: { collapsible: true } });
 		const rail = document.querySelector('.ds-shell-rail')!;
 		const header = document.querySelector('header.ds-shell-bar')!;
 		const toggle = screen.getByTestId('ds-rail-collapse');
-		const separator = screen.getByTestId('ds-rail-collapse-separator');
-		const identity = screen.getByTestId('identity');
+		const nav = rail.querySelector('nav')!;
 
-		expect(rail).not.toContainElement(toggle);
-		expect(header).toContainElement(toggle);
-		expect(toggle.className).toContain('md:grid');
-		expect(toggle.className).toContain('hidden');
+		expect(rail).toContainElement(toggle);
+		expect(header).not.toContainElement(toggle);
+		expect(screen.queryByTestId('ds-rail-collapse-separator')).not.toBeInTheDocument();
 		expect(
-			toggle.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the separator follows the toggle'
-		).toBeTruthy();
-		expect(
-			separator.compareDocumentPosition(identity) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the rest of the bar follows the separator'
+			nav.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the toggle follows the nav'
 		).toBeTruthy();
 		// The rail header holds the brand alone: nothing but the brand link
 		// precedes the nav.

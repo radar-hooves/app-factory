@@ -17,10 +17,9 @@
 	 * always both together. Operator ruling, 31/07/2026: every household app
 	 * renders one shell shape; apps do not choose variants.
 	 *
-	 * The collapse toggle is the leading edge of the top bar, before the page's
-	 * title, with a thin separator after it — where the shadcn sidebar blocks put
-	 * `Sidebar.Trigger`. The rail's header holds the brand alone, and the foot is
-	 * left to the app.
+	 * The collapse toggle is the rail's own, in its foot (operator, 30/10/2026:
+	 * a control that works the sidebar belongs on the sidebar, not the top bar).
+	 * The rail's header holds the brand alone.
 	 *
 	 * Search can sit in either of two places, because it reads as a different
 	 * thing depending on what is beside it. `searchPlacement` defaults to
@@ -149,7 +148,7 @@
 		 */
 		currentPath?: string;
 		/**
-		 * Offer an icon-only collapse toggle at the leading edge of the top bar.
+		 * Offer a collapse toggle in the rail's foot.
 		 *
 		 * Defaults ON. It was opt-in while the control was being introduced, and
 		 * two of nine household apps opted in — so seven rails could not be
@@ -720,25 +719,52 @@
 			/>
 
 			<!--
-				The drawer's foot: the one place feedback sits on a phone, where nothing
-				floats over the page. From md it is the bar's icon. Settings is the
-				account menu's, never a row here.
+				The rail's foot: the collapse toggle on md+ and, in the phone's drawer,
+				the one place feedback sits, where nothing floats over the page. The
+				toggle is the rail's own control, so it sits on the rail, as in Grafana's
+				docked menu and LiteLLM's sidebar (operator, 30/10/2026: it was "on the
+				top rail instead of the sidebar"). From md the report is the bar's icon.
+				Settings is the account menu's, never a row here. `.ds-nav` gives the
+				rows the rail's ink, its centring when collapsed and its peek padding.
 			-->
-			{#if mobileNavOpen && shellReport.open}
-				<div class="ds-shell-rail-foot mt-auto">
-					<button
-						type="button"
-						class="ds-nav-item w-full"
-						data-testid="ds-shell-drawer-report"
-						onclick={() => {
-							const open = shellReport.open;
-							closeMobileNav();
-							open?.();
-						}}
-					>
-						<Bug class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
-						<span class="truncate">Report a problem</span>
-					</button>
+			{#if mobileNavOpen ? shellReport.open : collapsible}
+				<div
+					class="ds-shell-rail-foot ds-nav mt-auto"
+					data-collapsed={railCollapsed ? 'true' : undefined}
+					data-peek={peeking ? 'true' : undefined}
+				>
+					{#if mobileNavOpen}
+						<button
+							type="button"
+							class="ds-nav-item w-full"
+							data-testid="ds-shell-drawer-report"
+							onclick={() => {
+								const open = shellReport.open;
+								closeMobileNav();
+								open?.();
+							}}
+						>
+							<Bug class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+							<span class="truncate">Report a problem</span>
+						</button>
+					{:else}
+						<button
+							type="button"
+							onclick={toggleCollapsed}
+							class="ds-nav-item w-full"
+							aria-label={collapseLabel}
+							aria-pressed={collapsed}
+							title={`${collapseLabel} (press [)`}
+							data-testid="ds-rail-collapse"
+						>
+							{#if collapsed}
+								<PanelLeftOpen class="size-[1.125rem] flex-none" aria-hidden="true" />
+							{:else}
+								<PanelLeftClose class="size-[1.125rem] flex-none" aria-hidden="true" />
+							{/if}
+							{#if !railNarrow}<span class="truncate">{collapsed ? 'Expand' : 'Collapse'}</span>{/if}
+						</button>
+					{/if}
 				</div>
 			{/if}
 			{#if collapsible && !railCollapsed && !mobileNavOpen}
@@ -786,35 +812,6 @@
 						<Menu class="size-4" />
 					{/if}
 				</button>
-			{/if}
-
-			<!--
-				The collapse toggle is the leading edge of the bar, before the page's
-				title and a thin separator after it: where the shadcn sidebar blocks put
-				`Sidebar.Trigger`, so the rail's header holds the brand alone. `md:grid`
-				keeps it off the phone, where the drawer has its own trigger.
-			-->
-			{#if collapsible}
-				<button
-					type="button"
-					onclick={toggleCollapsed}
-					class="text-shell-muted-foreground hover:text-shell-foreground -ml-1 hidden size-8 flex-none place-items-center rounded-md transition-colors pointer-coarse:size-11 md:grid"
-					aria-label={collapseLabel}
-					aria-pressed={collapsed}
-					title={`${collapseLabel} (press [)`}
-					data-testid="ds-rail-collapse"
-				>
-					{#if collapsed}
-						<PanelLeftOpen class="size-4" />
-					{:else}
-						<PanelLeftClose class="size-4" />
-					{/if}
-				</button>
-				<span
-					class="bg-border hidden h-4 w-px flex-none md:block"
-					aria-hidden="true"
-					data-testid="ds-rail-collapse-separator"
-				></span>
 			{/if}
 
 			<!-- The rail carries the brand on md+; below md the rail is gone, so the

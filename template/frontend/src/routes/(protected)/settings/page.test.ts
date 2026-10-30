@@ -55,7 +55,7 @@ describe('the settings index', () => {
 
 	it('leaves a navigation the reader started meanwhile alone', async () => {
 		vi.mocked(goto).mockImplementation(async () => {
-			router.navigating.to = { url: new URL('http://localhost/workspace') };
+			router.navigating.to = { url: new URL('http://localhost/settings/members') };
 		});
 		render(Page);
 		await settle();

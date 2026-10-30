@@ -48,13 +48,13 @@ test('the top bar search control, where the app draws one, opens the command pal
 // heading INSIDE the shell's main landmark: the frame also renders around the
 // loading state, so the chrome alone would pass before the page ever did.
 const STAMPED_ROUTES = [
-	{ path: '/workspace', heading: 'Members' },
+	{ path: '/settings/members', heading: 'Members' },
 	{ path: '/settings/application', heading: 'Application' },
 	{ path: '/chat', heading: 'Ask' }
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {
-	const smoke = path === '/workspace' ? ' @smoke' : '';
+	const smoke = path === '/settings/members' ? ' @smoke' : '';
 	test(`the factory's ${path} renders inside the app's shell${smoke}`, async ({ page }) => {
 		await page.goto(path);
 
@@ -109,7 +109,7 @@ for (const viewport of VIEWPORTS) {
 	// ends with space to scroll it clear.
 	test(`a page's last control scrolls clear of the report button at ${size}`, async ({ page }) => {
 		await page.setViewportSize(viewport);
-		await page.goto('/workspace');
+		await page.goto('/settings/members');
 		const main = page.locator('#ds-main');
 		await expect(main.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
 		await main.evaluate((region) => {
@@ -141,7 +141,7 @@ test('an address no route serves renders inside the shell', async ({ page }) => 
 // leaves the SPA for a full page load. The catch-all behind "Page not found"
 // must not claim it; the link sits inside the page, where the router listens.
 test('a link to the API leaves the app for the API', async ({ page }) => {
-	await page.goto('/workspace');
+	await page.goto('/settings/members');
 	await expect(page.locator('#ds-main').getByRole('heading', { name: 'Members' })).toBeVisible();
 	await page.locator('#ds-main').evaluate((main) => {
 		const link = document.createElement('a');

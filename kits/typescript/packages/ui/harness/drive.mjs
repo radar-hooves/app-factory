@@ -1509,9 +1509,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
-	// The collapse toggle leads the top bar (shadcn's Sidebar.Trigger place) and
-	// the rail's head holds the brand alone, centred on the slim rail and
-	// aligned on the open one. Geometry, so only a real layout can say.
+	// The collapse toggle is the rail's own, in its foot, below the nav; the
+	// rail's head holds the brand alone, centred on the slim rail and aligned on
+	// the open one. Geometry, so only a real layout can say.
 	{
 		const { context, page } = await open('surface=nested&collapsible=1');
 		await page.waitForSelector('.ds-shell-rail');
@@ -1521,30 +1521,32 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 				const rail = document.querySelector('.ds-shell-rail');
 				const bar = document.querySelector('header.ds-shell-bar');
 				const toggle = document.querySelector('[data-testid="ds-rail-collapse"]');
+				const nav = rail.querySelector('nav');
 				const brand = rail.querySelector('a[aria-label]');
 				const mark = brand.querySelector('span, svg, img') ?? brand;
 				return {
-					inBar: bar.contains(toggle) && !rail.contains(toggle),
-					toggleLeft: r(toggle).left - r(bar).left,
-					toggleTopInBar: r(toggle).top >= r(bar).top && r(toggle).bottom <= r(bar).bottom,
-					brandOnly: [...rail.children].filter((c) => c !== brand && c.tagName === 'A').length,
+					inRail: rail.contains(toggle) && !bar.contains(toggle),
+					belowNav: r(toggle).top >= r(nav).bottom - 1,
+					atRailFoot: Math.abs(r(rail).bottom - r(toggle).bottom) < 24,
+					withinRail: r(toggle).left >= r(rail).left && r(toggle).right <= r(rail).right,
+					toggleCentreOffset: Math.abs((r(toggle).left + r(toggle).right) / 2 - (r(rail).left + r(rail).right) / 2),
 					brandCentreOffset: Math.abs((r(brand).left + r(brand).right) / 2 - (r(rail).left + r(rail).right) / 2),
 					markLeft: r(mark).left - r(rail).left,
-					railHeadHeight: r(brand).height
+					barHasToggle: !!bar.querySelector('[data-testid="ds-rail-collapse"]')
 				};
 			});
 		const open1 = await read();
 		check(
-			'collapse toggle: first in the top bar, inside it, not in the rail',
-			open1.inBar && open1.toggleTopInBar && open1.toggleLeft < 40,
-			`in bar ${open1.inBar}, ${open1.toggleLeft.toFixed(0)}px from the bar edge`
+			'collapse toggle: in the rail, at its foot, nothing of it in the top bar',
+			open1.inRail && open1.belowNav && open1.atRailFoot && open1.withinRail && !open1.barHasToggle,
+			`in rail ${open1.inRail}, below nav ${open1.belowNav}, at foot ${open1.atRailFoot}`
 		);
 		check(
 			'expanded rail: the brand aligns to the rail padding',
 			open1.markLeft >= 12 && open1.markLeft <= 20,
 			`mark ${open1.markLeft.toFixed(0)}px from the rail edge`
 		);
-		await page.screenshot({ path: 'harness/dist/rail-toggle-expanded.png', clip: { x: 0, y: 0, width: 900, height: 160 } });
+		await page.screenshot({ path: 'harness/dist/rail-toggle-expanded.png', clip: { x: 0, y: 0, width: 900, height: 600 } });
 		await page.click('[data-testid="ds-rail-collapse"]');
 		await page.waitForFunction(
 			() => document.querySelector('.ds-shell-rail')?.dataset.collapsed === 'true'
@@ -1552,6 +1554,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await page.waitForFunction(() =>
 			document.getAnimations().every((animation) => animation.playState !== 'running')
 		);
+		await page.mouse.move(700, 400);
 		const slim = await read();
 		check(
 			'collapsed rail: the brand is centred on the slim rail',
@@ -1559,11 +1562,11 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			`brand centre ${slim.brandCentreOffset.toFixed(1)}px off the rail centre`
 		);
 		check(
-			'collapsed rail: the toggle has not moved',
-			slim.inBar && Math.abs(slim.toggleLeft - open1.toggleLeft) < 1,
-			`${open1.toggleLeft.toFixed(0)}px then ${slim.toggleLeft.toFixed(0)}px`
+			'collapsed rail: the toggle is centred on the slim rail, still at the foot',
+			slim.inRail && slim.atRailFoot && slim.withinRail && slim.toggleCentreOffset <= 1.5,
+			`toggle centre ${slim.toggleCentreOffset.toFixed(1)}px off the rail centre`
 		);
-		await page.screenshot({ path: 'harness/dist/rail-toggle-collapsed.png', clip: { x: 0, y: 0, width: 900, height: 160 } });
+		await page.screenshot({ path: 'harness/dist/rail-toggle-collapsed.png', clip: { x: 0, y: 0, width: 900, height: 600 } });
 		await context.close();
 	}
 
@@ -5085,7 +5088,7 @@ for (const [height, long] of [
 			v.report.length === 1 && v.report[0].inBar && !v.report[0].fixed && v.report[0].right <= v.themeLeft && v.floating.length === 0,
 			JSON.stringify(v)
 		);
-		check(`${label}: the rail has no Settings row and no foot`, !v.settingsRow, JSON.stringify(v));
+		check(`${label}: the rail has no Settings row`, !v.settingsRow, JSON.stringify(v));
 		check(`${label}: the page does not scroll sideways`, v.overflow <= 0, JSON.stringify(v));
 		check(`${label}: the bar's icon is a bug`, (await page.locator('[data-testid="ds-shell-report"] svg.lucide-bug').count()) === 1, 'not a bug');
 		check(`${label}: the bar's icon opens the report dialogue`, await opens(page, page.getByTestId('ds-shell-report')), 'no dialogue');

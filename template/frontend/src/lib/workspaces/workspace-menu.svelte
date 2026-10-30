@@ -33,7 +33,7 @@
 	`label` is what THIS app calls a workspace in its UI — "Household", "Circle"
 	(`rules-library/platform/tenancy.md` lets the vocabulary vary while the code
 	noun does not). `membersHref` is the app's own route for the members
-	surface; the factory stamps one at /workspace.
+	surface; the factory stamps one at /settings/members, in the settings frame.
 -->
 <script lang="ts">
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
@@ -53,7 +53,7 @@
 
 	let {
 		label = 'Workspace',
-		membersHref = '/workspace'
+		membersHref = '/settings/members'
 	}: { label?: string; membersHref?: string } = $props();
 
 	const noun = $derived(label.toLowerCase());

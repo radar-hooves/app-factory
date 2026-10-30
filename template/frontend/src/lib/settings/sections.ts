@@ -1,11 +1,15 @@
 import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+import Users from '@lucide/svelte/icons/users';
 import { toItems, type NavSource } from '@poodle64/ui/app-shell';
+import { workspaceLabel } from '$lib/app-frame.svelte';
 import { auth } from '$lib/auth.svelte';
 import { appSettingsSections } from './app';
 
 /**
  * Everything the settings destination lists: this app's own groups (`./app`),
- * then the factory's "This deployment", the operator-facing runtime settings
+ * then the workspace's own (its Members, under the name the frame declares:
+ * the same frame as every other setting, never a page of its own), then the
+ * factory's "This deployment", the operator-facing runtime settings
  * any declared Setting joins (app-factory docs/design/settings.md). That group is shown
  * only to whoever holds the admin entitlement; a caller without it sees the
  * app's groups alone, rather than a 403 page, since the rail's own Settings row
@@ -16,6 +20,10 @@ import { appSettingsSections } from './app';
 export function settingsSections(): NavSource {
 	return [
 		...appSettingsSections(),
+		{
+			heading: `This ${workspaceLabel.toLowerCase()}`,
+			items: [{ href: '/settings/members', label: 'Members', icon: Users }]
+		},
 		{
 			heading: 'This deployment',
 			items: auth.can('admin')

@@ -7,6 +7,7 @@
 </script>
 
 <!-- The members surface is the factory's (src/lib/workspaces/); this route is
-     where every app mounts it, under the name its frame declares. -->
+     where every app mounts it, under the name its frame declares, inside the
+     settings layout: the same panel frame and header as every other setting. -->
 <PageHeader title="Members" subtitle="Who shares this {noun}'s data." />
 <WorkspaceMembers label={workspaceLabel} />

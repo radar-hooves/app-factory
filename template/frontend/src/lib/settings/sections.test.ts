@@ -9,6 +9,8 @@ vi.mock('$lib/auth.svelte', () => ({
 	auth: { can: (module: string) => held.entitlements.includes(module) }
 }));
 
+vi.mock('$lib/app-frame.svelte', () => ({ workspaceLabel: 'Workspace' }));
+
 vi.mock('./app', () => ({ appSettingsSections: () => appSections.value }));
 
 const ACCOUNT = {
@@ -28,6 +30,7 @@ describe('the settings destination', () => {
 
 		expect(settingsSections().map((group) => ('heading' in group ? group.heading : ''))).toEqual([
 			'Your account',
+			'This workspace',
 			'This deployment'
 		]);
 	});
@@ -37,12 +40,16 @@ describe('the settings destination', () => {
 		expect(firstSettingsHref(settingsSections())).toBe('/settings/profile');
 	});
 
-	it("sends an admin with no settings of the app's own to the deployment's", () => {
+	it('sends a caller with no settings of the app\'s own to the members', () => {
 		held.entitlements = ['admin'];
-		expect(firstSettingsHref(settingsSections())).toBe('/settings/application');
+		expect(firstSettingsHref(settingsSections())).toBe('/settings/members');
 	});
 
-	it('has nowhere to send a caller who can open nothing', () => {
-		expect(firstSettingsHref(settingsSections())).toBeUndefined();
+	it('lists the deployment only to an admin', () => {
+		const headings = () =>
+			settingsSections().map((group) => ('heading' in group ? group.heading : ''));
+		expect(headings()).not.toContain('This deployment');
+		held.entitlements = ['admin'];
+		expect(headings()).toContain('This deployment');
 	});
 });
