@@ -97,7 +97,7 @@ test('a person granted a seat chooses the shared workspace, and every request ca
 	await expect(page.getByTestId('workspace-menu')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Account' }).click();
 	await page.getByRole('menuitem', { name: 'Members' }).click();
-	await expect(page).toHaveURL(/\/workspace$/);
+	await expect(page).toHaveURL(/\/settings\/members$/);
 	await page.goto('/');
 
 	// The partner makes a workspace and grants this person a seat in it.
