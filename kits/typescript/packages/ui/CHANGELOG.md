@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.31] - 2026-10-30
+
+Consumer: caspo. The operator ruled the report trigger is "a bug report or feedback button" drawn with the standard picture (30/10/2026).
+
+### Changed
+
+- **`AppShell`'s report trigger is the Lucide `bug`** in the bar (`ds-shell-report`) and the phone drawer's foot row (`ds-shell-drawer-report`), replacing `MessageSquarePlus`, which beside a chat reads as "new conversation". The label stays "Report a problem". `harness/drive.mjs` asserts the glyph in both places.
+
 ## [2026.10.30] - 2026-10-29
 
 Consumer: caspo (radar-hooves/caspo#188, phone-first polish). A colleague walk at 390 wide with a coarse pointer measured the bar's Menu button at 36px, Account at 34px, the brand link at 40px and the drawer rows at 36px, under the household's 44px touch floor.

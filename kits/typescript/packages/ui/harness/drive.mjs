@@ -5087,6 +5087,7 @@ for (const [height, long] of [
 		);
 		check(`${label}: the rail has no Settings row and no foot`, !v.settingsRow, JSON.stringify(v));
 		check(`${label}: the page does not scroll sideways`, v.overflow <= 0, JSON.stringify(v));
+		check(`${label}: the bar's icon is a bug`, (await page.locator('[data-testid="ds-shell-report"] svg.lucide-bug').count()) === 1, 'not a bug');
 		check(`${label}: the bar's icon opens the report dialogue`, await opens(page, page.getByTestId('ds-shell-report')), 'no dialogue');
 		check(`${label}: no page error`, errors.length === 0, JSON.stringify(errors));
 		await context.close();
@@ -5120,6 +5121,8 @@ for (const [height, long] of [
 			row.text === 'Report a problem' && row.inside && row.height >= 32,
 			JSON.stringify(row)
 		);
+		check(`phone at ${width}px: the drawer row's icon is a bug`, (await page.locator('[data-testid="ds-shell-drawer-report"] svg.lucide-bug').count()) === 1, 'not a bug');
+		await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/drawer-${width}.png` });
 		await page.getByTestId('ds-shell-drawer-report').click();
 		const opened = await page.getByRole('dialog').getByText('Report a problem').first().waitFor({ timeout: 3000 }).then(() => true, () => false);
 		const drawerGone = (await page.getByTestId('ds-shell-drawer').count()) === 0;

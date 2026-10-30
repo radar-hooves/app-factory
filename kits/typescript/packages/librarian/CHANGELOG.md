@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.16] - 2026-10-30
+
+Consumer: caspo (colleagues ask about their own pay, leave and medical; the operator ruled the app must say where questions go and how long they are kept).
+
+### Added
+
+- **`composerNotice`, one short app-supplied line under the composer.** Empty by default, and then nothing renders. It shows on every visit in the composer's own `copy` (an app passing `copy` to `Composer` adds the key), muted and centred under the box, docked or centred. `[text](/path)` and `[text](https://…)` render as links; any other address stays text. `data-testid="ds-lib-composer-notice"`.
+
 ## [2026.10.15] - 2026-10-29
 
 Consumer: caspo (radar-hooves/caspo#180: colleagues ask about their own pay, leave and medical).

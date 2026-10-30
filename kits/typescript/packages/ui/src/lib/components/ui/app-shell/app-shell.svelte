@@ -84,7 +84,7 @@
 	import Menu from '@lucide/svelte/icons/menu';
 	import X from '@lucide/svelte/icons/x';
 	import Search from '@lucide/svelte/icons/search';
-	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
+	import Bug from '@lucide/svelte/icons/bug';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
@@ -736,7 +736,7 @@
 							open?.();
 						}}
 					>
-						<MessageSquarePlus class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+						<Bug class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
 						<span class="truncate">Report a problem</span>
 					</button>
 				</div>
@@ -931,7 +931,7 @@
 						title="Report a problem"
 						data-testid="ds-shell-report"
 					>
-						<MessageSquarePlus class="size-4" />
+						<Bug class="size-4" />
 					</button>
 				{/if}
 

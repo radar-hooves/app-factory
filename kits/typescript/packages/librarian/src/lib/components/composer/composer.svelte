@@ -121,6 +121,22 @@
 
 	const words = $derived(resolveCopy(copy, name));
 
+	// `[text](url)` becomes a link; only a path or an http(s) address does, so
+	// copy can never smuggle in a script URL.
+	const noticeParts = $derived.by(() => {
+		const parts: { text: string; href?: string }[] = [];
+		const line = words.composerNotice.trim();
+		if (!line) return parts;
+		let last = 0;
+		for (const m of line.matchAll(/\[([^\]]+)\]\(((?:\/|https?:\/\/)[^)\s]*)\)/g)) {
+			if (m.index > last) parts.push({ text: line.slice(last, m.index) });
+			parts.push({ text: m[1], href: m[2] });
+			last = m.index + m[0].length;
+		}
+		if (last < line.length) parts.push({ text: line.slice(last) });
+		return parts;
+	});
+
 	// The banner needs somewhere to send a reader AND a reason to show at
 	// all: a host that never counts turns gets today's composer, unchanged.
 	const longConversation = $derived(
@@ -378,6 +394,14 @@
 	{#if rejected}
 		<p class="ds-lib-rejected" role="status" aria-live="polite">{rejected}</p>
 	{/if}
+
+	{#if noticeParts.length > 0}
+		<p class="ds-lib-notice" data-testid="ds-lib-composer-notice">
+			{#each noticeParts as part, i (i)}
+				{#if part.href}<a href={part.href}>{part.text}</a>{:else}{part.text}{/if}
+			{/each}
+		</p>
+	{/if}
 </div>
 
 <style>
@@ -608,6 +632,24 @@
 	.ds-lib-long-new:focus-visible {
 		outline: 2px solid var(--ds-color-ring);
 		outline-offset: 2px;
+	}
+
+	.ds-lib-notice {
+		margin: 0.5rem 0 0;
+		color: var(--ds-color-muted-foreground);
+		font-size: var(--ds-text-2xs);
+		line-height: 1.4;
+		text-align: center;
+	}
+
+	.ds-lib-notice a {
+		color: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.ds-lib-notice a:hover {
+		color: var(--ds-color-foreground);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

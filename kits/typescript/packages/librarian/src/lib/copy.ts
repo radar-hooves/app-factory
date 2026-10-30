@@ -65,6 +65,10 @@ export interface ChatCopy {
 	 *  start over — a follow-up re-reads the whole conversation, so each one
 	 *  costs more than the last. */
 	longConversation: string;
+	/** An app's own short line under the composer, every visit — where the
+	 *  question goes, how long it is kept. `[text](url)` makes a link. Empty
+	 *  (the default) renders nothing. */
+	composerNotice: string;
 	/** The working line's words when nothing more is known of what is happening. */
 	working: string;
 	/** The scroll region's accessible name. */
@@ -273,6 +277,7 @@ export function copyFor(name: string = DEFAULT_PERSONA): ChatCopy {
 		inSubject: '{collection}, in {subject}',
 		backToSubjects: 'Back to subjects from {subject}',
 		longConversation: `This conversation is getting long. A new question keeps ${who} quick.`,
+		composerNotice: '',
 		working: `${who} is working`,
 		conversationLabel: `Conversation with ${who}`,
 		copyAnswer: 'Copy',

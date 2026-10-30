@@ -602,3 +602,20 @@ describe('Composer while a session works', () => {
 		expect(screen.getByRole('button', { name: 'Attach a file' })).toBeDisabled();
 	});
 });
+
+describe('the app-supplied notice under the composer', () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	it('renders nothing when the app supplies none', () => {
+		render(Composer, base());
+		expect(screen.queryByTestId('ds-lib-composer-notice')).not.toBeInTheDocument();
+	});
+
+	it('shows the line with its link, and refuses a script address', () => {
+		render(Composer, base({ copy: { composerNotice: 'Goes to Anthropic. [About](/about) [x](javascript:alert(1))' } }));
+		const line = screen.getByTestId('ds-lib-composer-notice');
+		expect(line).toHaveTextContent('Goes to Anthropic. About [x](javascript:alert(1))');
+		expect(within(line).getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about');
+		expect(within(line).getAllByRole('link')).toHaveLength(1);
+	});
+});

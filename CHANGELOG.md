@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.92] - 2026-10-30
+
+Needs: the report trigger is drawn as the bug the operator ruled it should be (30/10/2026), and a chat page can say where a person's question goes; consumer: caspo.
+
+### Added
+
+- **A chat page can carry one line under the composer: `composerNotice`** (`@poodle64/librarian` 2026.10.16, which stamped apps now pin). An app returns it from `copy()` in `frontend/src/lib/agent/app.ts` (`{ composerNotice: 'Your questions go to … [More on the About page](/about).' }`); `ask-box.svelte` already hands that copy to the composer. It shows on every visit, quietly, never a modal; `[text](/path)` and `[text](https://…)` become links. Absent, nothing renders.
+
+### Changed
+
+- **The shell's report trigger is a bug** (`@poodle64/ui` 2026.10.31, floor `^2026.10.31`): the bar button and the phone drawer's foot row draw Lucide `bug` where they drew a speech bubble with a plus, which read as "new conversation" beside a chat. The label stays "Report a problem".
+
 ## [2026.10.91] - 2026-10-29
 
 Need: an app's conversations have a retention period the operator sets, and a delete that leaves nothing behind (radar-hooves/caspo#180); consumer: caspo.

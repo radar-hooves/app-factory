@@ -68,6 +68,9 @@
 		'collections-long'
 	];
 
+	const NOTICE =
+		'Your questions go to Anthropic, which runs the model. A conversation left for seven days is deleted. [More on the About page](/about).';
+
 	const requested = $derived((page.url.searchParams.get('state') ?? 'answer') as LabState);
 
 	let turns = $state<Turn[]>([]);
@@ -300,6 +303,7 @@
 						ongroup={(next) => (group = next)}
 						onsubmit={send}
 						onstop={() => (running = false)}
+						copy={page.url.searchParams.has('notice') ? { composerNotice: NOTICE } : undefined}
 						turnCount={requested === 'cost' ? 9 : undefined}
 						onnewquestion={requested === 'cost' ? () => (turns = []) : undefined}
 					/>

@@ -215,6 +215,7 @@ describe('ReportWidget: feedback has one home', () => {
 		const bar = screen.getByTestId('ds-shell-report');
 		expect(bar.closest('header')).toBe(document.querySelector('.ds-shell-bar'));
 		expect(bar).toHaveAttribute('aria-label', 'Report a problem');
+		expect(bar.querySelector('svg.lucide-bug')).not.toBeNull();
 		expect(document.querySelector('.fixed.rounded-full')).toBeNull();
 		await fireEvent.click(bar);
 		expect(await screen.findByRole('heading', { name: 'Report a problem' })).toBeInTheDocument();
