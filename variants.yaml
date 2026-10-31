@@ -42,6 +42,8 @@ library:
   backend/src/{package}/api/agent/redact.py: "as api/agent/ask.py: the library takes no agent slice (operator ruling 31/10/2026); retires if the library ever takes a chat surface"
   backend/src/{package}/api/agent/chat.py: "as api/agent/ask.py: the library takes no agent slice (operator ruling 31/10/2026); retires if the library ever takes a chat surface"
   backend/src/{package}/api/agent/content.py: "as api/agent/ask.py: the library takes no agent slice (operator ruling 31/10/2026); retires if the library ever takes a chat surface"
+  backend/src/{package}/api/agent/retention.py: "as api/agent/ask.py: the library takes no agent slice (operator ruling 31/10/2026); its conversation sweep has no conversations to sweep; retires if the library ever takes a chat surface"
+  backend/src/{package}/api/agent/settings.py: "as api/agent/ask.py: the library takes no agent slice (operator ruling 31/10/2026); it declares the conversation retention setting of a slice the library does not carry; retires if the library ever takes a chat surface"
   backend/tests/test_agent_lessons.py: "tests the factory's agent lessons module, which the library does not take (operator ruling 31/10/2026); the test would fail on a missing module; retires if the library ever takes a chat surface"
   backend/tests/support/fake_agent_cli.py: "fixture for the factory's agent tests, which the library does not take (operator ruling 31/10/2026); retires if the library ever takes a chat surface"
   frontend/src/lib/agent/chat.ts: "the library has no chat surface (operator ruling 31/10/2026): the factory's client would call agent routes the library does not serve; retires if the library ever takes a chat surface"
