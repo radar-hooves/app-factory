@@ -10,11 +10,11 @@
 		"dev": "pnpm --filter @poodle64/console run dev",
 		"test": "pnpm -r run test"
 	},
-	"packageManager": "pnpm@10.28.0",
+	"packageManager": "pnpm@10.34.5",
 	"pnpm": {
 		"overrides": {
 			"devalue": "5.9.4",
-			"fast-uri": "3.1.8",
+			"fast-uri": "3.1.9",
 			"nanoid": "3.3.18",
 			"source-map-js": "1.2.2"
 		},
