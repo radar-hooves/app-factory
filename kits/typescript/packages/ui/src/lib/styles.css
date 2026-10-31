@@ -1439,6 +1439,7 @@
 		background: var(--ds-color-surface-1);
 		border: 1px solid var(--ds-color-border);
 		border-radius: var(--ds-radius-sm);
+		contain: inline-size;
 		overflow-x: auto;
 		padding: var(--ds-spacing-sm);
 	}
@@ -1460,6 +1461,7 @@
 	   same rule the library surfaces learned at 390px. */
 	.ds-prose table {
 		border-collapse: collapse;
+		contain: inline-size;
 		display: block;
 		font-size: 0.9em;
 		margin-block: var(--ds-spacing-md);
@@ -1472,6 +1474,22 @@
 		border: 1px solid var(--ds-color-border);
 		padding: var(--ds-spacing-xs) var(--ds-spacing-sm);
 		text-align: start;
+	}
+
+	/* A flex item's automatic minimum size follows its content, so a table's
+	   natural width or an unbroken citation URL drags the shell's content column
+	   wider than the screen. `contain: inline-size` (on table and pre, above)
+	   removes the content from that sizing; at phone width a long URL breaks
+	   anywhere, and cells keep whole words so a table scrolls instead. Scoped to
+	   the phone: at every width it narrowed the desktop measure. */
+	@media (width <= 767px) {
+		.ds-prose {
+			overflow-wrap: anywhere;
+		}
+
+		.ds-prose table {
+			overflow-wrap: normal;
+		}
 	}
 
 	.ds-prose th {

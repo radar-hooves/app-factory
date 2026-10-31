@@ -13,6 +13,8 @@
  * jsdom supplies `CSS.escape` and setup.ts stubs `window.matchMedia`, so no polyfill is
  * needed; `scrollIntoView` is spied on per test.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import DocumentReader, { slugify } from '$lib/components/ui/document-reader/document-reader.svelte';
@@ -254,5 +256,23 @@ describe('DocumentReader — inside the shell', () => {
 		const sides = container.querySelectorAll('[data-slot="document-reader-side"]');
 		expect(sides).toHaveLength(1);
 		expect(aside.contains(sides[0])).toBe(true);
+	});
+});
+
+describe('a document never scrolls the page sideways (caspo)', () => {
+	// jsdom does not resolve the cascade or lay out, so the claim is held at its source.
+	const css = readFileSync(join(__dirname, '../lib/styles.css'), 'utf8');
+	const rule = (sel: string) => css.match(new RegExp(`\\n\\t${sel.replace('.', '\\.')} \\{[^}]*\\}`))?.[0] ?? '';
+
+	it('a table and a pre are contained out of the column sizing', () => {
+		expect(rule('.ds-prose table')).toContain('contain: inline-size;');
+		expect(rule('.ds-prose pre')).toContain('contain: inline-size;');
+	});
+
+	it('a long URL breaks only at phone width, and table cells keep whole words', () => {
+		const phone = css.match(/@media \(width <= 767px\) \{\s*\.ds-prose \{[^}]*\}\s*\.ds-prose table \{[^}]*\}/)?.[0] ?? '';
+		expect(phone).toContain('overflow-wrap: anywhere;');
+		expect(phone).toContain('overflow-wrap: normal;');
+		expect(rule('.ds-prose')).not.toContain('overflow-wrap');
 	});
 });

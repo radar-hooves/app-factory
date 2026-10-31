@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.10.33] - 2026-10-31
+
+Consumer: caspo. A References list of raw citation links and a wide table pushed a document page 129px sideways at 360px, though `.ds-prose table` already scrolled in its own box.
+
+### Fixed
+
+- **A document in `DocumentReader` no longer scrolls the page sideways at phone width.** The shell's content column is a flex item whose automatic minimum size follows its content, so a table's natural width or an unbroken URL dragged it wide. `.ds-prose table` and `.ds-prose pre` take `contain: inline-size`, and at 767px and under `.ds-prose` takes `overflow-wrap: anywhere` (cells keep `normal`, so a table scrolls rather than breaking mid-word). Scoped to the phone: the desktop measure does not move. An app drops its own copy of these rules.
+
 ## [2026.10.32] - 2026-10-30
 
 Consumer: caspo (the operator's walk of the app, 30/10/2026: the collapse button "is on the top rail instead of the sidebar").

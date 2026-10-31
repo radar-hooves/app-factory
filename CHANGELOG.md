@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.94] - 2026-10-31
+
+Need: a document with a wide table or a long URL scrolled the page sideways at 360px; consumer: caspo.
+
+### Fixed
+
+- **`DocumentReader` bodies no longer overflow at phone width** (`@poodle64/ui` 2026.10.33, floor `^2026.10.33`).
+
+### Consumer must change
+
+- Delete any app-owned `contain: inline-size` / `overflow-wrap` rules on `.prose` or `.ds-prose` from `app.css`; the package owns them.
+
 ## [2026.10.93] - 2026-10-30
 
 Need: the shell's three faults the operator found walking caspo (30/10/2026); consumer: caspo.
