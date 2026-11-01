@@ -70,7 +70,10 @@ serve "$service" factory_selftest "$service_port" CORS_ORIGINS=$placer_url
 	uv sync --no-default-groups
 )
 cd "$placer/frontend"
-pnpm add "@poodle64/ui@$(node -p "require('$service/frontend/package.json').dependencies['@poodle64/ui']")"
+# Both, as the service took them: the template pins an exact librarian that npm does not have
+# until this change merges, and pnpm resolves every dependency whenever it adds one.
+kit_spec() { node -p "require('$service/frontend/package.json').dependencies['@poodle64/$1']"; }
+pnpm add "@poodle64/ui@$(kit_spec ui)" "@poodle64/librarian@$(kit_spec librarian)"
 pnpm exec svelte-kit sync
 ELEMENT_ORIGINS=$service_url pnpm generate:elements
 # The derived types bind: a word where the element declares a number fails the check.
