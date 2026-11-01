@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.10.95] - 2026-11-01
+
+Need: the stamped backend suite left a Docker volume behind whenever a run was cancelled or killed, and a busy spinning disk made its Postgres miss the readiness limit; consumer: pebblestone (#893).
+
+### Fixed
+
+- **The test Postgres runs on tmpfs** (`tests/conftest.py`): the image's anonymous data volume is gone, so no run leaves one, and the server starts in seconds rather than minutes under disk contention. Measured on the household CI host: 8 s ready, `Mounts: []`.
+
+### Consumer must change
+
+- Nothing: `copier update` carries it. Delete any orphaned anonymous Postgres volumes already on a CI host.
+
 ## [2026.10.94] - 2026-10-31
 
 Need: a document with a wide table or a long URL scrolled the page sideways at 360px; consumer: caspo.

@@ -176,6 +176,11 @@ def _start_ephemeral_postgres() -> dict[str, str]:
         dbname="postgres",
         driver=None,
     )
+    # The image declares VOLUME on its data directory, so every container gets an
+    # anonymous volume that a cancelled or killed run never removes (a CI host piled
+    # up hundreds, and the disk contention made new servers miss the readiness limit).
+    # A tmpfs data directory leaves no volume and starts fast on a busy disk.
+    container.with_tmpfs_mount("/var/lib/postgresql/data")
     # Claimed and registered BEFORE start(): a start that fails part-way (the Docker
     # API timing out under load) has already created the container, and a cleanup
     # registered only after success leaves that one behind. Stopping a container
