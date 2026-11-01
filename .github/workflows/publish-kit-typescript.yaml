@@ -58,14 +58,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           scope: '@poodle64'
-
-      # Node 22 bundles npm 10.x, and OIDC publishing needs npm >= 11.5.1.
-      # Lifting npm alone keeps the toolchain identical to kit-typescript.yaml.
-      - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@^11.5.1
 
       # Only a 404 means unpublished; any other failure stops the run rather
       # than reading as "nothing to release".

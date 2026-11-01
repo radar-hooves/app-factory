@@ -4,6 +4,24 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.1] - 2026-11-02
+
+Need: the weekly major-upgrade pull request (#27) had been red since 09/10, and twelve stamped apps carried the same frontend majors in red pull requests of their own; consumer: the whole fleet.
+
+### Changed
+
+- **Adopted:** Vite 8 with `@sveltejs/vite-plugin-svelte` 7, Vitest 5 (and `@vitest/coverage-v8`), jsdom 30, `@testing-library/jest-dom` 7, ESLint 10, Stylelint 17 with `stylelint-config-html` 2 and `postcss-html` 2, TypeScript 6 (not 7), pnpm 12.16.1, the Node 24 base image and CI runners, `sveltekit-superforms` 3 and `isomorphic-dompurify` 4 (accepted by `@poodle64/ui` 2026.11.1 and `@poodle64/librarian` 2026.11.1). The desktop skeleton takes the same Stylelint and Vitest.
+- **Held in `renovate.json` and `template/renovate.json`, each with its blocker:** TypeScript 7 (typescript-eslint, svelte-check and SvelteKit do not support it; sveltejs/kit#17537, sveltejs/language-tools#3063); SvelteKit 3 with `adapter-static` 4 and `@sveltejs/package` 3 (bits-ui#2243; `@sveltejs/package` 3 also stops rewriting `$lib` in a built package; app-factory#60); `@tanstack/table-core` 9 (a rewrite of the table API `@poodle64/ui` exposes; app-factory#61). The old `vite-plugin-svelte` < 7 hold is gone with Vite 8. The desktop skeleton keeps pnpm 10, which is the pnpm nixpkgs ships.
+- **The unit test of `hooks.client` reads the import-time telemetry call at module scope.** Vitest 5 clears every mock's history before each test.
+
+### Consumer must change
+
+- `copier update` carries the template. Then, per app: `pnpm install` with pnpm 12 to rewrite the lockfile (the `packageManager` field moves with the update), and run the app's own suite.
+- **pnpm 12 ignores package.json's `"pnpm"` field.** The template no longer has one: build-script decisions are in the new `frontend/pnpm-workspace.yaml` (`allowBuilds`, esbuild on, puppeteer off). An app that added its own `pnpm.overrides`, `onlyBuiltDependencies` or similar moves them to that file, and decides every other dependency with a build script there (an undecided one fails the install). The app's own `Dockerfile` must `COPY frontend/pnpm-workspace.yaml` beside the lockfile, as the template's now does.
+- **Vitest 5:** `clearMocks` is on, so a test that reads a mock's calls made at import time or in another test must capture them at module scope (as `hooks.client.test.ts` does) or set `clearMocks: false`.
+- **ESLint 10 / eslint-plugin-svelte:** `svelte/prefer-svelte-reactivity` now flags a `new URL(...)` held in `$state`; use `SvelteURL`, or disable it on a value that is only ever replaced.
+- Apps with their own `typescript`, `vite`, `jsdom`, `stylelint` or `isomorphic-dompurify` pins take the versions above (Node 22.12 or later is required by several of them). An app using `sveltekit-superforms` takes 3 with `formsnap` 2.1 and needs `$app/state` aliased in its unit runner (the template's `vitest.config.ts` does).
+
 ## [2026.10.95] - 2026-11-01
 
 Need: the stamped backend suite left a Docker volume behind whenever a run was cancelled or killed, and a busy spinning disk made its Postgres miss the readiness limit; consumer: pebblestone (#893).

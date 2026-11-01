@@ -13,9 +13,24 @@
       "allowedVersions": "<3.15"
     },
     {
-      "description": "vite-plugin-svelte v7 declares `vite: ^8` as a peer and registers its Svelte prebundle loader ONLY under optimizeDeps.rolldownOptions — v6 branches on vite.rolldownVersion and falls back to optimizeDeps.esbuildOptions, v7 deleted that branch. Vite 7's esbuild dep-optimiser never reads rolldownOptions, so every prebundled .svelte file goes through uncompiled and `vite dev` dies, while build, check, lint and Vitest all stay green — a bump nothing in CI catches. Verified 07/09/2026 against the published 6.2.4 and 7.0.0 sources. Retires when this app takes Vite 8.",
-      "matchPackageNames": ["@sveltejs/vite-plugin-svelte"],
+      "description": "TypeScript 7 (the native compiler) is held below 7. Upstream is not ready: typescript-eslint's peer is <6.1, svelte-check's is ^5 || ^6, @sveltejs/kit 3 and @sveltejs/package 3 peer ^6, and `svelte-kit sync`, dev and build crash on 7.0.2 (sveltejs/kit#17537; svelte2tsx and svelte-check crash, sveltejs/language-tools#3063; typescript-eslint tracks it in typescript-eslint/typescript-eslint#10940). Retires when those three land TS 7 support.",
+      "matchPackageNames": ["typescript"],
       "allowedVersions": "<7"
+    },
+    {
+      "description": "SvelteKit 3, adapter-static 4 and @sveltejs/package 3 move together and are held. Upstream blocker: bits-ui (every app's and @poodle64/ui's component base) pulls runed 0.35, whose peer is @sveltejs/kit ^2 (huntabyte/bits-ui#2243, 'SvelteKit 3 support'). Also measured 02/11/2026: @sveltejs/package 3 no longer rewrites `$lib` in dist, so a built @poodle64/ui ships unresolvable `$lib/…` imports (a consumer's build fails 'Could not load src/lib/utils.js'), and kit 3 drops `$lib`, svelte.config.js and `$app/stores` for `#lib`, the Vite plugin options and `$app/state` — a fleet-wide source rewrite (`npx sv migrate sveltekit-3`) to run as one factory change after bits-ui lands. Tracked in radar-hooves/app-factory#60.",
+      "matchPackageNames": ["@sveltejs/kit", "@sveltejs/package"],
+      "allowedVersions": "<3"
+    },
+    {
+      "description": "adapter-static 4 peers @sveltejs/kit ^3, so it is held with SvelteKit 3 (see the rule above; radar-hooves/app-factory#60).",
+      "matchPackageNames": ["@sveltejs/adapter-static"],
+      "allowedVersions": "<4"
+    },
+    {
+      "description": "@tanstack/table-core 9 is a rewrite, not an upgrade: table features are declared up front (`_features`), `getCoreRowModel`/`getSortedRowModel`/`getFilteredRowModel` become `createCoreRowModel`/`createSortedRowModel`/`createFilteredRowModel`, and `ColumnDef` takes extra type arguments. @poodle64/ui re-exports `ColumnDef` and wraps `createTable` in `createSvelteTable`, so the bump breaks the table API every app calls (svelte-check: 27 errors in ui alone, measured 02/11/2026). Not an upstream fault: a deliberate @poodle64/ui major, with the apps' tables migrated beside it, tracked in radar-hooves/app-factory#61.",
+      "matchPackageNames": ["@tanstack/table-core"],
+      "allowedVersions": "<9"
     }
   ]
 }

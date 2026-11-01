@@ -24,6 +24,7 @@ export default defineConfig({
 			// touches them. See src/test/stubs/app-environment.ts.
 			'$app/environment': resolve(import.meta.dirname, 'src/test/stubs/app-environment.ts'),
 			'$app/stores': resolve(import.meta.dirname, 'src/test/stubs/app-stores.ts'),
+			'$app/state': resolve(import.meta.dirname, 'src/test/stubs/app-state.ts'),
 			'$app/navigation': resolve(import.meta.dirname, 'src/test/stubs/app-navigation.ts'),
 			'$app/forms': resolve(import.meta.dirname, 'src/test/stubs/app-forms.ts')
 		}

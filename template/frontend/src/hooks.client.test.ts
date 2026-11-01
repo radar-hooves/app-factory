@@ -10,12 +10,14 @@ vi.mock('@poodle64/ui/telemetry', () => ({ initBrowserTelemetry: mockInitBrowser
 // not inside a function this file could call directly.
 import { handleError, isStaleChunkError, mayAttemptReload } from './hooks.client';
 
+// Read here, at module scope: vitest 5 clears every mock's history before each test
+// (`clearMocks` defaults to true), so by the time a test runs the import-time call is gone.
+const telemetryCalls = [...mockInitBrowserTelemetry.mock.calls];
+
 describe('browser telemetry', () => {
 	it('starts once per app load, with the build version and no collector URL in dev', () => {
-		expect(mockInitBrowserTelemetry).toHaveBeenCalledTimes(1);
-		const [config] = mockInitBrowserTelemetry.mock.calls[0] as [
-			{ app: string; version: string; url: string }
-		];
+		expect(telemetryCalls).toHaveLength(1);
+		const [config] = telemetryCalls[0] as [{ app: string; version: string; url: string }];
 		expect(config.app.length).toBeGreaterThan(0);
 		expect(config.version).toBe('test'); // $app/environment's mocked build version
 		expect(config.url).toBe(''); // no collector to send to in dev

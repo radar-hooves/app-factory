@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.1] - 2026-11-02
+
+Consumer: the whole app fleet (the weekly major-upgrade lane, app-factory#27).
+
+### Changed
+
+- **`isomorphic-dompurify` 4 is accepted** (peer `^3.23.0 || ^4.0.0`), tested on 4.6; the package's tests run on Vitest 5 and jsdom 30. Nothing a consumer imports changed.
+
 ## [2026.10.16] - 2026-10-30
 
 Consumer: caspo (colleagues ask about their own pay, leave and medical; the operator ruled the app must say where questions go and how long they are kept).

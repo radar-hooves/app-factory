@@ -1,0 +1,6 @@
+# pnpm 12 reads its settings here, not from package.json's "pnpm" field. esbuild needs its
+# binary; pnpm 12 fails an install that leaves any build script undecided.
+allowBuilds:
+  esbuild: true
+  # impeccable's puppeteer would download its own Chrome; the design gates drive the host's browser.
+  puppeteer: false

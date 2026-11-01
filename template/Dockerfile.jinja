@@ -1,18 +1,18 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Frontend build (pnpm, SvelteKit static adapter)
-FROM node:22-slim AS frontend
+FROM node:24-slim AS frontend
 WORKDIR /frontend
 
 # Copy lockfile + manifest before source for cache efficiency. The pnpm
 # version comes from frontend/package.json's packageManager field alone —
 # corepack honours it, and it is what CI's pnpm/action-setup resolves too, so
 # one field drives the container and the CI gate alike.
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 
-# Pinned to package.json's packageManager (pnpm@10.28.0) — keep the two in
+# Pinned to package.json's packageManager (pnpm@12.16.1) — keep the two in
 # step; bare `corepack enable` alone lets a floating pnpm break the build.
-RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.16.1 --activate
 
 # The factory's own packages (@poodle64/design-tokens, @poodle64/ui) are public
 # on registry.npmjs.org and need no credential. Do not reintroduce a scope
@@ -29,7 +29,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
 
 COPY frontend/ ./
 
-# The heap ceiling is pinned rather than inherited. node:22-slim gives V8 about
+# The heap ceiling is pinned rather than inherited. The base image gives V8 about
 # 2096 MB by default, and a client bundle carrying the usual rich-content set
 # (a diagram renderer, a syntax highlighter, a PDF writer, a chart library)
 # peaks within a few percent of it — one app's build died with "Ineffective

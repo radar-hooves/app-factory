@@ -13,3 +13,11 @@ allowBuilds:
   '@bundled-es-modules/glob': false
   '@parcel/watcher': false
   style-dictionary: false
+# Transitive security floors. pnpm 12 reads overrides here, not from package.json's "pnpm" field.
+# fast-uri (via ajv): CVE-2026-75899, -75931, -75975, -76172, -84292, -84394. nanoid (via postcss): CVE-2026-67213.
+# devalue (via svelte, @sveltejs/kit): fixed in 5.9.3. source-map-js (via postcss, css-tree, @tailwindcss/node): CVE-2026-93749.
+overrides:
+  devalue: 5.9.4
+  fast-uri: 3.1.8
+  nanoid: 3.3.18
+  source-map-js: 1.2.2

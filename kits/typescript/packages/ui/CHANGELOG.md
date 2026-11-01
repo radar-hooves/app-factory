@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.1] - 2026-11-02
+
+Consumer: the whole app fleet (the weekly major-upgrade lane, app-factory#27).
+
+### Changed
+
+- **`sveltekit-superforms` 3 is accepted** (`^2.30.0 || ^3.0.0`), tested on 3.1, with `formsnap` 2.1 (its peer now names 3). The unit runner stubs `$app/state`, which superforms 3 imports in place of `$app/stores`. Build and dev tooling moves to Vitest 5, jsdom 30 and `@types/node` 24; nothing a consumer imports changed.
+
 ## [2026.10.33] - 2026-10-31
 
 Consumer: caspo. A References list of raw citation links and a wide table pushed a document page 129px sideways at 360px, though `.ds-prose table` already scrolled in its own box.
