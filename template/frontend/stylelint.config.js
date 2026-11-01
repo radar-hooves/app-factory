@@ -28,6 +28,10 @@ export default {
 		'selector-pseudo-class-no-unknown': [true, { ignorePseudoClasses: ['global', 'local'] }],
 		// Scoped-component CSS legitimately produces descending specificity: each
 		// component owns its own cascade, so the rule fires on correct code.
-		'no-descending-specificity': null
+		'no-descending-specificity': null,
+		// Stylelint 17 reads every `style="..."` attribute in a Svelte file as a bare
+		// declaration block. The attributes carry runtime values (a computed width, a
+		// CSS variable), which a class cannot hold.
+		'no-invalid-position-declaration': null
 	}
 };

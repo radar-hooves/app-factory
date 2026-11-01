@@ -203,16 +203,9 @@ A chat turn runs `--restricted` under `--permission-mode dontAsk` (Claude Code 2
 
 A persona is a directory shaped as a Claude Code home: `CLAUDE.md` (who it is), `settings.json` (`model`, `permissions.allow`, `permissions.deny`, hooks) and `.mcp.json` (the app's own `/mcp`, named fleet servers). Defaults live in the app at `config/personas/<name>/`; `<APP>_AGENT_PERSONAS_DIR` names an overriding directory, read at every spawn. The kit seeds a writable home per persona under `data/`. The tool lists reach the CLI as `--allowedTools` and `--disallowedTools` from that file; a chat session also takes the file whole as `--settings`, and CLAUDE.md in its system prompt (§Confinement). A persona whose documents download as Word or PDF carries its brand in `documents/`. A persona that uses the app's tools presents `ASKER_TOKEN` to its `/mcp` (`"Authorization": "Bearer ${ASKER_TOKEN}"`), and each write tool checks the asker's entitlements (§The asker and the writes).
 
-## What each app does with its data
+## The conversation migration
 
-The factory's migration `d943d70b8845` renames `agent_conversations.room` to `persona` and keeps the values. A row whose value names no persona in `config/chat.yaml` is listed nowhere and refused as a conversation that is not the person's. `room-<id>` grants are Authentik data the migration cannot reach.
-
-| App | Its data | What it does |
-| --- | --- | --- |
-| caspo | Three library chats; conversations whose answers are Milton's, held at the library; `room-<id>` grants held by colleagues | Writes `config/chat.yaml` (Outrider, `collections: true`) and Outrider's persona directory; deletes its old conversation rows in a migration of its own (Outrider can neither read nor continue Milton's transcripts); at Authentik, adds `chat-outrider` to caspo's application, binds it to every user and group bound to a `room-*` entitlement, deletes the `room-*` entitlements, and grants each colleague the library collection groups they should read; colleagues sign in again |
-| godswood, eight, casefile | No `config/rooms.yaml`, so no conversation rows | Take the release; write `config/chat.yaml` when they offer chat (Milton is godswood's persona) |
-| pebblestone | Already persona-shaped (`/agent/[persona]`) | Its personas become `config/chat.yaml` rows when it takes the factory's slice |
-| library | Its own line: the `collection_chat` tool and tables, `/api/collection-chat` | Renamed in its own lane; keeps `/api/caller` as the one door apps read |
+The factory's migration `d943d70b8845` renames `agent_conversations.room` to `persona` and keeps the values. A row whose value names no persona in `config/chat.yaml` is listed nowhere and refused as a conversation that is not the person's. A `room-<id>` grant is Authentik data the migration cannot reach: an app that held any binds `chat-<persona>` to every user and group bound to a `room-*` entitlement and then deletes the `room-*` entitlements.
 
 ## The tier and the hard limit
 
@@ -242,7 +235,6 @@ A persona's turn carries `ASKER_TOKEN`, minted for this app as the person who as
 - **supacrawl:** a mode for a persona's gateway caller that refuses private and loopback addresses (`SUPACRAWL_BLOCK_PRIVATE_NETWORKS` is unset on atlas, and the mcpnet listener serves every fleet server unsigned) and refuses `actions` (`executeJavascript` posts anywhere) and caller `headers`. Until then a page's text can steer a persona's `supacrawl_scrape` into the household's network; name `supacrawl_search` alone.
 - **mcp-servers (litellm-mcp):** `ocr` reads a path on its own host, under its own roots, so a file in an app's container never reaches it; it needs the file by bytes or as a package an app runs through the bridge (`${AGENT_SESSION_DIR}` names the session's folder for it).
 - **caspo:** Outrider's `settings.json` and `.mcp.json` as above; `mcp-gateway-api` granted to caspo's identity at the broker; `agent-common[documents]` and its brand for Word and PDF; and its `/mcp` intelligence tools withholding operator-provided claims from a person who is not an admin, as its HTTP routes do (the tools take the caller's `include_operator`, default true).
-- **master:** `rules-library/platform/canonical-app-shape.md` still names `config/rooms.yaml` and "the stamped room page" among the sanctioned files, and lists "collection" among the nouns a page must not show; lodged on master-project#233 for a sitting.
 
 ## Open
 

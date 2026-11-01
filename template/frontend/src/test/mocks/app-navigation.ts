@@ -1,7 +1,7 @@
 /**
  * Test-only stand-in for SvelteKit's `$app/navigation`.
  *
- * Same reason as `app-state.ts`: these are virtual modules the real
+ * Same reason as `app-state.svelte.ts`: these are virtual modules the real
  * `sveltekit()` Vite plugin provides, and vitest.config.ts runs the bare
  * `svelte()` plugin instead, so the specifier has nothing to resolve to on its
  * own. Giving Vite a real path to resolve is what lets a test

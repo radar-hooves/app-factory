@@ -4,6 +4,26 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.2] - 2026-11-02
+
+Need: seven apps took 2026.11.1 and each worked round the same factory faults locally, three with `.canonical-exceptions` lines that fail the gate after 02/12/2026; consumer: the app fleet (casefile, earworm, caspo, godswood, eight, console, library).
+
+### Changed
+
+- **The `$app/state` test mock is reactive** (`src/test/mocks/app-state.svelte.ts`, replacing `app-state.ts`): `page` is `$state`, as sveltekit-superforms 3 needs, `applyAction` writes the result into it, and `setup.ts` resets it after each test. An app deletes its own reactive-page helper and may take superforms 3.
+- **`src/fonts.d.ts`** declares `@fontsource-variable/*`, which TypeScript 6 checks and the packages ship no types for. The library deletes its own `fonts.d.ts`.
+- **`dark-seed.js` uses `catch {}`**, which ESLint 10 accepts. earworm drops its `eslint.debt.js` block; eight drops its edit.
+- **Stylelint `no-invalid-position-declaration` is off**: it reads every inline `style=` attribute as a bare declaration. caspo drops its parity exception (app-factory#63).
+- **`frontend/pnpm-workspace.yaml` carries `overrides`** for `js-yaml ^4.3.2` and `fast-uri ^3.1.6`. casefile drops its copy.
+- **`renovate.json` includes `.github/renovate-app.json`**, the app's own Renovate rules (stamped once with empty `packageRules`, never overwritten). An app holding a dependency of its own (earworm's FluentAssertions, eight's superforms) puts the rule there and drops its `parity:renovate.json` exception. `renovate.json` is now `renovate.json.jinja`, as it names the app's repo.
+- **impeccable 4 is held** (`<4`) in `renovate.json`: the exact 3.5.0 pin is what each app's `.design-craft-baseline.json` was banked against and a major changes the findings, so adopting it is one fleet re-bank, not a weekly pull request per app.
+- **Retired "room" vocabulary leaves stamped apps:** a migration replaces the `frontend/src/lib/agent/app.ts` header only if it still names `RoomExtensions`, and prunes `rooms` rows from `.template-parity.json`. `docs/design/agent-console.md` loses its stale migration table and master-rule claim.
+
+### Consumer must change
+
+- **Start-time refusal, in force since 2026.11.1:** an app refuses to start when `<APP>_OIDC_USERINFO_URL` is set and `<APP>_OIDC_AUDIENCE` is empty. Set `<APP>_OIDC_AUDIENCE` in the deployment before merging the update (casefile's and godswood's first deploys failed on it).
+- After `copier update`: delete the workarounds above, regenerate `.template-parity.json`, and `pnpm install`.
+
 ## [2026.11.1] - 2026-11-02
 
 Need: the weekly major-upgrade pull request (#27) had been red since 09/10, and twelve stamped apps carried the same frontend majors in red pull requests of their own; consumer: the whole fleet.

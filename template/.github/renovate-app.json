@@ -1,0 +1,5 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "This app's OWN Renovate rules: the one sanctioned place for holding a dependency of its own. The factory's renovate.json includes this file; the factory never overwrites it.",
+  "packageRules": []
+}

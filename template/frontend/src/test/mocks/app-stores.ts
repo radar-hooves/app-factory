@@ -1,7 +1,7 @@
 /**
  * Test-only stand-in for SvelteKit's `$app/stores`.
  *
- * Same reason as `app-state.ts`. `$app/stores` is the legacy store-based API
+ * Same reason as `app-state.svelte.ts`. `$app/stores` is the legacy store-based API
  * that `$app/state` supersedes; it is stubbed here because component code
  * migrated from it still imports it, not because new code should.
  *

@@ -2,8 +2,13 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/svelte';
 import { afterEach, vi } from 'vitest';
 
+import { resetPage as resetStatePage } from './mocks/app-state.svelte';
+import { resetPage as resetStorePage } from './mocks/app-stores';
+
 afterEach(async () => {
 	cleanup();
+	resetStatePage();
+	resetStorePage();
 
 	// bits-ui's body-scroll-lock releases 24ms AFTER its last lock goes, so
 	// unmounting a Dialog leaves a timer behind. Let it fire while jsdom is still

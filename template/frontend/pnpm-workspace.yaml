@@ -4,3 +4,8 @@ allowBuilds:
   esbuild: true
   # impeccable's puppeteer would download its own Chrome; the design gates drive the host's browser.
   puppeteer: false
+
+# Security floors every app needs: without them js-yaml resolves to 4.3.1 and fast-uri below 3.1.6.
+overrides:
+  js-yaml: ^4.3.2
+  fast-uri: ^3.1.6

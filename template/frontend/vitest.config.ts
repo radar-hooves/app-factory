@@ -39,7 +39,7 @@ export default defineConfig({
 			// each app to add the rest as its tests needed them, which made the
 			// factory the author of its own drift — three apps ended up with three
 			// different alias blocks and an exception each.
-			'$app/state': resolve(import.meta.dirname, 'src/test/mocks/app-state.ts'),
+			'$app/state': resolve(import.meta.dirname, 'src/test/mocks/app-state.svelte.ts'),
 			'$app/stores': resolve(import.meta.dirname, 'src/test/mocks/app-stores.ts'),
 			'$app/navigation': resolve(import.meta.dirname, 'src/test/mocks/app-navigation.ts'),
 			'$app/environment': resolve(import.meta.dirname, 'src/test/mocks/app-environment.ts'),
