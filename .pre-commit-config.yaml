@@ -14,7 +14,7 @@ default_language_version:
   python: python3.14
 
 # Merge commits run no gate without pre-merge-commit; changing this needs `pre-commit install` re-run.
-default_install_hook_types: [pre-commit, pre-merge-commit]
+default_install_hook_types: [pre-commit, pre-merge-commit, commit-msg]
 
 repos:
   # ---------------------------------------------------------------------------- #
@@ -80,6 +80,21 @@ repos:
         language: system
         pass_filenames: true
         files: '^\.claude/rules/.*\.md$'
+
+      - id: check-handoff-tracks-work
+        name: 'governance - Handoff open items are tracked'
+        entry: household-precommit-handoff-tracking
+        language: system
+        files: '^HANDOFF\.html$'
+        pass_filenames: true
+
+      - id: check-handoff-closed-trailer
+        name: 'governance - Handoff removals are counted'
+        entry: household-precommit-handoff-tracking --commit-msg
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true
 
       - id: check-history
         name: 'governance - A file states what is, not what was'
