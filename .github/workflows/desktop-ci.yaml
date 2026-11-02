@@ -53,7 +53,7 @@ jobs:
 
       - name: Install Nix (GitHub-hosted runner only)
         if: runner.environment == 'github-hosted'
-        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
@@ -87,7 +87,7 @@ jobs:
       - name: Set up Node.js
         # No cache: on the self-hosted runner its post-job save hangs until the
         # job's timeout, which GitHub reports as a cancelled run.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
 
