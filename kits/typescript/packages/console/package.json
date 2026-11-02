@@ -17,7 +17,7 @@
     "@fontsource-variable/hanken-grotesk": "^5.1.0",
     "@fontsource-variable/jetbrains-mono": "^5.1.0",
     "@lucide/svelte": "^1.7.0",
-    "@playwright/test": "1.58.2",
+    "@playwright/test": "1.64.1",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.63.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

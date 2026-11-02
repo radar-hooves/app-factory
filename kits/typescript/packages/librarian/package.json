@@ -70,14 +70,14 @@
 	},
 	"peerDependencies": {
 		"svelte": "^5.54.0",
-		"@poodle64/design-tokens": "^2026.8.1",
+		"@poodle64/design-tokens": "^2026.10.2",
 		"@lucide/svelte": "^1.7.0",
 		"marked": "^18.0.11",
 		"isomorphic-dompurify": "^3.23.0 || ^4.0.0",
 		"shiki": "^4.4.3"
 	},
 	"dependencies": {
-		"layerchart": "2.6.0"
+		"layerchart": "2.9.1"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "^1.7.0",
