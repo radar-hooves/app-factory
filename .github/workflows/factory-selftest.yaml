@@ -230,9 +230,9 @@ jobs:
         # registry-url/scope, for the same reason that reusable omits it:
         # @poodle64/* is public on npmjs, and setting one here 404s the
         # install (measured 2026-08-14, see that workflow's own comment).
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24'
+          node-version: '26'
 
       - name: Frontend — install and test (unit)
         # `pnpm test -- --run`, the same command frontend-ci.yaml's reusable
