@@ -133,6 +133,9 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_elements.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_security_headers.py{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/elements/index.test.ts{% endif %}"
+  # Needs superforms, formsnap and zod, which the self-test adds and a stamp does not carry.
+  - "{% if not factory_selftest %}frontend/src/test/superforms-field.test.ts{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/test/superforms-field.svelte{% endif %}"
   # Not a test, the element those tests and tests/elements/ prove the capability on.
   - "{% if not factory_selftest %}frontend/src/elements/selftest-card.svelte{% endif %}"
 
@@ -205,6 +208,8 @@ _migrations:
       - backend/tests/test_elements.py
       - backend/tests/test_security_headers.py
       - frontend/src/lib/elements/index.test.ts
+      - frontend/src/test/superforms-field.test.ts
+      - frontend/src/test/superforms-field.svelte
       - frontend/src/elements/selftest-card.svelte
       - frontend/src/routes/(protected)/settings/page.test.ts
   # A deleted scaffold slice is re-stamped file by file as the template adds to

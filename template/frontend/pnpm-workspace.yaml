@@ -5,7 +5,15 @@ allowBuilds:
   # impeccable's puppeteer would download its own Chrome; the design gates drive the host's browser.
   puppeteer: false
 
-# Security floors every app needs: without them js-yaml resolves to 4.3.1 and fast-uri below 3.1.6.
+# The household's own kits install on the day they are published: pnpm 12 otherwise holds a
+# version back for a day. The scope is published to public npm by its sole owner, through
+# trusted publishing with provenance, so nobody else can put a version under it.
+minimumReleaseAgeExclude:
+  - '@poodle64/*'
+
+# Security floors every app needs: without them js-yaml resolves to 4.3.1, fast-uri below
+# 3.1.6, and @sveltejs/kit's cookie 0.6 (GHSA-pxg6-pf52-xh8x, fixed in 0.7.0).
 overrides:
   js-yaml: ^4.3.2
   fast-uri: ^3.1.6
+  cookie: ^0.7.0

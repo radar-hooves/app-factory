@@ -4,6 +4,26 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.3] - 2026-11-02
+
+Need: a superforms 3 form rendered through the kit's `Form.Field` showed no field error under the 2026.11.2 `$app/state` mock, and each app worked round it differently; consumer: master-project for the app fleet (eight, caspo, godswood).
+
+### Changed
+
+- **The `$app/state` mock's `page` holds each field as `$state.raw`, as SvelteKit does,** behind own enumerable accessors so `{ ...page }` still reads the values. A test's `page.form` and `page.data` come back as themselves, not a deep Proxy, so formsnap's `structuredClone` of a form's errors no longer throws `DataCloneError`. It stays reactive: `applyAction` and `resetPage()` write through it. The factory's self-test proves it (`superforms-field.test.ts`: a zod-validated field fails client validation and its error renders); a stamp does not carry that test.
+- **`frontend/pnpm-workspace.yaml` overrides `cookie` to `^0.7.0`:** `@sveltejs/kit` pulls 0.6, which accepts out-of-bounds characters in a cookie's name, path and domain (GHSA-pxg6-pf52-xh8x, fixed in 0.7.0).
+- **`minimumReleaseAgeExclude` lists `@poodle64/*`.** pnpm 12 holds a new version back for a day, which refused the household's own kits on release day. The scope is published to public npm (not a private registry) by its one owner through trusted publishing with provenance, so the exemption lets in nothing from anyone else. Measured with pnpm 12.16.1 and `minimumReleaseAge: 1440`: `@poodle64/ui@2026.11.1`, five hours old, was refused without the line and installed with it.
+
+### Consumer must change
+
+After `copier update` and `pnpm install`, an app deletes:
+
+- a production `$state.snapshot` wrapper around a superForm (caspo);
+- an app-owned page mock (godswood's `reactive-page.svelte.ts`);
+- a superforms 3 hold in `.github/renovate-app.json` (eight);
+- a `cookie` override and its `.canonical-exceptions` line;
+- the `minimumReleaseAgeExclude` lines for `@poodle64/ui` and `@poodle64/librarian`, and the parity exceptions that went with them.
+
 ## [2026.11.2] - 2026-11-02
 
 Need: seven apps took 2026.11.1 and each worked round the same factory faults locally, three with `.canonical-exceptions` lines that fail the gate after 02/12/2026; consumer: the app fleet (casefile, earworm, caspo, godswood, eight, console, library).

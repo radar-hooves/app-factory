@@ -254,6 +254,8 @@ jobs:
           pnpm add \
             "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)" \
             "@poodle64/librarian@file:$(ls "${RUNNER_TEMP}"/poodle64-librarian-*.tgz)"
+          # What superforms-field.test.ts renders; a stamp carries none of them.
+          pnpm add -D sveltekit-superforms formsnap zod
           pnpm exec svelte-kit sync
           # Same reason as ruff format --check above: the app's prettier hook
           # must change nothing in a fresh stamp.
