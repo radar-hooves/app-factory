@@ -5,7 +5,7 @@
 //! corpus; [`http_client`] carries W3C trace context outbound; a panic anywhere
 //! in the process reaches the corpus too, through the same one call — see
 //! `panic` for the content-safety rule that governs what a crash may carry.
-//! [`sample_process_metrics`] is the same idea for the process's own RSS and
+//! [`sample_process_metrics`] is the same idea for the process's own memory and
 //! CPU: spawn it once on the caller's runtime and it reports every 60s,
 //! forever, on the same force-allowed footing as a client span or a crash.
 //!

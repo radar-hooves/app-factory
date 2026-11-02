@@ -97,8 +97,8 @@ pub fn init<R: Runtime>(
             let guard = telemetry::init(service_name, service_version, combined_allow);
             app.manage(Mutex::new(Some(guard)));
             app.manage(store);
-            // "Is it a memory hog" read from real use, not a guess: RSS and
-            // CPU every 60s, on the crate's own force-allowed
+            // "Is it a memory hog" read from real use, not a guess: RSS, OS-charged
+            // footprint and CPU every 60s, on the crate's own force-allowed
             // `telemetry::process` target. The crate spawns nothing itself,
             // so this is the one place this plugin puts the sampler on the
             // app's runtime; it never returns.

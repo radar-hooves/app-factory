@@ -19,7 +19,7 @@ fn matches(target: &str, entry: &str) -> bool {
 /// True when `target` is on the allow-list. This crate's own client spans carry
 /// only a method, a host, a path and a status (`client.rs`), its crash and
 /// error events carry only a location, a thread and a content-safe payload
-/// (`panic.rs`), and its process sampler carries only RSS and CPU
+/// (`panic.rs`), and its process sampler carries only memory and CPU
 /// (`process.rs`) — all three are always allowed, under the same
 /// equality-or-`::` rule as a caller's entry, never a bare prefix.
 pub(crate) fn allowed(target: &str, allow: &[&str]) -> bool {

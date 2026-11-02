@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.4] - 2026-11-02
+
+Need: a desktop app's process telemetry showed `rss_bytes` flat at about 520 MB for 11 days while the OS charged the process 20 GB, because macOS compresses untouched memory out of RSS; consumer: radar-hooves/thoth.
+
+### Added
+
+- **`telemetry` 0.7.0: the `process_metrics` event carries `footprint_bytes`,** the memory the OS charges the process (`phys_footprint` on macOS, anonymous + shmem + swap on Linux, absent on Windows). Proven on huginn against `footprint <pid>`: 2150696928 bytes against 2051 MB. `rss_bytes` is unchanged.
+
+### Consumer must change
+
+A Nix-built app bumping its `telemetry` tag refreshes its `outputHashes` entry to `"telemetry-0.7.0"`.
+
 ## [2026.11.3] - 2026-11-02
 
 Need: a superforms 3 form rendered through the kit's `Form.Field` showed no field error under the 2026.11.2 `$app/state` mock, and each app worked round it differently; consumer: master-project for the app fleet (eight, caspo, godswood).

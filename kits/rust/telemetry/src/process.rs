@@ -1,4 +1,11 @@
-//! The process's own RSS and CPU, sampled periodically.
+//! The process's own memory and CPU, sampled periodically.
+//!
+//! `rss_bytes` is resident pages only. macOS compresses memory nothing touches
+//! and compressed pages leave RSS, so a 20 GB leak read as a flat 520 MB
+//! (measured on Thoth, 02/11/2026). `footprint_bytes` is what the OS charges
+//! the process: `phys_footprint` on macOS (Activity Monitor's Memory column,
+//! `footprint <pid>`), anonymous + shmem + swapped pages on Linux. It is absent
+//! on a platform with no such reading, never zero.
 //!
 //! A process's own resource use is never a listening history or a dictation
 //! string — it is a fact about the binary, identical in shape whatever the
@@ -51,10 +58,60 @@ pub async fn sample_process_metrics() {
         tracing::info!(
             target: TARGET,
             rss_bytes = process.memory(),
+            footprint_bytes = footprint_bytes(),
             cpu_percent = process.cpu_usage(),
             "process_metrics"
         );
     }
+}
+
+/// Memory the OS charges this process, compressed and swapped pages included.
+#[cfg(target_os = "macos")]
+fn footprint_bytes() -> Option<u64> {
+    /// `rusage_info_v0` from `<libproc.h>`, through `ri_phys_footprint`.
+    #[repr(C)]
+    #[derive(Default)]
+    struct RusageInfoV0 {
+        uuid: [u8; 16],
+        user_time: u64,
+        system_time: u64,
+        pkg_idle_wkups: u64,
+        interrupt_wkups: u64,
+        pageins: u64,
+        wired_size: u64,
+        resident_size: u64,
+        phys_footprint: u64,
+        proc_start_abstime: u64,
+        proc_exit_abstime: u64,
+    }
+    unsafe extern "C" {
+        fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut RusageInfoV0) -> i32;
+    }
+    const RUSAGE_INFO_V0: i32 = 0;
+    let mut info = RusageInfoV0::default();
+    // SAFETY: `info` is a valid, writable `rusage_info_v0` for the call.
+    let rc = unsafe { proc_pid_rusage(std::process::id() as i32, RUSAGE_INFO_V0, &mut info) };
+    (rc == 0).then_some(info.phys_footprint)
+}
+
+#[cfg(target_os = "linux")]
+fn footprint_bytes() -> Option<u64> {
+    footprint_from_proc_status(&std::fs::read_to_string("/proc/self/status").ok()?)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn footprint_bytes() -> Option<u64> {
+    None
+}
+
+/// RssAnon + RssShmem + VmSwap, in bytes, from `/proc/<pid>/status` text.
+#[cfg(any(target_os = "linux", test))]
+fn footprint_from_proc_status(status: &str) -> Option<u64> {
+    let kib = |key: &str| -> Option<u64> {
+        let line = status.lines().find_map(|l| l.strip_prefix(key))?;
+        line.trim().strip_suffix("kB")?.trim().parse().ok()
+    };
+    Some((kib("RssAnon:")? + kib("RssShmem:").unwrap_or(0) + kib("VmSwap:").unwrap_or(0)) * 1024)
 }
 
 fn refresh(system: &mut System, pid: Pid) {
@@ -115,6 +172,7 @@ mod tests {
         tracing::info!(
             target: TARGET,
             rss_bytes = process.memory(),
+            footprint_bytes = footprint_bytes(),
             cpu_percent = process.cpu_usage(),
             "process_metrics"
         );
@@ -125,5 +183,27 @@ mod tests {
         assert_eq!(*target, TARGET);
         assert!(fields.contains("rss_bytes="), "{fields}");
         assert!(fields.contains("cpu_percent="), "{fields}");
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        assert!(fields.contains("footprint_bytes="), "{fields}");
+    }
+
+    #[test]
+    fn proc_status_footprint_sums_anon_shmem_and_swap() {
+        let s = "RssAnon:\t 100 kB\nRssFile:\t 900 kB\nRssShmem:\t 10 kB\nVmSwap:\t 5 kB\n";
+        assert_eq!(footprint_from_proc_status(s), Some(115 * 1024));
+        assert_eq!(footprint_from_proc_status("Name:\tx\n"), None);
+    }
+
+    /// An untouched block must be charged to the process: the figure grows by
+    /// about the block's size once it is written, and never reads below RSS's
+    /// anonymous part. On macOS this is the figure `footprint <pid>` reports.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn footprint_counts_a_written_block() {
+        let before = footprint_bytes().expect("footprint readable");
+        let block = vec![0xA5u8; 256 * 1024 * 1024];
+        std::hint::black_box(&block);
+        let after = footprint_bytes().expect("footprint readable");
+        assert!(after >= before + 200 * 1024 * 1024, "{before} -> {after}");
     }
 }

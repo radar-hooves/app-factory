@@ -52,11 +52,13 @@ Call `init` from the setup hook or `main`, never inside a Tokio task: it builds 
 
 ## The process sampler
 
-`telemetry::sample_process_metrics()` is a future that samples this process's own RSS and CPU every 60 seconds and emits them as one event on `telemetry::process`, force-allowed exactly as the client span and the crash reporter are: a process's resource use carries no listening history or dictation either way. The crate spawns nothing itself, so put the future on the caller's own runtime once, at startup:
+`telemetry::sample_process_metrics()` is a future that samples this process's own memory and CPU every 60 seconds and emits them as one event on `telemetry::process`, force-allowed exactly as the client span and the crash reporter are: a process's resource use carries no listening history or dictation either way. The crate spawns nothing itself, so put the future on the caller's own runtime once, at startup:
 
 ```rust
 tauri::async_runtime::spawn(telemetry::sample_process_metrics());
 ```
+
+The event carries `rss_bytes` (resident pages), `footprint_bytes` and `cpu_percent`. Read `footprint_bytes` for a leak: macOS compresses memory nothing touches and compressed pages leave RSS, so a 20 GB leak read as a flat 520 MB in `rss_bytes`. `footprint_bytes` is `phys_footprint` on macOS (Activity Monitor's Memory column, `footprint <pid>`) and anonymous + shmem + swapped pages on Linux; it is absent on Windows, never zero.
 
 It never returns.
 

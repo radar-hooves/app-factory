@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+The process sample carries `footprint_bytes`, the memory the OS charges the process: `phys_footprint` from `proc_pid_rusage` on macOS (what Activity Monitor and `footprint <pid>` report), `RssAnon + RssShmem + VmSwap` from `/proc/self/status` on Linux, absent on Windows. `rss_bytes` stays, but alone it hid a leak: macOS compresses untouched memory and compressed pages leave RSS, so Thoth's 20 GB leak (`footprint` 20 GB, `top` CMPRS 19G) read as a flat 517-550 MB for 11 days. Measured on huginn (macOS, Apple Silicon): a process holding 2 GiB reported `footprint_bytes` 2150696928 and `footprint <pid>` 2051 MB, the same figure. No new dependency (a four-line `extern` declaration of `proc_pid_rusage`, which libSystem provides).
+
+A Nix-built app's `outputHashes` key becomes `"telemetry-0.7.0"`.
+
 ## 0.6.0
 
 Moved into `radar-hooves/full-stack-app-template` under `kits/rust/telemetry`, with its full git history, on the operator's ruling of 28/09/2026 (`full-stack-app-template#55`): this repo is now the one home for shared app code in every language, skeletons plus kits, and telemetry is the first one. The standalone `telemetry-rs` repo is archived; behaviour is unchanged. Release tags move from this crate's own `vX.Y.Z` to the whole repo's calendar tag (`vYYYY.M.x`); the dependency line becomes `telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "<release tag>" }` — no `path` key needed, since Cargo finds a uniquely-named crate anywhere in a git repository's tree.
