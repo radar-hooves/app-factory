@@ -55,7 +55,7 @@
     },
     {
       "description": "Node moves with the estate baseline (24, the LTS every app and the template run), not ahead of it: Node 26 and @types/node 26 are held until master-project moves the baseline, and the factory then moves first.",
-      "matchPackageNames": ["node", "@types/node"],
+      "matchPackageNames": ["node", "@types/node", "actions/node-versions"],
       "matchUpdateTypes": ["major"],
       "enabled": false
     },
