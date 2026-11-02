@@ -4,6 +4,25 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.5] - 2026-11-02
+
+Need: one version baseline for the estate, moved by the factory first; consumer: radar-hooves/master-project#414. The factory's own routine updates had also stopped (below).
+
+### Changed
+
+- **The runtime image is `python:3.14-slim-trixie` and the builder `ghcr.io/astral-sh/uv:python3.14-trixie-slim`** (Debian 13; bookworm is oldstable). The `debian-archive` stage reads `trixie`, `trixie-updates` and `trixie-security`, so the apt layer's key follows the suites the base reads. Proven 02/11/2026 on atlas: a scratch render built the whole image on the new base (the archive check, `apt-get upgrade`, `curl`/`ca-certificates`, the Claude Code install, `useradd`), the app imported under Python 3.14.10 and fastmcp 4.1.5, and `libglib2.0-0`, `libgl1`, `ffmpeg`, `tesseract-ocr` and `poppler-utils` all install.
+- **`fastmcp>=4.0.1`** (the floor was 3.4.2; mcp-servers runs 4.0.1). Nothing in the template's `/mcp`, its person gate or the agent lessons client needed a change: `test_mcp_stateless.py`, `test_mcp_person_gate.py`, `test_mcp_auth.py`, `test_agent_lessons.py`, `test_agent_api.py` and `test_agent_jobs_api.py` pass on fastmcp 4.1.5 in a scratch render (276 tests), and `mypy src` is clean. Apps never saw 4 because the floor is a `>=` range: Renovate sees 4 as already allowed and proposes nothing, and an app's `uv.lock` moves only when its lock-file-maintenance PR does.
+- **`renovate.json` holds six more updates, each with its reason:** `tailwindcss` and `@tailwindcss/*` below 4.3.3 (the variant tests compile to nothing), `bits-ui` below 2.20 (`AppDialog` dismissal), `sysinfo` below 0.40 (`System::new` returns a `Result`), `astral-sh/uv` (the household pin is master-project's), Node and `@types/node` majors (the estate baseline is 24), and major bumps of `pnpm-workspace.yaml` overrides (cookie 2 breaks SvelteKit 2's build).
+
+### Fixed
+
+- **The factory's weekly Renovate PR was never refreshed after 09/10/2026.** The estate's Monday runs inside the "before 5am on Monday" window are the 17:00 UTC ones, which ran over the one-hour GitHub App token and aborted this repository with `Bad credentials` (18/10 and 25/10); the 19:00 UTC runs finished but sit outside the window, so they touch no weekly branch. A catch-up run (`ignoreSchedules`) refreshed the branches on 02/11/2026.
+
+### Consumer must change
+
+- An app takes the base image with `copier update`; its next build pulls trixie, and a Trivy baseline for bookworm no longer applies. An app's own `backend/system-packages.txt` is checked against Debian 13: a name Debian renamed for the 64-bit `time_t` transition resolves through its old name (`libglib2.0-0` installs `libglib2.0-0t64`), but a package trixie dropped (`libgl1-mesa-glx`) needs its replacement.
+- An app regenerates its lock for fastmcp 4 (`uv lock --upgrade-package fastmcp`) and runs its own suite; code of its own that uses fastmcp 3 APIs is the app's to check, the factory's slices are done.
+
 ## [2026.11.4] - 2026-11-02
 
 Need: a desktop app's process telemetry showed `rss_bytes` flat at about 520 MB for 11 days while the OS charged the process 20 GB, because macOS compresses untouched memory out of RSS; consumer: radar-hooves/thoth.

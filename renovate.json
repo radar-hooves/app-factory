@@ -32,6 +32,38 @@
       "description": "@tanstack/table-core 9 is a rewrite, not an upgrade: table features are declared up front (`_features`), `getCoreRowModel`/`getSortedRowModel`/`getFilteredRowModel` become `createCoreRowModel`/`createSortedRowModel`/`createFilteredRowModel`, and `ColumnDef` takes extra type arguments. @poodle64/ui re-exports `ColumnDef` and wraps `createTable` in `createSvelteTable`, so the bump breaks the table API every app calls (svelte-check: 27 errors in ui alone, measured 02/11/2026). Not an upstream fault: a deliberate @poodle64/ui major, with the apps' tables migrated beside it, tracked in radar-hooves/app-factory#61.",
       "matchPackageNames": ["@tanstack/table-core"],
       "allowedVersions": "<9"
+    },
+    {
+      "description": "Tailwind CSS 4.3.3 breaks the kit's own variant tests: `dark:hidden` and every `data-*` shorthand variant compile to no rule at all under it (packages/ui `dark-variant.test.ts` and `data-state-variants.test.ts`, 6 failures; green on 4.3.2 with everything else equal, measured 02/11/2026 on an otherwise-clean main). Retires when a release compiles them again.",
+      "matchPackageNames": ["tailwindcss", "@tailwindcss/**"],
+      "allowedVersions": "<4.3.3"
+    },
+    {
+      "description": "bits-ui 2.20 leaves a closed dialog's title in the document, so @poodle64/ui's `AppDialog` fails `reports its own dismissal through onOpenChange` (composed-chrome.test.ts; 2.19.5 passes, 2.20.2 fails, nothing else changed, measured 02/11/2026). Retires when ui's dialog or bits-ui is reconciled.",
+      "matchPackageNames": ["bits-ui"],
+      "allowedVersions": "<2.20"
+    },
+    {
+      "description": "sysinfo 0.40 changes `System::new` to return a `Result`, so the telemetry kit stops compiling (`expected &mut System, found &mut Result<System, Error>`, measured 02/11/2026; 0.39.6 compiles). A code change to the kit, not a routine bump: it ships as its own telemetry release. Renovate also reported an artifact error on it, since cargo resolved 0.40.1 inside the three-day wait.",
+      "matchPackageNames": ["sysinfo"],
+      "allowedVersions": "<0.40"
+    },
+    {
+      "description": "The uv pin is the household's, not this repo's: master-project's setup-uv action and its renovate preset (`constraints.uv`) hold it at 0.9.30, because a newer uv rewrites every marker of uv.lock. A bump to 0.13 left the kits job without its dev tools (`Failed to spawn: ruff`). The estate moves it in one change, from master-project, not here.",
+      "matchDepNames": ["astral-sh/uv"],
+      "enabled": false
+    },
+    {
+      "description": "Node moves with the estate baseline (24, the LTS every app and the template run), not ahead of it: Node 26 and @types/node 26 are held until master-project moves the baseline, and the factory then moves first.",
+      "matchPackageNames": ["node", "@types/node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "pnpm-workspace.yaml `overrides` are security floors for transitive packages, pinned to the major their dependents import; a major bump breaks them (cookie 2.0.1 removed `parse` and `serialize`, so SvelteKit 2's cookie.js fails to build, measured 02/11/2026 in the scratch render; devalue 6, fast-uri 4 and nanoid 6 are the same shape). The preset disables this for `overrides` dep types; a workspace file's are not read as those, so it is disabled by file.",
+      "matchFileNames": ["**/pnpm-workspace.yaml"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }

@@ -9,5 +9,5 @@
 # Python dependency belongs in pyproject.toml.
 #
 # Examples from the fleet: ffmpeg (audio/video transcode), tesseract-ocr and
-# poppler-utils (OCR and PDF extraction), libgl1 and libglib2.0-0 (the shared
-# objects OpenCV-backed wheels dlopen at import).
+# poppler-utils (OCR and PDF extraction), libgl1 and libglib2.0-0t64 (the
+# shared objects OpenCV-backed wheels dlopen at import).

@@ -40,7 +40,7 @@ RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 
 
 # Stage 2: Backend dependency build (uv-native)
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
@@ -87,12 +87,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # apt names it in /var/lib/apt/lists; the suites are the runtime FROM's and move
 # with it.
 FROM scratch AS debian-archive
-ADD https://deb.debian.org/debian/dists/bookworm/InRelease deb.debian.org_debian_dists_bookworm_InRelease
-ADD https://deb.debian.org/debian/dists/bookworm-updates/InRelease deb.debian.org_debian_dists_bookworm-updates_InRelease
-ADD https://deb.debian.org/debian-security/dists/bookworm-security/InRelease deb.debian.org_debian-security_dists_bookworm-security_InRelease
+ADD https://deb.debian.org/debian/dists/trixie/InRelease deb.debian.org_debian_dists_trixie_InRelease
+ADD https://deb.debian.org/debian/dists/trixie-updates/InRelease deb.debian.org_debian_dists_trixie-updates_InRelease
+ADD https://deb.debian.org/debian-security/dists/trixie-security/InRelease deb.debian.org_debian-security_dists_trixie-security_InRelease
 
 # Stage 5: Runtime
-FROM python:3.14-slim-bookworm
+FROM python:3.14-slim-trixie
 
 WORKDIR /app
 
