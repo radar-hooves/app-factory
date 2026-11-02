@@ -64,6 +64,11 @@
       "matchFileNames": ["**/pnpm-workspace.yaml"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "astral-sh/setup-uv above 8.2 breaks the scratch render on the self-hosted NixOS runner: it cannot find `ldd` to tell glibc from musl (`Failed to determine glibc or musl`), and the same job then builds `pyyaml==6.0.3` from source and fails (v8.3.2 and v10.3.3 measured 02/11/2026; 8.2.0 passes). The household wrapper in master-project owns the real setup-uv; this repo only copies it, because it is public and cannot reach a private action. Retires when the runner or the action resolves it.",
+      "matchPackageNames": ["astral-sh/setup-uv"],
+      "allowedVersions": "<8.3"
     }
   ]
 }
