@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.6] - 2026-11-03
+
+Need: one pre-commit config for the fleet, template first; consumer: radar-hooves/master-project#420.
+
+### Changed
+
+- **A stamped app's `.pre-commit-config.yaml` carries `check-history`** (a file states what is, not what was), after `check-pii`, and `ruff-pre-commit` moves to v0.15.21. The desktop skeleton gains `default_language_version`, the `commit-msg` install type, `check-handoff-tracks-work` and `check-handoff-closed-trailer` (it had neither handoff gate), and its `check-history` moves into the core order. Both match `docs/master/templates/pre-commit-config.md`.
+- The factory's own config follows the same template: plain hook names, `actionlint`, `ruff`, `ruff-format`, `uv-lock-check`, `mypy` over the Python kits, both handoff gates, `check-history`, `commit-msg` installed. `.github/actionlint.yaml` names the household runner labels and `ruff.toml` excludes `template/backend/alembic` (import order there is the stamped app's own).
+- `skeletons/desktop/scripts/webkit-layout/sweep.py` drops an unused `# noqa: BLE001`.
+
+### Consumer must change
+
+- An app whose tail (below the factory marker) declares `check-history` must drop it: a tail hook may not repeat a factory id. Pebblestone carries one. Re-run `pre-commit install` after `copier update` so the `commit-msg` hook type is wired.
+
 ## [2026.11.5] - 2026-11-02
 
 Need: one version baseline for the estate, moved by the factory first; consumer: radar-hooves/master-project#414. The factory's own routine updates had also stopped (below).

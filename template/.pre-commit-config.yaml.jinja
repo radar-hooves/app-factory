@@ -27,6 +27,12 @@ repos:
         language: system
         types: [text]
 
+      - id: check-history
+        name: 'governance - A file states what is, not what was'
+        entry: household-precommit-history
+        language: system
+        types: [text]
+
       - id: rules-fence
         name: 'governance - Rule content lands only at an open sunset-review sitting'
         entry: household-precommit-rules-fence
@@ -83,7 +89,7 @@ repos:
   # backend/; `scripts/` and `tools/` are each an app's own ratified
   # root-inventory name for root Python tooling (variants.yaml).
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.17
+    rev: v0.15.21
     hooks:
       - id: ruff
         name: 'python - Lint with ruff'

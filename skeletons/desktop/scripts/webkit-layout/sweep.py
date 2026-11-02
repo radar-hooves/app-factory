@@ -126,7 +126,7 @@ def sweep(browser, app, url, args):
                         action(page)
                         page.evaluate("document.fonts.ready")
                         page.wait_for_timeout(250)
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         results.append(
                             {
                                 "kind": "unreachable",

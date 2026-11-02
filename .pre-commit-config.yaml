@@ -1,14 +1,7 @@
-# Pre-commit hooks for the full-stack-app-template repo ITSELF.
-#
-# This guards the template's own source (copier.yaml, README.md, and
-# everything under template/) — NOT the scaffolded apps it produces, which
-# get their own guard via the shipped template/.pre-commit-config.yaml
-# (rules-library/core/pre-commit-config.md). Without this file, commits to
-# copier.yaml or the template's own docs carried no PII guard and no gitleaks.
-#
+# Pre-commit hooks for the app-factory repo ITSELF: its template, skeletons, kits
+# and workflows, not the apps it stamps (those get template/.pre-commit-config.yaml.jinja).
+# Household template: docs/master/templates/pre-commit-config.md in master-project.
 # Install with: pre-commit install
-# Run manually: pre-commit run --all-files
-# Update hooks:  pre-commit autoupdate
 
 default_language_version:
   python: python3.14
@@ -17,60 +10,33 @@ default_language_version:
 default_install_hook_types: [pre-commit, pre-merge-commit, commit-msg]
 
 repos:
-  # ---------------------------------------------------------------------------- #
-  #                              Security scanning                               #
-  # ---------------------------------------------------------------------------- #
+  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
+  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: 'ci - Lint GitHub Actions workflows'
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
       - id: gitleaks
-        name: 'security · Detect hardcoded secrets'
+        name: 'security - Detect hardcoded secrets'
 
-  # ---------------------------------------------------------------------------- #
-  #                              File validation                                 #
-  # ---------------------------------------------------------------------------- #
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: end-of-file-fixer
-        name: 'files · Fix end of files'
-        # Tauri's plugin builder regenerates this on every build without a final
-        # newline; adding one here dirtied the tree on each build.
-        exclude: ^kits/rust/tauri-plugin-telemetry/permissions/schemas/schema\.json$
-      - id: trailing-whitespace
-        name: 'files · Trim trailing whitespace'
-        args: [--markdown-linebreak-ext=md]
-      - id: check-yaml
-        name: 'yaml · Validate YAML syntax'
-        args: [--unsafe]
-      - id: check-toml
-        name: 'toml · Validate TOML syntax'
-      - id: check-json
-        name: 'json · Validate JSON syntax'
-      - id: check-merge-conflict
-        name: 'git · Detect conflict markers'
-      - id: check-added-large-files
-        name: 'git · Block large file commits'
-        args: ['--maxkb=5000']
-      - id: check-case-conflict
-        name: 'filesystem · Check case sensitivity'
-      - id: detect-private-key
-        name: 'security · Detect private keys'
-
-  # ---------------------------------------------------------------------------- #
-  #                              Household PII scan                              #
-  # ---------------------------------------------------------------------------- #
-
-  # The master check-pii gate, on PATH as a command provisioned per machine
-  # (rules-library/core/pre-commit-config.md — never a per-repo copy, and never
-  # a path into master: that shape took 22 repos' gates down on 02/09/2026).
   - repo: local
     hooks:
+      # The household PATH gates (rules-library/core/pre-commit-config.md): never
+      # a per-repo copy and never a path into master.
       - id: check-pii
-        name: 'security · Detect PII (names, mobiles, personal emails)'
+        name: 'security - Detect PII (names, mobiles, personal emails)'
         entry: household-precommit-pii
+        language: system
+        types: [text]
+
+      - id: check-history
+        name: 'governance - A file states what is, not what was'
+        entry: household-precommit-history
         language: system
         types: [text]
 
@@ -80,6 +46,7 @@ repos:
         language: system
         pass_filenames: true
         files: '^\.claude/rules/.*\.md$'
+        always_run: true
 
       - id: check-handoff-tracks-work
         name: 'governance - Handoff open items are tracked'
@@ -89,23 +56,69 @@ repos:
         pass_filenames: true
 
       - id: check-handoff-closed-trailer
-        name: 'governance - Handoff removals are counted'
+        name: 'governance - Handoff removals name their ids'
         entry: household-precommit-handoff-tracking --commit-msg
         language: system
         stages: [commit-msg]
         always_run: true
         pass_filenames: true
 
-      - id: check-history
-        name: 'governance - A file states what is, not what was'
-        entry: household-precommit-history
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        name: 'files - Fix end of files'
+        # Tauri's plugin builder regenerates this on every build without a final
+        # newline; adding one here dirtied the tree on each build.
+        exclude: ^kits/rust/tauri-plugin-telemetry/permissions/schemas/schema\.json$
+      - id: trailing-whitespace
+        name: 'files - Trim trailing whitespace'
+        args: [--markdown-linebreak-ext=md]
+      - id: check-yaml
+        name: 'yaml - Validate YAML syntax'
+        args: [--unsafe]
+      - id: check-toml
+        name: 'toml - Validate TOML syntax'
+      - id: check-json
+        name: 'json - Validate JSON syntax'
+      - id: check-merge-conflict
+        name: 'git - Detect conflict markers'
+      - id: check-added-large-files
+        name: 'git - Block large file commits'
+        args: ['--maxkb=5000']
+      - id: check-case-conflict
+        name: 'filesystem - Check case sensitivity'
+      - id: detect-private-key
+        name: 'security - Detect private keys'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff
+        name: 'python - Lint with ruff'
+        args: [--fix]
+      - id: ruff-format
+        name: 'python - Format with ruff'
+
+  - repo: local
+    hooks:
+      # Keeps uv.lock in sync with the workspace's pyproject.toml.
+      - id: uv-lock-check
+        name: 'uv - lockfile in sync'
+        entry: uv lock --check
         language: system
-        types: [text]
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock)$
 
-  # ---------------------------------------------------------------------------- #
-  #                                    Rust                                       #
-  # ---------------------------------------------------------------------------- #
+      # Each kit's own mypy config, over the tree CI checks (`mypy src tests`).
+      - id: mypy
+        name: 'python - Type-check with mypy'
+        entry: bash -c 'for kit in kits/python/*/; do (cd "$kit" && uv run mypy src tests) || exit; done'
+        language: system
+        pass_filenames: false
+        files: ^(kits/python/.*\.py|kits/python/.*/pyproject\.toml|uv\.lock)$
 
+  # Repo-specific.
   - repo: local
     hooks:
       # A formatter, not the gate: it rewrites the file and pre-commit reports
@@ -115,7 +128,7 @@ repos:
       # day and there is no rust-toolchain.toml, so a rustfmt release can
       # still part the two.
       - id: cargo-fmt
-        name: 'rust · cargo fmt (kits/rust)'
+        name: 'rust - cargo fmt (kits/rust)'
         # Through the kit's devShell, as CI runs it: atlas has cargo nowhere else.
         entry: bash -c 'cd kits/rust && nix develop --command cargo fmt --all'
         language: system

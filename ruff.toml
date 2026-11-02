@@ -15,8 +15,10 @@ target-version = "py314"
 # The jinja-templated sources are not parseable Python (`from {{ package_name }}
 # import ...`), so they are excluded rather than reported as syntax errors. They
 # are held to the same width by hand; the plain .py files below are the ones a
-# formatter can actually keep honest.
-extend-exclude = ["*.jinja"]
+# formatter can actually keep honest. The migrations are excluded too: their
+# import sorting depends on the app's own first-party list (`alembic`), which
+# this repo cannot know.
+extend-exclude = ["*.jinja", "template/backend/alembic"]
 
 # Mirrored from template/backend/pyproject.toml.jinja, not chosen here: the point
 # is to lint these files as the stamped app will, so this repo must not hold an
