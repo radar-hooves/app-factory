@@ -3,7 +3,7 @@
 A Tauri 2 app switches the household [`telemetry`](../telemetry) crate's whole contract on with one call, replacing what an app used to wire by hand (`full-stack-app-template#55`).
 
 ```toml
-tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.10.37" }
 ```
 
 ## The one call

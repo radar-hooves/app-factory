@@ -5,7 +5,7 @@ The household's one Rust telemetry call. Every Rust process — Tauri app, daemo
 Lives in `radar-hooves/full-stack-app-template` under `kits/rust/telemetry` (moved from the standalone `telemetry-rs` repo with its history, `full-stack-app-template#55`). A Tauri 2 app wires this crate through `kits/rust/tauri-plugin-telemetry` with one `.plugin(...)` call instead of by hand — see that crate's README; the wiring below is what the plugin does internally, and is still how a non-Tauri process (a CLI, a daemon) uses this crate directly.
 
 ```toml
-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.10.1" }
+telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.10.37" }
 ```
 
 The public surface is `init(service_name, service_version, allow) -> Guard`, `Guard` (`set_exporter`, `exporter`, `exporter_status`, `exporter_is_from_env`), `Exporter` (`from_env`), `probe(&Exporter) -> Result<(), ProbeError>`, `ProbeError`, `http_client()`, `sample_process_metrics()`, `report_error(context: &'static str)`, and `report_error_with_cause(context: &'static str, error: &(dyn std::error::Error + 'static))`. Nothing is added to it without the contract changing first.
