@@ -4,6 +4,15 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the shell's two visible faults, app-factory#37 and #38; consumer: the operator's holiday drain, radar-hooves/master-project#432.
+
+### Fixed
+
+- **`@poodle64/ui` AppShell prints without chrome**: under `@media print` the rail, top bar and skip link go, the shell and its scroller unclip, and the ground clears (kit change; ships with the next ui release).
+- **The search affordance's `kbd` takes the chrome tokens** (`bg-shell`, `border-shell-muted-foreground/40`), not the page surface, so it reads on any app's rail.
+
 ## [2026.11.13] - 2026-11-03
 
 Need: the stamped `shell.test.ts` runs byte-identical with or without the agent slice; consumer: the library, radar-hooves/master-project#424.

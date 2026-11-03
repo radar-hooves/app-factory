@@ -1663,4 +1663,29 @@
 			transition: none;
 		}
 	}
+
+	/* Paper: the shell steps out of the way. The page is one flow, not a clipped
+	   viewport with a rail beside it; body is cleared too, as an app paints its
+	   ground there. */
+	@media print {
+		body,
+		.ds-shell {
+			background: none !important;
+		}
+		.ds-shell {
+			display: block !important;
+			height: auto !important;
+			overflow: visible !important;
+		}
+		.ds-shell-rail,
+		.ds-shell-bar,
+		.ds-skip-link {
+			display: none !important;
+		}
+		.ds-shell-main {
+			display: block !important;
+			overflow: visible !important;
+			background: none !important;
+		}
+	}
 }

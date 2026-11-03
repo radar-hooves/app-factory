@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [Unreleased]
+
+Consumer: the operator (master-project#432, app-factory#37, #38).
+
+### Fixed
+
+- **AppShell prints without chrome**: `@media print` hides the rail, top bar and skip link, unclips the shell and its scroller and clears the ground.
+- **The search `kbd` takes the shell's chrome tokens**, not `bg-background`.
+
 ## [2026.11.5] - 2026-11-03
 
 Consumer: caspo (master-project#443).

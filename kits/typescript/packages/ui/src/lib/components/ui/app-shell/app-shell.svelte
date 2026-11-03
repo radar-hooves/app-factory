@@ -658,7 +658,7 @@
 		<span class="hidden truncate sm:inline">{searchLabel}</span>
 		{#if searchShortcut}
 			<kbd
-				class="border-border bg-background text-shell-muted-foreground text-2xs ml-auto hidden rounded border px-1.5 py-0.5 font-mono sm:block"
+				class="border-shell-muted-foreground/40 bg-shell text-shell-muted-foreground text-2xs ml-auto hidden rounded border px-1.5 py-0.5 font-mono sm:block"
 				>{searchShortcut}</kbd
 			>
 		{/if}
