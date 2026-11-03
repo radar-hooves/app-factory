@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.5] - 2026-11-03
+
+Consumer: caspo (master-project#443).
+
+### Changed
+
+- **`brandWordmark` is drawn as a mask filled with the rail's ink**, not as an image, so a one-colour wordmark reads on the pale rail in light theme as well as the dark. The day/night toggle stays on every rail.
+
+### Added
+
+- **`PageLead` `icon`**, an optional snippet drawn beside the lead (a record type's mark).
+
 ## [2026.11.4] - 2026-11-03
 
 Consumer: caspo (master-project#443, the one shell's caspo round). 2026.11.3 was published before these landed, so they ship here.

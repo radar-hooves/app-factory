@@ -1,5 +1,6 @@
 /** PageLead: the answer is a second-level heading (the rail owns the h1), and optional parts stay out when absent. */
 import { describe, it, expect } from 'vitest';
+import { createRawSnippet } from 'svelte';
 import { render, screen } from '@testing-library/svelte';
 import PageLead from '#lib/components/ui/page-lead/page-lead.svelte';
 
@@ -15,5 +16,14 @@ describe('PageLead', () => {
 	it('draws only the lead when nothing else is given', () => {
 		const { container } = render(PageLead, { lead: 'All clear' });
 		expect(container.querySelector('[data-slot="page-lead"]')!.children).toHaveLength(1);
+	});
+
+	it('draws the icon beside the lead, and no slot without one', () => {
+		const icon = createRawSnippet(() => ({ render: () => '<svg data-testid="mark"></svg>' }));
+		const { container } = render(PageLead, { lead: 'Acme Ltd', icon });
+		expect(screen.getByTestId('mark').closest('[data-slot="page-lead-icon"]')).not.toBeNull();
+		expect(container.querySelector('[data-slot="page-lead-icon"]')!.nextElementSibling).toHaveAttribute('data-answer');
+		render(PageLead, { lead: 'Plain' });
+		expect(container.querySelectorAll('[data-slot="page-lead-icon"]')).toHaveLength(1);
 	});
 });

@@ -12,9 +12,12 @@ Need: an app without the agent slice needs no stub; consumer: the library, radar
 
 - **`app-frame.svelte` no longer imports `#lib/agent/chat.js`**: the palette's Ask row loads it through a glob that matches nothing in an app without `lib/agent/chat.ts`, and the row is then simply absent. An app with the slice is unchanged. `shell.test.ts` waits for the hand-off the Ask row now makes after the lazy load.
 
+- **`brand.wordmark` is drawn as a mask in the rail's ink** (`@poodle64/ui` 2026.11.5), so a one-colour wordmark reads in both themes; **`PageLead` takes an optional `icon`** snippet. The template pins `^2026.11.5`.
+
 ### Consumer must change
 
 1. Library: delete `lib/agent/chat.ts` (the stub returning no personas).
+2. Caspo: a wordmark must be a single-colour image (its alpha is the shape; its own colour is ignored). Pass the record type's mark to `PageLead` as `icon`.
 
 ## [2026.11.10] - 2026-11-03
 

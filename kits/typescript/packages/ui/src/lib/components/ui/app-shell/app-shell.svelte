@@ -164,7 +164,7 @@
 		brandTitle?: string;
 		/** The mark beside the wordmark — an app's own logo component. */
 		brandMark?: Snippet;
-		/** A wordmark image (a URL), drawn in place of `brandTitle`'s text, which
+		/** A wordmark image (a URL), drawn as a mask in the rail's ink in place of `brandTitle`'s text, which
 		 *  stays its accessible name. */
 		brandWordmark?: string;
 		/** Where the brand links. */
@@ -597,7 +597,18 @@
 				</span>
 			{/if}
 			{#if brandWordmark && !railNarrow}
-				<img src={brandWordmark} alt="" class="hidden h-6 w-auto sm:inline" />
+				<!--
+					Drawn as a mask filled with the rail's ink (`currentColor`), so a
+					one-colour wordmark reads on the rail in both themes. The hidden
+					image only gives the span its natural width.
+				-->
+				<span class="relative hidden h-6 sm:inline-block" aria-hidden="true">
+					<img src={brandWordmark} alt="" class="invisible h-6 w-auto max-w-none" />
+					<span
+						class="absolute inset-0 bg-current"
+						style="mask: url({brandWordmark}) center left / contain no-repeat; -webkit-mask: url({brandWordmark}) center left / contain no-repeat;"
+					></span>
+				</span>
 			{:else if brandTitle && !railNarrow}
 				<!--
 					The wordmark stands down below sm, leaving the mark alone. On a phone

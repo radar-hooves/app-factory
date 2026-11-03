@@ -15,6 +15,7 @@
 		eyebrow,
 		subtitle,
 		meta,
+		icon,
 		class: className,
 		...restProps
 	}: HTMLAttributes<HTMLDivElement> & {
@@ -25,6 +26,8 @@
 		subtitle?: string;
 		/** Facts about the answer, under it: badges, dates, a status. */
 		meta?: Snippet;
+		/** The mark of the thing the lead is about (a record type's icon), drawn beside the lead. */
+		icon?: Snippet;
 	} = $props();
 </script>
 
@@ -32,7 +35,14 @@
 	{#if eyebrow}
 		<div class="text-primary text-2xs tracking-eyebrow mb-1 font-medium uppercase">{eyebrow}</div>
 	{/if}
-	<h2 class="font-display max-w-3xl text-xl leading-snug font-semibold" data-answer>{lead}</h2>
+	<div class="flex min-w-0 items-center gap-2.5">
+		{#if icon}
+			<span class="text-muted-foreground grid size-6 flex-none place-items-center" data-slot="page-lead-icon">
+				{@render icon()}
+			</span>
+		{/if}
+		<h2 class="font-display max-w-3xl text-xl leading-snug font-semibold" data-answer>{lead}</h2>
+	</div>
 	{#if subtitle}
 		<p class="text-muted-foreground mt-1.5 max-w-4xl text-sm">{subtitle}</p>
 	{/if}
