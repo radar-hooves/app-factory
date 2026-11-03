@@ -46,6 +46,7 @@ on:
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
+      - 'tests/layout-ownership/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
       - 'tests/elements/**'
       - 'kits/python/**'
@@ -64,6 +65,7 @@ on:
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
+      - 'tests/layout-ownership/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
       - 'tests/elements/**'
       - 'kits/python/**'
@@ -156,6 +158,9 @@ jobs:
 
       - name: Layout gate — which routes a change names
         run: node --test tests/layout-gate/routes.test.mjs
+
+      - name: Layout ownership gate — what it refuses
+        run: node --test tests/layout-ownership/ownership.test.mjs
 
       - name: Kits — lint, types and test
         # The root uv workspace's own committed lock, so frozen here, unlike

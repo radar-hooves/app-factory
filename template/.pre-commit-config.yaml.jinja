@@ -277,6 +277,20 @@ repos:
         files: '^frontend/(src/app\.css|package\.json)$'
         pass_filenames: false
 
+  # The factory owns the layout (the rail, the sidebar, the page frames); an app
+  # declares data (frontend/src/lib/shell.ts) and each route its pageType. Fails an
+  # app composing its own shell, sizing or centring its own page, or declaring a
+  # page type the factory does not have. Source only: no build, no browser. The
+  # same check runs in the unit leg (src/lib/layout-ownership.test.ts).
+  - repo: local
+    hooks:
+      - id: layout-ownership
+        name: 'design - The app carries no layout of its own'
+        entry: node frontend/scripts/check-layout-ownership.mjs
+        language: system
+        files: '^frontend/src/'
+        pass_filenames: false
+
   # Catches the app hand-rolling what @poodle64/ui already ships — a local
   # component duplicating a shipped one, or a route writing its own <h1>
   # instead of composing the shared PageHeader. It compiles, renders,
