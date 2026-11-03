@@ -6,8 +6,8 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-import { appProxy } from './app-proxy';
-import { HOUSEHOLD_DEV_UID_ENV, resolveDevIdentity } from './dev-identity';
+import { appProxy } from './app-proxy.ts';
+import { HOUSEHOLD_DEV_UID_ENV, resolveDevIdentity } from './dev-identity.ts';
 
 // The REAL path of node_modules, for Vite's serve allow-list.
 //

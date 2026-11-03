@@ -25,7 +25,7 @@
 		}
 		const only = data.length === 1 ? data[0] : undefined;
 		if (only) {
-			await goto(`/chat/${only.id}`, { replaceState: true });
+			await goto(`/chat/${only.id}`, { replace: true });
 			return;
 		}
 		personas = data;

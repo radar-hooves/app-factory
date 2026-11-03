@@ -3,6 +3,7 @@ export const beforeNavigate = () => {};
 export const afterNavigate = () => {};
 export const goto = async () => {};
 export const invalidateAll = async () => {};
+export const refreshAll = async () => {};
 export const invalidate = async () => {};
 export const preloadData = async () => {};
 export const preloadCode = async () => {};
