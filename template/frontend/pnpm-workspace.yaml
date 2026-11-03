@@ -12,8 +12,9 @@ minimumReleaseAgeExclude:
   - '@poodle64/*'
 
 # Security floors every app needs: without them js-yaml resolves to 4.3.1, fast-uri below
-# 3.1.6, and @sveltejs/kit's cookie 0.6 (GHSA-pxg6-pf52-xh8x, fixed in 0.7.0).
+# 3.1.6, and any cookie 0.6 (GHSA-pxg6-pf52-xh8x, fixed in 0.7.0); @sveltejs/kit 3 takes cookie 2,
+# which a bare cookie override would drag back to 0.x and break its build.
 overrides:
   js-yaml: ^4.3.2
   fast-uri: ^3.1.6
-  cookie: ^0.7.0
+  "cookie@<0.7.0": ^0.7.0
