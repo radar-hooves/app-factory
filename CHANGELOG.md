@@ -10,8 +10,12 @@ Need: the shell's two visible faults, app-factory#37 and #38; consumer: the oper
 
 ### Fixed
 
-- **`@poodle64/ui` AppShell prints without chrome**: under `@media print` the rail, top bar and skip link go, the shell and its scroller unclip, and the ground clears (kit change; ships with the next ui release).
-- **The search affordance's `kbd` takes the chrome tokens** (`bg-shell`, `border-shell-muted-foreground/40`), not the page surface, so it reads on any app's rail.
+- **`@poodle64/ui` AppShell prints without chrome**: under `@media print` the rail, top bar and skip link go, the shell and its scroller unclip, and the ground clears (`@poodle64/ui` 2026.11.6; the template pins `^2026.11.6`).
+- **The search affordance's `kbd` takes the chrome tokens** (`bg-shell`, `border-shell-muted-foreground/40`), not the page surface, so it reads on any app's rail (`@poodle64/ui` 2026.11.6).
+
+### Consumer must change
+
+Nothing: `copier update`, then `pnpm install`, takes `@poodle64/ui` 2026.11.6.
 
 ## [2026.11.13] - 2026-11-03
 
