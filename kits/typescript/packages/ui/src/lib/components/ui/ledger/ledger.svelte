@@ -45,8 +45,8 @@
 		groupSpacing,
 		listLayout
 	} from './look.js';
-	import { AU_LOCALE } from '$lib/format.js';
-	import { cn } from '$lib/utils.js';
+	import { AU_LOCALE } from '#lib/format.js';
+	import { cn } from '#lib/utils.js';
 	import {
 		LEDGER_PERIODS,
 		blocksOf,

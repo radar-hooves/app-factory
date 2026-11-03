@@ -7,7 +7,7 @@
 
 <script lang="ts">
 	import type { SVGAttributes } from 'svelte/elements';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	// An inline area + line trend: a compact multi-series sparkline for a
 	// row or card that has room for a trend but not a full Tier-1 chart

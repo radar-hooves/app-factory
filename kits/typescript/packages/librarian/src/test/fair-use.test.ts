@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import FairUseNotice from '$lib/components/fair-use-notice/fair-use-notice.svelte';
-import type { Quota } from '$lib/chat.svelte';
+import FairUseNotice from '#lib/components/fair-use-notice/fair-use-notice.svelte';
+import type { Quota } from '#lib/chat.svelte.js';
 
 /** Midnight tomorrow in the reader's own zone, which is where it is read. */
 function midnight(): string {

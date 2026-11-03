@@ -4,7 +4,7 @@
  * to the backend's wire contract, not captured from a run, so each carries only
  * what a fold reads.
  */
-import type { AgentEvent } from '$lib/client';
+import type { AgentEvent } from '#lib/client.js';
 
 const SESSION = 'c0ffee00-0000-4000-8000-000000000001';
 

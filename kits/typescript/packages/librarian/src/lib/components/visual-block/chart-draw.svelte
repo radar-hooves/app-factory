@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { AreaChart, BarChart, LineChart } from 'layerchart';
-	import type { ChartValue } from '$lib/visuals';
+	import type { ChartValue } from '#lib/visuals.js';
 
 	let { value }: { value: ChartValue } = $props();
 

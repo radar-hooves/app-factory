@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import ScopeStatement from '$lib/components/scope-statement/scope-statement.svelte';
+import ScopeStatement from '#lib/components/scope-statement/scope-statement.svelte';
 
 const STATEMENT =
 	'Outrider answers from the ADF Pay and Conditions Manual (PACMAN). It does not hold your own ' +

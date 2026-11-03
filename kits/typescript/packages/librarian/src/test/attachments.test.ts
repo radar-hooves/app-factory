@@ -3,7 +3,7 @@
  * 20 MB each, and only what the persona can actually read.
  */
 import { describe, it, expect } from 'vitest';
-import { acceptFiles, formatSize, MAX_BYTES } from '$lib/attachments';
+import { acceptFiles, formatSize, MAX_BYTES } from '#lib/attachments.js';
 
 // `size` is derived from the blob parts, and allocating 20 MB to prove a 20 MB
 // file is rejected is a silly way to spend a test run.

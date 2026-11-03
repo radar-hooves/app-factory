@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 	import Loader2 from '@lucide/svelte/icons/loader-2';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		message?: string;

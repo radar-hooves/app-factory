@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import Harness from './settings-shell.svelte';
-import SettingsShell from '$lib/components/ui/settings-shell/settings-shell.svelte';
+import SettingsShell from '#lib/components/ui/settings-shell/settings-shell.svelte';
 import { windowWidth } from './window-width.js';
 
 beforeEach(() => windowWidth(100));

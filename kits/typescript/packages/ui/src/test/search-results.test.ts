@@ -5,8 +5,8 @@
 // record of its contract.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import SearchResults from '$lib/components/ui/search-results/search-results.svelte';
-import type { LibrarySearchResult } from '$lib/components/ui/search-results';
+import SearchResults from '#lib/components/ui/search-results/search-results.svelte';
+import type { LibrarySearchResult } from '#lib/components/ui/search-results/index.js';
 
 const results: LibrarySearchResult[] = [
 	{

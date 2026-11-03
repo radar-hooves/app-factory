@@ -4,8 +4,8 @@
 // exists to end.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import DocumentDetail from '$lib/components/ui/document-detail/document-detail.svelte';
-import type { LibraryDocumentDetail, LibraryMembership } from '$lib/components/ui/document-detail';
+import DocumentDetail from '#lib/components/ui/document-detail/document-detail.svelte';
+import type { LibraryDocumentDetail, LibraryMembership } from '#lib/components/ui/document-detail/index.js';
 
 const doc: LibraryDocumentDetail = {
 	id: 'doc-1',

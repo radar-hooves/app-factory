@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Checkbox } from '$lib/components/ui/checkbox';
-  import { Switch } from '$lib/components/ui/switch';
-  import * as Dialog from '$lib/components/ui/dialog';
-  import * as Tabs from '$lib/components/ui/tabs';
-  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+  import { Switch } from '#lib/components/ui/switch/index.js';
+  import * as Dialog from '#lib/components/ui/dialog/index.js';
+  import * as Tabs from '#lib/components/ui/tabs/index.js';
+  import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 
   let checkboxChecked = $state(false);
   let switchChecked = $state(false);

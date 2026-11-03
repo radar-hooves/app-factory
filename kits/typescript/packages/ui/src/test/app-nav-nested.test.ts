@@ -24,7 +24,7 @@ import {
 	navChildren,
 	toItems,
 	type NavItem
-} from '$lib/components/ui/app-shell/types.js';
+} from '#lib/components/ui/app-shell/types.js';
 
 /** The disclosure control for a branch, by the label it names. */
 function chevron(label: string) {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Fixture for avatar.test.ts. Imported through the barrel, by the names a
 	// consumer writes, so the export shape is part of what is under test.
-	import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar';
+	import { Avatar, AvatarImage, AvatarFallback } from '#lib/components/ui/avatar/index.js';
 
 	let { src }: { src?: string } = $props();
 </script>

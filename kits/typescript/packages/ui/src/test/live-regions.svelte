@@ -7,9 +7,9 @@
 	// markup (rules-library/core/73-verification.md §"Behaviour vs Appearance").
 	// The load is gated on a button rather than a timer so the test observes the
 	// in-flight and settled phases as two distinct instants.
-	import EmptyState from '$lib/components/ui/empty-state/empty-state.svelte';
-	import ErrorState from '$lib/components/ui/error-state/error-state.svelte';
-	import LoadingState from '$lib/components/ui/loading-state/loading-state.svelte';
+	import EmptyState from '#lib/components/ui/empty-state/empty-state.svelte';
+	import ErrorState from '#lib/components/ui/error-state/error-state.svelte';
+	import LoadingState from '#lib/components/ui/loading-state/loading-state.svelte';
 
 	type Phase = 'idle' | 'loading' | 'failed' | 'empty';
 

@@ -34,8 +34,8 @@
 	 *     </CommandPalette>
 	 */
 	import type { Snippet } from 'svelte';
-	import * as Command from '$lib/components/ui/command/index.js';
-	import { toItems, type NavSource } from '$lib/components/ui/app-shell/types.js';
+	import * as Command from '#lib/components/ui/command/index.js';
+	import { toItems, type NavSource } from '#lib/components/ui/app-shell/types.js';
 
 	let {
 		open = $bindable(false),

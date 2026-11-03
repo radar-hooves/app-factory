@@ -3,10 +3,10 @@
  * never from the persona's words.
  */
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_COPY } from '$lib/copy';
-import { activityNow, stepKind, stepMeta, stepsNow, stepsSummary } from '$lib/steps';
-import { segment, type ActivityGroup, type Block } from '$lib/transcript.svelte';
-import type { Written } from '$lib/written';
+import { DEFAULT_COPY } from '#lib/copy.js';
+import { activityNow, stepKind, stepMeta, stepsNow, stepsSummary } from '#lib/steps.js';
+import { segment, type ActivityGroup, type Block } from '#lib/transcript.svelte.js';
+import type { Written } from '#lib/written.js';
 
 const tool = (name: string, input: Record<string, unknown>, result?: string, index = 0): Block => ({
 	kind: 'tool',

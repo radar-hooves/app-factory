@@ -6,7 +6,7 @@
 	 */
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import { CELL, END, HEAD_TEXT, RING_INSET } from './look.js';
 
 	let {

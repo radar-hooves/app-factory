@@ -5,8 +5,8 @@
 // no state of its own, so the callbacks ARE its behaviour.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import LibraryBrowse from '$lib/components/ui/library-browse/library-browse.svelte';
-import type { LibraryDocument, LibraryFacet } from '$lib/components/ui/library-browse';
+import LibraryBrowse from '#lib/components/ui/library-browse/library-browse.svelte';
+import type { LibraryDocument, LibraryFacet } from '#lib/components/ui/library-browse/index.js';
 
 const documents: LibraryDocument[] = [
 	{

@@ -5,14 +5,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/svelte';
-import Markdown from '$lib/components/markdown/markdown.svelte';
-import { splitVisuals } from '$lib/components/markdown/markdown';
-import { defaultVisuals } from '$lib/visuals';
+import Markdown from '#lib/components/markdown/markdown.svelte';
+import { splitVisuals } from '#lib/components/markdown/markdown.js';
+import { defaultVisuals } from '#lib/visuals.js';
 import Visual from './fixtures/visual.svelte';
 
 // LayerChart is loaded when a chart is drawn: the test stands a fixture in for the drawing component.
 const drawn = vi.hoisted(() => ({ loaded: 0 }));
-vi.mock('$lib/components/visual-block/chart-draw.svelte', async () => {
+vi.mock('#lib/components/visual-block/chart-draw.svelte', async () => {
 	drawn.loaded += 1;
 	return { default: (await import('./fixtures/visual.svelte')).default };
 });

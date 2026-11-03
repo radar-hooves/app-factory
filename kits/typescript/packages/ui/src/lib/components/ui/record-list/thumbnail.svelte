@@ -5,7 +5,7 @@
 	 * the record's name always sits beside it.
 	 */
 	import type { IconComponent } from '../app-shell/types.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		src,

@@ -2,8 +2,8 @@
 	// Harness for <SchemaForm>: holds the value the way a consuming app does —
 	// the component is controlled, so a test that never writes the emitted value
 	// back would be testing a form that cannot be typed into.
-	import SchemaForm from '$lib/components/ui/schema-form/schema-form.svelte';
-	import type { JsonSchema, SchemaFormChange, UISchemaElement } from '$lib/components/ui/schema-form';
+	import SchemaForm from '#lib/components/ui/schema-form/schema-form.svelte';
+	import type { JsonSchema, SchemaFormChange, UISchemaElement } from '#lib/components/ui/schema-form/index.js';
 
 	let {
 		schema,

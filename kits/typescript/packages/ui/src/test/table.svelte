@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Fixture for table.test.ts: the two class seams on one table, so a test can
 	// prove they land on different boxes rather than merging into one.
-	import * as Table from '$lib/components/ui/table';
+	import * as Table from '#lib/components/ui/table/index.js';
 </script>
 
 <Table.Root class="table-fixed" containerClass="max-h-64 rounded-lg">

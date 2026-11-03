@@ -25,7 +25,7 @@
 
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	// A document's key facts read at a glance, INSIDE whatever card already
 	// holds them — eyebrow label over value, wrapped into a responsive grid,

@@ -11,7 +11,7 @@
 	import * as Popover from '../popover/index.js';
 	import { Segmented } from '../segmented/index.js';
 	import * as Tooltip from '../tooltip/index.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import { LEDGER_PERIODS } from './ledger.js';
 	import type { LedgerPeriod } from './types.js';
 

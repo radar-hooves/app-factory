@@ -6,8 +6,8 @@
  * print each block once. Every stream here was captured from the real CLI.
  */
 import { describe, it, expect } from 'vitest';
-import { Transcript, type ToolBlock } from '$lib/transcript.svelte';
-import type { AgentEvent } from '$lib/client';
+import { Transcript, type ToolBlock } from '#lib/transcript.svelte.js';
+import type { AgentEvent } from '#lib/client.js';
 import { captured } from './fixtures/captured';
 
 function fold(events: AgentEvent[]) {

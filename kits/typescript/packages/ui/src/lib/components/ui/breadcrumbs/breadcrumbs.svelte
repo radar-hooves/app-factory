@@ -23,7 +23,7 @@
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	let {
 		items,

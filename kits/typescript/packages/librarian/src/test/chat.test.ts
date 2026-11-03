@@ -13,9 +13,9 @@ import {
 	type JobTransport,
 	type Quota,
 	type ChatTransport
-} from '$lib/chat.svelte';
-import type { AgentEvent } from '$lib/client';
-import type { TextBlock } from '$lib/transcript.svelte';
+} from '#lib/chat.svelte.js';
+import type { AgentEvent } from '#lib/client.js';
+import type { TextBlock } from '#lib/transcript.svelte.js';
 import { captured } from './fixtures/captured';
 
 const CHAT = captured('chat-stream');

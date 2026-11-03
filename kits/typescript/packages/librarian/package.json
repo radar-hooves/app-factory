@@ -83,7 +83,7 @@
 		"@lucide/svelte": "^1.7.0",
 		"@poodle64/design-tokens": "workspace:*",
 		"@sveltejs/kit": "^3.0.0",
-		"@sveltejs/package": "^2.5.8",
+		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@testing-library/jest-dom": "^7.0.0",
 		"@testing-library/svelte": "^5.4.2",
@@ -94,18 +94,22 @@
 		"playwright": "^1.62.0",
 		"publint": "^0.3.15",
 		"shiki": "^4.4.3",
-		"svelte": "^5.57.1",
-		"svelte-check": "^4.6.0",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.7.5",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
 		"vitest": "^5.0.5"
 	},
 	"scripts": {
-		"build": "svelte-kit sync && svelte-package && publint",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"build": "svelte-package && publint",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"test": "pnpm run build && vitest run",
 		"prepublishOnly": "pnpm run build",
 		"screenshots": "node scripts/screenshots.mjs"
 	},
-	"packageManager": "pnpm@12.16.1"
+	"packageManager": "pnpm@12.16.1",
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	}
 }

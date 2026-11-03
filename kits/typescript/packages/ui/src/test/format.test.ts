@@ -27,7 +27,7 @@ import {
 	formatRatioAsPercentage,
 	isNegativeMoney,
 	parseApiDate
-} from '$lib/format';
+} from '#lib/format.js';
 
 describe('formatCurrency', () => {
 	it('renders cents by default rather than rounding them away', () => {

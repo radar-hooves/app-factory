@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Fixture for status-badge.test.ts: forwards exactly the props the tests vary.
-	import StatusBadge from '$lib/components/ui/status-badge';
-	import type { Status } from '$lib/components/ui/status';
+	import StatusBadge from '#lib/components/ui/status-badge/index.js';
+	import type { Status } from '#lib/components/ui/status/index.js';
 
 	let {
 		status,

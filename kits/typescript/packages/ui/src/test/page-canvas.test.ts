@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import Harness from './page-canvas.svelte';
-import type { PageCanvasRegion } from '$lib/components/ui/page-canvas/types';
+import type { PageCanvasRegion } from '#lib/components/ui/page-canvas/types.js';
 
 const stage = () => screen.getByRole('document');
 const zoomLabel = () => screen.getByText(/^(\d+%|Fit)$/);

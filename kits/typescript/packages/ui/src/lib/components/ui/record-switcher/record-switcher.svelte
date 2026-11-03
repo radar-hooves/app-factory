@@ -27,7 +27,7 @@
 	import * as Popover from '../popover/index.js';
 	import type { IconComponent } from '../app-shell/types.js';
 	import Thumbnail from '../record-list/thumbnail.svelte';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import type { RecordPage, RecordSwitcherGroup, RecordSwitcherItem } from './types.js';
 
 	let {

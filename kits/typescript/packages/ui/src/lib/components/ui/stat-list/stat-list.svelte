@@ -17,7 +17,7 @@
 
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import type { WithElementRef } from '$lib/utils.js';
+	import type { WithElementRef } from '#lib/utils.js';
 	import InfoTip from '../info-tip/info-tip.svelte';
 
 	// The standing metric card for the right-hand context column: a route's

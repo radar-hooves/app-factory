@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
-import DocumentReader, { slugify } from '$lib/components/ui/document-reader/document-reader.svelte';
+import DocumentReader, { slugify } from '#lib/components/ui/document-reader/document-reader.svelte';
 import { createRawSnippet } from 'svelte';
 import InShell from './document-reader-in-shell.svelte';
 

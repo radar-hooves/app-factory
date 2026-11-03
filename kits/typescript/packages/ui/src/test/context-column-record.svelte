@@ -2,9 +2,9 @@
 	// Fixture for context-column-record.test.ts: a tool page in the shell whose
 	// aside is a ContextColumn: a record's opened section swapped by the page, a
 	// lease's document opened in its place, or (`list`) a list page's stat card.
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import ContextColumn from '$lib/components/ui/context-column';
-	import DocumentPane from '$lib/components/ui/document-pane';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import ContextColumn from '#lib/components/ui/context-column/index.js';
+	import DocumentPane from '#lib/components/ui/document-pane/index.js';
 
 	let {
 		withDocument = false,

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import Harness from './app-shell-location.svelte';
-import { activeNavTitle, shortLocation } from '$lib/components/ui/app-shell/types.js';
+import { activeNavTitle, shortLocation } from '#lib/components/ui/app-shell/types.js';
 
 const nav = [
 	{ label: 'Overview', href: '/overview' },

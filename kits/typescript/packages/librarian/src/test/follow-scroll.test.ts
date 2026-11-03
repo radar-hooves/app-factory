@@ -4,7 +4,7 @@
  * the reader's behalf.
  */
 import { describe, it, expect } from 'vitest';
-import { atBottom, distanceFromBottom, FollowScroll } from '$lib/follow-scroll.svelte';
+import { atBottom, distanceFromBottom, FollowScroll } from '#lib/follow-scroll.svelte.js';
 
 const at = (scrollTop: number, scrollHeight = 2000, clientHeight = 800) => ({
 	scrollTop,

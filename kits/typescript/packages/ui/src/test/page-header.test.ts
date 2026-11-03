@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import PageHeader from '$lib/components/ui/page-header/page-header.svelte';
+import PageHeader from '#lib/components/ui/page-header/page-header.svelte';
 import SnippetHeader from './page-header-breadcrumbs.svelte';
 
 describe('PageHeader — breadcrumbs', () => {

@@ -5,7 +5,7 @@
 	import UnknownField from './widgets/unknown-field.svelte';
 	import { setSchemaFormContext } from './context.js';
 	import { addressedPaths, getAt, setAt, unmappedFields } from './data.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import type { SchemaFormProps } from './types.js';
 
 	/**

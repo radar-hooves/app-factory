@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import Composer from '$lib/components/composer/composer.svelte';
+import Composer from '#lib/components/composer/composer.svelte';
 
 const COLLECTIONS = [
 	{ name: 'adf-pay', title: 'ADF pay and conditions' },

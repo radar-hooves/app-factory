@@ -45,7 +45,7 @@
 	import type { ListAction, ListIconAction } from '../list-toolbar/types.js';
 	import type { IconComponent } from '../app-shell/types.js';
 	import Thumbnail from './thumbnail.svelte';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import type { RecordListColumn, RecordListPreferences, RecordListRow } from './types.js';
 
 	type Id = R['id'];

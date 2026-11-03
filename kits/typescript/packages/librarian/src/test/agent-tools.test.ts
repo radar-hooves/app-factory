@@ -5,12 +5,12 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import { storedTurn } from '$lib/chat.svelte';
-import type { AgentEvent } from '$lib/client';
-import { Session } from '$lib/session.svelte';
-import { describe as words, fold, foldState, Transcript, type Turn } from '$lib/transcript.svelte';
-import { webSources } from '$lib/web-sources';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import { storedTurn } from '#lib/chat.svelte.js';
+import type { AgentEvent } from '#lib/client.js';
+import { Session } from '#lib/session.svelte.js';
+import { describe as words, fold, foldState, Transcript, type Turn } from '#lib/transcript.svelte.js';
+import { webSources } from '#lib/web-sources.js';
 import { LIBRARY_SEARCH, THINKING_TURN, WEB_TURN, WRITE_TURN } from './fixtures/tool-turns';
 
 function live(events: AgentEvent[]): Transcript {

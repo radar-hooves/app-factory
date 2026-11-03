@@ -19,7 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import ShellHarness from './app-shell.svelte';
-import { SHELL_TEXTURES } from '$lib/components/ui/app-shell/texture.js';
+import { SHELL_TEXTURES } from '#lib/components/ui/app-shell/texture.js';
 
 /** The box `texture` acts on: the shell's scrolling content region. */
 function contentRegion(container: HTMLElement): HTMLElement {

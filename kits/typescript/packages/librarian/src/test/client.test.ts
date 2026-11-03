@@ -9,7 +9,7 @@
  * and a finished iteration, because the host's loop is what re-enables Send.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ask, watch } from '$lib/client';
+import { ask, watch } from '#lib/client.js';
 
 const ASK = '/api/agent/outrider/ask';
 

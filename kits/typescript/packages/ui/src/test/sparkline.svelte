@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Fixture for sparkline.test.ts: forwards exactly the props the tests vary.
-	import Sparkline, { type Series } from '$lib/components/ui/sparkline';
+	import Sparkline, { type Series } from '#lib/components/ui/sparkline/index.js';
 
 	let {
 		series,

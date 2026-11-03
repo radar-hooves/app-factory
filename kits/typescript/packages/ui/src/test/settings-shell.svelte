@@ -3,10 +3,10 @@
 	// inside AppShell on a panel page, one group with no personal sections
 	// yet (left in the list, empty, and therefore not rendered), and a section
 	// whose own sub-page exercises the prefix match.
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import SettingsShell from '$lib/components/ui/settings-shell/settings-shell.svelte';
-	import type { NavSource } from '$lib/components/ui/app-shell/types.js';
-	import Panel from '$lib/components/ui/panel/panel.svelte';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import SettingsShell from '#lib/components/ui/settings-shell/settings-shell.svelte';
+	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
+	import Panel from '#lib/components/ui/panel/panel.svelte';
 	import Users from '@lucide/svelte/icons/users';
 	import Gavel from '@lucide/svelte/icons/gavel';
 	import Info from '@lucide/svelte/icons/info';

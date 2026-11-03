@@ -13,7 +13,7 @@
 		CardTitle,
 		CardDescription,
 		CardContent
-	} from '$lib/components/ui/card';
+	} from '#lib/components/ui/card/index.js';
 
 	let { level, class: className }: { level?: 1 | 2 | 3 | 4 | 5 | 6; class?: string } = $props();
 </script>

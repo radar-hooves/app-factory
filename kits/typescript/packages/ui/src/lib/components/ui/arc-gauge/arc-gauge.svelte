@@ -9,7 +9,7 @@
 
 <script lang="ts">
 	import type { SVGAttributes } from 'svelte/elements';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	// Radial capacity/percentage gauge: a compact SVG ring for a single 0–100
 	// metric where a StatCard's full metric tile would be too heavy — a

@@ -4,7 +4,7 @@
  * Outrider, the assistant for…".
  */
 import { describe, it, expect } from 'vitest';
-import { readerQuestion } from '$lib/transcript.svelte';
+import { readerQuestion } from '#lib/transcript.svelte.js';
 
 const PREAMBLE =
 	'You are Outrider, the assistant for ADF pay and conditions. Answer a Defence ' +

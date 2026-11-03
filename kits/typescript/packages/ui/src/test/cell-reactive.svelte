@@ -2,9 +2,9 @@
 	// Fixture for cell-reactive.test.ts: one markup snippet serving two columns
 	// built at runtime, told apart by the column the list passes it.
 	import { createRawSnippet } from 'svelte';
-	import RecordList from '$lib/components/ui/record-list';
-	import type { RecordListColumn, RecordListRow } from '$lib/components/ui/record-list';
-	import type { ListColumn } from '$lib/components/ui/ledger/types.js';
+	import RecordList from '#lib/components/ui/record-list/index.js';
+	import type { RecordListColumn, RecordListRow } from '#lib/components/ui/record-list/index.js';
+	import type { ListColumn } from '#lib/components/ui/ledger/types.js';
 
 	type Row = RecordListRow & { total: number; other: number };
 	let { rows }: { rows: Row[] } = $props();

@@ -6,8 +6,8 @@
  * `result` per run) were measured, not modelled.
  */
 import { describe, it, expect } from 'vitest';
-import { Session } from '$lib/session.svelte';
-import { segment, type TextBlock, type ToolBlock } from '$lib/transcript.svelte';
+import { Session } from '#lib/session.svelte.js';
+import { segment, type TextBlock, type ToolBlock } from '#lib/transcript.svelte.js';
 import { captured } from './fixtures/captured';
 
 const STREAM = captured('job-stream');

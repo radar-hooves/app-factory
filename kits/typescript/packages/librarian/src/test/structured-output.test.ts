@@ -7,9 +7,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import { Session } from '$lib/session.svelte';
-import { readFrom, segment, type TextBlock, type Turn } from '$lib/transcript.svelte';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import { Session } from '#lib/session.svelte.js';
+import { readFrom, segment, type TextBlock, type Turn } from '#lib/transcript.svelte.js';
 import { captured } from './fixtures/captured';
 
 const session = new Session();

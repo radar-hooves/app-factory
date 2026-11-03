@@ -2,7 +2,7 @@
 	import { Checkbox as CheckboxPrimitive } from 'bits-ui';
 	import Check from '@lucide/svelte/icons/check';
 	import Minus from '@lucide/svelte/icons/minus';
-	import { cn, type WithoutChildrenOrChild } from '$lib/utils';
+	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

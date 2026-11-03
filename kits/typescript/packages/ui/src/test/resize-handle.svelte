@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ResizeHandle } from '$lib/components/ui/resize-handle/index.js';
+	import { ResizeHandle } from '#lib/components/ui/resize-handle/index.js';
 
 	let { key = 'probe-width' }: { key?: string } = $props();
 	let width = $state<number | null>(null);

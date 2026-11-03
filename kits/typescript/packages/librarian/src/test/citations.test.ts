@@ -8,7 +8,7 @@ import {
 	resolveCitations,
 	splitSources,
 	type Citation
-} from '$lib/citations';
+} from '#lib/citations.js';
 
 describe('citationMarkers()', () => {
 	it('finds inline markers in order, once each', () => {

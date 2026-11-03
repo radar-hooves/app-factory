@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import ShellHarness from './app-shell.svelte';
-import { isNavItemActive, toGroups, toItems } from '$lib/components/ui/app-shell/types.js';
+import { isNavItemActive, toGroups, toItems } from '#lib/components/ui/app-shell/types.js';
 
 describe('AppShell — mobile navigation', () => {
 	it('opens the drawer from the menu control and closes it again', async () => {
@@ -602,7 +602,7 @@ describe('AppShell — active state', () => {
 
 	it('renders an icon badge as a labelled pill with no text', async () => {
 		const { default: Lock } = await import('@lucide/svelte/icons/lock');
-		const { default: AppNav } = await import('$lib/components/ui/app-shell/app-nav.svelte');
+		const { default: AppNav } = await import('#lib/components/ui/app-shell/app-nav.svelte');
 		render(AppNav, {
 			props: {
 				currentPath: '/',

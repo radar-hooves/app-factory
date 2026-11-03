@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import Breadcrumbs from '$lib/components/ui/breadcrumbs/breadcrumbs.svelte';
+import Breadcrumbs from '#lib/components/ui/breadcrumbs/breadcrumbs.svelte';
 
 const items = [
 	{ label: 'Library', href: '/library' },

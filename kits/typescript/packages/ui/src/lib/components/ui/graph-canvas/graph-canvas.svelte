@@ -18,8 +18,8 @@
 	import X from '@lucide/svelte/icons/x';
 	import Button from '../button/button.svelte';
 	import { Input } from '../input/index.js';
-	import { cn } from '$lib/utils.js';
-	import { formatNumber } from '$lib/format.js';
+	import { cn } from '#lib/utils.js';
+	import { formatNumber } from '#lib/format.js';
 	import { GraphScene, type Camera, type Inset } from './scene.js';
 	import type { GraphEdge, GraphKind, GraphNeighbour, GraphNode, GraphShape } from './types.js';
 

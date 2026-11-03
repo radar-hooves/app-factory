@@ -4,14 +4,14 @@
  * every version reachable and marked against the one before, and the visuals
  * a persona's fenced blocks are drawn by.
  */
-import { FRAME_CSP, framed } from '$lib/written';
+import { FRAME_CSP, framed } from '#lib/written.js';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import ArtefactPane from '$lib/components/artefact-pane/artefact-pane.svelte';
-import Conversation from '$lib/components/conversation/conversation.svelte';
-import Markdown from '$lib/components/markdown/markdown.svelte';
-import type { Turn } from '$lib/transcript.svelte';
-import type { Written } from '$lib/written';
+import ArtefactPane from '#lib/components/artefact-pane/artefact-pane.svelte';
+import Conversation from '#lib/components/conversation/conversation.svelte';
+import Markdown from '#lib/components/markdown/markdown.svelte';
+import type { Turn } from '#lib/transcript.svelte.js';
+import type { Written } from '#lib/written.js';
 import Visual from './fixtures/visual.svelte';
 
 const v1: Written = {

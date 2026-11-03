@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { toast } from 'svelte-sonner';
-import SettingsPage from '$lib/components/settings/settings-page.svelte';
+import SettingsPage from '#lib/components/settings/settings-page.svelte';
 
 vi.mock('svelte-sonner', () => ({ toast: { error: vi.fn() } }));
 

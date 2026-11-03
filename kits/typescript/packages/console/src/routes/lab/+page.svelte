@@ -5,7 +5,7 @@
 	 * "Sidebar sub-routes" shape is what AppShell ships as of ui 2026.9.8; the
 	 * lab stays for the next shape.
 	 */
-	import { PROFILES, type Section } from '$lib/profiles';
+	import { PROFILES, type Section } from '#lib/profiles.js';
 	import { toggleMode } from 'mode-watcher';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import ShieldIcon from '@lucide/svelte/icons/shield';

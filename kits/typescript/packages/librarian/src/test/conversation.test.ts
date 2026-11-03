@@ -13,9 +13,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import type { AgentTranscriptProps } from '$lib/components/agent-transcript';
-import Conversation from '$lib/components/conversation/conversation.svelte';
-import type { Turn } from '$lib/transcript.svelte';
+import type { AgentTranscriptProps } from '#lib/components/agent-transcript/index.js';
+import Conversation from '#lib/components/conversation/conversation.svelte';
+import type { Turn } from '#lib/transcript.svelte.js';
 
 function conversation(props: Record<string, unknown> = {}) {
 	return render(Conversation, { props: { turns: [], running: false, ...props } });

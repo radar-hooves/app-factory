@@ -16,7 +16,7 @@
 	 * bare Skeleton box for this, none matching what loaded.
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import Skeleton from '../skeleton/skeleton.svelte';
 
 	let {

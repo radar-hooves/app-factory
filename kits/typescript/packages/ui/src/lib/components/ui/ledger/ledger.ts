@@ -3,7 +3,7 @@
  * its tests share one. Dates are ISO `YYYY-MM-DD` and are never converted
  * through a time zone: a date is not an instant.
  */
-import { formatCurrency } from '$lib/format.js';
+import { formatCurrency } from '#lib/format.js';
 import type { LedgerPeriod, LedgerRow } from './types.js';
 
 export const LEDGER_PERIODS: readonly { value: LedgerPeriod; label: string }[] = [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertVariants } from '$lib/components/ui/alert/alert.svelte';
+import { alertVariants } from '#lib/components/ui/alert/alert.svelte';
 
 describe('alertVariants', () => {
 	it('warning is built from the status-warning token', () => {

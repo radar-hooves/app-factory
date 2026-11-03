@@ -1,12 +1,12 @@
 <script lang="ts">
 	// Fixture for record-list.test.ts: a consumer's wiring, with a cell of its
 	// own markup (a button) and probes for what the list emits.
-	import RecordList from '$lib/components/ui/record-list';
+	import RecordList from '#lib/components/ui/record-list/index.js';
 	import type {
 		RecordListColumn,
 		RecordListPreferences,
 		RecordListRow
-	} from '$lib/components/ui/record-list';
+	} from '#lib/components/ui/record-list/index.js';
 	import House from '@lucide/svelte/icons/house';
 
 	type Row = RecordListRow & { value: number; group?: string; fee?: string };

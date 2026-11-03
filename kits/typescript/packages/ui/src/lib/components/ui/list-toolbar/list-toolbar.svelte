@@ -14,7 +14,7 @@
 	import Button from '../button/button.svelte';
 	import * as Tooltip from '../tooltip/index.js';
 	import IconAction from './icon-action.svelte';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import type { ListAction, ListIconAction } from './types.js';
 
 	let {

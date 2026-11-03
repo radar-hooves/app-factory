@@ -7,8 +7,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/svelte';
 import House from '@lucide/svelte/icons/house';
-import RecordSwitcher from '$lib/components/ui/record-switcher';
-import type { RecordSwitcherGroup } from '$lib/components/ui/record-switcher';
+import RecordSwitcher from '#lib/components/ui/record-switcher/index.js';
+import type { RecordSwitcherGroup } from '#lib/components/ui/record-switcher/index.js';
 
 const GROUPS: RecordSwitcherGroup[] = [
 	{
