@@ -276,7 +276,7 @@ jobs:
         run: |
           set -euo pipefail
           rm src/lib/agent/chat.ts
-          pnpm test -- --run src/lib/shell.test.ts
+          pnpm exec vitest run src/lib/shell.test.ts
 
       - name: Elements — one element, two placements, in a real browser
         # The scratch app serves <selftest-card>; the proof stamps a second app in
