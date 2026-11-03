@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.15] - 2026-11-04
 
 Need: the stamped `gateway-only-models` hook fails an ordinary backend commit in an app whose suite runs coverage (radar-hooves/app-factory#76; consumer: portcullis, and every stamped app).
 
