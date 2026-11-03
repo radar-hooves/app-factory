@@ -4,6 +4,28 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.10] - 2026-11-03
+
+Need: the one shell's second round of gaps, found by earworm, eight and the library adopting v2026.11.9; consumer: every stamped app, radar-hooves/master-project#443.
+
+### Changed
+
+- **The `hand-rolled-page-title` drift rule forbids what the ruling forbids: a page drawing its own title** (an `<h1>`, or `PageHeader`, which draws one over the rail's). A page's section `<h2>` is right and no longer fails, and no baseline is needed. Eight and the library demoted section headings to `<h3>` to pass: they can go back to `<h2>`.
+- **A page's own actions live in the rail's middle, through `ShellActions`** (already in the kit). An action takes `disabled`, for a Refresh in flight. Eight's Refresh and "Back to Round n" register there with `{ label, icon, onclick | href }`; no app-side bar stands in.
+- **`PageLead` (`@poodle64/ui/page-lead`), the answer-led lead**: one answer sentence (an `h2`), an `eyebrow`, `subtitle` and `meta` row, under the rail's title. Its actions go to `ShellActions`, so it takes none. The scaffold's home opens on it.
+- **The account menu's commands are in every app's palette**: Settings, the app's account links, "View as colleague" where held, and Sign out, in an "Account" group, from the one list `app-frame.svelte` feeds the menu.
+- **The factory's Members page draws no title**; the rail's last crumb ("Members") names it.
+- **`shell.test.ts` passes a viewer with `can`** to `nav(viewer)`, and asserts the palette's account commands.
+- **The brand mark takes `text-primary`**: the factory sets its colour.
+- `@poodle64/ui` `^2026.11.3`.
+
+### Consumer must change
+
+1. Library: delete `lib/components/LeadAnswer.svelte` for `PageLead` (put its `actions` in `ShellActions`); promote section headings back to `<h2>`. casefile opens on `PageLead` too.
+2. Eight: register Refresh and "Back to Round n" with `<ShellActions actions={[…]} />`; promote section headings back to `<h2>`; drop any `PageHeader` left on a page.
+3. Earworm: delete any `accountCommands` stand-in; the palette lists them. Any app: drop `text-primary` from your mark in `shell.ts` (harmless if left).
+4. Any page still on `PageHeader` (a title or a trail) fails `lint:drift`: delete it, declare `title` and `breadcrumbs` in the route's load data. `copier update` re-stamps `check-ui-drift.mjs`, `app-frame.svelte`, `shell.test.ts` and the Members page.
+
 ## [2026.11.9] - 2026-11-03
 
 Need: two gaps in the one shell that casefile found adopting v2026.11.8; consumer: casefile, radar-hooves/master-project#443.

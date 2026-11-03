@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.3] - 2026-11-03
+
+Consumer: every stamped app (master-project#443, the one shell's second round).
+
+### Added
+
+- **`PageLead`** (`@poodle64/ui/page-lead`): a page's answer-led lead under the rail's title, an `h2` with `eyebrow`, `subtitle` and `meta`. Its actions go to `ShellActions`.
+- **`BarAction.disabled`**, for a bar action that is shown and not usable (a refresh in flight).
+
 ## [2026.11.2] - 2026-11-03
 
 Consumer: the operator, whose ruling of 03/11/2026 (master-project#443): the factory owns the top rail, the sidebar and the page types; apps declare data.
