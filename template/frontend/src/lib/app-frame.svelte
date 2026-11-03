@@ -22,6 +22,7 @@
 	import { AppShell, resolveNav } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
 	import { page } from '$app/state';
+	import { dynamicPageTitle } from '#lib/page-title.svelte.js';
 	import { goto } from '$app/navigation';
 	import Eye from '@lucide/svelte/icons/eye';
 	import { auth } from '#lib/auth.svelte.js';
@@ -46,6 +47,16 @@
 	// "View as colleague": an admin previews the app with fewer entitlements.
 	// Offered to whoever really holds `admin` (`auth.canViewAs`).
 	let viewAsOpen = $state(false);
+
+	// A page naming itself from fetched data (usePageTitle) names the last crumb:
+	// a declared trail's last crumb, else the title the rail shows.
+	const title = $derived(dynamicPageTitle() ?? page.data.title);
+	const breadcrumbs = $derived.by(() => {
+		const declared = page.data.breadcrumbs;
+		const named = dynamicPageTitle();
+		if (!named || !declared?.length) return declared;
+		return [...declared.slice(0, -1), { ...declared.at(-1)!, label: named }];
+	});
 
 	const accountLinks = $derived([
 		...(auth.canViewAs
@@ -74,8 +85,8 @@
 	homeHref={shell.brand.homeHref}
 	currentPath={page.url.pathname}
 	pageType={page.data.pageType}
-	title={page.data.title}
-	breadcrumbs={page.data.breadcrumbs}
+	{title}
+	{breadcrumbs}
 	onSearch={() => (paletteOpen = true)}
 >
 	<!-- The workspace switch, for whoever has more than one to switch between —

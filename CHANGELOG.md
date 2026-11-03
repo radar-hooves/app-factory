@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.9] - 2026-11-03
+
+Need: two gaps in the one shell that casefile found adopting v2026.11.8; consumer: casefile, radar-hooves/master-project#443.
+
+### Changed
+
+- **The chat index draws no title.** `chat/+page.svelte` carried a hero `PageHeader` ("Ask"); the rail's breadcrumbs name the page (its `load` title), so the heading and its subtitle are gone.
+- **`usePageTitle` names the shell's last crumb as well as the tab.** A detail page whose record name is fetched calls `usePageTitle(() => record?.name)` and the breadcrumb's last crumb reads it once it resolves (a declared trail's last crumb, else the title the rail shows); until then, and after the page is left, the route's `load` title or crumb stands. `app-frame.svelte` reads `dynamicPageTitle()`; `shell.test.ts` covers it.
+
+### Consumer must change
+
+1. Delete any local copy of the chat index's header; `copier update` re-stamps `chat/+page.svelte` (a parity-gated file).
+2. On a detail page, replace a generic last crumb ("Matter") by calling `usePageTitle(() => record?.name)` from `#lib/page-title.svelte.js` during component init; keep the generic one in `load` as the fallback.
+
 ## [2026.11.8] - 2026-11-03
 
 Need: one shell for every app: the factory owns the top rail, the sidebar and the page types, apps declare data; consumer: the operator, radar-hooves/master-project#443.

@@ -7,7 +7,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import PageHeader from '@poodle64/ui/page-header';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { TileGrid } from '@poodle64/ui/tile-grid';
@@ -32,8 +31,6 @@
 	});
 </script>
 
-<PageHeader title="Ask" subtitle="Put a question to whoever can answer it." />
-
 {#if failed}
 	<EmptyState title="Nothing to show" description={failed} />
 {:else if personas === null}
@@ -44,7 +41,7 @@
 		description="You have not been given anyone to ask questions of here."
 	/>
 {:else}
-	<TileGrid tag="ul" class="mt-6">
+	<TileGrid tag="ul">
 		{#each personas as persona (persona.id)}
 			<li>
 				<a

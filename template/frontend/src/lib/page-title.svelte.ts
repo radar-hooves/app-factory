@@ -1,6 +1,7 @@
 // A page whose title is fetched data (a record's name) cannot return it from
 // `load`: in SPA mode `load` does not call the API. It calls `usePageTitle`
-// instead, and the root layout shows that once it resolves; the route's static
+// instead, and the root layout shows that once it resolves, and the shell's last
+// crumb reads it too (app-frame.svelte); the route's static
 // `load` title stays the fallback until then, and again after the page is left.
 let current = $state.raw<{ title: string } | null>(null);
 
