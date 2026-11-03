@@ -1,8 +1,8 @@
 import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import Users from '@lucide/svelte/icons/users';
 import { toItems, type NavSource } from '@poodle64/ui/app-shell';
-import { workspaceLabel } from '$lib/app-frame.svelte';
-import { auth } from '$lib/auth.svelte';
+import { workspaceLabel } from '#lib/app-frame.svelte';
+import { auth } from '#lib/auth.svelte.js';
 import { appSettingsSections } from './app';
 
 /**

@@ -6,7 +6,7 @@ const reloadPage = vi.fn();
 const stopViewingAs = vi.fn();
 const state = vi.hoisted(() => ({ viewingAs: false }));
 
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
 	auth: {
 		held: ['admin', 'reports', 'example'],
 		entitlements: ['reports'],

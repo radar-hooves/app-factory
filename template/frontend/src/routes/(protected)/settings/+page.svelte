@@ -8,7 +8,7 @@
 	import { goto } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { EmptyState } from '@poodle64/ui/empty-state';
-	import { firstSettingsHref, settingsSections } from '$lib/settings/sections';
+	import { firstSettingsHref, settingsSections } from '#lib/settings/sections.js';
 
 	const first = $derived(firstSettingsHref(settingsSections()));
 

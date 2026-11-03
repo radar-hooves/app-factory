@@ -11,10 +11,10 @@
  * inside the shadow root too.
  *
  * Self-contained: it runs on another app's origin, so the console's own client
- * (`$lib/api`, its session and workspace) cannot serve it.
+ * (`#lib/api/index.js`, its session and workspace) cannot serve it.
  */
 import createClient, { type Middleware } from 'openapi-fetch';
-import type { paths } from '$api/schema';
+import type { paths } from '#lib/api/schema.js';
 import css from './elements.css?inline';
 
 export { default as Overlays } from './overlays.svelte';

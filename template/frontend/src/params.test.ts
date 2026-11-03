@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { match, spaMatcher } from './params/spa';
+import { match, spaMatcher } from './params';
 
-// Beside src/params/, not in it: SvelteKit reads every file there as a matcher
-// and refuses a name with a dot in it.
 describe("the catch-all's matcher", () => {
 	it.each([
 		'api/export/listens',

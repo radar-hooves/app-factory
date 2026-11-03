@@ -6,8 +6,8 @@
 	import PageHeader from '@poodle64/ui/page-header';
 	import { ShellControls } from '@poodle64/ui/app-shell';
 	import { Segmented, type SegmentedOption } from '@poodle64/ui/segmented';
-	import { api, describeApiError } from '$lib/api';
-	import { auth } from '$lib/auth.svelte';
+	import { api, describeApiError } from '#lib/api/index.js';
+	import { auth } from '#lib/auth.svelte.js';
 
 	let status = $state<string | null>(null);
 

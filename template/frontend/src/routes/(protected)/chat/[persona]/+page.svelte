@@ -11,12 +11,12 @@
 	under it), so a link reopens or narrows it on any device,
 	mid-answer included. A question another page hands over waits in the box
 	(`?q=`), or is asked on arrival, with its files, when it says so in
-	navigation state (`handOff` from `$lib/agent/chat`, which a Home page's
+	navigation state (`handOff` from `#lib/agent/chat`, which a Home page's
 	`AskHome` calls), which a pasted link cannot carry. That question never waits on the collection list: it goes as
 	soon as the persona is known, narrowed by the name the address gives.
 	A briefing is asked once, from a Home page, so this composer offers no
 	control for one (operator, 24/10/2026); one handed over still reads as its
-	card. What differs per app arrives through `$lib/agent/app`, never an edit here.
+	card. What differs per app arrives through `#lib/agent/app.js`, never an edit here.
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
@@ -40,8 +40,8 @@
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { toast } from 'svelte-sonner';
-	import * as app from '$lib/agent/app';
-	import AskBox from '$lib/agent/ask-box.svelte';
+	import * as app from '#lib/agent/app.js';
+	import AskBox from '#lib/agent/ask-box.svelte';
 	import {
 		BRIEFING,
 		chatTransport,
@@ -52,12 +52,12 @@
 		type Collection,
 		type ChatExtensions,
 		type Persona
-	} from '$lib/agent/chat';
+	} from '#lib/agent/chat.js';
 
 	const extensions: ChatExtensions = app;
 	const visuals = { ...defaultVisuals, ...extensions.visuals };
 
-	// Currency and rate are this app's own, declared in $lib/agent/app.ts;
+	// Currency and rate are this app's own, declared in #lib/agent/app.ts;
 	// without one, the plain USD figure, which is always correct, merely
 	// unconverted.
 	const formatCost = extensions.formatCost ?? ((usd: number) => `about US$${usd.toFixed(2)}`);

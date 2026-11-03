@@ -16,14 +16,14 @@
 	import { defaultVisuals } from '@poodle64/librarian/visuals';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
-	import { api } from '$lib/api';
-	import * as app from '$lib/agent/app';
+	import { api } from '#lib/api/index.js';
+	import * as app from '#lib/agent/app.js';
 	import {
 		personaDocuments,
 		sharedAnswer,
 		type ChatExtensions,
 		type Persona
-	} from '$lib/agent/chat';
+	} from '#lib/agent/chat.js';
 
 	const extensions: ChatExtensions = app;
 	const visuals = { ...defaultVisuals, ...extensions.visuals };

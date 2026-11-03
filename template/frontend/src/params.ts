@@ -1,4 +1,4 @@
-import type { ParamMatcher } from '@sveltejs/kit';
+import { defineParams } from '@sveltejs/kit/params';
 
 // What the backend and the proxy serve beside the SPA, never a client-side
 // route: the API and /mcp (backend main.py's _API_PREFIXES), SvelteKit's build
@@ -36,8 +36,10 @@ function firstSegment(key: string): string {
  */
 export function spaMatcher(appPrefixes: readonly string[]): ParamMatcher {
 	const notTheSpa = new Set([...NOT_THE_SPA, ...appPrefixes.map(firstSegment)]);
+
 	return (param) => {
 		const segments = param.split('/');
+
 		return !notTheSpa.has(segments[0] ?? '') && !/\.\w+$/.test(segments.at(-1) ?? '');
 	};
 }
@@ -45,3 +47,7 @@ export function spaMatcher(appPrefixes: readonly string[]): ParamMatcher {
 export const match = spaMatcher(
 	typeof __APP_BACKEND_PREFIXES__ === 'undefined' ? [] : __APP_BACKEND_PREFIXES__
 );
+
+export const params = defineParams({
+	spa: (param) => (match(param) ? param : undefined)
+});

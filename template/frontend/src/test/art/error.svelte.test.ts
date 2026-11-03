@@ -11,7 +11,7 @@ const nav = vi.hoisted(() => ({
 const art = vi.hoisted(() => ({ ErrorArt: undefined as unknown }));
 
 vi.mock('$app/state', () => ({ page: nav }));
-vi.mock('$lib/art', () => ({
+vi.mock('#lib/art.js', () => ({
 	get ErrorArt() {
 		return art.ErrorArt;
 	}

@@ -4,7 +4,7 @@
 	than take its height.
 -->
 <script lang="ts">
-	import type { Persona } from '$lib/agent/chat';
+	import type { Persona } from '#lib/agent/chat.js';
 
 	let { persona }: { persona: Persona } = $props();
 

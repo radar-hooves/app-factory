@@ -12,7 +12,7 @@
 	import Layers from '@lucide/svelte/icons/layers';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
-	import { auth } from '$lib/auth.svelte';
+	import { auth } from '#lib/auth.svelte.js';
 
 	let { label = 'Workspace' }: { label?: string } = $props();
 	const noun = $derived(label.toLowerCase());

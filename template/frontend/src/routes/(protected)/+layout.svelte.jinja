@@ -1,7 +1,7 @@
 {% raw %}<!--
 	The signed-in app: the protected layout of strategy-authentication.md
 	§Protected Layout. Every route under (protected)/ renders inside this app's
-	own frame ($lib/app-frame.svelte: the rail, the top bar, the palette) and
+	own frame (#lib/app-frame.svelte: the rail, the top bar, the palette) and
 	behind the session guard below, so a route the factory stamps here needs no
 	move to reach either (app-factory#6). A URL no route serves lands here too,
 	through the catch-all and +error.svelte beside this file. A route that must
@@ -20,12 +20,12 @@
 	import { ReportWidget } from '@poodle64/ui/feedback';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
-	import { apiFetch, redirectToAuthentik } from '$lib/api';
-	import AppFrame, { workspaceLabel } from '$lib/app-frame.svelte';
-	import * as app from '$lib/art';
-	import { auth } from '$lib/auth.svelte';
-	import type { StateArt } from '$lib/state-art';
-	import WorkspaceChooser from '$lib/workspaces/workspace-chooser.svelte';
+	import { apiFetch, redirectToAuthentik } from '#lib/api/index.js';
+	import AppFrame, { workspaceLabel } from '#lib/app-frame.svelte';
+	import * as app from '#lib/art.js';
+	import { auth } from '#lib/auth.svelte.js';
+	import type { StateArt } from '#lib/state-art.js';
+	import WorkspaceChooser from '#lib/workspaces/workspace-chooser.svelte';
 
 	let { children }: { children: Snippet } = $props();
 

@@ -7,7 +7,7 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import { Alert } from '@poodle64/ui/alert';
 	import { Button } from '@poodle64/ui/button';
-	import { auth } from '$lib/auth.svelte';
+	import { auth } from '#lib/auth.svelte.js';
 	import { reloadPage } from './reload';
 
 	function stop() {

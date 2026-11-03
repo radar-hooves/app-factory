@@ -30,19 +30,14 @@ export default defineConfig({
 		// Ensure Svelte resolves client-side (not server) modules in jsdom.
 		conditions: ['browser'],
 		alias: {
-			$lib: resolve(import.meta.dirname, 'src/lib'),
-			$components: resolve(import.meta.dirname, 'src/lib/components'),
-			$stores: resolve(import.meta.dirname, 'src/lib/stores'),
-			$api: resolve(import.meta.dirname, 'src/lib/api'),
 			// Every `$app/*` module SvelteKit provides virtually, stubbed here so
 			// this file is the same in every app. It previously shipped one and told
 			// each app to add the rest as its tests needed them, which made the
 			// factory the author of its own drift — three apps ended up with three
 			// different alias blocks and an exception each.
 			'$app/state': resolve(import.meta.dirname, 'src/test/mocks/app-state.svelte.ts'),
-			'$app/stores': resolve(import.meta.dirname, 'src/test/mocks/app-stores.ts'),
 			'$app/navigation': resolve(import.meta.dirname, 'src/test/mocks/app-navigation.ts'),
-			'$app/environment': resolve(import.meta.dirname, 'src/test/mocks/app-environment.ts'),
+			'$app/env': resolve(import.meta.dirname, 'src/test/mocks/app-env.ts'),
 			'$app/forms': resolve(import.meta.dirname, 'src/test/mocks/app-forms.ts'),
 			'$app/paths': resolve(import.meta.dirname, 'src/test/mocks/app-paths.ts')
 		}

@@ -7,11 +7,11 @@ import { firstSettingsHref, settingsSections } from './sections';
 const held = vi.hoisted(() => ({ entitlements: [] as string[] }));
 const appSections = vi.hoisted(() => ({ value: [] as unknown[] }));
 
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
 	auth: { can: (module: string) => held.entitlements.includes(module) }
 }));
 
-vi.mock('$lib/app-frame.svelte', () => ({ workspaceLabel: 'Workspace' }));
+vi.mock('#lib/app-frame.svelte', () => ({ workspaceLabel: 'Workspace' }));
 
 vi.mock('./app', () => ({ appSettingsSections: () => appSections.value }));
 

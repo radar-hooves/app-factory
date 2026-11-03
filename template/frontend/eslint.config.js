@@ -95,10 +95,6 @@ export default ts.config(
 				{
 					paths: [
 						{
-							name: '$app/stores',
-							message: 'Deprecated. Use `page` from $app/state.'
-						},
-						{
 							name: 'lucide-svelte',
 							message: 'Use @lucide/svelte with deep imports: @lucide/svelte/icons/<icon-name>.'
 						},
@@ -136,12 +132,6 @@ export default ts.config(
 							name: 'tw-animate-css',
 							message:
 								'Imported by @poodle64/ui/styles.css already. A second import is a silent fork.'
-						}
-					],
-					patterns: [
-						{
-							group: ['$lib/components/*', '$lib/stores/*', '$lib/api/*'],
-							message: 'Use the $components / $stores / $api aliases declared in svelte.config.js.'
 						}
 					]
 				}

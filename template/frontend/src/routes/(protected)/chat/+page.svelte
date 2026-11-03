@@ -11,8 +11,8 @@
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { TileGrid } from '@poodle64/ui/tile-grid';
-	import { api, describeApiError } from '$lib/api';
-	import type { Persona } from '$lib/agent/chat';
+	import { api, describeApiError } from '#lib/api/index.js';
+	import type { Persona } from '#lib/agent/chat.js';
 
 	let personas = $state<Persona[] | null>(null);
 	let failed = $state<string | null>(null);

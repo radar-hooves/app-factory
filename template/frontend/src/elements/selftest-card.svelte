@@ -3,7 +3,7 @@
 />
 
 <script module lang="ts">
-	import { element } from '$lib/elements';
+	import { element } from '#lib/elements/index.js';
 </script>
 
 <script lang="ts">
@@ -12,7 +12,7 @@
 	import { Button } from '@poodle64/ui/button';
 	import * as Card from '@poodle64/ui/card';
 	import * as Popover from '@poodle64/ui/popover';
-	import { Overlays, api, signInUrl, signingIn } from '$lib/elements';
+	import { Overlays, api, signInUrl, signingIn } from '#lib/elements/index.js';
 
 	interface Props {
 		/** The app this card is placed in; empty on the service's own page. */

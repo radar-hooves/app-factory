@@ -15,7 +15,7 @@ const router = vi.hoisted(() => ({
 
 vi.mock('$app/state', () => router);
 
-vi.mock('$lib/settings/sections', () => ({
+vi.mock('#lib/settings/sections.js', () => ({
 	settingsSections: () => [],
 	firstSettingsHref: () => '/settings/account'
 }));
