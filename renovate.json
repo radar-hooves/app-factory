@@ -50,7 +50,7 @@
       "enabled": false
     },
     {
-      "description": "pnpm-workspace.yaml `overrides` are security floors for transitive packages, pinned to the major their dependents import; a major bump breaks them (cookie 2.0.1 removed `parse` and `serialize`, so SvelteKit 2's cookie.js fails to build, measured 02/11/2026 in the scratch render; devalue 6, fast-uri 4 and nanoid 6 are the same shape). The preset disables this for `overrides` dep types; a workspace file's are not read as those, so it is disabled by file.",
+      "description": "pnpm-workspace.yaml `overrides` are security floors for transitive packages, pinned to the major their dependents import; a major bump breaks them (devalue 6, fast-uri 4 and nanoid 6 break their dependents the same way; cookie's floor is scoped to `cookie@<0.7.0` so SvelteKit 3's own cookie 2 is left alone). The preset disables this for `overrides` dep types; a workspace file's are not read as those, so it is disabled by file.",
       "matchFileNames": ["**/pnpm-workspace.yaml"],
       "matchUpdateTypes": ["major"],
       "enabled": false

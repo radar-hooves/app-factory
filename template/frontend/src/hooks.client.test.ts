@@ -19,7 +19,7 @@ describe('browser telemetry', () => {
 		expect(telemetryCalls).toHaveLength(1);
 		const [config] = telemetryCalls[0] as [{ app: string; version: string; url: string }];
 		expect(config.app.length).toBeGreaterThan(0);
-		expect(config.version).toBe('test'); // $app/environment's mocked build version
+		expect(config.version).toBe('test'); // $app/env's mocked build version
 		expect(config.url).toBe(''); // no collector to send to in dev
 	});
 });
