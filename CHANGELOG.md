@@ -17,7 +17,7 @@ Need: the one shell's second round of gaps, found by earworm, eight and the libr
 - **The factory's Members page draws no title**; the rail's last crumb ("Members") names it.
 - **`shell.test.ts` passes a viewer with `can`** to `nav(viewer)`, and asserts the palette's account commands.
 - **The brand mark takes `text-primary`**: the factory sets its colour.
-- `@poodle64/ui` `^2026.11.3`.
+- `@poodle64/ui` `^2026.11.4` (2026.11.3 was published before caspo's round landed).
 - **`shell.test.ts` holds for a rail declared `railCollapsed: true`**: it reads the state the rail starts in and asserts the toggle flips it.
 - **`brand.wordmark`**, a wordmark image (a URL) drawn in place of the title's text, which stays the home link's accessible name.
 - **`accountLinks[].entitlement`**: a link shown only to a caller for whom `viewer.can(entitlement)` holds, beside `admin`.

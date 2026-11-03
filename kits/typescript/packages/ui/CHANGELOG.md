@@ -2,14 +2,21 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.4] - 2026-11-03
+
+Consumer: caspo (master-project#443, the one shell's caspo round). 2026.11.3 was published before these landed, so they ship here.
+
+### Added
+
+- **`AppShell` `brandWordmark`**, a wordmark image drawn in place of `brandTitle`'s text; `ShellData` `brand.wordmark`, `ShellAccountLink.entitlement`, and `ShellData.paletteGroups` (`PaletteGroup`, `PaletteItem`, `resolvePaletteGroups`).
+- **`CommandPalette` `groups`**, extra groups beneath the nav's; a nav child is listed as "Section · page".
+
 ## [2026.11.3] - 2026-11-03
 
 Consumer: every stamped app (master-project#443, the one shell's second round).
 
 ### Added
 
-- **`AppShell` `brandWordmark`**, a wordmark image drawn in place of `brandTitle`'s text; `ShellData` `brand.wordmark`, `ShellAccountLink.entitlement`, and `ShellData.paletteGroups` (`PaletteGroup`, `PaletteItem`, `resolvePaletteGroups`).
-- **`CommandPalette` `groups`**, extra groups beneath the nav's; a nav child is listed as "Section · page".
 - **`PageLead`** (`@poodle64/ui/page-lead`): a page's answer-led lead under the rail's title, an `h2` with `eyebrow`, `subtitle` and `meta`. Its actions go to `ShellActions`.
 - **`BarAction.disabled`**, for a bar action that is shown and not usable (a refresh in flight).
 
