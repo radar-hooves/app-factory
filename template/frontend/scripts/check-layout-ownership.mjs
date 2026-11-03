@@ -35,9 +35,23 @@ export const PAGE_TYPES = ['reading', 'panel', 'tool', 'bare'];
 // self-test stub beside it.
 const SHELL_OWNERS = new Set(['src/lib/app-frame.svelte']);
 
+// `@container` is a container query, not the `container` class: the lookbehind
+// refuses a name that follows `@`.
 const WIDTH_CLASS =
-	/(?<![\w-])(?:[a-z0-9]+:)*(?:max-w-(?!none)[\w./[\]-]+|mx-auto|container|w-screen|h-screen|min-h-screen|min-w-screen)(?![\w-])/;
-const PAGE_MAX_WIDTH_RULE = /(?:^|[\s;{])max-width\s*:/;
+	/(?<![\w@-])(?:[a-z0-9]+:)*(?:max-w-(?!none)[\w./[\]-]+|mx-auto|container|w-screen|h-screen|min-h-screen|min-w-screen)(?![\w-])/;
+const PAGE_WIDTH_DECLARATION = /(?:^|[\s;{])max-(?:width|inline-size)\s*:/;
+// Selectors that name the page itself by convention, besides its own top-level
+// elements' classes and tags.
+const PAGE_FRAME_NAMES = new Set([
+	'page',
+	'wrap',
+	'wrapper',
+	'container',
+	'content',
+	'layout',
+	'root'
+]);
+const PAGE_FRAME_TAGS = new Set(['html', 'body', 'main', ':root']);
 const INLINE_FRAME_STYLE = /(?:max-width|margin(?:-inline)?)\s*:\s*[^;"']*(?:\d|auto)/;
 const VOID = new Set([
 	'area',
@@ -60,10 +74,10 @@ const VOID = new Set([
  * outermost elements, where a width or a centring is the page's frame. A width
  * on something inside (a field, a paragraph) is content and not asked about.
  * @param {string} markup
- * @returns {string[]} each tag's attribute text
+ * @returns {{ name: string, attrs: string }[]} each tag's name and attribute text
  */
-function topLevelAttributes(markup) {
-	/** @type {string[]} */
+function topLevelTags(markup) {
+	/** @type {{ name: string, attrs: string }[]} */
 	const out = [];
 	let depth = 0;
 	for (const m of markup.matchAll(
@@ -76,10 +90,44 @@ function topLevelAttributes(markup) {
 			depth = Math.max(0, depth - 1);
 			continue;
 		}
-		if (depth === 0) out.push(attrs);
+		if (depth === 0) out.push({ name, attrs });
 		if (!VOID.has(name) && !attrs.trimEnd().endsWith('/')) depth += 1;
 	}
 	return out;
+}
+
+/**
+ * Whether a <style> sets a width on the page itself: a rule giving `max-width`
+ * (or `max-inline-size`) whose selector ends on a top-level element of the
+ * markup, a conventional page-frame name (`.page`, `main`, `:global(body)`).
+ * A rule on a descendant (`.page p`, `.card`) is content and not asked about.
+ * @param {string} css
+ * @param {{ name: string, attrs: string }[]} top
+ */
+function stylesFrameThePage(css, top) {
+	const classes = new Set(PAGE_FRAME_NAMES);
+	const tags = new Set([...PAGE_FRAME_TAGS, ...top.map((t) => t.name)]);
+	for (const t of top) {
+		for (const m of t.attrs.matchAll(/\bclass\s*=\s*"([^"]*)"/g)) {
+			for (const c of (m[1] ?? '').split(/\s+/)) if (c) classes.add(c);
+		}
+	}
+	for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+		if (!PAGE_WIDTH_DECLARATION.test(rule[2] ?? '')) continue;
+		for (const selector of (rule[1] ?? '').split(',')) {
+			const last = selector
+				.replace(/:global\(([^)]*)\)/g, '$1')
+				.trim()
+				.split(/\s*[\s>+~]\s*/)
+				.at(-1);
+			if (!last) continue;
+			const tag = /^[a-z][\w-]*/i.exec(last)?.[0]?.toLowerCase();
+			const named = [...last.matchAll(/\.([\w-]+)/g)].map((m) => m[1] ?? '');
+			if ((tag && tags.has(tag)) || (last.startsWith(':root') && tags.has(':root'))) return true;
+			if (named.some((c) => classes.has(c))) return true;
+		}
+	}
+	return false;
 }
 
 /**
@@ -146,7 +194,8 @@ export function findViolations(root = FRONTEND_ROOT) {
 			const markup = text
 				.replace(/<script[\s\S]*?<\/script>/g, '')
 				.replace(/<style[\s\S]*?<\/style>/g, '');
-			const top = topLevelAttributes(markup);
+			const tops = topLevelTags(markup);
+			const top = tops.map((t) => t.attrs);
 			const match = top
 				.map((a) => WIDTH_CLASS.exec(a.replace(/^[^]*?class\s*=/, '')))
 				.find(Boolean);
@@ -159,12 +208,12 @@ export function findViolations(root = FRONTEND_ROOT) {
 				});
 			}
 			const styles = [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1] ?? '');
-			if (styles.some((css) => PAGE_MAX_WIDTH_RULE.test(css))) {
+			if (styles.some((css) => stylesFrameThePage(css, tops))) {
 				findings.push({
 					rule: 'own-page-frame',
 					file: rel,
 					detail:
-						'a <style> sets a max-width on its page; declare a pageType, the frame owns widths'
+						'a <style> sets a max-width on its page itself; declare a pageType, the frame owns widths'
 				});
 			}
 		}

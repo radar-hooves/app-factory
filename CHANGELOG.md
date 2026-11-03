@@ -18,13 +18,19 @@ Need: the one shell's second round of gaps, found by earworm, eight and the libr
 - **`shell.test.ts` passes a viewer with `can`** to `nav(viewer)`, and asserts the palette's account commands.
 - **The brand mark takes `text-primary`**: the factory sets its colour.
 - `@poodle64/ui` `^2026.11.3`.
+- **`shell.test.ts` holds for a rail declared `railCollapsed: true`**: it reads the state the rail starts in and asserts the toggle flips it.
+- **`brand.wordmark`**, a wordmark image (a URL) drawn in place of the title's text, which stays the home link's accessible name.
+- **`accountLinks[].entitlement`**: a link shown only to a caller for whom `viewer.can(entitlement)` holds, beside `admin`.
+- **The palette from data**: a child is listed as "Section · page" (a landing-page child is the section's own row); `shell.paletteGroups` (an array or `(viewer) => [...]`, each `{ heading, items: [{ label, href, icon? }] }`) adds groups of an app's own; and any app with a chat persona gets an "Ask {name}: …" row that hands the typed question to that persona's chat on Enter.
+- **The layout-ownership gate no longer reads `@container` as the `container` class**, and a `<style>` `max-width` (or `max-inline-size`) fails only on a rule whose selector ends on the page's own top-level element, `main`/`body` or a conventional page name (`.page`, `.wrap`, `.content`…); a rule on content inside the page passes.
 
 ### Consumer must change
 
 1. Library: delete `lib/components/LeadAnswer.svelte` for `PageLead` (put its `actions` in `ShellActions`); promote section headings back to `<h2>`. casefile opens on `PageLead` too.
 2. Eight: register Refresh and "Back to Round n" with `<ShellActions actions={[…]} />`; promote section headings back to `<h2>`; drop any `PageHeader` left on a page.
 3. Earworm: delete any `accountCommands` stand-in; the palette lists them. Any app: drop `text-primary` from your mark in `shell.ts` (harmless if left).
-4. Any page still on `PageHeader` (a title or a trail) fails `lint:drift`: delete it, declare `title` and `breadcrumbs` in the route's load data. `copier update` re-stamps `check-ui-drift.mjs`, `app-frame.svelte`, `shell.test.ts` and the Members page.
+4. caspo: declare `railCollapsed: true` if wanted, `brand.wordmark` for its lettering, `entitlement` on "Chip in", and its lessons group in `paletteGroups`; delete the palette's own Ask row, lessons group and "Section · page" labels, and the `QueryContainer` and `max-inline-size` workarounds. pebblestone: its image brand goes in `brand.wordmark`.
+5. Any page still on `PageHeader` (a title or a trail) fails `lint:drift`: delete it, declare `title` and `breadcrumbs` in the route's load data. `copier update` re-stamps `check-ui-drift.mjs`, `app-frame.svelte`, `shell.test.ts` and the Members page.
 
 ## [2026.11.9] - 2026-11-03
 

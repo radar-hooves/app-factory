@@ -35,7 +35,13 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import * as Command from '#lib/components/ui/command/index.js';
-	import { toItems, type NavSource } from '#lib/components/ui/app-shell/types.js';
+	import {
+		isNavGroup,
+		navChildren,
+		type IconComponent,
+		type NavSource
+	} from '#lib/components/ui/app-shell/types.js';
+	import type { PaletteGroup } from '#lib/components/ui/app-shell/shell-data.js';
 
 	let {
 		open = $bindable(false),
@@ -46,6 +52,7 @@
 		navHeading = 'Navigate',
 		emptyText = 'No results.',
 		shortcut = true,
+		groups = [],
 		lead,
 		children
 	}: {
@@ -65,6 +72,8 @@
 		emptyText?: string;
 		/** Bind ⌘K / Ctrl-K to toggle. Turn off to drive `open` yourself. */
 		shortcut?: boolean;
+		/** Extra groups of destinations beneath the nav group (`shell.paletteGroups`). */
+		groups?: readonly PaletteGroup[];
 		/** App rows above the nav group, left ungrouped so they stay first while
 		 *  the filter sorts: an action on what was typed. Given, the palette
 		 *  draws no empty line of its own. */
@@ -73,7 +82,30 @@
 		children?: Snippet;
 	} = $props();
 
-	const items = $derived(toItems(nav));
+	// A child is listed under its section's name ("Section · page"), so two
+	// sections each holding an "Open questions" are told apart; a child that is
+	// its section's landing page is the section's own row.
+	const items = $derived.by(() => {
+		const seen = new Set<string>();
+		const rows: { label: string; href: string; icon?: IconComponent }[] = [];
+		for (const entry of nav ?? []) {
+			for (const item of isNavGroup(entry) ? entry.items : [entry]) {
+				const candidates = [
+					item,
+					...navChildren(item).map((child) => ({
+						...child,
+						label: `${item.label} · ${child.label}`
+					}))
+				];
+				for (const row of candidates) {
+					if (seen.has(row.href)) continue;
+					seen.add(row.href);
+					rows.push(row);
+				}
+			}
+		}
+		return rows;
+	});
 
 	$effect(() => {
 		if (!open) query = '';
@@ -118,6 +150,18 @@
 				{/each}
 			</Command.Group>
 		{/if}
+
+		{#each groups as group (group.heading)}
+			<Command.Separator />
+			<Command.Group heading={group.heading}>
+				{#each group.items as item (item.href)}
+					<Command.Item onSelect={() => go(item.href)} value={`${group.heading} ${item.label}`}>
+						{#if item.icon}<item.icon class="mr-2 size-4" />{/if}
+						{item.label}
+					</Command.Item>
+				{/each}
+			</Command.Group>
+		{/each}
 
 		{#if children}
 			{#if items.length > 0}<Command.Separator />{/if}

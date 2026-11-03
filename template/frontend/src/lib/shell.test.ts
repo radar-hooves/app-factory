@@ -27,6 +27,13 @@ vi.mock('#lib/api/client.js', () => ({
 	getActiveWorkspaceId: vi.fn(() => null)
 }));
 
+const chat = vi.hoisted(() => ({ handOff: vi.fn() }));
+vi.mock('#lib/agent/chat.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/agent/chat.js')>()),
+	personasOf: () => Promise.resolve([{ id: 'milton', name: 'Milton' }]),
+	handOff: chat.handOff
+}));
+
 vi.mock('#lib/alerts/admin-alert-bell.svelte', () => import('../test/stubs/alert-bell.svelte'));
 
 const route = vi.hoisted(() => ({
@@ -166,8 +173,12 @@ describe('the sidebar', () => {
 		expect(follows(toggle, rail.querySelector('nav')!)).toBe(true);
 		expect(document.querySelector('header')).not.toContainElement(toggle);
 
+		// It folds an open rail and opens a folded one: the app may declare
+		// `railCollapsed`, so the test reads the state it starts in.
+		const startsCollapsed = shell.railCollapsed ?? false;
+		expect(rail.hasAttribute('data-collapsed')).toBe(startsCollapsed);
 		await fireEvent.click(toggle);
-		expect(rail).toHaveAttribute('data-collapsed', 'true');
+		expect(rail.hasAttribute('data-collapsed')).toBe(!startsCollapsed);
 	});
 
 	it('draws the nav the app declared', () => {
@@ -200,6 +211,33 @@ describe('the palette', () => {
 		const palette = within(await screen.findByRole('dialog'));
 		expect(palette.getByText('Settings')).toBeInTheDocument();
 		expect(palette.getByText('Sign out')).toBeInTheDocument();
+	});
+
+	it('asks the chat persona what was typed, on Enter', async () => {
+		render(Layout, { props: { children } });
+		await fireEvent.click(screen.getByTestId('ds-shell-search'));
+
+		const palette = within(await screen.findByRole('dialog'));
+		await fireEvent.input(palette.getByRole('combobox'), { target: { value: 'what is owed?' } });
+		const row = await palette.findByText('Ask Milton: what is owed?');
+		await fireEvent.click(row);
+		expect(chat.handOff).toHaveBeenCalledWith('milton', { ask: 'what is owed?' });
+	});
+
+	it('lists a nav section’s children under the section’s name', async () => {
+		const nav = typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
+		const parents = nav
+			.flatMap((e) => ('items' in e ? e.items : [e]))
+			.filter((item) => item.children?.length);
+		render(Layout, { props: { children } });
+		await fireEvent.click(screen.getByTestId('ds-shell-search'));
+
+		const palette = within(await screen.findByRole('dialog'));
+		for (const parent of parents) {
+			for (const child of parent.children!.filter((c) => c.href !== parent.href)) {
+				expect(palette.getByText(`${parent.label} · ${child.label}`)).toBeInTheDocument();
+			}
+		}
 	});
 });
 

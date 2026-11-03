@@ -10,8 +10,15 @@
  *   function of the viewer: `nav: (viewer) => [...]`, with
  *   `viewer.can('entitlement')`. No Settings row: Settings is the account
  *   menu's.
+ * - `brand.wordmark`: a wordmark image (a URL) drawn in place of the title's
+ *   text, which stays the home link's accessible name.
  * - `accountLinks`: extra rows in the account menu (an Admin route), after
- *   Settings. `admin: true` shows one only to a caller holding `admin`.
+ *   Settings. `admin: true` shows one only to a caller holding `admin`;
+ *   `entitlement: 'name'` only to a caller holding that entitlement.
+ * - `paletteGroups`: extra groups of destinations in the ⌘K palette, as an
+ *   array or `(viewer) => [...]`. The palette already lists the nav (a child
+ *   as "Section · page"), the account's commands, and an Ask row for each
+ *   chat persona.
  * - Name rows in the reader's words, never the library's architecture
  *   (canonical-app-shape.md §Milton is a person, not a place).
  *

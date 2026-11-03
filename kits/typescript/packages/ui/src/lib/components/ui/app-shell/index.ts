@@ -32,4 +32,11 @@ export {
 	type NavItem,
 	type NavSource
 } from './types.js';
-export { resolveNav, type ShellAccountLink, type ShellData } from './shell-data.js';
+export {
+	resolveNav,
+	resolvePaletteGroups,
+	type PaletteGroup,
+	type PaletteItem,
+	type ShellAccountLink,
+	type ShellData
+} from './shell-data.js';

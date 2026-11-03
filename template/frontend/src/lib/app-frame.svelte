@@ -19,13 +19,15 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
-	import { AppShell, resolveNav } from '@poodle64/ui/app-shell';
+	import { AppShell, resolveNav, resolvePaletteGroups } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
 	import * as Command from '@poodle64/ui/command';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Settings from '@lucide/svelte/icons/settings';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import { page } from '$app/state';
+	import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
+	import { handOff, personasOf, type Persona } from '#lib/agent/chat.js';
 	import { dynamicPageTitle } from '#lib/page-title.svelte.js';
 	import { goto } from '$app/navigation';
 	import Eye from '@lucide/svelte/icons/eye';
@@ -41,7 +43,27 @@
 	// One nav feeds BOTH the shell and the palette: a palette handed none finds
 	// nothing while looking like it works. ⌘K is bound by CommandPalette itself.
 	const nav = $derived(resolveNav(shell, auth));
+	const paletteGroups = $derived(resolvePaletteGroups(shell, auth));
 	let paletteOpen = $state(false);
+	let paletteQuery = $state('');
+
+	// Every app with a chat persona gets an Ask row: type a question, Enter asks
+	// that persona. Read once the palette first opens, and only for a signed-in
+	// caller; a failed read leaves the palette without the row.
+	let personas = $state<Persona[]>([]);
+	let personasRead = false;
+	$effect(() => {
+		if (!paletteOpen || personasRead || !auth.user) return;
+		personasRead = true;
+		void personasOf()
+			.then((all) => (personas = all))
+			.catch(() => (personasRead = false));
+	});
+	function ask(persona: Persona) {
+		const question = paletteQuery.trim();
+		paletteOpen = false;
+		void handOff(persona.id, { ask: question });
+	}
 	let collapsed = $state(shell.railCollapsed ?? false);
 
 	// One route, read by WorkspaceMenu (its own "Members" item, for several
@@ -68,7 +90,10 @@
 			? [{ label: 'View as colleague', icon: Eye, onSelect: () => (viewAsOpen = true) }]
 			: []),
 		...(shell.accountLinks ?? [])
-			.filter((link) => !link.admin || auth.can('admin'))
+			.filter(
+				(link) =>
+					(!link.admin || auth.can('admin')) && (!link.entitlement || auth.can(link.entitlement))
+			)
 			.map((link) => ({
 				label: link.label,
 				icon: link.icon,
@@ -93,6 +118,7 @@
 	bind:collapsed
 	brandTitle={shell.brand.title}
 	brandMark={shell.brand.mark ? brandMark : undefined}
+	brandWordmark={shell.brand.wordmark}
 	homeHref={shell.brand.homeHref}
 	currentPath={page.url.pathname}
 	pageType={page.data.pageType}
@@ -147,7 +173,23 @@
 <ViewAsDialog bind:open={viewAsOpen} />
 
 <!-- The account menu's commands are the palette's too, from the one list. -->
-<CommandPalette bind:open={paletteOpen} {nav} onNavigate={goto}>
+<CommandPalette
+	bind:open={paletteOpen}
+	bind:query={paletteQuery}
+	{nav}
+	groups={paletteGroups}
+	onNavigate={goto}
+>
+	{#snippet lead()}
+		{#if paletteQuery.trim()}
+			{#each personas as persona (persona.id)}
+				<Command.Item forceMount value={`ask ${persona.id}`} onSelect={() => ask(persona)}>
+					<MessageCircleQuestion class="mr-2 size-4" />
+					Ask {persona.name}: {paletteQuery.trim()}
+				</Command.Item>
+			{/each}
+		{/if}
+	{/snippet}
 	<Command.Group heading="Account">
 		{#each accountCommands as command (command.label)}
 			<Command.Item

@@ -62,6 +62,31 @@ test('a width on something inside the page is content, not the page’s frame', 
 	assert.deepEqual(rules(root), []);
 });
 
+test('a container query is not the container class, and a rule inside the page is content', () => {
+	const root = app({
+		'src/routes/x/+page.svelte': `<div class="@container grid @lg:grid-cols-2 gap-4"><p class="note">x</p></div>
+<style>
+	.note { max-width: 40ch; }
+	.grid p { max-inline-size: 30ch; }
+	@media (min-width: 40rem) { .note { max-width: 50ch; } }
+</style>`
+	});
+	assert.deepEqual(rules(root), []);
+});
+
+test('a width set on the page’s own element or on main is refused, whichever property', () => {
+	for (const css of [
+		'.wide { max-inline-size: 70rem; }',
+		':global(main) { max-width: 70rem; }',
+		'.page { max-width: 70rem; }'
+	]) {
+		const root = app({
+			'src/routes/x/+page.svelte': `<section class="wide">x</section>\n<style>\n${css}\n</style>`
+		});
+		assert.deepEqual(rules(root), ['own-page-frame src/routes/x/+page.svelte'], css);
+	}
+});
+
 test('an inline style framing the page is refused', () => {
 	const root = app({ 'src/routes/x/+page.svelte': `<div style="max-width: 60rem; margin: 0 auto">x</div>` });
 	assert.deepEqual(rules(root), ['own-page-frame src/routes/x/+page.svelte']);

@@ -28,6 +28,21 @@ export interface ShellAccountLink {
 	icon?: IconComponent;
 	/** Shown only to a caller holding `admin`. */
 	admin?: boolean;
+	/** Shown only to a caller holding this entitlement (`viewer.can`). */
+	entitlement?: string;
+}
+
+/** One destination in a palette group an app declares. */
+export interface PaletteItem {
+	label: string;
+	href: string;
+	icon?: IconComponent;
+}
+
+/** A group of destinations the palette lists beside the nav (a lessons group). */
+export interface PaletteGroup {
+	heading: string;
+	items: readonly PaletteItem[];
 }
 
 export interface ShellData<Viewer = never> {
@@ -38,6 +53,8 @@ export interface ShellData<Viewer = never> {
 		title: string;
 		/** The mark beside the wordmark: a component taking a `class`. */
 		mark?: IconComponent;
+		/** A wordmark image (a URL), drawn in place of `title`'s text; `title` stays the home link's name. */
+		wordmark?: string;
 		/** Where the brand links. Default `/`. */
 		homeHref?: string;
 	};
@@ -52,9 +69,24 @@ export interface ShellData<Viewer = never> {
 	railCollapsed?: boolean;
 	/** Extra rows in the account menu, after Settings. */
 	accountLinks?: readonly ShellAccountLink[];
+	/**
+	 * Extra groups in the ⌘K palette, beside the nav's and the account's: a
+	 * function of the viewer for rows that depend on who they are. Every app
+	 * with a chat persona also gets an "Ask" row there; no declaring it.
+	 */
+	paletteGroups?: readonly PaletteGroup[] | ((viewer: Viewer) => readonly PaletteGroup[]);
 }
 
 /** The nav as the frame renders it, whichever way the app declared it. */
 export function resolveNav<Viewer>(shell: ShellData<Viewer>, viewer: Viewer): NavSource {
 	return typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
+}
+
+/** The palette groups as the frame renders them, whichever way the app declared them. */
+export function resolvePaletteGroups<Viewer>(
+	shell: ShellData<Viewer>,
+	viewer: Viewer
+): readonly PaletteGroup[] {
+	const groups = shell.paletteGroups;
+	return (typeof groups === 'function' ? groups(viewer) : groups) ?? [];
 }

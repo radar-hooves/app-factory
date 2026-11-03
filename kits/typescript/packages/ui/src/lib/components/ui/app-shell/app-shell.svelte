@@ -112,6 +112,7 @@
 		brand,
 		brandTitle,
 		brandMark,
+		brandWordmark,
 		homeHref = '/',
 		banner,
 		context,
@@ -163,6 +164,9 @@
 		brandTitle?: string;
 		/** The mark beside the wordmark — an app's own logo component. */
 		brandMark?: Snippet;
+		/** A wordmark image (a URL), drawn in place of `brandTitle`'s text, which
+		 *  stays its accessible name. */
+		brandWordmark?: string;
 		/** Where the brand links. */
 		homeHref?: string;
 		/** Full-width region directly under the top bar: reconnect notices, trials. */
@@ -592,7 +596,9 @@
 					{@render brandMark()}
 				</span>
 			{/if}
-			{#if brandTitle && !railNarrow}
+			{#if brandWordmark && !railNarrow}
+				<img src={brandWordmark} alt="" class="hidden h-6 w-auto sm:inline" />
+			{:else if brandTitle && !railNarrow}
 				<!--
 					The wordmark stands down below sm, leaving the mark alone. On a phone
 					the rail is gone, so this same lockup is what the top bar carries — and
