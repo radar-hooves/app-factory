@@ -5,9 +5,10 @@ import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 // The element client's test asserts a sign-in hop, not a stylesheet. Importing
-// `src/lib/elements/index.ts` pulls in `elements.css?inline`, which Tailwind compiles from the
-// whole kit in 15-20s cold and past a minute on a loaded host (three tests timed
-// out on the CI runner, 03/11/2026); the build and the proof compile it for real.
+// `src/lib/elements/index.ts` pulls in `elements.css?inline`, which Tailwind
+// compiles from the whole kit: 7s of a 10s file on an idle host, and three tests
+// timed out at 60s on a loaded CI runner (03/11/2026). The build and the proof
+// compile it for real.
 const noElementsStylesheet: Plugin = {
 	name: 'no-elements-stylesheet',
 	enforce: 'pre',

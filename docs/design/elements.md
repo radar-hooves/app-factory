@@ -28,7 +28,7 @@ service                                                  placing app, any page
 
 A service:
 
-1. Write `frontend/src/elements/<tag>.svelte`, starting with `<svelte:options customElement={{ tag: '<tag>', extend: element }} />`, and import `element` and `api` from `$lib/elements`. Use kit components and Tailwind as on any page.
+1. Write `frontend/src/elements/<tag>.svelte`, starting with `<svelte:options customElement={{ tag: '<tag>', extend: element }} />`, and import `element` and `api` from `#lib/elements/index.js`. Use kit components and Tailwind as on any page.
 2. Name every placing origin in `CORS_ORIGINS`.
 3. At the front door, let `/elements.js` and `/elements.d.ts` pass without forward-auth (the yggdrasil vhost). Keep `/elements/session` and the API behind it.
 4. Make its home page its own elements: `<tag></tag>`.
