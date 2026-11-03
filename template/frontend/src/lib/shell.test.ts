@@ -193,7 +193,7 @@ describe('the account menu', () => {
 });
 
 describe('the palette', () => {
-	it('lists the account menu\'s commands beside the nav', async () => {
+	it("lists the account menu's commands beside the nav", async () => {
 		render(Layout, { props: { children } });
 		await fireEvent.click(screen.getByTestId('ds-shell-search'));
 
