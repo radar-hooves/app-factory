@@ -1,12 +1,24 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+
+// The element client's test asserts a sign-in hop, not a stylesheet. Importing
+// `src/lib/elements/index.ts` pulls in `elements.css?inline`, which Tailwind compiles from the
+// whole kit in 15-20s cold and past a minute on a loaded host (three tests timed
+// out on the CI runner, 03/11/2026); the build and the proof compile it for real.
+const noElementsStylesheet: Plugin = {
+	name: 'no-elements-stylesheet',
+	enforce: 'pre',
+	load: (id) =>
+		id.split('?')[0]?.endsWith('/src/lib/elements/elements.css') ? '/* none */' : undefined
+};
 
 export default defineConfig({
 	// No `hot` option: vite-plugin-svelte 7 removed it, and it was always a no-op
 	// here — vitest runs no dev server, so there is nothing to hot-reload.
-	plugins: [svelte(), tailwindcss()],
+	plugins: [noElementsStylesheet, svelte(), tailwindcss()],
 	test: {
 		globals: true,
 		environment: 'jsdom',
