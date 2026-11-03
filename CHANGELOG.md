@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the stamped `shell.test.ts` runs byte-identical with or without the agent slice; consumer: the library, radar-hooves/master-project#424.
+
+### Fixed
+
+- **`shell.test.ts` no longer needs `lib/agent/chat.ts`**: its mock reads the original module without naming its type, and the palette's "Ask <persona>" case is skipped when the frame's own glob (`./agent/chat.ts`) matches nothing; every other case runs everywhere. The Factory self-test deletes the slice from its scratch render and runs the file again.
+
+### Consumer must change
+
+1. Library: after `copier update`, delete the `.canonical-exceptions` line for `frontend/src/lib/shell.test.ts`.
+
 ## [2026.11.12] - 2026-11-03
 
 Need: one banner-free Python estate; consumer: the operator, radar-hooves/master-project#424.

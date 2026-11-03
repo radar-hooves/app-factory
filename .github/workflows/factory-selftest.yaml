@@ -268,6 +268,16 @@ jobs:
           pnpm test -- --run
           pnpm check
 
+      - name: Frontend — the shell test without the agent slice
+        # An app with no chat client (the library) runs the same stamped
+        # shell.test.ts: the Ask-row case skips, the rest passes. Run last in
+        # the scratch's frontend, after the suite above, since it deletes the slice.
+        working-directory: ${{ env.SCRATCH }}/frontend
+        run: |
+          set -euo pipefail
+          rm src/lib/agent/chat.ts
+          pnpm test -- --run src/lib/shell.test.ts
+
       - name: Elements — one element, two placements, in a real browser
         # The scratch app serves <selftest-card>; the proof stamps a second app in
         # another palette that places it, and drives both pages in Chromium (the

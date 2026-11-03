@@ -28,11 +28,16 @@ vi.mock('#lib/api/client.js', () => ({
 }));
 
 const chat = vi.hoisted(() => ({ handOff: vi.fn() }));
+// Lazy: the factory runs only when the frame imports the slice, which it does
+// only where `lib/agent/chat.ts` exists.
 vi.mock('#lib/agent/chat.js', async (importOriginal) => ({
-	...(await importOriginal<typeof import('#lib/agent/chat.js')>()),
+	...(await importOriginal<Record<string, unknown>>()),
 	personasOf: () => Promise.resolve([{ id: 'milton', name: 'Milton' }]),
 	handOff: chat.handOff
 }));
+
+// The same glob the frame uses decides whether the Ask row exists to assert.
+const hasChat = Object.keys(import.meta.glob('./agent/chat.ts')).length > 0;
 
 vi.mock('#lib/alerts/admin-alert-bell.svelte', () => import('../test/stubs/alert-bell.svelte'));
 
@@ -213,7 +218,7 @@ describe('the palette', () => {
 		expect(palette.getByText('Sign out')).toBeInTheDocument();
 	});
 
-	it('asks the chat persona what was typed, on Enter', async () => {
+	it.skipIf(!hasChat)('asks the chat persona what was typed, on Enter', async () => {
 		render(Layout, { props: { children } });
 		await fireEvent.click(screen.getByTestId('ds-shell-search'));
 
