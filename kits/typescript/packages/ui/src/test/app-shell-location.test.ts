@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import Harness from './app-shell-location.svelte';
 import { activeNavTitle, shortLocation } from '#lib/components/ui/app-shell/types.js';
 
@@ -48,11 +48,15 @@ describe('shortLocation', () => {
 describe('AppShell — location row', () => {
 	beforeEach(() => localStorage.clear());
 
-	it('shows where you are, and follows navigation', async () => {
+	it('shows where you are as breadcrumbs, and follows navigation', async () => {
 		const { rerender } = render(Harness, { currentPath: '/securities/trading' });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Securities › Trading');
+		const trail = screen.getByTestId('ds-shell-title');
+		expect(trail).toHaveAttribute('aria-label', 'Breadcrumb');
+		expect(trail.querySelectorAll('li')).toHaveLength(2);
+		expect(trail).toHaveTextContent('Securities Trading');
+		expect(within(trail).getByRole('link', { name: 'Securities' })).toHaveAttribute('href', '/securities');
 		await rerender({ currentPath: '/overview' });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Overview');
+		expect(screen.getByTestId('ds-shell-title')).toHaveTextContent('Overview');
 	});
 
 	it('renders no row on a route the nav does not list', () => {
@@ -60,29 +64,18 @@ describe('AppShell — location row', () => {
 		expect(screen.queryByTestId('ds-shell-location')).not.toBeInTheDocument();
 	});
 
-	it('shows on a phone too, truncated in the space it has', () => {
+	it('takes the first row’s free room on a phone, truncated', () => {
 		render(Harness, { currentPath: '/securities/trading' });
 		const row = screen.getByTestId('ds-shell-location');
 		expect(row).toHaveClass('max-sm:contents');
-		expect(row.querySelector('span')).toHaveClass('truncate', 'min-w-0', 'max-sm:flex-1', 'max-sm:basis-0');
+		expect(screen.getByTestId('ds-shell-title')).toHaveClass('min-w-0', 'max-sm:flex-1', 'max-sm:basis-0');
 	});
 
-	it('carries the trail wide and the page alone on a phone', () => {
-		render(Harness, { currentPath: '/securities/trading' });
-		const title = screen.getByTestId('ds-shell-title');
-		const [wide, narrow] = Array.from(title.querySelectorAll('span'));
-		expect(wide).toHaveTextContent('Securities › Trading');
-		expect(wide).toHaveClass('max-sm:hidden');
-		expect(narrow).toHaveTextContent('Trading');
-		expect(narrow).toHaveClass('sm:hidden');
-	});
-
-	it('names a section landing page by the section on a phone', () => {
+	it('names a section landing page by the section alone', () => {
 		render(Harness, { currentPath: '/securities' });
 		const title = screen.getByTestId('ds-shell-title');
-		const [wide, narrow] = Array.from(title.querySelectorAll('span'));
-		expect(wide).toHaveTextContent('Securities › Overview');
-		expect(narrow).toHaveTextContent(/^Securities$/);
+		expect(title.querySelectorAll('li')).toHaveLength(1);
+		expect(title).toHaveTextContent(/^Securities$/);
 	});
 
 	it('has no Settings row in the rail: Settings is the account menu’s', () => {

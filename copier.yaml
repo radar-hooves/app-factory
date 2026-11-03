@@ -62,10 +62,11 @@ _skip_if_exists:
   # THE extension point for the factory's state surfaces (the protected error page and
   # the protected layout's loading state): the app's own illustration.
   - frontend/src/lib/art.ts
-  # THE extension point for frontend/src/routes/(protected)/+layout.svelte: this app's
-  # shell, nav and top bar. Stamped with the factory's composition, then the
-  # app's — an update must never overwrite the nav it has declared.
-  - frontend/src/lib/app-frame.svelte
+  # THE app's shell, as data: its name, nav and account links (ShellData). The factory's
+  # frame (frontend/src/lib/app-frame.svelte, byte-identical in every app) lays the rail,
+  # the sidebar and the page frames out from it — an update must never overwrite the nav
+  # the app has declared.
+  - frontend/src/lib/shell.ts
   # The scaffold slice's landing page, like api/example/: the app replaces it
   # with its real home or a redirect, and an update must never put it back.
   - frontend/src/routes/(protected)/+page.svelte

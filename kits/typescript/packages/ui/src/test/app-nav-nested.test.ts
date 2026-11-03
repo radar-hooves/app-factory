@@ -20,11 +20,15 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/sve
 import NestedHarness from './app-nav-nested.svelte';
 import FlatHarness from './app-shell.svelte';
 import {
+
 	hasActiveNavChild,
 	navChildren,
 	toItems,
 	type NavItem
 } from '#lib/components/ui/app-shell/types.js';
+
+// The bar's breadcrumbs repeat the current row, so the rail is where its own state is read.
+const rail = () => document.querySelector<HTMLElement>('.ds-shell-rail')!;
 
 /** The disclosure control for a branch, by the label it names. */
 function chevron(label: string) {
@@ -47,15 +51,15 @@ describe('nested nav — the disclosure contract', () => {
 
 	it('takes the closed rows out of the accessibility tree, not merely out of sight', async () => {
 		render(NestedHarness, { props: { currentPath: '/overview' } });
-		expect(screen.queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
+		expect(within(rail()).queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
 
 		await fireEvent.click(chevron('Education'));
 
 		await waitFor(() =>
-			expect(screen.getByRole('link', { name: 'Topic one' })).toBeInTheDocument()
+			expect(within(rail()).getByRole('link', { name: 'Topic one' })).toBeInTheDocument()
 		);
 		expect(chevron('Education')).toHaveAttribute('aria-expanded', 'true');
-		expect(screen.getByRole('link', { name: 'Topic one' })).toHaveAttribute(
+		expect(within(rail()).getByRole('link', { name: 'Topic one' })).toHaveAttribute(
 			'href',
 			'/education/one'
 		);
@@ -69,7 +73,7 @@ describe('nested nav — the disclosure contract', () => {
 		await fireEvent.click(chevron('Education'));
 
 		await waitFor(() =>
-			expect(screen.queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument()
+			expect(within(rail()).queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument()
 		);
 	});
 
@@ -78,7 +82,7 @@ describe('nested nav — the disclosure contract', () => {
 		// expander, `href` would quietly stop meaning "go here" the day an app
 		// added children to an item that already had one.
 		render(NestedHarness, { props: { currentPath: '/overview' } });
-		const parent = screen.getByRole('link', { name: 'Education' });
+		const parent = within(rail()).getByRole('link', { name: 'Education' });
 
 		expect(parent).toHaveAttribute('href', '/education');
 		expect(parent).not.toHaveAttribute('aria-expanded');
@@ -94,7 +98,7 @@ describe('nested nav — expansion follows the path, until it is told otherwise'
 		render(NestedHarness, { props: { currentPath: '/education/two' } });
 
 		expect(chevron('Education')).toHaveAttribute('aria-expanded', 'true');
-		expect(screen.getByRole('link', { name: 'Topic two' })).toHaveAttribute('aria-current', 'page');
+		expect(within(rail()).getByRole('link', { name: 'Topic two' })).toHaveAttribute('aria-current', 'page');
 	});
 
 	it('opens a group whose children live at their own top-level routes', () => {
@@ -116,12 +120,12 @@ describe('nested nav — expansion follows the path, until it is told otherwise'
 		// passed throughout.
 		const { container } = render(NestedHarness, { props: { currentPath: '/education/two' } });
 
-		expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
-		expect(container.querySelectorAll('[data-active="true"]')).toHaveLength(1);
-		expect(container.querySelectorAll('.ds-nav-indicator')).toHaveLength(1);
+		expect(rail().querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+		expect(rail().querySelectorAll('[data-active="true"]')).toHaveLength(1);
+		expect(rail().querySelectorAll('.ds-nav-indicator')).toHaveLength(1);
 
-		expect(screen.getByRole('link', { name: 'Topic two' })).toHaveAttribute('aria-current', 'page');
-		const parent = screen.getByRole('link', { name: 'Education' });
+		expect(within(rail()).getByRole('link', { name: 'Topic two' })).toHaveAttribute('aria-current', 'page');
+		const parent = within(rail()).getByRole('link', { name: 'Education' });
 		expect(parent).not.toHaveAttribute('aria-current');
 		expect(parent).toHaveAttribute('data-within', 'true');
 	});
@@ -132,27 +136,27 @@ describe('nested nav — expansion follows the path, until it is told otherwise'
 		// earned prefix matching, so the suppression is scoped to a DECLARED child.
 		const { container } = render(NestedHarness, { props: { currentPath: '/education/unlisted' } });
 
-		const parent = screen.getByRole('link', { name: 'Education' });
+		const parent = within(rail()).getByRole('link', { name: 'Education' });
 		expect(parent).toHaveAttribute('aria-current', 'page');
-		expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+		expect(rail().querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 	});
 
 	it('keeps the parent active on its own page', () => {
 		render(NestedHarness, { props: { currentPath: '/education' } });
 
-		expect(screen.getByRole('link', { name: 'Education' })).toHaveAttribute('aria-current', 'page');
-		expect(screen.getByRole('link', { name: 'Topic one' })).not.toHaveAttribute('aria-current');
+		expect(within(rail()).getByRole('link', { name: 'Education' })).toHaveAttribute('aria-current', 'page');
+		expect(within(rail()).getByRole('link', { name: 'Topic one' })).not.toHaveAttribute('aria-current');
 	});
 
 	it('marks a parent whose section you are in but whose own href does not match', () => {
 		render(NestedHarness, { props: { currentPath: '/archive' } });
-		const records = screen.getByRole('link', { name: 'Records' });
+		const records = within(rail()).getByRole('link', { name: 'Records' });
 
 		expect(records).toHaveAttribute('data-within', 'true');
 		// Exactly one row may claim to BE the page.
 		expect(records).not.toHaveAttribute('data-active');
 		expect(records).not.toHaveAttribute('aria-current');
-		expect(screen.getByRole('link', { name: 'Archive' })).toHaveAttribute('aria-current', 'page');
+		expect(within(rail()).getByRole('link', { name: 'Archive' })).toHaveAttribute('aria-current', 'page');
 	});
 
 	it('follows the path across a navigation when the user has not intervened', async () => {
@@ -217,7 +221,7 @@ describe('nested nav — keyboard', () => {
 		// which is the same stranding the drawer's own focus handling exists to
 		// prevent, one level down.
 		render(NestedHarness, { props: { currentPath: '/education/one' } });
-		const child = screen.getByRole('link', { name: 'Topic one' });
+		const child = within(rail()).getByRole('link', { name: 'Topic one' });
 		child.focus();
 
 		await fireEvent.keyDown(child, { key: 'Escape' });
@@ -234,7 +238,7 @@ describe('nested nav — keyboard', () => {
 		await fireEvent.click(screen.getByTestId('ds-shell-menu'));
 		await waitFor(() => expect(screen.getByTestId('ds-shell-drawer')).toBeInTheDocument());
 
-		await fireEvent.keyDown(screen.getByRole('link', { name: 'Overview' }), { key: 'Escape' });
+		await fireEvent.keyDown(within(rail()).getByRole('link', { name: 'Overview' }), { key: 'Escape' });
 
 		await waitFor(() => expect(screen.queryByTestId('ds-shell-drawer')).not.toBeInTheDocument());
 	});
@@ -244,7 +248,7 @@ describe('nested nav — keyboard', () => {
 		await fireEvent.click(screen.getByTestId('ds-shell-menu'));
 		await waitFor(() => expect(screen.getByTestId('ds-shell-drawer')).toBeInTheDocument());
 
-		await fireEvent.keyDown(screen.getByRole('link', { name: 'Topic one' }), { key: 'Escape' });
+		await fireEvent.keyDown(within(rail()).getByRole('link', { name: 'Topic one' }), { key: 'Escape' });
 
 		await waitFor(() => expect(chevron('Education')).toHaveAttribute('aria-expanded', 'false'));
 		expect(screen.getByTestId('ds-shell-drawer')).toBeInTheDocument();
@@ -300,8 +304,8 @@ describe('nested nav — the collapsed rail', () => {
 
 		expect(screen.queryByRole('button', { name: /Expand Education/ })).not.toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: /Collapse Education/ })).not.toBeInTheDocument();
-		expect(screen.queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
-		expect(screen.getByRole('link', { name: 'Education' })).toHaveAttribute('href', '/education');
+		expect(within(rail()).queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
+		expect(within(rail()).getByRole('link', { name: 'Education' })).toHaveAttribute('href', '/education');
 	});
 
 	it('peeks with the labels drawn and the collapsed structure kept, so no row moves', async () => {
@@ -316,9 +320,9 @@ describe('nested nav — the collapsed rail', () => {
 		await fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
 		await waitFor(() => expect(rail).toHaveAttribute('data-peek', 'true'));
 
-		const education = screen.getByRole('link', { name: 'Education' });
+		const education = within(rail).getByRole('link', { name: 'Education' });
 		expect(education.querySelector('.sr-only')).toBeNull();
-		expect(screen.queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
+		expect(within(rail).queryByRole('link', { name: 'Topic one' })).not.toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: /(Expand|Collapse) Education/ })).not.toBeInTheDocument();
 	});
 
@@ -330,7 +334,7 @@ describe('nested nav — the collapsed rail', () => {
 		await fireEvent.click(screen.getByTestId('ds-rail-collapse'));
 
 		await waitFor(() =>
-			expect(screen.getByRole('link', { name: 'Topic one' })).toBeInTheDocument()
+			expect(within(rail()).getByRole('link', { name: 'Topic one' })).toBeInTheDocument()
 		);
 	});
 });
@@ -354,7 +358,7 @@ describe('nested nav — the childless case is untouched', () => {
 		expect(container.querySelector('[data-branch]')).toBeNull();
 		// The rows themselves are still there, so this is not passing by rendering
 		// nothing at all.
-		expect(container.querySelectorAll('.ds-nav-item').length).toBeGreaterThan(0);
+		expect(rail().querySelectorAll('.ds-nav-item').length).toBeGreaterThan(0);
 	});
 });
 

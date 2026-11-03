@@ -11,7 +11,7 @@ vi.mock('#lib/auth.svelte.js', () => ({
 	auth: { can: (module: string) => held.entitlements.includes(module) }
 }));
 
-vi.mock('#lib/app-frame.svelte', () => ({ workspaceLabel: 'Workspace' }));
+vi.mock('#lib/shell.js', () => ({ shell: { workspaceLabel: 'Workspace' } }));
 
 vi.mock('./app', () => ({ appSettingsSections: () => appSections.value }));
 

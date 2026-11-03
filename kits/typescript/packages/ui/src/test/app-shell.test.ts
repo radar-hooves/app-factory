@@ -318,9 +318,9 @@ describe('AppShell — rail collapse', () => {
 		});
 	});
 
-	it('sits in the rail, after the nav — not in the top bar', () => {
-		// A control that works the sidebar is the sidebar's (operator, 30/10/2026).
-		// Proven by DOM order, since jsdom applies no layout.
+	it('sits on the sidebar\'s top, before the nav — not in the top bar', () => {
+		// A control that works the sidebar is the sidebar's, at its top (operator,
+		// 03/11/2026). Proven by DOM order, since jsdom applies no layout.
 		render(ShellHarness, { props: { collapsible: true } });
 		const rail = document.querySelector('.ds-shell-rail')!;
 		const header = document.querySelector('header.ds-shell-bar')!;
@@ -329,15 +329,12 @@ describe('AppShell — rail collapse', () => {
 
 		expect(rail).toContainElement(toggle);
 		expect(header).not.toContainElement(toggle);
-		expect(screen.queryByTestId('ds-rail-collapse-separator')).not.toBeInTheDocument();
+		expect(screen.getByTestId('ds-rail-head')).toContainElement(toggle);
 		expect(
-			nav.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the toggle follows the nav'
+			toggle.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the toggle precedes the nav'
 		).toBeTruthy();
-		// The rail header holds the brand alone: nothing but the brand link
-		// precedes the nav.
-		const brand = rail.querySelector<HTMLElement>('a[aria-label="Harness"]')!;
-		expect(brand.parentElement).toBe(rail);
+		expect(rail.firstElementChild).toBe(screen.getByTestId('ds-rail-head'));
 	});
 
 	it('names the toggle for its action in both states', async () => {
@@ -482,40 +479,35 @@ describe('AppShell — a collapsed rail peeks', () => {
 	});
 });
 
-describe('AppShell — searchPlacement', () => {
-	// Search is a global affordance. Where it sits changes what it reads AS: after
-	// the `context` slot it looks like route context; over with the theme toggle
-	// and identity it reads as global. The prop moves the SAME button — same
-	// testid, same behaviour — so these assert position, not a second control.
-	it('renders search in the leading position by default', () => {
+describe('AppShell — the bar, to the ruling (03/11/2026)', () => {
+	const before = (a: Element, b: Element) =>
+		Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+	it('lays the right-hand controls out search, actions, theme, account from the left', () => {
 		render(ShellHarness);
 		const search = screen.getByTestId('ds-shell-search');
-		// Leading sits directly on the bar, ahead of the right-hand controls group,
-		// not inside it.
-		expect(search.parentElement).toHaveClass('ds-shell-bar');
-		expect(search.closest('.ml-auto')).toBeNull();
-	});
-
-	it('moves search into the trailing controls group, before actions, when asked', () => {
-		render(ShellHarness, { props: { searchPlacement: 'trailing' } });
-		const search = screen.getByTestId('ds-shell-search');
-		const group = search.closest('.ml-auto');
-
-		// Now inside the same right-hand group as the theme toggle...
-		expect(group).not.toBeNull();
-		expect(group).toContainElement(screen.getByTestId('ds-shell-theme'));
-		// ...and ahead of the app's own `actions` in that group.
 		const action = screen.getByTestId('action');
-		expect(
-			search.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'search should precede actions in the trailing group'
-		).toBeTruthy();
+		const theme = screen.getByTestId('ds-shell-theme');
+		const identity = screen.getByTestId('identity');
+		expect(before(search, action)).toBe(true);
+		expect(before(action, theme)).toBe(true);
+		expect(before(theme, identity)).toBe(true);
+		// All in the one right-hand group, with the breadcrumbs outside it.
+		const group = search.closest('.ml-auto')!;
+		expect(group).toContainElement(identity);
+		expect(group).not.toContainElement(screen.getByTestId('ds-shell-title'));
 	});
 
-	it('still opens the palette from the trailing position', async () => {
-		// Position is the only thing that changes: the button is the same one, so
-		// its behaviour has to survive the move.
-		render(ShellHarness, { props: { searchPlacement: 'trailing' } });
+	it('keeps the breadcrumbs left of every control', () => {
+		render(ShellHarness, { props: { currentPath: '/credentials' } });
+		const crumbs = screen.getByTestId('ds-shell-title');
+		expect(before(crumbs, screen.getByTestId('ds-shell-search'))).toBe(true);
+		expect(before(crumbs, screen.getByTestId('identity'))).toBe(true);
+	});
+
+	it('draws one search button, and it opens the palette', async () => {
+		render(ShellHarness);
+		expect(screen.getAllByTestId('ds-shell-search')).toHaveLength(1);
 		expect(screen.getByTestId('probe-palette')).toHaveTextContent('closed');
 
 		await fireEvent.click(screen.getByTestId('ds-shell-search'));
@@ -523,14 +515,19 @@ describe('AppShell — searchPlacement', () => {
 		await waitFor(() => expect(screen.getByTestId('probe-palette')).toHaveTextContent('open'));
 	});
 
-	it('renders exactly one search button in either placement', () => {
-		// Never both positions at once — the prop chooses one home for the button.
-		const { unmount } = render(ShellHarness);
-		expect(screen.getAllByTestId('ds-shell-search')).toHaveLength(1);
-		unmount();
+	it('carries no page title: one visually hidden heading names the page', () => {
+		render(ShellHarness, { props: { currentPath: '/credentials' } });
+		const heading = screen.getByRole('heading', { level: 1 });
+		expect(heading).toHaveTextContent('Credentials');
+		expect(heading).toHaveClass('sr-only');
+		expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+	});
 
-		render(ShellHarness, { props: { searchPlacement: 'trailing' } });
-		expect(screen.getAllByTestId('ds-shell-search')).toHaveLength(1);
+	it('draws nothing but the page for a bare page', () => {
+		render(ShellHarness, { props: { pageType: 'bare' } });
+		expect(document.querySelector('.ds-shell')).toBeNull();
+		expect(screen.queryByTestId('ds-shell-search')).not.toBeInTheDocument();
+		expect(screen.getByText('Page body')).toBeInTheDocument();
 	});
 });
 

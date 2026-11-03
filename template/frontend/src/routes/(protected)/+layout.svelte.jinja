@@ -8,8 +8,8 @@
 	render without a session, such as a no-access page, lives outside
 	(protected)/.
 
-	The frame is the app's; this file is the factory's, because what it does
-	must be the same in every app: who is signed in, which workspace a request
+	The frame and this file are the factory's, because what they do must be the
+	same in every app (the app's part is its `shell` data, #lib/shell.ts): who is signed in, which workspace a request
 	acts in, and that a page never renders until both are settled.
 -->
 <script lang="ts">
@@ -21,7 +21,8 @@
 	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
 	import { apiFetch, redirectToAuthentik } from '#lib/api/index.js';
-	import AppFrame, { workspaceLabel } from '#lib/app-frame.svelte';
+	import AppFrame from '#lib/app-frame.svelte';
+	import { shell } from '#lib/shell.js';
 	import * as app from '#lib/art.js';
 	import { auth } from '#lib/auth.svelte.js';
 	import type { StateArt } from '#lib/state-art.js';
@@ -105,7 +106,7 @@
 		{/if}
 	{:else if auth.needsWorkspaceChoice}
 		<!-- Several workspaces and none chosen: a choice, never a silent default. -->
-		<WorkspaceChooser label={workspaceLabel} />
+		<WorkspaceChooser label={shell.workspaceLabel} />
 	{:else}
 		<!-- Keyed on the workspace, so switching remounts the page and it fetches
 		     again. A page therefore never has to know a switch happened, and can

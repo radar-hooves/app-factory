@@ -1,6 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 import type { PageType } from '@poodle64/ui/app-shell';
+import type { BreadcrumbItem } from '@poodle64/ui/breadcrumbs';
 
 declare global {
 	namespace App {
@@ -12,6 +13,8 @@ declare global {
 			title?: string;
 			/** What the page is (AppShell `pageType`): `reading` unless it says otherwise. */
 			pageType?: PageType;
+			/** The bar's trail for a page deeper than the rail's row; the last crumb names the page. */
+			breadcrumbs?: BreadcrumbItem[];
 		}
 		/** Navigation state a page hands the next one; a pasted link cannot carry it. */
 		interface PageState {

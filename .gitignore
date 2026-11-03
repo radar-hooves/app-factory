@@ -6,3 +6,4 @@ target/
 .venv/
 dist/
 __pycache__/
+shell-review/

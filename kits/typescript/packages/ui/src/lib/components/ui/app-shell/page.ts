@@ -11,6 +11,12 @@
  * - `tool`: the whole frame, the content filling its height and scrolling
  *   inside itself; the page never scrolls. An aside stands at the frame's
  *   right edge, and below 80rem of window opens as a sheet from the bar.
+ * - `bare`: no rail and no bar, the route owning the whole window (a deck, a
+ *   workshop, a print view). The one type that is not a frame; nothing but a
+ *   presentation surface picks it.
+ *
+ * No type draws a title: the bar's last crumb names the page, and the shell's
+ * visually hidden heading keeps the outline.
  *
  * The widths are `--ds-page-*` custom properties (`styles.css`), so an app
  * retunes one in one declaration; it never writes a width of its own.
@@ -18,10 +24,10 @@
 import { getContext, setContext, type Snippet } from 'svelte';
 import type { IconComponent } from './types.js';
 
-export type PageType = 'reading' | 'panel' | 'tool';
+export type PageType = 'reading' | 'panel' | 'tool' | 'bare';
 
 /** Every page type, the default first. */
-export const PAGE_TYPES = ['reading', 'panel', 'tool'] as const satisfies readonly PageType[];
+export const PAGE_TYPES = ['reading', 'panel', 'tool', 'bare'] as const satisfies readonly PageType[];
 
 /** Where a pane or an aside is drawn just now, and how to put it away. */
 export interface PageColumnState {

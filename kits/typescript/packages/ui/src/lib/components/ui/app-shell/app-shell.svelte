@@ -17,20 +17,17 @@
 	 * always both together. Operator ruling, 31/07/2026: every household app
 	 * renders one shell shape; apps do not choose variants.
 	 *
-	 * The collapse toggle is the rail's own, in its foot (operator, 30/10/2026:
-	 * a control that works the sidebar belongs on the sidebar, not the top bar).
-	 * The rail's header holds the brand alone.
-	 *
-	 * Search can sit in either of two places, because it reads as a different
-	 * thing depending on what is beside it. `searchPlacement` defaults to
-	 * `leading` — its historical spot just after the `context` slot, so a shell
-	 * that never names the prop is unchanged — and `trailing` moves it into the
-	 * right-hand group with the theme toggle and identity, so that when `context`
-	 * carries route content the global affordance reads as global rather than as
-	 * part of the switcher next to it.
+	 * The bar, left to right: the breadcrumbs (where you are; the last crumb names
+	 * the page), the app's context and the page's own controls, then from the far
+	 * right the account, the day/night toggle, the alerts, the report button and
+	 * a small search (operator ruling, 03/11/2026). The collapse toggle is the
+	 * sidebar's own, on its top (30/10/2026 and 03/11/2026: a control that works
+	 * the sidebar belongs on the sidebar, not the bar). Settings are the account
+	 * menu's. None of it is a prop an app tunes: an app declares data, and the
+	 * shell lays it out.
 	 *
 	 * Content WIDTH is not a prop. A route declares what it is (`pageType`:
-	 * `reading`, `panel` or `tool`, see page.ts) and the shell owns everything
+	 * `reading`, `panel`, `tool` or `bare`, see page.ts) and the shell owns everything
 	 * that follows from it: the column's width and centring, the gutters, the
 	 * pane flush against the rail, the aside beside the content, and which of
 	 * them scrolls. The less an app decides, the better (operator, 24/10/2026).
@@ -92,7 +89,8 @@
 	import PanelRight from '@lucide/svelte/icons/panel-right';
 	import * as Sheet from '../sheet/index.js';
 	import AppNav from './app-nav.svelte';
-	import { activeNavTitle, shortLocation, toItems, type NavSource } from './types.js';
+	import { navTrail, TITLE_SEPARATOR, toItems, type NavSource } from './types.js';
+	import Breadcrumbs, { type BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';
 	import BarActions from './bar-actions.svelte';
 	import { shellReport } from './report.svelte.js';
 	import {
@@ -122,11 +120,11 @@
 		onSearch,
 		searchLabel = 'Search…',
 		searchShortcut = '⌘K',
-		searchPlacement = 'leading',
 		themeToggle = true,
 		onToggleTheme,
 		pageType = 'reading',
 		title,
+		breadcrumbs,
 		texture = 'grid',
 		children
 	}: {
@@ -185,14 +183,6 @@
 		searchLabel?: string;
 		/** The shortcut hint rendered in the search affordance; '' hides the kbd. */
 		searchShortcut?: string;
-		/**
-		 * Where the search affordance sits in the top bar. `leading` (default)
-		 * keeps its historical position just after the `context` slot; `trailing`
-		 * moves it into the right-hand group with the theme toggle and identity —
-		 * for when `context` carries route content and search should read as a
-		 * global control rather than as part of it.
-		 */
-		searchPlacement?: 'leading' | 'trailing';
 		themeToggle?: boolean;
 		/** Override the theme action. Defaults to mode-watcher's toggleMode. */
 		onToggleTheme?: () => void;
@@ -207,6 +197,13 @@
 		 * pane names where the reader is. Apps pass `page.data.title`.
 		 */
 		title?: string;
+		/**
+		 * The trail the bar carries, when the rail's own rows and `title` do not say
+		 * it: the route's load data (`page.data.breadcrumbs`). The last crumb names the
+		 * page. Left off, the trail is the rail's row (and its section) for the
+		 * current path, then `title` where that names something deeper.
+		 */
+		breadcrumbs?: BreadcrumbItem[];
 		/**
 		 * The house atmosphere on the content region: `grid` (a dot-grid floor
 		 * plus a corner vignette) or `none`.
@@ -241,19 +238,21 @@
 	// say: the pane is never dropped for a missing declaration.
 	const type = $derived<PageType>(slots.pane ? 'panel' : pageType);
 
-	// Where the user is, in words: the rail is icons when collapsed and a closed
-	// drawer on a phone, so the bar names the page, "Section › Page" inside a
-	// section and the item's one name otherwise. A page the rail has no row for
-	// is named by its pane ("Settings › Account") or, failing that, its title.
-	const location = $derived(
-		activeNavTitle(nav, currentPath) ??
-			(type === 'panel' ? slots.pane?.location : undefined) ??
-			title
-	);
-
-	// On a phone the bar holds one name, the page's own: a trail does not fit
-	// beside the menu, the brand and the bar's icons, and cut letters help no one.
-	const shortName = $derived(shortLocation(nav, currentPath, location));
+	// Where the user is, as the trail the bar carries: the route's own, else the
+	// rail's row (and section) for the path, then the page's `title` where it
+	// names something deeper than the row (a detail under its list). A page the
+	// rail has no row for is named by its pane ("Settings › Account") or its
+	// title. The LAST crumb names the page: it is the document's one heading,
+	// visually hidden, and the page body carries no title of its own.
+	const trail = $derived.by<BreadcrumbItem[]>(() => {
+		if (breadcrumbs && breadcrumbs.length > 0) return breadcrumbs;
+		const fromNav = navTrail(nav, currentPath, title);
+		if (fromNav.length > 0) return fromNav;
+		const pane = type === 'panel' ? slots.pane?.location : undefined;
+		const named = pane ?? title;
+		return named ? named.split(TITLE_SEPARATOR).map((label) => ({ label })) : [];
+	});
+	const pageName = $derived(trail.at(-1)?.label);
 
 	// The page's status and actions, registered by `<ShellActions>` from the route.
 	// Raw, not deep, so the page that registered it can find it again to withdraw it.
@@ -616,11 +615,8 @@
 {/snippet}
 
 <!--
-	One search button, rendered in one of two places by `searchPlacement`. It is a
-	snippet rather than two literals so the two positions cannot drift apart — same
-	markup, same `data-testid`, same behaviour; only the sizing classes differ.
-	`sizing` is where the difference lives: leading fills the row (`flex-1`),
-	trailing sizes to its clamp without stretching the right-hand group.
+	The one search button: small, the leftmost of the bar's right-hand controls.
+	`sizing` is its width at each tier.
 -->
 {#snippet searchButton(sizing: string)}
 	<!--
@@ -652,6 +648,9 @@
 	</button>
 {/snippet}
 
+{#if type === 'bare'}
+	{@render children()}
+{:else}
 <div class="ds-shell bg-background text-foreground flex h-dvh overflow-hidden">
 	<!-- WCAG 2.4.1: every app gets the bypass link, rather than one app having it. -->
 	<a href="#ds-main" class="ds-skip-link">Skip to content</a>
@@ -708,7 +707,43 @@
 				</button>
 			{/if}
 
-			{@render brandLockup()}
+			<!--
+				The rail's head: the brand and, from md, the collapse toggle, on the
+				sidebar's top (operator, 03/11/2026: "the sidebar toggle sits on the
+				sidebar itself, at its top, not on the rail"). Collapsed to icons the
+				two stack, the toggle under the mark, still before the first row.
+			-->
+			<div
+				class={cn(
+					'ds-shell-rail-head flex flex-none items-center',
+					railNarrow && 'flex-col pb-1'
+				)}
+				data-testid="ds-rail-head"
+			>
+				<div class="min-w-0 flex-1 {railNarrow ? 'w-full' : ''}">
+					{@render brandLockup()}
+				</div>
+				{#if collapsible && !mobileNavOpen}
+					<button
+						type="button"
+						onclick={toggleCollapsed}
+						class={cn(
+							'border-border text-shell-muted-foreground hover:text-shell-foreground grid size-8 flex-none place-items-center rounded-md border transition-colors',
+							railNarrow ? '' : 'mr-3'
+						)}
+						aria-label={collapseLabel}
+						aria-pressed={collapsed}
+						title={`${collapseLabel} (press [)`}
+						data-testid="ds-rail-collapse"
+					>
+						{#if collapsed}
+							<PanelLeftOpen class="size-4" aria-hidden="true" />
+						{:else}
+							<PanelLeftClose class="size-4" aria-hidden="true" />
+						{/if}
+					</button>
+				{/if}
+			</div>
 			<AppNav
 				{nav}
 				{currentPath}
@@ -719,52 +754,26 @@
 			/>
 
 			<!--
-				The rail's foot: the collapse toggle on md+ and, in the phone's drawer,
-				the one place feedback sits, where nothing floats over the page. The
-				toggle is the rail's own control, so it sits on the rail, as in Grafana's
-				docked menu and LiteLLM's sidebar (operator, 30/10/2026: it was "on the
-				top rail instead of the sidebar"). From md the report is the bar's icon.
-				Settings is the account menu's, never a row here. `.ds-nav` gives the
-				rows the rail's ink, its centring when collapsed and its peek padding.
+				The rail's foot, in the phone's drawer only: the one place feedback sits
+				there, where nothing floats over the page. From md the report is the
+				bar's icon. Settings is the account menu's, never a row here. `.ds-nav`
+				gives the row the rail's ink.
 			-->
-			{#if mobileNavOpen ? shellReport.open : collapsible}
-				<div
-					class="ds-shell-rail-foot ds-nav mt-auto"
-					data-collapsed={railCollapsed ? 'true' : undefined}
-					data-peek={peeking ? 'true' : undefined}
-				>
-					{#if mobileNavOpen}
-						<button
-							type="button"
-							class="ds-nav-item w-full"
-							data-testid="ds-shell-drawer-report"
-							onclick={() => {
-								const open = shellReport.open;
-								closeMobileNav();
-								open?.();
-							}}
-						>
-							<Bug class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
-							<span class="truncate">Report a problem</span>
-						</button>
-					{:else}
-						<button
-							type="button"
-							onclick={toggleCollapsed}
-							class="ds-nav-item w-full"
-							aria-label={collapseLabel}
-							aria-pressed={collapsed}
-							title={`${collapseLabel} (press [)`}
-							data-testid="ds-rail-collapse"
-						>
-							{#if collapsed}
-								<PanelLeftOpen class="size-[1.125rem] flex-none" aria-hidden="true" />
-							{:else}
-								<PanelLeftClose class="size-[1.125rem] flex-none" aria-hidden="true" />
-							{/if}
-							{#if !railNarrow}<span class="truncate">{collapsed ? 'Expand' : 'Collapse'}</span>{/if}
-						</button>
-					{/if}
+			{#if mobileNavOpen && shellReport.open}
+				<div class="ds-shell-rail-foot ds-nav mt-auto">
+					<button
+						type="button"
+						class="ds-nav-item w-full"
+						data-testid="ds-shell-drawer-report"
+						onclick={() => {
+							const open = shellReport.open;
+							closeMobileNav();
+							open?.();
+						}}
+					>
+						<Bug class="ds-nav-icon size-[1.125rem] flex-none" aria-hidden="true" />
+						<span class="truncate">Report a problem</span>
+					</button>
 				</div>
 			{/if}
 			{#if collapsible && !railCollapsed && !mobileNavOpen}
@@ -792,6 +801,11 @@
 		<header
 			class="ds-shell-bar bg-shell/80 text-shell-foreground border-border sticky top-0 z-20 flex min-h-14 flex-none flex-wrap items-center gap-2 border-b px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 backdrop-blur sm:gap-3 sm:px-5"
 		>
+			<!-- The page carries no title of its own: the last crumb names it, and this
+			     visually hidden heading keeps the document's outline. It sits in the
+			     bar, beside the trail it repeats, so the page body stays the page's. -->
+			{#if pageName}<h1 class="sr-only" data-testid="ds-page-heading">{pageName}</h1>{/if}
+
 			{#if hasNav}
 				<!-- `aria-controls` names the region this toggle opens. It is present
 				     whenever that region is in the document, which is always — the
@@ -820,29 +834,15 @@
 				{@render brandLockup(true)}
 			</span>
 
-			<!-- `min-w-0` is what lets a leading `context` snippet (a workspace
-			     switcher, a breadcrumb) actually shrink under crowding — a flex
-			     item's automatic `min-width: auto` otherwise floors it at its own
-			     min-content size, so with search, actions and identity all also
-			     competing for the bar the FIRST thing to run out of room was
-			     whichever trailing control happened to sit last in source order
-			     (theme, identity) — pushed edge-to-edge past the header's own
-			     right edge and, with no horizontal scroll on the bar, permanently
-			     unreachable rather than merely cramped (design-system#111). The
-			     wordmark and the search button already carry their own shrink
-			     behaviour (hiding text, going icon-only); `context` is the one
-			     leading slot that never had to. -->
-			{#if context}<div class="min-w-0">{@render context()}</div>{/if}
-
-			<!-- Where you are, then the page's scope controls. Inline with the
-			     rest of the bar from xl; below that, controls take a second row
-			     of the bar, and a bare label shows from md and not on a phone. -->
-			<!-- Where you are, then the page's scope controls. From sm they share one
-			     row, inline from xl and on the bar's second row below it. On a phone
-			     the wrapper steps aside (`contents`): the title takes the free room
-			     of the first row, truncated, and the controls take the second row
-			     whole. -->
-			{#if location || controls.content}
+			<!-- The bar, left to right: where you are (the breadcrumbs), the app's own
+			     context (a workspace switch), the page's controls, then, from the far
+			     right, the search, the report, the alerts, the day/night toggle and the
+			     account (operator ruling, 03/11/2026). `min-w-0` lets the trail shrink
+			     under crowding rather than floor at its own content and push the
+			     trailing controls past the bar's edge (design-system#111). The trail
+			     stays inline from sm; the page's controls take a second row of the bar
+			     below xl, and on a phone the trail takes the first row's free room. -->
+			{#if trail.length > 0 || context || controls.content}
 				<div
 					class={cn(
 						'flex min-w-0 items-center gap-2 max-sm:contents sm:gap-3',
@@ -850,15 +850,14 @@
 					)}
 					data-testid="ds-shell-location"
 				>
-					{#if location}
-						<span
-							class="text-shell-muted-foreground min-w-0 truncate text-sm max-sm:flex-1 max-sm:basis-0 sm:max-w-72"
-							title={location}
+					{#if trail.length > 0}
+						<Breadcrumbs
+							items={trail}
+							class="@container min-w-0 max-sm:flex-1 max-sm:basis-0"
 							data-testid="ds-shell-title"
-							>{#if shortName && shortName !== location}<span class="contents max-sm:hidden">{location}</span
-								><span class="contents sm:hidden">{shortName}</span>{:else}{location}{/if}</span
-						>
+						/>
 					{/if}
+					{#if context}<div class="min-w-0">{@render context()}</div>{/if}
 					{#if controls.content}
 						<div
 							class="flex min-w-0 items-center gap-2 max-sm:order-last max-sm:basis-full sm:gap-3"
@@ -868,12 +867,6 @@
 						</div>
 					{/if}
 				</div>
-			{/if}
-
-			{#if onSearch && searchPlacement === 'leading'}
-				{@render searchButton(
-					'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(200px,24vw,420px)] sm:flex-1 sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
-				)}
 			{/if}
 
 			<div class="ml-auto flex flex-none items-center gap-2 sm:gap-3">
@@ -911,9 +904,14 @@
 					</button>
 				{/if}
 
-				{#if onSearch && searchPlacement === 'trailing'}
+				{#if pageBar.current}
+					<BarActions bar={pageBar.current} />
+					<span class="bg-border hidden h-6 w-px flex-none sm:block" aria-hidden="true"></span>
+				{/if}
+
+				{#if onSearch}
 					{@render searchButton(
-						'h-9 w-9 flex-none justify-center px-0 sm:h-auto sm:w-[clamp(180px,18vw,300px)] sm:justify-start sm:gap-2 sm:px-3 sm:py-1.5'
+						'h-9 w-9 flex-none justify-center px-0 sm:h-9 sm:w-[clamp(7rem,11vw,10rem)] sm:justify-start sm:gap-2 sm:px-3'
 					)}
 				{/if}
 
@@ -930,11 +928,6 @@
 					>
 						<Bug class="size-4" />
 					</button>
-				{/if}
-
-				{#if pageBar.current}
-					<BarActions bar={pageBar.current} />
-					<span class="bg-border hidden h-6 w-px flex-none sm:block" aria-hidden="true"></span>
 				{/if}
 
 				{#if actions}{@render actions()}{/if}
@@ -1084,4 +1077,5 @@
 			</div>
 		</Sheet.Content>
 	</Sheet.Root>
+{/if}
 {/if}

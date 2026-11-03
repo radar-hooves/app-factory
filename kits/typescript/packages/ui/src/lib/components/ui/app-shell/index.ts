@@ -20,6 +20,7 @@ export {
 	isNavGroup,
 	isNavItemActive,
 	shortLocation,
+	navTrail,
 	navChildren,
 	toGroups,
 	toItems,
@@ -31,3 +32,4 @@ export {
 	type NavItem,
 	type NavSource
 } from './types.js';
+export { resolveNav, type ShellAccountLink, type ShellData } from './shell-data.js';

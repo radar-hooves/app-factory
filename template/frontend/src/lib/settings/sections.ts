@@ -1,7 +1,7 @@
 import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import Users from '@lucide/svelte/icons/users';
 import { toItems, type NavSource } from '@poodle64/ui/app-shell';
-import { workspaceLabel } from '#lib/app-frame.svelte';
+import { shell } from '#lib/shell.js';
 import { auth } from '#lib/auth.svelte.js';
 import { appSettingsSections } from './app';
 
@@ -21,7 +21,7 @@ export function settingsSections(): NavSource {
 	return [
 		...appSettingsSections(),
 		{
-			heading: `This ${workspaceLabel.toLowerCase()}`,
+			heading: `This ${shell.workspaceLabel.toLowerCase()}`,
 			items: [{ href: '/settings/members', label: 'Members', icon: Users }]
 		},
 		{

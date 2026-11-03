@@ -17,6 +17,7 @@
  *     const nav = $derived(allNav.filter((i) => !i.adminOnly || user.isAdmin));
  */
 import type { Component } from 'svelte';
+import type { BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';
 
 /** A Lucide (or equivalent) icon component: takes a class, renders an SVG. */
 export type IconComponent = Component<{ class?: string }>;
@@ -249,6 +250,41 @@ export function activeNavTitle(
 		if (isNavItemActive(item, currentPath)) return item.label;
 	}
 	return undefined;
+}
+
+/**
+ * The breadcrumb trail for where the user is, from the rail's own rows: a
+ * section that discloses children is its first crumb (linked), the page the
+ * last. `title` names the page itself when it differs from the row that owns it
+ * (a detail page under its list: "Matters › 6 Winfield"), and the last crumb is
+ * never a link. An unlisted route has no trail here: the caller names it.
+ */
+export function navTrail(
+	nav: NavSource | undefined,
+	currentPath: string | undefined,
+	title?: string
+): BreadcrumbItem[] {
+	const trail: BreadcrumbItem[] = [];
+	if (currentPath) {
+		for (const item of toItems(nav)) {
+			const child = navChildren(item).find((c) => isNavItemActive(c, currentPath));
+			if (child) {
+				// A child that is its section's landing page is named by the section.
+				trail.push({ label: item.label, href: item.href });
+				if (child.href !== item.href) trail.push({ label: child.label, href: child.href });
+				break;
+			}
+			if (isNavItemActive(item, currentPath)) {
+				trail.push({ label: item.label, href: item.href });
+				break;
+			}
+		}
+	}
+	const last = trail.at(-1);
+	if (!last) return trail;
+	if (title && last.label !== title) trail.push({ label: title });
+	delete trail[trail.length - 1].href;
+	return trail;
 }
 
 /**

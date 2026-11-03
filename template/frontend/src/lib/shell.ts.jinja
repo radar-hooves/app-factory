@@ -1,0 +1,35 @@
+{% raw %}/**
+ * What this app declares about its shell: data, never markup. The factory's
+ * frame (app-frame.svelte) lays the rail, the sidebar and the page frames out
+ * from it; no app composes its own. How to grow it:
+ *
+ * - `nav`: groups, in the order a reader reaches for them. The first group has
+ *   no heading and holds the ways in; a later group takes a `heading` only when
+ *   its rows share a subject the reader would name. `children` for a section
+ *   whose own pages are destinations, one level deep. Who may see a row is a
+ *   function of the viewer: `nav: (viewer) => [...]`, with
+ *   `viewer.can('entitlement')`. No Settings row: Settings is the account
+ *   menu's.
+ * - `accountLinks`: extra rows in the account menu (an Admin route), after
+ *   Settings. `admin: true` shows one only to a caller holding `admin`.
+ * - Name rows in the reader's words, never the library's architecture
+ *   (canonical-app-shape.md §Milton is a person, not a place).
+ *
+ * What a SCREEN is rides its route's load data: `pageType` (`reading` by
+ * default, `panel`, `tool`), `title` (the breadcrumbs' last crumb, which also
+ * names the page for a screen reader) and `breadcrumbs` for a detail deeper
+ * than the rail's row. Never a layout of the route's own.
+ */
+import type { ShellData } from '@poodle64/ui/app-shell';
+import House from '@lucide/svelte/icons/house';
+import type { auth } from '#lib/auth.svelte.js';
+
+export const shell: ShellData<typeof auth> = {
+	// What THIS app calls a workspace ("Household"), read by the account menu,
+	// the factory's members page and its workspace chooser
+	// (rules-library/platform/tenancy.md).
+	workspaceLabel: 'Workspace',
+	brand: { title: '{% endraw %}{{ project_title }}{% raw %}' },
+	nav: [{ items: [{ label: 'Home', href: '/', icon: House }] }]
+};
+{% endraw %}

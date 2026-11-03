@@ -19,7 +19,6 @@ import PageAside from '#lib/components/ui/app-shell/page-aside.svelte';
 		pageType,
 		title,
 		texture,
-		searchPlacement,
 		pane,
 		aside
 	}: {
@@ -34,9 +33,6 @@ import PageAside from '#lib/components/ui/app-shell/page-aside.svelte';
 		title?: string;
 		/** Undefined by default, for the same reason `pageType` is. */
 		texture?: ShellTexture;
-		/** Undefined by default, so the leading default is what the unset harness
-		    drives — same additivity contract as measure/texture. */
-		searchPlacement?: 'leading' | 'trailing';
 		/** Mounts a PagePane in the page. `location` names the bar on a panel page;
 		    `folded` gives it a folded snippet; `remember` is its storage key. */
 		pane?: { location?: string; folded?: boolean; remember?: string; fill?: boolean };
@@ -88,7 +84,6 @@ import PageAside from '#lib/components/ui/app-shell/page-aside.svelte';
 	{pageType}
 	{title}
 	{texture}
-	{searchPlacement}
 	bind:collapsed
 	brandTitle="Harness"
 	onSearch={() => (paletteOpen = true)}

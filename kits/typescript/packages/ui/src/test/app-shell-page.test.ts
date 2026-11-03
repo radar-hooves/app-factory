@@ -36,12 +36,12 @@ describe('AppShell page types: the frame', () => {
 		expect(frame().getAttribute('data-page')).toBe('reading');
 	});
 
-	it('is a closed scale of three, the default first', () => {
-		expect([...PAGE_TYPES]).toEqual(['reading', 'panel', 'tool']);
+	it('is a closed scale of four, the default first, the last not a frame', () => {
+		expect([...PAGE_TYPES]).toEqual(['reading', 'panel', 'tool', 'bare']);
 	});
 
 	it('writes each type to the frame, and holds the page body in the one main slot', () => {
-		for (const pageType of PAGE_TYPES) {
+		for (const pageType of PAGE_TYPES.filter((t) => t !== 'bare')) {
 			const { container, unmount } = render(ShellHarness, { props: { pageType } });
 			const main = container.querySelector('[data-slot="app-shell-content"]')!;
 			expect(main.children, pageType).toHaveLength(1);
@@ -164,7 +164,7 @@ describe('AppShell page types: the bar’s name', () => {
 				pane: { location: 'Settings › Account' }
 			}
 		});
-		expect(location()).toHaveTextContent('Settings › Account');
+		expect(location()).toHaveTextContent('Settings Account');
 	});
 
 	it('names the title where there is no pane location', () => {

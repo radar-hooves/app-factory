@@ -115,7 +115,7 @@ describe('SettingsShell — the panel page', () => {
 
 	it('names where the reader is in the bar, the rail having no row for Settings', () => {
 		render(Harness, { props: { currentPath: '/settings/users' } });
-		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Settings › Users');
+		expect(screen.getByTestId('ds-shell-location')).toHaveTextContent('Settings Users');
 	});
 
 	it('names the destination alone on a path that is no section', () => {
