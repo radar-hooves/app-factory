@@ -9,8 +9,8 @@ import {
 	Transcript,
 	type Outcome,
 	type ToolBlock
-} from '$lib/transcript.svelte';
-import { DEFAULT_COPY } from '$lib/copy';
+} from '#lib/transcript.svelte.js';
+import { DEFAULT_COPY } from '#lib/copy.js';
 
 function tool(name: string, rawInput: Record<string, unknown>): ToolBlock {
 	return { kind: 'tool', index: 0, name, rawInput: JSON.stringify(rawInput) };

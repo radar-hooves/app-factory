@@ -6,7 +6,7 @@
 // input nobody registered is `unknown`". A table that can return no answer is
 // how a field disappears.
 import { describe, it, expect } from 'vitest';
-import { pickWidget, WIDGET_KINDS } from '$lib/components/ui/schema-form';
+import { pickWidget, WIDGET_KINDS } from '#lib/components/ui/schema-form/index.js';
 
 describe('pickWidget — derivation from the schema', () => {
 	it.each([

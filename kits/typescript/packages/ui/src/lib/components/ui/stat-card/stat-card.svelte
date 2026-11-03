@@ -2,7 +2,7 @@
 	import type { Status } from '../status/index.js';
 	import type { Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	// A single metric, reserved for a figure that earns the space with real
 	// context. A bare integer belongs in a StatList.

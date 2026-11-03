@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import ContentSkeleton from '$lib/components/ui/content-skeleton/content-skeleton.svelte';
+import ContentSkeleton from '#lib/components/ui/content-skeleton/content-skeleton.svelte';
 
 const hiddenBlock = () => document.querySelector('[data-slot="content-skeleton"] > [aria-hidden]');
 

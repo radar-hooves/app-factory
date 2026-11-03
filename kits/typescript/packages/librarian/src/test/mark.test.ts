@@ -7,9 +7,9 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import Conversation from '$lib/components/conversation/conversation.svelte';
-import AnswerMark from '$lib/components/answer-mark/answer-mark.svelte';
-import type { Turn } from '$lib/transcript.svelte';
+import Conversation from '#lib/components/conversation/conversation.svelte';
+import AnswerMark from '#lib/components/answer-mark/answer-mark.svelte';
+import type { Turn } from '#lib/transcript.svelte.js';
 
 const answered = (id: string, text: string): Turn => ({
 	id,

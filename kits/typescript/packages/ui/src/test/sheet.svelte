@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Fixture for sheet.test.ts: a sheet opened by its own trigger, on any side.
-	import * as Sheet from '$lib/components/ui/sheet/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
 
 	let { side }: { side?: 'top' | 'right' | 'bottom' | 'left' } = $props();
 </script>

@@ -19,7 +19,7 @@
  * `/srv/job`, and an image's bytes emptied the way the factory stores them.
  */
 /// <reference types="vite/client" />
-import type { AgentEvent } from '$lib/client';
+import type { AgentEvent } from '#lib/client.js';
 import job from './job-stream.jsonl?raw';
 import chat from './chat-stream.jsonl?raw';
 import parallel from './parallel-reads.jsonl?raw';

@@ -2,14 +2,14 @@
 	// Harness for the shell's driven tests. The probes below are non-visual
 	// (text nodes read by testid) so every assertion is on an OUTCOME rather than
 	// on the fact that something drew.
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import CommandPalette from '$lib/components/ui/command-palette/command-palette.svelte';
-	import type { NavSource } from '$lib/components/ui/app-shell/types.js';
-	import type { PageColumnState, PageType } from '$lib/components/ui/app-shell/page.js';
-import PagePane from '$lib/components/ui/app-shell/page-pane.svelte';
-import PageAside from '$lib/components/ui/app-shell/page-aside.svelte';
-	import type { ShellTexture } from '$lib/components/ui/app-shell/texture.js';
-	import * as Command from '$lib/components/ui/command/index.js';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import CommandPalette from '#lib/components/ui/command-palette/command-palette.svelte';
+	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
+	import type { PageColumnState, PageType } from '#lib/components/ui/app-shell/page.js';
+import PagePane from '#lib/components/ui/app-shell/page-pane.svelte';
+import PageAside from '#lib/components/ui/app-shell/page-aside.svelte';
+	import type { ShellTexture } from '#lib/components/ui/app-shell/texture.js';
+	import * as Command from '#lib/components/ui/command/index.js';
 	import Package from '@lucide/svelte/icons/package';
 
 	let {

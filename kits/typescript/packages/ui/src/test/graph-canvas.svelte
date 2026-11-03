@@ -4,7 +4,7 @@
 		type GraphKind,
 		type GraphNeighbour,
 		type GraphNode
-	} from '$lib/components/ui/graph-canvas/index.js';
+	} from '#lib/components/ui/graph-canvas/index.js';
 
 	let {
 		selected: initial = null,

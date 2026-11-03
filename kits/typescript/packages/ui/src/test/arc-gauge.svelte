@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Fixture for arc-gauge.test.ts: forwards exactly the props the tests vary.
-	import ArcGauge, { type GaugeTone } from '$lib/components/ui/arc-gauge';
+	import ArcGauge, { type GaugeTone } from '#lib/components/ui/arc-gauge/index.js';
 
 	let {
 		pct,

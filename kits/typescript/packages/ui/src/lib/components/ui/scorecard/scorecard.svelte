@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	// A compact dot-row health strip: several independent 0/1/2 checks read at
 	// a glance (e.g. one dot per dependency) where a StatCard's single figure

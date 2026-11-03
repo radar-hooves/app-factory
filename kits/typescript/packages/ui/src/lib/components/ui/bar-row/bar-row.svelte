@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	// A labelled horizontal bar with a trailing value: a ranked-list row (a
 	// token-burn chart, a per-lane usage table) where a full StatCard or

@@ -1,8 +1,8 @@
 <script lang="ts">
 	// Fixture for page-canvas.test.ts: forwards every prop under test and
 	// exposes bindable state so a test can read what the canvas has driven.
-	import PageCanvas from '$lib/components/ui/page-canvas/page-canvas.svelte';
-	import type { PageCanvasRegion } from '$lib/components/ui/page-canvas/types';
+	import PageCanvas from '#lib/components/ui/page-canvas/page-canvas.svelte';
+	import type { PageCanvasRegion } from '#lib/components/ui/page-canvas/types.js';
 
 	let {
 		pageCount = 1,

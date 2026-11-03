@@ -6,8 +6,8 @@
  * date's own rendering, which must not move with the reader's timezone.
  */
 import { describe, it, expect } from 'vitest';
-import { formatVerified, trustMark, type Citation } from '$lib/citations';
-import { DEFAULT_COPY, resolveCopy } from '$lib/copy';
+import { formatVerified, trustMark, type Citation } from '#lib/citations.js';
+import { DEFAULT_COPY, resolveCopy } from '#lib/copy.js';
 
 const cited = (over: Partial<Citation> = {}): Citation => ({
 	n: 1,

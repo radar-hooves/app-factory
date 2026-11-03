@@ -6,4 +6,4 @@ export type {
 	NavGroup,
 	NavItem,
 	NavSource
-} from '$lib/components/ui/app-shell/types.js';
+} from '#lib/components/ui/app-shell/types.js';

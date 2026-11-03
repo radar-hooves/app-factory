@@ -10,8 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Harness from './record-list.svelte';
-import { orderBy } from '$lib/components/ui/ledger/ledger.js';
-import type { RecordListRow } from '$lib/components/ui/record-list';
+import { orderBy } from '#lib/components/ui/ledger/ledger.js';
+import type { RecordListRow } from '#lib/components/ui/record-list/index.js';
 
 type Row = RecordListRow & { value: number; group?: string };
 
@@ -201,7 +201,7 @@ describe('RecordList: how a row opens', () => {
 
 describe('list layout by the list’s own width', () => {
 	it('keeps the narrow tracks for a list beside a ContextColumn at 1280px with the rail open', async () => {
-		const { listLayout } = await import('$lib/components/ui/ledger/look.js');
+		const { listLayout } = await import('#lib/components/ui/ledger/look.js');
 		// 1280 window, 248px rail, 360px column: godswood measured 588px of list.
 		expect(listLayout(588)).toBe('narrow');
 		expect(listLayout(479)).toBe('phone');

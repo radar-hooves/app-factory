@@ -15,7 +15,7 @@
 	 * this only renders the answer. `<ol>` because rank IS the meaning.
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import Button from '../button/button.svelte';
 	import StatusBadge from '../status-badge/status-badge.svelte';

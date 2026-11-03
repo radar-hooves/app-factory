@@ -46,7 +46,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import Button from '../button/button.svelte';
 	import PageHeader from '../page-header/page-header.svelte';
 	import type { BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';

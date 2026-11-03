@@ -44,7 +44,7 @@ beforeEach(() => {
 
 /** A freshly-imported telemetry module — `vi.resetModules()`'s other half. */
 async function freshTelemetry() {
-	return await import('$lib/telemetry');
+	return await import('#lib/telemetry.js');
 }
 
 const OPTIONS = { app: 'cadmus', version: '2026.9.6', url: 'https://collector.example' } as const;

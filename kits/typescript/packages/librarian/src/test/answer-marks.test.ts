@@ -8,9 +8,9 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import type { Block, Outcome } from '$lib/transcript.svelte';
-import type { Citation } from '$lib/citations';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import type { Block, Outcome } from '#lib/transcript.svelte.js';
+import type { Citation } from '#lib/citations.js';
 
 const ANSWER: Block[] = [
 	{ kind: 'text', index: 0, text: 'Recreation leave accrues at 20 days a year [1].' }

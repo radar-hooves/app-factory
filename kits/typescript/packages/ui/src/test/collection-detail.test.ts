@@ -4,8 +4,8 @@
 // consumer, so their states must not be welded together.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import CollectionDetail from '$lib/components/ui/collection-detail/collection-detail.svelte';
-import type { LibraryCollection, LibraryDocument } from '$lib/components/ui/collection-detail';
+import CollectionDetail from '#lib/components/ui/collection-detail/collection-detail.svelte';
+import type { LibraryCollection, LibraryDocument } from '#lib/components/ui/collection-detail/index.js';
 
 const collection: LibraryCollection = {
 	id: 'col-7',

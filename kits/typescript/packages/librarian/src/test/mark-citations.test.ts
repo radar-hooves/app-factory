@@ -3,7 +3,7 @@
  * label — which is why the marking runs over the DOM rather than the string.
  */
 import { describe, it, expect } from 'vitest';
-import { markCitations, render } from '$lib/components/markdown/markdown';
+import { markCitations, render } from '#lib/components/markdown/markdown.js';
 
 function rendered(markdown: string): HTMLElement {
 	const host = document.createElement('div');

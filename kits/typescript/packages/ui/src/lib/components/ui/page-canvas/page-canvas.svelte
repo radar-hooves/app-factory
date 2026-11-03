@@ -21,7 +21,7 @@
 	// looked" — for the current page only.
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import { Skeleton } from '../skeleton/index.js';
 	import { Button } from '../button/index.js';
 	import Plus from '@lucide/svelte/icons/plus';

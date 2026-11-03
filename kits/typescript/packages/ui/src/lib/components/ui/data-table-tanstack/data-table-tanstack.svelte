@@ -56,7 +56,7 @@
 	import { Checkbox } from '../checkbox/index.js';
 	import type { Component } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	interface Props<TRow> {
 		table: Table<TRow>;

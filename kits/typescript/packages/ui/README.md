@@ -154,7 +154,7 @@ The package therefore imports no app store, no app route and no app brand:
 	import { goto } from '$app/navigation';
 	import AppShell, { type NavGroup } from '@poodle64/ui/app-shell';
 	import CommandPalette from '@poodle64/ui/command-palette';
-	import { nav } from '$lib/config/navigation'; // typed as NavGroup[]
+	import { nav } from '#lib/config/navigation'; // typed as NavGroup[]
 
 	let paletteOpen = $state(false);
 </script>

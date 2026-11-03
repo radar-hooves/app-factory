@@ -37,7 +37,7 @@
 		scene,
 		SCOPE,
 		type LabState
-	} from '$lib/chat-fixtures';
+	} from '#lib/chat-fixtures.js';
 
 	const STATES: LabState[] = [
 		'empty',

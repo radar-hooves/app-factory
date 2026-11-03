@@ -24,8 +24,8 @@ import {
 	ledgerDate,
 	periodKey,
 	periodLabel
-} from '$lib/components/ui/ledger/ledger.js';
-import type { LedgerColumn, LedgerRow } from '$lib/components/ui/ledger';
+} from '#lib/components/ui/ledger/ledger.js';
+import type { LedgerColumn, LedgerRow } from '#lib/components/ui/ledger/index.js';
 
 type Row = LedgerRow & { category?: string };
 

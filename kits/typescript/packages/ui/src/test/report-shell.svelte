@@ -2,8 +2,8 @@
 	// Harness for feedback's one home: the layout mounts ReportWidget beside the
 	// shell, as the template does, and the shell draws its trigger. `actions` and
 	// `identity` stand in for an app's own bar items, to prove the order.
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import ReportWidget from '$lib/components/feedback/report-widget.svelte';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import ReportWidget from '#lib/components/feedback/report-widget.svelte';
 
 	let {
 		mounted = true,

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet, Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	// The generic titled card. Where DetailPanel is the *entity* surface (and owns
 	// a status and a close affordance), Panel is the plain sectioning card any

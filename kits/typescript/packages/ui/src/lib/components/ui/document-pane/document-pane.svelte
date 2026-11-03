@@ -22,7 +22,7 @@
 	import * as Tooltip from '../tooltip/index.js';
 	import IconAction from '../list-toolbar/icon-action.svelte';
 	import type { ListIconAction } from '../list-toolbar/types.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		title,

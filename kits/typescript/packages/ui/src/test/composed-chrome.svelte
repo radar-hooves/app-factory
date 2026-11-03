@@ -2,20 +2,20 @@
 	// Harness for the page-chrome components. Every interactive affordance is
 	// wired to a state flag rendered as a non-visual <output> probe, so a test
 	// asserts the callback actually fired rather than that something merely drew.
-	import PageHeader from '$lib/components/ui/page-header/page-header.svelte';
-	import DetailPanel from '$lib/components/ui/detail-panel/detail-panel.svelte';
-	import AppDialog from '$lib/components/ui/app-dialog/app-dialog.svelte';
-	import DialogSection from '$lib/components/ui/dialog-section/dialog-section.svelte';
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import ContextColumn from '$lib/components/ui/context-column/context-column.svelte';
-	import EmptyState from '$lib/components/ui/empty-state/empty-state.svelte';
-	import ErrorState from '$lib/components/ui/error-state/error-state.svelte';
-	import LoadingState from '$lib/components/ui/loading-state/loading-state.svelte';
-	import InfoTip from '$lib/components/ui/info-tip/info-tip.svelte';
-	import StatusBadge from '$lib/components/ui/status-badge/status-badge.svelte';
-	import StatCard from '$lib/components/ui/stat-card/stat-card.svelte';
-	import StatList from '$lib/components/ui/stat-list/stat-list.svelte';
-	import Panel from '$lib/components/ui/panel/panel.svelte';
+	import PageHeader from '#lib/components/ui/page-header/page-header.svelte';
+	import DetailPanel from '#lib/components/ui/detail-panel/detail-panel.svelte';
+	import AppDialog from '#lib/components/ui/app-dialog/app-dialog.svelte';
+	import DialogSection from '#lib/components/ui/dialog-section/dialog-section.svelte';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import ContextColumn from '#lib/components/ui/context-column/context-column.svelte';
+	import EmptyState from '#lib/components/ui/empty-state/empty-state.svelte';
+	import ErrorState from '#lib/components/ui/error-state/error-state.svelte';
+	import LoadingState from '#lib/components/ui/loading-state/loading-state.svelte';
+	import InfoTip from '#lib/components/ui/info-tip/info-tip.svelte';
+	import StatusBadge from '#lib/components/ui/status-badge/status-badge.svelte';
+	import StatCard from '#lib/components/ui/stat-card/stat-card.svelte';
+	import StatList from '#lib/components/ui/stat-list/stat-list.svelte';
+	import Panel from '#lib/components/ui/panel/panel.svelte';
 
 	let dialogOpen = $state(false);
 	// Every open-state change the dialogue reports, in order — including the ones

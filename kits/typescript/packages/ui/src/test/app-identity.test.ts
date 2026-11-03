@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import Shield from '@lucide/svelte/icons/shield';
-import { AppIdentity } from '$lib/components/ui/app-identity';
+import { AppIdentity } from '#lib/components/ui/app-identity/index.js';
 
 describe('AppIdentity — handle initials with no display name', () => {
 	it('takes one letter from a bare, unbroken handle', () => {

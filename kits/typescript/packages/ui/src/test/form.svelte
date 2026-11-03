@@ -7,8 +7,8 @@
 	 * behaviour that made three apps vendor them.
 	 */
 	import { superForm, defaults } from 'sveltekit-superforms';
-	import * as Form from '$lib/components/ui/form/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
+	import * as Form from '#lib/components/ui/form/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 
 	// A plain adapter: the schema library is the app's choice, and the wrappers
 	// never see it. Constraints are declared directly so the harness carries no

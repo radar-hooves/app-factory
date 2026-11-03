@@ -6,7 +6,7 @@
 	// The snippets are declared at the top level and passed as props, not nested
 	// inside an `{#if}` in Panel's body: a snippet becomes a prop only where it is
 	// a direct child of the component, so the conditional has to be on the value.
-	import Panel from '$lib/components/ui/panel/panel.svelte';
+	import Panel from '#lib/components/ui/panel/panel.svelte';
 	import Trash from '@lucide/svelte/icons/trash-2';
 
 	let {

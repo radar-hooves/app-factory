@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import AlertCircle from '@lucide/svelte/icons/circle-alert';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		message: string;

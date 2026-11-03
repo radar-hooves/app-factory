@@ -15,7 +15,7 @@ import {
 	type Block,
 	type Segment,
 	type TextBlock
-} from '$lib/transcript.svelte';
+} from '#lib/transcript.svelte.js';
 
 let next = 0;
 const text = (body: string): Block => ({ kind: 'text', index: next++, text: body });

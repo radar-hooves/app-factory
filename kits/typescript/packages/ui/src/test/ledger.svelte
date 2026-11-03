@@ -2,14 +2,14 @@
 	// Fixture for ledger.test.ts: a consumer's wiring, with probes for what the
 	// ledger emits. The bulk action, the editor and the origin action are the
 	// consumer's own markup, which is the point: the ledger only places them.
-	import Ledger from '$lib/components/ui/ledger';
+	import Ledger from '#lib/components/ui/ledger/index.js';
 	import type {
 		LedgerColumn,
 		LedgerOpenContext,
 		LedgerPreferences,
 		LedgerRow
-	} from '$lib/components/ui/ledger';
-	import type { ListAction, ListIconAction } from '$lib/components/ui/list-toolbar';
+	} from '#lib/components/ui/ledger/index.js';
+	import type { ListAction, ListIconAction } from '#lib/components/ui/list-toolbar/index.js';
 
 	type Row = LedgerRow & { category?: string };
 

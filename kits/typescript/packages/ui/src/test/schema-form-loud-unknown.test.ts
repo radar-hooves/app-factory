@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import Harness from './schema-form.svelte';
-import type { UISchemaElement } from '$lib/components/ui/schema-form';
+import type { UISchemaElement } from '#lib/components/ui/schema-form/index.js';
 
 const flagged = (container: HTMLElement) =>
 	Array.from(container.querySelectorAll('[data-schema-form-unknown]'));

@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Fixture for bar-row.test.ts: forwards exactly the props the tests vary.
-	import BarRow from '$lib/components/ui/bar-row';
+	import BarRow from '#lib/components/ui/bar-row/index.js';
 
 	let {
 		label,

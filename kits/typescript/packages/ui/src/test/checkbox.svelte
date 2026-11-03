@@ -4,7 +4,7 @@
 	// bits-ui's compound namespace object. The bound-state probe reads the
 	// two-way binding directly, so the toggle is proven from the component's
 	// own state and not only from the attribute it paints.
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 
 	let checked = $state(false);
 </script>

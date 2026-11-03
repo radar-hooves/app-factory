@@ -7,8 +7,8 @@
 	// every claim it makes about the flat rail — the drawer, the focus trap, the
 	// collapse control, the active rules, the palette — has to keep passing
 	// untouched, or nesting has changed something a consumer never asked for.
-	import AppShell from '$lib/components/ui/app-shell/app-shell.svelte';
-	import type { NavSource } from '$lib/components/ui/app-shell/types.js';
+	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
+	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
 	import Package from '@lucide/svelte/icons/package';
 
 	let {

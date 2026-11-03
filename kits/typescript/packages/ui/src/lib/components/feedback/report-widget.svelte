@@ -17,7 +17,7 @@
 	import { Label } from '../ui/label/index.js';
 	import Textarea from '../ui/textarea/textarea.svelte';
 	import { shellReport } from '../ui/app-shell/report.svelte.js';
-	import { getSessionId } from '$lib/telemetry';
+	import { getSessionId } from '#lib/telemetry.js';
 
 	// The feedback widget every household app mounts: the one report dialogue.
 	// It draws no trigger of its own. While mounted it registers `open` with the

@@ -27,7 +27,7 @@
 		type NavItem,
 		type NavSource
 	} from './types.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		nav,

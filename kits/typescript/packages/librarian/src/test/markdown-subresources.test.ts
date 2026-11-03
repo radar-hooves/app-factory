@@ -1,6 +1,6 @@
 /** Rendered agent content fetches nothing from outside the origin. */
 import { describe, it, expect } from 'vitest';
-import { render, highlight } from '$lib/components/markdown/markdown';
+import { render, highlight } from '#lib/components/markdown/markdown.js';
 
 const DATA = 'data:image/png;base64,iVBORw0KGgo=';
 

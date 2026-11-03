@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Avatar as AvatarPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	/**
 	 * The signed-in user's face, with a fallback that survives a broken image.

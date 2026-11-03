@@ -6,7 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { Chat, type ChatTransport } from '$lib/chat.svelte';
+import { Chat, type ChatTransport } from '#lib/chat.svelte.js';
 
 const READ = {
 	id: 'a',

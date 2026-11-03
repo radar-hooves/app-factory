@@ -4,8 +4,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import ConversationList from '$lib/components/conversation-list/conversation-list.svelte';
-import type { ConversationSummary } from '$lib/chat.svelte';
+import ConversationList from '#lib/components/conversation-list/conversation-list.svelte';
+import type { ConversationSummary } from '#lib/chat.svelte.js';
 
 const LIST: ConversationSummary[] = [
 	{ id: 'a', title: 'Leave on posting', last_activity_at: '2026-09-28T01:00:00Z' },

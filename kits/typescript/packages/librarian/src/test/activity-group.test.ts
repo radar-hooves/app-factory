@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import ActivityGroup from '$lib/components/activity-group/activity-group.svelte';
+import ActivityGroup from '#lib/components/activity-group/activity-group.svelte';
 import {
 	segment,
 	type ActivityGroup as ActivityGroupType,
 	type Block
-} from '$lib/transcript.svelte';
+} from '#lib/transcript.svelte.js';
 
 const blocks: Block[] = [
 	{ kind: 'thinking', index: 0, text: 'Which clause covers this?' },

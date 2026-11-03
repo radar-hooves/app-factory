@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Fixture for page-section.test.ts: the snippet-bearing props (actions, body).
-	import PageSection from '$lib/components/ui/page-section/page-section.svelte';
+	import PageSection from '#lib/components/ui/page-section/page-section.svelte';
 
 	let {
 		id,

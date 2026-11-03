@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import Working from '$lib/components/working/working.svelte';
-import { copyFor } from '$lib/copy';
+import Working from '#lib/components/working/working.svelte';
+import { copyFor } from '#lib/copy.js';
 
 describe('Working line', () => {
 	it('opens on the persona working, not an architecture-flavoured placeholder', () => {

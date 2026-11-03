@@ -19,7 +19,7 @@
 	import { Badge } from '../ui/badge/index.js';
 	import { Button } from '../ui/button/index.js';
 	import * as Popover from '../ui/popover/index.js';
-	import { cn } from '$lib/utils';
+	import { cn } from '#lib/utils.js';
 
 	// The alerts bell: what machines told this deployment's operator, in the
 	// shell's top-bar `actions` slot. App machinery like ReportWidget, mounted

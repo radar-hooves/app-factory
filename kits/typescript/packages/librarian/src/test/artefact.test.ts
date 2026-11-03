@@ -10,10 +10,10 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import Conversation from '$lib/components/conversation/conversation.svelte';
-import Composer from '$lib/components/composer/composer.svelte';
-import type { Artefact, Block, Turn } from '$lib/transcript.svelte';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import Conversation from '#lib/components/conversation/conversation.svelte';
+import Composer from '#lib/components/composer/composer.svelte';
+import type { Artefact, Block, Turn } from '#lib/transcript.svelte.js';
 
 const PROSE = 'I read 6 lines. They add up exactly to the printed total, $42.38.';
 const BLOCKS: Block[] = [{ kind: 'text', index: 0, text: PROSE }];

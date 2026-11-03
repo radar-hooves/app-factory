@@ -8,9 +8,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import { Session } from '$lib/session.svelte';
-import { readFrom, segment, type ActivityGroup, type DescribeTool } from '$lib/transcript.svelte';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import { Session } from '#lib/session.svelte.js';
+import { readFrom, segment, type ActivityGroup, type DescribeTool } from '#lib/transcript.svelte.js';
 import { captured } from './fixtures/captured';
 
 const describeTool: DescribeTool = (block) => {

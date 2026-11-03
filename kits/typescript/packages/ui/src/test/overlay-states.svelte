@@ -2,12 +2,12 @@
 	// Fixture for data-state-variants.test.ts: one overlay of each shape whose
 	// state attributes the package writes utilities against, so the CSS side of
 	// that gate is pinned to what bits-ui really renders rather than to a table.
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Select from '$lib/components/ui/select';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
-	import Switch from '$lib/components/ui/switch/switch.svelte';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import Checkbox from '#lib/components/ui/checkbox/checkbox.svelte';
+	import Switch from '#lib/components/ui/switch/switch.svelte';
 </script>
 
 <Dialog.Root>

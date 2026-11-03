@@ -102,7 +102,7 @@
 		type ShellActionsHolder,
 		type ShellControlsSlot
 	} from './controls.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import ResizeHandle from '../resize-handle/resize-handle.svelte';
 
 	let {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import ToolRow from '$lib/components/tool-row/tool-row.svelte';
-import type { ToolBlock } from '$lib/transcript.svelte';
+import ToolRow from '#lib/components/tool-row/tool-row.svelte';
+import type { ToolBlock } from '#lib/transcript.svelte.js';
 
 describe('ToolRow', () => {
 	it('says what the persona did, never the tool name or the raw path, until it is opened', async () => {

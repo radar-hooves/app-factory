@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Probe from './graph-canvas.svelte';
-import { GraphScene } from '$lib/components/ui/graph-canvas/scene.js';
+import { GraphScene } from '#lib/components/ui/graph-canvas/scene.js';
 
 const root = () => document.querySelector<HTMLElement>('[data-slot=graph-canvas]')!;
 const find = () => screen.getByLabelText('Find in Relations') as HTMLInputElement;

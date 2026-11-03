@@ -3,7 +3,7 @@
  * above all the POST — asserted on the exact payload the endpoint receives,
  * because that body IS the interface the server side is written against.
  *
- * `html-to-image` and `$lib/telemetry` are mocked so the payload's `screenshot`
+ * `html-to-image` and `#lib/telemetry` are mocked so the payload's `screenshot`
  * and `session_id` legs are deterministic, and so the widget's behaviour on
  * the legs where those collaborators would fail is driven directly: a page
  * whose screenshot cannot be captured still submits, and an unconfigured
@@ -13,10 +13,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { toPng } from 'html-to-image';
 import ReportWidget from './report-shell.svelte';
-import { getSessionId } from '$lib/telemetry';
+import { getSessionId } from '#lib/telemetry.js';
 
 vi.mock('html-to-image', () => ({ toPng: vi.fn() }));
-vi.mock('$lib/telemetry', () => ({ getSessionId: vi.fn(() => 'faro-session-1') }));
+vi.mock('#lib/telemetry', () => ({ getSessionId: vi.fn(() => 'faro-session-1') }));
 
 /** A fetch that answers `{ id }` like the endpoint contract says. */
 function okFetch(id = 'fb-1234') {

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import StatList from '$lib/components/ui/stat-list/stat-list.svelte';
+import StatList from '#lib/components/ui/stat-list/stat-list.svelte';
 
 const lib = join(__dirname, '../lib');
 const read = (p: string) => readFileSync(join(lib, p), 'utf8');

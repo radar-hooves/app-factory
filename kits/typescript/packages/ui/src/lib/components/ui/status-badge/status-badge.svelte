@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Status } from '../status/index.js';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	// The one state chip: a coloured dot plus a label on a tinted pill. Styling
 	// comes from .ds-chip / .ds-dot in @poodle64/ui/styles.css, so the whole app's

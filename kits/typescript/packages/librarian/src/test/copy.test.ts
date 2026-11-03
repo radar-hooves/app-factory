@@ -2,7 +2,7 @@
  * A persona's name is an argument, and a slug is not a name.
  */
 import { describe, it, expect } from 'vitest';
-import { copyFor, DEFAULT_COPY, personaName, resolveCopy } from '$lib/copy';
+import { copyFor, DEFAULT_COPY, personaName, resolveCopy } from '#lib/copy.js';
 
 describe('personaName', () => {
 	it('capitalises a route slug', () => {

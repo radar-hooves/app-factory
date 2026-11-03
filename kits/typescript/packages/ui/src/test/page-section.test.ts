@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
-import PageSection from '$lib/components/ui/page-section/page-section.svelte';
+import PageSection from '#lib/components/ui/page-section/page-section.svelte';
 import Harness from './page-section.svelte';
 
 describe('PageSection', () => {

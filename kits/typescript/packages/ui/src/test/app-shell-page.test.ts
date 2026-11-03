@@ -16,9 +16,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import ShellHarness from './app-shell.svelte';
 import { windowWidth } from './window-width.js';
-import PagePane from '$lib/components/ui/app-shell/page-pane.svelte';
-import PageAside from '$lib/components/ui/app-shell/page-aside.svelte';
-import { PAGE_TYPES } from '$lib/components/ui/app-shell/page.js';
+import PagePane from '#lib/components/ui/app-shell/page-pane.svelte';
+import PageAside from '#lib/components/ui/app-shell/page-aside.svelte';
+import { PAGE_TYPES } from '#lib/components/ui/app-shell/page.js';
 
 const frame = () => document.querySelector<HTMLElement>('[data-slot="app-shell-content"] > .ds-page')!;
 const pane = () => document.querySelector<HTMLElement>('.ds-page-pane');

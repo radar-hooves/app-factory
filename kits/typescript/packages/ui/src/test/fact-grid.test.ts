@@ -12,8 +12,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import FactGrid from '$lib/components/ui/fact-grid/fact-grid.svelte';
-import type { Fact } from '$lib/components/ui/fact-grid/fact-grid.svelte';
+import FactGrid from '#lib/components/ui/fact-grid/fact-grid.svelte';
+import type { Fact } from '#lib/components/ui/fact-grid/fact-grid.svelte';
 
 function cellFor(label: string): HTMLElement {
 	const dt = screen.getByText(label);

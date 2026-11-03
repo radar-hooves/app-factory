@@ -4,9 +4,9 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import AgentTranscript from '$lib/components/agent-transcript/agent-transcript.svelte';
-import Conversation from '$lib/components/conversation/conversation.svelte';
-import type { Block, Turn } from '$lib/transcript.svelte';
+import AgentTranscript from '#lib/components/agent-transcript/agent-transcript.svelte';
+import Conversation from '#lib/components/conversation/conversation.svelte';
+import type { Block, Turn } from '#lib/transcript.svelte.js';
 
 const ANSWER: Block[] = [{ kind: 'text', index: 0, text: 'Twenty days a year.' }];
 const ADDRESS = '/chat/outrider/answers/c1/0';

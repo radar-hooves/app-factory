@@ -13,7 +13,7 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import Button from '../button/button.svelte';
 	import { Badge } from '../badge/index.js';
 	import DetailPanel from '../detail-panel/detail-panel.svelte';

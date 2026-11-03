@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet, Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 	import X from '@lucide/svelte/icons/x';
 	import StatusBadge from '../status-badge/status-badge.svelte';
 	import type { Status } from '../status/index.js';

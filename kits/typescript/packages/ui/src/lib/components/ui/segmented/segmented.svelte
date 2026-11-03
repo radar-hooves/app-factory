@@ -12,7 +12,7 @@
 	 * always has one answer, so the value cannot be cleared.
 	 */
 	import { ToggleGroup } from 'bits-ui';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		value = $bindable(),

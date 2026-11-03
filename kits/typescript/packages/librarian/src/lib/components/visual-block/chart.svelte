@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import type { ChartValue } from '$lib/visuals';
+	import type { ChartValue } from '#lib/visuals.js';
 
 	interface Props {
 		value: unknown;

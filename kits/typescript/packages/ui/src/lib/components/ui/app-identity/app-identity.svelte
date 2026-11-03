@@ -39,8 +39,8 @@
 	 */
 	import type { Component } from 'svelte';
 	import { toggleMode } from 'mode-watcher';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
 
 	let {
 		user,

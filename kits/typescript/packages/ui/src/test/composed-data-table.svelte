@@ -11,10 +11,10 @@
 		type ColumnFiltersState,
 		type SortingState
 	} from '@tanstack/table-core';
-	import { createSvelteTable } from '$lib/components/ui/data-table/index.js';
-	import DataTableTanstack from '$lib/components/ui/data-table-tanstack/data-table-tanstack.svelte';
-	import DataTableToolbar from '$lib/components/ui/data-table-toolbar/data-table-toolbar.svelte';
-	import type { ChipGroup } from '$lib/components/ui/data-table-toolbar/data-table-toolbar.svelte';
+	import { createSvelteTable } from '#lib/components/ui/data-table/index.js';
+	import DataTableTanstack from '#lib/components/ui/data-table-tanstack/data-table-tanstack.svelte';
+	import DataTableToolbar from '#lib/components/ui/data-table-toolbar/data-table-toolbar.svelte';
+	import type { ChipGroup } from '#lib/components/ui/data-table-toolbar/data-table-toolbar.svelte';
 
 	type Row = { id: string; name: string; state: string };
 

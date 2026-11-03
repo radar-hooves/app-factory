@@ -1,7 +1,7 @@
 <script lang="ts">
-	import SettingsShell from '$lib/components/ui/settings-shell/settings-shell.svelte';
-	import Panel from '$lib/components/ui/panel/panel.svelte';
-	import SettingsRow from '$lib/components/ui/settings-row/settings-row.svelte';
+	import SettingsShell from '#lib/components/ui/settings-shell/settings-shell.svelte';
+	import Panel from '#lib/components/ui/panel/panel.svelte';
+	import SettingsRow from '#lib/components/ui/settings-row/settings-row.svelte';
 
 	let { onpick = () => {} }: { onpick?: (id: string) => void } = $props();
 	let selected = $state('library');

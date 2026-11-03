@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Avatar as AvatarPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	/**
 	 * What shows while the image is loading and after it fails. It is not a
