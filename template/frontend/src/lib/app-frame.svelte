@@ -27,7 +27,6 @@
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import { page } from '$app/state';
 	import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
-	import { handOff, personasOf, type Persona } from '#lib/agent/chat.js';
 	import { dynamicPageTitle } from '#lib/page-title.svelte.js';
 	import { goto } from '$app/navigation';
 	import Eye from '@lucide/svelte/icons/eye';
@@ -47,22 +46,32 @@
 	let paletteOpen = $state(false);
 	let paletteQuery = $state('');
 
-	// Every app with a chat persona gets an Ask row: type a question, Enter asks
-	// that persona. Read once the palette first opens, and only for a signed-in
-	// caller; a failed read leaves the palette without the row.
+	// An app with a chat persona gets an Ask row: type a question, Enter asks
+	// that persona. The agent slice is optional (the library has none), so its
+	// client is a glob that matches nothing there, never a hard import. Read
+	// once the palette first opens, and only for a signed-in caller; a failed
+	// read leaves the palette without the row.
+	type Persona = { id: string; name: string };
+	type Chat = {
+		personasOf: () => Promise<Persona[]>;
+		handOff: (persona: string, options: { ask: string }) => Promise<unknown>;
+	};
+	const chatModules = import.meta.glob<Chat>('./agent/chat.ts');
+	const loadChat = Object.values(chatModules)[0] as (() => Promise<Chat>) | undefined;
 	let personas = $state<Persona[]>([]);
-	let personasRead = false;
+	let personasRead = !loadChat;
 	$effect(() => {
 		if (!paletteOpen || personasRead || !auth.user) return;
 		personasRead = true;
-		void personasOf()
+		void loadChat?.()
+			.then((chat) => chat.personasOf())
 			.then((all) => (personas = all))
 			.catch(() => (personasRead = false));
 	});
 	function ask(persona: Persona) {
 		const question = paletteQuery.trim();
 		paletteOpen = false;
-		void handOff(persona.id, { ask: question });
+		void loadChat?.().then((chat) => chat.handOff(persona.id, { ask: question }));
 	}
 	let collapsed = $state(shell.railCollapsed ?? false);
 

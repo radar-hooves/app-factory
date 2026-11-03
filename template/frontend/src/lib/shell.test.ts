@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { createRawSnippet, tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -221,7 +221,9 @@ describe('the palette', () => {
 		await fireEvent.input(palette.getByRole('combobox'), { target: { value: 'what is owed?' } });
 		const row = await palette.findByText('Ask Milton: what is owed?');
 		await fireEvent.click(row);
-		expect(chat.handOff).toHaveBeenCalledWith('milton', { ask: 'what is owed?' });
+		await waitFor(() =>
+			expect(chat.handOff).toHaveBeenCalledWith('milton', { ask: 'what is owed?' })
+		);
 	});
 
 	it('lists a nav section’s children under the section’s name', async () => {

@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.11] - 2026-11-03
+
+Need: an app without the agent slice needs no stub; consumer: the library, radar-hooves/master-project#443.
+
+### Changed
+
+- **`app-frame.svelte` no longer imports `#lib/agent/chat.js`**: the palette's Ask row loads it through a glob that matches nothing in an app without `lib/agent/chat.ts`, and the row is then simply absent. An app with the slice is unchanged. `shell.test.ts` waits for the hand-off the Ask row now makes after the lazy load.
+
+### Consumer must change
+
+1. Library: delete `lib/agent/chat.ts` (the stub returning no personas).
+
 ## [2026.11.10] - 2026-11-03
 
 Need: the one shell's second round of gaps, found by earworm, eight and the library adopting v2026.11.9; consumer: every stamped app, radar-hooves/master-project#443.
