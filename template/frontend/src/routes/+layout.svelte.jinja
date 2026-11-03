@@ -1,10 +1,10 @@
 {% raw %}<script lang="ts">
 	import '../app.css';
-	import '$lib/fonts';
+	import '#lib/fonts.js';
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '@poodle64/ui/sonner';
 	import { page } from '$app/state';
-	import { dynamicPageTitle } from '$lib/page-title.svelte';
+	import { dynamicPageTitle } from '#lib/page-title.svelte.js';
 
 	// What every route needs, signed in or not. The signed-in app — the shell,
 	// the session guard, the workspace — is (protected)/+layout.svelte, so a route that

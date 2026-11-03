@@ -28,21 +28,6 @@
       "allowedVersions": "<7"
     },
     {
-      "description": "SvelteKit 3, adapter-static 4 and @sveltejs/package 3 move together and are held. Upstream blocker: bits-ui (every app's and @poodle64/ui's component base) pulls runed 0.35, whose peer is @sveltejs/kit ^2 (huntabyte/bits-ui#2243, 'SvelteKit 3 support'). Also measured 02/11/2026: @sveltejs/package 3 no longer rewrites `$lib` in dist, so a built @poodle64/ui ships unresolvable `$lib/\u2026` imports (a consumer's build fails 'Could not load src/lib/utils.js'), and kit 3 drops `$lib`, svelte.config.js and `$app/stores` for `#lib`, the Vite plugin options and `$app/state` \u2014 a fleet-wide source rewrite (`npx sv migrate sveltekit-3`) to run as one factory change after bits-ui lands. Tracked in radar-hooves/app-factory#60.",
-      "matchPackageNames": [
-        "@sveltejs/kit",
-        "@sveltejs/package"
-      ],
-      "allowedVersions": "<3"
-    },
-    {
-      "description": "adapter-static 4 peers @sveltejs/kit ^3, so it is held with SvelteKit 3 (see the rule above; radar-hooves/app-factory#60).",
-      "matchPackageNames": [
-        "@sveltejs/adapter-static"
-      ],
-      "allowedVersions": "<4"
-    },
-    {
       "description": "@tanstack/table-core 9 is a rewrite, not an upgrade: table features are declared up front (`_features`), `getCoreRowModel`/`getSortedRowModel`/`getFilteredRowModel` become `createCoreRowModel`/`createSortedRowModel`/`createFilteredRowModel`, and `ColumnDef` takes extra type arguments. @poodle64/ui re-exports `ColumnDef` and wraps `createTable` in `createSvelteTable`, so the bump breaks the table API every app calls (svelte-check: 27 errors in ui alone, measured 02/11/2026). Not an upstream fault: a deliberate @poodle64/ui major, with the apps' tables migrated beside it, tracked in radar-hooves/app-factory#61.",
       "matchPackageNames": [
         "@tanstack/table-core"

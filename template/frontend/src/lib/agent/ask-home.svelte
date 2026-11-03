@@ -15,8 +15,8 @@
 		warmChat,
 		type Collection,
 		type Persona
-	} from '$lib/agent/chat';
-	import AskBox from '$lib/agent/ask-box.svelte';
+	} from '#lib/agent/chat.js';
+	import AskBox from '#lib/agent/ask-box.svelte';
 
 	let { persona: id }: { persona: string } = $props();
 

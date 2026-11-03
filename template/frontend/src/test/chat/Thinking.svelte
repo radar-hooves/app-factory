@@ -1,6 +1,6 @@
 <!-- A test app's `ChatExtensions.Thinking`. -->
 <script lang="ts">
-	import type { Persona } from '$lib/agent/chat';
+	import type { Persona } from '#lib/agent/chat.js';
 
 	let { persona, since }: { persona: Persona; label?: string; since?: number } = $props();
 </script>

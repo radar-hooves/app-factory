@@ -32,8 +32,8 @@
 	import { Panel } from '@poodle64/ui/panel';
 	import * as Select from '@poodle64/ui/select';
 	import * as Table from '@poodle64/ui/table';
-	import { api, describeApiError, toastApiError } from '$lib/api';
-	import { auth } from '$lib/auth.svelte';
+	import { api, describeApiError, toastApiError } from '#lib/api/index.js';
+	import { auth } from '#lib/auth.svelte.js';
 
 	let { label = 'Workspace' }: { label?: string } = $props();
 	const noun = $derived(label.toLowerCase());

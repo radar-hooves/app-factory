@@ -2,7 +2,7 @@
  * Test-only stand-in for SvelteKit's `$app/forms`.
  *
  * Same reason as `app-state.svelte.ts`. `applyAction` writes the action result back
- * into the `page` store from `app-stores.ts` and the reactive `page` of `app-state.svelte.ts`, so a component under test sees
+ * into the reactive `page` of `app-state.svelte.ts`, so a component under test sees
  * `form` and `status` update the way it would in the browser.
  *
  * `enhance` must genuinely intercept the form's submit event, and a stub that
@@ -20,14 +20,12 @@
  * receives the same input shape SvelteKit's own `enhance` passes, and that is
  * the whole contract.
  */
-import type { ActionResult } from '@sveltejs/kit';
+import type { ActionResult } from '$app/forms';
 
 import { page as statePage } from './app-state.svelte';
-import { page } from './app-stores';
 
 export function applyAction(result: ActionResult): Promise<void> {
 	if (result.type === 'error' || result.type === 'redirect') return Promise.resolve();
-	page.update((current) => ({ ...current, form: result.data ?? null, status: result.status }));
 	statePage.form = result.data ?? null;
 	statePage.status = result.status;
 	return Promise.resolve();

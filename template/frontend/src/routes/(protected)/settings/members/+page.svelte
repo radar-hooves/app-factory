@@ -1,7 +1,7 @@
 <script lang="ts">
 	import PageHeader from '@poodle64/ui/page-header';
-	import { workspaceLabel } from '$lib/app-frame.svelte';
-	import WorkspaceMembers from '$lib/workspaces/workspace-members.svelte';
+	import { workspaceLabel } from '#lib/app-frame.svelte';
+	import WorkspaceMembers from '#lib/workspaces/workspace-members.svelte';
 
 	const noun = workspaceLabel.toLowerCase();
 </script>

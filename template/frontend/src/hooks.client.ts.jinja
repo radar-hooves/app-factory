@@ -1,7 +1,6 @@
+import type { HandleClientError } from '@sveltejs/kit/hooks';
 import { initBrowserTelemetry } from '@poodle64/ui/telemetry';
-import type { HandleClientError } from '@sveltejs/kit';
-
-import { version } from '$app/environment';
+import { version } from '$app/env';
 
 // Browser-side telemetry (`rules-library/platform/telemetry.md`), started once
 // per app load. Dev has no collector to send to, hence the empty URL;

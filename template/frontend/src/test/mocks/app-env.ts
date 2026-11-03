@@ -1,5 +1,5 @@
 /**
- * Test-only stand-in for SvelteKit's `$app/environment`.
+ * Test-only stand-in for SvelteKit's `$app/env`.
  *
  * Same reason as `app-state.svelte.ts`. The values describe the environment the suite
  * actually runs in: jsdom is a browser-like environment, tests are a dev build,

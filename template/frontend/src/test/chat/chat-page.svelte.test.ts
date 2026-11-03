@@ -22,14 +22,14 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('$app/state', async () => ({ page: (await import('./page-state.svelte')).nav }));
 vi.mock('$app/navigation', () => ({ goto: fake.goto, preloadCode: vi.fn(async () => undefined) }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api/index.js', () => ({
 	api: { GET: fake.GET, POST: vi.fn(), PATCH: vi.fn(), PUT: fake.PUT, DELETE: fake.DELETE },
 	// The page's ask goes through the global fetch the tests stub.
 	apiFetch: (...args: Parameters<typeof fetch>) => fetch(...args)
 }));
 // Every member the page reads, the test app's unset ones included: a mock
 // refuses a read of a name it was not given.
-vi.mock('$lib/agent/app', async () => ({
+vi.mock('#lib/agent/app.js', async () => ({
 	oncite: undefined,
 	describeTool: undefined,
 	copy: undefined,
@@ -45,8 +45,8 @@ vi.mock('$lib/agent/app', async () => ({
 	}
 }));
 
-import AskHome from '$lib/agent/ask-home.svelte';
-import { forgetAgent, handOff } from '$lib/agent/chat';
+import AskHome from '#lib/agent/ask-home.svelte';
+import { forgetAgent, handOff } from '#lib/agent/chat.js';
 import { nav as page } from './page-state.svelte';
 import Shell from './Shell.svelte';
 import Thinking from './Thinking.svelte';
@@ -622,7 +622,7 @@ describe('A question handed over from another page', () => {
 	});
 
 	it('finds the personas and collections a Home page already read, and asks for neither again', async () => {
-		const { personasOf, collectionsOf } = await import('$lib/agent/chat');
+		const { personasOf, collectionsOf } = await import('#lib/agent/chat.js');
 		const [outrider] = await personasOf();
 		await collectionsOf(outrider!);
 		fake.GET.mockClear();

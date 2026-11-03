@@ -1,7 +1,7 @@
 <!--
 	The one question box: the librarian's Composer (attach, briefing, the scope
 	picker, send) with the persona's name, its words and its briefing filled in
-	from `$lib/agent/app`. The chat page and a Home page's `AskHome` both
+	from `#lib/agent/app`. The chat page and a Home page's `AskHome` both
 	render this, so the two are the same box; they differ only in what sending
 	does. A briefing control appears where the host takes one (`onbriefing`,
 	which a Home page's box does and the chat page does not) and the app
@@ -13,14 +13,14 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import Composer from '@poodle64/librarian/composer';
-	import * as app from '$lib/agent/app';
+	import * as app from '#lib/agent/app.js';
 	import {
 		choiceOf,
 		type Briefing,
 		type ChatExtensions,
 		type Collection,
 		type Persona
-	} from '$lib/agent/chat';
+	} from '#lib/agent/chat.js';
 
 	type Props = Omit<
 		ComponentProps<typeof Composer>,

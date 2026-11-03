@@ -13,7 +13,7 @@ import LoadingArt from '../../test/art/LoadingArt.svelte';
 
 const redirectToAuthentik = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.js', () => ({
 	api: { GET: vi.fn(), POST: vi.fn() },
 	redirectToAuthentik: (...args: unknown[]) => redirectToAuthentik(...args),
 	setActiveWorkspaceId: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('$app/state', () => ({ page: route }));
 
 const art = vi.hoisted(() => ({ LoadingArt: undefined as unknown }));
 
-vi.mock('$lib/art', () => ({
+vi.mock('#lib/art.js', () => ({
 	get LoadingArt() {
 		return art.LoadingArt;
 	}
@@ -46,7 +46,7 @@ const session = vi.hoisted(() => ({
 	activeWorkspace: null as { id: number; slug: string; name: string } | null
 }));
 
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
 	auth: {
 		init,
 		get isLoading() {

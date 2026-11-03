@@ -17,7 +17,7 @@ declare global {
 		interface PageState {
 			/** A question the chat page asks on arrival, `goto('/chat/<persona>', { state: { ask } })`. */
 			ask?: string;
-			/** Files that go with `ask`; `handOff` from `$lib/agent/chat` sets both. */
+			/** Files that go with `ask`; `handOff` from `#lib/agent/chat.js` sets both. */
 			files?: File[];
 			/** The kind `ask` is asked as (`BRIEFING`); absent, a plain question. */
 			kind?: string;

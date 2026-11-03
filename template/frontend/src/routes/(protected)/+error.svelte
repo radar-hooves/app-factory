@@ -8,8 +8,8 @@
 	import { page } from '$app/state';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
-	import * as app from '$lib/art';
-	import type { StateArt } from '$lib/state-art';
+	import * as app from '#lib/art.js';
+	import type { StateArt } from '#lib/state-art.js';
 
 	const art: StateArt = app;
 

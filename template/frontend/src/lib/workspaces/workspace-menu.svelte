@@ -14,7 +14,7 @@
 	reach Members to make the FIRST grant (master-project#291), so the
 	frame's own `identity` slot wires `AppIdentity`'s `onManageMembers` for
 	exactly the callers this component renders nothing for — see
-	`$lib/app-frame.svelte`. New-workspace creation has no such second door: an
+	`#lib/app-frame.svelte`. New-workspace creation has no such second door: an
 	org-of-one who wants a second workspace reaches it once a second
 	membership makes this menu render again, or from a route the app adds if
 	that act turns out to matter sooner.
@@ -47,9 +47,9 @@
 	import * as DropdownMenu from '@poodle64/ui/dropdown-menu';
 	import { Input } from '@poodle64/ui/input';
 	import { Label } from '@poodle64/ui/label';
-	import { api, toastApiError } from '$lib/api';
-	import { auth } from '$lib/auth.svelte';
-	import { cn } from '$lib/utils';
+	import { api, toastApiError } from '#lib/api/index.js';
+	import { auth } from '#lib/auth.svelte.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		label = 'Workspace',

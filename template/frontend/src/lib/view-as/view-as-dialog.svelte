@@ -12,7 +12,7 @@
 	import { Button } from '@poodle64/ui/button';
 	import { Checkbox } from '@poodle64/ui/checkbox';
 	import { Label } from '@poodle64/ui/label';
-	import { auth } from '$lib/auth.svelte';
+	import { auth } from '#lib/auth.svelte.js';
 	import { reloadPage } from './reload';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();

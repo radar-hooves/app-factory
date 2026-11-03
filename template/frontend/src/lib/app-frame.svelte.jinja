@@ -34,11 +34,11 @@
 	import { goto } from '$app/navigation';
 	import Eye from '@lucide/svelte/icons/eye';
 	import House from '@lucide/svelte/icons/house';
-	import { auth } from '$lib/auth.svelte';
-	import AdminAlertBell from '$lib/alerts/admin-alert-bell.svelte';
-	import ViewAsBanner from '$lib/view-as/view-as-banner.svelte';
-	import ViewAsDialog from '$lib/view-as/view-as-dialog.svelte';
-	import WorkspaceMenu from '$lib/workspaces/workspace-menu.svelte';
+	import { auth } from '#lib/auth.svelte.js';
+	import AdminAlertBell from '#lib/alerts/admin-alert-bell.svelte';
+	import ViewAsBanner from '#lib/view-as/view-as-banner.svelte';
+	import ViewAsDialog from '#lib/view-as/view-as-dialog.svelte';
+	import WorkspaceMenu from '#lib/workspaces/workspace-menu.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -58,7 +58,7 @@
 	 * - Name rows in the reader's words, never the library's architecture
 	 *   (canonical-app-shape.md §Milton is a person, not a place).
 	 *
-	 * A nav long enough to want its own file moves to `$lib/config/navigation.ts`
+	 * A nav long enough to want its own file moves to `#lib/config/navigation.ts`
 	 * and is imported here.
 	 */
 	const nav: NavGroup[] = [{ items: [{ label: 'Home', href: '/', icon: House }] }];

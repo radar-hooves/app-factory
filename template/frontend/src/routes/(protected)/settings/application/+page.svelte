@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { SettingsPage } from '@poodle64/ui/settings';
-	import { apiFetch, redirectToAuthentik } from '$api';
+	import { apiFetch, redirectToAuthentik } from '#lib/api/index.js';
 </script>
 
 <SettingsPage

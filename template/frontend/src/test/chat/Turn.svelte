@@ -12,7 +12,7 @@
 	import AnswerShare from '@poodle64/librarian/answer-share';
 	import Markdown from '@poodle64/librarian/markdown';
 	import type { TextBlock } from '@poodle64/librarian/transcript';
-	import type { Persona } from '$lib/agent/chat';
+	import type { Persona } from '#lib/agent/chat.js';
 
 	let { persona, ...turn }: AgentTranscriptProps & { persona: Persona } = $props();
 

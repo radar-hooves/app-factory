@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { setViewAs } from '$lib/api';
+import { setViewAs } from '#lib/api/index.js';
 
 import { chatTransport, type Persona } from './chat';
 

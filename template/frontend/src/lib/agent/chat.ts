@@ -26,7 +26,7 @@ import type { DescribeTool } from '@poodle64/librarian/transcript';
 import type { Visual } from '@poodle64/librarian/visuals';
 import { goto, preloadCode } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { api, apiFetch } from '$lib/api';
+import { api, apiFetch } from '#lib/api/index.js';
 
 /** A persona as `GET /api/agent/personas` lists it. */
 export interface Persona {

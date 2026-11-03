@@ -4,7 +4,7 @@
  * THE extension point for `src/lib/api/index.ts`, which is owed byte-identical:
  * the barrel re-exports everything here after its own exports, so a call site
  * imports the factory's client and this app's domain functions from the same
- * `$lib/api`. Measured 06/09/2026 across the fleet: three apps had rewritten the
+ * `#lib/api/index.js`. Measured 06/09/2026 across the fleet: three apps had rewritten the
  * barrel to add seven, thirty and two hundred lines of their own — the same file
  * diverging three ways for the same reason, which is what a seam is for.
  *

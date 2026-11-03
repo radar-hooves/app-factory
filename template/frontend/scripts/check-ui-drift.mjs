@@ -305,20 +305,18 @@ function composedImports(src) {
 
 /**
  * A page's own presentation frequently lives one level down, not in the route
- * file itself. Only direct children (`$components`/`$lib` imports resolving to
+ * file itself. Only direct children (`#lib` imports resolving to
  * a `.svelte` file) are followed; a grandchild is out of scope, matching "one
  * level deep" in the brief contract.
  */
 function childComponentFiles(pageSrc) {
 	const out = [];
-	const importRe = /from\s+['"](\$components\/[^'"]+|\$lib\/[^'"]+)['"]/g;
+	const importRe = /from\s+['"](#lib\/[^'"]+)['"]/g;
 	let m;
 	while ((m = importRe.exec(pageSrc))) {
 		const spec = m[1];
 		if (!spec.endsWith('.svelte')) continue;
-		const relPath = spec.startsWith('$components/')
-			? spec.replace('$components/', 'lib/components/')
-			: spec.replace('$lib/', 'lib/');
+		const relPath = spec.replace('#lib/', 'lib/');
 		const full = path.join(SRC, relPath);
 		if (existsSync(full)) out.push(full);
 	}
