@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
-## [Unreleased]
+## [2026.11.6] - 2026-11-03
 
 Consumer: the operator (master-project#432, app-factory#37, #38).
 
