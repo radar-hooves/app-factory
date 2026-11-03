@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PAGE_TYPES } from '@poodle64/ui/app-shell';
 
 import Layout from '../routes/(protected)/+layout.svelte';
-import { usePageTitle } from './page-title.svelte.js';
+import TitledPage from '../test/stubs/titled-page.svelte';
 import { shell } from './shell.js';
 
 // The shell, as this app wears it: the factory's frame fed by this app's own
@@ -120,7 +120,7 @@ describe('the bar', () => {
 		expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('This one');
 	});
 
-	it("names the last crumb from the page itself, as usePageTitle sets it", async () => {
+	it('names the last crumb from the page itself, as usePageTitle sets it', async () => {
 		route.data = {
 			breadcrumbs: [{ label: 'Things', href: '/things' }, { label: 'Thing' }]
 		};
@@ -129,12 +129,15 @@ describe('the bar', () => {
 		const { unmount } = render(Layout, { props: { children } });
 		expect(last()).toHaveTextContent('Thing');
 
-		const stop = $effect.root(() => usePageTitle(() => 'Mq 28a'));
+		const page = render(TitledPage, { props: { name: 'Mq 28a' } });
 		await tick();
 		expect(last()).toHaveTextContent('Mq 28a');
-		expect(within(crumbs()).getByRole('link', { name: 'Things' })).toHaveAttribute('href', '/things');
+		expect(within(crumbs()).getByRole('link', { name: 'Things' })).toHaveAttribute(
+			'href',
+			'/things'
+		);
 
-		stop();
+		page.unmount();
 		await tick();
 		expect(last()).toHaveTextContent('Thing');
 		unmount();
