@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.2] - 2026-11-03
+
+Consumer: the operator, whose ruling of 03/11/2026 (master-project#443): the factory owns the top rail, the sidebar and the page types; apps declare data.
+
+### Changed
+
+- **The bar runs to the ruling.** Breadcrumbs on the left (`Breadcrumbs`, from the rail's row and its section, then `title`, or the route's `breadcrumbs`; the last crumb names the page), then the page's controls, then from the far right the account, the day/night toggle, the alerts (`actions`), the report button and a small search. **`searchPlacement` is gone**: the search is one small button in the right-hand group, never a bar across the page.
+- **The sidebar's toggle sits on the sidebar's top**, in its head beside the brand (stacked under the mark when collapsed or peeking), no longer at its foot. `data-testid="ds-rail-collapse"` is unchanged; the foot remains only for the phone drawer's report row.
+- **No page draws a title.** The shell renders one visually hidden `<h1>` (the last crumb) in the bar; the page body carries none.
+- **`bare` is a fourth page type**: no rail, no bar, the route owns the window (a deck, a workshop, a print view). Added for caspo's immersive surfaces; nothing else should pick it.
+- `ShellData` (and `resolveNav`, `navTrail`) in `@poodle64/ui/app-shell`: what an app declares, read by the factory's frame.
+
+### Consumer must change
+
+- Drop `searchPlacement` from any `<AppShell>`. A route whose own markup writes a title now has two headings: delete the route's.
+- `ds-shell-location` now holds the breadcrumbs (`ds-shell-title` is the `<nav>`); a test reading the bar's text reads the trail.
+
 ## [2026.11.1] - 2026-11-02
 
 Consumer: the whole app fleet (the weekly major-upgrade lane, app-factory#27).

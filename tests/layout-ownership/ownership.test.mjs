@@ -55,6 +55,27 @@ test('a route sizing or centring its own page is refused, wherever the class sit
 	assert.deepEqual(rules(styled), ['own-page-frame src/routes/x/+layout.svelte']);
 });
 
+test('a width on something inside the page is content, not the page’s frame', () => {
+	const root = app({
+		'src/routes/x/+page.svelte': `<div class="space-y-4"><Input class="max-w-sm" /><p class="max-w-prose mx-auto">Drop it in the container</p></div>`
+	});
+	assert.deepEqual(rules(root), []);
+});
+
+test('an inline style framing the page is refused', () => {
+	const root = app({ 'src/routes/x/+page.svelte': `<div style="max-width: 60rem; margin: 0 auto">x</div>` });
+	assert.deepEqual(rules(root), ['own-page-frame src/routes/x/+page.svelte']);
+});
+
+test('a server load with an unknown page type is refused, and a namespace import of the shell too', () => {
+	const root = app({
+		'src/routes/x/+page.server.ts': `export const load = () => ({ pageType: 'wide' });`,
+		'src/lib/y.svelte': `<script>import * as S from '@poodle64/ui/app-shell';</script>`,
+		'src/app.d.ts': `import type { PageType } from '@poodle64/ui/app-shell';\n// AppShell pageType`
+	});
+	assert.deepEqual(rules(root).sort(), ['own-shell src/lib/y.svelte', 'page-type src/routes/x/+page.server.ts']);
+});
+
 test('a width inside a component is the component’s, not the page’s', () => {
 	const root = app({ 'src/lib/card.svelte': `<div class="max-w-sm mx-auto">x</div>` });
 	assert.deepEqual(rules(root), []);

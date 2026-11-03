@@ -38,6 +38,49 @@ const SHELL_OWNERS = new Set(['src/lib/app-frame.svelte']);
 const WIDTH_CLASS =
 	/(?<![\w-])(?:[a-z0-9]+:)*(?:max-w-(?!none)[\w./[\]-]+|mx-auto|container|w-screen|h-screen|min-h-screen|min-w-screen)(?![\w-])/;
 const PAGE_MAX_WIDTH_RULE = /(?:^|[\s;{])max-width\s*:/;
+const INLINE_FRAME_STYLE = /(?:max-width|margin(?:-inline)?)\s*:\s*[^;"']*(?:\d|auto)/;
+const VOID = new Set([
+	'area',
+	'base',
+	'br',
+	'col',
+	'embed',
+	'hr',
+	'img',
+	'input',
+	'link',
+	'meta',
+	'source',
+	'track',
+	'wbr'
+]);
+
+/**
+ * The opening tags at the top level of a route's markup: the page's own
+ * outermost elements, where a width or a centring is the page's frame. A width
+ * on something inside (a field, a paragraph) is content and not asked about.
+ * @param {string} markup
+ * @returns {string[]} each tag's attribute text
+ */
+function topLevelAttributes(markup) {
+	/** @type {string[]} */
+	const out = [];
+	let depth = 0;
+	for (const m of markup.matchAll(
+		/<(\/?)([A-Za-z][\w:.-]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*)>/g
+	)) {
+		const closing = m[1] === '/';
+		const name = (m[2] ?? '').toLowerCase();
+		const attrs = m[3] ?? '';
+		if (closing) {
+			depth = Math.max(0, depth - 1);
+			continue;
+		}
+		if (depth === 0) out.push(attrs);
+		if (!VOID.has(name) && !attrs.trimEnd().endsWith('/')) depth += 1;
+	}
+	return out;
+}
 
 /**
  * @param {string} dir
@@ -76,7 +119,9 @@ export function findViolations(root = FRONTEND_ROOT) {
 
 		if (
 			!SHELL_OWNERS.has(rel) &&
-			/import\s*{[^}]*\bAppShell\b[^}]*}\s*from\s*['"]@poodle64\/ui\/app-shell['"]/.test(text)
+			/import\s+(?:type\s+)?(?:\*\s*as\s+\w+|[^;]*?\bAppShell\b[^;]*?)\s+from\s*['"]@poodle64\/ui\/app-shell(?:\/app-shell\.svelte)?['"]/.test(
+				text
+			)
 		) {
 			findings.push({
 				rule: 'own-shell',
@@ -101,12 +146,16 @@ export function findViolations(root = FRONTEND_ROOT) {
 			const markup = text
 				.replace(/<script[\s\S]*?<\/script>/g, '')
 				.replace(/<style[\s\S]*?<\/style>/g, '');
-			const match = WIDTH_CLASS.exec(markup);
-			if (match) {
+			const top = topLevelAttributes(markup);
+			const match = top
+				.map((a) => WIDTH_CLASS.exec(a.replace(/^[^]*?class\s*=/, '')))
+				.find(Boolean);
+			const inline = top.some((a) => /style\s*=/.test(a) && INLINE_FRAME_STYLE.test(a));
+			if (match || inline) {
 				findings.push({
 					rule: 'own-page-frame',
 					file: rel,
-					detail: `sizes or centres its own page (\`${match[0]}\`); declare a pageType, the frame owns widths, gutters and columns`
+					detail: `sizes or centres its own page (\`${match?.[0] ?? 'inline style'}\`); declare a pageType, the frame owns widths, gutters and columns`
 				});
 			}
 			const styles = [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1] ?? '');
@@ -120,7 +169,7 @@ export function findViolations(root = FRONTEND_ROOT) {
 			}
 		}
 
-		if (/^src\/routes\/.*\+(?:page|layout)\.(?:ts|js)$/.test(rel)) {
+		if (/^src\/routes\/.*\+(?:page|layout)(?:\.server)?\.(?:ts|js)$/.test(rel)) {
 			for (const m of text.matchAll(/\bpageType\s*:\s*(['"`])([^'"`]*)\1/g)) {
 				if (!PAGE_TYPES.includes(m[2] ?? '')) {
 					findings.push({

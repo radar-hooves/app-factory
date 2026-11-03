@@ -4,6 +4,26 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.8] - 2026-11-03
+
+Need: one shell for every app: the factory owns the top rail, the sidebar and the page types, apps declare data; consumer: the operator, radar-hooves/master-project#443.
+
+### Changed
+
+- **`frontend/src/lib/app-frame.svelte` is the factory's**, byte-identical in every app, and leaves the sanctioned per-app list. What an app is lives in **`frontend/src/lib/shell.ts`** (`ShellData`: `workspaceLabel`, `brand`, `nav` or `nav(viewer)`, `railCollapsed`, `accountLinks`), the new extension point (copier `_skip_if_exists`). `workspaceLabel` moves there: `#lib/app-frame.svelte` no longer exports it.
+- **The rail to the ruling of 03/11/2026**: breadcrumbs left; from the far right the account, day/night, alerts, report, a small search; the sidebar toggle on the sidebar's top; Settings in the account menu; no page title (one hidden heading). A route declares `pageType` (`reading`, `panel`, `tool`, `bare`), `title` and, for a detail deeper than the rail's row, `breadcrumbs`, in its load data.
+- **Two checks every app runs in its unit leg and pre-commit**: `src/lib/shell.test.ts` (the bar's order, the toggle's place, the account menu, each page type's frame, rendered through the real layout with the app's own `shell`) and `src/lib/layout-ownership.test.ts` over `scripts/check-layout-ownership.mjs` (`pnpm lint:layout`): an app composing its own `AppShell`, writing shell chrome, sizing or centring its own page's outermost element, or declaring a `pageType` the factory lacks, fails. Neither is the app's to edit; each app's own layout specs go.
+- `@poodle64/ui` `^2026.11.2`.
+
+### Consumer must change
+
+Before `copier update` (the frame is overwritten, and `shell.ts` is stamped with a one-row nav if absent):
+
+1. Create `frontend/src/lib/shell.ts` from your `app-frame.svelte`: `workspaceLabel`, `brand: { title, mark?, homeHref? }`, the `nav` (a function of `viewer` for entitlement-gated rows), `railCollapsed`, and `accountLinks` for any extra account-menu row.
+2. Delete everything else in `app-frame.svelte` (it is re-stamped), drop `searchPlacement`, and drop `workspaceLabel` imports from `#lib/app-frame.svelte` for `shell.workspaceLabel` from `#lib/shell.js`.
+3. Delete the app's own layout specs (`tests/e2e/layout.spec.ts` and its like), and any route heading or `max-w-*`/`mx-auto` on a page's outer element; declare `pageType` instead.
+4. Add `lint:layout` runs through pre-commit on its own; baseline nothing.
+
 ## [2026.11.7] - 2026-11-03
 
 Need: the factory on SvelteKit 3 and style-dictionary 5, closing the GHSA-27mw-82g8-phjj advisory fix; consumer: radar-hooves/master-project#417 (the estate sweep), radar-hooves/app-factory#60.
