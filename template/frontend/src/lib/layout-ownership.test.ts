@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error: a plain .mjs gate, no declaration file.
 import { findViolations } from '../../scripts/check-layout-ownership.mjs';
 
 // The gate over this app's own source, in the unit leg every app runs: an app
@@ -9,7 +8,7 @@ import { findViolations } from '../../scripts/check-layout-ownership.mjs';
 // or delete; `pnpm lint:layout` runs the same check.
 describe('the app carries no layout of its own', () => {
 	it('composes the factory shell, sizes no page itself, and declares only the factory’s page types', () => {
-		const findings = findViolations() as { rule: string; file: string; detail: string }[];
+		const findings = findViolations();
 		expect(findings.map((f) => `${f.rule} ${f.file}: ${f.detail}`)).toEqual([]);
 	});
 });

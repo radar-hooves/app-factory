@@ -39,6 +39,11 @@ const WIDTH_CLASS =
 	/(?<![\w-])(?:[a-z0-9]+:)*(?:max-w-(?!none)[\w./[\]-]+|mx-auto|container|w-screen|h-screen|min-h-screen|min-w-screen)(?![\w-])/;
 const PAGE_MAX_WIDTH_RULE = /(?:^|[\s;{])max-width\s*:/;
 
+/**
+ * @param {string} dir
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
 function walk(dir, out = []) {
 	if (!existsSync(dir)) return out;
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -49,10 +54,16 @@ function walk(dir, out = []) {
 	return out;
 }
 
+/** @param {string} rel */
 const isTest = (rel) => /\.(test|spec)\.[jt]s$/.test(rel) || rel.startsWith('src/test/');
 
-/** Findings under `root` (the frontend directory), as `{ rule, file, detail }`. */
+/**
+ * Findings under `root` (the frontend directory).
+ * @param {string} [root]
+ * @returns {{ rule: string, file: string, detail: string }[]}
+ */
 export function findViolations(root = FRONTEND_ROOT) {
+	/** @type {{ rule: string, file: string, detail: string }[]} */
 	const findings = [];
 	const src = path.join(root, 'src');
 	for (const full of walk(src)) {
@@ -70,7 +81,8 @@ export function findViolations(root = FRONTEND_ROOT) {
 			findings.push({
 				rule: 'own-shell',
 				file: rel,
-				detail: 'composes AppShell; the factory frame (src/lib/app-frame.svelte) is the one shell, fed by src/lib/shell.ts'
+				detail:
+					'composes AppShell; the factory frame (src/lib/app-frame.svelte) is the one shell, fed by src/lib/shell.ts'
 			});
 		}
 		if (
@@ -86,7 +98,9 @@ export function findViolations(root = FRONTEND_ROOT) {
 		}
 
 		if (/^src\/routes\/.*\+(?:page|layout)\.svelte$/.test(rel)) {
-			const markup = text.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+			const markup = text
+				.replace(/<script[\s\S]*?<\/script>/g, '')
+				.replace(/<style[\s\S]*?<\/style>/g, '');
 			const match = WIDTH_CLASS.exec(markup);
 			if (match) {
 				findings.push({
@@ -95,23 +109,24 @@ export function findViolations(root = FRONTEND_ROOT) {
 					detail: `sizes or centres its own page (\`${match[0]}\`); declare a pageType, the frame owns widths, gutters and columns`
 				});
 			}
-			const styles = [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
+			const styles = [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1] ?? '');
 			if (styles.some((css) => PAGE_MAX_WIDTH_RULE.test(css))) {
 				findings.push({
 					rule: 'own-page-frame',
 					file: rel,
-					detail: 'a <style> sets a max-width on its page; declare a pageType, the frame owns widths'
+					detail:
+						'a <style> sets a max-width on its page; declare a pageType, the frame owns widths'
 				});
 			}
 		}
 
 		if (/^src\/routes\/.*\+(?:page|layout)\.(?:ts|js)$/.test(rel)) {
 			for (const m of text.matchAll(/\bpageType\s*:\s*(['"`])([^'"`]*)\1/g)) {
-				if (!PAGE_TYPES.includes(m[2])) {
+				if (!PAGE_TYPES.includes(m[2] ?? '')) {
 					findings.push({
 						rule: 'page-type',
 						file: rel,
-						detail: `pageType '${m[2]}' is not one of the factory's: ${PAGE_TYPES.join(', ')}`
+						detail: `pageType '${m[2] ?? ''}' is not one of the factory's: ${PAGE_TYPES.join(', ')}`
 					});
 				}
 			}

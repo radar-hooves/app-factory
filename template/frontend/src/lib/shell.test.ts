@@ -35,26 +35,28 @@ const route = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: route }));
 
-const workspace = { id: 7, slug: 'personal-1', name: 'personal-1' };
-vi.mock('#lib/auth.svelte.js', () => ({
-	auth: {
-		init: vi.fn(),
-		isLoading: false,
-		failure: null,
-		user: { id: 1, username: 'someone', display_name: 'Some One', email: null },
-		isAuthenticated: true,
-		workspaces: [{ workspace, role: 'owner' }],
-		activeWorkspace: workspace,
-		canSwitchWorkspace: false,
-		needsWorkspaceChoice: false,
-		activeRole: 'owner',
-		entitlements: [],
-		canViewAs: false,
-		can: () => true,
-		setActiveWorkspace: vi.fn(),
-		logout: vi.fn()
-	}
-}));
+vi.mock('#lib/auth.svelte.js', () => {
+	const workspace = { id: 7, slug: 'personal-1', name: 'personal-1' };
+	return {
+		auth: {
+			init: vi.fn(),
+			isLoading: false,
+			failure: null,
+			user: { id: 1, username: 'someone', display_name: 'Some One', email: null },
+			isAuthenticated: true,
+			workspaces: [{ workspace, role: 'owner' }],
+			activeWorkspace: workspace,
+			canSwitchWorkspace: false,
+			needsWorkspaceChoice: false,
+			activeRole: 'owner',
+			entitlements: [],
+			canViewAs: false,
+			can: () => true,
+			setActiveWorkspace: vi.fn(),
+			logout: vi.fn()
+		}
+	};
+});
 
 const children = createRawSnippet(() => ({
 	render: () => '<p data-testid="the-page">the page</p>'

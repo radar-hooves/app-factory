@@ -710,17 +710,18 @@
 			<!--
 				The rail's head: the brand and, from md, the collapse toggle, on the
 				sidebar's top (operator, 03/11/2026: "the sidebar toggle sits on the
-				sidebar itself, at its top, not on the rail"). Collapsed to icons the
-				two stack, the toggle under the mark, still before the first row.
+				sidebar itself, at its top, not on the rail"). Collapsed (to icons, or
+				peeking) the two stack, the toggle under the mark, so no row moves when
+				the rail peeks.
 			-->
 			<div
 				class={cn(
 					'ds-shell-rail-head flex flex-none items-center',
-					railNarrow && 'flex-col pb-1'
+					railCollapsed && 'flex-col items-start pb-1'
 				)}
 				data-testid="ds-rail-head"
 			>
-				<div class="min-w-0 flex-1 {railNarrow ? 'w-full' : ''}">
+				<div class={railCollapsed ? 'w-full' : 'min-w-0 flex-1'}>
 					{@render brandLockup()}
 				</div>
 				{#if collapsible && !mobileNavOpen}
@@ -729,7 +730,7 @@
 						onclick={toggleCollapsed}
 						class={cn(
 							'border-border text-shell-muted-foreground hover:text-shell-foreground grid size-8 flex-none place-items-center rounded-md border transition-colors',
-							railNarrow ? '' : 'mr-3'
+							railCollapsed ? 'ml-3' : 'mr-3'
 						)}
 						aria-label={collapseLabel}
 						aria-pressed={collapsed}
@@ -853,7 +854,7 @@
 					{#if trail.length > 0}
 						<Breadcrumbs
 							items={trail}
-							class="@container min-w-0 max-sm:flex-1 max-sm:basis-0"
+							class="min-w-0 max-sm:flex-1 max-sm:basis-0"
 							data-testid="ds-shell-title"
 						/>
 					{/if}

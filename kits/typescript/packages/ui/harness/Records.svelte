@@ -339,7 +339,7 @@
 
 {#if surface === 'records'}
 	{@const here = list === 'managers' ? '#/property/managers' : list === 'pnl' ? '#/property/pnl' : list === 'tools' ? '#/property/tools' : '#/property'}
-	<AppShell {nav} currentPath={here} brandTitle="Godswood" onSearch={() => {}} searchPlacement="trailing" texture="grid" pageType="tool">
+	<AppShell {nav} currentPath={here} brandTitle="Godswood" onSearch={() => {}} texture="grid" pageType="tool">
 		<ContextColumn
 			stats={[
 				{ label: 'Value', value: '$2,085,000', sub: '3 properties' },
@@ -404,7 +404,7 @@
 		</div>
 	</AppShell>
 {:else}
-	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" title="Property" onSearch={() => {}} searchPlacement="trailing" texture="grid" pageType="tool">
+	<AppShell {nav} currentPath="#/property/4" brandTitle="Godswood" title="Property" onSearch={() => {}} texture="grid" pageType="tool">
 		<ShellControls>
 			<RecordSwitcher
 				name="4. Banksia"

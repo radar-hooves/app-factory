@@ -193,13 +193,6 @@
 	// it by navigation rather than by synthesising clicks.
 	const params = new URLSearchParams(location.search);
 	const collapsible = params.get('collapsible') === '1';
-	// `?search=trailing` drives the search affordance into the right-hand controls
-	// group; `?search=leading` (or unset) leaves it in its historical spot. Only an
-	// engine tells the two apart — whether the button stretches the row or sizes to
-	// its clamp is a flex-layout fact jsdom has no answer for.
-	const searchParam = params.get('search');
-	const searchPlacement =
-		searchParam === 'trailing' || searchParam === 'leading' ? searchParam : undefined;
 	// `?surface=states` swaps the shell for the async-outcome surfaces. Their
 	// announcement contract is a claim about the platform accessibility tree,
 	// which jsdom does not build: testing-library computes a role from a static
@@ -2025,7 +2018,6 @@
 		bind:collapsed
 		brandTitle="Harness"
 		onSearch={() => (paletteOpen = true)}
-		{searchPlacement}
 	>
 		{#snippet brandMark()}
 			<span class="text-primary text-xs font-bold">H</span>

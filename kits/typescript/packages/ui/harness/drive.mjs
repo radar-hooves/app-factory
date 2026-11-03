@@ -1509,9 +1509,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
-	// The collapse toggle is the rail's own, in its foot, below the nav; the
-	// rail's head holds the brand alone, centred on the slim rail and aligned on
-	// the open one. Geometry, so only a real layout can say.
+	// The collapse toggle is the sidebar's own, in its head, on its top and above
+	// the nav (operator, 03/11/2026); the brand beside it aligned on the open rail
+	// and centred on the slim one. Geometry, so only a real layout can say.
 	{
 		const { context, page } = await open('surface=nested&collapsible=1');
 		await page.waitForSelector('.ds-shell-rail');
@@ -1526,8 +1526,8 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 				const mark = brand.querySelector('span, svg, img') ?? brand;
 				return {
 					inRail: rail.contains(toggle) && !bar.contains(toggle),
-					belowNav: r(toggle).top >= r(nav).bottom - 1,
-					atRailFoot: Math.abs(r(rail).bottom - r(toggle).bottom) < 24,
+					aboveNav: r(toggle).bottom <= r(nav).top + 1,
+					atRailTop: r(toggle).top - r(rail).top < 80,
 					withinRail: r(toggle).left >= r(rail).left && r(toggle).right <= r(rail).right,
 					toggleCentreOffset: Math.abs((r(toggle).left + r(toggle).right) / 2 - (r(rail).left + r(rail).right) / 2),
 					brandCentreOffset: Math.abs((r(brand).left + r(brand).right) / 2 - (r(rail).left + r(rail).right) / 2),
@@ -1537,9 +1537,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			});
 		const open1 = await read();
 		check(
-			'collapse toggle: in the rail, at its foot, nothing of it in the top bar',
-			open1.inRail && open1.belowNav && open1.atRailFoot && open1.withinRail && !open1.barHasToggle,
-			`in rail ${open1.inRail}, below nav ${open1.belowNav}, at foot ${open1.atRailFoot}`
+			'collapse toggle: on the sidebar, at its top above the nav, nothing of it in the top bar',
+			open1.inRail && open1.aboveNav && open1.atRailTop && open1.withinRail && !open1.barHasToggle,
+			`in rail ${open1.inRail}, above nav ${open1.aboveNav}, at top ${open1.atRailTop}`
 		);
 		check(
 			'expanded rail: the brand aligns to the rail padding',
@@ -1562,11 +1562,43 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			`brand centre ${slim.brandCentreOffset.toFixed(1)}px off the rail centre`
 		);
 		check(
-			'collapsed rail: the toggle is centred on the slim rail, still at the foot',
-			slim.inRail && slim.atRailFoot && slim.withinRail && slim.toggleCentreOffset <= 1.5,
+			'collapsed rail: the toggle is centred on the slim rail, still on its top',
+			slim.inRail && slim.aboveNav && slim.atRailTop && slim.withinRail && slim.toggleCentreOffset <= 1.5,
 			`toggle centre ${slim.toggleCentreOffset.toFixed(1)}px off the rail centre`
 		);
 		await page.screenshot({ path: 'harness/dist/rail-toggle-collapsed.png', clip: { x: 0, y: 0, width: 900, height: 600 } });
+		await context.close();
+	}
+
+	// The bar, to the ruling of 03/11/2026: the breadcrumbs on the left, then from
+	// the far right the account, the day/night toggle, (alerts,) the report and a
+	// SMALL search. Left to right the controls therefore run search, report,
+	// theme, account. Geometry, so only a real layout can say.
+	{
+		const { context, page } = await open('collapsible=1');
+		await page.waitForSelector('[data-testid="ds-shell-search"]');
+		const x = await page.evaluate(() => {
+			const left = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+			const crumbs = left('[data-testid="ds-shell-title"]');
+			const search = left('[data-testid="ds-shell-search"]');
+			const report = left('[data-testid="ds-shell-report"]');
+			const theme = left('[data-testid="ds-shell-theme"]');
+			const account = left('button[aria-label="Account"]') ?? left('[data-testid="identity"]');
+			return {
+				crumbsRight: crumbs?.right,
+				search: search && { left: search.left, right: search.right, width: search.width },
+				reportLeft: report?.left,
+				themeLeft: theme?.left,
+				accountLeft: account?.left,
+				barRight: document.querySelector('header.ds-shell-bar').getBoundingClientRect().right
+			};
+		});
+		check(
+			'the bar runs breadcrumbs, then search, day/night, account from the left',
+			x.crumbsRight <= x.search.left && (x.reportLeft === undefined || x.search.right <= x.reportLeft) && x.search.right <= x.themeLeft && (x.accountLeft === undefined || x.themeLeft < x.accountLeft),
+			JSON.stringify(x)
+		);
+		check('the search is small, not a bar across the page', x.search.width <= 176, `${x.search.width.toFixed(0)}px wide`);
 		await context.close();
 	}
 
@@ -1748,7 +1780,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 					railOpen: px('var(--ds-shell-rail-width)'),
 					root: parseFloat(getComputedStyle(document.documentElement).fontSize)
 				},
-				location: document.querySelector('[data-testid="ds-shell-title"]')?.innerText.trim() ?? null,
+				location: ((el) => (el ? [...el.querySelectorAll('li')].map((li) => li.innerText.trim()).join(' › ') : null))(document.querySelector('[data-testid="ds-shell-title"]')),
 				documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
 			};
 		});
@@ -1947,8 +1979,8 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			`pane element ${before.pane === null ? 'absent' : 'present'}`
 		);
 		check(
-			'panel @390px: the bar names the pane\'s location, as the one name a phone shows',
-			before.location === 'Section A',
+			'panel @390px: the bar names the pane\'s location, as its trail',
+			before.location === 'Sections › Section A',
 			`bar: ${JSON.stringify(before.location)}`
 		);
 		await page.click('[data-testid="ds-page-pane-open"]');
@@ -3524,7 +3556,7 @@ for (const scheme of ['light', 'dark']) {
 			// The personal group is present in the data and EMPTY; it must not
 			// render an eyebrow with nothing under it.
 			headings: [...pane.querySelectorAll('.ds-nav-heading')].map((h) => h.textContent.trim()),
-			location: document.querySelector('[data-testid="ds-shell-title"]')?.innerText.trim()
+			location: ((el) => (el ? [...el.querySelectorAll('li')].map((li) => li.innerText.trim()).join(' › ') : null))(document.querySelector('[data-testid="ds-shell-title"]'))
 		};
 	});
 
@@ -4868,7 +4900,7 @@ for (const density of ['comfortable', 'compact']) {
 	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
 	const phone = await page.evaluate(() => {
 		const row = document.querySelector('[data-testid="ds-shell-controls"]');
-		const title = document.querySelector('[data-testid="ds-shell-location"] > span');
+		const title = document.querySelector('[data-testid="ds-shell-title"] li:last-child > span');
 		const nav = row.querySelector('nav');
 		const vis = (el) => el && el.getBoundingClientRect().width > 0;
 		const last = nav.lastElementChild;
@@ -4893,7 +4925,7 @@ for (const density of ['comfortable', 'compact']) {
 	// A tab out of sight is never silent: the strip fades the edge that has more, and the fade follows the scroll.
 	const edge = async () =>
 		page.evaluate(() => {
-			const nav = document.querySelector('[data-testid="ds-shell-location"] nav');
+			const nav = document.querySelector('[data-testid="ds-shell-controls"] nav');
 			const css = getComputedStyle(nav);
 			const mask = css.maskImage || css.webkitMaskImage;
 			return {
@@ -4904,11 +4936,11 @@ for (const density of ['comfortable', 'compact']) {
 				end: css.getPropertyValue('--fade-end').trim()
 			};
 		});
-	await page.evaluate(() => (document.querySelector('[data-testid="ds-shell-location"] nav').scrollLeft = 0));
-	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-location"] nav').hasAttribute('data-more-before'));
+	await page.evaluate(() => (document.querySelector('[data-testid="ds-shell-controls"] nav').scrollLeft = 0));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-controls"] nav').hasAttribute('data-more-before'));
 	const atStart = await edge();
-	await page.evaluate(() => document.querySelector('[data-testid="ds-shell-location"] nav').lastElementChild.scrollIntoView({ inline: 'end' }));
-	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-location"] nav').hasAttribute('data-more-after'));
+	await page.evaluate(() => document.querySelector('[data-testid="ds-shell-controls"] nav').lastElementChild.scrollIntoView({ inline: 'end' }));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="ds-shell-controls"] nav').hasAttribute('data-more-after'));
 	const atEnd = await edge();
 	check(
 		'RecordSwitcher at 390px: the strip fades the edge with more tabs beyond it, and the fade moves with the scroll',
@@ -4928,7 +4960,7 @@ for (const density of ['comfortable', 'compact']) {
 	await page.addStyleTag({ content: SETTLE });
 	await page.waitForSelector('[data-slot="record-switcher-trigger"]');
 	const opened = await page.evaluate(() => {
-		const nav = document.querySelector('[data-testid="ds-shell-location"] nav');
+		const nav = document.querySelector('[data-testid="ds-shell-controls"] nav');
 		const n = nav.getBoundingClientRect();
 		const t = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
 		return { tab: nav.querySelector('[aria-current="page"]').textContent.trim(), inView: t.left >= n.left - 1 && t.right <= n.right + 1, before: nav.hasAttribute('data-more-before') };
@@ -5050,10 +5082,10 @@ for (const [height, long] of [
 					right: Math.round(b.getBoundingClientRect().right)
 				})),
 				themeLeft: Math.round(theme.left),
-				title: title?.innerText,
+				title: ((el) => (el ? [...el.querySelectorAll('li')].map((li) => li.innerText.trim()).join(' › ') : null))(title),
 				titleShown: !!titleBox && titleBox.width > 0,
 				titleInside: !!titleBox && titleBox.right <= innerWidth && titleBox.left >= 0,
-				ellipsis: title ? getComputedStyle(title).textOverflow : null,
+				ellipsis: title ? getComputedStyle(title.querySelector('li:last-child > span') ?? title).textOverflow : null,
 				settingsRow: !!document.querySelector('.ds-shell-rail a[href$="/settings"], .ds-shell-rail-foot a'),
 				floating: [...document.querySelectorAll('body *')].filter((el) => getComputedStyle(el).position === 'fixed' && el.getBoundingClientRect().width > 0 && !el.closest('[role="dialog"]') && !el.matches('.ds-shell-rail, .ds-shell-rail *, [aria-label="Dismiss menu"]')).map((el) => el.tagName),
 				overflow: document.documentElement.scrollWidth - innerWidth,
@@ -5081,7 +5113,7 @@ for (const [height, long] of [
 		check(
 			`${label}: the bar's title is "Section › Page"`,
 			v.title === TITLE && v.titleShown && v.titleInside,
-			JSON.stringify({ title: v.title })
+			JSON.stringify(v)
 		);
 		check(
 			`${label}: feedback is one icon in the bar's right group, before the theme toggle, and nothing floats`,
@@ -5102,8 +5134,8 @@ for (const [height, long] of [
 		await page.waitForSelector('[data-testid="ds-shell-menu"]');
 		const v = await seen(page);
 		check(
-			`phone at ${width}px: the bar shows the one name, the page's own, truncated to what room it has, and nothing reports from the page`,
-			v.titleShown && v.titleInside && v.title === TITLE.split(' › ').pop() && v.ellipsis === 'ellipsis' && v.report.length === 0 && v.floating.length === 0 && v.overflow <= 0,
+			`phone at ${width}px: the bar shows the trail, ending in the page's own name, truncated to what room it has, and nothing reports from the page`,
+			v.titleShown && v.titleInside && v.title.endsWith(TITLE.split(' › ').pop()) && v.ellipsis === 'ellipsis' && v.report.length === 0 && v.floating.length === 0 && v.overflow <= 0,
 			JSON.stringify(v)
 		);
 		await page.click('[data-testid="ds-shell-menu"]');
