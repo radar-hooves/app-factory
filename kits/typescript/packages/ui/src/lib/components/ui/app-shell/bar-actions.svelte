@@ -20,6 +20,7 @@
 				href={action.href}
 				download={action.download ? '' : undefined}
 				onclick={action.onclick}
+				disabled={action.disabled}
 				title={action.detail}
 				class="pointer-coarse:h-11"
 			>
@@ -56,6 +57,7 @@
 							</DropdownMenu.Item>
 						{:else}
 							<DropdownMenu.Item
+								disabled={action.disabled}
 								onSelect={() => action.onclick?.()}
 								class="pointer-coarse:min-h-11 pointer-coarse:text-base"
 							>

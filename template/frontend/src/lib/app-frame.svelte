@@ -21,6 +21,10 @@
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell, resolveNav } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
+	import * as Command from '@poodle64/ui/command';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Settings from '@lucide/svelte/icons/settings';
+	import LogOut from '@lucide/svelte/icons/log-out';
 	import { page } from '$app/state';
 	import { dynamicPageTitle } from '#lib/page-title.svelte.js';
 	import { goto } from '$app/navigation';
@@ -58,6 +62,7 @@
 		return [...declared.slice(0, -1), { ...declared.at(-1)!, label: named }];
 	});
 
+	// The account menu's rows beyond Settings, and what the palette lists beside them.
 	const accountLinks = $derived([
 		...(auth.canViewAs
 			? [{ label: 'View as colleague', icon: Eye, onSelect: () => (viewAsOpen = true) }]
@@ -70,11 +75,17 @@
 				onSelect: () => goto(link.href)
 			}))
 	]);
+
+	const accountCommands = $derived([
+		{ label: 'Settings', icon: Settings, onSelect: () => goto('/settings') },
+		...accountLinks.map((link) => ({ ...link, icon: link.icon ?? ArrowRight })),
+		{ label: 'Sign out', icon: LogOut, onSelect: () => void auth.logout() }
+	]);
 </script>
 
 {#snippet brandMark()}
 	{@const Mark = shell.brand.mark}
-	{#if Mark}<Mark class="size-6" />{/if}
+	{#if Mark}<Mark class="text-primary size-6" />{/if}
 {/snippet}
 
 <AppShell
@@ -135,4 +146,20 @@
 
 <ViewAsDialog bind:open={viewAsOpen} />
 
-<CommandPalette bind:open={paletteOpen} {nav} onNavigate={goto} />
+<!-- The account menu's commands are the palette's too, from the one list. -->
+<CommandPalette bind:open={paletteOpen} {nav} onNavigate={goto}>
+	<Command.Group heading="Account">
+		{#each accountCommands as command (command.label)}
+			<Command.Item
+				value={command.label}
+				onSelect={() => {
+					paletteOpen = false;
+					command.onSelect();
+				}}
+			>
+				<command.icon class="mr-2 size-4" />
+				{command.label}
+			</Command.Item>
+		{/each}
+	</Command.Group>
+</CommandPalette>

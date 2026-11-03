@@ -59,6 +59,9 @@ vi.mock('#lib/auth.svelte.js', () => {
 	};
 });
 
+// A viewer for a `nav(viewer)` that gates rows on `viewer.can`.
+const viewer = { can: () => true } as never;
+
 const children = createRawSnippet(() => ({
 	render: () => '<p data-testid="the-page">the page</p>'
 }));
@@ -75,7 +78,7 @@ describe('the app declares its shell as data', () => {
 	it('names itself, and gives a nav the rail can draw', () => {
 		expect(shell.workspaceLabel).toBeTruthy();
 		expect(shell.brand.title).toBeTruthy();
-		const nav = typeof shell.nav === 'function' ? shell.nav({} as never) : shell.nav;
+		const nav = typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
 		expect(nav.length).toBeGreaterThan(0);
 	});
 });
@@ -97,7 +100,7 @@ describe('the bar', () => {
 
 	it('carries the breadcrumbs on the left, before every control', () => {
 		const first = shell.nav;
-		const row = (typeof first === 'function' ? first({} as never) : first)
+		const row = (typeof first === 'function' ? first(viewer) : first)
 			.flatMap((e) => ('items' in e ? e.items : [e]))
 			.at(0)!;
 		route.url = new URL(`http://localhost${row.href}`);
@@ -169,7 +172,7 @@ describe('the sidebar', () => {
 
 	it('draws the nav the app declared', () => {
 		render(Layout, { props: { children } });
-		const nav = typeof shell.nav === 'function' ? shell.nav({} as never) : shell.nav;
+		const nav = typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
 		const labels = nav.flatMap((e) => ('items' in e ? e.items : [e])).map((i) => i.label);
 		const rail = within(document.querySelector<HTMLElement>('.ds-shell-rail')!);
 		for (const label of labels) {
@@ -186,6 +189,17 @@ describe('the account menu', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 		expect(await screen.findByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+	});
+});
+
+describe('the palette', () => {
+	it('lists the account menu\'s commands beside the nav', async () => {
+		render(Layout, { props: { children } });
+		await fireEvent.click(screen.getByTestId('ds-shell-search'));
+
+		const palette = within(await screen.findByRole('dialog'));
+		expect(palette.getByText('Settings')).toBeInTheDocument();
+		expect(palette.getByText('Sign out')).toBeInTheDocument();
 	});
 });
 

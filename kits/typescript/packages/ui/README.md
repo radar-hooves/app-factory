@@ -95,6 +95,7 @@ rather than rebuilding it:
 | `page-header`                                   | The only page-title pattern: optional `breadcrumbs` (the trail's items, or a snippet) and `icon`, eyebrow, an optional title, one clamped subtitle, an `info` tooltip, a `meta` row and an `actions` slot. Omit `title` for a header that is a breadcrumb bar.                                                                                                                                   |
 | `breadcrumbs`                                   | The trail: `items` of `{ label, href? }`, a named landmark, chevrons, each step truncating rather than wrapping. PageHeader draws it from `breadcrumbs={[…]}`. See [The page](#the-page-container-sections-and-the-type-scale). |
 | `page-container`                                | A route's page at the one rhythm: header, sections and panels 1.5rem apart, filling the content box. |
+| `page-lead`                                     | A page's lead, under the rail's title: one answer sentence (`lead`, an `h2`), an optional `eyebrow`, `subtitle` and `meta` row. Its actions go to `ShellActions`. |
 | `page-section`                                  | A section of a page: `title` at `level` 2 or 3, an optional `description`, `count` and `actions`, and its content at one distance below. |
 | `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose`, and a contents list from its own headings, which a shell places as the page's aside. See [A document to read](#a-document-to-read). |
 | `content-skeleton`                              | A region loading, shaped like what replaces it: `rows`, `tiles` or `prose`. A whole page waiting is LoadingState. |
@@ -210,7 +211,7 @@ a second row of the bar below that:
 A page's own actions (a download, an export) register with `ShellActions`.
 From `sm` each is a labelled button in the bar's trailing group; below it they
 fold into one "More actions" (`⋯`) menu listing each with its icon and name,
-and the status stands down. The shell's own icons stay as they are.
+and the status stands down. An action takes `disabled` (a refresh in flight). The shell's own icons stay as they are.
 
 ```svelte
 <ShellActions

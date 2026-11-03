@@ -37,6 +37,8 @@ export interface BarAction {
 	href?: string;
 	download?: boolean;
 	onclick?: () => void;
+	/** Shown but not usable (a refresh in flight). */
+	disabled?: boolean;
 	/** The page's one primary action takes the accent. */
 	primary?: boolean;
 	/** What the label leaves out (a file's size), as the tooltip. */

@@ -3,7 +3,7 @@
 	// it with this app's real home, or send `/` there with a `redirect()` in
 	// +page.ts. Both files are the app's own once stamped.
 	import { onMount } from 'svelte';
-	import PageHeader from '@poodle64/ui/page-header';
+	import PageLead from '@poodle64/ui/page-lead';
 	import { ShellControls } from '@poodle64/ui/app-shell';
 	import { Segmented, type SegmentedOption } from '@poodle64/ui/segmented';
 	import { api, describeApiError } from '#lib/api/index.js';
@@ -35,18 +35,14 @@
 	];
 </script>
 
-<!-- Compose the shared page-title treatment rather than a hand-rolled heading —
-     every route shares one header (canonical-app-shape.md, check-ui-drift.mjs).
-
-     prettier-ignore, because this tag's WIDTH is an answer, not a style: both
-     values are rendered from copier answers, so it is this app's name plus its
-     one-line description. An app whose sentence runs long is past prettier's
-     print width on one line, and a terser app has the pre-wrapped form collapsed
-     back onto one — so `pnpm lint` failed on a freshly stamped app that nobody
-     had touched yet, at whichever length the file was not tuned for. Ignoring
-     the tag is the only form stable at every length. -->
+<!-- The rail names the page (`title` in +page.ts); the page opens on its lead.
+     prettier-ignore, because this tag's WIDTH is an answer, not a style: the
+     sentence is rendered from a copier answer, and an app whose sentence runs
+     long is past prettier's print width on one line, a terser app has the
+     pre-wrapped form collapsed back onto one. Ignoring the tag is the only form
+     stable at every length. -->
 <!-- prettier-ignore -->
-<PageHeader title="{% endraw %}{{ project_name }}{% raw %}" subtitle="{% endraw %}{{ description }}{% raw %}" />
+<PageLead eyebrow="{% endraw %}{{ project_name }}{% raw %}" lead="{% endraw %}{{ description }}{% raw %}" />
 
 <ShellControls>
 	<Segmented bind:value={view} options={VIEW_OPTIONS} label="View" size="sm" />

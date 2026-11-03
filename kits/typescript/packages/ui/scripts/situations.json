@@ -314,6 +314,11 @@
           "insteadOf": "a hand-written <h1> and title bar (the drift gate fails this)"
         },
         {
+          "name": "PageLead",
+          "props": "lead, eyebrow?, subtitle?, meta?",
+          "insteadOf": "an app-side lead component: the answer-led sentence a page opens on, under the rail's title (its actions go to ShellActions)"
+        },
+        {
           "name": "Breadcrumbs",
           "props": "items, label?",
           "insteadOf": "a hand-written chevron trail in PageHeader's breadcrumbs snippet; PageHeader takes the same items as `breadcrumbs={[…]}`"
