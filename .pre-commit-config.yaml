@@ -110,6 +110,12 @@ repos:
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock)$
 
+      - id: no-section-banners
+        name: 'python - No section-banner comments'
+        entry: '^\s*#\s*[-=#*]{5,}'
+        language: pygrep
+        types: [python]
+
       # Each kit's own mypy config, over the tree CI checks (`mypy src tests`).
       - id: mypy
         name: 'python - Type-check with mypy'

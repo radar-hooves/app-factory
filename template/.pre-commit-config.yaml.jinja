@@ -109,6 +109,12 @@ repos:
         pass_filenames: false
         files: ^backend/(pyproject\.toml|uv\.lock)$
 
+      - id: no-section-banners
+        name: 'python - No section-banner comments'
+        entry: '^\s*#\s*[-=#*]{5,}'
+        language: pygrep
+        types: [python]
+
   # mypy runs here as well as in CI, so a type error cannot reach main via a
   # green local commit. pass_filenames: false because mypy resolves across
   # files, so it takes the whole tree exactly as CI does; `files` still gates
