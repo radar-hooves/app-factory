@@ -54,7 +54,7 @@ function kitSources(): Plugin {
 		await build({
 			configFile: false,
 			logLevel: 'silent',
-					plugins: [
+			plugins: [
 				{
 					name: 'no-stylesheet',
 					enforce: 'pre',

@@ -297,7 +297,8 @@ export function handOff(
 		: group
 			? `?${new URLSearchParams({ group })}`
 			: '';
-	return goto(`${resolve(`/chat/${encodeURIComponent(persona)}`)}${query}`, {
+	const path = resolve('/(protected)/chat/[persona]', { persona: encodeURIComponent(persona) });
+	return goto(`${path}${query}`, {
 		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
 	});
 }
