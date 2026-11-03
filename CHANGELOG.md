@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.14] - 2026-11-03
 
 Need: the shell's two visible faults, app-factory#37 and #38; consumer: the operator's holiday drain, radar-hooves/master-project#432.
 
