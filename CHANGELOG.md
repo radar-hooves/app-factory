@@ -6,7 +6,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Need: the factory on SvelteKit 3 and style-dictionary 5, closing the GHSA-27mw-82g8-phjj advisory fix; consumer: radar-hooves/master-project (weekly major-upgrade run), radar-hooves/app-factory#60.
+Need: the factory on SvelteKit 3 and style-dictionary 5, closing the GHSA-27mw-82g8-phjj advisory fix; consumer: radar-hooves/master-project#417 (the estate sweep), radar-hooves/app-factory#60.
 
 ### Changed
 
