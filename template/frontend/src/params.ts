@@ -34,7 +34,7 @@ function firstSegment(key: string): string {
  * load, which SvelteKit makes for a path no route matches; without this, the
  * catch-all would claim it and render "Page not found".
  */
-export function spaMatcher(appPrefixes: readonly string[]): ParamMatcher {
+export function spaMatcher(appPrefixes: readonly string[]): (param: string) => boolean {
 	const notTheSpa = new Set([...NOT_THE_SPA, ...appPrefixes.map(firstSegment)]);
 
 	return (param) => {

@@ -95,8 +95,8 @@ describe('handleError', () => {
 
 	const chunkFailure = () =>
 		handleError({
-			error: new Error('Failed to fetch dynamically imported module'),
-			message: 'Internal Error'
+			kind: 'unknown',
+			error: new Error('Failed to fetch dynamically imported module')
 		} as Parameters<typeof handleError>[0]);
 
 	it('reloads once and reports the recovery, not the raw failure', () => {
@@ -111,16 +111,16 @@ describe('handleError', () => {
 		expect(reload).toHaveBeenCalledTimes(1);
 		// The second failure falls through to the error page, which is correct:
 		// a fresh manifest that still cannot load the chunk is a real failure.
-		expect(second).toEqual({ message: 'Internal Error' });
+		expect(second).toBeUndefined();
 	});
 
 	it('leaves a genuine application error untouched', () => {
 		const result = handleError({
-			error: new TypeError("Cannot read properties of undefined (reading 'id')"),
-			message: 'Internal Error'
+			kind: 'unknown',
+			error: new TypeError("Cannot read properties of undefined (reading 'id')")
 		} as Parameters<typeof handleError>[0]);
 
 		expect(reload).not.toHaveBeenCalled();
-		expect(result).toEqual({ message: 'Internal Error' });
+		expect(result).toBeUndefined();
 	});
 });

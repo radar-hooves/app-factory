@@ -80,7 +80,7 @@ export function mayAttemptReload(now: number = Date.now()): boolean {
 	}
 }
 
-export const handleError: HandleClientError = ({ error, message }) => {
+export const handleError: HandleClientError = ({ error }) => {
 	if (isStaleChunkError(error) && mayAttemptReload()) {
 		// A full document fetch: it picks up the current manifest and follows the
 		// proxy's authentication redirect when the session has also expired.
@@ -89,5 +89,5 @@ export const handleError: HandleClientError = ({ error, message }) => {
 		return { message: 'Updating to the latest version…' };
 	}
 
-	return { message };
+	// Nothing returned keeps SvelteKit's own status and message.
 };

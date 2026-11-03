@@ -207,7 +207,7 @@ describe('A persona page, through the app extension points', () => {
 		expect(asked).not.toHaveBeenCalled();
 		expect(fake.goto).toHaveBeenCalledWith(
 			'/chat/outrider',
-			expect.objectContaining({ replaceState: true })
+			expect.objectContaining({ replace: true })
 		);
 	});
 
@@ -219,7 +219,7 @@ describe('A persona page, through the app extension points', () => {
 		expect(JSON.parse(String(init.body))).toMatchObject({ question: 'How much leave?' });
 		expect(fake.goto).toHaveBeenCalledWith(
 			'/chat/outrider',
-			expect.objectContaining({ replaceState: true, state: {} })
+			expect.objectContaining({ replace: true, state: {} })
 		);
 	});
 
@@ -447,7 +447,7 @@ describe('Choosing where a persona looks', () => {
 		await fireEvent.click(screen.getByRole('option', { name: /^Conditions of service/ }));
 		expect(fake.goto).toHaveBeenCalledWith(
 			'?collection=conditions',
-			expect.objectContaining({ replaceState: true })
+			expect.objectContaining({ replace: true })
 		);
 	});
 
@@ -473,7 +473,7 @@ describe('Choosing where a persona looks', () => {
 			await waitFor(() =>
 				expect(fake.goto).toHaveBeenCalledWith(
 					'?group=pay',
-					expect.objectContaining({ replaceState: true })
+					expect.objectContaining({ replace: true })
 				)
 			);
 			expect(fake.goto).toHaveBeenCalledTimes(1);

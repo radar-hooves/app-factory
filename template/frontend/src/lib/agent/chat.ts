@@ -297,7 +297,7 @@ export function handOff(
 		: group
 			? `?${new URLSearchParams({ group })}`
 			: '';
-	return goto(resolve(`/chat/${encodeURIComponent(persona)}${query}`), {
+	return goto(`${resolve(`/chat/${encodeURIComponent(persona)}`)}${query}`, {
 		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
 	});
 }
@@ -307,7 +307,7 @@ export function handOff(
  * that persona's collections. A Home page calls this as it mounts.
  */
 export function warmChat(persona: string): void {
-	void preloadCode(`/chat/${encodeURIComponent(persona)}`).catch(() => undefined);
+	void preloadCode('/(protected)/chat/[persona]').catch(() => undefined);
 	void personasOf()
 		.then((all) => {
 			const found = all.find((p) => p.id === persona);

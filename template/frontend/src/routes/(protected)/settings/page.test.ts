@@ -35,7 +35,7 @@ describe('the settings index', () => {
 		await settle();
 
 		expect(goto).toHaveBeenCalledTimes(3);
-		expect(goto).toHaveBeenCalledWith('/settings/account', { replaceState: true });
+		expect(goto).toHaveBeenCalledWith('/settings/account', { replace: true });
 	});
 
 	it('asks once when the redirect lands', async () => {

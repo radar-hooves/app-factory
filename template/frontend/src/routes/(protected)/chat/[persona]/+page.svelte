@@ -190,7 +190,7 @@
 				current.new();
 				if (!question) return;
 				current.draft = question;
-				void goto(address(), { replaceState: true, keepFocus: true, noScroll: true });
+				void goto(address(), { replace: true, reset: false });
 			} else if (want !== current.conversationId) void reopen(current, want);
 		});
 	});
@@ -206,7 +206,7 @@
 		if (!current || !ask) return;
 		untrack(() => {
 			const { files, kind } = page.state;
-			void goto(address(), { replaceState: true, keepFocus: true, noScroll: true, state: {} });
+			void goto(address(), { replace: true, reset: false, state: {} });
 			void current.ask(
 				ask,
 				typeof kind === 'string' ? kind : undefined,
@@ -224,11 +224,7 @@
 		if (named && named !== untrack(() => wanted)) {
 			void goto(
 				untrack(() => address(named)),
-				{
-					replaceState: true,
-					keepFocus: true,
-					noScroll: true
-				}
+				{ replace: true, reset: false }
 			);
 		}
 	});
@@ -239,11 +235,11 @@
 		if (await current.open(id)) return;
 		if (page.url.searchParams.get('c') !== id) return;
 		toast.info("That conversation can't be opened. It may have been deleted.");
-		await goto(address(), { replaceState: true, keepFocus: true, noScroll: true });
+		await goto(address(), { replace: true, reset: false });
 	}
 
 	function fresh() {
-		void goto(address(), { keepFocus: true, noScroll: true });
+		void goto(address(), { reset: false });
 	}
 
 	/**
@@ -258,12 +254,12 @@
 			const pick = picked;
 			picked = null;
 			if (!pick) return;
-			const query = new SvelteURLSearchParams(page.url.searchParams);
+			const query = new SvelteURLSearchParams(page.url.search);
 			query.delete('collection');
 			query.delete('group');
 			if (pick.collection) query.set('collection', pick.collection);
 			else if (pick.group) query.set('group', pick.group);
-			void goto(`?${query}`, { replaceState: true, keepFocus: true, noScroll: true });
+			void goto(`?${query}`, { replace: true, reset: false });
 		});
 	}
 

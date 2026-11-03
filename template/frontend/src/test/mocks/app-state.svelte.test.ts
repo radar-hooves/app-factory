@@ -17,7 +17,7 @@ describe('the $app/state page mock', () => {
 			});
 		});
 		await Promise.resolve();
-		await applyAction({ type: 'failure', status: 400, data: { error: 'x' } });
+		await applyAction({ type: 'failure', status: 400, data: { error: 'x' }, location: '/' });
 		await Promise.resolve();
 		stop();
 		expect(seen.at(-1)).toEqual([{ error: 'x' }, 400]);

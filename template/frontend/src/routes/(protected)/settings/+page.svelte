@@ -28,7 +28,7 @@
 			for (let n = 0; n < TRIES; n++) {
 				if (n > 0 && (!shown || navigating.to || page.url.pathname !== here)) return;
 				try {
-					await goto(target, { replaceState: true });
+					await goto(target, { replace: true });
 				} catch {
 					return;
 				}
