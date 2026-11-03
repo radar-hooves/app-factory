@@ -4,14 +4,13 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.12] - 2026-11-03
 
-Need: one banner-free Python estate; consumer: the operator, radar-hooves/master-project#424 and #421.
+Need: one banner-free Python estate; consumer: the operator, radar-hooves/master-project#424.
 
 ### Changed
 
 - **The stamped `.pre-commit-config.yaml` gains `no-section-banners`**, a pygrep gate after `uv-lock-check` that fails a `# -----` or `# =====` banner comment in Python. A stamped app re-renders (`copier update`) to get it. The shipped `test_vend.py` lost its two banner lines so a fresh stamp passes. App-factory's own config carries the same gate.
-- The stamped backend `pyproject.toml` already carries the household tool block (ruff B C4 E F I RUF SIM UP W, 120, py314, mypy strict, pytest importlib); nothing to change there.
 
 ## [2026.11.11] - 2026-11-03
 
