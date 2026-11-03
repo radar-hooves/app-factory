@@ -4,6 +4,15 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the stamped `gateway-only-models` hook fails an ordinary backend commit in an app whose suite runs coverage (radar-hooves/app-factory#76; consumer: portcullis, and every stamped app).
+
+### Fixed
+
+- **The `gateway-only-models` hook runs its one test with `-o addopts=`**, so an app's `--cov` / `--cov-fail-under` in pytest `addopts` no longer trips on a one-file run, and no `PYTEST_ADDOPTS=--no-cov` override is needed. `--no-cov` was not used: it is an unrecognised argument in an app without `pytest-cov`. `backend/tests/test_gateway_models.py` is stamped and kept on update (checked on a fresh render).
+- Consumer must change: regenerate `.template-parity.json` (the hook is in a parity-gated file).
+
 ## [2026.11.14] - 2026-11-03
 
 Need: the shell's two visible faults, app-factory#37 and #38; consumer: the operator's holiday drain, radar-hooves/master-project#432.

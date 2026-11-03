@@ -163,7 +163,7 @@ repos:
     hooks:
       - id: gateway-only-models
         name: 'python - Models only through the gateway alias'
-        entry: bash -c 'cd backend && exec uv run pytest -q --noconftest -p no:cacheprovider tests/test_gateway_models.py'
+        entry: bash -c 'cd backend && exec uv run pytest -q -o addopts= --noconftest -p no:cacheprovider tests/test_gateway_models.py'
         language: system
         pass_filenames: false
         files: '^(backend/src|scripts|tools)/.*\.py$'
