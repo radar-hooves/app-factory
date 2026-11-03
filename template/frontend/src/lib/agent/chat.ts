@@ -293,14 +293,16 @@ export function handOff(
 	{ ask, files, collection, group, kind }: HandedOver
 ): Promise<void> {
 	const query = collection
-		? `?${new URLSearchParams({ collection })}`
+		? (`?${new URLSearchParams({ collection })}` as const)
 		: group
-			? `?${new URLSearchParams({ group })}`
-			: '';
-	const path = resolve('/(protected)/chat/[persona]', { persona: encodeURIComponent(persona) });
-	return goto(`${path}${query}`, {
-		state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
-	});
+			? (`?${new URLSearchParams({ group })}` as const)
+			: ('' as const);
+	return goto(
+		resolve(`/(protected)/chat/[persona]${query}`, { persona: encodeURIComponent(persona) }),
+		{
+			state: { ask, ...(files?.length ? { files } : {}), ...(kind ? { kind } : {}) }
+		}
+	);
 }
 
 /**
