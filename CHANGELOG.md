@@ -4,6 +4,25 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the factory on SvelteKit 3 and style-dictionary 5, closing the GHSA-27mw-82g8-phjj advisory fix; consumer: radar-hooves/master-project (weekly major-upgrade run), radar-hooves/app-factory#60.
+
+### Changed
+
+- **SvelteKit 3, `@sveltejs/adapter-static` 4, `@sveltejs/package` 3 and style-dictionary 5**, in the template, the desktop skeleton and the kits. The Renovate holds on all three are gone (the `bits-ui` peer warning on `runed` is a pnpm peer notice only: build, check, lint and the specs the change touches are clean with it).
+- **`$lib` is `#lib`.** `package.json` carries `"imports": { "#lib/*": "./src/lib/*" }`, imports name their extension (`#lib/api/index.js`, `#lib/app-frame.svelte`), and the `$components`, `$stores` and `$api` aliases are retired for `#lib/components/…`, `#lib/stores/…` and `#lib/api/…` (SvelteKit 3 deprecates `kit.alias`). `svelte.config.js` is deleted: the adapter, `vitePreprocess`, the custom-element warning filter and the version poll sit in the `sveltekit({…})` options of `vite.config.ts`. `tsconfig.json` extends `$app/tsconfig`.
+- **`$app/environment` is `$app/env`; `$app/stores` is gone** (the test mocks follow: `app-env.ts` in, `app-stores.ts` out). `goto` takes `replace` and `reset: false` in place of `replaceState`, `keepFocus` and `noScroll`; `handOff` resolves `/(protected)/chat/[persona]` with its parameter and `warmChat` preloads that route id. `handleError` in `hooks.client.ts` returns nothing for an ordinary error, so SvelteKit's own status and message stand. The `spa` param matcher moves from `src/params/spa.ts` to `src/params.ts` (`defineParams`).
+- **The `cookie` security floor in `pnpm-workspace.yaml` is scoped to `cookie@<0.7.0`.** A bare `cookie` override pinned SvelteKit 3's own cookie 2 to 0.x and `vite build` died with `parseCookie is not a function`.
+- **The element client's unit test no longer compiles the kit's stylesheet through Tailwind** (a stub for `elements.css` in `vitest.config.ts`; the build and the proof compile it for real). It cost 7s of a 10s file on an idle host, and three of its tests timed out at 60s on atlas under load (v2026.11.6's first self-test run).
+
+### Consumer must change
+
+- `package.json`: `@sveltejs/kit` `^3.0.0`, `@sveltejs/adapter-static` `^4.0.1`, `svelte` at least 5.57.1; add the `imports` block above. `pnpm-workspace.yaml`: the `cookie` override key becomes `"cookie@<0.7.0"`.
+- Source: `npx sv migrate sveltekit-3` rewrites `$lib` to `#lib` with extensions, `$app/stores` to `$app/state`, `$app/environment` to `$app/env`, the `goto` options and the type imports. It leaves `$components`, `$stores` and `$api` alone: rewrite them to `#lib/components/`, `#lib/stores/` and `#lib/api/` (`$api` itself is `#lib/api/index.js`). Then `resolve()` takes a route id with its parameters, or a literal pathname, and `preloadCode` a route id; `page.url` is read-only (copy it before mutating); `ActionResult` carries `location`; `invalidateAll` is `refreshAll`; a file named `server.ts`, or any `server/` directory outside `src/routes`, is now server-only.
+- A `svelte.config.js` that carries anything beyond the factory's options has no seam in the factory-owned `vite.config.ts`: name it before `copier update`.
+- Re-stamped files: `vite.config.ts`, `vite.elements.config.ts`, `vitest.config.ts`, `tsconfig.json`, `eslint.config.js`, `components.json`, `scripts/check-ui-drift.mjs`, `src/hooks.client.ts`, `src/params.ts`, `src/test/mocks/*`, `src/test/setup.ts`, `renovate.json`.
+
 ## [2026.11.6] - 2026-11-03
 
 Need: one pre-commit config for the fleet, template first; consumer: radar-hooves/master-project#420.
