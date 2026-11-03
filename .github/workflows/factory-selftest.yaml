@@ -270,12 +270,13 @@ jobs:
 
       - name: Frontend — the shell test without the agent slice
         # An app with no chat client (the library) runs the same stamped
-        # shell.test.ts: the Ask-row case skips, the rest passes. Run last in
-        # the scratch's frontend, after the suite above, since it deletes the slice.
+        # shell.test.ts: the Ask-row case skips, the rest passes. The slice is
+        # set aside for this one file and put back for the steps after it.
         working-directory: ${{ env.SCRATCH }}/frontend
         run: |
           set -euo pipefail
-          rm src/lib/agent/chat.ts
+          mv src/lib/agent/chat.ts "$RUNNER_TEMP/chat.ts"
+          trap 'mv "$RUNNER_TEMP/chat.ts" src/lib/agent/chat.ts' EXIT
           pnpm exec vitest run src/lib/shell.test.ts
 
       - name: Elements — one element, two placements, in a real browser
