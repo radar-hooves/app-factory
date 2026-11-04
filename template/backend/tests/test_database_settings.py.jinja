@@ -79,9 +79,9 @@ def test_the_pool_defaults_to_sqlalchemys_and_an_app_sizes_it_by_setting(monkeyp
     monkeypatch.setattr(db_session, "_engine", None)
     try:
         pool = db_session.get_engine().pool
-        assert (pool.size(), pool._max_overflow) == (10, 20)  # noqa: SLF001 -- no public accessor for the overflow
+        assert (pool.size(), pool._max_overflow) == (10, 20)
     finally:
-        db_session._engine = None  # noqa: SLF001
+        db_session._engine = None
 
 
 def test_the_bare_pool_names_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:

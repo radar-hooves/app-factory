@@ -268,6 +268,24 @@ jobs:
           pnpm test -- --run
           pnpm check
 
+      - name: Stamped pre-commit — the app's own lint hooks over the scratch app
+        # What an app runs on its first commit, which `ruff format` and `prettier`
+        # alone never did (app-factory#63 and #76 shipped through that gap). Only
+        # the hooks that need nothing but the app's own install: the household
+        # hooks (pii, history, rules-fence, handoff, template-parity, gitleaks,
+        # actionlint) read master-project and run in each app's own CI.
+        # design-craft and design-drift need a browser and bank a baseline on a
+        # first run, so the Elements step's Chromium is theirs.
+        working-directory: ${{ env.SCRATCH }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git add .
+          for hook in ruff gateway-only-models stylelint stylelint-svelte eslint \
+              design-arbitrary-values colour-surface layout-ownership; do
+            uvx pre-commit run "$hook" --all-files
+          done
+
       - name: Frontend — the shell test without the agent slice
         # An app with no chat client (the library) runs the same stamped
         # shell.test.ts: the Ask-row case skips, the rest passes. The slice is

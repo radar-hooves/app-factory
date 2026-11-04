@@ -319,7 +319,7 @@ def test_actor_registry_refuses_unregistered_identity(tmp_path):
 def test_actor_registry_refuses_a_configured_path_that_is_missing(tmp_path):
     """A configured-but-missing file is a fault, not an empty registry."""
     missing = tmp_path / "actors.yaml"
-    with pytest.raises(FileNotFoundError, match="actors.yaml"):
+    with pytest.raises(FileNotFoundError, match=r"actors\.yaml"):
         ActorRegistry(missing)
     assert ActorRegistry(None).registered_ids() == ["local-console"]
 
