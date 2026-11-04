@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: running an app from its own code is a canonical, declared option, never an exception (operator ruling 04/11/2026; consumer: radar-hooves/master-project#445, godswood, caspo).
+
+### Added
+
+- **`run_mode` copier answer** (`image` default, or `source`), recorded in `.copier-answers.yml` beside `registry_host`. `source` is production as a checkout of `main` moved by the app's own deploy unit. The shape gate and fleet convergence in master's `skills-library/canonical-app-migration` read it in place of `registry-and-tag` / `health-revision` exceptions.
+
+### Consumer must change
+
+An app on `source` (godswood, caspo) sets `run_mode: source` in `.copier-answers.yml` and drops its `registry-and-tag` and `health-revision` exceptions once master's gate reads the answer. Every other app takes the `image` default on its next update.
+
 ## [2026.11.16] - 2026-11-04
 
 Need: the holistic review's faults that need no decision (radar-hooves/app-factory#57; consumer: radar-hooves/master-project#445, and every stamped app).
