@@ -418,6 +418,17 @@ watchtower_url:
     Base URL of the deploying host's Watchtower HTTP API, asked to pull the image just pushed (e.g. `http://127.0.0.1:8080`). No factory default.
 
 
+run_mode:
+  type: str
+  when: "{{ skeleton == 'web' }}"
+  default: image
+  choices:
+    - image
+    - source
+  help: >-
+    Where production runs this app's code from. `image` (default): the image the change pipeline pushes and Watchtower pulls. `source`: a checkout of `main` on the host, moved by the app's own deploy unit, with the image carrying only the system and toolchain. Both are canonical and neither is an exception; the answer is the app's record of which it is, read by the shape gate and fleet convergence in place of `registry-and-tag` and `health-revision` exceptions. Flipping it is this one line in `.copier-answers.yml`, and does not move the app: the host's stack and deploy unit do.
+
+
 runner_labels:
   type: str
   when: "{{ skeleton == 'web' }}"
