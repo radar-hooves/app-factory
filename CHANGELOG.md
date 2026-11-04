@@ -10,11 +10,11 @@ Need: a slice an app does not take is a declared option, never an exception or a
 
 ### Added
 
-- **`omitted_slices` copier answer** (default none; any of `users`, `workspaces`, `admin`, `feedback`, `agent`, `alerts`, `settings`, `system`), recorded in `.copier-answers.yml`. **`slices.yaml`** maps each slice to the files it owns. Master's gate reads the answer and the map at the app's `_commit` and counts those files conforming, absent or differing. The answer removes nothing from a stamp.
+- **`omitted_slices` copier answer** (default none; any of `users`, `workspaces`, `admin`, `feedback`, `agent`, `alerts`, `settings`, `system`, `files`), recorded in `.copier-answers.yml`. **`slices.yaml`** maps each slice to the files it owns. Master's gate reads the answer and the map at the app's `_commit` and counts those files conforming, absent or differing. The answer removes nothing from a stamp.
 
 ### Consumer must change
 
-Library sets `omitted_slices: [agent]`; portcullis `[users, workspaces, agent, alerts, feedback, settings]`. Each drops the exception or variant lines `slices.yaml` now covers once master's gate reads the answer.
+Library sets `omitted_slices: [agent]`; portcullis `[users, workspaces, agent, alerts, feedback, settings, files]`. Each drops the exception or variant lines `slices.yaml` now covers once master's gate reads the answer.
 
 ## [2026.11.17] - 2026-11-04
 

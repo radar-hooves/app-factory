@@ -7,7 +7,7 @@
 # are fnmatch globs where `*` crosses `/`, with `{package}` the app's package,
 # and a `deps:<name>` entry names a dependency only that slice declares.
 # A file shared across slices (main.py, mcp/server.py, scripts/__init__.py,
-# elements.py, security_events.py, files/) is composition, not slice-owned, and
+# elements.py, security_events.py) is composition, not slice-owned, and
 # is listed under no slice: an app that differs there still owes a variant.
 # A path may sit under several slices; any one of them omitted covers it.
 
@@ -67,3 +67,10 @@ settings:
 system:
   - backend/src/{package}/api/system/*
   - backend/tests/test_system_health.py
+files:
+  - backend/src/{package}/files/*
+  - backend/src/{package}/config/sections/files.py
+  - backend/tests/test_files_settings.py
+  - backend/tests/test_storage.py
+  - deps:nextcloud
+  - deps:python-multipart

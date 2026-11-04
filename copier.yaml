@@ -443,6 +443,7 @@ omitted_slices:
     - alerts
     - settings
     - system
+    - files
   help: >-
     The factory slices this app does not take. Default none. Declaring one is the app's record that its absence is canonical, never an exception or a variant: the shape gate and fleet convergence read this answer and `slices.yaml` (the files each slice owns, at the app's own `_commit`) and count those files conforming, absent or differing. It removes nothing: the app deletes the slice's files itself, and a file shared across slices (main.py, mcp/server.py, elements.py, files/) stays the app's to justify. Taking a slice back is this one line in `.copier-answers.yml` and a render.
 
