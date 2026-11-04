@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.18] - 2026-11-05
 
 Need: a slice an app does not take is a declared option, never an exception or a variant (operator ruling 04/11/2026; master-project#445 "slice declaration"; consumers: library, portcullis, radar-hooves/app-factory#80).
 
