@@ -341,7 +341,11 @@ async def ask(
         raise BadRequestError(f"{persona.name} takes no attachments")
     body, files = await _asked(request, settings.agent)
     agent, collections = await chat.for_turn(
-        settings.agent, persona, asking, model=chat.model_for(persona, identity.entitlements)
+        settings.agent,
+        persona,
+        asking,
+        model=chat.model_for(persona, identity.entitlements),
+        entitlements=identity.entitlements,
     )
     return await ask_module.ask(
         get_session_factory(),

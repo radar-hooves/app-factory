@@ -10,6 +10,8 @@ Need: running an app from its own code is a canonical, declared option, never an
 
 ### Added
 
+- **`app_hooks.agent_engine(base, entitlements) -> Agent`**: `chat.agent`, `chat.for_turn` and `chat.keeper` pass the persona's `LocalAgent` through it, so an app answers a persona from another `Agent` implementation (a plain Messages-API engine) without editing `chat.py` or `router.py`. `entitlements` are the caller's on a turn, `None` for reading a conversation back, an artefact and forgetting a session. Absent, the agent is `base`; a hook that raises propagates. `chat.agent` and `chat.for_turn` gain an `entitlements` argument. Need: caspo's colleagues are answered from an Anthropic API grant that refuses Claude Code requests (operator ruling 04/11/2026; consumer: caspo, app-factory#86). Consumer must change: nothing; an app that wants it defines the hook, and regenerates `.template-parity.json`.
+
 - **`run_mode` copier answer** (`image` default, or `source`), recorded in `.copier-answers.yml` beside `registry_host`. `source` is production as a checkout of `main` moved by the app's own deploy unit. The shape gate and fleet convergence in master's `skills-library/canonical-app-migration` read it in place of `registry-and-tag` / `health-revision` exceptions.
 
 ### Consumer must change

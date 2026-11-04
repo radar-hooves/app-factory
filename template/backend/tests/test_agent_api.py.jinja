@@ -1454,6 +1454,45 @@ async def test_a_turn_runs_at_the_effort_and_thinking_the_app_hook_returns(
     assert (failed.settings.effort, failed.settings.thinking) == (agent_settings.chat_effort, agent_settings.thinking)
 
 
+async def test_the_app_hook_supplies_the_engine_a_turn_and_the_paths_without_a_caller_use(
+    app: FastAPI,
+    agent_settings: AgentSettings,
+    authentik: fake_authentik.FakeAuthentik,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    who = _person("chat-manual")
+    persona = chat.get(agent_settings, "manual")
+    asking = Asking(app.state.exchange, f"as:{who['x-authentik-uid']}", who["x-authentik-uid"])
+    asked: list[tuple[object, tuple[str, ...] | None]] = []
+    engine = object()
+
+    def supply(base: object, entitlements: tuple[str, ...] | None) -> object:
+        asked.append((base, entitlements))
+        return engine
+
+    held = ("chat-manual",)
+    plain, _ = await chat.for_turn(agent_settings, persona, asking, entitlements=held)
+    assert plain is not engine
+
+    monkeypatch.setattr(app_hooks, "agent_engine", supply, raising=False)
+    turn, collections = await chat.for_turn(agent_settings, persona, asking, entitlements=held)
+    assert turn is engine and collections is not None
+    [(base, seen)] = asked
+    assert seen == held and base.run_env[chat.LIBRARY_TOKEN]  # type: ignore[attr-defined]
+
+    asked.clear()
+    assert await chat.agent(agent_settings, persona, asking) is engine
+    assert chat.keeper(agent_settings, "manual") is engine
+    assert [seen for _, seen in asked] == [None, None]
+
+    def broken(*_: object) -> object:
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(app_hooks, "agent_engine", broken, raising=False)
+    with pytest.raises(RuntimeError):
+        await chat.for_turn(agent_settings, persona, asking, entitlements=held)
+
+
 async def test_the_retrieval_reuses_a_held_library_token_while_the_session_gets_a_fresh_one(
     app: FastAPI, agent_settings: AgentSettings, authentik: fake_authentik.FakeAuthentik
 ) -> None:
