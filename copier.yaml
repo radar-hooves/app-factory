@@ -429,6 +429,24 @@ run_mode:
     Where production runs this app's code from. `image` (default): the image the change pipeline pushes and Watchtower pulls. `source`: a checkout of `main` on the host, moved by the app's own deploy unit, with the image carrying only the system and toolchain. Both are canonical and neither is an exception; the answer is the app's record of which it is, read by the shape gate and fleet convergence in place of `registry-and-tag` and `health-revision` exceptions. Flipping it is this one line in `.copier-answers.yml`, and does not move the app: the host's stack and deploy unit do.
 
 
+omitted_slices:
+  type: yaml
+  multiselect: true
+  when: "{{ skeleton == 'web' }}"
+  default: []
+  choices:
+    - users
+    - workspaces
+    - admin
+    - feedback
+    - agent
+    - alerts
+    - settings
+    - system
+  help: >-
+    The factory slices this app does not take. Default none. Declaring one is the app's record that its absence is canonical, never an exception or a variant: the shape gate and fleet convergence read this answer and `slices.yaml` (the files each slice owns, at the app's own `_commit`) and count those files conforming, absent or differing. It removes nothing: the app deletes the slice's files itself, and a file shared across slices (main.py, mcp/server.py, elements.py, files/) stays the app's to justify. Taking a slice back is this one line in `.copier-answers.yml` and a render.
+
+
 runner_labels:
   type: str
   when: "{{ skeleton == 'web' }}"

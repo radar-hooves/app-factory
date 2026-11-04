@@ -1,0 +1,69 @@
+# The files each factory slice owns, for an app that omits it. An app records the
+# slices it does not take in `omitted_slices` (copier.yaml); the parity gate and
+# fleet convergence read that answer and treat every path matched here for an
+# omitted slice as conforming: absent, or differing, needs no exception and no
+# variant. Read at the app's own `_commit` tag, so the map is the one the app was
+# stamped from. Keys are slice names (the choices of `omitted_slices`); patterns
+# are fnmatch globs where `*` crosses `/`, with `{package}` the app's package,
+# and a `deps:<name>` entry names a dependency only that slice declares.
+# A file shared across slices (main.py, mcp/server.py, scripts/__init__.py,
+# elements.py, security_events.py, files/) is composition, not slice-owned, and
+# is listed under no slice: an app that differs there still owes a variant.
+# A path may sit under several slices; any one of them omitted covers it.
+
+users:
+  - backend/src/{package}/api/users/*
+  - backend/tests/test_view_as_api.py
+  - backend/tests/test_route_walk.py
+  - backend/tests/test_mcp_person_gate.py
+  - frontend/src/lib/view-as/*
+workspaces:
+  - backend/src/{package}/api/workspaces/*
+  - backend/src/{package}/db/scoping.py
+  - backend/tests/test_workspaces_api.py
+  - backend/tests/test_workspace_scoping.py
+  - backend/tests/test_workspace_race.py
+  - backend/tests/test_route_walk.py
+  - backend/tests/test_mcp_person_gate.py
+  - frontend/src/lib/workspaces/*
+  - frontend/tests/e2e/workspaces.spec.ts
+admin:
+  - backend/src/{package}/api/admin/*
+  - backend/tests/test_admin_api.py
+feedback:
+  - backend/src/{package}/api/feedback/*
+  - backend/src/{package}/config/sections/feedback.py
+  - backend/src/{package}/mcp/dispatchers/feedback.py
+  - backend/tests/test_feedback_api.py
+agent:
+  - backend/src/{package}/api/agent/*
+  - backend/src/{package}/config/sections/agent.py
+  - backend/src/{package}/exchange.py
+  - backend/src/{package}/config/sections/exchange.py
+  - backend/tests/test_agent_*.py
+  - backend/tests/test_exchange.py
+  - backend/tests/test_gateway_models.py
+  - backend/tests/support/attachments.py
+  - backend/tests/support/fake_agent_cli.py
+  - backend/tests/support/fake_authentik.py
+  - backend/tests/support/fake_clamd.py
+  - backend/tests/support/fake_library.py
+  - frontend/src/lib/agent/*
+  - frontend/src/routes/(protected)/chat/*
+  - frontend/src/test/chat/*
+  - frontend/tests/e2e/chat.spec.ts
+  - frontend/tests/e2e/chat/*
+  - deps:agent-common
+alerts:
+  - backend/src/{package}/api/alerts/*
+  - backend/src/{package}/mcp/dispatchers/alerts.py
+  - backend/tests/test_alerts_api.py
+  - frontend/src/lib/alerts/*
+settings:
+  - backend/tests/test_settings_api.py
+  - frontend/src/lib/settings/sections.ts
+  - frontend/src/lib/settings/sections.test.ts
+  - frontend/src/routes/(protected)/settings/*
+system:
+  - backend/src/{package}/api/system/*
+  - backend/tests/test_system_health.py
