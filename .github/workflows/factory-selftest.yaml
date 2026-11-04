@@ -279,6 +279,8 @@ jobs:
         working-directory: ${{ env.SCRATCH }}
         run: |
           set -euo pipefail
+          # The Elements step stamps beside this app, and git refuses a nested repo with no commit.
+          trap 'rm -rf .git' EXIT
           git init -q
           git add .
           for hook in ruff gateway-only-models stylelint stylelint-svelte eslint \
