@@ -4,6 +4,23 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.16] - 2026-11-04
+
+Need: the holistic review's faults that need no decision (radar-hooves/app-factory#57; consumer: radar-hooves/master-project#445, and every stamped app).
+
+### Fixed
+
+- **`fastmcp>=4.1.2`**, closing GHSA-7xgj-8392-5q4r and GHSA-vqqp-x5qm-5qp4 on every stamped `/mcp`.
+- **The MCP gate no longer reads a missing identity claim as `sub`** (an opaque id that matches no actor); the token is refused with 401. It retries one slow userinfo answer before a 503, and a caller that hangs up mid-request (`ClientDisconnect`, `ClosedResourceError`) raises nothing (#77, #78).
+- **The route walk matches person-facing prefixes by whole path segment**, so `/api/feedbackexport` is no longer exempt as `/api/feedback`.
+- **Two stamped-test lint findings** (an unused `noqa`, an unescaped `match=` pattern) that the self-test now catches.
+- **The factory self-test runs the stamp's own lint hooks** (ruff, gateway-only-models, stylelint, eslint, the arbitrary-values, colour-surface and layout-ownership gates) over the scratch app, which is how #63 and #76 shipped.
+- **A factory test holds `_skip_if_exists` to files the factory ships.**
+
+### Consumer must change
+
+Regenerate `.template-parity.json` (`test_mcp_auth.py`, `test_route_walk.py`, `test_database_settings.py` and `http_auth.py` are parity-gated). An app whose MCP callers' tokens lack the configured identity claim (`mcp_actor`, default `preferred_username`) now gets 401 where it was silently admitted as `sub`: set the claim.
+
 ## [2026.11.15] - 2026-11-04
 
 Need: the stamped `gateway-only-models` hook fails an ordinary backend commit in an app whose suite runs coverage (radar-hooves/app-factory#76; consumer: portcullis, and every stamped app).

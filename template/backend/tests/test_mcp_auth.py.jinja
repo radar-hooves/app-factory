@@ -23,6 +23,7 @@ import httpx
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
+from starlette.requests import ClientDisconnect
 
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
@@ -226,17 +227,49 @@ async def test_client_supplied_identity_is_stripped():
 
 
 @pytest.mark.unit
-async def test_missing_claim_falls_back_to_sub():
-    """The configured claim is preferred; `sub` is the fallback."""
+async def test_a_missing_identity_claim_is_refused_never_read_as_sub():
+    """An opaque `sub` matches no registered actor, so a token without the configured claim is a 401."""
     gated = require_bearer_auth(
         _inner_app,
         audiences=(AUDIENCE,),
         userinfo_url=USERINFO_URL,
-        transport=_userinfo_transport({"sub": "fallback-identity"}),
+        transport=_userinfo_transport({"sub": "opaque-id"}),
+    )
+    response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
+    assert response.status_code == 401
+
+
+@pytest.mark.unit
+async def test_one_slow_userinfo_answer_is_retried_not_a_503():
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("slow")
+        return httpx.Response(200, json={"preferred_username": "mcp-service"})
+
+    gated = require_bearer_auth(
+        _inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=httpx.MockTransport(handler)
     )
     response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
     assert response.status_code == 200
-    assert response.text == "fallback-identity"
+    assert len(calls) == 2
+
+
+@pytest.mark.unit
+async def test_a_caller_that_hangs_up_mid_request_raises_nothing():
+    async def hung_up(scope, receive, send):
+        raise ClientDisconnect()
+
+    gated = require_bearer_auth(
+        hung_up, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_recording_userinfo([])
+    )
+    await gated(
+        {"type": "http", "headers": [(b"authorization", _bearer(machine_token("good-token")).encode())]},
+        lambda: None,
+        lambda message: None,
+    )
 
 
 @pytest.mark.unit

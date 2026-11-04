@@ -49,7 +49,9 @@ import time
 from collections.abc import Collection, Mapping
 from typing import Protocol, cast
 
+import anyio
 import httpx
+from starlette.requests import ClientDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +194,7 @@ def require_bearer_auth(
         new_scope = _without_client_id(scope)
         cast("list[tuple[bytes, bytes]]", new_scope["headers"]).append((b"x-client-id", client_id_header))
 
-        await app(new_scope, receive, send)  # type: ignore[operator]
+        await _serve(app, new_scope, receive, send)
 
     # Expose the userinfo client so the host app's lifespan can close it on
     # shutdown; without this the connection pool leaks across create_app()
@@ -225,7 +227,15 @@ async def _admit_asker(
         return
     new_scope = _without_client_id(scope)
     new_scope["asker"] = person
-    await app(new_scope, receive, send)  # type: ignore[operator]
+    await _serve(app, new_scope, receive, send)
+
+
+async def _serve(app: object, scope: dict[str, object], receive: object, send: object) -> None:
+    """Run the MCP app; a caller that hangs up mid-request is not a server fault, and has nobody to answer."""
+    try:
+        await app(scope, receive, send)  # type: ignore[operator]
+    except ClientDisconnect, anyio.ClosedResourceError, anyio.BrokenResourceError:
+        logger.debug("MCP HTTP caller disconnected before the response finished")
 
 
 def _without_client_id(scope: dict[str, object]) -> dict[str, object]:
@@ -277,7 +287,11 @@ async def _resolve_identity(
         return 200, cached
 
     try:
-        response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
+        try:
+            response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
+        except httpx.TimeoutException:
+            # One slow answer is not an outage: ask once more before a 503 tells the caller to retry.
+            response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
     except httpx.HTTPError:
         logger.warning("OIDC userinfo endpoint unreachable")
         return 503, None
@@ -291,9 +305,10 @@ async def _resolve_identity(
         logger.warning("OIDC userinfo returned a non-JSON body")
         return 401, None
 
-    identity = claims.get(identity_claim) or claims.get("sub")
+    identity = claims.get(identity_claim)
     if not identity:
-        logger.warning("OIDC userinfo response missing %r and sub claims", identity_claim)
+        # Never `sub`: an opaque id matches no registered actor, so a missing claim must read as a fault here.
+        logger.warning("OIDC userinfo response missing the %r claim", identity_claim)
         return 401, None
 
     resolved = str(identity)
