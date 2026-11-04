@@ -61,16 +61,21 @@ def _gates(dependant: Dependant) -> Iterator[str]:
         yield from _gates(dependency)
 
 
+def _under(path: str, roots: set[str]) -> bool:
+    """`path` is a root or sits beneath one, by whole segments: `/feedbackexport` is not under `/feedback`."""
+    return any(path == root or path.startswith(f"{root}/") for root in roots)
+
+
 def _ungated(app: FastAPI, open_routes: dict[str, str]) -> list[str]:
     """Every API route outside the person-facing set and `open_routes` that declares no module gate."""
     prefix = _API_PREFIX.rstrip("/")
-    person_facing = tuple(f"{prefix}{path}" for path in PERSON_FACING)
+    person_facing = {f"{prefix}{path}" for path in PERSON_FACING}
     declared = {f"{prefix}{path}" for path in open_routes}
     return [
         f"{methods} {path}"
         for methods, path, dependant in _routes(app)
         if path.startswith(_API_PREFIX)
-        and not path.startswith(person_facing)
+        and not _under(path, person_facing)
         and path not in declared
         and not any(_gates(dependant))
     ]
@@ -99,6 +104,15 @@ def test_a_route_held_open_is_passed_whole_and_nothing_beside_it() -> None:
     assert _ungated(walked, {"/support/webhook": "a signature over the raw body"}) == [
         f"POST {_API_PREFIX.rstrip('/')}/support/webhook/replay"
     ]
+
+
+def test_a_person_facing_prefix_exempts_whole_segments_only() -> None:
+    router = APIRouter()
+    router.add_api_route("/feedback/{report_id}", lambda: None)
+    router.add_api_route("/feedbackexport", lambda: None)
+    walked = FastAPI()
+    walked.include_router(router, prefix=_API_PREFIX.rstrip("/"))
+    assert _ungated(walked, {}) == [f"GET {_API_PREFIX.rstrip('/')}/feedbackexport"]
 
 
 def test_a_personas_routes_gate_on_the_persona_they_name(app: FastAPI) -> None:
