@@ -12,9 +12,11 @@ Need: a slice an app does not take is a declared option, never an exception or a
 
 - **`omitted_slices` copier answer** (default none; any of `users`, `workspaces`, `admin`, `feedback`, `agent`, `alerts`, `settings`, `system`, `files`), recorded in `.copier-answers.yml`. **`slices.yaml`** maps each slice to the files it owns. Master's gate reads the answer and the map at the app's `_commit` and counts those files conforming, absent or differing. The answer removes nothing from a stamp.
 
+- **`config/vend.py` rides out a broker restart.** Every broker request (attest challenge, token, credential read) retries through `tenacity` on connection errors, timeouts, 5xx and 429 (honouring `Retry-After`): 3 attempts, jittered 1 s / 2 s backoff. A 4xx still fails at once with its typed message. The old `_vend_with_retry` loop, which retried every `VendError` including a 403, is removed. Need: godswood's go-live migration step and its rollback both failed `get_settings()` with `Connection refused` while the portcullis container was recreated (05/11/2026 02:21; consumer: godswood, radar-hooves/godswood#928). Adds the `tenacity>=9.0.0` dependency.
+
 ### Consumer must change
 
-Library sets `omitted_slices: [agent]`; portcullis `[users, workspaces, agent, alerts, feedback, settings, files]`. Each drops the exception or variant lines `slices.yaml` now covers once master's gate reads the answer.
+Every app takes the new `config/vend.py`, `tests/test_vend.py` and `pyproject.toml` (`tenacity`), re-locks, and regenerates `.template-parity.json`. Library sets `omitted_slices: [agent]`; portcullis `[users, workspaces, agent, alerts, feedback, settings, files]`. Each drops the exception or variant lines `slices.yaml` now covers once master's gate reads the answer.
 
 ## [2026.11.17] - 2026-11-04
 

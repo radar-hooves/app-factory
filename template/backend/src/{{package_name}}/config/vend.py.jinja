@@ -32,7 +32,6 @@ before.
 import base64
 import logging
 import os
-import time
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -47,6 +46,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, load_pem_private_key
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings
+from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +195,70 @@ def _error_reason(response: httpx.Response) -> str:
     return "unknown"
 
 
+_ATTEMPTS = 3
+_RETRY_AFTER_CAP_SECONDS = 30.0
+
+
+class _Retryable(Exception):
+    """A broker answer worth asking again: 5xx, or 429 carrying its ``Retry-After``."""
+
+    def __init__(self, response: httpx.Response) -> None:
+        super().__init__(f"HTTP {response.status_code}")
+        self.response = response
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    try:
+        return min(max(float(response.headers.get("Retry-After", "")), 0.0), _RETRY_AFTER_CAP_SECONDS)
+    except ValueError:
+        return None
+
+
+_backoff = wait_exponential_jitter(initial=1, exp_base=2, jitter=0.5)
+
+
+def _wait(state: Any) -> float:
+    """1 s, then 2 s (the third attempt is the last), jittered; a 429's ``Retry-After`` wins."""
+    exc = state.outcome.exception() if state.outcome else None
+    if isinstance(exc, _Retryable):
+        hinted = _retry_after(exc.response)
+        if hinted is not None:
+            return hinted
+    return float(_backoff(state))
+
+
+def _send(method: str, url: str, **kwargs: Any) -> httpx.Response:
+    """One broker request, retried only where the broker is plausibly restarting.
+
+    A broker recreated under a running deploy refuses connections for seconds;
+    settings loading (an app's start, its migration step, a worker) must ride
+    that out. Retried: connection errors, timeouts, 5xx and 429 (honouring
+    ``Retry-After``), 3 attempts, jittered 1 s / 2 s backoff -- never
+    indefinitely. A 4xx is returned at once and the caller raises its typed
+    message; after the last attempt a 5xx/429 is returned the same way, a
+    transport error re-raised.
+    """
+    request = httpx.post if method == "POST" else httpx.get
+    try:
+        for attempt in Retrying(
+            retry=retry_if_exception_type((httpx.TransportError, _Retryable)),
+            stop=stop_after_attempt(_ATTEMPTS),
+            wait=_wait,
+            reraise=True,
+        ):
+            with attempt:
+                response = request(url, timeout=_TIMEOUT_SECONDS, **kwargs)
+                if (
+                    response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+                    or response.status_code == HTTPStatus.TOO_MANY_REQUESTS
+                ):
+                    raise _Retryable(response)
+                return response
+    except _Retryable as exhausted:
+        return exhausted.response
+    raise AssertionError("unreachable: Retrying returns or raises")  # pragma: no cover
+
+
 #: The bearer this process last attested, cached in memory only -- never on
 #: disk, never logged. One process, one identity, one cache.
 _BEARER_CACHE: dict[str, Any] = {}
@@ -202,7 +266,7 @@ _BEARER_EXPIRY_MARGIN_SECONDS = 60
 
 
 def _post_attest(path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    response = httpx.post(f"{BROKER_URL.rstrip('/')}{path}", json=payload, timeout=_TIMEOUT_SECONDS)
+    response = _send("POST", f"{BROKER_URL.rstrip('/')}{path}", json=payload)
     if response.status_code != HTTPStatus.OK:
         raise VendError(f"broker refused {path}: HTTP {response.status_code} ({_error_reason(response)})")
     return dict(response.json())
@@ -247,10 +311,10 @@ def vend(credential: str, field: str) -> str:
     error that names neither the cause nor the fix.
     """
     bearer = _attest_bearer()
-    response = httpx.get(
+    response = _send(
+        "GET",
         f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
         headers={"Authorization": f"Bearer {bearer}"},
-        timeout=_TIMEOUT_SECONDS,
     )
     if response.status_code != HTTPStatus.OK:
         raise VendError(
@@ -262,33 +326,6 @@ def vend(credential: str, field: str) -> str:
         if entry.get("name") == field and entry.get("value"):
             return str(entry["value"])
     raise VendError(f"credential '{credential}' carries no non-empty field named '{field}'")
-
-
-_VEND_ATTEMPTS = 3
-_VEND_BACKOFF_SECONDS = 2.0
-
-
-def _vend_with_retry(credential: str, field: str) -> str:
-    """`vend`, retried with backoff for a broker that is locked or has not
-    finished starting -- the shape of the broker restarting alongside this
-    container, not of a genuinely absent credential.
-
-    Bounded: the last attempt's VendError is what escapes, carrying the
-    broker's own diagnostic and nothing this app was not already told.
-    Uncaught here, it propagates out of settings construction and fails the
-    container's own boot -- which is the point: compose restarts it rather
-    than serving with a credential it never got.
-    """
-    last_error: VendError | None = None
-    for attempt in range(_VEND_ATTEMPTS):
-        try:
-            return vend(credential, field)
-        except VendError as exc:
-            last_error = exc
-            if attempt < _VEND_ATTEMPTS - 1:
-                time.sleep(_VEND_BACKOFF_SECONDS * (2**attempt))
-    assert last_error is not None  # the loop above always sets it before falling through
-    raise last_error
 
 
 @dataclass(frozen=True)
@@ -362,7 +399,7 @@ def resolve_vended_fields(settings: BaseSettings, only: Collection[str] | None =
                 _log_vend_switched_off_once()
             else:
                 named = getattr(settings, spec.credential_field, "") if spec.credential_field else ""
-                resolved = _vend_with_retry(named or spec.credential, spec.field)
+                resolved = vend(named or spec.credential, spec.field)
         if resolved != value:
             setattr(settings, name, SecretStr(resolved) if is_secret else resolved)
 
@@ -397,10 +434,10 @@ def vend_envelope(credential: str) -> dict[str, Any]:
     never write it anywhere. Nothing in this module renders a response body: a
     failure surfaces the HTTP status and the broker's own error token only.
     """
-    response = httpx.get(
+    response = _send(
+        "GET",
         f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
         headers={"Authorization": f"Bearer {_attest_bearer()}"},
-        timeout=_TIMEOUT_SECONDS,
     )
     if response.status_code != HTTPStatus.OK:
         raise VendError(f"broker refused '{credential}': HTTP {response.status_code} ({_error_reason(response)})")
