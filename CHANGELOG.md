@@ -4,6 +4,12 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+### Added
+
+- **`config/vend.py` re-attests once on a 401 from a credential read.** A broker restart forgets every bearer it minted, so a cached bearer is refused until its hour runs out. `vend` and `vend_envelope` now drop it, attest afresh and read again, once; a second 401 is raised with its typed message, never looped. Beside the existing connection/5xx/429 retry. Need: godswood's pipeline held its queue on HTTP 401 from 12:34 to 13:07 after the broker restarted at 12:29 (27/09/2026; local patch godswood `562e75cb2`; consumer: godswood, radar-hooves/godswood#928). Consumer must change: take `config/vend.py` and `tests/test_vend.py`, drop godswood's local `_get_credential`, and regenerate `.template-parity.json`.
+
 ## [2026.11.18] - 2026-11-05
 
 Need: a slice an app does not take is a declared option, never an exception or a variant (operator ruling 04/11/2026; master-project#445 "slice declaration"; consumers: library, portcullis, radar-hooves/app-factory#80).

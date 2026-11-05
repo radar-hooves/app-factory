@@ -303,6 +303,22 @@ def _attest_bearer() -> str:
     return str(_BEARER_CACHE["key"])
 
 
+def _get_credential(credential: str) -> httpx.Response:
+    """``GET /v1/credentials/{credential}``, attesting afresh once when the broker disowns the cached bearer.
+
+    A broker restart forgets every bearer it minted, so the cached one is
+    refused (401) until it would have expired; dropping it and attesting again
+    recovers at once (mcp-servers' ``portcullis_attest.py`` does the same). One
+    re-attest only: a second 401 is returned for the caller to raise, never looped.
+    """
+    url = f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}"
+    response = _send("GET", url, headers={"Authorization": f"Bearer {_attest_bearer()}"})
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
+        _BEARER_CACHE.clear()
+        response = _send("GET", url, headers={"Authorization": f"Bearer {_attest_bearer()}"})
+    return response
+
+
 def vend(credential: str, field: str) -> str:
     """Return one field of a broker credential.
 
@@ -310,12 +326,7 @@ def vend(credential: str, field: str) -> str:
     an empty value: a blank password fails later, somewhere else, as a connection
     error that names neither the cause nor the fix.
     """
-    bearer = _attest_bearer()
-    response = _send(
-        "GET",
-        f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
-        headers={"Authorization": f"Bearer {bearer}"},
-    )
+    response = _get_credential(credential)
     if response.status_code != HTTPStatus.OK:
         raise VendError(
             f"could not vend '{credential}.{field}' from {BROKER_URL}: "
@@ -434,11 +445,7 @@ def vend_envelope(credential: str) -> dict[str, Any]:
     never write it anywhere. Nothing in this module renders a response body: a
     failure surfaces the HTTP status and the broker's own error token only.
     """
-    response = _send(
-        "GET",
-        f"{BROKER_URL.rstrip('/')}/v1/credentials/{credential}",
-        headers={"Authorization": f"Bearer {_attest_bearer()}"},
-    )
+    response = _get_credential(credential)
     if response.status_code != HTTPStatus.OK:
         raise VendError(f"broker refused '{credential}': HTTP {response.status_code} ({_error_reason(response)})")
     return dict(response.json())

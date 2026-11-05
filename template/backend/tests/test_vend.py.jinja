@@ -220,6 +220,56 @@ def test_a_4xx_fails_at_once_with_its_typed_message(tmp_path: Path, monkeypatch:
     assert sleeps == []
 
 
+def _bearer_flow(unauthorised: int) -> Any:
+    """A broker that mints a new bearer per attest and refuses the first `unauthorised` credential reads with 401."""
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    seen = {"attests": 0, "reads": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/attest/challenge"):
+            return httpx.Response(200, json={"challenge_id": "chal_1", "nonce": "nonce_1"})
+        if request.url.path.endswith("/v1/attest/token"):
+            seen["attests"] += 1
+            return httpx.Response(200, json={"key": f"pc_bearer_{seen['attests']}", "expires_at": future})
+        seen["reads"] += 1
+        if seen["reads"] <= unauthorised:
+            return httpx.Response(401, json={"code": "invalid_token"})
+        return httpx.Response(
+            200, json={"material": {"kind": "static", "fields": [{"name": "f", "value": "vended-value"}]}}
+        )
+
+    handler.seen = seen  # type: ignore[attr-defined]
+    return handler
+
+
+def test_a_401_after_a_broker_restart_re_attests_once_and_answers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 27/09/2026 restart: the broker forgot the cached bearer; one fresh attest recovers."""
+    _with_key(tmp_path, monkeypatch)
+    handler = _bearer_flow(unauthorised=1)
+    _through_transport(monkeypatch, handler)
+    assert vend_module.vend("example-credential", "f") == "vended-value"
+    assert handler.seen == {"attests": 2, "reads": 2}
+
+
+def test_a_second_401_is_raised_never_looped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_key(tmp_path, monkeypatch)
+    handler = _bearer_flow(unauthorised=99)
+    _through_transport(monkeypatch, handler)
+    with pytest.raises(VendError, match=r"HTTP 401 \(invalid_token\)"):
+        vend_module.vend("example-credential", "f")
+    assert handler.seen == {"attests": 2, "reads": 2}
+
+
+def test_vend_envelope_re_attests_on_a_401_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_key(tmp_path, monkeypatch)
+    handler = _bearer_flow(unauthorised=1)
+    _through_transport(monkeypatch, handler)
+    assert vend_module.vend_envelope("example-credential")["material"]["kind"] == "static"
+    assert handler.seen["attests"] == 2
+
+
 def test_the_boot_lane_file_answers_before_the_broker_is_ever_asked(tmp_path) -> None:
     """The one escape hatch: a value already on disk means `vend` is never called."""
     credential_file = tmp_path / "boot-lane-secret"
