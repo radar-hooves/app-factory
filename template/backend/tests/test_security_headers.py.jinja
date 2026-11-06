@@ -1,5 +1,31 @@
 """The Content-Security-Policy `SecurityHeadersMiddleware` sends, and the hashes it learns from the built shell."""
 
+{% if headless -%}
+from httpx import ASGITransport, AsyncClient, Response
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.main import create_app
+
+
+async def _get(path: str) -> Response:
+    app = create_app(settings=get_settings())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.get(path)
+
+
+def _directive(response: Response, name: str) -> list[str]:
+    policy = response.headers["content-security-policy"]
+    return next(part.split()[1:] for part in policy.split("; ") if part.split()[0] == name)
+
+
+async def test_a_headless_api_carries_a_default_deny_policy_with_no_shell_to_trust():
+    for path in ("/api/system/health", "/api/no-such-route", "/"):
+        response = await _get(path)
+        assert _directive(response, "default-src") == ["'none'"], path
+        assert _directive(response, "script-src") == ["'self'"], path
+        assert _directive(response, "frame-ancestors") == ["'none'"], path
+        assert response.headers["x-frame-options"] == "DENY", path
+{%- else -%}
 import base64
 import hashlib
 import re
@@ -116,3 +142,4 @@ async def test_the_interactive_api_documents_are_exempt_and_only_they_are(build)
     for path in ("/docs", "/redoc"):
         assert "content-security-policy" not in (await _get(path)).headers, path
     assert "content-security-policy" in (await _get("/openapi.json")).headers
+{%- endif %}

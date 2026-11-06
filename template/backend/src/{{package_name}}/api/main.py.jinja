@@ -19,8 +19,9 @@ admin gate, the same dependencies the admin router uses.
 ``agent`` is the factory's too: the personas a person may chat with, over the
 collections they may read (`app-factory docs/design/agent-console.md`), their
 conversations, and app-started jobs. It offers nothing until this app writes
-`config/chat.yaml`, so taking it costs a fresh stamp nothing until the app
-actually uses it.
+`config/chat.yaml`. An app that will not use it declares it in `omitted_slices`
+(copier.yaml), and the render then carries none of it; so do ``feedback``,
+``alerts`` and ``files``.
 
 There is deliberately NO ``api/auth`` slice, and an app must not add one.
 Authentication is the identity provider's (Tier 1a, proxy-delegated), so the
@@ -36,10 +37,16 @@ from fastapi import APIRouter
 
 from {{ package_name }} import api
 from {{ package_name }}.api.admin.router import router as admin_router
+{%- if 'agent' not in omitted_slices %}
 from {{ package_name }}.api.agent.router import router as agent_router
+{%- endif %}
+{%- if 'alerts' not in omitted_slices %}
 from {{ package_name }}.api.alerts.router import router as alerts_router
+{%- endif %}
 from {{ package_name }}.api.example.router import router as example_router
+{%- if 'feedback' not in omitted_slices %}
 from {{ package_name }}.api.feedback.router import router as feedback_router
+{%- endif %}
 from {{ package_name }}.api.system.router import router as system_router
 from {{ package_name }}.api.users.dependencies import get_current_user
 from {{ package_name }}.api.users.router import router as users_router
@@ -51,8 +58,12 @@ api_router = APIRouter()
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
+{%- if 'feedback' not in omitted_slices %}
 api_router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
+{%- endif %}
+{%- if 'alerts' not in omitted_slices %}
 api_router.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
+{%- endif %}
 api_router.include_router(
     settings.router(
         domains=api,
@@ -64,6 +75,8 @@ api_router.include_router(
     prefix="/settings",
     tags=["settings"],
 )
+{%- if 'agent' not in omitted_slices %}
 api_router.include_router(agent_router, prefix="/agent", tags=["agent"])
+{%- endif %}
 api_router.include_router(example_router, prefix="/example", tags=["example"])
 api_router.include_router(system_router, prefix="/system", tags=["system"])

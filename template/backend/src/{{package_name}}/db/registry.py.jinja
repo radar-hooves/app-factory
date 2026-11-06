@@ -16,12 +16,18 @@ what stops a new table quietly shipping with no access predicate
 
 from app_slices.settings.models import SettingChange, SettingOverride
 
+{% if 'agent' not in omitted_slices -%}
 from {{ package_name }}.api.agent.conversations import AgentConversation
 from {{ package_name }}.api.agent.jobs_models import AgentJob, AgentJobEvent, AgentJobLessonReport  # noqa: F401
 from {{ package_name }}.api.agent.quota import AgentQuestionCount
+{% endif -%}
+{% if 'alerts' not in omitted_slices -%}
 from {{ package_name }}.api.alerts.models import Alert
+{% endif -%}
 from {{ package_name }}.api.example.models import ExampleItem  # noqa: F401
+{% if 'feedback' not in omitted_slices -%}
 from {{ package_name }}.api.feedback.models import FeedbackReport
+{% endif -%}
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
 from {{ package_name }}.db.base import Base
@@ -64,13 +70,19 @@ WORKSPACE_EXEMPT: dict[type, str] = {
     Workspace: "the workspace itself — rows are scoped TO it",
     WorkspaceMembership: "the grant that resolution reads; scoping it by workspace would be circular",
     DeploymentEnvironmentMarker: "app-level singleton recording which deployment this database belongs to",
+{%- if 'feedback' not in omitted_slices %}
     FeedbackReport: "personal-subject: the person who filed it — a report may carry a screenshot of their own screen",
+{%- endif %}
+{%- if 'agent' not in omitted_slices %}
     AgentConversation: (
         "personal-subject: the asker — a conversation belongs to whoever asked, not a workspace;"
         " an answer the asker shares is read by whoever may chat with its persona, one answer at a time"
     ),
     AgentQuestionCount: "personal-subject: the asker — one person's daily allowance, counted across every persona",
+{%- endif %}
+{%- if 'alerts' not in omitted_slices %}
     Alert: "no per-workspace division: what a machine told this deployment's operator, raised naming no workspace and read under the reserved admin entitlement",
+{%- endif %}
     SettingOverride: "app-level settings row: a runtime setting is deployment-wide, read and written under the reserved admin entitlement (app-factory docs/design/settings.md)",
     SettingChange: "app-level settings row: the append-only audit trail for SettingOverride, same scope",
 }

@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 
+{% if not headless -%}
 # Stage 1: Frontend build (pnpm, SvelteKit static adapter)
 FROM node:24-slim AS frontend
 WORKDIR /frontend
@@ -39,6 +40,7 @@ COPY frontend/ ./
 RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 
 
+{% endif -%}
 # Stage 2: Backend dependency build (uv-native)
 FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 \
@@ -148,6 +150,7 @@ RUN rm -rf \
 RUN useradd -m -u 1000 -s /bin/bash appuser
 USER 1000:1000
 
+{% if 'agent' not in omitted_slices -%}
 # Claude Code, the engine the agent slice drives (the agent-common kit's driver spawns
 # `claude -p` per persona per question). Installed with the vendor's native
 # installer under the runtime user's own home, because uid 1000 owns ~/.local.
@@ -167,6 +170,7 @@ RUN curl -fsSL -o /tmp/install-claude.sh https://claude.ai/install.sh \
     && rm -f /tmp/install-claude.sh \
     && claude --version
 
+{% endif -%}
 # The dependencies, then this app's own package into the same venv: two layers,
 # so a code change leaves the large one cached.
 COPY --from=builder --chown=1000:1000 /app/backend/.venv /app/backend/.venv
@@ -199,10 +203,12 @@ COPY --chown=1000:1000 backend/gunicorn.conf.py ./backend/gunicorn.conf.py
 COPY --chown=1000:1000 config ./config
 ENV {{ project_name | upper | replace('-', '_') }}_ACTORS_CONFIG_PATH=/app/config/actors.yaml
 
+{% if not headless -%}
 # Built SPA at the path main.py's _FRONTEND_BUILD expects, relative to the
 # process cwd (WORKDIR /app) — frontend/build.
 COPY --from=frontend --chown=1000:1000 /frontend/build ./frontend/build
 
+{% endif -%}
 EXPOSE {{ backend_port }}
 
 CMD ["./backend/entrypoint.sh"]

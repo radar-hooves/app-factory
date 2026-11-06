@@ -139,6 +139,38 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/test/superforms-field.svelte{% endif %}"
   # Not a test, the element those tests and tests/elements/ prove the capability on.
   - "{% if not factory_selftest %}frontend/src/elements/selftest-card.svelte{% endif %}"
+  # A headless app: no front end, so nothing that builds, serves or tests one.
+  - "{% if headless %}frontend{% endif %}"
+  - "{% if headless %}backend/src/{{ package_name }}/elements.py{% endif %}"
+  - "{% if headless %}backend/tests/test_elements.py{% endif %}"
+  - "{% if headless %}backend/tests/test_version.py{% endif %}"
+  # A slice the app declares in `omitted_slices` that nothing it keeps composes on:
+  # its own files leave the render, and the composition files render without it.
+  - "{% if 'agent' in omitted_slices %}backend/src/{{ package_name }}/api/agent{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/src/{{ package_name }}/config/sections/agent.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/tests/test_agent_*.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/tests/support/attachments.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/tests/support/fake_agent_cli.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/tests/support/fake_clamd.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}backend/tests/support/fake_library.py{% endif %}"
+  - "{% if 'agent' in omitted_slices %}frontend/src/lib/agent{% endif %}"
+  - "{% if 'agent' in omitted_slices %}frontend/src/routes/(protected)/chat{% endif %}"
+  - "{% if 'agent' in omitted_slices %}frontend/src/test/chat{% endif %}"
+  - "{% if 'agent' in omitted_slices %}frontend/tests/e2e/chat.spec.ts{% endif %}"
+  - "{% if 'agent' in omitted_slices %}frontend/tests/e2e/chat{% endif %}"
+  - "{% if 'feedback' in omitted_slices %}backend/src/{{ package_name }}/api/feedback{% endif %}"
+  - "{% if 'feedback' in omitted_slices %}backend/src/{{ package_name }}/config/sections/feedback.py{% endif %}"
+  - "{% if 'feedback' in omitted_slices %}backend/src/{{ package_name }}/mcp/dispatchers/feedback.py{% endif %}"
+  - "{% if 'feedback' in omitted_slices %}backend/tests/test_feedback_api.py{% endif %}"
+  - "{% if 'feedback' in omitted_slices %}backend/tests/test_db_session_commit_ordering.py{% endif %}"
+  - "{% if 'alerts' in omitted_slices %}backend/src/{{ package_name }}/api/alerts{% endif %}"
+  - "{% if 'alerts' in omitted_slices %}backend/src/{{ package_name }}/mcp/dispatchers/alerts.py{% endif %}"
+  - "{% if 'alerts' in omitted_slices %}backend/tests/test_alerts_api.py{% endif %}"
+  - "{% if 'alerts' in omitted_slices %}frontend/src/lib/alerts{% endif %}"
+  - "{% if 'files' in omitted_slices %}backend/src/{{ package_name }}/files{% endif %}"
+  - "{% if 'files' in omitted_slices %}backend/src/{{ package_name }}/config/sections/files.py{% endif %}"
+  - "{% if 'files' in omitted_slices %}backend/tests/test_files_settings.py{% endif %}"
+  - "{% if 'files' in omitted_slices %}backend/tests/test_storage.py{% endif %}"
 
 # Files the template has retired and copier cannot delete. A plain update
 # removes a file the old tagged render had and the new one lacks, but not
@@ -260,6 +292,15 @@ skeleton:
     - desktop
   help: 'Which skeleton: web (FastAPI + SvelteKit container) or desktop (Tauri + SvelteKit)'
 
+# A web app with no front end: the backend, its API and its /mcp, and nothing a
+# browser loads. Asked second because every frontend question below reads it.
+headless:
+  type: bool
+  default: false
+  when: "{{ skeleton == 'web' }}"
+  help: >-
+    Does this app have no front end? `true` stamps the backend, its API and its /mcp alone: no frontend/, no SPA mount, no elements, no frontend build stage and no frontend hooks, and the change pipeline, finding no frontend member, runs no frontend CI. One answer and one render, never a variant: every headless app owes the same files. Turning it on in an app is `copier update --data headless=true`, then deleting frontend/ in the same commit: copier never deletes a file `_exclude` newly hides.
+
 project_name:
   type: str
   help: 'Project name (kebab-case, e.g. my-app)'
@@ -284,6 +325,7 @@ project_title:
 team_name:
   type: str
   default: "{{ project_title }}"
+  when: "{{ not headless }}"
   help: Who the feedback dialog says will read a report, as "the <name> team". Set it where the app's own team is not its display name (for example "CASPO").
 
 # Hidden and never answered by an app — `when: false` keeps a real stamp's
@@ -303,7 +345,7 @@ factory_selftest:
 dark_first:
   type: bool
   default: false
-  when: true
+  when: "{{ not headless }}"
   help: >-
     Does this app rest DARK? Palette-class, like frontend/src/app.css — the one axis apps are allowed to differ on. `true` stamps a pre-hydration seed in app.html that sets mode-watcher's own storage key and class before first paint, and only when the visitor has stored no preference of their own. mode-watcher's `defaultMode` cannot express it: its setInitialMode script is injected at render time, which is late enough to flash light on a cold SPA shell, so an app that answered it by hand ended up excepting the whole file.
 
@@ -315,7 +357,7 @@ factory_fonts:
     Fraunces (--ds-font-display): display
     Hanken Grotesk (--ds-font-body): body
     JetBrains Mono (--ds-font-code): code
-  when: "{{ skeleton == 'web' }}"
+  when: "{{ skeleton == 'web' and not headless }}"
   help: >-
     Which of the factory's self-hosted faces this app loads. Palette-class, like app.css: an app that brings its own face for a role (its own @font-face behind --ds-font-display, say) drops that one, and neither its package nor its import ships. Leave all three for an app that uses the factory's faces.
 
@@ -325,7 +367,7 @@ density:
   choices:
     - comfortable
     - compact
-  when: true
+  when: "{{ not headless }}"
   help: >-
     Row and control density for the shared design system, as `data-ds-density` on <html>. Palette-class, and the same one axis: `compact` is for an app whose primary surface is a dense table someone reads all day (portal-tables.md), `comfortable` for everything else. One app hand-edited app.html for this; every other app answers the default and its app.html does not change.
 
@@ -347,6 +389,7 @@ backend_port:
 
 frontend_port:
   type: int
+  when: "{{ not headless }}"
   help: 'Frontend Vite dev port — allocate from the port registry (web: band 5170-5199; desktop: the tauri band, with the next port its HMR socket); never a framework default'
 
 bundle_identifier:
@@ -364,7 +407,7 @@ linux_cargo_args:
 
 frontend_e2e_port:
   type: int
-  when: "{{ skeleton == 'web' }}"
+  when: "{{ skeleton == 'web' and not headless }}"
   help: >-
     Playwright's own Vite dev port — allocate from the port registry (band 5200-5229). Asked rather than derived: the E2E server used to be frontend_port + 1000, which lands outside every band the registry defines, so nothing could tell you it was free and no row recorded it.
 
@@ -444,8 +487,10 @@ omitted_slices:
     - settings
     - system
     - files
+  validator: >-
+    {% for kept in ['alerts', 'files'] %}{% if kept in omitted_slices and 'agent' not in omitted_slices %}The agent slice raises alerts and writes files: omit agent with {{ kept }}, or keep {{ kept }}. {% endif %}{% endfor %}
   help: >-
-    The factory slices this app does not take. Default none. Declaring one is the app's record that its absence is canonical, never an exception or a variant: the shape gate and fleet convergence read this answer and `slices.yaml` (the files each slice owns, at the app's own `_commit`) and count those files conforming, absent or differing. It removes nothing: the app deletes the slice's files itself, and a file shared across slices (main.py, mcp/server.py, elements.py, files/) stays the app's to justify. Taking a slice back is this one line in `.copier-answers.yml` and a render.
+    The factory slices this app does not take. Default none: every app takes the whole factory, and a slice the factory adds later reaches it. Declaring one is the app's record that its absence is canonical, never an exception or a variant. agent, feedback, alerts and files, which nothing kept composes on, leave the render: their files are not stamped, main.py, api/main.py, config, the model registry, the MCP server, the image and the frontend shell render without them, and the parity manifest is that render. users, workspaces, admin, settings and system are what the rest composes on, so they stay in the render; declaring one records that the app replaces it, and the gates count the files `slices.yaml` maps to it (at the app's own `_commit`) conforming, absent or differing. alerts and files go only with agent, which uses both. Taking a slice back or giving one up is `copier update --data` with the new list; a slice given up leaves its files standing (copier never deletes a file `_exclude` newly hides), and the app deletes them in the same commit.
 
 
 runner_labels:

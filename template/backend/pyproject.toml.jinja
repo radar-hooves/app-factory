@@ -5,8 +5,10 @@ description = "{{ description }}"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.136.3",
+{%- if 'agent' not in omitted_slices %}
     # python-multipart: a chat's ask takes attachments as multipart (api/agent/router.py).
     "python-multipart>=0.0.20",
+{%- endif %}
     "uvicorn[standard]>=0.49.0",
     "fastmcp>=4.1.2",
     "pydantic>=2.13.4",
@@ -39,21 +41,27 @@ dependencies = [
     # under an explicit index a [tool.uv.sources] pin reaches only a DECLARED
     # dependency — undeclared it resolves against PyPI and is not found.
     "redactyl-core>=2026.7.0",
+{%- if 'files' not in omitted_slices %}
     # nextcloud: the household api-client's WebDAV wrapper and generated OCS Share
     # API, bound in files/storage.py — the files slice's whole WebDAV layer, so no
     # app carries its own put/get/list/move/delete/share code.
     "nextcloud>=2026.6.0",
+{%- endif %}
+{%- if 'agent' not in omitted_slices %}
     # agent-common: the factory's own Claude Code kit (kits/python/agent-common) —
     # the CLI driver, personas, transcripts and the library's collections the
     # agent slice binds to this app.
     "agent-common>=2026.10.91",
+{%- endif %}
     # app-slices: the factory's shared web slices (kits/python/app-slices),
     # mounted in api/main.py rather than stamped; runtime settings first.
     "app-slices>=2026.11.20",
+{%- if 'agent' not in omitted_slices %}
     # library: the household api-client of the library's caller door, which
     # agent-common's `Collections` reads through; transitive-only, so declared for
     # its index pin below to reach it.
     "library>=2026.10.18124341",
+{%- endif %}
 ]
 
 [dependency-groups]
@@ -106,10 +114,16 @@ explicit = true
 [tool.uv.sources]
 api-common = { index = "{{ private_index_name }}" }
 redactyl-core = { index = "{{ private_index_name }}" }
+{%- if 'files' not in omitted_slices %}
 nextcloud = { index = "{{ private_index_name }}" }
+{%- endif %}
+{%- if 'agent' not in omitted_slices %}
 agent-common = { index = "{{ private_index_name }}" }
+{%- endif %}
 app-slices = { index = "{{ private_index_name }}" }
+{%- if 'agent' not in omitted_slices %}
 library = { index = "{{ private_index_name }}" }
+{%- endif %}
 
 [tool.ruff]
 line-length = 120

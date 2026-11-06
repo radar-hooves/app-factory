@@ -1,15 +1,18 @@
 # The files each factory slice owns, for an app that omits it. An app records the
-# slices it does not take in `omitted_slices` (copier.yaml); the parity gate and
-# fleet convergence read that answer and treat every path matched here for an
-# omitted slice as conforming: absent, or differing, needs no exception and no
-# variant. Read at the app's own `_commit` tag, so the map is the one the app was
-# stamped from. Keys are slice names (the choices of `omitted_slices`); patterns
-# are fnmatch globs where `*` crosses `/`, with `{package}` the app's package,
-# and a `deps:<name>` entry names a dependency only that slice declares.
-# A file shared across slices (main.py, mcp/server.py, scripts/__init__.py,
-# elements.py, security_events.py) is composition, not slice-owned, and
-# is listed under no slice: an app that differs there still owes a variant.
-# A path may sit under several slices; any one of them omitted covers it.
+# slices it does not take in `omitted_slices` (copier.yaml), and the parity gate
+# and fleet convergence read this map at the app's own `_commit` tag: every path
+# matched for an omitted slice is conforming, absent or differing, with no
+# exception and no variant. agent, feedback, alerts and files, which nothing kept
+# composes on, also leave the render: copier.yaml's `_exclude` drops their own
+# files and the composition files render without them, so most of their paths
+# are simply not owed. users, workspaces, admin, settings and system stay in the
+# render, since the rest composes on them. Keys are slice names (the choices of
+# `omitted_slices`); patterns are fnmatch globs where `*` crosses `/`, with
+# `{package}` the app's package, and a `deps:<name>` entry names a dependency
+# only that slice declares. A file shared across slices (main.py, mcp/server.py,
+# scripts/__init__.py, elements.py, security_events.py) is composition, not
+# slice-owned, and is listed under no slice: an app that differs there still owes
+# a variant. A path may sit under several slices; any one of them omitted covers it.
 
 users:
   - backend/src/{package}/api/users/*
@@ -35,6 +38,7 @@ feedback:
   - backend/src/{package}/config/sections/feedback.py
   - backend/src/{package}/mcp/dispatchers/feedback.py
   - backend/tests/test_feedback_api.py
+  - backend/tests/test_db_session_commit_ordering.py
 agent:
   - backend/src/{package}/api/agent/*
   - backend/src/{package}/config/sections/agent.py
@@ -54,6 +58,8 @@ agent:
   - frontend/tests/e2e/chat.spec.ts
   - frontend/tests/e2e/chat/*
   - deps:agent-common
+  - deps:library
+  - deps:python-multipart
 alerts:
   - backend/src/{package}/api/alerts/*
   - backend/src/{package}/mcp/dispatchers/alerts.py
@@ -73,4 +79,3 @@ files:
   - backend/tests/test_files_settings.py
   - backend/tests/test_storage.py
   - deps:nextcloud
-  - deps:python-multipart

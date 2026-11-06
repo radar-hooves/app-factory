@@ -96,18 +96,25 @@ describe('the app declares its shell as data', () => {
 });
 
 describe('the bar', () => {
-	it('runs, from the left, search, report, alerts, day/night, account', async () => {
+	// The report and the bell come with the feedback and alerts slices; an app
+	// that declares one omitted runs this with the rest of the bar.
+	it('runs, from the left, search, {% if 'feedback' not in omitted_slices %}report, {% endif %}{% if 'alerts' not in omitted_slices %}alerts, {% endif %}day/night, account', async () => {
 		render(Layout, { props: { children } });
-		const search = screen.getByTestId('ds-shell-search');
-		const report = await screen.findByTestId('ds-shell-report');
-		const alerts = screen.getByTestId('alerts');
-		const theme = screen.getByTestId('ds-shell-theme');
-		const account = screen.getByRole('button', { name: 'Account' });
+		const bar = [
+			screen.getByTestId('ds-shell-search'),
+{%- if 'feedback' not in omitted_slices %}
+			await screen.findByTestId('ds-shell-report'),
+{%- endif %}
+{%- if 'alerts' not in omitted_slices %}
+			screen.getByTestId('alerts'),
+{%- endif %}
+			screen.getByTestId('ds-shell-theme'),
+			await screen.findByRole('button', { name: 'Account' })
+		];
 
-		expect(follows(search, report), 'report follows search').toBe(true);
-		expect(follows(report, alerts), 'alerts follow the report').toBe(true);
-		expect(follows(alerts, theme), 'the toggle follows the alerts').toBe(true);
-		expect(follows(theme, account), 'the account is last').toBe(true);
+		for (const [i, control] of bar.slice(1).entries()) {
+			expect(follows(bar[i], control), `control ${i + 1}`).toBe(true);
+		}
 	});
 
 	it('carries the breadcrumbs on the left, before every control', () => {

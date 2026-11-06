@@ -167,6 +167,7 @@ repos:
         language: system
         pass_filenames: false
         files: '^(backend/src|scripts|tools)/.*\.py$'
+{%- if not headless %}
 
   # Prettier is the frontend's only formatter, as ruff-format is the backend's.
   # Needs `pnpm install` in frontend/, like the two design gates below.
@@ -315,6 +316,7 @@ repos:
         language: system
         files: '^frontend/src/.*\.svelte$'
         pass_filenames: false
+{%- endif %}
 
   # The mechanical fence for master-project#839: a commit that edits a file the
   # factory owns is refused, derived every run from the factory's own file list

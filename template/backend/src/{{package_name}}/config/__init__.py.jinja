@@ -16,12 +16,18 @@ from pathlib import Path
 from pydantic import Field, ValidationError, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+{% if 'agent' not in omitted_slices -%}
 from {{ package_name }}.config.sections.agent import AgentSettings
+{% endif -%}
 from {{ package_name }}.config.sections.database import DatabaseSettings
 from {{ package_name }}.config.sections.example import ExampleSettings
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
+{%- if 'feedback' not in omitted_slices %}
 from {{ package_name }}.config.sections.feedback import FeedbackSettings
+{%- endif %}
+{%- if 'files' not in omitted_slices %}
 from {{ package_name }}.config.sections.files import FilesSettings
+{%- endif %}
 from {{ package_name }}.config.sections.identity import IdentitySettings
 from {{ package_name }}.config.sections.mcp import MCPSettings
 from {{ package_name }}.config.sections.security import SecuritySettings
@@ -102,19 +108,25 @@ class Settings(BaseSettings):
     # defaults or to .env, and a container configured entirely by environment
     # silently runs on localhost. Init arguments outrank every source, so the
     # section's own resolution (env, then .env, then default) is what stands.
+{%- if 'agent' not in omitted_slices %}
     # Where this deployment's personas live and what their sessions inherit
     # (api/agent/). Every field has a safe default, so a fresh stamp with no
     # persona directory boots and its console renders empty.
     agent: AgentSettings = Field(default_factory=AgentSettings)
+{%- endif %}
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     example: ExampleSettings = Field(default_factory=ExampleSettings)
     # This app's exchange client (exchange.py). No issuer turns it off.
     exchange: ExchangeSettings = Field(default_factory=ExchangeSettings)
+{%- if 'feedback' not in omitted_slices %}
     # Where a reported feedback issue is filed. Empty repo disables filing.
     feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
+{%- endif %}
+{%- if 'files' not in omitted_slices %}
     # This app's Nextcloud-backed file store. Empty NEXTCLOUD_URL disables
     # the slice — the safe default for a fresh stamp (files/storage.py).
     files: FilesSettings = Field(default_factory=FilesSettings)
+{%- endif %}
     # Names of the forward-auth identity headers. Defaults are Authentik's
     # own spellings, so an app behind the household outpost sets none of them.
     identity: IdentitySettings = Field(default_factory=IdentitySettings)
@@ -146,8 +158,12 @@ def get_settings() -> Settings:
             database=DatabaseSettings(),
             example=ExampleSettings(),
             exchange=ExchangeSettings(),
+{%- if 'feedback' not in omitted_slices %}
             feedback=FeedbackSettings(),
+{%- endif %}
+{%- if 'files' not in omitted_slices %}
             files=FilesSettings(),
+{%- endif %}
             identity=IdentitySettings(),
             mcp=MCPSettings(),
             security=SecuritySettings(),

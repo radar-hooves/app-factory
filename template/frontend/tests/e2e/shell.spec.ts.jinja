@@ -49,8 +49,8 @@ test('the top bar search control, where the app draws one, opens the command pal
 // loading state, so the chrome alone would pass before the page ever did.
 const STAMPED_ROUTES = [
 	{ path: '/settings/members', heading: 'Members' },
-	{ path: '/settings/application', heading: 'Application' },
-	{ path: '/chat', heading: 'Ask' }
+	{ path: '/settings/application', heading: 'Application' }{% if 'agent' not in omitted_slices %},
+	{ path: '/chat', heading: 'Ask' }{% endif %}
 ];
 
 for (const { path, heading } of STAMPED_ROUTES) {

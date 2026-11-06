@@ -17,7 +17,7 @@
 	confirmed, so nothing here may assume `auth.user`.
 -->
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import type { Component, Snippet } from 'svelte';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
 	import { AppShell, resolveNav, resolvePaletteGroups } from '@poodle64/ui/app-shell';
 	import { CommandPalette } from '@poodle64/ui/command-palette';
@@ -32,12 +32,17 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import { auth } from '#lib/auth.svelte.js';
 	import { shell } from '#lib/shell.js';
-	import AdminAlertBell from '#lib/alerts/admin-alert-bell.svelte';
 	import ViewAsBanner from '#lib/view-as/view-as-banner.svelte';
 	import ViewAsDialog from '#lib/view-as/view-as-dialog.svelte';
 	import WorkspaceMenu from '#lib/workspaces/workspace-menu.svelte';
 
 	let { children }: { children: Snippet } = $props();
+
+	// The alerts slice is optional (an app may declare it omitted), so its bell is
+	// a glob that matches nothing there, as the chat client below is.
+	const AdminAlertBell = Object.values(
+		import.meta.glob<{ default: Component }>('./alerts/admin-alert-bell.svelte', { eager: true })
+	)[0]?.default;
 
 	// One nav feeds BOTH the shell and the palette: a palette handed none finds
 	// nothing while looking like it works. ⌘K is bound by CommandPalette itself.
@@ -145,7 +150,7 @@
 
 	<!-- The bell (app-factory docs/design/alerts.md), admin-gated by the component itself. -->
 	{#snippet actions()}
-		<AdminAlertBell />
+		{#if AdminAlertBell}<AdminAlertBell />{/if}
 	{/snippet}
 
 	<!-- Who is signed in, and the way out — rendered once, at the end of the

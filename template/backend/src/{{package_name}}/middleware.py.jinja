@@ -97,13 +97,14 @@ SELF_FALLBACK = ("media-src", "worker-src")
 
 
 def content_security_policy(
-    build_dir: Path, element_origins: Iterable[str] = (), extra: Mapping[str, Iterable[str]] | None = None
+    build_dir: Path | None, element_origins: Iterable[str] = (), extra: Mapping[str, Iterable[str]] | None = None
 ) -> str:
     """The one policy the app sends, computed once at startup.
 
     Default-deny, same-origin. `script-src` also names the sha256 of each inline
     script in the built shell (SvelteKit's bootstrap, whose body changes every
-    build), so there is no `'unsafe-inline'` for scripts and no build-time step.
+    build), so there is no `'unsafe-inline'` for scripts and no build-time step;
+    a headless app has no shell and passes None.
     Each origin in ELEMENT_ORIGINS is admitted for its `/elements.js` (a module
     import, then its own chunks) and for the API reads its elements make as the
     viewer; nothing declared adds nothing. `style-src` allows inline style, and
@@ -119,7 +120,7 @@ def content_security_policy(
     """
     hashes = {
         "'sha256-" + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + "'"
-        for page in build_dir.rglob("*.html")
+        for page in (build_dir.rglob("*.html") if build_dir else ())
         for body in _INLINE_SCRIPT.findall(page.read_bytes().decode())
     }
     origins = [origin for origin in element_origins if _ORIGIN.fullmatch(origin)]

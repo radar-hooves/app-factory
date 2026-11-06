@@ -17,10 +17,10 @@
 	import { onMount } from 'svelte';
 	import { Button } from '@poodle64/ui/button';
 	import { ErrorState } from '@poodle64/ui/error-state';
-	import { ReportWidget } from '@poodle64/ui/feedback';
-	import { LoadingState } from '@poodle64/ui/loading-state';
+{% endraw %}{% if 'feedback' not in omitted_slices %}{% raw %}	import { ReportWidget } from '@poodle64/ui/feedback';
+{% endraw %}{% endif %}{% raw %}	import { LoadingState } from '@poodle64/ui/loading-state';
 	import { page } from '$app/state';
-	import { apiFetch, redirectToAuthentik } from '#lib/api/index.js';
+	import { {% endraw %}{% if 'feedback' not in omitted_slices %}apiFetch, {% endif %}{% raw %}redirectToAuthentik } from '#lib/api/index.js';
 	import AppFrame from '#lib/app-frame.svelte';
 	import { shell } from '#lib/shell.js';
 	import * as app from '#lib/art.js';
@@ -116,7 +116,7 @@
 		{/key}
 	{/if}
 </AppFrame>
-
+{% endraw %}{% if 'feedback' not in omitted_slices %}{% raw %}
 <!-- The feedback widget, for whoever is actually signed in — there is nobody
      to attribute a report to before then. The endpoint is named because the
      widget's own default, /api/feedback, is not the route: the router serves
@@ -124,4 +124,5 @@
      with a 405 before any redirect could add the slash (master-project#335). -->
 {#if auth.user}
 	<ReportWidget fetch={apiFetch} endpoint="/api/feedback/" team="{% endraw %}{{ team_name }}{% raw %}" />
-{/if}{% endraw %}
+{/if}
+{% endraw %}{% endif -%}

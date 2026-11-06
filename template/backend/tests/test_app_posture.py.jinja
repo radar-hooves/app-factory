@@ -9,7 +9,9 @@ nobody had changed the line — so this file pins them, and pins the
 from fastapi.middleware.cors import CORSMiddleware
 from httpx import ASGITransport, AsyncClient
 
+{% if not headless -%}
 from {{ package_name }} import main
+{% endif -%}
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
 
@@ -61,6 +63,7 @@ async def test_no_cors_middleware_without_a_configured_origin(app):
 
 async def test_cors_middleware_is_installed_once_an_origin_is_configured():
     assert _has_cors(_app_with(cors_origins="https://example.test"))
+{%- if not headless %}
 
 
 async def test_a_deploy_reaches_the_next_load_and_hashed_assets_are_kept(monkeypatch, tmp_path):
@@ -160,3 +163,4 @@ async def test_an_api_path_the_spa_declines_is_the_routers(monkeypatch, tmp_path
         for path in (f"{api}/no-such-route", api):
             missing = await client.get(path)
             assert (missing.status_code, missing.json()) == (404, {"detail": "Not Found"}), path
+{%- endif %}

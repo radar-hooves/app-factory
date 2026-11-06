@@ -115,6 +115,7 @@ def test_a_person_facing_prefix_exempts_whole_segments_only() -> None:
     assert _ungated(walked, {}) == [f"GET {_API_PREFIX.rstrip('/')}/feedbackexport"]
 
 
+{% if 'agent' not in omitted_slices -%}
 def test_a_personas_routes_gate_on_the_persona_they_name(app: FastAPI) -> None:
     named = [(path, dependant) for _, path, dependant in _routes(app) if "{persona}" in path]
     assert named
@@ -129,6 +130,7 @@ def test_a_conversations_routes_gate_on_the_persona_it_is_with(app: FastAPI) -> 
     assert all("chat-{conversation.persona}" in _gates(dependant) for _, dependant in named)
 
 
+{% endif -%}
 async def test_an_account_admitted_only_to_chat_reaches_its_own_record_and_not_the_people(
     client: AsyncClient,
 ) -> None:

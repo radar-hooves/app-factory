@@ -42,6 +42,8 @@ on:
       - 'template/**'
       - 'copier.yaml'
       - 'variants.yaml'
+      - 'slices.yaml'
+      - 'tests/template/**'
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
@@ -61,6 +63,8 @@ on:
       - 'template/**'
       - 'copier.yaml'
       - 'variants.yaml'
+      - 'slices.yaml'
+      - 'tests/template/**'
       - 'skeletons/desktop/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
@@ -109,7 +113,7 @@ jobs:
     if: ${{ !github.event.pull_request.head.repo.fork && inputs.macos-signing-identity == '' }}
     # atlas, not the pool: the private index's LAN address resolves only there (huginn timed out, 24/10/2026).
     runs-on: ['self-hosted', 'household', 'atlas']
-    timeout-minutes: 30
+    timeout-minutes: 50
     env:
       # Deliberately NOT UV_FROZEN=1. That pin is for a real app's CI, which
       # syncs against a uv.lock a developer already committed; template/ ships
@@ -152,6 +156,9 @@ jobs:
 
       - name: Retirement migration — holds copier.yaml's list to its `_exclude`
         run: uv run --frozen pytest -q tests/migrations
+
+      - name: Copier answers — headless, omitted slices, run mode
+        run: uv run --frozen pytest -q tests/template
 
       - name: Arbitrary-values ratchet — the wrapper against the real bin
         run: node --test tests/arbitrary-values/ratchet.test.mjs
@@ -305,6 +312,81 @@ jobs:
         # host's own, NixOS running no downloaded browser: host-browser.ts).
         run: tests/elements/proof.sh "$SCRATCH"
 
+      - name: Render the other shapes — headless, slices omitted, and both
+        # The default render above carries every slice and a front end. These are
+        # the shapes an app's answers can ask for instead: `headless`, and the
+        # slices that leave the render when omitted (agent, feedback, alerts,
+        # files, which go together here). Both extremes of each, so every branch
+        # in a template file renders and is run at least once.
+        run: |
+          set -euo pipefail
+          render() {
+            dest=$1; shift
+            uvx copier copy --defaults --trust --vcs-ref=HEAD \
+              --data factory_selftest=true \
+              --data project_name=factory-selftest \
+              --data description="Factory self-test scratch render — never deployed" \
+              --data backend_port=8398 --data frontend_port=5198 --data frontend_e2e_port=5228 \
+              --data postgres_host=127.0.0.1 --data postgres_port=5432 \
+              --data portcullis_url=http://127.0.0.1:1 \
+              --data private_index_name=godswood --data private_index_url=http://172.21.0.2:3141/poodle64/prod/+simple/ \
+              --data registry_host=registry.invalid --data registry_credential_file=/dev/null \
+              --data watchtower_url=http://127.0.0.1:1 \
+              "$@" . "$dest"
+          }
+          lean='omitted_slices=[agent, alerts, feedback, files]'
+          render "$SCRATCH-headless" --data headless=true
+          render "$SCRATCH-headless-lean" --data headless=true --data "$lean"
+          render "$SCRATCH-lean" --data "$lean"
+          test ! -e "$SCRATCH-headless/frontend"
+          test ! -e "$SCRATCH-headless-lean/backend/src/factory_selftest/api/agent"
+          if grep -q claude "$SCRATCH-headless-lean/Dockerfile"; then echo "Claude Code installed without the agent slice" >&2; exit 1; fi
+
+      - name: Other shapes — backend install, lint and test
+        # Each takes only the kits its own pyproject names: a lean render that
+        # declares no agent must not get agent-common back from this loop.
+        run: |
+          set -euo pipefail
+          for app in "$SCRATCH-headless" "$SCRATCH-headless-lean" "$SCRATCH-lean"; do
+            (
+              cd "$app/backend"
+              for kit in "${GITHUB_WORKSPACE}"/kits/python/*/; do
+                if grep -q "\"$(basename "$kit")>=" pyproject.toml; then uv add --frozen --editable "$kit"; fi
+              done
+              uv sync --no-default-groups --group dev
+              uv run ruff format --check .
+              uv run ruff check .
+              uv run mypy src
+            )
+          done
+          for app in "$SCRATCH-headless" "$SCRATCH-headless-lean"; do
+            (cd "$app/backend" && uv run pytest -q -n 4)
+          done
+          # A headless app's own hooks are the backend's alone.
+          cd "$SCRATCH-headless-lean"
+          trap 'rm -rf .git' EXIT
+          git init -q
+          git add .
+          for hook in ruff gateway-only-models; do
+            uvx pre-commit run "$hook" --all-files
+          done
+
+      - name: Slices omitted — the frontend without agent, feedback and alerts
+        # The shell, the protected layout and the e2e shell spec render without
+        # them; the same install, check and suite as the default render's.
+        working-directory: ${{ env.SCRATCH }}-lean/frontend
+        run: |
+          set -euo pipefail
+          pnpm add \
+            "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)" \
+            "@poodle64/librarian@file:$(ls "${RUNNER_TEMP}"/poodle64-librarian-*.tgz)"
+          pnpm add -D sveltekit-superforms formsnap zod
+          pnpm exec svelte-kit sync
+          pnpm exec prettier --check .
+          pnpm test -- --run
+          pnpm check
+          pnpm exec eslint .
+
       - name: Clean up the scratch renders
         if: always()
-        run: rm -rf "$SCRATCH" "$SCRATCH-placer"
+        run: rm -rf "$SCRATCH" "$SCRATCH"-*

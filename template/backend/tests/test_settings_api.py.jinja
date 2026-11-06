@@ -42,5 +42,7 @@ async def test_each_domains_declared_settings_are_on_the_page(client: AsyncClien
     assert {
         "example.new_item_button_enabled",
         "example.max_items_per_page",
+{%- if 'agent' not in omitted_slices %}
         "agent.conversation_retention_days",
+{%- endif %}
     } <= document["schema"]["properties"].keys()

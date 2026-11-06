@@ -4,7 +4,9 @@ The canonical household shape:
   - lifespan chains the db engine and the FastMCP lifespan
   - /mcp is mounted as an ASGI sub-app (FastMCP HTTP transport), wrapped in the
     household's canonical Authentik bearer-token gate
+{%- if not headless %}
   - The SPA is served from /frontend/build/ by app.frontend
+{%- endif %}
 
 The app exposes two surfaces and each is gated on its own terms — they are NOT
 interchangeable (rules-library/platform/canonical-app-shape.md):
@@ -23,35 +25,49 @@ interchangeable (rules-library/platform/canonical-app-shape.md):
     `app_hooks.mcp_auth` instead; everything else here is unchanged.
 """
 
+{% if 'agent' not in omitted_slices -%}
 import asyncio
 import contextlib
+{% endif -%}
 import logging
+{%- if not headless %}
 import os
+{%- endif %}
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+{%- if not headless %}
 from pathlib import Path
+{%- endif %}
 from typing import Any
 
 from api_common.telemetry import instrument_app
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+{%- if not headless %}
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.routing import Match, Mount
 from starlette.types import Scope
+{%- endif %}
 
 from {{ package_name }} import app_hooks
+{%- if 'agent' not in omitted_slices %}
 from {{ package_name }}.api.agent import ask as agent_turns
 from {{ package_name }}.api.agent import chat as agent_chat
 from {{ package_name }}.api.agent import jobs as agent_jobs
+{%- endif %}
 from {{ package_name }}.api.main import api_router
 from {{ package_name }}.app_hooks import API_DESCRIPTION, OPENAPI_TAGS, lifespan_tasks, register
 from {{ package_name }}.config import Settings, get_settings
+{%- if not headless %}
 from {{ package_name }}.config.paths import frontend_build_dir
-from {{ package_name }}.db.session import get_engine, get_session_factory
+{%- endif %}
+from {{ package_name }}.db.session import get_engine{% if 'agent' not in omitted_slices %}, get_session_factory{% endif %}
+{%- if not headless %}
 from {{ package_name }}.elements import register_elements
+{%- endif %}
 from {{ package_name }}.exceptions import register_exception_handlers
 from {{ package_name }}.exchange import Exchange
 from {{ package_name }}.logging import app_version, configure_logging
@@ -75,6 +91,7 @@ _log = logging.getLogger(__name__)
 # short one got a single line, and main.py stopped being byte-identical for the
 # length of a sentence. A lone string assignment is never wrapped, at any length.
 _COPIER_DESCRIPTION = "{{ description }}"
+{%- if not headless %}
 
 # Resolved from the source tree, not the working directory: uvicorn is launched
 # from backend/ in dev (.envrc, .vscode/launch.json) and from the repo root in a
@@ -117,9 +134,11 @@ try {
   }
 } catch {}
 """
+{%- endif %}
 
 # Every vertical slice mounts under this; an app with an older consumer contract names its own in app_hooks.
 _API_PREFIX: str = getattr(app_hooks, "API_PREFIX", "/api")
+{%- if not headless %}
 
 # Nor is a path under an API namespace a client-side route. Derived from what is mounted.
 _API_PREFIXES = tuple(f"/{prefix.strip('/')}" for prefix in (_API_PREFIX, "/mcp") if prefix.strip("/"))
@@ -196,8 +215,10 @@ class _SPAMount(Mount):
         if any(path == prefix or path.startswith(f"{prefix}/") for prefix in _API_PREFIXES):
             return Match.NONE, {}
         return super().matches(scope)
+{%- endif %}
 
 
+{% if 'agent' not in omitted_slices -%}
 @asynccontextmanager
 async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]:
     """Refuse to start on a persona this app cannot open, warm the database engine,
@@ -229,6 +250,17 @@ async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]
         await agent_jobs.shutdown()
         await agent_turns.shutdown()
         engine.dispose()
+{%- else -%}
+@asynccontextmanager
+async def _db_lifespan(app: FastAPI, settings: Settings) -> AsyncGenerator[None]:
+    """Warm the database engine for the life of the worker, then dispose it."""
+    engine = get_engine()
+    app.state.engine = engine
+    try:
+        yield
+    finally:
+        engine.dispose()
+{%- endif %}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -387,7 +419,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SecurityHeadersMiddleware,
         is_production=not settings.debug,
         csp=content_security_policy(
-            _FRONTEND_BUILD,
+            {% if headless %}None{% else %}_FRONTEND_BUILD{% endif %},
             settings.element_origins_list,
             getattr(app_hooks, "content_security_sources", lambda: {})(),
         ),
@@ -407,15 +439,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # sub-apps, not router routes, and are gated on their own terms rather than
     # by this limit.
     app.include_router(api_router, prefix=_API_PREFIX, dependencies=[Depends(enforce_default_rate_limit)])
+{%- if not headless %}
 
     # The elements this app serves to other apps' pages, and places on its own.
     register_elements(app, settings)
+{%- endif %}
 
     # This app's own middleware and exception handlers. Last, so anything added
     # wraps outermost and runs first — a Host-header or body-size guard has to
     # see the request before the factory's stack does. An app with nothing to add
     # calls a function that does nothing, which is why main.py stays identical.
     register(app, settings)
+{%- if not headless %}
 
     # Serve the SPA — must be last so API routes take precedence.
     # Skip mounting if the frontend has not been built yet (dev-only path).
@@ -425,5 +460,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
     else:
         _log.warning("frontend/build not found; SPA not mounted. Run `pnpm build` in frontend/.")
+{%- endif %}
 
     return app
