@@ -11,7 +11,7 @@ changes. A conversation keeps its id, now typed uuid: its address and a shared a
 
 On the app's own chain, not the factory branch: a key's type divides every revision that references
 the key into before and after. An app with revisions of its own points ``down_revision`` at its own
-head, names what the catalog cannot know in the call (`keep`, `include`, `soft_refs`, `mapped`), and
+head, names what the catalogue cannot know in the call (`keep`, `include`, `soft_refs`, `mapped`), and
 upgrades in an offline window after a dump (app-factory `docs/development/uuid7-rekey.md`).
 """
 

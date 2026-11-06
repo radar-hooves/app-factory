@@ -13,7 +13,7 @@ New keys keep the old order: rows are numbered in their old key order (a v4
 table by `created_at`, then key), and each takes a v7 whose time is its own
 `created_at` where it has one, held monotonic and never later than now.
 
-What the catalog cannot know is the caller's to say. An integer or uuid key the
+What the catalogue cannot know is the caller's to say. An integer or uuid key the
 database does not generate is refused until it is named: `keep` one another
 system assigns (a MusicBrainz id, another app's document id), `include` one the
 app mints in Python. `include` also takes a text key (hex v4). `soft_refs` names

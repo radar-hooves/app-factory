@@ -5,7 +5,7 @@ Shared Python app code, published to the household's private index and consumed 
 ## Packages
 
 - [`agent-common`](agent-common) — the household's Claude Code agent: `cli` (the driver: argv, environment, a spawn in its own process group, the idle-timeout read loop, the stderr tail, the kill, stream-json stdin turns), `sandbox` (Landlock confinement of every session), `bridge` (a session's own stdio MCP servers, run outside it) and `remote` (an HTTP server whose header a helper mints, relayed so the helper runs as the app), `persona` (load a persona directory and seed its writable home), `transcript` (read and forget a session as turns), `agent` (the `Agent` interface a chat asks through, and `LocalAgent`, which keeps each document version its persona writes), `documents` (Word and PDF in a brand's templates, and a Word attachment's text; the `documents` extra), `collections` (`Collections`: the library's collections read as the person asking, through api-clients' `library` client — which they may read, the documents a question draws on with their passages, a cited document — and the `passages_block` appended to a question) and `sse` (the frame). Design: [`docs/design/agent-console.md`](../../docs/design/agent-console.md). The stamped `api/agent/` slice binds it to the app's settings, data directory and exceptions.
-- [`app-slices`](app-slices) — the web app's shared slices, mounted rather than stamped. `db` owns the one MetaData a kit's tables and the app's share (the stamped `db/base.py` adopts it); `settings` is the runtime settings slice (declare, read, and a router factory the stamped `api/main.py` mounts with the app's own session, caller and gates). Its page is `@poodle64/ui/settings`. Design: [`docs/design/settings.md`](../../docs/design/settings.md).
+- [`app-slices`](app-slices) — the web app's shared slices, mounted rather than stamped. `db` owns the one MetaData a kit's tables and the app's share (the stamped `db/base.py` adopts it); `settings` is the runtime settings slice (declare, read, and a router factory the stamped `api/main.py` mounts with the app's own session, caller and gates; its page is `@poodle64/ui/settings`; design: [`docs/design/settings.md`](../../docs/design/settings.md)); `rekey` converts a schema's keys to UUID v7 for revision `2bce3d4f6105` ([`docs/development/uuid7-rekey.md`](../../docs/development/uuid7-rekey.md)).
 
 ## Depending on a kit
 
@@ -13,7 +13,7 @@ A stamped app already does, in `backend/pyproject.toml`:
 
 ```toml
 "agent-common>=2026.9.57",
-"app-slices>=2026.10.0",
+"app-slices>=2026.11.20",
 # …
 [tool.uv.sources]
 agent-common = { index = "<private index name>" }

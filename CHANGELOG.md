@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.20] - 2026-11-06
+
+Need: primary keys consistent across the fleet, as UUIDs (operator ruling 06/11/2026; consumer: master-project orchestrator, app-factory#100). Decision: `docs/product/P09-decisions.md` §Keys.
+
+### Changed
+
+- **Every key the factory stamps is a UUID v7 the app mints** (`default=uuid.uuid7`, no server default): `users`, `workspaces`, `workspace_memberships`, `alerts`, `example_items`, `feedback_reports`, `agent_job_events` and the kit's `setting_changes`, and every foreign key to them (`WorkspaceScoped.workspace_id`, `SharedReference.workspace_id`). `agent_conversations.id` is typed uuid and keeps its value; a new one is v7. `agent_jobs.job_id` stays the CLI's session id, minted v7. Natural keys stay as they are. Ids are UUIDs through the API (path parameters, `X-Workspace-Id`, schemas, the feedback MCP tool), `schema.d.ts`, the auth store and `@poodle64/ui` 2026.11.7's `AlertBell`. A typed error's `details` may carry a UUID (`jsonable_encoder`).
+- **`app_slices.rekey.rekey_to_uuid7`** (kit release with this tag) converts a schema in the caller's transaction: order-keeping v7 keys, every reference rewritten, rows, checksum, order and references proved per table before it commits, or it raises and nothing changes. A key the database does not generate, a view over a converted column and a dangling reference are refused first. `keep`, `include`, `soft_refs`, `mapped` name what the catalogue cannot know.
+- **Revision `2bce3d4f6105`** calls it, on the app's own chain: a barrier (`docs/development/migrations.md`), so a fresh stamp has two heads, the app chain's and the factory's. `tests/migrations/test_migration_branch.py` allows barriers.
+
+### Consumer must change
+
+Every app converts in its own lane, in an offline window after a dump, by `docs/development/uuid7-rekey.md`: take this release, `app-slices>=2026.11.20` and `@poodle64/ui` `^2026.11.7`; point `2bce3d4f6105`'s `down_revision` at the app's own head and name its own keys in the call (the doc lists what each app holds outside itself); retype its own models, schemas and frontend; regenerate `schema.d.ts` and `.template-parity.json`. Taking any later release means converting: the factory's models are UUID from here.
+
 ## [2026.11.19] - 2026-11-05
 
 ### Added
