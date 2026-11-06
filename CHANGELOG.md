@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.25] - 2026-11-07
+
+Need: the stamped shell's palette test passes on a loaded CI runner. Consumer: eight (radar-hooves/eight), through its orchestrator (eight run 42312953912, `asks the chat persona what was typed, on Enter`).
+
+### Fixed
+
+- **The palette's Ask test no longer races the chat client's first import.** The frame imports `agent/chat.ts` lazily when the palette first opens; the test's mock factory loads that module's whole real graph, which on a slow runner outlasts `findBy`'s 1s default, so the Ask row was not yet drawn. The test now warms the import before rendering and gives the row a 10s budget. Test only: the palette's behaviour is unchanged. Reproduced by delaying the mock factory 2.5s (fails with `Unable to find an element with the text: Ask Milton: what is owed?`; passes 6/6 fixed).
+
+### Consumer must change
+
+- Take `src/lib/shell.test.ts` and regenerate `.template-parity.json`.
+
 ## [2026.11.24] - 2026-11-07
 
 Need: the agent chat keeps working when the library's document ids are UUID strings (the library rekeys them to UUID v7; an integer id still resolves). Consumer: eight (radar-hooves/eight), through its orchestrator.

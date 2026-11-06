@@ -227,12 +227,16 @@ describe('the palette', () => {
 	});
 
 	it.skipIf(!hasChat)('asks the chat persona what was typed, on Enter', async () => {
+		// The frame imports the chat client on first open; the mock factory loads the
+		// real module's graph, which on a loaded runner outlasts findBy's 1s default.
+		// Warm it first, and give the row the test's own budget.
+		await import('#lib/agent/chat.js');
 		render(Layout, { props: { children } });
 		await fireEvent.click(screen.getByTestId('ds-shell-search'));
 
 		const palette = within(await screen.findByRole('dialog'));
 		await fireEvent.input(palette.getByRole('combobox'), { target: { value: 'what is owed?' } });
-		const row = await palette.findByText('Ask Milton: what is owed?');
+		const row = await palette.findByText('Ask Milton: what is owed?', {}, { timeout: 10_000 });
 		await fireEvent.click(row);
 		await waitFor(() =>
 			expect(chat.handOff).toHaveBeenCalledWith('milton', { ask: 'what is owed?' })
