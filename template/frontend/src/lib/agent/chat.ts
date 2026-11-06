@@ -337,7 +337,7 @@ export function personaDocuments(persona: Persona): LoadDocument {
 	return (documentId) =>
 		data(
 			api.GET('/api/agent/{persona}/documents/{document_id}', {
-				params: { path: { persona: persona.id, document_id: Number(documentId) } }
+				params: { path: { persona: persona.id, document_id: documentId } }
 			})
 		);
 }

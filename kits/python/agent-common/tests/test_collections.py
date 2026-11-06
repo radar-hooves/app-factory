@@ -227,7 +227,7 @@ async def test_what_an_earlier_turn_cited_is_added_as_a_source_only_where_it_car
     library.get("/documents/1042").respond(200, json=_annex())
     reader = _collections()
 
-    def earlier() -> dict[int, asyncio.Task[Document | None]]:
+    def earlier() -> dict[int | str, asyncio.Task[Document | None]]:
         return {1042: asyncio.ensure_future(reader.document(1042))}
 
     [carried] = await reader.opened([], "squadron leader in brisbane", earlier=earlier())
@@ -388,3 +388,21 @@ async def test_a_passage_that_is_most_of_a_short_documents_section_is_not_repeat
     [source] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "leave")
 
     assert source.excerpts == ()
+
+
+UUID_ID = "0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10"
+
+
+async def test_a_uuid_document_id_travels_through_opening_unchanged() -> None:
+    asked: list[int | str] = []
+
+    class Reader(Collections):
+        async def document(self, document_id: int | str) -> Document | None:
+            asked.append(document_id)
+            return Document(title="Pay manual", sections=[{"anchor": "a", "heading": "Leave", "text": "Accrues."}])
+
+    held = [Source(1, "adf-pay", UUID_ID, "Pay manual", (Passage("Leave", "Recreation leave accrues."),))]
+    [source] = await Reader(URL, _token).opened(held, "anything")
+
+    assert asked == [UUID_ID]
+    assert source.document_id == UUID_ID

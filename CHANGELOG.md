@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.24] - 2026-11-07
+
+Need: the agent chat keeps working when the library's document ids are UUID strings (the library rekeys them to UUID v7; an integer id still resolves). Consumer: eight (radar-hooves/eight), through its orchestrator.
+
+### Changed
+
+- **A library document id is an integer or a UUID string, passed to the library as it came.** `agent-common`'s `Source.document_id` and `Collections.document` take `int | str`. The agent's document route takes both (an id that reads as an integer stays one). The follow-up carry-over keeps a UUID citation instead of dropping it. The chat page sends the citation's id as it is, where `Number(...)` turned a UUID into `NaN`.
+- The `library` api-client pin is not bumped. Its current release validates the id as an integer, so a UUID reaches the library only once the app takes the UUID-only client the library publishes; an integer id works on both sides of that swap.
+
+### Consumer must change
+
+- The template requires `agent-common>=2026.11.24` (the kit published by this tag). Regenerate `.template-parity.json`; regenerate `schema.d.ts` if the app does not take the template's.
+
 ## [2026.11.23] - 2026-11-06
 
 Need: every stamped app's runtime connects to Postgres as a role that is not a superuser, its password from the broker (master's decision of 06/11/2026 under the operator's delegation, from portcullis#257; consumer: master-project orchestrator, radar-hooves/app-factory#103). Godswood's two needs relayed mid-lane (godswood#928): an app already running the 2026.10 opt-in runtime role adopts with no hand step, and the runtime role reads `alembic_version`. Decision: `docs/product/P09-decisions.md` §Roles. Adoption: `docs/development/database-roles.md`.

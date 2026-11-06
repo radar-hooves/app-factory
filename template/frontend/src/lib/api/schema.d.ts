@@ -2716,7 +2716,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                document_id: number;
+                document_id: number | string;
                 persona: string;
             };
             cookie?: never;

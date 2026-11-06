@@ -148,7 +148,7 @@ class Source:
 
     n: int
     collection: str
-    document_id: int | None
+    document_id: int | str | None
     title: str
     passages: tuple[Passage, ...]
     excerpts: tuple[Passage, ...] = ()
@@ -229,7 +229,7 @@ class Collections:
         sources: builtins.list[Source],
         question: str,
         *,
-        earlier: Mapping[int, asyncio.Task[Document | None]] | None = None,
+        earlier: Mapping[int | str, asyncio.Task[Document | None]] | None = None,
     ) -> builtins.list[Source]:
         """`sources` with the text of their documents the question needs, and the `earlier` turn's documents it names.
 
@@ -247,7 +247,7 @@ class Collections:
         """
         terms = _terms(question)
         held = {source.document_id for source in sources}
-        tasks = {
+        tasks: dict[int | str, asyncio.Task[Document | None]] = {
             document_id: asyncio.ensure_future(self.document(document_id))
             for document_id in dict.fromkeys(s.document_id for s in sources[:OPENED_DOCUMENTS])
             if document_id is not None
@@ -263,7 +263,7 @@ class Collections:
             for task in tasks.values():
                 task.cancel()
             raise
-        found: dict[int, Document] = {}
+        found: dict[int | str, Document] = {}
         for document_id, task in tasks.items():
             if task not in done:
                 task.cancel()
@@ -292,7 +292,7 @@ class Collections:
                 result.append(Source(len(result) + 1, "", document_id, document.title, (), excerpts))
         return result
 
-    async def document(self, document_id: int) -> Document | None:
+    async def document(self, document_id: int | str) -> Document | None:
         """A cited document, section by section; None where the library has none this person may read.
 
         The library answers "not there" and "not yours" alike, so a document
@@ -300,7 +300,7 @@ class Collections:
         """
         async with self._api() as api:
             try:
-                detail = await api.get_caller_document(document_id=document_id, sections=True)
+                detail = await api.get_caller_document(document_id=document_id, sections=True)  # type: ignore[arg-type]  # the client's hint is int until the library's UUID client lands
             except NotFoundException:
                 return None
         title = str((detail.metadata or {}).get("title") or "").strip()
