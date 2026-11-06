@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [2026.11.21] - 2026-11-06
+## [2026.11.22] - 2026-11-06
 
 Need: no template variants, so apps are consistent unless master brings the operator a specific case, and some services need no front end (operator ruling 06/11/2026; consumer: master-project orchestrator, radar-hooves/app-factory#101); the MCP route's 500s and 503s (#77). Decisions: `docs/product/P09-decisions.md` §Shapes and slices.
 
@@ -18,6 +18,7 @@ Need: no template variants, so apps are consistent unless master brings the oper
 
 - **A caller that hangs up while `/mcp` waits on userinfo is answered 499, never 500** (#77). Cause, from Loki and Tempo: Authentik's one userinfo endpoint, which the front door also asks for every MCP request, saturates when agent sessions start (149 calls in 25 s, median 3.6 s, max 7.9 s). The transport's body read then raised `ClientDisconnect` and FastMCP's own error middleware answered 500 before 2026.11.16's catch at the gate saw it. The gate now reads an admitted request's body itself, after the auth decision; a refused one is drained without being kept, as before.
 - **A slow userinfo is waited for once, never answered 503 at 5 s** (#77): 5 s to connect, 15 s to answer, no retry queued behind the burst (seven days of Authentik's runtimes: p99 4.2 s, 12 of about 200,000 over 15 s).
+- **The element client's test loads no component.** `lib/elements/client.ts` holds the API client and the sign-in hop, and `index.ts` re-exports it beside `element` and `Overlays`, so an element's imports are unchanged. The test re-imported `index.ts` per case, and with it `bits-ui`'s whole barrel through `overlays.svelte`: 12 s for its first case in the self-test, over 20 s in a lean render, where three cases failed (run 42163106736). Measured locally: 1.3 s then about 150 ms a case before, 89 ms then 7 ms after.
 
 ### Removed
 
@@ -25,7 +26,7 @@ Need: no template variants, so apps are consistent unless master brings the oper
 
 ### Consumer must change
 
-Every app takes `mcp/http_auth.py`, `middleware.py`, `app-frame.svelte` and the factory tests, and regenerates `.template-parity.json`; a web app that declares nothing renders `main.py` unchanged. An app that gives up a slice runs `copier update --data 'omitted_slices=[...]'` and deletes the slice's files in the same commit, since copier never deletes a file `_exclude` newly hides: and regenerates `schema.d.ts`: casefile `[agent]` (no persona); the library `[agent]`, and it converges (the operator did not ratify #80): its `main.py` lags the factory and closes its own Redis client, which belongs in `app_hooks.lifespan_tasks`, and `test_route_walk.py`, `test_mcp_person_gate.py`, `mcp/dispatchers/alerts.py` and `test_alerts_api.py` are owed again; portcullis declares nothing new and keeps 29 variants, 20 of them master's of 04/11. A headless app runs `copier update --data headless=true` and deletes `frontend/`. Master's shape gate (`frontend-dir`) must read `headless` before a headless app's gate is green.
+Every app takes `mcp/http_auth.py`, `middleware.py`, `app-frame.svelte`, `lib/elements/client.ts`, `lib/elements/index.ts`, `vitest.config.ts` and the factory tests, and regenerates `.template-parity.json`; a web app that declares nothing renders `main.py` unchanged. An app that gives up a slice runs `copier update --data 'omitted_slices=[...]'` and deletes the slice's files in the same commit, since copier never deletes a file `_exclude` newly hides: and regenerates `schema.d.ts`: casefile `[agent]` (no persona); the library `[agent]`, and it converges (the operator did not ratify #80): its `main.py` lags the factory and closes its own Redis client, which belongs in `app_hooks.lifespan_tasks`, and `test_route_walk.py`, `test_mcp_person_gate.py`, `mcp/dispatchers/alerts.py` and `test_alerts_api.py` are owed again; portcullis declares nothing new and keeps 29 variants, 20 of them master's of 04/11. A headless app runs `copier update --data headless=true` and deletes `frontend/`. Master's shape gate (`frontend-dir`) must read `headless` before a headless app's gate is green.
 
 ## [2026.11.20] - 2026-11-06
 
