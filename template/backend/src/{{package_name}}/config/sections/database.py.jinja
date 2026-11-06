@@ -32,11 +32,14 @@ class DatabaseSettings(VendedSettings):
         extra="ignore",
     )
 
-    # The app's own role, not the superuser: a deployed database is created with a
-    # role named for its app and usually carries no `postgres` login at all, so a
-    # superuser default cannot connect. An app whose role differs changes THIS
-    # default — never an env file, which the debugger does not read.
-    postgres_user: str = "{{ postgres_user }}"
+    # The three roles (`db/roles.py`). The owner role runs the migrations and owns
+    # the schema; the runtime role is what the app serves as; neither is a
+    # superuser. The bootstrap superuser is the role initdb made, which the app
+    # logs in as once, at its first start, to hand the database to the owner role.
+    postgres_user: str = "{{ project_name | replace('-', '_') }}_owner"
+    postgres_runtime_user: str = "{{ project_name | replace('-', '_') }}_runtime"
+    postgres_bootstrap_user: str = "{{ postgres_user }}"
+    # The owner role's password, and the bootstrap's until that first start.
     # Empty means "read the boot-lane file, else vend it" (see `Vended` in
     # config/vend.py), not "no password". Only a deployment that supplies
     # POSTGRES_PASSWORD itself leaves this set.
@@ -44,22 +47,12 @@ class DatabaseSettings(VendedSettings):
         str,
         Vended("{{ project_name }}-db", "password", file_field="postgres_password_file"),
     ] = ""
-    # Opt-in least privilege (ISM): the role the RUNNING app connects as, one that
-    # can read and write its own tables and nothing else. Empty means the app
-    # connects as `postgres_user`, the owner, as before. Set, migrations still run
-    # as the owner and `db/grants.py` grants this role DML on the schema. The role
-    # itself is provisioned on the database host, never created here.
-    postgres_runtime_user: str = ""
-    # Vended only when a runtime user is set (`requires`), from its own credential:
-    # a deployment that does not opt in never needs a second one.
+    # Its own credential. The owner role sets the runtime role's password from it
+    # at every start, so a rotation in the broker takes effect at the next one.
+    # The boot-lane file is for the app that IS the broker and cannot vend from itself.
     postgres_runtime_password: Annotated[
         str,
-        Vended(
-            "{{ project_name }}-db-runtime",
-            "password",
-            file_field="postgres_runtime_password_file",
-            requires="postgres_runtime_user",
-        ),
+        Vended("{{ project_name }}-db-runtime", "password", file_field="postgres_runtime_password_file"),
     ] = ""
     postgres_runtime_password_file: str | None = None
     # The answered fleet-host address, NOT localhost: there is no development
@@ -103,7 +96,7 @@ class DatabaseSettings(VendedSettings):
 
     @property
     def database_url(self) -> str:
-        """Sync SQLAlchemy connection URL. A property, never a computed field: a
+        """The owner role's sync SQLAlchemy URL, which migrations use. A property, never a computed field: a
         computed field rides every `model_dump()`, and this one carries the password.
 
         User and password are percent-encoded: a generated password containing
@@ -117,12 +110,13 @@ class DatabaseSettings(VendedSettings):
 
     @property
     def runtime_database_url(self) -> str:
-        """The URL the running app's engine connects with: the runtime role when
-        `postgres_runtime_user` is set, else the owner (`database_url`). Migrations
-        never use this; they need the owner's DDL rights."""
-        if not self.postgres_runtime_user:
-            return self.database_url
+        """The URL the running app's engine connects with, as the runtime role."""
         return self._url(self.postgres_runtime_user, self.postgres_runtime_password)
+
+    @property
+    def bootstrap_database_url(self) -> str:
+        """The bootstrap superuser's URL, with the owner role's password: it answers only until the first start."""
+        return self._url(self.postgres_bootstrap_user, self.postgres_password)
 
     def _url(self, user: str, password: str) -> str:
         return (

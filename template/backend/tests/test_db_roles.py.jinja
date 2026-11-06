@@ -1,0 +1,432 @@
+"""The database's roles (`db/roles.py`): who owns what, what the runtime role may do, and the first start.
+
+The whole suite migrates as an owner role that is not a superuser and serves as the runtime role
+its first migration created (`conftest.py`), so every test here starts from that. Throwaway roles
+and databases are made with passwords generated here, never a vended credential.
+"""
+
+import secrets
+import uuid
+from collections.abc import Callable, Iterator
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.pool import NullPool
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.config import vend as vend_module
+from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, DatabaseSettings
+from {{ package_name }}.db.roles import (
+    RoleError,
+    adopt,
+    adopt_on_first_start,
+    ensure_runtime_role,
+    prove_runtime_role,
+    refuse_superuser,
+)
+from {{ package_name }}.db.session import get_engine
+
+
+def _url(user: str, password: str, database: str | None = None) -> str:
+    settings = get_settings().database
+    return DatabaseSettings(
+        postgres_user=user,
+        postgres_password=password,
+        postgres_runtime_password="unused",
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=database or settings.postgres_db,
+    ).database_url
+
+
+def _name(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:10]}"
+
+
+@pytest.fixture
+def owner_engine() -> Iterator[Engine]:
+    engine = create_engine(get_settings().database.database_url, poolclass=NullPool)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def superuser(server_url: Callable[[str], str]) -> Iterator[Engine]:
+    """The test server's own user on this worker's database; a test that needs a superuser skips without one."""
+    engine = create_engine(server_url(get_settings().database.postgres_db), poolclass=NullPool)
+    with engine.connect() as connection:
+        if not connection.execute(text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")).scalar():
+            pytest.skip("the test server's user is not a superuser")
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def scratch_role(owner_engine: Engine, superuser: Engine) -> Iterator[str]:
+    """A runtime role name the test creates with `ensure_runtime_role`; dropped afterwards with what it was granted."""
+    role = _name("rt")
+    yield role
+    with superuser.begin() as connection:
+        if connection.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": role}).scalar():
+            connection.exec_driver_sql(f'DROP OWNED BY "{role}"')
+            connection.exec_driver_sql(f'DROP ROLE "{role}"')
+
+
+def _refused(engine: Engine, statement: str) -> bool:
+    with engine.connect() as connection:
+        try:
+            connection.exec_driver_sql(statement)
+        except DBAPIError as exc:
+            return getattr(exc.orig, "sqlstate", None) == "42501"
+        finally:
+            connection.rollback()
+    return False
+
+
+def _attributes(connection: Connection, role: str) -> tuple[bool, bool]:
+    row = connection.execute(
+        text("SELECT rolsuper, rolcreaterole FROM pg_roles WHERE rolname = :role"), {"role": role}
+    ).one()
+    return bool(row[0]), bool(row[1])
+
+
+# ── The suite's own roles: what every start leaves ──────────────────────────
+
+
+def test_the_app_serves_as_the_runtime_role_and_migrates_as_an_owner_that_is_no_superuser(
+    owner_engine: Engine,
+) -> None:
+    settings = get_settings().database
+    with get_engine().connect() as connection:
+        assert connection.execute(text("SELECT current_user")).scalar() == settings.postgres_runtime_user
+        assert _attributes(connection, settings.postgres_runtime_user) == (False, False)
+    with owner_engine.connect() as connection:
+        assert _attributes(connection, settings.postgres_user) == (False, True)
+        owners = connection.execute(
+            text(
+                "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database() "
+                "UNION SELECT tableowner FROM pg_tables WHERE schemaname = 'public'"
+            )
+        ).scalars()
+        assert set(owners) == {settings.postgres_user}
+
+
+def test_the_runtime_role_reads_and_writes_an_app_table() -> None:
+    with get_engine().connect() as connection:
+        connection.execute(text("SELECT id FROM users LIMIT 1"))
+        connection.execute(
+            text(
+                "INSERT INTO deployment_environment (id, environment, stamped_at) VALUES (TRUE, 'local', NOW()) "
+                "ON CONFLICT (id) DO UPDATE SET environment = EXCLUDED.environment"
+            )
+        )
+        connection.execute(text("UPDATE deployment_environment SET stamped_at = stamped_at"))
+        connection.execute(text("DELETE FROM deployment_environment WHERE FALSE"))
+        connection.rollback()
+
+
+def test_the_runtime_role_is_refused_every_change_to_the_schema() -> None:
+    prove_runtime_role(get_settings().database.runtime_database_url)
+    engine = get_engine()
+    for statement in (
+        "ALTER TABLE deployment_environment ADD COLUMN probe integer",
+        "TRUNCATE deployment_environment",
+        "CREATE INDEX runtime_probe_idx ON deployment_environment (environment)",
+        "CREATE SCHEMA runtime_probe",
+        "DELETE FROM alembic_version",
+        "UPDATE alembic_version SET version_num = version_num",
+        "INSERT INTO alembic_version (version_num) VALUES ('probe')",
+        "TRUNCATE alembic_version",
+    ):
+        assert _refused(engine, statement), statement
+
+
+def test_the_runtime_role_reads_which_revision_the_database_is_at() -> None:
+    """An app's About page shows it; nothing the app serves may change it."""
+    with get_engine().connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
+
+
+def test_a_table_a_later_migration_creates_is_data_accessible_but_not_droppable(owner_engine: Engine) -> None:
+    """Default privileges: a release that adds a table needs nothing more."""
+    table = _name("later")
+    with owner_engine.begin() as connection:
+        connection.exec_driver_sql(f"CREATE TABLE {table} (id serial PRIMARY KEY, label text)")
+    try:
+        with get_engine().begin() as connection:
+            connection.exec_driver_sql(f"INSERT INTO {table} (label) VALUES ('a')")
+            connection.exec_driver_sql(f"UPDATE {table} SET label = 'b'")
+            assert connection.exec_driver_sql(f"SELECT label FROM {table}").scalar() == "b"
+            connection.exec_driver_sql(f"DELETE FROM {table}")
+        assert _refused(get_engine(), f"DROP TABLE {table}")
+    finally:
+        with owner_engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP TABLE {table}")
+
+
+# ── The runtime role, created and re-passworded at every start ──────────────
+
+
+def test_a_missing_runtime_role_is_created_and_its_password_follows_the_broker(
+    owner_engine: Engine, scratch_role: str
+) -> None:
+    first, second = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
+    with owner_engine.begin() as connection:
+        assert ensure_runtime_role(connection, scratch_role, first) is True
+    with create_engine(_url(scratch_role, first), poolclass=NullPool).connect() as connection:
+        assert connection.execute(text("SELECT count(*) FROM users")).scalar() is not None
+    with owner_engine.begin() as connection:
+        assert ensure_runtime_role(connection, scratch_role, second) is False
+    with pytest.raises(OperationalError, match="password authentication failed"):
+        create_engine(_url(scratch_role, first), poolclass=NullPool).connect()
+    prove_runtime_role(_url(scratch_role, second))
+
+
+def test_the_password_reaches_the_server_only_as_a_scram_verifier(
+    owner_engine: Engine, superuser: Engine, scratch_role: str
+) -> None:
+    password = secrets.token_urlsafe(24)
+    with owner_engine.begin() as connection:
+        ensure_runtime_role(connection, scratch_role, password)
+    with superuser.connect() as connection:
+        stored = connection.execute(text("SELECT rolpassword FROM pg_authid WHERE rolname = :r"), {"r": scratch_role})
+        assert stored.scalar_one().startswith("SCRAM-SHA-256$")
+
+
+def test_an_empty_runtime_password_is_refused_naming_the_role(owner_engine: Engine) -> None:
+    with owner_engine.connect() as connection, pytest.raises(RoleError, match="not vended"):
+        ensure_runtime_role(connection, "no_password_here", "")
+
+
+def test_the_runtime_role_cannot_be_the_owner(owner_engine: Engine) -> None:
+    with owner_engine.connect() as connection, pytest.raises(RoleError, match="owner role"):
+        ensure_runtime_role(connection, get_settings().database.postgres_user, "pw")
+
+
+def test_a_role_name_is_quoted_not_interpolated(owner_engine: Engine) -> None:
+    hostile = 'x"; DROP TABLE users; --'
+    with owner_engine.connect() as connection:
+        ensure_runtime_role(connection, hostile, "pw")
+        assert connection.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": hostile}).scalar() == 1
+        assert connection.execute(text("SELECT to_regclass('public.users')")).scalar() is not None
+        connection.rollback()
+
+
+def test_the_proof_names_what_the_runtime_role_was_allowed(owner_engine: Engine, scratch_role: str) -> None:
+    password = secrets.token_urlsafe(24)
+    with owner_engine.begin() as connection:
+        ensure_runtime_role(connection, scratch_role, password)
+        connection.exec_driver_sql(f'GRANT CREATE ON SCHEMA public TO "{scratch_role}"')
+    with pytest.raises(RoleError, match=r"allowed CREATE TABLE; it must be refused"):
+        prove_runtime_role(_url(scratch_role, password))
+
+
+# ── The owner role: migrations, and the first start's adoption ──────────────
+
+
+def test_migrations_refuse_a_superuser(owner_engine: Engine, superuser: Engine) -> None:
+    with superuser.connect() as connection, pytest.raises(RoleError, match="a superuser"):
+        refuse_superuser(connection)
+    with owner_engine.connect() as connection:
+        refuse_superuser(connection)
+
+
+def test_adoption_hands_everything_the_bootstrap_owns_to_the_owner(
+    superuser: Engine, server_url: Callable[[str], str]
+) -> None:
+    """Run by the test server's own bootstrap superuser, in a transaction rolled back, so its password stands."""
+    database, owner, runtime = _name("adopt"), _name("own"), _name("rt")
+    with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+        connection.exec_driver_sql(f'CREATE DATABASE "{database}"')
+    engine = create_engine(server_url(database), poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                CREATE EXTENSION pg_trgm;
+                CREATE SCHEMA extra;
+                CREATE TYPE mood AS ENUM ('calm', 'busy');
+                CREATE DOMAIN positive AS integer CHECK (VALUE > 0);
+                CREATE TYPE pair AS (left_id integer, right_id integer);
+                CREATE TABLE things (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, mood mood, size positive);
+                CREATE TABLE extra.notes (id serial PRIMARY KEY, thing_id integer REFERENCES things (id));
+                CREATE SEQUENCE tickets;
+                CREATE VIEW calm_things AS SELECT id FROM things WHERE mood = 'calm';
+                CREATE MATERIALIZED VIEW thing_count AS SELECT count(*) AS n FROM things;
+                CREATE FUNCTION touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+                CREATE STATISTICS thing_stats ON mood, size FROM things;
+                CREATE COLLATION plain FROM "C";
+                CREATE TEXT SEARCH DICTIONARY words (TEMPLATE = simple);
+                CREATE TEXT SEARCH CONFIGURATION search (COPY = simple);
+                """
+            )
+        with engine.connect() as connection:
+            bootstrap = connection.execute(text("SELECT current_user")).scalar_one()
+            # A runtime role the bootstrap made before, as the opt-in shape of 2026.10 had a deployment
+            # do, here with an attribute and a membership the owner could not take away.
+            connection.exec_driver_sql(f'CREATE ROLE "{runtime}" LOGIN CREATEDB IN ROLE pg_read_all_data')
+            moved = adopt(connection, owner, secrets.token_urlsafe(24), runtime)
+            # The schema, three types, two tables, the free sequence, two views, the function, the
+            # statistics, the collation and the two text search objects.
+            assert moved == 14
+            owners = connection.execute(
+                text(
+                    "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database() "
+                    "UNION SELECT pg_get_userbyid(relowner) FROM pg_class "
+                    "WHERE relname IN ('things', 'things_id_seq', 'notes', 'notes_id_seq', 'tickets', "
+                    "'calm_things', 'thing_count') "
+                    "UNION SELECT pg_get_userbyid(typowner) FROM pg_type WHERE typname IN ('mood', 'positive', 'pair') "
+                    "UNION SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE proname = 'touch' "
+                    "UNION SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'extra' "
+                    "UNION SELECT pg_get_userbyid(stxowner) FROM pg_statistic_ext WHERE stxname = 'thing_stats' "
+                    "UNION SELECT pg_get_userbyid(collowner) FROM pg_collation WHERE collname = 'plain' "
+                    "UNION SELECT pg_get_userbyid(dictowner) FROM pg_ts_dict WHERE dictname = 'words' "
+                    "UNION SELECT pg_get_userbyid(cfgowner) FROM pg_ts_config WHERE cfgname = 'search'"
+                )
+            ).scalars()
+            assert set(owners) == {owner}
+            # An extension's members stay its installer's; the system catalogs stay the bootstrap's.
+            assert (
+                connection.execute(
+                    text("SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE proname = 'similarity'")
+                ).scalar()
+                == bootstrap
+            )
+            assert _attributes(connection, owner) == (False, True)
+            stripped = connection.execute(
+                text(
+                    "SELECT rolcreatedb OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member = r.oid) "
+                    "FROM pg_roles r WHERE rolname = :r"
+                ),
+                {"r": runtime},
+            )
+            assert stripped.scalar() is False
+            # The owner role can now set that runtime role's password, as every start does.
+            connection.exec_driver_sql(f'SET ROLE "{owner}"')
+            connection.exec_driver_sql(f"ALTER ROLE \"{runtime}\" WITH LOGIN PASSWORD 'rotated'")
+            connection.exec_driver_sql("RESET ROLE")
+            closed = connection.execute(
+                text("SELECT rolpassword IS NULL FROM pg_authid WHERE rolname = :r"), {"r": bootstrap}
+            )
+            assert closed.scalar() is True
+            connection.rollback()
+            reopened = connection.execute(
+                text("SELECT rolpassword IS NULL FROM pg_authid WHERE rolname = :r"), {"r": bootstrap}
+            )
+            assert reopened.scalar() is False
+    finally:
+        engine.dispose()
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+
+
+def test_adoption_needs_a_superuser_and_an_owner_that_is_not_the_bootstrap(
+    owner_engine: Engine, superuser: Engine
+) -> None:
+    with owner_engine.connect() as connection, pytest.raises(RoleError, match="not one"):
+        adopt(connection, _name("own"), "pw", _name("rt"))
+    with superuser.connect() as connection, pytest.raises(RoleError, match="cannot be the bootstrap"):
+        adopt(connection, connection.execute(text("SELECT current_user")).scalar_one(), "pw", _name("rt"))
+
+
+def test_the_first_start_adopts_a_database_its_owner_role_cannot_log_in_to(
+    superuser: Engine, server_url: Callable[[str], str]
+) -> None:
+    """A throwaway bootstrap superuser, as initdb leaves one, and a runtime role it made; the owner role takes its password."""
+    database, bootstrap, owner, runtime = _name("first"), _name("boot"), _name("own"), _name("rt")
+    password = secrets.token_urlsafe(24)
+    settings = get_settings().database
+    first_start = DatabaseSettings(
+        postgres_user=owner,
+        postgres_password=password,
+        postgres_bootstrap_user=bootstrap,
+        postgres_runtime_user=runtime,
+        postgres_runtime_password="unused",
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=database,
+    )
+    with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+        connection.exec_driver_sql(f"CREATE ROLE \"{bootstrap}\" SUPERUSER LOGIN PASSWORD '{password}'")
+        connection.exec_driver_sql(f'CREATE DATABASE "{database}" OWNER "{bootstrap}"')
+        connection.exec_driver_sql(f'CREATE ROLE "{runtime}" LOGIN CREATEDB IN ROLE pg_read_all_data')
+    try:
+        with create_engine(first_start.bootstrap_database_url, poolclass=NullPool).begin() as connection:
+            connection.exec_driver_sql("CREATE TABLE ledger (id integer PRIMARY KEY)")
+            connection.exec_driver_sql("CREATE TABLE alembic_version (version_num varchar(32) PRIMARY KEY)")
+            connection.exec_driver_sql("CREATE TABLE deployment_environment (id boolean PRIMARY KEY, environment text)")
+            # More than DML, as a hand grant may have given it: every start takes it back.
+            connection.exec_driver_sql(f'GRANT ALL ON ALL TABLES IN SCHEMA public TO "{runtime}"')
+        assert adopt_on_first_start(first_start) == 3
+        assert adopt_on_first_start(first_start) is None
+        with pytest.raises(OperationalError, match="password authentication failed"):
+            create_engine(first_start.bootstrap_database_url, poolclass=NullPool).connect()
+        rotated = secrets.token_urlsafe(24)
+        with create_engine(first_start.database_url, poolclass=NullPool).begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE ledger ADD COLUMN note text")
+            assert ensure_runtime_role(connection, runtime, rotated) is False
+        prove_runtime_role(_url(runtime, rotated, database))
+    finally:
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+            for role in (runtime, owner, bootstrap):
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+
+
+def test_a_wrong_owner_password_is_no_first_start() -> None:
+    """Both logins refused: the owner's own error, saying the bootstrap refused it too.
+
+    A bootstrap and a database that do not exist, so nothing could change even on a server that trusts every login.
+    """
+    settings = get_settings().database
+    wrong = DatabaseSettings(
+        postgres_user=settings.postgres_user,
+        postgres_password="not-the-password",
+        postgres_bootstrap_user=_name("boot"),
+        postgres_runtime_password="unused",
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=_name("nothing"),
+    )
+    with pytest.raises(OperationalError, match=settings.postgres_user) as caught:
+        adopt_on_first_start(wrong)
+    assert any("refused it too" in note for note in getattr(caught.value, "__notes__", []))
+
+
+# ── Settings ─────────────────────────────────────────────────────────────────
+
+
+def test_the_roles_are_named_for_the_app_and_the_bootstrap_is_the_answered_role() -> None:
+    fields = DatabaseSettings.model_fields
+    assert fields["postgres_user"].default == "{{ project_name | replace('-', '_') }}_owner"
+    assert fields["postgres_runtime_user"].default == "{{ project_name | replace('-', '_') }}_runtime"
+    assert fields["postgres_bootstrap_user"].default == "{{ postgres_user }}"
+
+
+def test_each_url_names_its_role_and_percent_encodes_it() -> None:
+    settings = DatabaseSettings(
+        postgres_user="owner",
+        postgres_password="o@w:d",
+        postgres_runtime_user="app",
+        postgres_runtime_password="p@ss:w/rd",
+        postgres_bootstrap_user="boot",
+    )
+    assert settings.database_url.startswith(f"{SQLALCHEMY_SCHEME}://owner:o%40w%3Ad@")
+    assert settings.runtime_database_url.startswith(f"{SQLALCHEMY_SCHEME}://app:p%40ss%3Aw%2Frd@")
+    assert settings.bootstrap_database_url.startswith(f"{SQLALCHEMY_SCHEME}://boot:o%40w%3Ad@")
+
+
+def test_the_runtime_password_vends_under_its_own_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(vend_module._VEND_SWITCH_ENV, raising=False)  # conftest defaults it off for the suite
+    calls: list[tuple[str, str]] = []
+
+    def fake_vend(credential: str, field: str) -> str:
+        calls.append((credential, field))
+        return "vended"
+
+    monkeypatch.setattr(vend_module, "vend", fake_vend)
+    settings = DatabaseSettings(postgres_password="owner-pw", postgres_runtime_password="")
+    assert calls == [("{{ project_name }}-db-runtime", "password")]
+    assert settings.postgres_runtime_password == "vended"

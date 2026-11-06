@@ -4,6 +4,31 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.23] - 2026-11-06
+
+Need: every stamped app's runtime connects to Postgres as a role that is not a superuser, its password from the broker (master's decision of 06/11/2026 under the operator's delegation, from portcullis#257; consumer: master-project orchestrator, radar-hooves/app-factory#103). Godswood's two needs relayed mid-lane (godswood#928): an app already running the 2026.10 opt-in runtime role adopts with no hand step, and the runtime role reads `alembic_version`. Decision: `docs/product/P09-decisions.md` §Roles. Adoption: `docs/development/database-roles.md`.
+
+### Changed
+
+- **Three roles, none of them serving as a superuser.** `POSTGRES_USER` defaults to `<app>_owner`, which runs the migrations and owns the schema (CREATEROLE, nothing more). `POSTGRES_RUNTIME_USER` defaults to `<app>_runtime`, which the app's engine connects as: DML on the app's tables and sequences, `SELECT` on `alembic_version`, no DDL. `POSTGRES_BOOTSTRAP_USER` defaults to the `postgres_user` answer, initdb's superuser. Migrations refuse to run as a superuser.
+- **The first start on this release adopts the database** (`db/roles.py`, run by `alembic/env.py`). If the owner's login is refused for its password, the app logs in as the bootstrap with the same `<app>-db` password and, in one transaction, creates the owner, moves the database and everything the bootstrap owns to it, and takes the bootstrap's password away. A runtime role made earlier loses every attribute and membership and comes into the owner's charge in the same transaction.
+- **Every start creates the runtime role if it is missing**, sets its password from the broker's `<app>-db-runtime` (hashed to a SCRAM verifier in the app), revokes all it holds and grants DML back, then proves it. The runtime role is made to try `CREATE TABLE`, `DROP TABLE`, `ALTER ROLE`, `COPY … PROGRAM`, `TRUNCATE` and `CREATE TRIGGER`, each rolled back; if any is not refused, or the role holds an attribute or a membership, the start stops. The `alembic.roles` log lines record it.
+- **The test suite runs as production does.** It migrates as a non-superuser owner and serves as the runtime role. The server's own user makes the owner role and the databases. The scoping test's throwaway tables are `TEMPORARY`.
+- `db/grants.py` is `db/roles.py`; `test_db_runtime_role.py` is `test_db_roles.py`, which adopts on the test server's own bootstrap superuser in a transaction it rolls back.
+
+### Removed
+
+- The empty-means-owner opt-in, and `Vended.requires`, which only it used.
+
+### Consumer must change
+
+Every app adopts in its own window by `docs/development/database-roles.md`, portcullis first. It takes `db/roles.py` (copier deletes `db/grants.py`), `config/sections/database.py`, `config/vend.py`, `alembic/env.py`, `conftest.py`, `support/explicit_server_guard.py` and the factory tests, and regenerates `.template-parity.json`.
+
+- **Start-time refusals.** The new release will not start until its stack has dropped `POSTGRES_USER: <bootstrap>` and vends `POSTGRES_RUNTIME_PASSWORD` from `<app>-db-runtime`, minted in the broker and granted to the app's identity. A `pg_hba.conf` that names roles must admit `<app>_owner` and `<app>_runtime`.
+- After the first start the bootstrap has no password. Nothing may log in as it over TCP; dumps and restores reach it through the container's socket. A migration that creates an untrusted extension needs it created by hand through the socket first.
+- The app's own tests serve as the runtime role. A table made through the session must be `TEMPORARY`. A teardown that `TRUNCATE`s uses `DELETE` or the owner's engine.
+- The app's own `.github/image-smoke.sh` adds `-e POSTGRES_RUNTIME_USER=postgres -e POSTGRES_RUNTIME_PASSWORD="$pgpass"`.
+
 ## [2026.11.22] - 2026-11-06
 
 Need: no template variants, so apps are consistent unless master brings the operator a specific case, and some services need no front end (operator ruling 06/11/2026; consumer: master-project orchestrator, radar-hooves/app-factory#101); the MCP route's 500s and 503s (#77). Decisions: `docs/product/P09-decisions.md` §Shapes and slices.

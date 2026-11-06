@@ -6,6 +6,7 @@ per-session Postgres testcontainer — the household hermetic-test pattern
 """
 
 import atexit
+import hashlib
 import json
 import logging
 import os
@@ -264,10 +265,25 @@ def _resolve_test_server() -> dict[str, str]:
 
 
 _TEST_SERVER = _resolve_test_server()
-os.environ["POSTGRES_USER"] = _TEST_SERVER["user"]
+
+# The suite connects as a deployment does (`db/roles.py`): the migrations as an owner role
+# that is not a superuser, the app as the runtime role the first migration creates. The
+# server's own user makes the owner role and the databases, and nothing else. The passwords
+# derive from the server's, so every process of a run agrees on them.
+TEST_OWNER = "{{ package_name }}_test_owner"
+TEST_RUNTIME = "{{ package_name }}_test_runtime"
+
+
+def _role_password(role: str) -> str:
+    return hashlib.sha256(f"{_TEST_SERVER['password']}:{role}".encode()).hexdigest()
+
+
+os.environ["POSTGRES_USER"] = TEST_OWNER
+os.environ["POSTGRES_PASSWORD"] = _role_password(TEST_OWNER)
+os.environ["POSTGRES_RUNTIME_USER"] = TEST_RUNTIME
+os.environ["POSTGRES_RUNTIME_PASSWORD"] = _role_password(TEST_RUNTIME)
 os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
 os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
-os.environ["POSTGRES_PASSWORD"] = _TEST_SERVER["password"]
 os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
 # ── THE extension point for this file (canonical-app-shape.md §Extension Points)
@@ -357,16 +373,22 @@ def _ensure_test_database_ready() -> None:
     from {{ package_name }}.config import get_settings
 
     settings = get_settings().database
-    maintenance_url = settings.database_url.rsplit("/", 1)[0] + "/postgres"
-    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    engine = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as conn:
-            exists = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": TEST_DATABASE_NAME}
-            ).scalar()
-            if not exists:
-                logging.info("Creating test database %s", TEST_DATABASE_NAME)
-                conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}"'))
+            # The owner role as a deployment's first start leaves it: not a superuser, CREATEROLE
+            # so the first migration can create the runtime role. Reset where an earlier run made it.
+            exists = conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": TEST_OWNER}).scalar()
+            conn.execute(
+                text(
+                    f'{"ALTER" if exists else "CREATE"} ROLE "{TEST_OWNER}" '
+                    f"WITH LOGIN CREATEROLE NOSUPERUSER PASSWORD '{_role_password(TEST_OWNER)}'"
+                )
+            )
+            # Dropped first rather than reused, as a worker's copy is: on an explicit server an
+            # earlier run's database is still there, owned by whoever made it then.
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}" OWNER "{TEST_OWNER}"'))
     finally:
         engine.dispose()
 
@@ -418,16 +440,26 @@ def _copy_test_database(template: str) -> None:
     """
     from sqlalchemy import create_engine, text
 
-    from {{ package_name }}.config import get_settings
-
-    maintenance_url = get_settings().database.database_url.rsplit("/", 1)[0] + "/postgres"
-    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    engine = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as conn:
             conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)'))
-            conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}" TEMPLATE "{template}"'))
+            conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}" TEMPLATE "{template}" OWNER "{TEST_OWNER}"'))
     finally:
         engine.dispose()
+
+
+def _maintenance_url(database: str = "postgres") -> str:
+    """The test server's own user, by default on its maintenance database: what makes the owner role and the databases."""
+    from tests.support.explicit_server_guard import explicit_server_url
+
+    return explicit_server_url(_TEST_SERVER, database)
+
+
+@pytest.fixture
+def server_url() -> Callable[[str], str]:
+    """A URL as the test server's own user, to the database named: for a test that makes roles (`test_db_roles.py`)."""
+    return _maintenance_url
 
 
 def pytest_configure(config: pytest.Config) -> None:

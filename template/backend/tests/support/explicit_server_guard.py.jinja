@@ -48,11 +48,11 @@ def partial_quartet_warning(explicit: dict[str, str | None]) -> str | None:
 
 
 def explicit_server_url(explicit: dict[str, str], dbname: str) -> str:
-    """Build a connection URL to a database on the explicit test server.
+    """Build a connection URL to a database on the test server, as the server's own user.
 
     Mirrors ``DatabaseSettings.database_url`` (``config/sections/database.py``)
-    without going through ``get_settings()`` -- the caller (``conftest.py``)
-    has not assigned ``POSTGRES_*`` env vars at the point this runs.
+    without going through ``get_settings()``, whose user is the suite's owner
+    role, not the server's.
     """
     username = quote_plus(explicit["user"])
     password = quote_plus(explicit["password"])

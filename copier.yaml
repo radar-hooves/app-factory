@@ -99,7 +99,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_agent_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_app_posture.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
-  - "{% if not factory_selftest %}backend/tests/test_db_runtime_role.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_db_roles.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_explicit_test_server_guard.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_exchange.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
@@ -204,7 +204,7 @@ _migrations:
       - backend/tests/test_agent_settings.py
       - backend/tests/test_app_posture.py
       - backend/tests/test_database_settings.py
-      - backend/tests/test_db_runtime_role.py
+      - backend/tests/test_db_roles.py
       - backend/tests/test_explicit_test_server_guard.py
       - backend/tests/test_exchange.py
       - backend/tests/test_fanout.py
@@ -506,7 +506,7 @@ postgres_user:
   when: "{{ skeleton == 'web' }}"
   default: "{{ project_name | replace('-', '_') }}"
   help: >-
-    Role this app's database was CREATED with. Almost always the app's own name, but two of the fleet's databases were built with the superuser and answer to `postgres` — read it off the live server rather than assuming, because a wrong role fails as a password error and sends you hunting the wrong thing. It is an answer rather than a code default because development holds no env file: this value IS the configuration.
+    Role this app's database was CREATED with: its bootstrap superuser, which the app logs in as once, at its first start, to hand the database to its owner role (`<app>_owner`; the app serves as `<app>_runtime`, docs/development/database-roles.md). Almost always the app's own name, but two of the fleet's databases were built with the superuser and answer to `postgres` — read it off the live server rather than assuming, because a wrong role fails as a password error and sends you hunting the wrong thing.
 
 
 postgres_port:

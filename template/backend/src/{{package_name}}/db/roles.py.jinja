@@ -1,0 +1,303 @@
+"""The database's three roles, and the rights each holds (app-factory `docs/product/P09-decisions.md` §Roles).
+
+- The **bootstrap superuser** (`postgres_bootstrap_user`) is the role initdb made. It keeps
+  initdb and restores, through the database container's own socket, and has no password.
+- The **owner role** (`postgres_user`) runs the migrations and owns the database, its schemas
+  and every object in them. Not a superuser; CREATEROLE, so it can create and re-password the
+  runtime role, and nothing else (Postgres 16 and later confine CREATEROLE to the roles it made).
+- The **runtime role** (`postgres_runtime_user`) is what the app serves as: DML on the app's
+  tables and sequences, a read of which revision the database is at, and no DDL.
+
+`alembic/env.py` runs these at every start, in order: `adopt_on_first_start`, `refuse_superuser`,
+the migrations, `ensure_runtime_role` and `prove_runtime_role`.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
+
+from psycopg import sql
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.pool import NullPool
+
+if TYPE_CHECKING:
+    from {{ package_name }}.config.sections.database import DatabaseSettings
+
+#: What `prove_runtime_role` has the runtime role try, each refused as insufficient privilege
+#: (SQLSTATE 42501) or the start fails. Each runs in a transaction that is rolled back.
+REFUSED = {
+    "CREATE TABLE": "CREATE TABLE runtime_role_probe (id integer)",
+    "DROP TABLE": "DROP TABLE alembic_version",
+    "ALTER ROLE": "ALTER ROLE CURRENT_USER CREATEROLE",
+    "COPY ... PROGRAM": "COPY (SELECT 1) TO PROGRAM 'true'",
+    "TRUNCATE": "TRUNCATE deployment_environment",
+    "CREATE TRIGGER": (
+        "CREATE TRIGGER runtime_role_probe BEFORE UPDATE ON deployment_environment"
+        " FOR EACH ROW EXECUTE FUNCTION suppress_redundant_updates_trigger()"
+    ),
+}
+
+_INSUFFICIENT_PRIVILEGE = "42501"
+# Every schema but the system's. `pg_has_role` counts the public schema of Postgres 15 and later,
+# which `pg_database_owner` owns, as the database owner's.
+_APP_SCHEMA = "n.nspname NOT LIKE 'pg\\_%' AND n.nspname <> 'information_schema'"
+_NOT_EXTENSION_MEMBER = (
+    "NOT EXISTS (SELECT 1 FROM pg_depend d"
+    " WHERE d.classid = {catalog}::regclass AND d.objid = {oid} AND d.deptype = 'e')"
+)
+# What the bootstrap superuser owns in this database outside the system schemas and extensions:
+# what adoption moves to the owner role, and what must be left of it afterwards (nothing). A
+# sequence a column owns follows its table. Operators, operator classes, large objects, foreign
+# servers, publications and event triggers stay the bootstrap's: no app makes them outside an extension.
+_BOOTSTRAP_OWNED = f"""
+SELECT 'SCHEMA', quote_ident(n.nspname) FROM pg_namespace n
+WHERE n.nspowner = :bootstrap AND {_APP_SCHEMA} AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_namespace'", oid="n.oid")}
+UNION ALL
+SELECT CASE c.relkind WHEN 'v' THEN 'VIEW' WHEN 'm' THEN 'MATERIALIZED VIEW' WHEN 'S' THEN 'SEQUENCE'
+       WHEN 'f' THEN 'FOREIGN TABLE' ELSE 'TABLE' END, c.oid::regclass::text
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relowner = :bootstrap AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f') AND {_APP_SCHEMA}
+  AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_class'", oid="c.oid")}
+  AND NOT (c.relkind = 'S' AND EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass
+           AND d.objid = c.oid AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')))
+UNION ALL
+SELECT CASE t.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END, t.oid::regtype::text
+FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+WHERE t.typowner = :bootstrap AND t.typtype IN ('e', 'd', 'r', 'c') AND {_APP_SCHEMA}
+  AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_type'", oid="t.oid")}
+  AND (t.typtype <> 'c' OR (SELECT relkind FROM pg_class WHERE oid = t.typrelid) = 'c')
+UNION ALL
+SELECT 'ROUTINE', p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.proowner = :bootstrap AND {_APP_SCHEMA} AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_proc'", oid="p.oid")}
+UNION ALL
+SELECT 'STATISTICS', quote_ident(n.nspname) || '.' || quote_ident(s.stxname)
+FROM pg_statistic_ext s JOIN pg_namespace n ON n.oid = s.stxnamespace
+WHERE s.stxowner = :bootstrap AND {_APP_SCHEMA}
+UNION ALL
+SELECT 'COLLATION', c.oid::regcollation::text FROM pg_collation c JOIN pg_namespace n ON n.oid = c.collnamespace
+WHERE c.collowner = :bootstrap AND {_APP_SCHEMA} AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_collation'", oid="c.oid")}
+UNION ALL
+SELECT 'TEXT SEARCH CONFIGURATION', c.oid::regconfig::text
+FROM pg_ts_config c JOIN pg_namespace n ON n.oid = c.cfgnamespace
+WHERE c.cfgowner = :bootstrap AND {_APP_SCHEMA} AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_ts_config'", oid="c.oid")}
+UNION ALL
+SELECT 'TEXT SEARCH DICTIONARY', td.oid::regdictionary::text
+FROM pg_ts_dict td JOIN pg_namespace n ON n.oid = td.dictnamespace
+WHERE td.dictowner = :bootstrap AND {_APP_SCHEMA} AND {_NOT_EXTENSION_MEMBER.format(catalog="'pg_ts_dict'", oid="td.oid")}
+"""
+
+
+class RoleError(RuntimeError):
+    """A role is missing, has rights it must not, or lacks one it needs."""
+
+
+def _execute(connection: Connection, statement: sql.Composable) -> None:
+    """Run a statement composed with psycopg's quoting, through SQLAlchemy so its transaction holds it.
+
+    Never `text()`: it reads `:name` as a bind parameter, and a SCRAM verifier carries colons.
+    """
+    connection.exec_driver_sql(statement.as_string(_dbapi(connection)))
+
+
+def _dbapi(connection: Connection) -> Any:
+    return cast(Any, connection.connection.dbapi_connection)
+
+
+def _password(connection: Connection, role: str, password: str) -> sql.Composable:
+    """The role's password as a SCRAM verifier, hashed here, so the server is never sent the plaintext."""
+    if not password:
+        raise RoleError(f"The password for database role {role!r} is empty: its broker credential was not vended.")
+    return sql.Literal(_dbapi(connection).pgconn.encrypt_password(password.encode(), role.encode()).decode())
+
+
+def _role_exists(connection: Connection, role: str) -> bool:
+    return bool(connection.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": role}).scalar())
+
+
+def _is_superuser(connection: Connection) -> tuple[str, bool]:
+    row = connection.execute(text("SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user")).one()
+    return str(row[0]), bool(row[1])
+
+
+def adopt(connection: Connection, owner: str, password: str, runtime: str) -> int:
+    """On the bootstrap superuser's connection: make `owner` own everything, and close the bootstrap's login.
+
+    Creates the owner role (or aligns one that exists) with `password`, moves the database and every
+    schema, table, view, sequence, type and routine the bootstrap owns to it, and removes the
+    bootstrap's password, so it logs in only through the database container's socket. A `runtime`
+    role made before (the opt-in shape of 2026.10) loses every attribute and membership and is put
+    in the owner's charge as one it had created, so `ensure_runtime_role` can set its password. One
+    transaction: the caller commits, and a failure leaves nothing changed. Returns how many objects
+    moved.
+
+    Object by object, because Postgres refuses `REASSIGN OWNED BY` for the bootstrap superuser,
+    which owns the system catalogs.
+    """
+    bootstrap, superuser = _is_superuser(connection)
+    if not superuser:
+        raise RoleError(f"Adopting the database needs its bootstrap superuser; {bootstrap!r} is not one.")
+    if owner == bootstrap:
+        raise RoleError(
+            f"The owner role cannot be the bootstrap superuser {bootstrap!r}: set POSTGRES_USER to the owner role."
+        )
+    verb = "ALTER" if _role_exists(connection, owner) else "CREATE"
+    _execute(
+        connection,
+        sql.SQL(
+            verb + " ROLE {} WITH LOGIN CREATEROLE NOSUPERUSER NOCREATEDB NOREPLICATION NOBYPASSRLS PASSWORD {}"
+        ).format(sql.Identifier(owner), _password(connection, owner, password)),
+    )
+    if _role_exists(connection, runtime):
+        # Stripped of whatever it was given, which the owner could not take away, then put in the
+        # owner's charge as CREATEROLE leaves a role's creator: ADMIN alone, never its privileges.
+        role = sql.Identifier(runtime)
+        _execute(
+            connection,
+            sql.SQL("ALTER ROLE {} WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS").format(role),
+        )
+        memberships = connection.execute(
+            text("SELECT roleid::regrole::text FROM pg_auth_members WHERE member = to_regrole(:role)"),
+            {"role": runtime},
+        ).scalars()
+        for granted in memberships.all():
+            _execute(connection, sql.SQL("REVOKE {} FROM {}").format(sql.SQL(granted), role))
+        _execute(
+            connection,
+            sql.SQL("GRANT {} TO {} WITH ADMIN TRUE, INHERIT FALSE, SET FALSE").format(role, sql.Identifier(owner)),
+        )
+    database = connection.execute(text("SELECT current_database()")).scalar_one()
+    _execute(
+        connection, sql.SQL("ALTER DATABASE {} OWNER TO {}").format(sql.Identifier(database), sql.Identifier(owner))
+    )
+    bootstrap_oid = connection.execute(text("SELECT oid FROM pg_roles WHERE rolname = current_user")).scalar_one()
+    owned = connection.execute(text(_BOOTSTRAP_OWNED), {"bootstrap": bootstrap_oid}).all()
+    for kind, name in owned:
+        # `name` is quote_ident, regclass, regtype or regprocedure output: already quoted for SQL.
+        _execute(
+            connection, sql.SQL("ALTER {} {} OWNER TO {}").format(sql.SQL(kind), sql.SQL(name), sql.Identifier(owner))
+        )
+    left = connection.execute(text(_BOOTSTRAP_OWNED), {"bootstrap": bootstrap_oid}).all()
+    if left:
+        raise RoleError(
+            f"{bootstrap!r} still owns {', '.join(f'{kind} {name}' for kind, name in left)} after adoption."
+        )
+    _execute(connection, sql.SQL("ALTER ROLE {} PASSWORD NULL").format(sql.Identifier(bootstrap)))
+    return len(owned)
+
+
+def adopt_on_first_start(database: DatabaseSettings) -> int | None:
+    """Adopt the database if the owner role cannot log in yet and the bootstrap superuser can.
+
+    A database the owner role has never owned (a release's first start, or a fresh initdb) still
+    answers the app's password as the bootstrap's, since the owner role takes that same credential.
+    Only a refused password counts: a refused address (`pg_hba.conf`) or an unreachable server
+    raises as it is. Returns how many objects moved, or None when the owner logged in.
+    """
+    try:
+        create_engine(database.database_url, poolclass=NullPool).connect().close()
+        return None
+    except OperationalError as exc:
+        if "password authentication failed" not in str(exc.orig):
+            raise
+        refused = exc
+    try:
+        with create_engine(database.bootstrap_database_url, poolclass=NullPool).begin() as connection:
+            return adopt(connection, database.postgres_user, database.postgres_password, database.postgres_runtime_user)
+    except OperationalError as exc:
+        if "password authentication failed" not in str(exc.orig):
+            raise
+        refused.add_note(
+            f"The bootstrap role {database.postgres_bootstrap_user!r} refused it too, so this is no first start: "
+            "the owner role's password is not the one the broker vends."
+        )
+        raise refused from None
+
+
+def refuse_superuser(connection: Connection) -> None:
+    """Refuse to migrate as a superuser: the bootstrap is for initdb and restores alone."""
+    user, superuser = _is_superuser(connection)
+    if superuser:
+        raise RoleError(
+            f"Migrations connect as {user!r}, a superuser. They run as the owner role, which is not one "
+            "(app-factory P09 §Roles): leave POSTGRES_USER at the stamped owner role."
+        )
+
+
+def ensure_runtime_role(connection: Connection, role: str, password: str) -> bool:
+    """On the owner's connection: create the runtime role if it is missing, set its password, and grant it DML.
+
+    The password is set from the broker at every start, so a rotation takes effect at the next
+    one. The runtime role reads and writes every table and sequence in the owner's schemas, and
+    tables a later migration creates (default privileges); it creates nothing, and reads the
+    migration table without writing it. Idempotent. Returns whether the role was created.
+    """
+    if role == connection.execute(text("SELECT current_user")).scalar_one():
+        raise RoleError(
+            f"The runtime role cannot be the owner role {role!r}: set POSTGRES_RUNTIME_USER to its own role."
+        )
+    created = not _role_exists(connection, role)
+    _execute(
+        connection,
+        sql.SQL(("CREATE" if created else "ALTER") + " ROLE {} WITH LOGIN PASSWORD {}").format(
+            sql.Identifier(role), _password(connection, role, password)
+        ),
+    )
+    runtime = sql.Identifier(role)
+    schemas = connection.execute(
+        text(f"SELECT n.nspname FROM pg_namespace n WHERE pg_has_role(n.nspowner, 'USAGE') AND {_APP_SCHEMA}")
+    ).scalars()
+    for name in schemas:
+        schema = sql.Identifier(name)
+        for statement in (
+            # Only what is granted below: a runtime role made before may hold more.
+            "REVOKE ALL ON ALL TABLES IN SCHEMA {schema} FROM {runtime}",
+            "REVOKE ALL ON ALL SEQUENCES IN SCHEMA {schema} FROM {runtime}",
+            "REVOKE ALL ON SCHEMA {schema} FROM {runtime}",
+            "GRANT USAGE ON SCHEMA {schema} TO {runtime}",
+            # PUBLIC held CREATE on `public` until Postgres 15, and a database restored from then still grants it.
+            "REVOKE CREATE ON SCHEMA {schema} FROM PUBLIC, {runtime}",
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {schema} TO {runtime}",
+            "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {schema} TO {runtime}",
+        ):
+            _execute(connection, sql.SQL(statement).format(schema=schema, runtime=runtime))
+    for statement in (
+        "ALTER DEFAULT PRIVILEGES GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {runtime}",
+        "ALTER DEFAULT PRIVILEGES GRANT USAGE, SELECT ON SEQUENCES TO {runtime}",
+        # Which revision the database is at is the app's to show (an About page), never to change.
+        "REVOKE ALL ON public.alembic_version FROM {runtime}",
+        "GRANT SELECT ON public.alembic_version TO {runtime}",
+    ):
+        _execute(connection, sql.SQL(statement).format(runtime=runtime))
+    return created
+
+
+def prove_runtime_role(url: str) -> None:
+    """Connect as the runtime role and raise unless it holds no attribute, belongs to no role, and is refused all of `REFUSED`."""
+    engine = create_engine(url, poolclass=NullPool)
+    allowed: list[str] = []
+    with engine.connect() as connection:
+        role, *attributes = connection.execute(
+            text(
+                "SELECT current_user, rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls, "
+                "EXISTS (SELECT 1 FROM pg_auth_members WHERE member = to_regrole(current_user)) "
+                "FROM pg_roles WHERE rolname = current_user"
+            )
+        ).one()
+        if any(attributes):
+            raise RoleError(
+                f"The runtime role {role!r} holds a role attribute or belongs to a role; it must do neither."
+            )
+        for label, statement in REFUSED.items():
+            try:
+                connection.exec_driver_sql(statement)
+            except DBAPIError as exc:
+                if getattr(exc.orig, "sqlstate", None) != _INSUFFICIENT_PRIVILEGE:
+                    raise
+            else:
+                allowed.append(label)
+            finally:
+                connection.rollback()
+    if allowed:
+        raise RoleError(f"The runtime role {role!r} was allowed {', '.join(allowed)}; it must be refused.")

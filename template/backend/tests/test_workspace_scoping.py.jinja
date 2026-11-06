@@ -70,6 +70,7 @@ class ScopedRow(ProbeBase, WorkspaceScoped):
     """
 
     __tablename__ = "scoped_rows_test"
+    __table_args__ = ({"prefixes": ["TEMPORARY"]},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -81,6 +82,7 @@ class TaxonomyRow(ProbeBase, SharedReference):
     """A shared taxonomy, for proving the third bucket behaves. Same treatment."""
 
     __tablename__ = "taxonomy_rows_test"
+    __table_args__ = ({"prefixes": ["TEMPORARY"]},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -92,6 +94,7 @@ class PlainRow(ProbeBase):
     """An unscoped model, standing in for an identity or reference table."""
 
     __tablename__ = "plain_rows_test"
+    __table_args__ = ({"prefixes": ["TEMPORARY"]},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -99,7 +102,8 @@ class PlainRow(ProbeBase):
 
 @pytest.fixture
 def tables(session: Session) -> None:
-    """Create the throwaway tables inside the test's own transaction."""
+    """Create the throwaway tables inside the test's own transaction, as temporary tables: the app's runtime
+    role, which the session connects as, creates nothing in the app's schema (`db/roles.py`)."""
     # cast: the declarative __table__ is typed as FromClause, which has no create().
     cast(Table, ScopedRow.__table__).create(session.connection())
     cast(Table, TaxonomyRow.__table__).create(session.connection())
