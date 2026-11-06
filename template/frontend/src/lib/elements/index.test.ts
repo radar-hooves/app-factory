@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The element's API client (`index.ts`): a signed-out answer makes the page's
+ * The element's API client (`client.ts`, which `index.ts` re-exports): a signed-out answer makes the page's
  * one sign-in hop, never a second. Each test takes a fresh module, because the
  * hop in progress is held at module scope for every element on the page.
  * `baseUrl` and `fetch` go per request, as the console's client test does: the
@@ -19,7 +19,7 @@ function answer(status: number, body = '{}', type = 'application/json') {
 
 async function runtime() {
 	vi.resetModules();
-	return import('./index');
+	return import('./client');
 }
 
 describe('the element API client', () => {

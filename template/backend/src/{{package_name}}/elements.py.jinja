@@ -7,7 +7,7 @@ Registered ahead of the SPA, so none of these falls through to `index.html`:
   `<script type="module">` sends no cookie and cannot follow a sign-in
   redirect. Every call an element makes stays behind forward-auth and CORS.
 - `/elements/session`, reached top-level by an element whose first fetch came
-  back signed out (`frontend/src/lib/elements/index.ts`). Forward-auth's walk
+  back signed out (`frontend/src/lib/elements/client.ts`). Forward-auth's walk
   leaves this app's session cookie, and the browser goes straight back, to a
   page on an origin in `CORS_ORIGINS` only. A hidden frame cannot make this
   walk: Authentik's sign-in pages refuse every frame.
