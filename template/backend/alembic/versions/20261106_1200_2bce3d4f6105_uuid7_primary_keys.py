@@ -15,6 +15,7 @@ head, names what the catalog cannot know in the call (`keep`, `include`, `soft_r
 upgrades in an offline window after a dump (app-factory `docs/development/uuid7-rekey.md`).
 """
 
+import logging
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -29,9 +30,15 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+#: A child of `alembic`, so the proof prints beside Alembic's own lines (`alembic.ini`).
+log = logging.getLogger("alembic.rekey")
+
+
 def upgrade() -> None:
     bind = op.get_bind()
-    rekey_to_uuid7(bind)
+    report = rekey_to_uuid7(bind)
+    for table, (rows, checksum) in report.proof.items():
+        log.info("%s: %d rows, checksum %s, the same before and after", table, rows, checksum)
     if sa.inspect(bind).has_table("agent_conversations"):
         op.alter_column("agent_conversations", "id", type_=sa.Uuid(), postgresql_using="id::uuid")
 

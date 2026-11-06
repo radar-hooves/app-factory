@@ -1,23 +1,27 @@
 """Rekey a Postgres schema's surrogate keys to UUID v7, in the caller's transaction.
 
 `rekey_to_uuid7(connection)` gives every table whose single-column primary key
-is an integer, or a uuid not already v7, a v7 key, rewrites every foreign key
-that reaches it, and proves the result before returning: per table, the row
-count and a checksum over the columns it did not convert, the order of the rows
-by key and the row each reference points at. Any difference raises
-`RekeyMismatch` and the caller's transaction rolls back with nothing changed.
+the database generates (an identity, a serial, a uuid default) a v7 key,
+rewrites every foreign key that reaches it, and proves the result before
+returning: per table, the row count and a checksum over the columns it did not
+convert, the order of the rows by key and the row each reference points at. Any
+difference raises `RekeyMismatch` and the caller's transaction rolls back with
+nothing changed. A key that is itself a foreign key converts as a reference; a
+uuid key whose rows are all v7 already is left as it is.
 
 New keys keep the old order: rows are numbered in their old key order (a v4
 table by `created_at`, then key), and each takes a v7 whose time is its own
 `created_at` where it has one, held monotonic and never later than now.
 
-What the catalog cannot know is the caller's to say: `keep` a table whose key
-comes from outside (another system's id); `include` a table whose key is text
-(hex v4); `soft_refs` a column holding another table's key with no foreign key;
-`mapped` a table whose old ids something outside still holds, whose old-to-new
-map then stays in schema `uuid7_rekey`. An integer key with no generator, a view
-over a converted column and a reference to no row are refused before anything
-changes. `docs/development/uuid7-rekey.md` in app-factory is the recipe around it.
+What the catalog cannot know is the caller's to say. An integer or uuid key the
+database does not generate is refused until it is named: `keep` one another
+system assigns (a MusicBrainz id, another app's document id), `include` one the
+app mints in Python. `include` also takes a text key (hex v4). `soft_refs` names
+a column holding another table's key with no foreign key; `mapped` a table whose
+old ids something outside still holds, whose old-to-new map then stays in schema
+`uuid7_rekey`. A view over a converted column and a reference to no row are
+refused too, all before anything changes. `docs/development/uuid7-rekey.md` in
+app-factory is the recipe around it.
 """
 
 import datetime
@@ -216,6 +220,7 @@ def _keys(
         {"schema": schema},
     )
     keys: dict[str, _Key] = {}
+    undecided: list[str] = []
     for name, columns in primaries:
         if name not in tables or name in keep:
             continue
@@ -228,29 +233,33 @@ def _keys(
             continue
         attr = tables[name][col]
         kind = str(attr["type"]).split("(")[0]
-        generated = bool(attr["identity"]) or str(attr["default"] or "").startswith("nextval(")
+        default = str(attr["default"] or "")
+        stamped = f"{q('created_at')} NULLS FIRST, {q(col)}" if "created_at" in tables[name] else q(col)
         if kind in _INTEGERS:
-            if not generated and name not in include:
-                raise RekeyError(
-                    f"{name}.{col} is an integer key with no generator: keep it if another system assigns it, "
-                    "include it if this app does"
-                )
+            generated = bool(attr["identity"]) or default.startswith("nextval(")
             order = q(col)
-        elif kind == "uuid" or (name in include and kind in _TEXTS):
-            if kind == "uuid":
-                all_v7 = connection.execute(
-                    text(f"SELECT bool_and(substr({q(col)}::text, 15, 1) = '7') FROM {q(schema)}.{q(name)}")
-                ).scalar()
-                if all_v7:
-                    continue
-            else:
-                kind = "text"
-            order = f"{q('created_at')} NULLS FIRST, {q(col)}" if "created_at" in tables[name] else q(col)
+        elif kind == "uuid":
+            all_v7 = connection.execute(
+                text(f"SELECT bool_and(substr({q(col)}::text, 15, 1) = '7') FROM {q(schema)}.{q(name)}")
+            ).scalar()
+            if all_v7 or (all_v7 is None and not default):
+                continue
+            generated, order = bool(default), stamped
+        elif kind in _TEXTS and name in include:
+            generated, kind, order = True, "text", stamped
         elif name in include:
             raise RekeyError(f"{name}.{col} is included but is {attr['type']}, not an integer, uuid or text")
         else:
             continue
+        if not generated and name not in include:
+            undecided.append(f"{name}.{col} ({kind})")
+            continue
         keys[name] = _Key(name, col, kind, order)
+    if undecided:
+        raise RekeyError(
+            f"keys the database does not generate: {', '.join(sorted(undecided))}. "
+            "Keep each another system assigns; include each this app mints"
+        )
     return dict(sorted(keys.items()))
 
 

@@ -245,18 +245,32 @@ def test_a_difference_rolls_everything_back(db: Engine, monkeypatch: pytest.Monk
     assert _read(db) == before
 
 
-def test_an_integer_key_nothing_generates_is_the_callers_to_name(db: Engine) -> None:
+def test_a_key_the_database_does_not_generate_is_the_callers_to_name(db: Engine) -> None:
+    """Another system's id (a release number, a MusicBrainz id) and a key the app mints look alike here."""
     with db.begin() as conn:
         conn.execute(text("CREATE TABLE releases (id integer PRIMARY KEY, title text)"))
+        conn.execute(text("CREATE TABLE recordings (mbid uuid PRIMARY KEY, title text)"))
+        conn.execute(text("CREATE TABLE cases (id uuid PRIMARY KEY, title text, created_at timestamptz)"))
+        conn.execute(text("CREATE TABLE drafts (id uuid PRIMARY KEY, title text)"))
         conn.execute(text("INSERT INTO releases VALUES (249504, 'Kind of Blue')"))
+        conn.execute(text("INSERT INTO recordings VALUES ('5b11f4ce-a62d-471e-81fc-a69a8278c7da', 'So What')"))
+        conn.execute(text("INSERT INTO cases VALUES (gen_random_uuid(), 'a matter', now())"))
 
-    with pytest.raises(RekeyError, match="no generator"), db.begin() as conn:
+    undecided = r"cases\.id \(uuid\), recordings\.mbid \(uuid\), releases\.id \(integer\)"
+    with pytest.raises(RekeyError, match=undecided), db.begin() as conn:
         rekey_to_uuid7(conn)
 
     with db.begin() as conn:
-        report = rekey_to_uuid7(conn, keep=["releases"])
-    assert "releases" not in report.rekeyed
-    assert _types(db)["releases.id"] == "integer"
+        report = rekey_to_uuid7(conn, keep=["releases", "recordings"], include=["cases"])
+    assert "cases" in report.rekeyed
+    assert "drafts" not in report.rekeyed
+    types = _types(db)
+    assert (types["releases.id"], types["recordings.mbid"]) == ("integer", "uuid")
+    with db.connect() as conn:
+        assert (
+            conn.execute(text("SELECT mbid::text FROM recordings")).scalar() == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+        )
+        assert conn.execute(text("SELECT id FROM cases")).scalar_one().version == 7
 
 
 def test_a_mapped_table_keeps_its_old_ids_resolving(db: Engine) -> None:
