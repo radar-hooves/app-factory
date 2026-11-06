@@ -72,7 +72,7 @@ def create_report(session: Session, *, user_id: uuid.UUID, data: FeedbackCreate)
     return report
 
 
-def get_report(session: Session, report_id: int) -> FeedbackReport:
+def get_report(session: Session, report_id: uuid.UUID) -> FeedbackReport:
     """Return a feedback report by id.
 
     Raises:
@@ -146,7 +146,7 @@ def _file_github_issue(*, repo: str, token: str, title: str, body: str) -> str:
     return str(response.json()["html_url"])
 
 
-def file_issue(*, report_id: int, settings: Settings) -> None:
+def file_issue(*, report_id: uuid.UUID, settings: Settings) -> None:
     """Redact the message and file it as a GitHub issue; runs as a background task.
 
     Opens its OWN session rather than the request's — a background task can run
@@ -175,7 +175,7 @@ def file_issue(*, report_id: int, settings: Settings) -> None:
             )
             issue_url = _file_github_issue(repo=settings.feedback.github_repo, token=token, title=title, body=body)
         except (VendError, httpx.HTTPError) as exc:
-            logger.warning("Could not file feedback %d as a GitHub issue: %s", report_id, exc)
+            logger.warning("Could not file feedback %s as a GitHub issue: %s", report_id, exc)
             report.error = str(exc)
         else:
             report.status = FeedbackStatus.FILED

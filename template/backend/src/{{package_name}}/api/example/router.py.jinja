@@ -4,6 +4,8 @@ Routers contain no business logic — they delegate to service functions and
 translate between HTTP and domain types.
 """
 
+import uuid
+
 from fastapi import APIRouter
 
 from {{ package_name }}.api.example import service
@@ -30,7 +32,7 @@ def list_items(session: SessionDep, _workspace: CurrentWorkspace) -> list[Exampl
 
 
 @router.get("/{item_id}", response_model=ExampleItemRead, operation_id="getExampleItem")
-def get_item(item_id: int, session: SessionDep, _workspace: CurrentWorkspace) -> ExampleItemRead:
+def get_item(item_id: uuid.UUID, session: SessionDep, _workspace: CurrentWorkspace) -> ExampleItemRead:
     """Get a single example item by id."""
     item = service.get_item(session, item_id)
     return ExampleItemRead.model_validate(item)

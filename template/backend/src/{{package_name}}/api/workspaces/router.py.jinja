@@ -46,7 +46,7 @@ def create_workspace(data: WorkspaceCreate, session: SessionDep, identity: Curre
 
 @router.patch("/{workspace_id}", response_model=WorkspaceRead, operation_id="renameWorkspace")
 def rename_workspace(
-    workspace_id: int, data: WorkspaceRename, session: SessionDep, identity: CurrentIdentity
+    workspace_id: uuid.UUID, data: WorkspaceRename, session: SessionDep, identity: CurrentIdentity
 ) -> WorkspaceRead:
     """Rename a workspace. Owner only. The slug is stable and does not follow."""
     service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
@@ -55,7 +55,7 @@ def rename_workspace(
 
 
 @router.get("/{workspace_id}/members", response_model=list[MemberRead], operation_id="listWorkspaceMembers")
-def list_members(workspace_id: int, session: SessionDep, identity: CurrentIdentity) -> list[MemberRead]:
+def list_members(workspace_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> list[MemberRead]:
     """List who shares a workspace. Any member may look.
 
     Membership, not ownership, is the gate: the people whose data you share are
@@ -72,7 +72,9 @@ def list_members(workspace_id: int, session: SessionDep, identity: CurrentIdenti
     status_code=status.HTTP_201_CREATED,
     operation_id="addWorkspaceMember",
 )
-def add_member(workspace_id: int, data: MemberAdd, session: SessionDep, identity: CurrentIdentity) -> MembershipRead:
+def add_member(
+    workspace_id: uuid.UUID, data: MemberAdd, session: SessionDep, identity: CurrentIdentity
+) -> MembershipRead:
     """Grant someone membership of a workspace. Owner only.
 
     This is the act the whole primitive exists for: sharing is a grant somebody
@@ -88,7 +90,7 @@ def add_member(workspace_id: int, data: MemberAdd, session: SessionDep, identity
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="removeWorkspaceMember",
 )
-def remove_member(workspace_id: int, user_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
+def remove_member(workspace_id: uuid.UUID, user_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
     """Retract someone's membership. Owner only.
 
     Their rows stay with the workspace and their attribution stays on them; only

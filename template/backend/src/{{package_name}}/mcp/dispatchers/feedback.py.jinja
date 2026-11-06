@@ -8,6 +8,8 @@ is gated by `actors.yaml` alone; a person needs `admin`, as the feedback routes
 require.
 """
 
+import uuid
+
 from fastmcp import FastMCP
 
 from {{ package_name }}.api.feedback import service
@@ -40,7 +42,7 @@ def register_feedback_tools(mcp: FastMCP) -> None:
     """Register `feedback_get` and `feedback_list` on `mcp`."""
 
     @mcp.tool(meta=requires("admin"))
-    def feedback_get(id: int) -> dict[str, object]:
+    def feedback_get(id: uuid.UUID) -> dict[str, object]:
         """Return one feedback report by id, without its screenshot bytes.
 
         Raises:

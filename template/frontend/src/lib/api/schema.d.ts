@@ -478,7 +478,7 @@ export interface paths {
         post?: never;
         /**
          * Delete
-         * @description Forget the conversation: the agent's transcript first, then the row, so a failure leaves it listed.
+         * @description Forget the conversation: the agent's transcript and files first, then the row, so a failure leaves it listed.
          */
         delete: operations["deleteConversation"];
         options?: never;
@@ -664,7 +664,9 @@ export interface paths {
          *     unread: 413 for a body or a file too large, 415 for a type not read,
          *     400 for too many. Read, they are then checked by their bytes (`content`):
          *     415 for a file that is not what its name says, 422 for one the
-         *     scanner names, 503 when a scanner is configured and cannot answer.
+         *     scanner names, 503 when a scanner is configured and cannot answer. A
+         *     persona that takes none (`attachments: false`) refuses any multipart body
+         *     unread, 400.
          */
         post: operations["askPersona"];
         delete?: never;
@@ -1001,8 +1003,11 @@ export interface components {
          *     empties every app's bell.
          */
         AlertRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Key */
             key: string;
             /** Title */
@@ -1075,7 +1080,10 @@ export interface components {
         };
         /** ConversationRead */
         ConversationRead: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
             /** Title */
             title: string;
@@ -1091,7 +1099,10 @@ export interface components {
         };
         /** ConversationSummary */
         ConversationSummary: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
             /** Title */
             title: string;
@@ -1172,8 +1183,11 @@ export interface components {
          * @description Response schema for ExampleItem (excludes internal DB columns).
          */
         ExampleItemRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Title */
             title: string;
             /** Body */
@@ -1205,8 +1219,11 @@ export interface components {
          * @description The one thing `ReportWidget`'s `onSubmitted(id)` needs.
          */
         FeedbackCreateResponse: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /**
          * FeedbackRead
@@ -1217,8 +1234,11 @@ export interface components {
          *     pays for an image it may not want.
          */
         FeedbackRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /**
              * Created At
              * Format: date-time
@@ -1403,8 +1423,11 @@ export interface components {
          * @description One row of the append-only history — who changed what, when.
          */
         SettingChangeRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Key */
             key: string;
             /** Old Value */
@@ -1601,8 +1624,11 @@ export interface components {
          * @description A workspace as the API exposes it.
          */
         WorkspaceRead: {
-            /** Id */
-            id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Slug */
             slug: string;
             /** Name */
@@ -1733,7 +1759,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                workspace_id: number;
+                workspace_id: string;
             };
             cookie?: never;
         };
@@ -1768,7 +1794,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                workspace_id: number;
+                workspace_id: string;
             };
             cookie?: never;
         };
@@ -1799,7 +1825,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                workspace_id: number;
+                workspace_id: string;
             };
             cookie?: never;
         };
@@ -1834,7 +1860,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                workspace_id: number;
+                workspace_id: string;
                 user_id: string;
             };
             cookie?: never;
@@ -1970,7 +1996,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                report_id: number;
+                report_id: string;
             };
             cookie?: never;
         };
@@ -2001,7 +2027,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                report_id: number;
+                report_id: string;
             };
             cookie?: never;
         };
@@ -2064,7 +2090,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                alert_id: number;
+                alert_id: string;
             };
             cookie?: never;
         };
@@ -2093,7 +2119,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                alert_id: number;
+                alert_id: string;
             };
             cookie?: never;
         };
@@ -2754,7 +2780,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path: {
                 persona: string;
@@ -2788,7 +2814,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path: {
                 persona: string;
@@ -2824,7 +2850,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path: {
                 persona: string;
@@ -2856,7 +2882,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2887,7 +2913,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2922,10 +2948,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-workspace-id"?: number | null;
+                "x-workspace-id"?: string | null;
             };
             path: {
-                item_id: number;
+                item_id: string;
             };
             cookie?: never;
         };

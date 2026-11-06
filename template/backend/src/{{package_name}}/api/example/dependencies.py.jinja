@@ -7,12 +7,13 @@ dependencies (SessionDep, CurrentUser) live in deps.py.
 # This file is intentionally minimal — add example-specific dependencies as needed.
 # Example:
 #
+# import uuid
 # from typing import Annotated
 # from fastapi import Depends
 # from {{ package_name }}.api.example.service import get_item
 # from {{ package_name }}.deps import SessionDep
 #
-# async def get_example_item(item_id: int, session: SessionDep):
+# async def get_example_item(item_id: uuid.UUID, session: SessionDep):
 #     return await get_item(session, item_id)
 #
 # ExampleItemDep = Annotated[ExampleItem, Depends(get_example_item)]

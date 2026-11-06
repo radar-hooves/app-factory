@@ -7,6 +7,8 @@ an admin act — while reading a report back is, because a report may carry a
 screenshot of somebody else's screen.
 """
 
+import uuid
+
 from fastapi import APIRouter, BackgroundTasks, status
 from starlette.responses import Response
 
@@ -49,7 +51,7 @@ def create_feedback(
     dependencies=[module_dependency("admin")],
     operation_id="getFeedback",
 )
-def get_feedback(report_id: int, session: SessionDep) -> FeedbackRead:
+def get_feedback(report_id: uuid.UUID, session: SessionDep) -> FeedbackRead:
     """Return one feedback report. Admin only.
 
     Raises:
@@ -63,7 +65,7 @@ def get_feedback(report_id: int, session: SessionDep) -> FeedbackRead:
     dependencies=[module_dependency("admin")],
     operation_id="getFeedbackScreenshot",
 )
-def get_feedback_screenshot(report_id: int, session: SessionDep) -> Response:
+def get_feedback_screenshot(report_id: uuid.UUID, session: SessionDep) -> Response:
     """Return the screenshot PNG bytes captured with this report.
 
     Raises:

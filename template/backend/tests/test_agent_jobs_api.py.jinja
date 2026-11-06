@@ -165,12 +165,14 @@ def settled_calls(monkeypatch: pytest.MonkeyPatch) -> list[JobOutcome]:
     return calls
 
 
-async def _start(agent_settings: AgentSettings, persona: Persona, workspace_id: int, **kwargs: Any) -> str:
+async def _start(agent_settings: AgentSettings, persona: Persona, workspace_id: uuid.UUID, **kwargs: Any) -> str:
     kwargs.setdefault("created_by_id", None)
     return await jobs_module.start(get_session_factory(), agent_settings, persona, workspace_id=workspace_id, **kwargs)
 
 
-async def _message(agent_settings: AgentSettings, persona: Persona, job_id: str, workspace_id: int, text: str) -> None:
+async def _message(
+    agent_settings: AgentSettings, persona: Persona, job_id: str, workspace_id: uuid.UUID, text: str
+) -> None:
     await jobs_module.send_message(
         get_session_factory(), agent_settings, persona, job_id, text, workspace_id=workspace_id, user_id=None
     )
@@ -184,7 +186,7 @@ async def _wait_until(predicate: Callable[[], bool], *, timeout: float = _POLL_T
             await asyncio.sleep(0.02)
 
 
-def _job(job_id: str, workspace_id: int) -> AgentJob:
+def _job(job_id: str, workspace_id: uuid.UUID) -> AgentJob:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
         job = jobs_models.get_job(db, job_id)
@@ -192,13 +194,13 @@ def _job(job_id: str, workspace_id: int) -> AgentJob:
     return job
 
 
-def _events(job_id: str, workspace_id: int) -> list[dict[str, Any]]:
+def _events(job_id: str, workspace_id: uuid.UUID) -> list[dict[str, Any]]:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
         return [event for _, event in jobs_models.list_events(db, job_id)]
 
 
-def _answers(job_id: str, workspace_id: int) -> list[str]:
+def _answers(job_id: str, workspace_id: uuid.UUID) -> list[str]:
     """Each `assistant` text in the log, in order."""
     return [
         block["text"]
@@ -214,7 +216,7 @@ def _echo_field(answer: str, name: str) -> str:
     return next(part.removeprefix(f"{name}=") for part in answer.split(" | ") if part.startswith(f"{name}="))
 
 
-async def _wait_until_settled(job_id: str, workspace_id: int) -> AgentJob:
+async def _wait_until_settled(job_id: str, workspace_id: uuid.UUID) -> AgentJob:
     await _wait_until(lambda: _job(job_id, workspace_id).status != jobs_models.RUNNING)
     return _job(job_id, workspace_id)
 
@@ -1085,7 +1087,7 @@ def _second_worker(agent_settings: AgentSettings) -> contextlib.AbstractAsyncCon
     """Another worker process of this deployment: the same app, database and data directory, its
     own process, event loop and children -- what gunicorn's other workers are to the one running a
     job. Yields its base URL and pid."""
-    prefix = "{{ project_name | upper | replace('-', '_') }}_AGENT_"
+    prefix = "FACTORY_SELFTEST_AGENT_"
     return live_server.run_server(
         {
             f"{prefix}PERSONAS_DIR": str(agent_settings.personas_dir),
@@ -1165,7 +1167,7 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
 # -- A job whose process is gone -------------------------------------------------
 
 
-def _age_heartbeat(job_id: str, workspace_id: int) -> None:
+def _age_heartbeat(job_id: str, workspace_id: uuid.UUID) -> None:
     with get_session_factory()() as db:
         bind_session(db, workspace_id=workspace_id)
         job = jobs_models.get_job(db, job_id)
@@ -1174,7 +1176,7 @@ def _age_heartbeat(job_id: str, workspace_id: int) -> None:
         db.commit()
 
 
-async def _orphan(agent_settings: AgentSettings, persona: Persona, workspace_id: int) -> str:
+async def _orphan(agent_settings: AgentSettings, persona: Persona, workspace_id: uuid.UUID) -> str:
     """A job whose worker died mid-run: its task destroyed with nothing left to settle the row."""
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until_running(job_id)

@@ -23,13 +23,13 @@ export const api = createClient<paths>({
 // the backend resolves it without being told. It is only once someone belongs to
 // two workspaces that the header becomes load-bearing, and until it is set the
 // backend answers 409 with the choices rather than guessing.
-let activeWorkspaceId: number | null = null;
+let activeWorkspaceId: string | null = null;
 
-export function setActiveWorkspaceId(id: number | null) {
+export function setActiveWorkspaceId(id: string | null) {
 	activeWorkspaceId = id;
 }
 
-export function getActiveWorkspaceId(): number | null {
+export function getActiveWorkspaceId(): string | null {
 	return activeWorkspaceId;
 }
 
@@ -38,7 +38,7 @@ export function getActiveWorkspaceId(): number | null {
 const workspaceMiddleware: Middleware = {
 	async onRequest({ request }) {
 		if (activeWorkspaceId !== null) {
-			request.headers.set('X-Workspace-Id', String(activeWorkspaceId));
+			request.headers.set('X-Workspace-Id', activeWorkspaceId);
 		}
 		return request;
 	}

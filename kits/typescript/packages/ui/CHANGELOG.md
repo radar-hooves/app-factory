@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.7] - 2026-11-06
+
+Consumer: master-project orchestrator, app-factory#100.
+
+### Changed
+
+- **`Alert.id` is a string**: the factory's alerts carry a UUID v7 key.
+
 ## [2026.11.6] - 2026-11-03
 
 Consumer: the operator (master-project#432, app-factory#37, #38).

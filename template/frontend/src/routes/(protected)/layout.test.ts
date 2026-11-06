@@ -41,9 +41,9 @@ const init = vi.hoisted(() => vi.fn());
 const session = vi.hoisted(() => ({
 	isLoading: false,
 	failure: null as 'lapsed' | 'refused' | 'failed' | null,
-	user: null as { id: number; username: string } | null,
-	workspaces: [] as { workspace: { id: number; slug: string; name: string }; role: string }[],
-	activeWorkspace: null as { id: number; slug: string; name: string } | null
+	user: null as { id: string; username: string } | null,
+	workspaces: [] as { workspace: { id: string; slug: string; name: string }; role: string }[],
+	activeWorkspace: null as { id: string; slug: string; name: string } | null
 }));
 
 vi.mock('#lib/auth.svelte.js', () => ({
@@ -81,9 +81,9 @@ vi.mock('#lib/auth.svelte.js', () => ({
 	}
 }));
 
-const USER = { id: 1, username: 'someone' };
+const USER = { id: '1', username: 'someone' };
 
-function workspace(id: number, name: string) {
+function workspace(id: string, name: string) {
 	return { workspace: { id, slug: name, name }, role: 'owner' };
 }
 
@@ -105,7 +105,7 @@ beforeEach(() => {
 });
 
 function signIn() {
-	const sole = workspace(7, 'personal-1');
+	const sole = workspace('7', 'personal-1');
 	Object.assign(session, { user: USER, workspaces: [sole], activeWorkspace: sole.workspace });
 }
 
@@ -240,7 +240,7 @@ describe('the signed-in app layout', () => {
 	it('asks which workspace, never a silent default, when two are held and none chosen', () => {
 		Object.assign(session, {
 			user: USER,
-			workspaces: [workspace(7, 'household'), workspace(8, 'circle')]
+			workspaces: [workspace('7', 'household'), workspace('8', 'circle')]
 		});
 		render(Layout, { props: { children } });
 

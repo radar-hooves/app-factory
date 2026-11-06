@@ -10,7 +10,7 @@ import AlertBell from '#lib/components/alerts/alert-bell.svelte';
 
 vi.mock('svelte-sonner', () => ({ toast: { error: vi.fn() } }));
 
-function alert(id: number, read = false) {
+function alert(id: string, read = false) {
 	return {
 		id,
 		key: `producer:${id}`,
@@ -51,7 +51,7 @@ describe('AlertBell', () => {
 		const global = serve([]);
 		const own = vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ alerts: [alert(1)], total: 1, unread: 1 })
+			json: () => Promise.resolve({ alerts: [alert('1')], total: 1, unread: 1 })
 		});
 		render(AlertBell, { fetch: own });
 		await waitFor(() => expect(screen.getByTestId('alert-bell')).toBeInTheDocument());
@@ -69,7 +69,7 @@ describe('AlertBell', () => {
 	});
 
 	it('counts only the unread in its badge and its accessible name', async () => {
-		serve([alert(1), alert(2), alert(3, true)]);
+		serve([alert('1'), alert('2'), alert('3', true)]);
 		render(AlertBell);
 
 		const bell = await screen.findByTestId('alert-bell');
@@ -78,7 +78,7 @@ describe('AlertBell', () => {
 	});
 
 	it('marks an alert read when it is opened, against the endpoint it was given', async () => {
-		const fetchMock = serve([alert(7)]);
+		const fetchMock = serve([alert('7')]);
 		render(AlertBell, { endpoint: '/v2/alerts' });
 
 		await fireEvent.click(await screen.findByTestId('alert-bell'));
@@ -88,7 +88,7 @@ describe('AlertBell', () => {
 	});
 
 	it('dismisses an alert, and the bell goes once nothing is open', async () => {
-		serve([alert(7)]);
+		serve([alert('7')]);
 		render(AlertBell);
 
 		await fireEvent.click(await screen.findByTestId('alert-bell'));
@@ -100,7 +100,7 @@ describe('AlertBell', () => {
 	});
 
 	it('says so when an act fails, and keeps the alert', async () => {
-		serve([alert(7)], 500);
+		serve([alert('7')], 500);
 		render(AlertBell);
 
 		await fireEvent.click(await screen.findByTestId('alert-bell'));

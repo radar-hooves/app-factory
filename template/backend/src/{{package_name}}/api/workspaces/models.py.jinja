@@ -41,7 +41,7 @@ class Workspace(Base, TimestampMixin):
 
     __tablename__ = "workspaces"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
 
     # Stable machine identifier. Personal workspaces are minted as
     # "personal-<user id>", which is unique by construction and needs no
@@ -68,13 +68,13 @@ class WorkspaceMembership(Base, TimestampMixin):
     __tablename__ = "workspace_memberships"
     __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_workspace_memberships_workspace_user"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
 
     # CASCADE on both sides is correct HERE and wrong on a domain row: deleting a
     # workspace or a user should retract the grant, never destroy the data the
     # grant reached. Domain rows use RESTRICT/SET NULL for exactly that reason
     # (see WorkspaceScoped in db/base.py).
-    workspace_id: Mapped[int] = mapped_column(
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

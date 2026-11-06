@@ -1,7 +1,7 @@
 <script lang="ts" module>
 	/** One alert as the endpoint lists it: the app factory's `AlertRead`. */
 	export type Alert = {
-		id: number;
+		id: string;
 		key: string;
 		title: string;
 		body: string | null;
@@ -151,7 +151,7 @@
 							variant="ghost"
 							size="icon-xs"
 							aria-label="Dismiss"
-							onclick={() => void act(String(alert.id), 'DELETE', 'Could not dismiss the alert')}
+							onclick={() => void act(alert.id, 'DELETE', 'Could not dismiss the alert')}
 							data-testid="alert-dismiss"
 						>
 							<X />

@@ -36,7 +36,7 @@ class FeedbackCreate(BaseModel):
 class FeedbackCreateResponse(BaseModel):
     """The one thing `ReportWidget`'s `onSubmitted(id)` needs."""
 
-    id: int
+    id: uuid.UUID
 
 
 class FeedbackRead(BaseModel):
@@ -49,7 +49,7 @@ class FeedbackRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: uuid.UUID
     created_at: datetime.datetime
     user_id: uuid.UUID
     route: str

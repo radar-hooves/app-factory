@@ -35,7 +35,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -147,7 +146,7 @@ class AgentJobEvent(Base, WorkspaceScoped):
 
     __tablename__ = "agent_job_events"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.job_id", ondelete="CASCADE"), nullable=False, index=True)
     #: The event as Claude Code printed it, less two things `jobs.py` takes
     #: out before it lands here: whatever the app's own `agent_event` hook
@@ -196,7 +195,7 @@ _LESSON_REPORT_PK = "agent_job_lesson_reports_pkey"
 _LESSON_REPORT_JOB_FK = "fk_agent_job_lesson_reports_job_id_agent_jobs"
 
 
-def insert_lesson_report_if_absent(db: Session, job_id: str, *, workspace_id: int, **fields: Any) -> None:
+def insert_lesson_report_if_absent(db: Session, job_id: str, *, workspace_id: uuid.UUID, **fields: Any) -> None:
     """Insert `job_id`'s report, or do nothing if one exists for the same `revision` (a field,
     default 0) — first write wins per revision; a repeat call is silently dropped, not merged, and
     a later revision is its own report. A SAVEPOINT: ONLY the two known-benign conflicts (this row's own primary key, or its
@@ -278,7 +277,7 @@ class RunSpec:
 
     job_id: str
     persona: str
-    workspace_id: int
+    workspace_id: uuid.UUID
     created_by_id: uuid.UUID | None
     run_id: str
     json_schema: dict[str, Any] | None
@@ -295,7 +294,7 @@ class JobOutcome:
 
     job_id: str
     persona: str
-    workspace_id: int
+    workspace_id: uuid.UUID
     created_by_id: uuid.UUID | None
     status: str
     structured_output: dict[str, Any] | None
@@ -395,9 +394,8 @@ def get_job_unscoped(db: Session, job_id: str) -> AgentJob | None:
         return db.get(AgentJob, job_id)
 
 
-def record_event(db: Session, job_id: str, event: dict[str, Any], *, whole_message: bool = False) -> int:
-    """Append one event and commit. Returns its `id` — the monotonic `seq`
-    `jobs.watch()` reads forward from.
+def record_event(db: Session, job_id: str, event: dict[str, Any], *, whole_message: bool = False) -> uuid.UUID:
+    """Append one event and commit. Returns its `id`, which `jobs.watch()` reads forward from.
 
     `whole_message` is a finished `assistant` message: it supersedes the
     `stream_event` rows a streaming job kept while it was being written, which
@@ -416,19 +414,21 @@ def record_event(db: Session, job_id: str, event: dict[str, Any], *, whole_messa
     return row.id
 
 
-def list_events(db: Session, job_id: str, *, after: int = 0) -> list[tuple[int, dict[str, Any]]]:
-    """Every event recorded for `job_id` past `after`, oldest first, each with its `seq`."""
-    rows = db.execute(
-        select(AgentJobEvent.id, AgentJobEvent.event)
-        .where(AgentJobEvent.job_id == job_id, AgentJobEvent.id > after)
-        .order_by(AgentJobEvent.id)
-    )
+def list_events(db: Session, job_id: str, *, after: uuid.UUID | None = None) -> list[tuple[uuid.UUID, dict[str, Any]]]:
+    """Every event recorded for `job_id` past `after`, oldest first, each with its id.
+
+    The id is a v7 the writing process mints, so one run's events sort in the order it wrote them.
+    """
+    query = select(AgentJobEvent.id, AgentJobEvent.event).where(AgentJobEvent.job_id == job_id)
+    if after is not None:
+        query = query.where(AgentJobEvent.id > after)
+    rows = db.execute(query.order_by(AgentJobEvent.id))
     return [(row.id, row.event) for row in rows]
 
 
 def read_progress(
-    db: Session, job_id: str, *, after: int, stale_seconds: float
-) -> tuple[bool, list[tuple[int, dict[str, Any]]]]:
+    db: Session, job_id: str, *, after: uuid.UUID | None, stale_seconds: float
+) -> tuple[bool, list[tuple[uuid.UUID, dict[str, Any]]]]:
     """Whether a live process is still working on `job_id`, then every event past `after`.
 
     In that order: a run records its last event before it settles, so events

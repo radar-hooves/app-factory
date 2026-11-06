@@ -11,6 +11,7 @@ nothing ages out.
 
 import datetime
 import logging
+import uuid
 from collections.abc import Iterable
 
 from app_slices.settings import get_value
@@ -34,7 +35,7 @@ async def erase(db: Session, settings: AgentSettings, rows: Iterable[AgentConver
 
     A conversation whose files cannot be removed is logged and stays listed.
     """
-    gone: list[str] = []
+    gone: list[uuid.UUID] = []
     for row in rows:
         if row.session_id:
             try:

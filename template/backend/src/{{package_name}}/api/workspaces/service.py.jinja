@@ -51,7 +51,7 @@ def list_memberships(session: Session, user_id: uuid.UUID) -> list[WorkspaceMemb
     return list(session.execute(stmt).scalars().all())
 
 
-def list_members(session: Session, workspace_id: int) -> list[WorkspaceMembership]:
+def list_members(session: Session, workspace_id: uuid.UUID) -> list[WorkspaceMembership]:
     """Return every membership OF this workspace, user loaded, oldest first.
 
     The other direction from ``list_memberships``: that is one person's
@@ -67,7 +67,7 @@ def list_members(session: Session, workspace_id: int) -> list[WorkspaceMembershi
     return list(session.execute(stmt).scalars().all())
 
 
-def get_membership(session: Session, *, workspace_id: int, user_id: uuid.UUID) -> WorkspaceMembership | None:
+def get_membership(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership | None:
     """Return this user's membership of this workspace, or None."""
     stmt = select(WorkspaceMembership).where(
         WorkspaceMembership.workspace_id == workspace_id,
@@ -76,7 +76,7 @@ def get_membership(session: Session, *, workspace_id: int, user_id: uuid.UUID) -
     return session.execute(stmt).scalar_one_or_none()
 
 
-def get_workspace(session: Session, workspace_id: int) -> Workspace:
+def get_workspace(session: Session, workspace_id: uuid.UUID) -> Workspace:
     """Return a workspace by id.
 
     Raises:
@@ -156,7 +156,7 @@ def create_workspace(session: Session, *, owner: User, name: str) -> WorkspaceMe
     return membership
 
 
-def require_member(session: Session, *, workspace_id: int, user_id: uuid.UUID) -> WorkspaceMembership:
+def require_member(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership:
     """Return the caller's membership of this workspace, or refuse.
 
     Raises:
@@ -170,7 +170,7 @@ def require_member(session: Session, *, workspace_id: int, user_id: uuid.UUID) -
     return membership
 
 
-def require_owner(session: Session, *, workspace_id: int, user_id: uuid.UUID) -> WorkspaceMembership:
+def require_owner(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership:
     """Return the caller's OWNER membership of this workspace, or refuse.
 
     Raises:
@@ -184,7 +184,7 @@ def require_owner(session: Session, *, workspace_id: int, user_id: uuid.UUID) ->
     return membership
 
 
-def rename_workspace(session: Session, *, workspace_id: int, name: str) -> Workspace:
+def rename_workspace(session: Session, *, workspace_id: uuid.UUID, name: str) -> Workspace:
     """Change a workspace's display name. The slug is stable and does not follow.
 
     Commits its own write. The rename endpoint hands the new name to the
@@ -197,7 +197,9 @@ def rename_workspace(session: Session, *, workspace_id: int, name: str) -> Works
     return workspace
 
 
-def add_member(session: Session, *, workspace_id: int, user_id: uuid.UUID, role: WorkspaceRole) -> WorkspaceMembership:
+def add_member(
+    session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID, role: WorkspaceRole
+) -> WorkspaceMembership:
     """Grant someone membership of a workspace.
 
     Raises:
@@ -223,7 +225,7 @@ def add_member(session: Session, *, workspace_id: int, user_id: uuid.UUID, role:
     return membership
 
 
-def remove_member(session: Session, *, workspace_id: int, user_id: uuid.UUID) -> None:
+def remove_member(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> None:
     """Retract someone's membership.
 
     Their rows stay with the workspace and their attribution stays on them; only

@@ -26,7 +26,7 @@ const BACKEND = process.env.{{ project_name | upper | replace('-', '_') }}_DEV_B
 const PARTNER = { 'x-authentik-uid': 'e2e-partner', 'x-authentik-username': 'e2e-partner' };
 
 type Membership = {
-	workspace: { id: number; slug: string; name: string };
+	workspace: { id: string; slug: string; name: string };
 	role: 'owner' | 'member';
 };
 type Person = { id: string; username: string };

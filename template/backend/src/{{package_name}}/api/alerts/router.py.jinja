@@ -9,6 +9,8 @@ carries the read gate and each mutating route adds the write gate, per
 entitlements.py.
 """
 
+import uuid
+
 from fastapi import APIRouter, Query, status
 
 from {{ package_name }}.api.alerts import service
@@ -37,7 +39,7 @@ def list_alerts(
     dependencies=[module_dependency("admin", write=True)],
     operation_id="markAlertRead",
 )
-def mark_alert_read(alert_id: int, session: SessionDep) -> None:
+def mark_alert_read(alert_id: uuid.UUID, session: SessionDep) -> None:
     """Mark one alert read.
 
     Raises:
@@ -52,7 +54,7 @@ def mark_alert_read(alert_id: int, session: SessionDep) -> None:
     dependencies=[module_dependency("admin", write=True)],
     operation_id="dismissAlert",
 )
-def dismiss_alert(alert_id: int, session: SessionDep) -> None:
+def dismiss_alert(alert_id: uuid.UUID, session: SessionDep) -> None:
     """Dismiss one alert. It returns, unread, if its producer raises it again.
 
     Raises:

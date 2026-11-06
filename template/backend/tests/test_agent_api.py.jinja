@@ -192,7 +192,7 @@ def _said(events: list[dict[str, Any]]) -> str:
 
 def _row(conversation_id: str) -> AgentConversation:
     with get_session_factory()() as db:
-        found = db.get(AgentConversation, conversation_id)
+        found = db.get(AgentConversation, uuid.UUID(conversation_id))
     assert found is not None
     return found
 
@@ -217,13 +217,15 @@ async def _until(predicate: Callable[[], object], timeout: float = 10.0) -> None
 
 
 def _latest(who: dict[str, str]) -> str | None:
+    """The id of `who`'s newest conversation, as the page holds it."""
     with get_session_factory()() as db:
-        return db.execute(
+        found = db.execute(
             select(AgentConversation.id)
             .join(User, User.id == AgentConversation.user_id)
             .where(User.authentik_uid == who["x-authentik-uid"])
             .order_by(AgentConversation.created_at.desc())
         ).scalar()
+    return str(found) if found else None
 
 
 async def _asking(

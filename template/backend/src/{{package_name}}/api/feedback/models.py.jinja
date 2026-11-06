@@ -38,7 +38,7 @@ class FeedbackReport(Base, TimestampMixin):
 
     __tablename__ = "feedback_reports"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
 
     # NOT NULL: this is the personal-subject predicate `db/registry.py` claims.
     # CASCADE, unlike WorkspaceScoped's attribution columns — a report is

@@ -1,5 +1,7 @@
 """Pydantic request/response schemas for the example domain."""
 
+import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,6 +17,6 @@ class ExampleItemRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: uuid.UUID
     title: str
     body: str | None

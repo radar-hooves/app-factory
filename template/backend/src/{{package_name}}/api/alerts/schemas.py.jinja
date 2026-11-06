@@ -1,6 +1,7 @@
 """Pydantic schemas for machine-raised alerts."""
 
 import datetime
+import uuid
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -44,7 +45,7 @@ class AlertRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: uuid.UUID
     key: str
     title: str
     body: str | None

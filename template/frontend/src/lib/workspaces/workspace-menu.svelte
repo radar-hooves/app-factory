@@ -60,7 +60,7 @@
 	// The only reason this ever renders: something to switch between.
 	const hasChoice = $derived(auth.canSwitchWorkspace);
 	// bits-ui radio groups carry string values; workspace ids are numbers.
-	const activeValue = $derived(auth.activeWorkspace ? String(auth.activeWorkspace.id) : '');
+	const activeValue = $derived(auth.activeWorkspace?.id ?? '');
 
 	let createOpen = $state(false);
 	let newName = $state('');
@@ -114,11 +114,11 @@
 			<DropdownMenu.Label>Switch {noun}</DropdownMenu.Label>
 			<DropdownMenu.RadioGroup
 				value={activeValue}
-				onValueChange={(value) => auth.setActiveWorkspace(Number(value))}
+				onValueChange={(value) => auth.setActiveWorkspace(value)}
 			>
 				{#each auth.workspaces as membership (membership.workspace.id)}
 					<DropdownMenu.RadioItem
-						value={String(membership.workspace.id)}
+						value={membership.workspace.id}
 						data-testid="workspace-menu-option"
 					>
 						{membership.workspace.name}

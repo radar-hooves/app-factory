@@ -49,7 +49,7 @@ const route = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: route }));
 
 vi.mock('#lib/auth.svelte.js', () => {
-	const workspace = { id: 7, slug: 'personal-1', name: 'personal-1' };
+	const workspace = { id: '7', slug: 'personal-1', name: 'personal-1' };
 	return {
 		auth: {
 			init: vi.fn(),

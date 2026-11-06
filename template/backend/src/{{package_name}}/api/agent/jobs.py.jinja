@@ -115,7 +115,7 @@ _tasks: set[asyncio.Task[None]] = set()
 
 def new_job_id() -> str:
     """A fresh job id, for a caller that must know its job's folder before starting it (`job_dir`)."""
-    return str(uuid.uuid4())
+    return str(uuid.uuid7())
 
 
 def job_dir(job_id: str) -> Path:
@@ -226,7 +226,7 @@ async def start(
     settings: AgentSettings,
     persona: Persona,
     *,
-    workspace_id: int,
+    workspace_id: uuid.UUID,
     created_by_id: uuid.UUID | None,
     prompt: str,
     job_id: str | None = None,
@@ -729,7 +729,7 @@ async def send_message(
     job_id: str,
     text: str,
     *,
-    workspace_id: int,
+    workspace_id: uuid.UUID,
     user_id: uuid.UUID | None,
 ) -> None:
     """Send `text` to `job_id`, from any worker: queued for its running process, or a resumed run.
@@ -766,7 +766,7 @@ async def send_message(
         _spawn(db_session_factory, settings, persona, outcome, [text], resume=True)
 
 
-async def stop(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int) -> None:
+async def stop(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: uuid.UUID) -> None:
     """Stop `job_id`, from any worker. A job with nothing running is a no-op.
 
     Flags the row, which the running process acts on at its next poll. When
@@ -788,7 +788,7 @@ async def stop(db_session_factory: sessionmaker[Session], job_id: str, *, worksp
 
 
 async def watch(
-    db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int
+    db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: uuid.UUID
 ) -> AsyncIterator[dict[str, object]]:
     """Yield `job_id`'s events from the first, then follow them until its run settles.
 
@@ -803,10 +803,10 @@ async def watch(
     belongs to `workspace_id`; this only needs it to bind the sessions it
     opens itself.
     """
-    last_seq = 0
+    last_seq: uuid.UUID | None = None
     while True:
 
-        def _read(after: int = last_seq) -> tuple[bool, list[tuple[int, dict[str, Any]]]]:
+        def _read(after: uuid.UUID | None = last_seq) -> tuple[bool, list[tuple[uuid.UUID, dict[str, Any]]]]:
             with db_session_factory() as db:
                 bind_session(db, workspace_id=workspace_id)
                 return jobs_models.read_progress(db, job_id, after=after, stale_seconds=_STALE_SECONDS)
@@ -821,7 +821,7 @@ async def watch(
 
 
 async def authorize(
-    db_session_factory: sessionmaker[Session], job_id: str, workspace_id: int, persona: str
+    db_session_factory: sessionmaker[Session], job_id: str, workspace_id: uuid.UUID, persona: str
 ) -> AgentJob:
     """Return `job_id`'s row if it belongs to `workspace_id` AND `persona`, else refuse.
 
@@ -854,7 +854,9 @@ async def authorize(
     return job
 
 
-async def cleanup(db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: int, persona: str) -> None:
+async def cleanup(
+    db_session_factory: sessionmaker[Session], job_id: str, *, workspace_id: uuid.UUID, persona: str
+) -> None:
     """Remove everything `job_id` left on disk, once it is no longer resumable.
 
     Its working folder, the home it ran as, and what the CLI itself kept under the persona's

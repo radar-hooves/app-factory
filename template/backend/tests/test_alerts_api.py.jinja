@@ -7,6 +7,7 @@ HTTP reads that follow and rolls back with everything else.
 """
 
 import json
+import uuid
 from typing import Any
 
 import httpx
@@ -140,8 +141,9 @@ async def test_a_dismissed_alert_is_gone_until_raised_again(client: AsyncClient,
 
 
 async def test_an_unknown_alert_answers_404(client: AsyncClient) -> None:
-    assert (await client.post("/api/alerts/999999/read", headers=ADMIN)).status_code == 404
-    assert (await client.delete("/api/alerts/999999", headers=ADMIN)).status_code == 404
+    missing = uuid.uuid7()
+    assert (await client.post(f"/api/alerts/{missing}/read", headers=ADMIN)).status_code == 404
+    assert (await client.delete(f"/api/alerts/{missing}", headers=ADMIN)).status_code == 404
 
 
 async def test_a_caller_without_admin_cannot_see_alerts(client: AsyncClient) -> None:

@@ -17,7 +17,7 @@ vi.mock('./api/client', () => ({
 
 const USER = { id: 1, username: 'someone', display_name: null, email: null, last_seen_at: null };
 
-function membership(id: number, name: string, role: 'owner' | 'member' = 'owner') {
+function membership(id: string, name: string, role: 'owner' | 'member' = 'owner') {
 	return { workspace: { id, slug: name, name }, role };
 }
 
@@ -42,13 +42,13 @@ beforeEach(() => {
 
 describe('auth store — workspace resolution', () => {
 	it('selects the sole membership, so a single-workspace user never chooses', async () => {
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'personal-1')]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.activeWorkspace?.id).toBe('7');
 		expect(auth.canSwitchWorkspace).toBe(false);
-		expect(setActiveWorkspaceId).toHaveBeenCalledWith(7);
+		expect(setActiveWorkspaceId).toHaveBeenCalledWith('7');
 		// Selected, not remembered: the only option was never a choice, so the
 		// day a second membership arrives the next load asks rather than
 		// reloading into the old, empty workspace.
@@ -57,13 +57,13 @@ describe('auth store — workspace resolution', () => {
 
 	it('remembers a workspace the person actually chose', async () => {
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		auth.setActiveWorkspace(8);
+		auth.setActiveWorkspace('8');
 		expect(localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)).toBe('8');
 	});
 
@@ -71,8 +71,8 @@ describe('auth store — workspace resolution', () => {
 		// Deliberate: the backend answers 409 with the choices rather than guessing,
 		// because a silent default is how one workspace's data lands in another.
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
@@ -85,40 +85,40 @@ describe('auth store — workspace resolution', () => {
 	it('honours a remembered workspace across a reload', async () => {
 		localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, '8');
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		expect(auth.activeWorkspace?.id).toBe(8);
+		expect(auth.activeWorkspace?.id).toBe('8');
 	});
 
 	it('discards a remembered workspace the caller is no longer a member of', async () => {
 		// Otherwise every request keeps sending a workspace that now 403s, with
 		// nothing on screen explaining why.
 		localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, '99');
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'household')]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.activeWorkspace?.id).toBe('7');
 		expect(localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)).toBeNull();
 	});
 
 	it('switches only to a workspace the caller actually belongs to', async () => {
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		auth.setActiveWorkspace(999);
+		auth.setActiveWorkspace('999');
 		expect(auth.activeWorkspace).toBeNull();
 
-		auth.setActiveWorkspace(8);
-		expect(auth.activeWorkspace?.id).toBe(8);
+		auth.setActiveWorkspace('8');
+		expect(auth.activeWorkspace?.id).toBe('8');
 	});
 });
 
@@ -128,7 +128,7 @@ describe('auth store — why nobody is signed in', () => {
 	}
 
 	it("asks for the caller without following a redirect, so the proxy's answer arrives as itself", async () => {
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'personal-1')]);
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -214,7 +214,7 @@ describe('auth store — why nobody is signed in', () => {
 		await auth.init();
 		expect(auth.failure).toBe('failed');
 
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'personal-1')]);
 		await auth.init();
 		expect(auth.failure).toBeNull();
 		expect(auth.isAuthenticated).toBe(true);
@@ -224,8 +224,8 @@ describe('auth store — why nobody is signed in', () => {
 describe('auth store — a choice is asked for, never defaulted', () => {
 	it('needs a choice only while several are held and none is chosen', async () => {
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
@@ -233,13 +233,13 @@ describe('auth store — a choice is asked for, never defaulted', () => {
 		expect(auth.needsWorkspaceChoice).toBe(true);
 		expect(auth.activeRole).toBeNull();
 
-		auth.setActiveWorkspace(8);
+		auth.setActiveWorkspace('8');
 		expect(auth.needsWorkspaceChoice).toBe(false);
 		expect(auth.activeRole).toBe('owner');
 	});
 
 	it('never needs a choice for an org-of-one', async () => {
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'personal-1', 'member')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'personal-1', 'member')]);
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -250,49 +250,49 @@ describe('auth store — a choice is asked for, never defaulted', () => {
 
 describe('auth store — refreshing memberships after a grant, a rename or a retraction', () => {
 	it('keeps the active workspace and follows its new name', async () => {
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'household')]);
 		const auth = await freshAuth();
 		await auth.init();
 
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'the family')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'the family')]);
 		await auth.refreshWorkspaces();
 
-		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.activeWorkspace?.id).toBe('7');
 		expect(auth.activeWorkspace?.name).toBe('the family');
 	});
 
 	it('drops an active workspace the caller was removed from, and selects the sole remaining one', async () => {
 		localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, '8');
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle')
+			membership('7', 'household'),
+			membership('8', 'circle')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
-		expect(auth.activeWorkspace?.id).toBe(8);
+		expect(auth.activeWorkspace?.id).toBe('8');
 
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'household')]);
 		await auth.refreshWorkspaces();
 
-		expect(auth.activeWorkspace?.id).toBe(7);
-		expect(setActiveWorkspaceId).toHaveBeenLastCalledWith(7);
+		expect(auth.activeWorkspace?.id).toBe('7');
+		expect(setActiveWorkspaceId).toHaveBeenLastCalledWith('7');
 	});
 
 	it('leaves nothing chosen when a grant makes the held set ambiguous', async () => {
 		// The person had one workspace and was auto-selected into it; a grant
 		// arrives. Their existing choice stands — the new one is offered by the
 		// switcher, never silently switched to.
-		respondWith({ ...USER, entitlements: [] }, [membership(7, 'household')]);
+		respondWith({ ...USER, entitlements: [] }, [membership('7', 'household')]);
 		const auth = await freshAuth();
 		await auth.init();
 
 		respondWith({ ...USER, entitlements: [] }, [
-			membership(7, 'household'),
-			membership(8, 'circle', 'member')
+			membership('7', 'household'),
+			membership('8', 'circle', 'member')
 		]);
 		await auth.refreshWorkspaces();
 
-		expect(auth.activeWorkspace?.id).toBe(7);
+		expect(auth.activeWorkspace?.id).toBe('7');
 		expect(auth.canSwitchWorkspace).toBe(true);
 		expect(auth.needsWorkspaceChoice).toBe(false);
 	});
@@ -300,7 +300,7 @@ describe('auth store — refreshing memberships after a grant, a rename or a ret
 
 describe('auth store — entitlement grades', () => {
 	it('reads a bare key as read-only and :write as both', async () => {
-		respondWith({ ...USER, entitlements: ['property', 'travel:write'] }, [membership(7, 'w')]);
+		respondWith({ ...USER, entitlements: ['property', 'travel:write'] }, [membership('7', 'w')]);
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -317,7 +317,7 @@ describe('auth store — view as colleague', () => {
 
 	it('restores the kept set for the first request and reports the real one', async () => {
 		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, JSON.stringify(['reports']));
-		respondWith(ME, [membership(7, 'w')]);
+		respondWith(ME, [membership('7', 'w')]);
 		const auth = await freshAuth();
 		await auth.init();
 
@@ -334,7 +334,7 @@ describe('auth store — view as colleague', () => {
 
 	it('applies only names the account really holds, per tab', async () => {
 		respondWith({ ...ME, entitlements: ['admin', 'reports'], viewing_as: false }, [
-			membership(7, 'w')
+			membership('7', 'w')
 		]);
 		const auth = await freshAuth();
 		await auth.init();
@@ -347,7 +347,7 @@ describe('auth store — view as colleague', () => {
 
 	it('stops by forgetting the set', async () => {
 		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, '["reports"]');
-		respondWith(ME, [membership(7, 'w')]);
+		respondWith(ME, [membership('7', 'w')]);
 		const auth = await freshAuth();
 		await auth.init();
 		auth.stopViewingAs();
@@ -358,7 +358,7 @@ describe('auth store — view as colleague', () => {
 
 	it('drops a stored set the server did not honour', async () => {
 		sessionStorage.setItem(VIEW_AS_STORAGE_KEY, '["reports"]');
-		respondWith({ ...ME, held: ['reports'], viewing_as: false }, [membership(7, 'w')]);
+		respondWith({ ...ME, held: ['reports'], viewing_as: false }, [membership('7', 'w')]);
 		const auth = await freshAuth();
 		await auth.init();
 

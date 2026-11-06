@@ -4,6 +4,8 @@ Demonstrates the transaction-rollback pattern and httpx.AsyncClient usage.
 Replace with tests for the first real domain when the example slice is removed.
 """
 
+import uuid
+
 import pytest
 
 #: The example module's own grant, which its router requires.
@@ -48,7 +50,7 @@ async def test_create_and_get_item(client):
 @pytest.mark.integration
 async def test_get_item_not_found(client):
     """GET for a missing item returns 404."""
-    response = await client.get("/api/example/99999", headers=ENTITLED)
+    response = await client.get(f"/api/example/{uuid.uuid7()}", headers=ENTITLED)
     assert response.status_code == 404
 
 

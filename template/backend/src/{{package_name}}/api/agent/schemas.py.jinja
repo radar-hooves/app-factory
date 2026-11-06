@@ -11,6 +11,7 @@ something the page renders.
 """
 
 import datetime
+import uuid
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
@@ -21,7 +22,7 @@ class AskRequest(BaseModel):
 
     question: str = Field(min_length=1, max_length=8000)
     #: A conversation of this person's with this persona, to carry on.
-    resume: str | None = None
+    resume: uuid.UUID | None = None
     #: What the page asked for (`briefing`), in its own word: kept with the
     #: question and read back with it, never sent to the agent.
     kind: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,31}$")
@@ -85,7 +86,7 @@ class CollectionRead(BaseModel):
 
 
 class ConversationSummary(BaseModel):
-    id: str
+    id: uuid.UUID
     title: str
     last_activity_at: datetime.datetime
     answering_since: datetime.datetime | None = None

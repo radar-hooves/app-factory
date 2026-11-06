@@ -1,10 +1,15 @@
-"""A factory migration never names an app's revision, so `copier update` needs no repointing."""
+"""A factory migration never names an app's revision, so `copier update` needs no repointing.
+
+The one exception is a barrier: a revision on the app's own chain that every revision referencing
+what it changes must sit before or after (a key's type), which each app points at its own head."""
 
 import ast
 from pathlib import Path
 
 VERSIONS = Path(__file__).resolve().parents[2] / "template" / "backend" / "alembic" / "versions"
 LAST_CHAINED = "e1f7a3b4c5d6"
+#: Each chained onto the app chain's last hand-chained revision or barrier, in order.
+BARRIERS = ["2bce3d4f6105"]
 FIELDS = {"revision", "down_revision", "branch_labels", "depends_on"}
 
 
@@ -42,14 +47,18 @@ def breaches(versions: Path) -> list[str]:
     """What a factory revision after the hand-chained ones does that an app would have to repoint."""
     revs = _revisions(versions)
     assert LAST_CHAINED in revs, "the last hand-chained factory revision is gone"
-    later = set(revs) - _ancestors(revs, LAST_CHAINED)
+    barriers = [b for b in BARRIERS if b in revs]
+    hand = _ancestors(revs, LAST_CHAINED) | set(barriers)
+    later = set(revs) - hand
+    found = [
+        f"barrier {b} chains onto {revs[b]['down_revision']}, not {parent}"
+        for b, parent in zip(barriers, [LAST_CHAINED, *barriers], strict=False)
+        if revs[b]["down_revision"] != {parent} or revs[b]["branch_labels"] or revs[b]["depends_on"]
+    ]
     roots = [r for r in later if not revs[r]["down_revision"]]
-    found = [f"{r} chains onto {p}" for r in later for p in revs[r]["down_revision"] if p not in later]
+    found += [f"{r} chains onto {p}" for r in later for p in revs[r]["down_revision"] if p not in later]
     found += [
-        f"{r} depends on {d}, not the factory"
-        for r in later
-        for d in revs[r]["depends_on"]
-        if d not in later | _ancestors(revs, LAST_CHAINED)
+        f"{r} depends on {d}, not the factory" for r in later for d in revs[r]["depends_on"] if d not in later | hand
     ]
     found += [
         f"{r} starts the branch without its label or without depending on {LAST_CHAINED}"
@@ -90,4 +99,19 @@ def test_a_labelled_root_depending_on_the_last_chained_one_is_clean(tmp_path: Pa
     _write(tmp_path, LAST_CHAINED, "None")
     _write(tmp_path, "first", "None", '("factory",)', f'"{LAST_CHAINED}"')
     _write(tmp_path, "second", '"first"')
+    assert breaches(tmp_path) == []
+
+
+def test_a_barrier_chained_anywhere_but_the_app_chain_is_caught(tmp_path: Path) -> None:
+    _write(tmp_path, LAST_CHAINED, "None")
+    _write(tmp_path, "first", "None", '("factory",)', f'"{LAST_CHAINED}"')
+    _write(tmp_path, BARRIERS[0], '"first"')
+    assert any(f"barrier {BARRIERS[0]} chains onto" in b for b in breaches(tmp_path))
+
+
+def test_a_factory_revision_may_depend_on_a_barrier(tmp_path: Path) -> None:
+    _write(tmp_path, LAST_CHAINED, "None")
+    _write(tmp_path, BARRIERS[0], f'"{LAST_CHAINED}"')
+    _write(tmp_path, "first", "None", '("factory",)', f'"{LAST_CHAINED}"')
+    _write(tmp_path, "second", '"first"', depends=f'"{BARRIERS[0]}"')
     assert breaches(tmp_path) == []

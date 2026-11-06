@@ -98,7 +98,7 @@ class _Turn:
     agent: Agent
     #: The library as the person asking, for a persona that chats with collections.
     collections: Collections | None
-    conversation_id: str
+    conversation_id: uuid.UUID
     #: The question's place in the conversation's record.
     position: int
     question: str
@@ -142,7 +142,7 @@ async def ask(
     user_id: uuid.UUID,
     exempt: bool,
     question: str,
-    resume: str | None,
+    resume: uuid.UUID | None,
     files: dict[str, bytes],
     kind: str | None = None,
     collection: str | None = None,
@@ -231,7 +231,7 @@ async def ask(
 
     async def frames() -> AsyncIterator[str]:
         queue = listening[0]
-        yield sse.frame({"type": "system", "subtype": "init", "session_id": started.id})
+        yield sse.frame({"type": "system", "subtype": "init", "session_id": str(started.id)})
         try:
             while (event := await queue.get()) is not None:
                 yield sse.frame(event)
@@ -332,7 +332,7 @@ async def _answer(
                         place.position = turn.position if turn.edit is None else turn.edit
                         if replaced and replaced != session:
                             await turn.agent.forget(replaced)
-                    event = {**event, "session_id": turn.conversation_id}
+                    event = {**event, "session_id": str(turn.conversation_id)}
                 answered_at = place.position
                 if not held and _speaks(event) and answered_at is not None:
                     held = True
@@ -491,7 +491,7 @@ async def _kept(
     agent: Agent,
     persona: Persona,
     user_id: uuid.UUID,
-    resume: str | None,
+    resume: uuid.UUID | None,
     edit: int,
 ) -> int:
     """How many of the agent's answers come before question `edit`, counted against its transcript as the page reads it.
@@ -560,7 +560,7 @@ async def _settled(turn: _Turn, position: int) -> None:
     if hook is None:
         return
     try:
-        await run_in_threadpool(hook, turn.persona.id, turn.conversation_id, position)
+        await run_in_threadpool(hook, turn.persona.id, str(turn.conversation_id), position)
     except Exception:
         logger.exception("app_hooks.agent_turn_settled failed for conversation %s", turn.conversation_id)
 

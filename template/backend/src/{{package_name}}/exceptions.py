@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 
@@ -155,7 +156,7 @@ def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] 
     content: dict[str, object] = {"error": exc.error_code, "message": exc.message}
     if exc.details:
         content["details"] = exc.details
-    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
+    return JSONResponse(status_code=exc.status_code, content=jsonable_encoder(content), headers=headers)
 
 
 # Keys the logging module reserves on a LogRecord. Passing any of them through
