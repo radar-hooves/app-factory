@@ -112,9 +112,10 @@ describe('the bar', () => {
 			await screen.findByRole('button', { name: 'Account' })
 		];
 
-		for (const [i, control] of bar.slice(1).entries()) {
-			expect(follows(bar[i], control), `control ${i + 1}`).toBe(true);
-		}
+		bar.reduce((before, control) => {
+			expect(follows(before, control)).toBe(true);
+			return control;
+		});
 	});
 
 	it('carries the breadcrumbs on the left, before every control', () => {
