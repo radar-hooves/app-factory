@@ -310,6 +310,26 @@ async def test_a_caller_gone_before_its_refusal_is_499_never_a_503():
 
 
 @pytest.mark.unit
+async def test_a_refused_body_in_several_chunks_is_drained_then_refused():
+    """A refusal consumes every chunk before it answers, so the connection stays fit for reuse."""
+    chunks = [
+        {"type": "http.request", "body": b"x" * 1024, "more_body": True},
+        {"type": "http.request", "body": b"y" * 1024, "more_body": False},
+    ]
+    sent: list[dict[str, object]] = []
+
+    async def receive() -> dict[str, object]:
+        return chunks.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    gated = require_bearer_auth(_inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL)
+    await gated({"type": "http", "headers": []}, receive, send)
+    assert (chunks, [m["status"] for m in sent if m["type"] == "http.response.start"]) == ([], [401])
+
+
+@pytest.mark.unit
 async def test_the_body_the_gate_read_reaches_the_app():
     """The gate reads the body before the app does; the app still receives every byte of it, once."""
 

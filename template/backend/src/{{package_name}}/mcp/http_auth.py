@@ -253,8 +253,8 @@ async def _serve(app: object, scope: dict[str, object], receive: object, send: o
 
 
 async def _refuse(receive: object, send: object, answer: Callable[..., Awaitable[None]], *args: str) -> None:
-    """Answer a refused request once its body is read, or 499 to a caller already gone."""
-    if await _read_body(receive) is None:
+    """Answer a refused request once its body is drained, or 499 to a caller already gone."""
+    if not await _drain_body(receive):
         await _send_client_closed(send)
         return
     await answer(send, *args)
@@ -348,11 +348,24 @@ def _issued_for(token: str, audiences: Collection[str]) -> bool:
     return any(isinstance(name, str) and name in audiences for name in named)
 
 
-async def _read_body(receive: object) -> bytes | None:
-    """The whole request body, or None when the caller has hung up.
+async def _drain_body(receive: object) -> bool:
+    """Consume a refused request's body without keeping it; False when the caller has hung up.
 
-    Read before any answer: an unconsumed body on an HTTP/1.1 connection leaves it
-    unfit for keep-alive reuse.
+    Drained before any answer: an unconsumed body on an HTTP/1.1 connection leaves it
+    unfit for keep-alive reuse. Nothing is held, so an unauthenticated body costs no memory.
+    """
+    while True:
+        event: dict[str, object] = await receive()  # type: ignore[operator]
+        if event.get("type") == "http.disconnect":
+            return False
+        if not event.get("more_body", False):
+            return True
+
+
+async def _read_body(receive: object) -> bytes | None:
+    """An admitted request's whole body, or None when the caller has hung up.
+
+    The MCP transport reads the whole body too, so holding it here costs nothing more.
     """
     chunks: list[bytes] = []
     while True:
