@@ -53,7 +53,7 @@ class SettingChange(KitBase):
 
     __tablename__ = "setting_changes"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
     key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     old_value: Mapped[bool | int | float | str | None] = mapped_column(JSONB, nullable=True)
     new_value: Mapped[bool | int | float | str] = mapped_column(JSONB, nullable=False)

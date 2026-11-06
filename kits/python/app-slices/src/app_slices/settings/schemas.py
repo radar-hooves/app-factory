@@ -1,6 +1,7 @@
 """Pydantic schemas for the settings slice."""
 
 import datetime
+import uuid
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
@@ -38,7 +39,7 @@ class SettingRead(BaseModel):
 class SettingChangeRead(BaseModel):
     """One row of the append-only history — who changed what, when."""
 
-    id: int
+    id: uuid.UUID
     key: str
     old_value: bool | int | float | str | None
     new_value: bool | int | float | str
