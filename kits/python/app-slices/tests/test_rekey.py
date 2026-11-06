@@ -162,7 +162,12 @@ def _constraints(db: Engine) -> list[str]:
         return [r[0] for r in rows]
 
 
-def test_every_surrogate_key_and_reference_becomes_v7_and_reads_the_same(db: Engine) -> None:
+def test_every_surrogate_key_and_reference_becomes_v7_and_reads_the_same(
+    db: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Small batches and checksum chunks, so a table spans many of each.
+    monkeypatch.setattr(rekey, "_BATCH", 50)
+    monkeypatch.setattr(rekey, "_CHUNK", 7)
     before, constraints = _read(db), _constraints(db)
 
     with db.begin() as conn:
@@ -336,3 +341,55 @@ def test_a_view_over_a_converted_column_is_refused(db: Engine) -> None:
 
     with pytest.raises(RekeyError, match="workspace_names"), db.begin() as conn:
         rekey_to_uuid7(conn)
+
+
+def test_any_created_at_keeps_the_order_and_a_time_before_1970_is_held_at_the_epoch(db: Engine) -> None:
+    with db.begin() as conn:
+        conn.execute(text("CREATE TABLE ledger (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), created_at timestamp)"))
+        conn.execute(text("CREATE TABLE diary (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), created_at date)"))
+        conn.execute(
+            text(
+                "INSERT INTO ledger (created_at) SELECT TIMESTAMP '1950-01-01' + (g || ' days')::interval FROM generate_series(1, 30) g"
+            )
+        )
+        conn.execute(text("INSERT INTO diary (created_at) SELECT DATE '2026-01-01' - g FROM generate_series(1, 30) g"))
+        before: dict[str, list[object]] = {
+            t: list(conn.execute(text(f"SELECT created_at FROM {t} ORDER BY {o}")).scalars())
+            for t, o in (("ledger", "created_at, id"), ("diary", "id"))
+        }
+
+    with db.begin() as conn:
+        rekey_to_uuid7(conn, keep=["people"])
+
+    with db.connect() as conn:
+        for t in before:
+            assert list(conn.execute(text(f"SELECT created_at FROM {t} ORDER BY id")).scalars()) == before[t], t
+        first: uuid.UUID = conn.execute(text("SELECT id FROM ledger ORDER BY id LIMIT 1")).scalar_one()
+        assert first.int >> 80 == 0
+
+
+def test_a_partitioned_table_holding_a_converted_key_is_refused(db: Engine) -> None:
+    with db.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE readings (at date, workspace_id integer REFERENCES workspaces (id)) PARTITION BY RANGE (at)"
+            )
+        )
+        conn.execute(
+            text("CREATE TABLE readings_2026 PARTITION OF readings FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')")
+        )
+
+    with pytest.raises(RekeyError, match="readings"), db.begin() as conn:
+        rekey_to_uuid7(conn)
+    assert _types(db)["workspaces.id"] == "integer"
+
+
+def test_a_type_change_postgres_refuses_names_the_table_and_changes_nothing(db: Engine) -> None:
+    with db.begin() as conn:
+        conn.execute(text("ALTER TABLE categories ADD CONSTRAINT positive CHECK (parent_id > 0)"))
+    before = _read(db)
+
+    with pytest.raises(RekeyError, match=r"refused converting public\.categories"), db.begin() as conn:
+        rekey_to_uuid7(conn)
+    assert _read(db) == before
+    assert _types(db)["categories.id"] == "integer"

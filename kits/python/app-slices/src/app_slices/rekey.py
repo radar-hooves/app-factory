@@ -20,8 +20,10 @@ app mints in Python. `include` also takes a text key (hex v4). `soft_refs` names
 a column holding another table's key with no foreign key; `mapped` a table whose
 old ids something outside still holds, whose old-to-new map then stays in schema
 `uuid7_rekey`. A view over a converted column and a reference to no row are
-refused too, all before anything changes. `docs/development/uuid7-rekey.md` in
-app-factory is the recipe around it.
+refused too, as is a partitioned table holding a converted key, all before
+anything changes; a type change Postgres itself refuses (a CHECK or a partial
+index comparing a key with an integer) rolls back naming the table.
+`docs/development/uuid7-rekey.md` in app-factory is the recipe around it.
 """
 
 import datetime
@@ -33,6 +35,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import column, insert, table, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,8 @@ MAP_SCHEMA = "uuid7_rekey"
 _INTEGERS = {"smallint", "integer", "bigint"}
 _TEXTS = {"text", "character varying", "character"}
 _BATCH = 5000
+#: Rows per checksum chunk, so the proof of a table of any size stays under Postgres's 1 GB value.
+_CHUNK = 100_000
 
 
 class RekeyError(Exception):
@@ -66,7 +71,10 @@ class _Key:
     table: str
     column: str
     type: str
-    order: str
+    #: The old row order: quoted columns, each with its direction.
+    order: tuple[str, ...]
+    #: Whether `created_at` is a timestamp the new keys take their time from.
+    stamped: bool
 
 
 def rekey_to_uuid7(
@@ -99,7 +107,7 @@ def rekey_to_uuid7(
 
     now_ms = _now_ms(connection) - 1
     for i, key in enumerate(keys.values()):
-        report.rekeyed[key.table] = _build_map(connection, schema, i, key, tables[key.table], now_ms)
+        report.rekeyed[key.table] = _build_map(connection, schema, i, key, now_ms)
 
     foreign_keys = _foreign_keys(connection, schema, roots)
     for owner, name, _ in foreign_keys:
@@ -125,13 +133,16 @@ def rekey_to_uuid7(
             for (t, col), root in sorted(roots.items())
             if t == owner
         ]
-        connection.execute(text(f"ALTER TABLE {q(schema)}.{q(owner)} " + ", ".join(clauses)))
+        try:
+            connection.execute(text(f"ALTER TABLE {q(schema)}.{q(owner)} " + ", ".join(clauses)))
+        except DBAPIError as exc:
+            raise RekeyError(f"Postgres refused converting {schema}.{owner}: {exc.orig}") from exc
     for seq in sequences:
         connection.execute(text(f"DROP SEQUENCE {seq}"))
     for owner, name, definition in foreign_keys:
         connection.execute(text(f"ALTER TABLE {q(schema)}.{q(owner)} ADD CONSTRAINT {q(name)} {definition}"))
 
-    after_keys = {name: _Key(k.table, k.column, "uuid", q(k.column)) for name, k in keys.items()}
+    after_keys = {name: _Key(k.table, k.column, "uuid", (q(k.column),), k.stamped) for name, k in keys.items()}
     for t in touched:
         after = _proof(connection, schema, t, tables[t], after_keys, roots)
         if after != before[t]:
@@ -144,7 +155,7 @@ def rekey_to_uuid7(
             connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {q(MAP_SCHEMA)}"))
             connection.execute(
                 text(
-                    f"CREATE TABLE IF NOT EXISTS {q(MAP_SCHEMA)}.{q(name)} "
+                    f"CREATE TABLE {q(MAP_SCHEMA)}.{q(name)} "
                     f"(old_id {keys[name].type} PRIMARY KEY, new_id uuid NOT NULL UNIQUE)"
                 )
             )
@@ -234,19 +245,20 @@ def _keys(
         attr = tables[name][col]
         kind = str(attr["type"]).split("(")[0]
         default = str(attr["default"] or "")
-        stamped = f"{q('created_at')} NULLS FIRST, {q(col)}" if "created_at" in tables[name] else q(col)
+        stamped = str(tables[name].get("created_at", {}).get("type", "")).startswith("timestamp")
+        by_time = (f"{q('created_at')} NULLS FIRST", q(col)) if stamped else (q(col),)
         if kind in _INTEGERS:
             generated = bool(attr["identity"]) or default.startswith("nextval(")
-            order = q(col)
+            order: tuple[str, ...] = (q(col),)
         elif kind == "uuid":
             all_v7 = connection.execute(
                 text(f"SELECT bool_and(substr({q(col)}::text, 15, 1) = '7') FROM {q(schema)}.{q(name)}")
             ).scalar()
             if all_v7 or (all_v7 is None and not default):
                 continue
-            generated, order = bool(default), stamped
+            generated, order = bool(default), by_time
         elif kind in _TEXTS and name in include:
-            generated, kind, order = True, "text", stamped
+            generated, kind, order = True, "text", by_time
         elif name in include:
             raise RekeyError(f"{name}.{col} is included but is {attr['type']}, not an integer, uuid or text")
         else:
@@ -254,7 +266,7 @@ def _keys(
         if not generated and name not in include:
             undecided.append(f"{name}.{col} ({kind})")
             continue
-        keys[name] = _Key(name, col, kind, order)
+        keys[name] = _Key(name, col, kind, order, stamped)
     if undecided:
         raise RekeyError(
             f"keys the database does not generate: {', '.join(sorted(undecided))}. "
@@ -313,6 +325,9 @@ def _roots(
                 changed = True
             elif seen != root:
                 raise RekeyError(f"{child}.{child_column} holds keys of both {seen} and {root}")
+    others = sorted({t for t, _ in roots} - set(tables))
+    if others:
+        raise RekeyError(f"partitioned or not ordinary tables hold a converted key; convert them by hand: {others}")
     return roots
 
 
@@ -402,25 +417,28 @@ def _proof(
             continue
         key = keys[root]
         joins.append(
-            f"LEFT JOIN (SELECT {quote(key.column)} AS k, row_number() OVER (ORDER BY {key.order}) AS n "
+            f"LEFT JOIN (SELECT {quote(key.column)} AS k, row_number() OVER (ORDER BY {_order(key)}) AS n "
             f"FROM {quote(schema)}.{quote(root)}) r{i} ON r{i}.k = t.{quote(col)}::{key.type}"
         )
         marks.append(f"CASE WHEN t.{quote(col)} IS NULL THEN 'null' ELSE coalesce(r{i}.n::text, 'dangling') END")
     own = keys.get(name)
-    place = f"row_number() OVER (ORDER BY {_qualified(own.order)})" if own else "0"
+    place = f"row_number() OVER (ORDER BY {_order(own, 't')})" if own else "0"
     line = " || '|' || ".join([f"md5(ROW({', '.join(f't.{c}' for c in kept)})::text)", *marks])
+    lines = f"SELECT {line} AS line, {place} AS place FROM {quote(schema)}.{quote(name)} t {' '.join(joins)}"
+    numbered = f"SELECT line, row_number() OVER (ORDER BY place, line) AS r FROM ({lines}) s"
+    chunks = (
+        f"SELECT (r - 1) / {_CHUNK} AS g, count(*) AS n, md5(string_agg(line, E'\\n' ORDER BY r)) AS h "
+        f"FROM ({numbered}) s GROUP BY 1"
+    )
     row = connection.execute(
-        text(
-            f"SELECT count(*), md5(coalesce(string_agg(line, E'\\n' ORDER BY place, line), '')) FROM "
-            f"(SELECT {line} AS line, {place} AS place FROM {quote(schema)}.{quote(name)} t {' '.join(joins)}) s"
-        )
+        text(f"SELECT coalesce(sum(n), 0), md5(coalesce(string_agg(h, '' ORDER BY g), '')) FROM ({chunks}) s")
     ).one()
     return int(row[0]), str(row[1])
 
 
-def _qualified(order: str) -> str:
-    """An ORDER BY over bare quoted columns, qualified to the proof's alias `t`."""
-    return ", ".join(f"t.{part.strip()}" for part in order.split(","))
+def _order(key: _Key, alias: str = "") -> str:
+    """`key`'s row order as an ORDER BY list, its columns qualified by `alias`."""
+    return ", ".join(f"{alias}.{part}" if alias else part for part in key.order)
 
 
 def _now_ms(connection: Connection) -> int:
@@ -433,7 +451,6 @@ def _build_map(
     schema: str,
     i: int,
     key: _Key,
-    columns: dict[str, dict[str, object]],
     now_ms: int,
 ) -> int:
     """Fill `pg_temp.uuid7_map_<i>` with a v7 per row, in old order, and the lookup function over it."""
@@ -441,31 +458,27 @@ def _build_map(
     connection.execute(
         text(f"CREATE TEMP TABLE uuid7_map_{i} (old_id {key.type} PRIMARY KEY, new_id uuid NOT NULL UNIQUE)")
     )
-    stamped = "created_at" in columns
+    source = f"{quote(schema)}.{quote(key.table)}"
+    earliest = connection.execute(text(f"SELECT min(created_at) FROM {source}")).scalar() if key.stamped else None
+    last = min(_ms(earliest), now_ms) if earliest is not None else now_ms
+    counter, count = -1, 0
+    target = table("uuid7_map_" + str(i), column("old_id"), column("new_id"), schema="pg_temp")
     rows = connection.execute(
         text(
-            f"SELECT {quote(key.column)}{', ' + quote('created_at') if stamped else ''} "
-            f"FROM {quote(schema)}.{quote(key.table)} ORDER BY {key.order}"
-        )
-    ).all()
-    known = [_ms(r[1]) for r in rows if stamped and r[1] is not None]
-    last = min(min(known, default=now_ms), now_ms)
-    counter = -1
-    target = table("uuid7_map_" + str(i), column("old_id"), column("new_id"), schema="pg_temp")
-    batch: list[dict[str, object]] = []
-    for row in rows:
-        ms = min(max(last, _ms(row[1]) if stamped and row[1] is not None else last), now_ms)
-        if ms > last or counter < 0:
-            counter = int.from_bytes(os.urandom(6)) >> 7
-        else:
-            counter += 1
-        last = ms
-        batch.append({"old_id": row[0], "new_id": uuid7_at(ms, counter, int.from_bytes(os.urandom(4)))})
-        if len(batch) == _BATCH:
-            connection.execute(insert(target), batch)
-            batch = []
-    if batch:
+            f"SELECT {quote(key.column)}, {quote('created_at') if key.stamped else 'NULL'} "
+            f"FROM {source} ORDER BY {_order(key)}"
+        ),
+        execution_options={"yield_per": _BATCH},
+    )
+    for partition in rows.partitions():
+        batch: list[dict[str, object]] = []
+        for old, created in partition:
+            ms = min(max(last, _ms(created)) if created is not None else last, now_ms)
+            counter = counter + 1 if ms == last and counter >= 0 else int.from_bytes(os.urandom(6)) >> 7
+            last = ms
+            batch.append({"old_id": old, "new_id": uuid7_at(ms, counter, int.from_bytes(os.urandom(4)))})
         connection.execute(insert(target), batch)
+        count += len(batch)
     connection.execute(text(f"ANALYZE pg_temp.uuid7_map_{i}"))
     connection.execute(
         text(
@@ -473,9 +486,11 @@ def _build_map(
             f"AS 'SELECT new_id FROM pg_temp.uuid7_map_{i} WHERE old_id = $1'"
         )
     )
-    return len(rows)
+    return count
 
 
-def _ms(value: object) -> int:
-    assert isinstance(value, datetime.datetime)
-    return int(value.timestamp() * 1000)
+def _ms(value: datetime.datetime) -> int:
+    """Milliseconds since the epoch, none before it; a timestamp without a zone is read as UTC."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.UTC)
+    return max(int(value.timestamp() * 1000), 0)

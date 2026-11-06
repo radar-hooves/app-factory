@@ -10,7 +10,7 @@ In the migration's own transaction it gives every single-column key the database
 INFO  [alembic.rekey] example_items: 5000 rows, checksum 0f44ef86…, the same before and after
 ```
 
-Refused before anything changes, all at once: a key the database does not generate, a view over a converted column, a reference that names no row.
+Refused before anything changes: a key the database does not generate (all listed at once), a view over a converted column, a partitioned table holding a converted key, a reference that names no row. A type change Postgres itself refuses (a CHECK or a partial index comparing a key with an integer) rolls back naming the table.
 
 | Argument | Names | When |
 | --- | --- | --- |
