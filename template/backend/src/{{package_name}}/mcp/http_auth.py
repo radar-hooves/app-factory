@@ -19,6 +19,15 @@ A short-lived in-memory cache (keyed on a sha256 of the token, never the
 plaintext) avoids a userinfo round trip on every request from an
 already-validated caller.
 
+Userinfo is one endpoint for the whole instance, and the front door validates
+every MCP request in the estate there too, so a burst of agent sessions starting
+holds an uncached lookup for seconds (app-factory#77: 149 calls in 25 s, median
+3.6 s, max 7.9 s). The gate waits for the answer rather than failing at a short
+timeout, and reads the request body itself before the MCP app sees it: a caller
+that hung up during the wait is answered 499 (client closed request), never
+handed to the transport, whose body read would raise and whose own error
+middleware would answer 500 for nobody.
+
 A bearer this app's own token exchange issued (``asker``, the stamped
 ``exchange.Exchange``) is not a machine's: it names a person, a persona's asker
 or one another app asked for. The gate routes it by its issuer, verifies it
@@ -46,18 +55,19 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from typing import Protocol, cast
 
-import anyio
 import httpx
-from starlette.requests import ClientDisconnect
 
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL_SECONDS = 60.0
 _CACHE_MAX_ENTRIES = 256
-_USERINFO_TIMEOUT_SECONDS = 5.0
+# A refused connection fails at once; a saturated userinfo gets the time it takes.
+# Seven days of Authentik's own runtimes (06/11/2026): p99 4.2 s, p99.9 8.5 s, 12 of
+# about 200,000 over 15 s. One request, never a retry queued behind the burst.
+_USERINFO_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 
 class AskerTokens(Protocol):
@@ -141,7 +151,7 @@ def require_bearer_auth(
     """
     cache = _TokenCache()
     accepted = frozenset(audiences)
-    client = httpx.AsyncClient(transport=transport, timeout=_USERINFO_TIMEOUT_SECONDS)
+    client = httpx.AsyncClient(transport=transport, timeout=_USERINFO_TIMEOUT)
 
     async def gated_app(scope: dict[str, object], receive: object, send: object) -> None:
         if scope["type"] != "http":
@@ -153,8 +163,7 @@ def require_bearer_auth(
             await _admit_asker(app, asker, token, scope, receive, send, resource_metadata_url)
             return
         if token is None or not userinfo_url or not accepted:
-            await _drain_body(receive)
-            await _send_unauthorized(send, resource_metadata_url)
+            await _refuse(receive, send, _send_unauthorized, resource_metadata_url)
             return
 
         status, identity = await _resolve_identity(
@@ -166,13 +175,11 @@ def require_bearer_auth(
             client=client,
         )
         if status == 503:
-            await _drain_body(receive)
-            await _send_unavailable(send)
+            await _refuse(receive, send, _send_unavailable)
             return
         if status != 200 or identity is None:
             logger.warning("MCP HTTP request rejected: bearer token did not validate")
-            await _drain_body(receive)
-            await _send_unauthorized(send, resource_metadata_url)
+            await _refuse(receive, send, _send_unauthorized, resource_metadata_url)
             return
 
         logger.debug("Resolved MCP HTTP identity: %s", identity)
@@ -185,8 +192,7 @@ def require_bearer_auth(
             client_id_header = identity.encode("latin-1")
         except UnicodeEncodeError:
             logger.warning("MCP HTTP request rejected: resolved identity is not header-safe")
-            await _drain_body(receive)
-            await _send_unauthorized(send, resource_metadata_url)
+            await _refuse(receive, send, _send_unauthorized, resource_metadata_url)
             return
 
         # Copy scope and rewrite headers: remove any client-supplied x-client-id,
@@ -217,13 +223,11 @@ async def _admit_asker(
         person = await asker.verified(token)
     except ConnectionError:
         logger.warning("MCP HTTP request held: the identity provider's signing keys are unreachable")
-        await _drain_body(receive)
-        await _send_unavailable(send)
+        await _refuse(receive, send, _send_unavailable)
         return
     if person is None:
         logger.warning("MCP HTTP request rejected: an asker's bearer did not verify")
-        await _drain_body(receive)
-        await _send_unauthorized(send, resource_metadata_url)
+        await _refuse(receive, send, _send_unauthorized, resource_metadata_url)
         return
     new_scope = _without_client_id(scope)
     new_scope["asker"] = person
@@ -231,11 +235,29 @@ async def _admit_asker(
 
 
 async def _serve(app: object, scope: dict[str, object], receive: object, send: object) -> None:
-    """Run the MCP app; a caller that hangs up mid-request is not a server fault, and has nobody to answer."""
-    try:
-        await app(scope, receive, send)  # type: ignore[operator]
-    except ClientDisconnect, anyio.ClosedResourceError, anyio.BrokenResourceError:
-        logger.debug("MCP HTTP caller disconnected before the response finished")
+    """Run the MCP app on the body read here, or answer 499 to a caller already gone."""
+    body = await _read_body(receive)
+    if body is None:
+        await _send_client_closed(send)
+        return
+    replayed = False
+
+    async def replay() -> object:
+        nonlocal replayed
+        if replayed:
+            return await receive()  # type: ignore[operator]
+        replayed = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    await app(scope, replay, send)  # type: ignore[operator]
+
+
+async def _refuse(receive: object, send: object, answer: Callable[..., Awaitable[None]], *args: str) -> None:
+    """Answer a refused request once its body is read, or 499 to a caller already gone."""
+    if await _read_body(receive) is None:
+        await _send_client_closed(send)
+        return
+    await answer(send, *args)
 
 
 def _without_client_id(scope: dict[str, object]) -> dict[str, object]:
@@ -287,11 +309,7 @@ async def _resolve_identity(
         return 200, cached
 
     try:
-        try:
-            response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
-        except httpx.TimeoutException:
-            # One slow answer is not an outage: ask once more before a 503 tells the caller to retry.
-            response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
+        response = await client.get(userinfo_url, headers={"Authorization": f"Bearer {token}"})
     except httpx.HTTPError:
         logger.warning("OIDC userinfo endpoint unreachable")
         return 503, None
@@ -330,20 +348,27 @@ def _issued_for(token: str, audiences: Collection[str]) -> bool:
     return any(isinstance(name, str) and name in audiences for name in named)
 
 
-async def _drain_body(receive: object) -> None:
-    """Consume the HTTP request body so the connection is left in a clean state.
+async def _read_body(receive: object) -> bytes | None:
+    """The whole request body, or None when the caller has hung up.
 
-    Loops until ``more_body`` is falsy or a ``http.disconnect`` event arrives.
-    Skipping the drain on an HTTP/1.1 connection with an unconsumed body leaves
-    the connection in an inconsistent state, preventing keep-alive reuse.
+    Read before any answer: an unconsumed body on an HTTP/1.1 connection leaves it
+    unfit for keep-alive reuse.
     """
+    chunks: list[bytes] = []
     while True:
         event: dict[str, object] = await receive()  # type: ignore[operator]
-        event_type = event.get("type", "")
-        if event_type == "http.disconnect":
-            return
-        if event_type == "http.request" and not event.get("more_body", False):
-            return
+        if event.get("type") == "http.disconnect":
+            return None
+        chunks.append(cast("bytes", event.get("body", b"")))
+        if not event.get("more_body", False):
+            return b"".join(chunks)
+
+
+async def _send_client_closed(send: object) -> None:
+    """Answer a caller that hung up before it was served: 499, client closed request, read by nobody."""
+    logger.info("MCP HTTP caller hung up before its request was served")
+    await send({"type": "http.response.start", "status": 499, "headers": [(b"content-length", b"0")]})  # type: ignore[operator]
+    await send({"type": "http.response.body", "body": b""})  # type: ignore[operator]
 
 
 async def _send_unauthorized(send: object, resource_metadata_url: str) -> None:

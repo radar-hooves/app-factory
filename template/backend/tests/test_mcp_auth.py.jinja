@@ -18,12 +18,12 @@ and the test punished it for that.
 
 import json
 from collections.abc import Iterator
+from typing import cast
 
 import httpx
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
-from starlette.requests import ClientDisconnect
 
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.actors import Actor, ActorRegistry
@@ -240,36 +240,95 @@ async def test_a_missing_identity_claim_is_refused_never_read_as_sub():
 
 
 @pytest.mark.unit
-async def test_one_slow_userinfo_answer_is_retried_not_a_503():
+async def test_a_slow_userinfo_is_asked_once_never_requeued_behind_the_burst():
+    """A lookup that times out is a 503 after one request: a second would queue behind the burst that slowed the first."""
     calls: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(1)
-        if len(calls) == 1:
-            raise httpx.ReadTimeout("slow")
-        return httpx.Response(200, json={"preferred_username": "mcp-service"})
+        raise httpx.ReadTimeout("slow")
 
     gated = require_bearer_auth(
         _inner_app, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=httpx.MockTransport(handler)
     )
     response = await _call(gated, {"Authorization": _bearer(machine_token("good-token"))})
-    assert response.status_code == 200
-    assert len(calls) == 2
+    assert (response.status_code, len(calls)) == (503, 1)
+
+
+def _mcp_scope(token: str) -> dict[str, object]:
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/",
+        "raw_path": b"/",
+        "root_path": "",
+        "query_string": b"",
+        "server": ("localhost", 80),
+        "client": ("127.0.0.1", 50000),
+        "headers": [
+            (b"host", b"localhost"),
+            (b"authorization", _bearer(token).encode()),
+            (b"content-type", b"application/json"),
+            (b"accept", b"application/json, text/event-stream"),
+        ],
+    }
+
+
+async def _drive_gone_caller(transport: httpx.MockTransport) -> list[int]:
+    """The real FastMCP app behind the gate, asked by a caller who hung up while the gate waited."""
+    from {{ package_name }}.mcp.server import create_mcp_server
+
+    raw = create_mcp_server().http_app(path="/", stateless_http=True)
+    gated = require_bearer_auth(raw, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=transport)
+    sent: list[dict[str, object]] = []
+
+    async def gone() -> dict[str, object]:
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    async with raw.lifespan(raw):
+        await gated(_mcp_scope(machine_token("good-token")), gone, send)
+    return [cast(int, m["status"]) for m in sent if m["type"] == "http.response.start"]
 
 
 @pytest.mark.unit
-async def test_a_caller_that_hangs_up_mid_request_raises_nothing():
-    async def hung_up(scope, receive, send):
-        raise ClientDisconnect()
+async def test_a_caller_gone_before_it_is_served_is_499_never_the_transports_500():
+    """app-factory#77: the caller hung up during a slow userinfo, the transport's body read raised
+    ClientDisconnect, and FastMCP's own error middleware answered 500 before the gate could see it."""
+    assert await _drive_gone_caller(_recording_userinfo([])) == [499]
+
+
+@pytest.mark.unit
+async def test_a_caller_gone_before_its_refusal_is_499_never_a_503():
+    """A caller that hung up while userinfo was unreachable is not owed, and is not logged as, a server failure."""
+    assert await _drive_gone_caller(_unreachable_transport()) == [499]
+
+
+@pytest.mark.unit
+async def test_the_body_the_gate_read_reaches_the_app():
+    """The gate reads the body before the app does; the app still receives every byte of it, once."""
+
+    async def echo_body(scope, receive, send):
+        event = await receive()
+        body = event["body"]
+        await send(
+            {"type": "http.response.start", "status": 200, "headers": [(b"content-length", str(len(body)).encode())]}
+        )
+        await send({"type": "http.response.body", "body": body})
 
     gated = require_bearer_auth(
-        hung_up, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_recording_userinfo([])
+        echo_body, audiences=(AUDIENCE,), userinfo_url=USERINFO_URL, transport=_recording_userinfo([])
     )
-    await gated(
-        {"type": "http", "headers": [(b"authorization", _bearer(machine_token("good-token")).encode())]},
-        lambda: None,
-        lambda message: None,
-    )
+    async with _client(gated) as client:
+        response = await client.post(
+            "/", headers={"Authorization": _bearer(machine_token("good-token"))}, content=b'{"jsonrpc": "2.0"}'
+        )
+    assert (response.status_code, response.content) == (200, b'{"jsonrpc": "2.0"}')
 
 
 @pytest.mark.unit
