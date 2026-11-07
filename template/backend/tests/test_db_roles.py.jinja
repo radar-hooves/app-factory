@@ -21,8 +21,8 @@ from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, Datab
 from {{ package_name }}.db import roles
 from {{ package_name }}.db.roles import (
     RoleError,
-    adopt,
     _bootstrap_closed,
+    adopt,
     adopt_on_first_start,
     ensure_runtime_role,
     prove_runtime_role,
