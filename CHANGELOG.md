@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.28] - 2026-11-07
 
 Need: a stamped app never starts healthy while its bootstrap superuser accepts the store password over TCP. Consumer: portcullis (radar-hooves/portcullis#257), through its lane and master-project's orchestrator; app-factory#106.
 
