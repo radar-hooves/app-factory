@@ -12,8 +12,12 @@ Need: a stamped app never starts healthy while its bootstrap superuser accepts t
 
 - **`adopt_on_first_start` tries the bootstrap login at every start**, not only when the owner is refused. A dump and restore into a fresh initdb gives the bootstrap the store password back while the owner keeps its old verifier and logs in; the start now re-runs adoption, which removes the password again, and fails if it cannot. A refused password or a `pg_hba.conf` that rejects the bootstrap reads as closed, not a fault. No setting is added.
 
+- **The stamped frontend takes `@poodle64/ui` ^2026.11.8**, whose `<SchemaForm>` no longer compiles schemas with `new Function` and so works under the apps' `script-src 'self'`. Need: library (front-end lane), via master-project's orchestrator.
+
 ### Consumer must change
 
+- An app that moved `<SchemaForm>` behind a soft-failing toggle because of the CSP can put it back.
+- Take `package.json`'s `@poodle64/ui` bump and run `pnpm install`.
 - Take `db/roles.py` and `tests/test_db_roles.py` and regenerate `.template-parity.json`.
 
 ## [2026.11.27] - 2026-11-07

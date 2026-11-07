@@ -338,6 +338,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@cfworker/json-schema':
+        specifier: ^4.1.6
+        version: 4.1.6
       '@grafana/faro-web-sdk':
         specifier: ^2.11.0
         version: 2.13.0
@@ -491,6 +494,9 @@ packages:
 
   '@bundled-es-modules/memfs@4.17.0':
     resolution: {integrity: sha512-ykdrkEmQr9BV804yd37ikXfNnvxrwYfY9Z2/EtMHFEFadEjsQXJ1zL9bVZrKNLDtm91UdUOEHso6Aweg93K6xQ==}
+
+  '@cfworker/json-schema@4.1.6':
+    resolution: {integrity: sha512-YzVGTHXf4bzlyAL5KAvHYCdNbbt6zM5cYkAgxqxQPDQM6aZ4ShIIN5yJ+6q7YeonnevxT8k/LmD2tJi/jOiKkg==}
 
   '@csstools/color-helpers@6.1.2':
     resolution: {integrity: sha512-grhRy3OKmniaAEKXMjua5z/EODX0MSqBGjunw8+j/3HQjOnahs2AGhvEOIYVUWcU6ScApbhLhVrQTX8XqrMrow==}
@@ -3248,6 +3254,8 @@ snapshots:
       util: 0.12.5
     transitivePeerDependencies:
       - tslib
+
+  '@cfworker/json-schema@4.1.6': {}
 
   '@csstools/color-helpers@6.1.2': {}
 

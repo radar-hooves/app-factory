@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { createAjv, Generate, type UISchemaElement } from '@jsonforms/core';
+	import { Generate, type UISchemaElement } from '@jsonforms/core';
 	import Panel from '../panel/panel.svelte';
 	import SchemaFormElement from './schema-form-element.svelte';
 	import UnknownField from './widgets/unknown-field.svelte';
 	import { setSchemaFormContext } from './context.js';
 	import { addressedPaths, getAt, setAt, unmappedFields } from './data.js';
+	import { createRuleEvaluator, validateValue } from './validator.js';
 	import { cn } from '#lib/utils.js';
 	import type { SchemaFormProps } from './types.js';
 
@@ -41,9 +42,10 @@
 		class: className
 	}: SchemaFormProps = $props();
 
-	// One Ajv for the life of the form: rule conditions and validation both use
-	// it, and compiling per keystroke would be the whole cost of the component.
-	const ajv = createAjv();
+	// Rule conditions and validation both go through the interpreting validator
+	// in `validator.ts`: no `new Function`, so the apps' CSP (no `unsafe-eval`)
+	// holds.
+	const ajv = createRuleEvaluator();
 
 	// No UI schema is a legitimate mode, not an error: generating one from the
 	// schema is the only arrangement in which a field CANNOT be missing from the
@@ -53,31 +55,19 @@
 	const addressed = $derived(addressedPaths(layout));
 	const unmapped = $derived(unmappedFields(schema, addressed));
 
-	/**
-	 * Validation messages by dot path. Ajv is asked about a CLONE, because
-	 * `createAjv` enables `useDefaults` and would otherwise write defaults into
-	 * the caller's value behind its back.
-	 */
+	/** Validation messages by dot path, from the schema itself. */
 	const errors = $derived.by(() => {
 		const byPath: Record<string, string[]> = {};
 		if (!validate) return byPath;
 		try {
-			const check = ajv.compile(schema as object);
-			const probe = structuredClone($state.snapshot(value));
-			if (check(probe)) return byPath;
-			for (const error of check.errors ?? []) {
-				const missing = (error.params as { missingProperty?: string })?.missingProperty;
-				const instance = error.instancePath.replace(/^\//, '').split('/').filter(Boolean).join('.');
-				const path = missing ? [instance, missing].filter(Boolean).join('.') : instance;
-				if (!path) continue;
-				(byPath[path] ??= []).push(missing ? 'Required' : (error.message ?? 'is invalid'));
-			}
+			for (const { path, message } of validateValue(schema as object, $state.snapshot(value)))
+				(byPath[path] ??= []).push(message);
 		} catch {
-			// A schema Ajv will not compile, or a value it will not clone, is still
-			// a form this renderer can lay out — it simply cannot be validated.
-			// Never let a validation problem blank the form: that is the failure
-			// mode this whole component exists to remove.
-			return byPath;
+			// A schema the validator will not read is still a form this renderer
+			// can lay out — it simply cannot be validated. Never let a validation
+			// problem blank the form: that is the failure mode this whole
+			// component exists to remove.
+			return {};
 		}
 		return byPath;
 	});

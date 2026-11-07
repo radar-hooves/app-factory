@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.8] - 2026-11-07
+
+Consumer: library (front-end lane), via master-project's orchestrator.
+
+### Fixed
+
+- **`<SchemaForm>` runs under `script-src 'self'` (no `unsafe-eval`).** Rule conditions and `validate` went through Ajv, which compiles every schema with `new Function`; the browser refused it and the form threw. Both now use `@cfworker/json-schema`, which interprets the schema. Ajv's build-time standalone mode cannot serve a schema the server sends at runtime. Same messages (`Required`, then the keyword's own text, now cfworker's wording rather than Ajv's). `@jsonforms/core` stays, headless, for scope resolution and rule logic.
+
+### Added
+
+- Dependency `@cfworker/json-schema`.
+
 ## [2026.11.7] - 2026-11-06
 
 Consumer: master-project orchestrator, app-factory#100.

@@ -1,12 +1,8 @@
 import { getContext, setContext } from 'svelte';
-import type { createAjv, JsonSchema } from '@jsonforms/core';
+import type { JsonSchema } from '@jsonforms/core';
 
-/**
- * The Ajv instance `@jsonforms/core` builds. Typed through its own factory so
- * this package never names `ajv` — a transitive dependency of the engine, not
- * a dependency of ours.
- */
-export type FormAjv = ReturnType<typeof createAjv>;
+import type { FormAjv } from './validator.js';
+export type { FormAjv };
 
 /**
  * The form-wide facts every nested element needs, published once by
@@ -25,7 +21,7 @@ export interface SchemaFormContext {
 	readonly idPrefix: string;
 	/** Validation messages by dot path, from the schema itself. */
 	readonly errors: Record<string, string[]>;
-	/** The shared Ajv instance rule conditions are evaluated with. */
+	/** The validator rule conditions are evaluated with. */
 	readonly ajv: FormAjv;
 	/** Commit one field. */
 	change: (path: string, value: unknown) => void;
