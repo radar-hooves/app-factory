@@ -44,7 +44,7 @@ documents = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "library", specifier = ">=2026.10.18124341", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" },
+    { name = "library", specifier = ">=2026.11.7085808", index = "http://172.21.0.2:3141/poodle64/prod/+simple/" },
     { name = "pypandoc-binary", marker = "extra == 'documents'", specifier = ">=1.17" },
     { name = "typst", marker = "extra == 'documents'", specifier = ">=0.15.0" },
 ]
@@ -377,7 +377,7 @@ wheels = [
 
 [[package]]
 name = "library"
-version = "2026.10.18124341"
+version = "2026.11.7085808"
 source = { registry = "http://172.21.0.2:3141/poodle64/prod/+simple/" }
 dependencies = [
     { name = "api-common" },
@@ -388,7 +388,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "http://172.21.0.2:3141/poodle64/prod/+f/6fc/07f594fe2feb6/library-2026.10.18124341-py3-none-any.whl", hash = "sha256:6fc07f594fe2feb6d70ad10a6c1a85879adea50fe4d9d00261da629070d35334" },
+    { url = "http://172.21.0.2:3141/poodle64/prod/+f/b8d/abb625e466e27/library-2026.11.7085808-py3-none-any.whl", hash = "sha256:b8dabb625e466e27b16e4b8136d92dd112109bcb8d20a6eb9d79406e1026312d" },
 ]
 
 [[package]]

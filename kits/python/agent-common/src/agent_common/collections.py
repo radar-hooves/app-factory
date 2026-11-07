@@ -24,6 +24,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
+from uuid import UUID
 
 from library import CallerApi, Configuration, QueryRequest
 from library.exceptions import NotFoundException
@@ -148,7 +149,7 @@ class Source:
 
     n: int
     collection: str
-    document_id: int | str | None
+    document_id: UUID | None
     title: str
     passages: tuple[Passage, ...]
     excerpts: tuple[Passage, ...] = ()
@@ -211,7 +212,7 @@ class Collections:
         request = QueryRequest(query=query, collections=builtins.list(names), top_k=top_k)
         async with self._api() as api:
             response = await api.query_as_caller(query_request=request)
-        grouped: dict[tuple[str, int | None] | int, tuple[str, int | None, str, builtins.list[Passage]]] = {}
+        grouped: dict[tuple[str, UUID | None] | int, tuple[str, UUID | None, str, builtins.list[Passage]]] = {}
         for index, chunk in enumerate(response.chunks):
             key = (chunk.collection, chunk.document_id) if chunk.document_id is not None else index
             passage = Passage(chunk.locator, str((chunk.payload or {}).get("document") or chunk.snippet or ""))
@@ -229,7 +230,7 @@ class Collections:
         sources: builtins.list[Source],
         question: str,
         *,
-        earlier: Mapping[int | str, asyncio.Task[Document | None]] | None = None,
+        earlier: Mapping[UUID, asyncio.Task[Document | None]] | None = None,
     ) -> builtins.list[Source]:
         """`sources` with the text of their documents the question needs, and the `earlier` turn's documents it names.
 
@@ -247,7 +248,7 @@ class Collections:
         """
         terms = _terms(question)
         held = {source.document_id for source in sources}
-        tasks: dict[int | str, asyncio.Task[Document | None]] = {
+        tasks: dict[UUID, asyncio.Task[Document | None]] = {
             document_id: asyncio.ensure_future(self.document(document_id))
             for document_id in dict.fromkeys(s.document_id for s in sources[:OPENED_DOCUMENTS])
             if document_id is not None
@@ -263,7 +264,7 @@ class Collections:
             for task in tasks.values():
                 task.cancel()
             raise
-        found: dict[int | str, Document] = {}
+        found: dict[UUID, Document] = {}
         for document_id, task in tasks.items():
             if task not in done:
                 task.cancel()
@@ -292,7 +293,7 @@ class Collections:
                 result.append(Source(len(result) + 1, "", document_id, document.title, (), excerpts))
         return result
 
-    async def document(self, document_id: int | str) -> Document | None:
+    async def document(self, document_id: UUID) -> Document | None:
         """A cited document, section by section; None where the library has none this person may read.
 
         The library answers "not there" and "not yours" alike, so a document
@@ -300,7 +301,7 @@ class Collections:
         """
         async with self._api() as api:
             try:
-                detail = await api.get_caller_document(document_id=document_id, sections=True)  # type: ignore[arg-type]  # the client's hint is int until the library's UUID client lands
+                detail = await api.get_caller_document(document_id=document_id, sections=True)
             except NotFoundException:
                 return None
         title = str((detail.metadata or {}).get("title") or "").strip()

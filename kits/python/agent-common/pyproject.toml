@@ -11,7 +11,7 @@ dependencies = [
     # `Collections` lists, searches and opens documents through. Resolved off
     # the private index (the workspace root's [tool.uv.sources]). The floor is
     # the first release carrying `CallerApi.query_as_caller`.
-    "library>=2026.10.18124341",
+    "library>=2026.11.7085808",
     # httpx: `remote` forwards a relayed server's messages over it.
     "httpx>=0.28.1",
 ]

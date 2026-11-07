@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.26] - 2026-11-07
+
+Need: the agent chat carries every library id as a UUID only, the form the library serves since its UUID v7 swap (library revision 8519f9b0), with no path that reads both forms (the operator, 07/11/2026: "no ways to read both old and new"). Consumer: eight (radar-hooves/eight), through its orchestrator; godswood, caspo and the library move to this release too. The Factory self-test had been red since the UUID-only `library` client 2026.11.7085808, its fixtures still serving integer ids.
+
+### Changed
+
+- **`agent-common` types a library document id as `UUID`**, in `Source.document_id`, `Collections.document` and the opened-documents bookkeeping. The `int | str` union of 2026.11.24 is gone. The kit and the template floor the `library` client at `2026.11.7085808`.
+- **The agent's document route takes a UUID** (`DocumentId` is gone); the follow-up carry-over keeps a recorded citation only if it is a UUID, so an integer citation from an older conversation is dropped. The chat page sends the id as the string it is.
+- Fixtures and tests (`fake_library.py`, the kit's suite, the chat page and e2e specs) serve and assert UUIDs.
+
+### Consumer must change
+
+- The template requires `agent-common>=2026.11.26` and `library>=2026.11.7085808`. Regenerate `.template-parity.json`; take the template's `schema.d.ts` (`document_id: string`) or regenerate yours.
+
 ## [2026.11.25] - 2026-11-07
 
 Need: the stamped shell's palette test passes on a loaded CI runner. Consumer: eight (radar-hooves/eight), through its orchestrator (eight run 42312953912, `asks the chat persona what was typed, on Enter`).

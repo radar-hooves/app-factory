@@ -5,6 +5,7 @@ import json
 from collections.abc import Iterator
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -13,6 +14,9 @@ from agent_common.collections import Collection, Collections, Document, Passage,
 from library.exceptions import ApiException
 
 URL = "https://library.test/api/caller"
+COLLECTION_ID = UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a01")
+DOC = UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10")
+OTHER = UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a20")
 
 
 async def _token() -> str:
@@ -32,11 +36,11 @@ def library() -> Iterator[respx.MockRouter]:
 def _summary(name: str, *, profile: dict[str, Any] | None, documents_to: str | None, **display: str) -> dict[str, Any]:
     return {
         **display,
-        "id": 1,
+        "id": str(COLLECTION_ID),
         "name": name,
         "pipeline": "text",
         "status": "active",
-        "owner_project_id": 1,
+        "owner_project_id": str(COLLECTION_ID),
         "profile": profile,
         "document_count": 1,
         "type_counts": {},
@@ -44,10 +48,10 @@ def _summary(name: str, *, profile: dict[str, Any] | None, documents_to: str | N
     }
 
 
-def _chunk(n: int, *, payload: dict[str, Any] | None, document_id: int | None = 1042) -> dict[str, Any]:
+def _chunk(n: int, *, payload: dict[str, Any] | None, document_id: UUID | None = DOC) -> dict[str, Any]:
     return {
         "collection": "adf-pay",
-        "document_id": document_id,
+        "document_id": None if document_id is None else str(document_id),
         "content_hash": None,
         "source": "adf-pay.pdf",
         "title": f"Pay manual {n}",
@@ -63,12 +67,12 @@ def _chunk(n: int, *, payload: dict[str, Any] | None, document_id: int | None = 
 
 def _document(**kwargs: Any) -> dict[str, Any]:
     return {
-        "id": 1042,
+        "id": str(DOC),
         "hash": "sha256:0",
         "metadata": {"title": "Pay manual"},
         "tags": None,
         "locations": [],
-        "memberships": [{"collection_id": 1, "collection_name": "adf-pay", "index_status": "indexed"}],
+        "memberships": [{"collection_id": str(COLLECTION_ID), "collection_name": "adf-pay", "index_status": "indexed"}],
         "operation_ids": [],
         "sections": [{"anchor": "page-001--leave", "heading": "Leave", "text": "Recreation leave accrues."}],
         "created_at": "2026-09-29T02:11:00+00:00",
@@ -111,7 +115,7 @@ async def test_a_collection_carries_its_short_title_and_its_subject(library: res
                 "short_title": " DASR ",
                 "subject": {"name": "airworthiness", "title": "Airworthiness"},
             },
-            {**_summary("untitled", profile=None, documents_to=None), "subject": {"name": "misc"}},
+            {**_summary("untitled", profile=None, documents_to=None), "subject": {"name": "misc", "title": ""}},
             {**_summary("loose", profile=None, documents_to=None), "subject": None},
         ],
     )
@@ -132,7 +136,7 @@ async def test_a_search_names_its_collections_and_numbers_the_documents_in_rank_
                 _chunk(1, payload={"document": "The full passage."}),
                 _chunk(2, payload=None, document_id=None),
                 _chunk(3, payload={"other": "x"}),
-                _chunk(4, payload=None, document_id=2048),
+                _chunk(4, payload=None, document_id=OTHER),
             ],
             "decision_id": "d1",
             "routed_collections": ["adf-pay"],
@@ -154,12 +158,12 @@ async def test_a_search_names_its_collections_and_numbers_the_documents_in_rank_
         Source(
             1,
             "adf-pay",
-            1042,
+            DOC,
             "Pay manual 1",
             (Passage("page 1", "The full passage."), Passage("page 3", "snippet 3")),
         ),
         Source(2, "adf-pay", None, "Pay manual 2", (Passage(None, "snippet 2"),)),
-        Source(3, "adf-pay", 2048, "Pay manual 4", (Passage(None, "snippet 4"),)),
+        Source(3, "adf-pay", OTHER, "Pay manual 4", (Passage(None, "snippet 4"),)),
     ]
 
 
@@ -184,11 +188,11 @@ def _annex(rows: int = 400) -> dict[str, Any]:
 async def test_a_long_table_the_passages_missed_the_row_of_is_cut_to_its_header_and_the_row_asked_for(
     library: respx.MockRouter,
 ) -> None:
-    library.get("/documents/1042").respond(200, json=_annex())
+    library.get(f"/documents/{DOC}").respond(200, json=_annex())
     chunk = Passage("Part 1.1: three bedrooms", "| Place0 | $1000 |")
 
     [source] = await _collections().opened(
-        [Source(1, "pacman", 1042, "Annex 7.E", (chunk,))], "squadron leader in brisbane"
+        [Source(1, "pacman", DOC, "Annex 7.E", (chunk,))], "squadron leader in brisbane"
     )
 
     [excerpt] = source.excerpts
@@ -202,13 +206,13 @@ async def test_a_long_table_the_passages_missed_the_row_of_is_cut_to_its_header_
 async def test_a_short_document_reaches_the_model_whole_without_repeating_what_a_passage_already_holds(
     library: respx.MockRouter,
 ) -> None:
-    library.get("/documents/1042").respond(200, json=_document())
+    library.get(f"/documents/{DOC}").respond(200, json=_document())
     chunk = Passage("Leave", "Recreation leave accrues.")
 
-    [source] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "anything at all")
+    [source] = await _collections().opened([Source(1, "adf-pay", DOC, "Pay manual", (chunk,))], "anything at all")
 
     assert source.excerpts == ()
-    library.get("/documents/1042").respond(
+    library.get(f"/documents/{DOC}").respond(
         200,
         json=_document(
             sections=[
@@ -217,61 +221,61 @@ async def test_a_short_document_reaches_the_model_whole_without_repeating_what_a
             ]
         ),
     )
-    [again] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "anything at all")
+    [again] = await _collections().opened([Source(1, "adf-pay", DOC, "Pay manual", (chunk,))], "anything at all")
     assert again.excerpts == (Passage("Long service", "Accrues after ten years."),)
 
 
 async def test_what_an_earlier_turn_cited_is_added_as_a_source_only_where_it_carries_the_question(
     library: respx.MockRouter,
 ) -> None:
-    library.get("/documents/1042").respond(200, json=_annex())
+    library.get(f"/documents/{DOC}").respond(200, json=_annex())
     reader = _collections()
 
-    def earlier() -> dict[int | str, asyncio.Task[Document | None]]:
-        return {1042: asyncio.ensure_future(reader.document(1042))}
+    def earlier() -> dict[UUID, asyncio.Task[Document | None]]:
+        return {DOC: asyncio.ensure_future(reader.document(DOC))}
 
     [carried] = await reader.opened([], "squadron leader in brisbane", earlier=earlier())
     assert (carried.n, carried.document_id, carried.title, carried.passages) == (
         1,
-        1042,
+        DOC,
         "Annex 7.E: Rent ceilings",
         (),
     )
     assert "| Brisbane | $2,611 |" in carried.excerpts[0].text
 
     assert await reader.opened([], "can you generate artefacts", earlier=earlier()) == []
-    held = [Source(1, "pacman", 1042, "Annex 7.E", (Passage(None, "x"),))]
+    held = [Source(1, "pacman", DOC, "Annex 7.E", (Passage(None, "x"),))]
     assert [s.n for s in await reader.opened(held, "brisbane", earlier=earlier())] == [1]
 
 
 async def test_a_document_that_cannot_be_opened_leaves_the_passages_standing(
     library: respx.MockRouter, caplog: pytest.LogCaptureFixture
 ) -> None:
-    library.get("/documents/1042").respond(500, json={"error": "boom", "message": "down"})
-    held = [Source(1, "pacman", 1042, "Annex 7.E", (Passage(None, "x"),))]
+    library.get(f"/documents/{DOC}").respond(500, json={"error": "boom", "message": "down"})
+    held = [Source(1, "pacman", DOC, "Annex 7.E", (Passage(None, "x"),))]
 
     assert await _collections().opened(held, "brisbane") == held
-    assert "Could not open document 1042" in caplog.text
+    assert f"Could not open document {DOC}" in caplog.text
 
 
 async def test_a_cited_document_opens_section_by_section_and_an_absent_one_reads_as_none(
     library: respx.MockRouter,
 ) -> None:
-    route = library.get("/documents/1042").respond(200, json=_document())
+    route = library.get(f"/documents/{DOC}").respond(200, json=_document())
 
-    assert await _collections().document(1042) == Document(
+    assert await _collections().document(DOC) == Document(
         title="Pay manual",
         sections=[{"anchor": "page-001--leave", "heading": "Leave", "text": "Recreation leave accrues."}],
     )
     assert route.calls.last.request.url.params["sections"] == "true"
 
-    library.get("/documents/1042").respond(200, json=_document(metadata={}))
-    untitled = await _collections().document(1042)
+    library.get(f"/documents/{DOC}").respond(200, json=_document(metadata={}))
+    untitled = await _collections().document(DOC)
     assert untitled is not None
-    assert untitled.title == "Document 1042"
+    assert untitled.title == f"Document {DOC}"
 
-    library.get("/documents/1042").respond(404, json={"error": "not_found", "message": "absent"})
-    assert await _collections().document(1042) is None
+    library.get(f"/documents/{DOC}").respond(404, json={"error": "not_found", "message": "absent"})
+    assert await _collections().document(DOC) is None
 
 
 async def test_a_refused_call_is_the_callers_to_handle(library: respx.MockRouter) -> None:
@@ -316,7 +320,7 @@ def test_the_passages_block_heads_each_document_once_with_all_its_passages_behin
             Source(
                 1,
                 "adf-pay",
-                1042,
+                DOC,
                 "Pay manual",
                 (Passage("page 12", "Recreation leave accrues."), Passage("page 14", "Leave is taken in days.")),
                 (Passage("Long service", "Accrues after ten years."),),
@@ -337,7 +341,7 @@ def test_the_passages_block_heads_each_document_once_with_all_its_passages_behin
 
 
 def test_a_follow_up_is_told_it_was_searched_on_its_own_words() -> None:
-    sources = [Source(1, "adf-pay", 1, "Pay manual", (Passage(None, "text"),))]
+    sources = [Source(1, "adf-pay", DOC, "Pay manual", (Passage(None, "text"),))]
 
     assert "searched on its own words" not in passages_block(sources)
     assert "searched on its own words" in passages_block(sources, follow_up=True)
@@ -355,10 +359,10 @@ async def test_a_captioned_table_is_cut_to_its_rows_and_a_task_cancelled_mid_ope
 ) -> None:
     rows = "\n".join(f"| Place{i} | ${i} |" for i in range(300))
     table = f"Table 1: ceilings\n| Location | Amount |\n| --- | --- |\n{rows}\n| Q3 Brisbane | $9 |"
-    library.get("/documents/1042").respond(
+    library.get(f"/documents/{DOC}").respond(
         200, json=_document(sections=[{"anchor": "a", "heading": "H", "text": table}])
     )
-    held = [Source(1, "pacman", 1042, "Annex", (Passage(None, "x"),))]
+    held = [Source(1, "pacman", DOC, "Annex", (Passage(None, "x"),))]
 
     [source] = await _collections().opened(held, "and Q3?")
 
@@ -369,7 +373,7 @@ async def test_a_captioned_table_is_cut_to_its_rows_and_a_task_cancelled_mid_ope
         await asyncio.sleep(5)
         return httpx.Response(200, json=_document())
 
-    library.get("/documents/1042").mock(side_effect=silent)
+    library.get(f"/documents/{DOC}").mock(side_effect=silent)
     opening = asyncio.create_task(_collections().opened(held, "brisbane"))
     await asyncio.sleep(0.2)
     opening.cancel()
@@ -380,29 +384,11 @@ async def test_a_captioned_table_is_cut_to_its_rows_and_a_task_cancelled_mid_ope
 
 
 async def test_a_passage_that_is_most_of_a_short_documents_section_is_not_repeated(library: respx.MockRouter) -> None:
-    library.get("/documents/1042").respond(
+    library.get(f"/documents/{DOC}").respond(
         200, json=_document(sections=[{"anchor": "a", "heading": "Leave", "text": "Recreation leave accrues daily."}])
     )
     chunk = Passage("Leave", "Recreation leave accrues")
 
-    [source] = await _collections().opened([Source(1, "adf-pay", 1042, "Pay manual", (chunk,))], "leave")
+    [source] = await _collections().opened([Source(1, "adf-pay", DOC, "Pay manual", (chunk,))], "leave")
 
     assert source.excerpts == ()
-
-
-UUID_ID = "0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10"
-
-
-async def test_a_uuid_document_id_travels_through_opening_unchanged() -> None:
-    asked: list[int | str] = []
-
-    class Reader(Collections):
-        async def document(self, document_id: int | str) -> Document | None:
-            asked.append(document_id)
-            return Document(title="Pay manual", sections=[{"anchor": "a", "heading": "Leave", "text": "Accrues."}])
-
-    held = [Source(1, "adf-pay", UUID_ID, "Pay manual", (Passage("Leave", "Recreation leave accrues."),))]
-    [source] = await Reader(URL, _token).opened(held, "anything")
-
-    assert asked == [UUID_ID]
-    assert source.document_id == UUID_ID

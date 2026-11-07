@@ -46,7 +46,7 @@ vi.mock('#lib/agent/app.js', async () => ({
 }));
 
 import AskHome from '#lib/agent/ask-home.svelte';
-import { forgetAgent, handOff, personaDocuments } from '#lib/agent/chat.js';
+import { forgetAgent, handOff } from '#lib/agent/chat.js';
 import { nav as page } from './page-state.svelte';
 import Shell from './Shell.svelte';
 import Thinking from './Thinking.svelte';
@@ -76,9 +76,10 @@ const COLLECTIONS = [
 		documents_to: '2026-09-20'
 	}
 ];
+const DOCUMENT_ID = '0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10';
 const CITATION = {
 	n: 1,
-	document_id: '1042',
+	document_id: DOCUMENT_ID,
 	title: 'The Manual, Part 5: Leave',
 	section: '5.1 Recreation leave'
 };
@@ -388,15 +389,7 @@ describe('A persona page, through the app extension points', () => {
 			await screen.findByText('Four weeks a year.', { selector: 'p, div, section' })
 		).toBeTruthy();
 		expect(fake.GET).toHaveBeenCalledWith('/api/agent/{persona}/documents/{document_id}', {
-			params: { path: { persona: 'outrider', document_id: '1042' } }
-		});
-	});
-
-	it('sends a UUID document id to the persona route as it came', async () => {
-		const id = '0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10';
-		await personaDocuments({ id: 'outrider' } as Parameters<typeof personaDocuments>[0])(id);
-		expect(fake.GET).toHaveBeenCalledWith('/api/agent/{persona}/documents/{document_id}', {
-			params: { path: { persona: 'outrider', document_id: id } }
+			params: { path: { persona: 'outrider', document_id: DOCUMENT_ID } }
 		});
 	});
 });

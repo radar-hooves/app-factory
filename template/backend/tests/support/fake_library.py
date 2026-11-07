@@ -38,20 +38,21 @@ import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from uuid import UUID
 
 COLLECTION = "manual"
 SECOND = "conditions"
 RESTRICTED = "restricted"
-DOCUMENT_ID = 1042
-RESTRICTED_ID = 2048
+DOCUMENT_ID = UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10")
+RESTRICTED_ID = UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a20")
 #: `COLLECTION`'s currency mark, the date `test_agent_api.py.jinja` expects its listing to show.
 DOCUMENTS_TO = "2026-09-29"
 SUMMARY = "Pay, allowances and leave."
 
 _CATALOGUE = {
-    COLLECTION: (1, SUMMARY, DOCUMENTS_TO, DOCUMENT_ID),
-    SECOND: (2, "Conditions of service.", "2026-09-20", None),
-    RESTRICTED: (3, "Held back.", None, RESTRICTED_ID),
+    COLLECTION: (UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a01"), SUMMARY, DOCUMENTS_TO, DOCUMENT_ID),
+    SECOND: (UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a02"), "Conditions of service.", "2026-09-20", None),
+    RESTRICTED: (UUID("0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a03"), "Held back.", None, RESTRICTED_ID),
 }
 
 #: What each collection is about, and the title a picker row has room for, as the library groups them.
@@ -98,14 +99,16 @@ class FakeLibrary:
         return server
 
 
-def _document(document_id: int, collection: str) -> dict[str, Any]:
+def _document(document_id: UUID, collection: str) -> dict[str, Any]:
     return {
-        "id": document_id,
+        "id": str(document_id),
         "hash": f"sha256:{document_id}",
         "metadata": {"title": "The Manual, Part 5: Leave"},
         "tags": None,
         "locations": [],
-        "memberships": [{"collection_id": 1, "collection_name": collection, "index_status": "indexed"}],
+        "memberships": [
+            {"collection_id": str(_CATALOGUE[collection][0]), "collection_name": collection, "index_status": "indexed"}
+        ],
         "operation_ids": [],
         "sections": [
             {"anchor": "5-1", "heading": "5.1 Recreation leave", "text": "A member accrues four weeks a year."},
@@ -120,13 +123,13 @@ def _summary(name: str) -> dict[str, Any]:
     collection_id, summary, documents_to, _ = _CATALOGUE[name]
     short_title, subject = _SUBJECTS[name]
     return {
-        "id": collection_id,
+        "id": str(collection_id),
         "name": name,
         "short_title": short_title,
         "subject": subject,
         "pipeline": "text",
         "status": "active",
-        "owner_project_id": 1,
+        "owner_project_id": str(collection_id),
         "profile": {"summary": summary},
         "document_count": 1,
         "type_counts": {},
@@ -139,7 +142,7 @@ def _chunk(rank: int, collection: str, query: str) -> dict[str, Any]:
     text = f"In {collection}, on {query!r}: a member accrues four weeks of recreation leave each year of service."
     return {
         "collection": collection,
-        "document_id": document_id,
+        "document_id": None if document_id is None else str(document_id),
         "content_hash": None,
         "source": f"{collection}.pdf",
         "title": "The Manual, Part 5: Leave",
@@ -197,12 +200,12 @@ class _Handler(BaseHTTPRequestHandler):
             with self.fake.lock:
                 self.fake.listings.append(person)
             self._send(200, [_summary(name) for name in readable])
-        elif match := re.fullmatch(r"/documents/(\d+)", path):
-            held = next((name for name, row in _CATALOGUE.items() if row[3] == int(match[1])), None)
+        elif match := re.fullmatch(r"/documents/([0-9a-f-]{36})", path):
+            held = next((name for name, row in _CATALOGUE.items() if str(row[3]) == match[1]), None)
             if held is None or held not in readable:
                 self._send(404, {"error": "not_found", "message": "no such document"})
             else:
-                self._send(200, _document(int(match[1]), held))
+                self._send(200, _document(UUID(match[1]), held))
         else:
             self._send(404, {"error": "not_found", "message": path})
 

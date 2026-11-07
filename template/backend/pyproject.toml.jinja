@@ -51,7 +51,7 @@ dependencies = [
     # agent-common: the factory's own Claude Code kit (kits/python/agent-common) —
     # the CLI driver, personas, transcripts and the library's collections the
     # agent slice binds to this app.
-    "agent-common>=2026.11.24",
+    "agent-common>=2026.11.26",
 {%- endif %}
     # app-slices: the factory's shared web slices (kits/python/app-slices),
     # mounted in api/main.py rather than stamped; runtime settings first.
@@ -60,7 +60,7 @@ dependencies = [
     # library: the household api-client of the library's caller door, which
     # agent-common's `Collections` reads through; transitive-only, so declared for
     # its index pin below to reach it.
-    "library>=2026.10.18124341",
+    "library>=2026.11.7085808",
 {%- endif %}
 ]
 

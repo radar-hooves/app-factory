@@ -636,7 +636,7 @@ test('a person invited to chat with one persona is refused everything else', asy
 		for (const path of [
 			'/api/agent/outrider/conversations',
 			'/api/agent/outrider/collections',
-			'/api/agent/outrider/documents/1042'
+			'/api/agent/outrider/documents/0194f3c0-7a52-7d3e-9b1a-5c2f8e4d6a10'
 		]) {
 			expect((await person.get(path)).status(), path).toBe(403);
 		}

@@ -121,8 +121,6 @@ gate(entered, "chat-{persona}")
 gate(owned, "chat-{conversation.persona}")
 gate(watching, "agent-{persona}")
 EnteredPersona = Annotated[Persona, Depends(entered)]
-#: A library document id: an integer where it is one, else the UUID string, passed to the library as it came.
-DocumentId = Annotated[int | str, pydantic.Field(union_mode="left_to_right")]
 OwnedConversation = Annotated[Owned, Depends(owned)]
 
 
@@ -389,7 +387,7 @@ async def clear_conversations(
 
 @router.get("/{persona}/documents/{document_id}", operation_id="getDocument")
 async def document(
-    persona: EnteredPersona, document_id: DocumentId, settings: SettingsDep, asking: CurrentAsking
+    persona: EnteredPersona, document_id: uuid.UUID, settings: SettingsDep, asking: CurrentAsking
 ) -> DocumentRead:
     """A document the persona cited, section by section; absent when the library has none this person may read."""
     found = (
