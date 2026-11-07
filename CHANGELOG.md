@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.29] - 2026-11-07
 
 Need: two starts against one Postgres server must not fail each other, and the roles doc must not promise a reload that a bind-mounted `pg_hba.conf` ignores. Consumer: caspo (caspo#221) and portcullis, through master-project's orchestrator.
 
