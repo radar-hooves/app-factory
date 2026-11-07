@@ -187,27 +187,43 @@ def adopt(connection: Connection, owner: str, password: str, runtime: str) -> in
     return len(owned)
 
 
-def adopt_on_first_start(database: DatabaseSettings) -> int | None:
-    """Adopt the database if the owner role cannot log in yet and the bootstrap superuser can.
+def _bootstrap_closed(exc: OperationalError) -> bool:
+    """Whether the server refused the bootstrap's login: a wrong or empty password, or `pg_hba.conf` closing the address."""
+    message = str(exc.orig)
+    return "password authentication failed" in message or "pg_hba.conf" in message
 
-    A database the owner role has never owned (a release's first start, or a fresh initdb) still
-    answers the app's password as the bootstrap's, since the owner role takes that same credential.
-    Only a refused password counts: a refused address (`pg_hba.conf`) or an unreachable server
-    raises as it is. Returns how many objects moved, or None when the owner logged in.
+
+def adopt_on_first_start(database: DatabaseSettings) -> int | None:
+    """Adopt the database whenever the bootstrap superuser still answers the app's password over TCP.
+
+    Two starts reach it. A database the owner role has never owned (a release's first start, or a
+    fresh initdb) refuses the owner role's login and answers the app's password as the bootstrap's,
+    since the owner role takes that same credential. A restore into a fresh initdb gives the
+    bootstrap that password back while the owner keeps its old verifier and logs in, so the bootstrap
+    is tried at every start: if it answers, adoption runs again and removes its password, or the
+    start fails.
+
+    A refused password or a `pg_hba.conf` that closes the bootstrap's address reads as closed. An
+    unreachable server raises as it is. Returns how many objects moved, or None when the bootstrap
+    was closed and the owner logged in.
     """
+    refused: OperationalError | None = None
     try:
         create_engine(database.database_url, poolclass=NullPool).connect().close()
-        return None
     except OperationalError as exc:
         if "password authentication failed" not in str(exc.orig):
             raise
         refused = exc
+    if refused is None and database.postgres_user == database.postgres_bootstrap_user:
+        return None  # `refuse_superuser` stops this start.
     try:
         with create_engine(database.bootstrap_database_url, poolclass=NullPool).begin() as connection:
             return adopt(connection, database.postgres_user, database.postgres_password, database.postgres_runtime_user)
     except OperationalError as exc:
-        if "password authentication failed" not in str(exc.orig):
+        if not _bootstrap_closed(exc):
             raise
+        if refused is None:
+            return None
         refused.add_note(
             f"The bootstrap role {database.postgres_bootstrap_user!r} refused it too, so this is no first start: "
             "the owner role's password is not the one the broker vends."

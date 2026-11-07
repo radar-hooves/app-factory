@@ -21,6 +21,7 @@ from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, Datab
 from {{ package_name }}.db.roles import (
     RoleError,
     adopt,
+    _bootstrap_closed,
     adopt_on_first_start,
     ensure_runtime_role,
     prove_runtime_role,
@@ -373,6 +374,52 @@ def test_the_first_start_adopts_a_database_its_owner_role_cannot_log_in_to(
             connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
             for role in (runtime, owner, bootstrap):
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+
+
+def test_a_restore_that_gives_the_bootstrap_its_password_back_is_adopted_again(superuser: Engine) -> None:
+    """The owner keeps its verifier and logs in, yet the bootstrap answers the app's password: the start closes it."""
+    database, bootstrap, owner, runtime = _name("rest"), _name("boot"), _name("own"), _name("rt")
+    password = secrets.token_urlsafe(24)
+    settings = get_settings().database
+    restored = DatabaseSettings(
+        postgres_user=owner,
+        postgres_password=password,
+        postgres_bootstrap_user=bootstrap,
+        postgres_runtime_user=runtime,
+        postgres_runtime_password=secrets.token_urlsafe(24),
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=database,
+    )
+    with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+        connection.exec_driver_sql(f"CREATE ROLE \"{bootstrap}\" SUPERUSER LOGIN PASSWORD '{password}'")
+        connection.exec_driver_sql(f'CREATE DATABASE "{database}" OWNER "{bootstrap}"')
+    try:
+        assert adopt_on_first_start(restored) == 0
+        assert adopt_on_first_start(restored) is None
+        # The restore: a fresh initdb hands the bootstrap the store password again; the owner is untouched.
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f"ALTER ROLE \"{bootstrap}\" PASSWORD '{password}'")
+        create_engine(restored.database_url, poolclass=NullPool).connect().close()
+        create_engine(restored.bootstrap_database_url, poolclass=NullPool).connect().close()
+        assert adopt_on_first_start(restored) == 0
+        with pytest.raises(OperationalError, match="password authentication failed"):
+            create_engine(restored.bootstrap_database_url, poolclass=NullPool).connect()
+        create_engine(restored.database_url, poolclass=NullPool).connect().close()
+        assert adopt_on_first_start(restored) is None
+    finally:
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+            for role in (owner, bootstrap):
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+
+
+def test_a_bootstrap_that_pg_hba_closes_reads_as_closed() -> None:
+    """The server's own wording for a rejected address is no fault."""
+    rejected = OperationalError("connect", {}, Exception('FATAL:  pg_hba.conf rejects connection for host "10.0.0.2"'))
+    assert _bootstrap_closed(rejected)
+    assert _bootstrap_closed(OperationalError("connect", {}, Exception("password authentication failed for user")))
+    assert not _bootstrap_closed(OperationalError("connect", {}, Exception("connection refused")))
 
 
 def test_a_wrong_owner_password_is_no_first_start() -> None:
