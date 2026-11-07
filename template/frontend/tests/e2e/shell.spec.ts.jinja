@@ -44,23 +44,31 @@ test('the top bar search control, where the app draws one, opens the command pal
 
 // Every route the factory stamps sits under routes/(protected)/, so it renders inside
 // this app's own frame and behind the session guard with no move, whatever the
-// app has put in the frame (app-factory#6). Each case waits for the page's own
-// heading INSIDE the shell's main landmark: the frame also renders around the
-// loading state, so the chrome alone would pass before the page ever did.
+// app has put in the frame (app-factory#6). The page body carries no title of its
+// own: the shell's last crumb names the page in the document's one heading, in the
+// top bar's banner (data-testid ds-page-heading, visually hidden). That crumb is
+// the rail's row for the path where the app has one, else the route's `title`, so
+// a case waits for that heading to name SOME page, and for the main landmark the
+// page renders into: the frame also renders around the loading state, so the
+// chrome alone would pass before the page ever did.
 const STAMPED_ROUTES = [
-	{ path: '/settings/members', heading: 'Members' },
-	{ path: '/settings/application', heading: 'Application' }{% if 'agent' not in omitted_slices %},
-	{ path: '/chat', heading: 'Ask' }{% endif %}
+	{ path: '/settings/members' },
+	{ path: '/settings/application' }{% if 'agent' not in omitted_slices %},
+	{ path: '/chat' }{% endif %}
 ];
 
-for (const { path, heading } of STAMPED_ROUTES) {
+async function expectPageInShell(page: Page) {
+	await expect(page.getByTestId('ds-page-heading')).toHaveText(/\S/);
+	await expect(page.getByTestId('ds-page-heading')).not.toHaveText('Page not found');
+	await expect(page.locator('#ds-main')).toBeVisible();
+}
+
+for (const { path } of STAMPED_ROUTES) {
 	const smoke = path === '/settings/members' ? ' @smoke' : '';
 	test(`the factory's ${path} renders inside the app's shell${smoke}`, async ({ page }) => {
 		await page.goto(path);
 
-		await expect(
-			page.locator('#ds-main').getByRole('heading', { name: heading, exact: true })
-		).toBeVisible();
+		await expectPageInShell(page);
 	});
 }
 
@@ -90,12 +98,12 @@ async function expectEachTakesItsClick(controls: Locator) {
 for (const viewport of VIEWPORTS) {
 	const size = `${viewport.width}x${viewport.height}`;
 
-	for (const { path, heading } of STAMPED_ROUTES) {
+	for (const { path } of STAMPED_ROUTES) {
 		test(`nothing of the shell covers a control on ${path} at ${size}`, async ({ page }) => {
 			await page.setViewportSize(viewport);
 			await page.goto(path);
+			await expectPageInShell(page);
 			const main = page.locator('#ds-main');
-			await expect(main.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 
 			for (const region of [page.getByRole('banner'), main]) {
 				await expectEachTakesItsClick(region.getByRole('button'));
@@ -110,8 +118,8 @@ for (const viewport of VIEWPORTS) {
 	test(`a page's last control scrolls clear of the report button at ${size}`, async ({ page }) => {
 		await page.setViewportSize(viewport);
 		await page.goto('/settings/members');
+		await expectPageInShell(page);
 		const main = page.locator('#ds-main');
-		await expect(main.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
 		await main.evaluate((region) => {
 			const row = document.createElement('div');
 			row.style.cssText = 'display: flex; justify-content: flex-end; padding-top: 150vh';
@@ -142,7 +150,7 @@ test('an address no route serves renders inside the shell', async ({ page }) => 
 // must not claim it; the link sits inside the page, where the router listens.
 test('a link to the API leaves the app for the API', async ({ page }) => {
 	await page.goto('/settings/members');
-	await expect(page.locator('#ds-main').getByRole('heading', { name: 'Members' })).toBeVisible();
+	await expectPageInShell(page);
 	await page.locator('#ds-main').evaluate((main) => {
 		const link = document.createElement('a');
 		link.href = '/api/system/health';

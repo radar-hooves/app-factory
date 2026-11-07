@@ -78,7 +78,31 @@
 		paletteOpen = false;
 		void loadChat?.().then((chat) => chat.handOff(persona.id, { ask: question }));
 	}
-	let collapsed = $state(shell.railCollapsed ?? false);
+
+	// The rail's open or folded choice is the person's, kept per browser until
+	// they change it; `shell.railCollapsed` is only where it starts before they
+	// have chosen. localStorage is per origin, so the key needs no app name.
+	const RAIL_KEY = 'ds-rail-collapsed';
+	function storedCollapsed(): boolean | undefined {
+		try {
+			const kept = localStorage.getItem(RAIL_KEY);
+			return kept === null ? undefined : kept === '1';
+		} catch {
+			return undefined;
+		}
+	}
+	const railStart = storedCollapsed() ?? shell.railCollapsed ?? false;
+	let collapsed = $state(railStart);
+	let kept = railStart;
+	$effect(() => {
+		if (collapsed === kept) return;
+		kept = collapsed;
+		try {
+			localStorage.setItem(RAIL_KEY, collapsed ? '1' : '0');
+		} catch {
+			// Private mode or blocked storage: the choice lasts the visit.
+		}
+	});
 
 	// One route, read by WorkspaceMenu (its own "Members" item, for several
 	// memberships) and AppIdentity (onManageMembers, for exactly one).

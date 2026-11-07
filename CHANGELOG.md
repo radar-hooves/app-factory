@@ -4,6 +4,22 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the stamped `shell.spec.ts` failed 20 of its 24 cases on a fresh stamp (15 in godswood), and godswood's re-stamp lost its persisted rail choice. Consumer: godswood, through master-project's orchestrator.
+
+### Fixed
+
+- **`shell.spec.ts` looks for the page's heading where the shell puts it.** Since the 03/11/2026 shell ruling the page body carries no title: the last crumb names the page in the document's one `h1` (`data-testid="ds-page-heading"`, visually hidden) in the top bar's banner, outside `#ds-main`. The spec waited for a heading inside `#ds-main` and so failed `/settings/members`, `/settings/application`, `/chat`, the report-button and covered-control cases at all four sizes, and the API-link case. It now waits for that heading to name a page (the rail's row where the app has one, else the route's title) and for `#ds-main`. Reproduced on a scratch stamp (20 failed), 24 pass after.
+
+### Added
+
+- **The frame remembers the rail's open or folded choice** in `localStorage` (`ds-rail-collapsed`, per origin); `shell.railCollapsed` is only where it starts. `shell.test.ts` covers a reload.
+
+### Consumer must change
+
+- Take `app-frame.svelte`, `shell.test.ts` and `tests/e2e/shell.spec.ts` and regenerate `.template-parity.json`. An app with its own persisted rail store (godswood's `stores/shell.svelte.ts`) drops the local binding in the frame; its Cmd+B shortcut and other uses of that store are the app's.
+
 ## [2026.11.29] - 2026-11-07
 
 Need: two starts against one Postgres server must not fail each other, and the roles doc must not promise a reload that a bind-mounted `pg_hba.conf` ignores. Consumer: caspo (caspo#221) and portcullis, through master-project's orchestrator.

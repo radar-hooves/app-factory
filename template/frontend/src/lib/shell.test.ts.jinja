@@ -83,6 +83,7 @@ const follows = (a: Element, b: Element) =>
 	Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 beforeEach(() => {
+	localStorage.clear();
 	route.url = new URL('http://localhost/');
 	route.data = {};
 });
@@ -192,6 +193,18 @@ describe('the sidebar', () => {
 		const startsCollapsed = shell.railCollapsed ?? false;
 		expect(rail.hasAttribute('data-collapsed')).toBe(startsCollapsed);
 		await fireEvent.click(toggle);
+		expect(rail.hasAttribute('data-collapsed')).toBe(!startsCollapsed);
+	});
+
+	it("remembers the person's choice across a reload, and starts from the declared default until they make one", async () => {
+		const startsCollapsed = shell.railCollapsed ?? false;
+		const first = render(Layout, { props: { children } });
+		await fireEvent.click(screen.getByTestId('ds-rail-collapse'));
+		await tick();
+		first.unmount();
+
+		render(Layout, { props: { children } });
+		const rail = document.querySelector('.ds-shell-rail')!;
 		expect(rail.hasAttribute('data-collapsed')).toBe(!startsCollapsed);
 	});
 
