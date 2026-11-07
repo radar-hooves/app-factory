@@ -37,7 +37,8 @@ vi.mock('#lib/agent/chat.js', async (importOriginal) => ({
 }));
 
 // The same glob the frame uses decides whether the Ask row exists to assert.
-const hasChat = Object.keys(import.meta.glob('./agent/chat.ts')).length > 0;
+const chatModules = import.meta.glob('./agent/chat.ts');
+const hasChat = Object.keys(chatModules).length > 0;
 
 vi.mock('#lib/alerts/admin-alert-bell.svelte', () => import('../test/stubs/alert-bell.svelte'));
 
@@ -229,8 +230,8 @@ describe('the palette', () => {
 	it.skipIf(!hasChat)('asks the chat persona what was typed, on Enter', async () => {
 		// The frame imports the chat client on first open; the mock factory loads the
 		// real module's graph, which on a loaded runner outlasts findBy's 1s default.
-		// Warm it first, and give the row the test's own budget.
-		await import('#lib/agent/chat.js');
+		// Warm it first (by the frame's own glob, so a render without the slice resolves nothing), and give the row the test's own budget.
+		await Promise.all(Object.values(chatModules).map((load) => load()));
 		render(Layout, { props: { children } });
 		await fireEvent.click(screen.getByTestId('ds-shell-search'));
 
