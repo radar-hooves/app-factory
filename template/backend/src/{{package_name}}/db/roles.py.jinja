@@ -224,10 +224,17 @@ def adopt_on_first_start(database: DatabaseSettings) -> int | None:
             raise
         if refused is None:
             return None
-        refused.add_note(
-            f"The bootstrap role {database.postgres_bootstrap_user!r} refused it too, so this is no first start: "
-            "the owner role's password is not the one the broker vends."
-        )
+        if "password authentication failed" in str(exc.orig):
+            refused.add_note(
+                f"The bootstrap role {database.postgres_bootstrap_user!r} refused it too, so this is no first start: "
+                "the owner role's password is not the one the broker vends."
+            )
+        else:
+            refused.add_note(
+                f"pg_hba.conf closes the bootstrap role {database.postgres_bootstrap_user!r}'s address, so the owner "
+                "role cannot be adopted from here: a first adoption needs the bootstrap's pg_hba line for that one "
+                f"start. The server said: {exc.orig}"
+            )
         raise refused from None
 
 

@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.config import vend as vend_module
 from {{ package_name }}.config.sections.database import SQLALCHEMY_SCHEME, DatabaseSettings
+from {{ package_name }}.db import roles
 from {{ package_name }}.db.roles import (
     RoleError,
     adopt,
@@ -420,6 +421,38 @@ def test_a_bootstrap_that_pg_hba_closes_reads_as_closed() -> None:
     assert _bootstrap_closed(rejected)
     assert _bootstrap_closed(OperationalError("connect", {}, Exception("password authentication failed for user")))
     assert not _bootstrap_closed(OperationalError("connect", {}, Exception("connection refused")))
+
+
+def test_a_first_start_behind_a_closed_pg_hba_names_the_rejection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The owner is refused and `pg_hba.conf` rejects the bootstrap: the note names the address, not the owner's password."""
+    settings = get_settings().database
+    absent = DatabaseSettings(
+        postgres_user=_name("own"),
+        postgres_password=secrets.token_urlsafe(24),
+        postgres_bootstrap_user=_name("boot"),
+        postgres_runtime_password=secrets.token_urlsafe(24),
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=settings.postgres_db,
+    )
+    rejection = 'FATAL:  pg_hba.conf rejects connection for host "10.0.0.2", user "boot"'
+
+    class _Rejected:
+        def begin(self) -> None:
+            raise OperationalError("connect", {}, Exception(rejection))
+
+    real = roles.create_engine
+    monkeypatch.setattr(
+        roles,
+        "create_engine",
+        lambda url, **kwargs: _Rejected() if url == absent.bootstrap_database_url else real(url, **kwargs),
+    )
+    with pytest.raises(OperationalError, match="password authentication failed") as caught:
+        adopt_on_first_start(absent)
+    notes = " ".join(getattr(caught.value, "__notes__", []))
+    assert "pg_hba.conf closes the bootstrap role" in notes
+    assert rejection in notes
+    assert "broker vends" not in notes
 
 
 def test_a_wrong_owner_password_is_no_first_start() -> None:
