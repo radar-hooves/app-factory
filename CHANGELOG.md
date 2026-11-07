@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: a stamped app never starts healthy while its bootstrap superuser accepts the store password over TCP. Consumer: portcullis (radar-hooves/portcullis#257), through its lane and master-project's orchestrator; app-factory#106.
+
+### Fixed
+
+- **`adopt_on_first_start` tries the bootstrap login at every start**, not only when the owner is refused. A dump and restore into a fresh initdb gives the bootstrap the store password back while the owner keeps its old verifier and logs in; the start now re-runs adoption, which removes the password again, and fails if it cannot. A refused password or a `pg_hba.conf` that rejects the bootstrap reads as closed, not a fault. No setting is added.
+
+### Consumer must change
+
+- Take `db/roles.py` and `tests/test_db_roles.py` and regenerate `.template-parity.json`.
+
 ## [2026.11.27] - 2026-11-07
 
 Need: the stamped shell test resolves in a render without the agent slice. Consumer: eight (radar-hooves/eight), through its orchestrator. Fixes 2026.11.25's headless break.
