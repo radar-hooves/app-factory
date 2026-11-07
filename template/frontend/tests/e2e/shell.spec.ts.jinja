@@ -51,11 +51,15 @@ test('the top bar search control, where the app draws one, opens the command pal
 // a case waits for that heading to name SOME page, and for the main landmark the
 // page renders into: the frame also renders around the loading state, so the
 // chrome alone would pass before the page ever did.
+{% if 'agent' not in omitted_slices -%}
 const STAMPED_ROUTES = [
 	{ path: '/settings/members' },
-	{ path: '/settings/application' }{% if 'agent' not in omitted_slices %},
-	{ path: '/chat' }{% endif %}
+	{ path: '/settings/application' },
+	{ path: '/chat' }
 ];
+{%- else -%}
+const STAMPED_ROUTES = [{ path: '/settings/members' }, { path: '/settings/application' }];
+{%- endif %}
 
 async function expectPageInShell(page: Page) {
 	await expect(page.getByTestId('ds-page-heading')).toHaveText(/\S/);
