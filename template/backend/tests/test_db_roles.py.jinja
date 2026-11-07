@@ -6,8 +6,10 @@ and databases are made with passwords generated here, never a vended credential.
 """
 
 import secrets
+import time
 import uuid
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -415,6 +417,53 @@ def test_a_restore_that_gives_the_bootstrap_its_password_back_is_adopted_again(s
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
 
 
+def test_two_starts_against_one_server_adopt_in_turn(superuser: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the lock the second start's role change fails with "tuple concurrently updated"."""
+    database, bootstrap, owner, runtime = _name("race"), _name("boot"), _name("own"), _name("rt")
+    password = secrets.token_urlsafe(24)
+    settings = get_settings().database
+    start = DatabaseSettings(
+        postgres_user=owner,
+        postgres_password=password,
+        postgres_bootstrap_user=bootstrap,
+        postgres_runtime_user=runtime,
+        postgres_runtime_password="unused",
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=database,
+    )
+    with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+        connection.exec_driver_sql(f"CREATE ROLE \"{bootstrap}\" SUPERUSER LOGIN PASSWORD '{password}'")
+        connection.exec_driver_sql(f'CREATE DATABASE "{database}" OWNER "{bootstrap}"')
+    try:
+        assert adopt_on_first_start(start) == 0
+        # A restore hands the bootstrap its password back: both starts below find it answering.
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f"ALTER ROLE \"{bootstrap}\" PASSWORD '{password}'")
+        real_adopt = roles.adopt
+
+        def slow_adopt(*args: object, **kwargs: object) -> int:
+            moved = real_adopt(*args, **kwargs)  # type: ignore[arg-type]
+            time.sleep(1.5)  # still inside its transaction, the owner role's row changed and uncommitted
+            return moved
+
+        monkeypatch.setattr(roles, "adopt", slow_adopt)
+
+        def second() -> int | None:
+            time.sleep(0.5)
+            return adopt_on_first_start(start)
+
+        with ThreadPoolExecutor(2) as pool:
+            first_run, second_run = pool.submit(adopt_on_first_start, start), pool.submit(second)
+            results = {first_run.result(timeout=60), second_run.result(timeout=60)}
+        assert results == {0, None}
+    finally:
+        with superuser.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
+            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+            for role in (runtime, owner, bootstrap):
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+
+
 def test_a_bootstrap_that_pg_hba_closes_reads_as_closed() -> None:
     """The server's own wording for a rejected address is no fault."""
     rejected = OperationalError("connect", {}, Exception('FATAL:  pg_hba.conf rejects connection for host "10.0.0.2"'))
@@ -440,6 +489,8 @@ def test_a_first_start_behind_a_closed_pg_hba_names_the_rejection(monkeypatch: p
     class _Rejected:
         def begin(self) -> None:
             raise OperationalError("connect", {}, Exception(rejection))
+
+        connect = begin
 
     real = create_engine
     monkeypatch.setattr(

@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: two starts against one Postgres server must not fail each other, and the roles doc must not promise a reload that a bind-mounted `pg_hba.conf` ignores. Consumer: caspo (caspo#221) and portcullis, through master-project's orchestrator.
+
+### Fixed
+
+- **`adopt_on_first_start` and `ensure_runtime_role` run under a Postgres advisory lock** (`roles_lock`, held for that block only, taken as the owner or, before it can log in, the bootstrap). Two concurrent starts (two workers, parallel test databases) raced, and one failed with "tuple concurrently updated" on a role change. `test_two_starts_against_one_server_adopt_in_turn` fails without the lock. A start that can log in as neither runs unlocked and meets the refusal itself.
+- **`docs/development/database-roles.md`** says `pg_reload_conf()` does not reach a bind-mounted `pg_hba.conf` that was rewritten (a new inode): write it in place or restart the Postgres container.
+
+### Consumer must change
+
+- Take `db/roles.py`, `alembic/env.py` and `tests/test_db_roles.py` and regenerate `.template-parity.json`. An app that serialised its tests to avoid the race can stop. No setting is added.
+
 ## [2026.11.28] - 2026-11-07
 
 Need: a stamped app never starts healthy while its bootstrap superuser accepts the store password over TCP. Consumer: portcullis (radar-hooves/portcullis#257), through its lane and master-project's orchestrator; app-factory#106.

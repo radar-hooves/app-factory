@@ -14,6 +14,8 @@ the migrations, `ensure_runtime_role` and `prove_runtime_role`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
 from psycopg import sql
@@ -40,6 +42,9 @@ REFUSED = {
 }
 
 _INSUFFICIENT_PRIVILEGE = "42501"
+# Held by every start while it changes roles: two starts against one server (workers, parallel test
+# databases) otherwise fail one of them with "tuple concurrently updated" on a role change.
+_ROLES_LOCK = "SELECT pg_advisory_lock(hashtextextended('app-factory:db-roles', 0))"
 # Every schema but the system's. `pg_has_role` counts the public schema of Postgres 15 and later,
 # which `pg_database_owner` owns, as the database owner's.
 _APP_SCHEMA = "n.nspname NOT LIKE 'pg\\_%' AND n.nspname <> 'information_schema'"
@@ -193,6 +198,27 @@ def _bootstrap_closed(exc: OperationalError) -> bool:
     return "password authentication failed" in message or "pg_hba.conf" in message
 
 
+@contextmanager
+def roles_lock(database: DatabaseSettings) -> Iterator[None]:
+    """Serialise starts against one database: a Postgres advisory lock, held for the block and no longer.
+
+    Taken as the owner role, or as the bootstrap before the owner can log in, on a connection of its
+    own that the block's end closes, which releases it. When neither logs in, the block runs unlocked
+    and meets the refusal itself.
+    """
+    urls = (database.database_url, database.bootstrap_database_url, database.database_url)
+    for url in urls:
+        try:
+            connection = create_engine(url, poolclass=NullPool, isolation_level="AUTOCOMMIT").connect()
+        except OperationalError:
+            continue
+        with connection:
+            connection.exec_driver_sql(_ROLES_LOCK)
+            yield
+        return
+    yield
+
+
 def adopt_on_first_start(database: DatabaseSettings) -> int | None:
     """Adopt the database whenever the bootstrap superuser still answers the app's password over TCP.
 
@@ -207,6 +233,11 @@ def adopt_on_first_start(database: DatabaseSettings) -> int | None:
     unreachable server raises as it is. Returns how many objects moved, or None when the bootstrap
     was closed and the owner logged in.
     """
+    with roles_lock(database):
+        return _adopt_on_first_start(database)
+
+
+def _adopt_on_first_start(database: DatabaseSettings) -> int | None:
     refused: OperationalError | None = None
     try:
         create_engine(database.database_url, poolclass=NullPool).connect().close()
