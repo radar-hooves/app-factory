@@ -441,7 +441,7 @@ def test_a_first_start_behind_a_closed_pg_hba_names_the_rejection(monkeypatch: p
         def begin(self) -> None:
             raise OperationalError("connect", {}, Exception(rejection))
 
-    real = roles.create_engine
+    real = create_engine
     monkeypatch.setattr(
         roles,
         "create_engine",
