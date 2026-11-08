@@ -71,6 +71,15 @@ none of them behaves exactly as it does today.
     calls this each time a job's run settles, a resumed one included, in
     whichever worker process settled it, for an app that acts on a job's
     answer (`jobs_models.JobOutcome`).
+  - `agent_job_resumable(spec: RunSpec) -> bool` — `api/agent/jobs.py`
+    calls this in `send_message()` when no live run holds the job, before it
+    resumes the stored session (`spec.mcp_config` is what the session would
+    start its servers with). For an app whose ids can change under stored jobs
+    (the UUID v7 rekey, a removed user): return False when the binding no
+    longer resolves to an active owner and workspace. `send_message()` then
+    raises `jobs.StaleSessionError`, resumes nothing and leaves the row; the
+    app starts the job again with `start()`, carrying the answer. Absent, every
+    session resumes. A hook that raises fails the message.
 """
 
 from collections.abc import AsyncGenerator

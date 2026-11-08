@@ -40,6 +40,7 @@ docker logs <app> 2>&1 | grep -E 'alembic.rekey|Running upgrade'
 ```
 
 - The upgrade raised: nothing changed. The previous image starts as before.
+- Stored agent sessions: an `agent_jobs` row keeps the `mcp_config` it started with, which binds the old user and workspace ids, and a resume replays it, so its server exits finding no such user (godswood, 08/11/2026: every reading waited). Define `app_hooks.agent_job_resumable` before the window, or retire the paused jobs; `send_message()` then raises `StaleSessionError` and the app starts the job again.
 - Wrong after it committed: stop the app, `docker exec -i <app>-postgres pg_restore --clean --if-exists -U <role> -d <db> < <dump>`, start the previous image.
 
 ## Keys held outside each app

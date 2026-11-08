@@ -31,6 +31,7 @@ because this slice assigns it.
 
 import datetime
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,8 +63,8 @@ from {{ package_name }}.db.scoping import unscoped
 #: know whether a process is working on ``job_id`` right now.
 RUNNING, COMPLETED, FAILED, CANCELLED = "running", "completed", "failed", "cancelled"
 
-#: `enqueue_or_reopen`'s two answers that start no run.
-QUEUED, STOPPING = "queued", "stopping"
+#: `enqueue_or_reopen`'s three answers that start no run.
+QUEUED, STOPPING, STALE = "queued", "stopping", "stale"
 
 #: The type of the coalesced token deltas a streaming job keeps while a message is written.
 STREAM_EVENT = "stream_event"
@@ -446,14 +447,21 @@ def read_progress(
 
 
 def enqueue_or_reopen(
-    db: Session, job_id: str, message: str, *, run_id: str, stale_seconds: float
+    db: Session,
+    job_id: str,
+    message: str,
+    *,
+    run_id: str,
+    stale_seconds: float,
+    resumable: Callable[[RunSpec], bool] | None = None,
 ) -> RunSpec | str | None:
     """Hand ``message`` to whichever process is running ``job_id``, or reopen it for a new run.
 
     Returns `QUEUED` when a live run will write it onto its CLI's stdin,
     `STOPPING` when that run has been asked to stop, the new run's `RunSpec`
     (held by ``run_id``) when there was no live run and the caller must start
-    one, or `None` for no such job. A `running` row with a stale heartbeat
+    one, `STALE` when there was none and ``resumable`` refuses the stored
+    session (the row is left as it was), or `None` for no such job. A `running` row with a stale heartbeat
     counts as no live run: its process is gone, and waiting on it would
     strand the message.
     """
@@ -472,6 +480,9 @@ def enqueue_or_reopen(
         job.pending_messages = [*job.pending_messages, message]
         db.commit()
         return QUEUED
+    if resumable is not None and not resumable(_spec(job)):
+        db.rollback()
+        return STALE
     job.status = RUNNING
     job.run_id = run_id
     job.heartbeat_at = func.now()

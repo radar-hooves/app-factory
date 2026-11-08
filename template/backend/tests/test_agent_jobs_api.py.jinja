@@ -1355,6 +1355,38 @@ async def test_a_jobs_own_mcp_config_binds_its_identity_and_is_reused_on_resume(
     assert json.loads(_answers(job_id, workspace_id)[-1])["status_code"] == 200
 
 
+async def test_a_session_the_app_says_no_longer_binds_its_owner_is_never_resumed(
+    agent_settings: AgentSettings,
+    persona: Persona,
+    identity: tuple[uuid.UUID, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a rekey the stored `mcp_config` binds an id that is gone: a resume would start a server that
+    exits. `agent_job_resumable` refuses it before anything reopens, and a job it accepts resumes as before."""
+    _, workspace_id = identity
+    job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
+    await _wait_until_settled(job_id, workspace_id)
+    events_before = len(_events(job_id, workspace_id))
+    refused: list[RunSpec] = []
+
+    def _no(spec: RunSpec) -> bool:
+        refused.append(spec)
+        return False
+
+    monkeypatch.setattr(app_hooks, "agent_job_resumable", _no, raising=False)
+    with pytest.raises(jobs_module.StaleSessionError):
+        await _message(agent_settings, persona, job_id, workspace_id, "again")
+    assert [spec.job_id for spec in refused] == [job_id]
+    job = _job(job_id, workspace_id)
+    assert job.status == jobs_models.COMPLETED
+    assert len(_events(job_id, workspace_id)) == events_before
+
+    monkeypatch.setattr(app_hooks, "agent_job_resumable", lambda spec: True, raising=False)
+    await _message(agent_settings, persona, job_id, workspace_id, "again")
+    await _wait_until_settled(job_id, workspace_id)
+    assert len(_events(job_id, workspace_id)) > events_before
+
+
 #: A stdio server that, asked to `initialize`, answers with the key it vends with.
 _KEYED_SERVER = """
 import json, os, sys

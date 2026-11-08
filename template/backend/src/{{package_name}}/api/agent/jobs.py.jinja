@@ -69,7 +69,7 @@ from {{ package_name }}.api.agent.redact import redact, redact_event
 from {{ package_name }}.config.paths import data_dir
 from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
-from {{ package_name }}.exceptions import BadRequestError, NotFoundError
+from {{ package_name }}.exceptions import BadRequestError, ConflictError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,14 @@ _HEARTBEAT_SECONDS = 10.0
 _STALE_SECONDS = 90.0
 #: How often every worker sweeps for dead runs (`supervise`).
 _SWEEP_SECONDS = 60.0
+
+
+class StaleSessionError(ConflictError):
+    """The job's stored session cannot be resumed: `app_hooks.agent_job_resumable` refused it.
+
+    Nothing was reopened or started. The app starts the job again with `start()`,
+    carrying the message, as for a session no job holds."""
+
 
 _ORPHANED = "orphaned: the process running this job stopped before it finished"
 _SHUT_DOWN = "stopped: the worker process running this job shut down"
@@ -745,23 +753,37 @@ async def send_message(
     `workspace_id` binds every session this call opens; the caller (the
     router, via `authorize()`) has already checked it matches the job's own.
 
+    A resume replays the `mcp_config` stored at start, which binds whatever
+    identity the app gave it then. An app whose ids can change under a stored
+    job (a rekey, a removed user) defines `app_hooks.agent_job_resumable`, asked
+    before any resume: a session it refuses is never resumed, so its server
+    never starts for an owner that is gone.
+
     Raises:
         NotFoundError: no such job.
         BadRequestError: the job's running process has been asked to stop.
+        StaleSessionError: `agent_job_resumable` refused the stored session.
     """
     text = await run_in_threadpool(redact, persona.name, user_id, text)
     run_id = str(uuid.uuid4())
+    from {{ package_name }} import app_hooks
+
+    resumable = getattr(app_hooks, "agent_job_resumable", None)
 
     def _enqueue() -> RunSpec | str | None:
         with db_session_factory() as db:
             bind_session(db, workspace_id=workspace_id)
-            return jobs_models.enqueue_or_reopen(db, job_id, text, run_id=run_id, stale_seconds=_STALE_SECONDS)
+            return jobs_models.enqueue_or_reopen(
+                db, job_id, text, run_id=run_id, stale_seconds=_STALE_SECONDS, resumable=resumable
+            )
 
     outcome = await run_in_threadpool(_enqueue)
     if outcome is None:
         raise NotFoundError(f"no such job: {job_id}")
     if outcome == jobs_models.STOPPING:
         raise BadRequestError("this job is stopping; send the message again once it has stopped")
+    if outcome == jobs_models.STALE:
+        raise StaleSessionError(f"job {job_id} cannot be resumed: its stored session no longer binds its owner")
     if isinstance(outcome, RunSpec):
         _spawn(db_session_factory, settings, persona, outcome, [text], resume=True)
 

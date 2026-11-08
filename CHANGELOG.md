@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.31] - 2026-11-08
+
+Need: a resumed agent job must not start an MCP server bound to an owner a rekey replaced. Consumer: godswood (#894), through master-project's orchestrator (#417).
+
+### Added
+
+- **`app_hooks.agent_job_resumable(spec: RunSpec) -> bool`**, asked by `jobs.send_message()` when no live run holds the job, before it reopens the row. False raises `jobs.StaleSessionError` (409), resumes nothing and leaves the row; the app starts the job again with `start()`, carrying the answer. Absent, every session resumes as before. `test_a_session_the_app_says_no_longer_binds_its_owner_is_never_resumed` covers both answers.
+- `docs/development/uuid7-rekey.md` tells the window to define the hook or retire stored sessions.
+
+### Consumer must change
+
+- An app that resumes agent jobs after a rekey defines the hook (read its stored `mcp_config` against the active user and workspace) and catches `StaleSessionError` to start the job again. Take `jobs.py`, `jobs_models.py`, `app_hooks.py`'s docstring and the test, and regenerate `.template-parity.json`.
+
 ## [2026.11.30] - 2026-11-07
 
 Need: the stamped `shell.spec.ts` failed 20 of its 24 cases on a fresh stamp (15 in godswood), and godswood's re-stamp lost its persisted rail choice. Consumer: godswood, through master-project's orchestrator.
