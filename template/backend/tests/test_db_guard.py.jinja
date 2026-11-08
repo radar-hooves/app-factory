@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from {{ package_name }}.db import guard
 from {{ package_name }}.db.environment import DeploymentEnvironment, stamp_environment
 from {{ package_name }}.db.guard import (
     ProductionWriteForbiddenError,
@@ -142,5 +143,20 @@ def test_the_checkout_check_alone_refuses_an_unreachable_origin_and_passes_an_im
     (tmp_path / "image" / "backend").mkdir(parents=True)
     assert_checkout_on_default_branch(backend_dir=tmp_path / "image" / "backend")
     _git(checkout, "remote", "set-url", "origin", str(checkout.parent / "gone.git"))
+    with pytest.raises(ProductionWriteForbiddenError, match="Cannot verify"):
+        assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+
+
+def test_a_source_run_container_without_git_passes_but_a_host_without_git_is_refused(
+    checkout: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A source-run app: the checkout is mounted (so .git is found) but the image has no git binary.
+    (checkout / "backend" / "app.py").write_text("x = 8\n")
+    monkeypatch.setattr(guard.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(guard, "_in_container", lambda: True)
+    assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+    # The same missing git outside a container is a person's checkout that cannot be verified.
+    monkeypatch.setattr(guard, "_in_container", lambda: False)
+    monkeypatch.setenv("PATH", "")
     with pytest.raises(ProductionWriteForbiddenError, match="Cannot verify"):
         assert_checkout_on_default_branch(backend_dir=checkout / "backend")

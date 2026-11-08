@@ -9,6 +9,10 @@ Passes untouched, because nothing is there to protect or to compare:
 
 - a deployed image (no ``.git`` above the package; migrations run at boot, and refusing on
   missing git state would stop the live app starting);
+- a container with no git binary: an app run from source mounts its checkout, so a ``.git`` is
+  above the package, but its image carries no git and its deploy unit, not a person, moved the
+  checkout. A seat or script on a checkout has git (else it could not have branched) or no
+  container, so it is still compared and refused;
 - a database not stamped production, one with no marker table (before its first migration a
   failed read would abort the migration's own transaction), and one whose name contains
   ``test`` (the suite's throwaway databases).
@@ -19,6 +23,7 @@ database is production and the comparison is the point.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,6 +45,15 @@ def _git(root: Path, *args: str) -> str:
             f"Cannot verify the checkout against origin (git {args[0]}): {exc}"
         ) from exc
     return done.stdout.strip()
+
+
+def _in_container() -> bool:
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
+
+
+def _is_deployed_container() -> bool:
+    """A container without git cannot be a seat's checkout: the deploy unit moved what it runs."""
+    return _in_container() and shutil.which("git") is None
 
 
 def _checkout_root(backend_dir: Path) -> Path | None:
@@ -70,7 +84,7 @@ def assert_checkout_on_default_branch(*, backend_dir: Path | None = None) -> Non
     """
     backend = backend_dir or Path(__file__).resolve().parents[3]
     root = _checkout_root(backend)
-    if root is None:
+    if root is None or _is_deployed_container():
         return
 
     # The remote's own answer for its default branch, so no fetch and no branch name assumed.

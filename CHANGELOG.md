@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.36] - 2026-11-09
+
+Need: an app with `run_mode: source` must start on a release carrying `db/guard.py`. Its container mounts the checkout at `/srv/<app>` (so a `.git` sits above the package) but its image has no git binary, so 2026.11.33's guard raised `Cannot verify the checkout against origin ([Errno 2] ... 'git')` at the migration step and caspo's backend crash-looped. Consumer: master-project's weekly factory sweep (caspo reverted to v2026.11.28; godswood next).
+
+### Fixed
+
+- **`db/guard.py`: a container with no git binary passes.** The guard tells the two cases apart by who could have moved the checkout: a source-run app's container (`/.dockerenv` or `/run/.containerenv`, and no `git` on PATH) runs what its deploy unit put there; a seat or script on a checkout has git, or is not in a container, and is still compared with origin and refused. A container that has git, or a git-less host, is still refused on an unverifiable checkout.
+
+### Consumer must change
+
+- Take `db/guard.py` and `tests/test_db_guard.py`, and regenerate `.template-parity.json`. caspo and godswood (`run_mode: source`) update past v2026.11.35 to this release. No setting is added; the image still needs no git.
+
 ## [2026.11.35] - 2026-11-09
 
 Need: Renovate's weekly major PRs on every stamped app move the image's frontend stage to `node:26-slim`, which ships no corepack, so `corepack enable` fails the image build on main while PR CI (which does not build the image) stays green. Consumer: master-project's weekly major-upgrade run (casefile#30, caspo#195, earworm#81, eight#150, godswood#939, library#159, portcullis#222).
