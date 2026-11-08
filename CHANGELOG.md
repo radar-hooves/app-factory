@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.33] - 2026-11-08
+
+Need: eight's council seats wrote product rows to the live database from unmerged branches, and the deployed code could not read them. Consumer: eight (radar-hooves/eight#217); every stamped app runs seats and scripts against live databases alike.
+
+### Added
+
+- **`db/guard.py`: a database stamped production takes a migration only from a clean checkout of origin's default branch.** `assert_can_write_to_database` runs in `alembic/env.py` before the first migration. It compares HEAD with `git ls-remote origin HEAD` (the remote's own default branch, no fetch, no branch name assumed) and refuses on a mismatch, on any change under `backend/` (untracked included), or when origin cannot be reached. It passes untouched a deployed image (no `.git` above the package, so boot migrations run), a database not stamped production, one with no marker table (before its first migration), and one whose name contains `test`. Scripts that write by hand call it on their connection.
+
+### Consumer must change
+
+- Take `db/guard.py`, `alembic/env.py` and `tests/test_db_guard.py`, and regenerate `.template-parity.json`. eight drops its own `db/guard.py` and the `parity:backend/alembic/env.py` exception (radar-hooves/eight#217). No setting is added; the image needs no git.
+
 ## [2026.11.32] - 2026-11-08
 
 Need: godswood's #928 security slice found two holes in kit files it rightly did not edit: any workspace owner could force a membership on any user (M7), and a 5xx body carried raw `str(e)` from about 39 raise sites (F-23). Consumer: godswood, through master-project's orchestrator (#417).

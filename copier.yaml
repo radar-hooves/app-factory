@@ -100,6 +100,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_app_posture.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_database_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_db_roles.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_db_guard.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_explicit_test_server_guard.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_exchange.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
@@ -205,6 +206,7 @@ _migrations:
       - backend/tests/test_app_posture.py
       - backend/tests/test_database_settings.py
       - backend/tests/test_db_roles.py
+      - backend/tests/test_db_guard.py
       - backend/tests/test_explicit_test_server_guard.py
       - backend/tests/test_exchange.py
       - backend/tests/test_fanout.py

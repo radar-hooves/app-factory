@@ -1,0 +1,119 @@
+"""The production write guard (`db/guard.py`): a production-stamped database takes a write only from a clean checkout of origin's default branch."""
+
+import subprocess
+from pathlib import Path
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from {{ package_name }}.db.environment import DeploymentEnvironment, stamp_environment
+from {{ package_name }}.db.guard import ProductionWriteForbiddenError, assert_can_write_to_database
+
+_GIT_ENV = ["-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "init.defaultBranch=trunk"]
+
+
+def _git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *_GIT_ENV, *args], cwd=cwd, check=True, capture_output=True)
+
+
+@pytest.fixture
+def checkout(tmp_path: Path) -> Path:
+    """A clone of a bare origin whose default branch is `trunk` (not `main`), with `backend/` committed and pushed."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "--bare", str(origin))
+    work = tmp_path / "work"
+    _git(tmp_path, "clone", str(origin), str(work))
+    (work / "backend").mkdir()
+    (work / "backend" / "app.py").write_text("x = 1\n")
+    _git(work, "add", "backend/app.py")
+    _git(work, "commit", "-m", "first")
+    _git(work, "push", "origin", "HEAD:refs/heads/trunk")
+    _git(origin, "symbolic-ref", "HEAD", "refs/heads/trunk")
+    return work
+
+
+def _stamp(session: Session, environment: DeploymentEnvironment) -> None:
+    stamp_environment(session.connection(), environment)
+
+
+def _check(session: Session, root: Path) -> None:
+    assert_can_write_to_database(session.connection(), backend_dir=root / "backend", ignore_test_db=True)
+
+
+def test_production_from_a_clean_default_branch_passes(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    _check(session, checkout)
+
+
+def test_production_from_a_dirty_backend_tree_is_refused(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (checkout / "backend" / "app.py").write_text("x = 2\n")
+    with pytest.raises(ProductionWriteForbiddenError, match="uncommitted"):
+        _check(session, checkout)
+
+
+def test_production_from_an_untracked_backend_file_is_refused(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (checkout / "backend" / "new.py").write_text("y = 1\n")
+    with pytest.raises(ProductionWriteForbiddenError, match="uncommitted"):
+        _check(session, checkout)
+
+
+def test_dirt_outside_backend_does_not_refuse(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (checkout / "notes.md").write_text("n\n")
+    _check(session, checkout)
+
+
+def test_production_from_an_unmerged_branch_is_refused(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    _git(checkout, "checkout", "-b", "feature")
+    (checkout / "backend" / "app.py").write_text("x = 3\n")
+    _git(checkout, "commit", "-am", "unmerged")
+    with pytest.raises(ProductionWriteForbiddenError, match="default branch"):
+        _check(session, checkout)
+
+
+def test_production_behind_the_default_branch_is_refused(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (checkout / "backend" / "app.py").write_text("x = 4\n")
+    _git(checkout, "commit", "-am", "ahead")
+    _git(checkout, "push", "origin", "HEAD:refs/heads/trunk")
+    _git(checkout, "reset", "--hard", "HEAD~1")
+    with pytest.raises(ProductionWriteForbiddenError, match="default branch"):
+        _check(session, checkout)
+
+
+def test_production_with_an_unreachable_origin_is_refused(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    _git(checkout, "remote", "set-url", "origin", str(checkout.parent / "gone.git"))
+    with pytest.raises(ProductionWriteForbiddenError, match="Cannot verify"):
+        _check(session, checkout)
+
+
+def test_a_deployed_image_without_git_passes(session: Session, tmp_path: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (tmp_path / "backend").mkdir()
+    # tmp_path lives under no checkout, as an image's /app does not.
+    _check(session, tmp_path)
+
+
+def test_a_local_database_passes_from_a_dirty_branch(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.LOCAL)
+    (checkout / "backend" / "app.py").write_text("x = 5\n")
+    _check(session, checkout)
+
+
+def test_a_test_named_database_passes_without_the_override(session: Session, checkout: Path) -> None:
+    _stamp(session, DeploymentEnvironment.PRODUCTION)
+    (checkout / "backend" / "app.py").write_text("x = 6\n")
+    assert_can_write_to_database(session.connection(), backend_dir=checkout / "backend")
+
+
+def test_a_database_with_no_marker_table_passes(session: Session, checkout: Path) -> None:
+    (checkout / "backend" / "app.py").write_text("x = 7\n")
+    connection = session.connection()
+    # An empty search path hides the marker table, as a database before its first migration has none.
+    connection.execute(text("SET LOCAL search_path TO pg_catalog"))
+    assert_can_write_to_database(connection, backend_dir=checkout / "backend", ignore_test_db=True)

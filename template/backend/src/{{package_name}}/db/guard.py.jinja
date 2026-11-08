@@ -1,0 +1,93 @@
+"""Refuse a write to a production-stamped database from code that is not what production runs.
+
+A seat or a script run from a git checkout can reach the live database (see
+``db/environment.py``); product rows written from an unmerged branch are rows the deployed
+code cannot read. A database stamped ``production`` therefore takes a write only from a
+checkout whose HEAD is the remote's default-branch HEAD and whose ``backend/`` tree is clean.
+
+Passes untouched, because nothing is there to protect or to compare:
+
+- a deployed image (no ``.git`` above the package; migrations run at boot, and refusing on
+  missing git state would stop the live app starting);
+- a database not stamped production, one with no marker table (before its first migration a
+  failed read would abort the migration's own transaction), and one whose name contains
+  ``test`` (the suite's throwaway databases).
+
+A checkout that cannot be compared (remote unreachable, git failing) is refused: the
+database is production and the comparison is the point.
+"""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from sqlalchemy import text
+from sqlalchemy.engine import Connection, Engine
+
+from {{ package_name }}.db.environment import DeploymentEnvironment, stamped_environment
+
+
+class ProductionWriteForbiddenError(RuntimeError):
+    """A checkout that is not the remote's default branch, or is dirty, tried to write to production."""
+
+
+def _git(root: Path, *args: str) -> str:
+    try:
+        done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=30, check=True)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ProductionWriteForbiddenError(
+            f"Cannot verify the checkout against origin (git {args[0]}): {exc}"
+        ) from exc
+    return done.stdout.strip()
+
+
+def _checkout_root(backend_dir: Path) -> Path | None:
+    for candidate in (backend_dir, *backend_dir.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _database_name(bind: Engine | Connection) -> str | None:
+    return (bind.engine if isinstance(bind, Connection) else bind).url.database
+
+
+def _has_marker_table(bind: Engine | Connection) -> bool:
+    statement = text("SELECT to_regclass('deployment_environment')")
+    if isinstance(bind, Connection):
+        return bind.execute(statement).scalar() is not None
+    with bind.connect() as connection:
+        return connection.execute(statement).scalar() is not None
+
+
+def assert_can_write_to_database(
+    bind: Engine | Connection, *, backend_dir: Path | None = None, ignore_test_db: bool = False
+) -> None:
+    """Raise ``ProductionWriteForbiddenError`` unless writing to the connected database is allowed from here."""
+    if not ignore_test_db and "test" in (_database_name(bind) or ""):
+        return
+    if not _has_marker_table(bind):
+        return
+    if stamped_environment(bind) is not DeploymentEnvironment.PRODUCTION:
+        return
+
+    backend = backend_dir or Path(__file__).resolve().parents[3]
+    root = _checkout_root(backend)
+    if root is None:
+        return
+
+    # The remote's own answer for its default branch, so no fetch and no branch name assumed.
+    remote_head = _git(root, "ls-remote", "origin", "HEAD").split()[:1]
+    head = _git(root, "rev-parse", "HEAD")
+    if not remote_head or head != remote_head[0]:
+        raise ProductionWriteForbiddenError(
+            "Writing to a production-stamped database is forbidden from a checkout whose HEAD is not "
+            f"origin's default branch (HEAD={head[:8]}, origin={remote_head[0][:8] if remote_head else 'unknown'}). "
+            "Merge your code first."
+        )
+    if _git(root, "status", "--porcelain", "--", str(backend)):
+        raise ProductionWriteForbiddenError(
+            "Writing to a production-stamped database is forbidden with uncommitted changes under backend/. "
+            "Commit and land them first."
+        )
