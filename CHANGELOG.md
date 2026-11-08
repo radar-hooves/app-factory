@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.35] - 2026-11-09
+
+Need: Renovate's weekly major PRs on every stamped app move the image's frontend stage to `node:26-slim`, which ships no corepack, so `corepack enable` fails the image build on main while PR CI (which does not build the image) stays green. Consumer: master-project's weekly major-upgrade run (casefile#30, caspo#195, earworm#81, eight#150, godswood#939, library#159, portcullis#222).
+
+### Changed
+
+- **`Dockerfile`: the frontend stage builds on `node:26-slim` and installs pnpm with npm, at the version `frontend/package.json`'s `packageManager` declares.** The line reads the field (`node -p`, a `+sha` suffix dropped) instead of restating `pnpm@x.y.z`, so image and manifest cannot drift and Renovate's bump of the field alone moves both; `pnpm install --frozen-lockfile` is unchanged. Proven by stamping a scratch app and running `docker build --target frontend`: node v26.13.0, pnpm 12.16.1, `pnpm build` complete.
+
+### Consumer must change
+
+- Take `Dockerfile` and regenerate `.template-parity.json`. Close the app's open `node:26-slim` Renovate PR once converged: the Dockerfile already carries it. No setting is added.
+
 ## [2026.11.34] - 2026-11-08
 
 Need: eight's study loop records decisions and outcomes in core-memory, a live write that is not a database write; from unmerged code they record evidence the deployed code never produced. Consumer: eight (radar-hooves/eight#240).
