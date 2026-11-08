@@ -77,7 +77,7 @@
 		"shiki": "^4.4.3"
 	},
 	"dependencies": {
-		"layerchart": "2.9.1"
+		"layerchart": "2.9.2"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "^1.7.0",
