@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.34] - 2026-11-08
+
+Need: eight's study loop records decisions and outcomes in core-memory, a live write that is not a database write; from unmerged code they record evidence the deployed code never produced. Consumer: eight (radar-hooves/eight#240).
+
+### Added
+
+- **`db/guard.py`: `assert_checkout_on_default_branch(*, backend_dir=None)`, the checkout half of the guard as a public function.** Raises `ProductionWriteForbiddenError` unless HEAD is origin's default-branch HEAD and `backend/` is clean; a deployed image (no `.git`) passes, an unreachable origin refuses. `assert_can_write_to_database` calls it after its production-stamp checks, so the database path behaves as before (refusal messages now open "A live write is forbidden").
+
+### Consumer must change
+
+- Take `db/guard.py` and `tests/test_db_guard.py`, and regenerate `.template-parity.json`. eight calls `assert_checkout_on_default_branch()` from its study script in place of its own `assert_checkout_on_main`. No setting is added.
+
 ## [2026.11.33] - 2026-11-08
 
 Need: eight's council seats wrote product rows to the live database from unmerged branches, and the deployed code could not read them. Consumer: eight (radar-hooves/eight#217); every stamped app runs seats and scripts against live databases alike.

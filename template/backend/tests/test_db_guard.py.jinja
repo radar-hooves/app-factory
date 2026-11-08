@@ -8,7 +8,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.db.environment import DeploymentEnvironment, stamp_environment
-from {{ package_name }}.db.guard import ProductionWriteForbiddenError, assert_can_write_to_database
+from {{ package_name }}.db.guard import (
+    ProductionWriteForbiddenError,
+    assert_can_write_to_database,
+    assert_checkout_on_default_branch,
+)
 
 _GIT_ENV = ["-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "init.defaultBranch=trunk"]
 
@@ -117,3 +121,26 @@ def test_a_database_with_no_marker_table_passes(session: Session, checkout: Path
     # An empty search path hides the marker table, as a database before its first migration has none.
     connection.execute(text("SET LOCAL search_path TO pg_catalog"))
     assert_can_write_to_database(connection, backend_dir=checkout / "backend", ignore_test_db=True)
+
+
+def test_the_checkout_check_alone_refuses_an_unmerged_branch_and_dirt(checkout: Path) -> None:
+    assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+    (checkout / "backend" / "app.py").write_text("x = 5\n")
+    with pytest.raises(ProductionWriteForbiddenError, match="uncommitted"):
+        assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+    _git(checkout, "checkout", "--", "backend/app.py")
+    _git(checkout, "checkout", "-b", "feature")
+    (checkout / "backend" / "app.py").write_text("x = 6\n")
+    _git(checkout, "commit", "-am", "unmerged")
+    with pytest.raises(ProductionWriteForbiddenError, match="default branch"):
+        assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+
+
+def test_the_checkout_check_alone_refuses_an_unreachable_origin_and_passes_an_image(
+    checkout: Path, tmp_path: Path
+) -> None:
+    (tmp_path / "image" / "backend").mkdir(parents=True)
+    assert_checkout_on_default_branch(backend_dir=tmp_path / "image" / "backend")
+    _git(checkout, "remote", "set-url", "origin", str(checkout.parent / "gone.git"))
+    with pytest.raises(ProductionWriteForbiddenError, match="Cannot verify"):
+        assert_checkout_on_default_branch(backend_dir=checkout / "backend")

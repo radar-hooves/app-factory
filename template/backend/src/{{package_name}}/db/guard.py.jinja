@@ -61,6 +61,33 @@ def _has_marker_table(bind: Engine | Connection) -> bool:
         return connection.execute(statement).scalar() is not None
 
 
+def assert_checkout_on_default_branch(*, backend_dir: Path | None = None) -> None:
+    """Raise ``ProductionWriteForbiddenError`` unless this checkout is origin's default branch with a clean ``backend/``.
+
+    The checkout half of the guard, for any live write that is not a database write (a decision
+    recorded in core-memory, a call to an estate service). A deployed image (no ``.git``) passes;
+    an unreachable origin refuses.
+    """
+    backend = backend_dir or Path(__file__).resolve().parents[3]
+    root = _checkout_root(backend)
+    if root is None:
+        return
+
+    # The remote's own answer for its default branch, so no fetch and no branch name assumed.
+    remote_head = _git(root, "ls-remote", "origin", "HEAD").split()[:1]
+    head = _git(root, "rev-parse", "HEAD")
+    if not remote_head or head != remote_head[0]:
+        raise ProductionWriteForbiddenError(
+            "A live write is forbidden from a checkout whose HEAD is not "
+            f"origin's default branch (HEAD={head[:8]}, origin={remote_head[0][:8] if remote_head else 'unknown'}). "
+            "Merge your code first."
+        )
+    if _git(root, "status", "--porcelain", "--", str(backend)):
+        raise ProductionWriteForbiddenError(
+            "A live write is forbidden with uncommitted changes under backend/. Commit and land them first."
+        )
+
+
 def assert_can_write_to_database(
     bind: Engine | Connection, *, backend_dir: Path | None = None, ignore_test_db: bool = False
 ) -> None:
@@ -72,22 +99,4 @@ def assert_can_write_to_database(
     if stamped_environment(bind) is not DeploymentEnvironment.PRODUCTION:
         return
 
-    backend = backend_dir or Path(__file__).resolve().parents[3]
-    root = _checkout_root(backend)
-    if root is None:
-        return
-
-    # The remote's own answer for its default branch, so no fetch and no branch name assumed.
-    remote_head = _git(root, "ls-remote", "origin", "HEAD").split()[:1]
-    head = _git(root, "rev-parse", "HEAD")
-    if not remote_head or head != remote_head[0]:
-        raise ProductionWriteForbiddenError(
-            "Writing to a production-stamped database is forbidden from a checkout whose HEAD is not "
-            f"origin's default branch (HEAD={head[:8]}, origin={remote_head[0][:8] if remote_head else 'unknown'}). "
-            "Merge your code first."
-        )
-    if _git(root, "status", "--porcelain", "--", str(backend)):
-        raise ProductionWriteForbiddenError(
-            "Writing to a production-stamped database is forbidden with uncommitted changes under backend/. "
-            "Commit and land them first."
-        )
+    assert_checkout_on_default_branch(backend_dir=backend_dir)
