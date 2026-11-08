@@ -2,18 +2,17 @@
 
 {% if not headless -%}
 # Stage 1: Frontend build (pnpm, SvelteKit static adapter)
-FROM node:24-slim AS frontend
+FROM node:26-slim AS frontend
 WORKDIR /frontend
 
-# Copy lockfile + manifest before source for cache efficiency. The pnpm
-# version comes from frontend/package.json's packageManager field alone —
-# corepack honours it, and it is what CI's pnpm/action-setup resolves too, so
-# one field drives the container and the CI gate alike.
+# Copy lockfile + manifest before source for cache efficiency.
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 
-# Pinned to package.json's packageManager (pnpm@12.16.1) — keep the two in
-# step; bare `corepack enable` alone lets a floating pnpm break the build.
-RUN corepack enable && corepack prepare pnpm@12.16.1 --activate
+# pnpm comes from frontend/package.json's packageManager field alone (the field
+# CI's pnpm/action-setup resolves too), installed with npm because node 25+
+# images no longer ship corepack. Read from the manifest, never restated here,
+# so the image cannot drift from it; a `+sha` integrity suffix is dropped.
+RUN npm install --global "pnpm@$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")"
 
 # The factory's own packages (@poodle64/design-tokens, @poodle64/ui) are public
 # on registry.npmjs.org and need no credential. Do not reintroduce a scope
