@@ -1,6 +1,8 @@
 <!--
 	Who shares the active workspace's data, and — for an owner — the acts that
-	change it: grant a membership, retract one, rename the workspace.
+	change it: invite someone, retract a membership or an invitation, rename the
+	workspace. Any member may leave. Beside the list, the invitations waiting on
+	the caller, to accept or decline.
 
 	This is the screen the tenancy design recorded as not existing. Without it
 	the only way to make the grant the whole primitive exists for was an API
@@ -10,9 +12,10 @@
 	Linear's Members): a list with a role beside each person, an add control
 	that picks from people the app already knows, a remove per row, confirmed.
 
-	Nothing here decides authorisation. The backend refuses a non-owner's grant,
-	a re-grant, a removal of the last owner and a stranger's read; this surface
-	only hides what the caller's role says cannot succeed.
+	Nothing here decides authorisation. The backend refuses a non-owner's invitation,
+	a re-invitation, a removal or departure of the last owner, an acceptance by
+	anyone but the invitee and a stranger's read; this surface only hides what the
+	caller's role says cannot succeed.
 -->
 <script lang="ts">
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -39,17 +42,21 @@
 	const noun = $derived(label.toLowerCase());
 
 	type Person = { id: string; username: string; display_name: string | null };
-	type Member = { user: Person; role: 'owner' | 'member' };
+	type Member = { user: Person; role: 'owner' | 'member'; status: 'pending' | 'accepted' };
+	type Invitation = { workspace: { id: string; name: string }; role: 'owner' | 'member' };
 
 	let members = $state<Member[]>([]);
+	let invitations = $state<Invitation[]>([]);
 	let people = $state<Person[]>([]);
 	let loading = $state(true);
 	let failure = $state<string | null>(null);
 
 	const workspace = $derived(auth.activeWorkspace);
 	const isOwner = $derived(auth.activeRole === 'owner');
-	// Who can still be added: everyone the app has seen who is not already here.
+	// Who can still be invited: everyone the app has seen who is not already here or invited.
 	const candidates = $derived(people.filter((p) => !members.some((m) => m.user.id === p.id)));
+
+	const acceptedCount = $derived(members.filter((m) => m.status === 'accepted').length);
 
 	const displayName = (p: Person) => p.display_name || p.username;
 
@@ -57,11 +64,12 @@
 		if (!workspace) return;
 		loading = true;
 		failure = null;
-		const [listed, known] = await Promise.all([
+		const [listed, known, waiting] = await Promise.all([
 			api.GET('/api/workspaces/{workspace_id}/members', {
 				params: { path: { workspace_id: workspace.id } }
 			}),
-			api.GET('/api/users/')
+			api.GET('/api/users/'),
+			api.GET('/api/workspaces/invitations')
 		]);
 		loading = false;
 		if (listed.error) {
@@ -70,11 +78,12 @@
 		}
 		members = listed.data;
 		people = known.data ?? [];
+		invitations = waiting.data ?? [];
 	}
 
 	onMount(load);
 
-	// ── Grant ──────────────────────────────────────────────────────────────
+	// ── Invite ──────────────────────────────────────────────────────────────
 	let addOpen = $state(false);
 	let chosenUserId = $state('');
 	let chosenRole = $state('member');
@@ -100,11 +109,11 @@
 		});
 		adding = false;
 		if (error) {
-			toastApiError(error, 'Could not add the member');
+			toastApiError(error, 'Could not send the invitation');
 			return;
 		}
-		toast.success('Member added', {
-			description: `${chosenPerson ? displayName(chosenPerson) : 'They'} can now see everything in ${workspace.name}.`
+		toast.success('Invitation sent', {
+			description: `${chosenPerson ? displayName(chosenPerson) : 'They'} can see ${workspace.name} once they accept.`
 		});
 		addOpen = false;
 		await load();
@@ -128,6 +137,40 @@
 			description: `${displayName(target.user)} no longer sees ${workspace.name}. What they added stays.`
 		});
 		await load();
+	}
+
+	// ── Answer an invitation, or leave ─────────────────────────────────────
+	let leaving = $state(false);
+
+	async function answer(invitation: Invitation, accept: boolean) {
+		const params = { params: { path: { workspace_id: invitation.workspace.id } } };
+		const { error } = accept
+			? await api.POST('/api/workspaces/{workspace_id}/invitation/accept', params)
+			: await api.POST('/api/workspaces/{workspace_id}/invitation/decline', params);
+		if (error) {
+			toastApiError(error, accept ? 'Could not accept the invitation' : 'Could not decline it');
+			return;
+		}
+		await auth.refreshWorkspaces();
+		await load();
+		toast.success(accept ? 'Invitation accepted' : 'Invitation declined', {
+			description: accept ? `${invitation.workspace.name} is now in your menu.` : undefined
+		});
+	}
+
+	async function leave() {
+		if (!workspace) return;
+		const left = workspace;
+		const { error } = await api.POST('/api/workspaces/{workspace_id}/leave', {
+			params: { path: { workspace_id: left.id } }
+		});
+		leaving = false;
+		if (error) {
+			toastApiError(error, `Could not leave the ${noun}`);
+			return;
+		}
+		await auth.refreshWorkspaces();
+		toast.success(`Left ${left.name}`);
 	}
 
 	// ── Rename ─────────────────────────────────────────────────────────────
@@ -171,9 +214,42 @@
 		{/snippet}
 	</ErrorState>
 {:else}
+	{#if invitations.length > 0}
+		<Panel title="Invitations" subtitle="Nothing is shared with you until you accept." pad={false}>
+			<Table.Root>
+				<Table.Body>
+					{#each invitations as invitation (invitation.workspace.id)}
+						<Table.Row data-testid="workspace-invitation">
+							<Table.Cell>
+								<div class="font-medium">{invitation.workspace.name}</div>
+								<div class="text-muted-foreground text-xs">as {invitation.role}</div>
+							</Table.Cell>
+							<Table.Cell class="space-x-2 text-right">
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => answer(invitation, false)}
+									data-testid="workspace-invitation-decline"
+								>
+									Decline
+								</Button>
+								<Button
+									size="sm"
+									onclick={() => answer(invitation, true)}
+									data-testid="workspace-invitation-accept"
+								>
+									Accept
+								</Button>
+							</Table.Cell>
+						</Table.Row>
+					{/each}
+				</Table.Body>
+			</Table.Root>
+		</Panel>
+	{/if}
 	<Panel
 		title={workspace.name}
-		subtitle="{members.length} {members.length === 1 ? 'member' : 'members'}"
+		subtitle="{acceptedCount} {acceptedCount === 1 ? 'member' : 'members'}"
 		icon={Users}
 		pad={false}
 		data-testid="workspace-members"
@@ -209,9 +285,7 @@
 				<Table.Row>
 					<Table.Head>Person</Table.Head>
 					<Table.Head>Role</Table.Head>
-					{#if isOwner}
-						<Table.Head><span class="sr-only">Actions</span></Table.Head>
-					{/if}
+					<Table.Head><span class="sr-only">Actions</span></Table.Head>
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
@@ -225,25 +299,34 @@
 						</Table.Cell>
 						<Table.Cell>
 							<Badge variant={member.role === 'owner' ? 'default' : 'outline'}>{member.role}</Badge>
+							{#if member.status === 'pending'}
+								<Badge variant="secondary" data-testid="workspace-member-pending">invited</Badge>
+							{/if}
 						</Table.Cell>
-						{#if isOwner}
-							<Table.Cell class="text-right">
-								<!-- Never your own row. Leaving is a different act from being
-								     removed — a member is not an owner, so it would need its own
-								     route — and nobody has asked for it; the backend's last-owner
-								     refusal covers the one lockout, so the control is not offered. -->
-								{#if member.user.id !== auth.user?.id}
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() => (removing = member)}
-										data-testid="workspace-remove-member"
-									>
-										Remove
-									</Button>
-								{/if}
-							</Table.Cell>
-						{/if}
+						<Table.Cell class="text-right">
+							<!-- Your own row offers Leave (any role; the backend keeps the last
+							     owner and your last workspace); another's offers Remove, to an
+							     owner, which on an invited row withdraws the invitation. -->
+							{#if member.user.id === auth.user?.id}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => (leaving = true)}
+									data-testid="workspace-leave"
+								>
+									Leave
+								</Button>
+							{:else if isOwner}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => (removing = member)}
+									data-testid="workspace-remove-member"
+								>
+									{member.status === 'pending' ? 'Withdraw' : 'Remove'}
+								</Button>
+							{/if}
+						</Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>
@@ -253,8 +336,8 @@
 
 <AppDialog
 	bind:open={addOpen}
-	title="Add a member"
-	subtitle="They will see everything in {workspace?.name} from their next request."
+	title="Invite a member"
+	subtitle="They see everything in {workspace?.name} once they accept."
 	size="sm"
 >
 	<form id="add-member" class="space-y-4" onsubmit={addMember}>
@@ -271,7 +354,7 @@
 				</Select.Content>
 			</Select.Root>
 			<p class="text-muted-foreground text-xs">
-				Only someone who has signed in to this app at least once can be added.
+				Only someone who has signed in to this app at least once can be invited.
 			</p>
 		</div>
 		<div class="space-y-2">
@@ -286,7 +369,7 @@
 				</Select.Content>
 			</Select.Root>
 			<p class="text-muted-foreground text-xs">
-				An owner may add and remove members and rename the {noun}; that is all the role decides.
+				An owner may invite and remove members and rename the {noun}; that is all the role decides.
 			</p>
 		</div>
 	</form>
@@ -298,7 +381,7 @@
 			disabled={adding || !chosenUserId}
 			data-testid="workspace-add-submit"
 		>
-			Add
+			Invite
 		</Button>
 	{/snippet}
 </AppDialog>
@@ -326,6 +409,28 @@
 	{/snippet}
 </AppDialog>
 
+<AlertDialog.Root bind:open={leaving}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Leave {workspace?.name}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				You will no longer see it. What you added stays, still attributed to you, and an owner can
+				invite you back.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action
+				variant="destructive"
+				onclick={leave}
+				data-testid="workspace-leave-confirm"
+			>
+				Leave
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
 <AlertDialog.Root
 	open={removing !== null}
 	onOpenChange={(open) => {
@@ -334,9 +439,17 @@
 >
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Remove {removing ? displayName(removing.user) : ''}?</AlertDialog.Title>
+			<AlertDialog.Title>
+				{removing?.status === 'pending' ? 'Withdraw the invitation to' : 'Remove'}
+				{removing ? displayName(removing.user) : ''}?
+			</AlertDialog.Title>
 			<AlertDialog.Description>
-				They will no longer see {workspace?.name}. What they added stays, still attributed to them.
+				{#if removing?.status === 'pending'}
+					They will not be able to accept it.
+				{:else}
+					They will no longer see {workspace?.name}. What they added stays, still attributed to
+					them.
+				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

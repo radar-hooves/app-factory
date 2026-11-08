@@ -138,13 +138,94 @@ export interface paths {
         get: operations["listWorkspaceMembers"];
         put?: never;
         /**
-         * Add Member
-         * @description Grant someone membership of a workspace. Owner only.
+         * Invite Member
+         * @description Invite someone to a workspace. Owner only; the invitee must accept.
          *
-         *     This is the act the whole primitive exists for: sharing is a grant somebody
-         *     makes, never something the app infers from two people using the same proxy.
+         *     Sharing is a grant the person takes, never something done to them: the row is
+         *     pending, grants no access and changes nobody's workspace resolution until the
+         *     invitee accepts it (``acceptWorkspaceInvitation``).
          */
         post: operations["addWorkspaceMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Invitations
+         * @description List the invitations waiting on the caller, the workspace and the role offered.
+         */
+        get: operations["listMyWorkspaceInvitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invitation/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Accept the caller's own pending invitation. The workspace joins their switcher.
+         */
+        post: operations["acceptWorkspaceInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invitation/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Invitation
+         * @description Decline the caller's own pending invitation.
+         */
+        post: operations["declineWorkspaceInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Workspace
+         * @description Leave a workspace. Any member; never the last owner, never the caller's last workspace.
+         */
+        post: operations["leaveWorkspace"];
         delete?: never;
         options?: never;
         head?: never;
@@ -163,7 +244,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Member
-         * @description Retract someone's membership. Owner only.
+         * @description Retract someone's membership, or withdraw a pending invitation. Owner only.
          *
          *     Their rows stay with the workspace and their attribution stays on them; only
          *     the grant goes.
@@ -1302,6 +1383,14 @@ export interface components {
              */
             timestamp: string;
         };
+        /**
+         * InvitationRead
+         * @description An invitation waiting on the caller: the workspace offered and the role.
+         */
+        InvitationRead: {
+            workspace: components["schemas"]["WorkspaceRead"];
+            role: components["schemas"]["WorkspaceRole"];
+        };
         /** MarkRead */
         MarkRead: {
             /** Helpful */
@@ -1318,12 +1407,12 @@ export interface components {
         };
         /**
          * MemberAdd
-         * @description Request body for granting someone membership of a workspace.
+         * @description Request body for inviting someone to a workspace.
          *
          *     Identified by the app's own user id rather than an Authentik uid: the caller
          *     granting access is choosing from people the app already knows, and accepting
          *     a provider key here would let a client mint a membership for an identity the
-         *     app has never authenticated.
+         *     app has never authenticated. The invitation is pending until they accept.
          */
         MemberAdd: {
             /**
@@ -1345,6 +1434,7 @@ export interface components {
         MemberRead: {
             user: components["schemas"]["MemberUserRead"];
             role: components["schemas"]["WorkspaceRole"];
+            status: components["schemas"]["MembershipStatus"];
         };
         /**
          * MemberUserRead
@@ -1376,6 +1466,17 @@ export interface components {
             workspace: components["schemas"]["WorkspaceRead"];
             role: components["schemas"]["WorkspaceRole"];
         };
+        /**
+         * MembershipStatus
+         * @description Whether the person has taken the grant.
+         *
+         *     An owner's act writes PENDING: an invitation only the invitee can turn into
+         *     ACCEPTED. Nothing that resolves a workspace, authorises a request or counts
+         *     owners reads a PENDING row, so an invitation changes no caller's access, and
+         *     no machine caller's workspace resolution, until the person says yes.
+         * @enum {string}
+         */
+        MembershipStatus: "pending" | "accepted";
         /** PersonaRead */
         PersonaRead: {
             /** Id */
@@ -1841,8 +1942,117 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["MemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listMyWorkspaceInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationRead"][];
+                };
+            };
+        };
+    };
+    acceptWorkspaceInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["MembershipRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    declineWorkspaceInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leaveWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

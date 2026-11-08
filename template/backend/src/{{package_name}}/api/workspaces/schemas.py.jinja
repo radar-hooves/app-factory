@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from {{ package_name }}.api.workspaces.models import WorkspaceRole
+from {{ package_name }}.api.workspaces.models import MembershipStatus, WorkspaceRole
 
 
 class WorkspaceRead(BaseModel):
@@ -23,6 +23,15 @@ class MembershipRead(BaseModel):
     This is what the SPA's workspace switcher renders, and what tells it whether
     to render at all: a caller with one membership never sees a switcher.
     """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    workspace: WorkspaceRead
+    role: WorkspaceRole
+
+
+class InvitationRead(BaseModel):
+    """An invitation waiting on the caller: the workspace offered and the role."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +66,7 @@ class MemberRead(BaseModel):
 
     user: MemberUserRead
     role: WorkspaceRole
+    status: MembershipStatus
 
 
 class WorkspaceCreate(BaseModel):
@@ -72,12 +82,12 @@ class WorkspaceRename(BaseModel):
 
 
 class MemberAdd(BaseModel):
-    """Request body for granting someone membership of a workspace.
+    """Request body for inviting someone to a workspace.
 
     Identified by the app's own user id rather than an Authentik uid: the caller
     granting access is choosing from people the app already knows, and accepting
     a provider key here would let a client mint a membership for an identity the
-    app has never authenticated.
+    app has never authenticated. The invitation is pending until they accept.
     """
 
     user_id: uuid.UUID

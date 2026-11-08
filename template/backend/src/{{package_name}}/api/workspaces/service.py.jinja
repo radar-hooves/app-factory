@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from {{ package_name }}.api.users.models import User
-from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership, WorkspaceRole
+from {{ package_name }}.api.workspaces.models import MembershipStatus, Workspace, WorkspaceMembership, WorkspaceRole
 from {{ package_name }}.exceptions import ConflictError, ForbiddenError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -41,18 +41,36 @@ def _unique_slug(session: Session, base: str) -> str:
 
 
 def list_memberships(session: Session, user_id: uuid.UUID) -> list[WorkspaceMembership]:
-    """Return every membership this user holds, workspace loaded, oldest first.
+    """Return every ACCEPTED membership this user holds, workspace loaded, oldest first.
+
+    A pending invitation is not a membership: it is invisible here, so it can
+    never make a request ambiguous or change which workspace a machine caller
+    resolves to. ``list_invitations`` is where the invitee reads them.
 
     Never empty for a user who has been through ``ensure_personal_workspace`` —
     which is every authenticated user — so workspace resolution has no
     zero-membership branch to handle.
     """
-    stmt = select(WorkspaceMembership).where(WorkspaceMembership.user_id == user_id).order_by(WorkspaceMembership.id)
+    stmt = (
+        select(WorkspaceMembership)
+        .where(WorkspaceMembership.user_id == user_id, WorkspaceMembership.status == MembershipStatus.ACCEPTED)
+        .order_by(WorkspaceMembership.id)
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
+def list_invitations(session: Session, user_id: uuid.UUID) -> list[WorkspaceMembership]:
+    """Return the invitations waiting on this user, workspace loaded, oldest first."""
+    stmt = (
+        select(WorkspaceMembership)
+        .where(WorkspaceMembership.user_id == user_id, WorkspaceMembership.status == MembershipStatus.PENDING)
+        .order_by(WorkspaceMembership.id)
+    )
     return list(session.execute(stmt).scalars().all())
 
 
 def list_members(session: Session, workspace_id: uuid.UUID) -> list[WorkspaceMembership]:
-    """Return every membership OF this workspace, user loaded, oldest first.
+    """Return every membership OF this workspace, pending invitations included, user loaded, oldest first.
 
     The other direction from ``list_memberships``: that is one person's
     workspaces, this is one workspace's people. It is what the members surface
@@ -67,12 +85,24 @@ def list_members(session: Session, workspace_id: uuid.UUID) -> list[WorkspaceMem
     return list(session.execute(stmt).scalars().all())
 
 
-def get_membership(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership | None:
-    """Return this user's membership of this workspace, or None."""
+def get_membership(
+    session: Session,
+    *,
+    workspace_id: uuid.UUID,
+    user_id: uuid.UUID,
+    status: MembershipStatus | None = MembershipStatus.ACCEPTED,
+) -> WorkspaceMembership | None:
+    """Return this user's membership of this workspace, or None.
+
+    Accepted only by default, which is what every authorisation reads. A caller
+    that handles the invitation itself passes ``status=None`` to see either.
+    """
     stmt = select(WorkspaceMembership).where(
         WorkspaceMembership.workspace_id == workspace_id,
         WorkspaceMembership.user_id == user_id,
     )
+    if status is not None:
+        stmt = stmt.where(WorkspaceMembership.status == status)
     return session.execute(stmt).scalar_one_or_none()
 
 
@@ -105,7 +135,9 @@ def ensure_personal_workspace(session: Session, user: User) -> WorkspaceMembersh
     user makes.
     """
     existing = session.execute(
-        select(WorkspaceMembership).where(WorkspaceMembership.user_id == user.id).limit(1)
+        select(WorkspaceMembership)
+        .where(WorkspaceMembership.user_id == user.id, WorkspaceMembership.status == MembershipStatus.ACCEPTED)
+        .limit(1)
     ).scalar_one_or_none()
     if existing is not None:
         return existing
@@ -124,7 +156,9 @@ def ensure_personal_workspace(session: Session, user: User) -> WorkspaceMembersh
             session.flush()
     except IntegrityError:
         winner = session.execute(
-            select(WorkspaceMembership).where(WorkspaceMembership.user_id == user.id).limit(1)
+            select(WorkspaceMembership)
+            .where(WorkspaceMembership.user_id == user.id, WorkspaceMembership.status == MembershipStatus.ACCEPTED)
+            .limit(1)
         ).scalar_one_or_none()
         if winner is None:
             raise
@@ -197,54 +231,116 @@ def rename_workspace(session: Session, *, workspace_id: uuid.UUID, name: str) ->
     return workspace
 
 
-def add_member(
+def invite_member(
     session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID, role: WorkspaceRole
 ) -> WorkspaceMembership:
-    """Grant someone membership of a workspace.
+    """Invite someone to a workspace. The invitation is PENDING until they accept.
 
     Raises:
         NotFoundError: when no such user exists.
-        ConflictError: when they are already a member — re-granting is not a
-            silent role change, because a silent role change is how someone
-            gains ownership nobody decided to give them.
+        ConflictError: when they are already a member or already invited —
+            re-inviting is not a silent role change, because a silent role change
+            is how someone gains ownership nobody decided to give them.
 
-    Commits its own write. The add endpoint hands the membership to the client
-    in the same stream, so a grant that waited for the request's own commit
-    would not yet be visible to the new member's very next request.
+    Commits its own write. The endpoint hands the invitation to the client in the
+    same stream, so one that waited for the request's own commit would not yet be
+    visible to the invitee's very next request.
     """
     if session.get(User, user_id) is None:
         raise NotFoundError(f"User {user_id} not found")
 
-    if get_membership(session, workspace_id=workspace_id, user_id=user_id) is not None:
-        raise ConflictError("That user is already a member of this workspace")
+    if get_membership(session, workspace_id=workspace_id, user_id=user_id, status=None) is not None:
+        raise ConflictError("That user is already a member of this workspace, or invited to it")
 
-    membership = WorkspaceMembership(workspace_id=workspace_id, user_id=user_id, role=role)
+    membership = WorkspaceMembership(
+        workspace_id=workspace_id, user_id=user_id, role=role, status=MembershipStatus.PENDING
+    )
     session.add(membership)
-    session.commit()
-    logger.info("Granted workspace membership", extra={"workspace_id": workspace_id, "member_user_id": user_id})
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        # Two owners inviting the same person at once: the unique constraint is the arbiter.
+        session.rollback()
+        raise ConflictError("That user is already a member of this workspace, or invited to it") from exc
+    logger.info("Invited to a workspace", extra={"workspace_id": workspace_id, "member_user_id": user_id})
     return membership
 
 
+def _pending_invitation(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership:
+    invitation = get_membership(session, workspace_id=workspace_id, user_id=user_id, status=MembershipStatus.PENDING)
+    if invitation is None:
+        raise NotFoundError("There is no invitation to that workspace")
+    return invitation
+
+
+def accept_invitation(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> WorkspaceMembership:
+    """The invitee takes the grant. Only their own pending invitation can be taken.
+
+    Commits its own write, for the reason ``invite_member`` gives.
+
+    Raises:
+        NotFoundError: when the caller has no pending invitation to that workspace.
+    """
+    invitation = _pending_invitation(session, workspace_id=workspace_id, user_id=user_id)
+    invitation.status = MembershipStatus.ACCEPTED
+    session.commit()
+    logger.info("Accepted a workspace invitation", extra={"workspace_id": workspace_id, "member_user_id": user_id})
+    return invitation
+
+
+def decline_invitation(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """The invitee turns the invitation down; the row goes, and an owner may invite again.
+
+    Raises:
+        NotFoundError: when the caller has no pending invitation to that workspace.
+    """
+    session.delete(_pending_invitation(session, workspace_id=workspace_id, user_id=user_id))
+    session.commit()
+    logger.info("Declined a workspace invitation", extra={"workspace_id": workspace_id, "member_user_id": user_id})
+
+
+def leave_workspace(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """A member walks out of a workspace, whatever their role.
+
+    Refuses to leave the last owner (``remove_member``'s rule) and refuses to
+    leave the caller's last workspace: every authenticated user keeps at least
+    one, which is what lets workspace resolution have no zero-membership branch.
+
+    Raises:
+        ForbiddenError: when the caller is not a member.
+        ConflictError: when it is their last workspace, or they are its last owner.
+    """
+    require_member(session, workspace_id=workspace_id, user_id=user_id)
+    if len(list_memberships(session, user_id)) == 1:
+        raise ConflictError("That is your only workspace; create or accept another before leaving it")
+    remove_member(session, workspace_id=workspace_id, user_id=user_id)
+
+
 def remove_member(session: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> None:
-    """Retract someone's membership.
+    """Retract someone's membership, or withdraw their pending invitation.
 
     Their rows stay with the workspace and their attribution stays on them; only
     the grant goes. Refuses to remove the last owner, which would leave a
-    workspace nobody can administer.
+    workspace nobody can administer. Only ACCEPTED owners count: an owner who
+    has merely been invited administers nothing yet.
 
     Commits its own write. The remove endpoint hands the 2xx to the client in
     the same stream, so a retraction that waited for the request's own commit
     would still be usable by the removed member's very next request.
     """
-    membership = get_membership(session, workspace_id=workspace_id, user_id=user_id)
+    membership = get_membership(session, workspace_id=workspace_id, user_id=user_id, status=None)
     if membership is None:
         raise NotFoundError("That user is not a member of this workspace")
 
-    if membership.role is WorkspaceRole.OWNER:
+    if membership.role is WorkspaceRole.OWNER and membership.status is MembershipStatus.ACCEPTED:
+        # Serialise on the workspace row: two owners leaving at once would each
+        # count the other and both pass, leaving a workspace nobody administers.
+        session.execute(select(Workspace.id).where(Workspace.id == workspace_id).with_for_update())
         owners = session.execute(
             select(WorkspaceMembership).where(
                 WorkspaceMembership.workspace_id == workspace_id,
                 WorkspaceMembership.role == WorkspaceRole.OWNER,
+                WorkspaceMembership.status == MembershipStatus.ACCEPTED,
             )
         ).scalars()
         if len(list(owners)) == 1:

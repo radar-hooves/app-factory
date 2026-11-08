@@ -13,6 +13,7 @@ from fastapi import APIRouter, status
 
 from {{ package_name }}.api.workspaces import service
 from {{ package_name }}.api.workspaces.schemas import (
+    InvitationRead,
     MemberAdd,
     MemberRead,
     MembershipRead,
@@ -68,21 +69,60 @@ def list_members(workspace_id: uuid.UUID, session: SessionDep, identity: Current
 
 @router.post(
     "/{workspace_id}/members",
-    response_model=MembershipRead,
+    response_model=MemberRead,
     status_code=status.HTTP_201_CREATED,
     operation_id="addWorkspaceMember",
 )
-def add_member(
+def invite_member(
     workspace_id: uuid.UUID, data: MemberAdd, session: SessionDep, identity: CurrentIdentity
-) -> MembershipRead:
-    """Grant someone membership of a workspace. Owner only.
+) -> MemberRead:
+    """Invite someone to a workspace. Owner only; the invitee must accept.
 
-    This is the act the whole primitive exists for: sharing is a grant somebody
-    makes, never something the app infers from two people using the same proxy.
+    Sharing is a grant the person takes, never something done to them: the row is
+    pending, grants no access and changes nobody's workspace resolution until the
+    invitee accepts it (``acceptWorkspaceInvitation``).
     """
     service.require_owner(session, workspace_id=workspace_id, user_id=identity.user.id)
-    membership = service.add_member(session, workspace_id=workspace_id, user_id=data.user_id, role=data.role)
+    membership = service.invite_member(session, workspace_id=workspace_id, user_id=data.user_id, role=data.role)
+    return MemberRead.model_validate(membership)
+
+
+@router.get("/invitations", response_model=list[InvitationRead], operation_id="listMyWorkspaceInvitations")
+def list_my_invitations(session: SessionDep, identity: CurrentIdentity) -> list[InvitationRead]:
+    """List the invitations waiting on the caller, the workspace and the role offered."""
+    invitations = service.list_invitations(session, identity.user.id)
+    return [InvitationRead.model_validate(m) for m in invitations]
+
+
+@router.post(
+    "/{workspace_id}/invitation/accept",
+    response_model=MembershipRead,
+    operation_id="acceptWorkspaceInvitation",
+)
+def accept_invitation(workspace_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> MembershipRead:
+    """Accept the caller's own pending invitation. The workspace joins their switcher."""
+    membership = service.accept_invitation(session, workspace_id=workspace_id, user_id=identity.user.id)
     return MembershipRead.model_validate(membership)
+
+
+@router.post(
+    "/{workspace_id}/invitation/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="declineWorkspaceInvitation",
+)
+def decline_invitation(workspace_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
+    """Decline the caller's own pending invitation."""
+    service.decline_invitation(session, workspace_id=workspace_id, user_id=identity.user.id)
+
+
+@router.post(
+    "/{workspace_id}/leave",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="leaveWorkspace",
+)
+def leave_workspace(workspace_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
+    """Leave a workspace. Any member; never the last owner, never the caller's last workspace."""
+    service.leave_workspace(session, workspace_id=workspace_id, user_id=identity.user.id)
 
 
 @router.delete(
@@ -91,7 +131,7 @@ def add_member(
     operation_id="removeWorkspaceMember",
 )
 def remove_member(workspace_id: uuid.UUID, user_id: uuid.UUID, session: SessionDep, identity: CurrentIdentity) -> None:
-    """Retract someone's membership. Owner only.
+    """Retract someone's membership, or withdraw a pending invitation. Owner only.
 
     Their rows stay with the workspace and their attribution stays on them; only
     the grant goes.

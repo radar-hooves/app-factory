@@ -1,0 +1,77 @@
+"""What an error body may carry: details on a 4xx always, on a 5xx only in debug.
+
+A raise site writes `details={"detail": str(e)}` for the log's sake, and for a
+database error that string is SQL and bound parameters. The log keeps it; a 5xx
+body to the caller does not (`debug` off). A 4xx keeps it: the workspace chooser
+and the entitlement refusal read their details to act.
+"""
+
+from collections.abc import Iterator
+
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient, Response
+
+from {{ package_name }}.config import get_settings
+from {{ package_name }}.exceptions import (
+    BadRequestError,
+    ServiceUnavailableError,
+    UpstreamServiceError,
+    register_exception_handlers,
+)
+
+LEAK = {"detail": "SELECT secret FROM t WHERE k = 'bound-parameter'"}
+
+
+@pytest.fixture
+def probe() -> FastAPI:
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/upstream")
+    def upstream() -> None:
+        raise UpstreamServiceError("The upstream failed", details=LEAK)
+
+    @app.get("/unavailable")
+    def unavailable() -> None:
+        raise ServiceUnavailableError("Not now", details=LEAK)
+
+    @app.get("/bad")
+    def bad() -> None:
+        raise BadRequestError("Nope", details={"field": "x"})
+
+    return app
+
+
+@pytest.fixture
+def debug(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[bool]:
+    monkeypatch.setattr(get_settings(), "debug", request.param)
+    yield request.param
+
+
+async def _get(app: FastAPI, path: str) -> Response:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.get(path)
+
+
+@pytest.mark.parametrize("debug", [False], indirect=True)
+@pytest.mark.parametrize("path", ["/upstream", "/unavailable"])
+async def test_a_5xx_body_carries_no_details(probe: FastAPI, debug: bool, path: str) -> None:
+    response = await _get(probe, path)
+
+    assert response.status_code >= 500
+    assert set(response.json()) == {"error", "message"}
+    assert "bound-parameter" not in response.text
+
+
+@pytest.mark.parametrize("debug", [True], indirect=True)
+async def test_a_5xx_body_carries_details_under_debug(probe: FastAPI, debug: bool) -> None:
+    assert (await _get(probe, "/upstream")).json()["details"] == LEAK
+
+
+@pytest.mark.parametrize("debug", [False, True], indirect=True)
+async def test_a_4xx_body_keeps_its_details(probe: FastAPI, debug: bool) -> None:
+    response = await _get(probe, "/bad")
+
+    assert response.status_code == 400
+    assert response.json()["details"] == {"field": "x"}

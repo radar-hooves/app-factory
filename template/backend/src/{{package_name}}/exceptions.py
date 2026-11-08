@@ -152,9 +152,20 @@ class BusyError(ServiceUnavailableError):
         self.retry_after = retry_after
 
 
+def _debug() -> bool:
+    # Imported here: config's sections import this module's siblings at load.
+    from .config import get_settings
+
+    return get_settings().debug
+
+
 def _build_error_response(exc: BackendBaseException, *, headers: dict[str, str] | None = None) -> JSONResponse:
     content: dict[str, object] = {"error": exc.error_code, "message": exc.message}
-    if exc.details:
+    # A 5xx body is for a stranger's eyes as much as the caller's: raise sites put
+    # `str(e)` in details, which for a database error is SQL and bound parameters.
+    # The log carries them (`_log_exception`); the body does so only under debug.
+    # A 4xx keeps them, because the caller acts on them (the workspace chooser).
+    if exc.details and (exc.status_code < 500 or _debug()):
         content["details"] = exc.details
     return JSONResponse(status_code=exc.status_code, content=jsonable_encoder(content), headers=headers)
 

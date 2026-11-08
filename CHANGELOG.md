@@ -4,6 +4,23 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.32] - 2026-11-08
+
+Need: godswood's #928 security slice found two holes in kit files it rightly did not edit: any workspace owner could force a membership on any user (M7), and a 5xx body carried raw `str(e)` from about 39 raise sites (F-23). Consumer: godswood, through master-project's orchestrator (#417).
+
+### Fixed
+
+- **A workspace membership is an invitation the invitee accepts (M7).** `POST /api/workspaces/{id}/members` now writes a `pending` row (`MemberRead`, with `status`). Nothing that resolves a workspace, authorises a request or counts owners reads a pending row, so an invitation changes no caller's workspace resolution (a machine caller's `X-Workspace-Id`-less call stays unambiguous) until the person accepts. New: `GET /api/workspaces/invitations` (the caller's own), `POST /{id}/invitation/accept` and `/decline` (only the invitee; anyone else gets 404), `POST /{id}/leave` (any member, never the last owner, never the caller's last workspace). `DELETE /{id}/members/{user_id}` on a pending row withdraws the invitation. The members page shows the invitations, a pending badge, Leave and Withdraw.
+- **A 5xx body carries `error` and `message` only; `details` only under `settings.debug` (F-23).** A 4xx keeps its details (the workspace chooser reads them). The log already recorded them.
+
+### Consumer must change
+
+- Take `api/workspaces/*`, `exceptions.py`, `tests/test_workspaces_api.py`, `tests/test_error_bodies.py`, `lib/workspaces/workspace-members.svelte`, `lib/api/schema.d.ts` and `tests/e2e/workspaces.spec.ts`, and regenerate `.template-parity.json`.
+- **Migration `5a3c9e71b2d4`** (factory branch, `depends_on` the barrier) adds `workspace_memberships.status` with every existing row `accepted`; no standing grant lapses. Its downgrade deletes pending rows first, since without the column they would read as grants. It reaches an app through `alembic upgrade heads`; an app on the barrier needs nothing repointed.
+- **`workspaces.service.add_member` is gone**: `invite_member` then `accept_invitation` is the flow. An app whose own code calls `add_member` moves to it (measured 08/11/2026: casefile's `tests/mcp_tools/test_dispatchers.py` ×3, godswood's tests ×7 across seven files; no app's `src/` calls it). A test or script that POSTs `/members` and expects a seat accepts as the invitee next. An app's route-gating table lists the new routes (caspo's `test_route_gating.py`).
+- Carrying the workspaces slice, so their next factory bump takes this: casefile, caspo, earworm, eight, godswood, library, pebblestone. portcullis omits it.
+- Raise sites that read `details` from a 5xx body must read the log instead; none in the fleet is known to.
+
 ## [2026.11.31] - 2026-11-08
 
 Need: a resumed agent job must not start an MCP server bound to an owner a rekey replaced. Consumer: godswood (#894), through master-project's orchestrator (#417).

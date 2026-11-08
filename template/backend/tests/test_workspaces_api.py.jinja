@@ -44,6 +44,31 @@ async def _list_items(client: AsyncClient, uid: str) -> Response:
     )
 
 
+def _identity(uid: str) -> dict[str, str]:
+    return {"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "example"}
+
+
+async def _workspace_of(client: AsyncClient, uid: str) -> str:
+    return (await client.get("/api/workspaces/me", headers=_identity(uid))).json()[0]["workspace"]["id"]
+
+
+async def _user_id(client: AsyncClient, session: Session, uid: str) -> str:
+    await client.get("/api/workspaces/me", headers=_identity(uid))
+    return str(session.execute(select(User).where(User.authentik_uid == uid)).scalar_one().id)
+
+
+async def _invite(client: AsyncClient, owner: str, workspace_id: str, user_id: str, role: str = "member") -> Response:
+    return await client.post(
+        f"/api/workspaces/{workspace_id}/members",
+        json={"user_id": user_id, "role": role},
+        headers=_identity(owner),
+    )
+
+
+async def _accept(client: AsyncClient, uid: str, workspace_id: str | uuid.UUID) -> Response:
+    return await client.post(f"/api/workspaces/{workspace_id}/invitation/accept", headers=_identity(uid))
+
+
 # ── The wall, over HTTP ──────────────────────────────────────────────────────
 
 
@@ -83,14 +108,15 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
     assert (await _list_items(client, "the-partner")).json() == []
     partner = session.execute(select(User).where(User.authentik_uid == "the-partner")).scalar_one()
 
-    # The grant — the act the whole primitive exists for.
-    granted = await client.post(
+    # The offer, then her yes — the two acts the whole primitive exists for.
+    invited = await client.post(
         f"/api/workspaces/{household_id}/members",
         # str(): user ids are UUIDs, which the JSON encoder will not take raw.
         json={"user_id": str(partner.id), "role": "member"},
         headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
     )
-    assert granted.status_code == 201
+    assert invited.status_code == 201
+    assert (await _accept(client, "the-partner", household_id)).status_code == 200
 
     # She now belongs to two workspaces, so a bare request is ambiguous and is
     # refused with the choices rather than silently defaulted.
@@ -139,12 +165,13 @@ async def test_a_member_can_see_who_shares_the_workspace_and_a_stranger_cannot(
     assert {"the-operator", "the-partner", "a-stranger"} <= set(by_username)
     assert set(by_username["the-partner"]) == {"id", "username", "display_name"}
 
-    granted = await client.post(
+    invited = await client.post(
         f"/api/workspaces/{household_id}/members",
         json={"user_id": by_username["the-partner"]["id"], "role": "member"},
         headers=operator,
     )
-    assert granted.status_code == 201
+    assert invited.status_code == 201
+    assert (await client.post(f"/api/workspaces/{household_id}/invitation/accept", headers=partner)).status_code == 200
 
     # A member — not only an owner — may see who shares the data.
     members = (await client.get(f"/api/workspaces/{household_id}/members", headers=partner)).json()
@@ -177,6 +204,124 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
         },
     )
     assert refused.status_code == 403
+
+
+# ── Membership is a grant the person takes ──────────────────────────────────
+
+
+async def test_an_invitation_grants_nothing_until_the_invitee_accepts(client: AsyncClient, session: Session) -> None:
+    """The M7 fault: an owner could force a membership on any user id with no consent.
+
+    A forced second membership made every call the invitee sent without
+    `X-Workspace-Id` a 409, which broke machine acts-as callers. Pending changes
+    nothing for them, and reads as an invitation only to the invitee.
+    """
+    await _create_item(client, "owner", "owner's item")
+    owner_ws = await _workspace_of(client, "owner")
+    target = await _user_id(client, session, "target")
+
+    assert (await _invite(client, "owner", owner_ws, target)).status_code == 201
+
+    # No second membership, no 409, no access to the owner's data.
+    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 1
+    assert (await _list_items(client, "target")).status_code == 200
+    forced = await client.get("/api/example/", headers={**_identity("target"), "x-workspace-id": owner_ws})
+    assert forced.status_code == 403
+    assert (await client.get(f"/api/workspaces/{owner_ws}/members", headers=_identity("target"))).status_code == 403
+
+    # The invitee sees it, and only the invitee.
+    waiting = (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json()
+    assert [(i["workspace"]["id"], i["role"]) for i in waiting] == [(owner_ws, "member")]
+    assert (await client.get("/api/workspaces/invitations", headers=_identity("owner"))).json() == []
+
+    # The owner sees it as pending and cannot invite twice.
+    members = (await client.get(f"/api/workspaces/{owner_ws}/members", headers=_identity("owner"))).json()
+    assert [(m["user"]["username"], m["status"]) for m in members] == [("owner", "accepted"), ("target", "pending")]
+    assert (await _invite(client, "owner", owner_ws, target)).status_code == 409
+
+    assert (await _accept(client, "target", owner_ws)).status_code == 200
+    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
+    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 2
+
+
+async def test_only_the_invitee_can_accept_or_decline(client: AsyncClient, session: Session) -> None:
+    """An owner cannot accept for the invitee, and a third party finds no invitation."""
+    await _create_item(client, "owner", "x")
+    owner_ws = await _workspace_of(client, "owner")
+    target = await _user_id(client, session, "target")
+    await _user_id(client, session, "bystander")
+    await _invite(client, "owner", owner_ws, target)
+
+    assert (await _accept(client, "owner", owner_ws)).status_code == 404
+    assert (await _accept(client, "bystander", owner_ws)).status_code == 404
+    declined_by_other = await client.post(
+        f"/api/workspaces/{owner_ws}/invitation/decline", headers=_identity("bystander")
+    )
+    assert declined_by_other.status_code == 404
+
+    declined = await client.post(f"/api/workspaces/{owner_ws}/invitation/decline", headers=_identity("target"))
+    assert declined.status_code == 204
+    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
+    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 1
+    # Declined means gone: an owner may ask again, and the answer is still the invitee's.
+    assert (await _invite(client, "owner", owner_ws, target)).status_code == 201
+
+
+async def test_a_pending_owner_invitation_confers_no_owner_rights_and_is_not_an_owner_to_count(
+    client: AsyncClient, session: Session
+) -> None:
+    """An invited owner administers nothing, and the sole real owner still cannot leave or be removed."""
+    await _create_item(client, "owner", "x")
+    owner_ws = await _workspace_of(client, "owner")
+    target = await _user_id(client, session, "target")
+    owner_id = await _user_id(client, session, "owner")
+    await _invite(client, "owner", owner_ws, target, role="owner")
+
+    renamed = await client.patch(f"/api/workspaces/{owner_ws}", json={"name": "mine now"}, headers=_identity("target"))
+    assert renamed.status_code == 403
+    # A second workspace so the sole owner is stopped by the owner rule, not the last-workspace rule.
+    second = await client.post("/api/workspaces/", json={"name": "second"}, headers=_identity("owner"))
+    assert second.status_code == 201
+    left = await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("owner"))
+    assert left.status_code == 409
+    removed = await client.delete(f"/api/workspaces/{owner_ws}/members/{owner_id}", headers=_identity("owner"))
+    assert removed.status_code == 409
+
+
+async def test_a_member_can_leave_but_never_as_the_last_owner_nor_from_their_last_workspace(
+    client: AsyncClient, session: Session
+) -> None:
+    """M7's other half: a `member` could not leave, because removal was owner-only."""
+    await _create_item(client, "owner", "x")
+    owner_ws = await _workspace_of(client, "owner")
+    guest = await _user_id(client, session, "guest")
+    await _invite(client, "owner", owner_ws, guest)
+    await _accept(client, "guest", owner_ws)
+
+    left = await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("guest"))
+    assert left.status_code == 204
+    assert [
+        m["workspace"]["id"] for m in (await client.get("/api/workspaces/me", headers=_identity("guest"))).json()
+    ] == [await _workspace_of(client, "guest")]
+
+    # Not a member any more: the same refusal a stranger gets.
+    assert (await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("guest"))).status_code == 403
+    # The last workspace is never left, and the last owner never leaves.
+    own = await _workspace_of(client, "guest")
+    assert (await client.post(f"/api/workspaces/{own}/leave", headers=_identity("guest"))).status_code == 409
+    assert (await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("owner"))).status_code == 409
+
+
+async def test_an_owner_can_withdraw_a_pending_invitation(client: AsyncClient, session: Session) -> None:
+    await _create_item(client, "owner", "x")
+    owner_ws = await _workspace_of(client, "owner")
+    target = await _user_id(client, session, "target")
+    await _invite(client, "owner", owner_ws, target)
+
+    withdrawn = await client.delete(f"/api/workspaces/{owner_ws}/members/{target}", headers=_identity("owner"))
+
+    assert withdrawn.status_code == 204
+    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
 
 
 # ── First sight is race-safe ────────────────────────────────────────────────

@@ -32,6 +32,19 @@ class WorkspaceRole(enum.StrEnum):
     MEMBER = "member"
 
 
+class MembershipStatus(enum.StrEnum):
+    """Whether the person has taken the grant.
+
+    An owner's act writes PENDING: an invitation only the invitee can turn into
+    ACCEPTED. Nothing that resolves a workspace, authorises a request or counts
+    owners reads a PENDING row, so an invitation changes no caller's access, and
+    no machine caller's workspace resolution, until the person says yes.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+
+
 class Workspace(Base, TimestampMixin):
     """A body of shared data and the people who may reach it.
 
@@ -59,10 +72,11 @@ class WorkspaceMembership(Base, TimestampMixin):
     ledgers AND the circle that owns the family stories, while a reader belongs
     only to the circle.
 
-    Membership is an EXPLICIT row an owner writes. It is never derived from an
-    identity-provider group, an entitlement, or the ability to sign in — two
-    people sharing a proxy is not evidence they share a ledger. Sharing is a
-    grant, not an inference.
+    Membership is an EXPLICIT row an owner offers and the person accepts. It is
+    never derived from an identity-provider group, an entitlement, or the ability
+    to sign in — two people sharing a proxy is not evidence they share a ledger.
+    Sharing is a grant the person takes, not an inference and not a thing done to
+    them.
     """
 
     __tablename__ = "workspace_memberships"
@@ -95,6 +109,16 @@ class WorkspaceMembership(Base, TimestampMixin):
         Enum(WorkspaceRole, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
         nullable=False,
         default=WorkspaceRole.MEMBER,
+    )
+
+    # Existing rows migrate as accepted (the column's server default), so no
+    # standing grant lapses; the ORM default is accepted for the one writer that
+    # is the person's own act (their personal workspace, a workspace they create).
+    status: Mapped[MembershipStatus] = mapped_column(
+        Enum(MembershipStatus, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=MembershipStatus.ACCEPTED,
+        server_default=MembershipStatus.ACCEPTED.value,
     )
 
     # Eager by default: a membership is almost never useful without the
