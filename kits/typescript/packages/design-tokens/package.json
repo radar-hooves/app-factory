@@ -53,5 +53,5 @@
     "style-dictionary": "^5.0.0",
     "tailwindcss": "^4.3.2"
   },
-  "packageManager": "pnpm@12.16.1"
+  "packageManager": "pnpm@12.18.0"
 }
