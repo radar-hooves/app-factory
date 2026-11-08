@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.9] - 2026-11-08
+
+Need: godswood's commonality step 5 retires its last three local formatters. Consumer: godswood, through master-project's orchestrator (#417).
+
+### Added
+
+- **`minDecimals` / `maxDecimals` on `formatNumber`, `formatCurrency`, `formatPercentage` and `formatRatioAsPercentage`.** `decimals` still means both, so every existing call renders as before. A range trims trailing zeros between the two: `formatNumber(v, { maxDecimals: 8 })` (a crypto or securities quantity), `formatCurrency(v, { minDecimals: 2, maxDecimals: 4 })` (a unit price), `formatRatioAsPercentage(0.5, { maxDecimals: 2 })` is `50%`. An omitted `minDecimals` is `decimals` if set, else 0 (2 for money, which keeps cents). `DecimalRange` is exported.
+
 ## [2026.11.8] - 2026-11-07
 
 Consumer: library (front-end lane), via master-project's orchestrator.

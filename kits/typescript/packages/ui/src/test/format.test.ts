@@ -423,3 +423,52 @@ describe('formatDateTime', () => {
 		expect(formatDateTime('not a date')).toBe('not a date');
 	});
 });
+
+describe('decimal ranges', () => {
+	it('formatNumber trims a quantity to at most N places', () => {
+		expect(formatNumber(0.125, { maxDecimals: 8 })).toBe('0.125');
+		expect(formatNumber(1234.123456789, { maxDecimals: 8 })).toBe('1,234.12345679');
+		expect(formatNumber(2, { maxDecimals: 6 })).toBe('2');
+		expect(formatNumber(1.5, { minDecimals: 2, maxDecimals: 6 })).toBe('1.50');
+		expect(formatNumber('0.1', { maxDecimals: 8 })).toBe('0.1');
+		expect(formatNumber(null, { maxDecimals: 8 })).toBe('N/A');
+	});
+
+	it('formatCurrency takes a minimum and a maximum', () => {
+		const range = { minDecimals: 2, maxDecimals: 4 };
+		expect(formatCurrency(1.5, range)).toBe('$1.50');
+		expect(formatCurrency(1.2345, range)).toBe('$1.2345');
+		expect(formatCurrency(1.23456, range)).toBe('$1.2346');
+		expect(formatCurrency(1.2, range)).toBe('$1.20');
+		expect(formatCurrency(-1.2345, range)).toBe('-$1.2345');
+		expect(formatCurrency(-1.2345, { ...range, negative: 'brackets' })).toBe('($1.2345)');
+		expect(formatCurrency(1234.5, range)).toBe('$1,234.50');
+		expect(formatCurrency(undefined, range)).toBe('N/A');
+		// A range with only a ceiling keeps cents as its floor.
+		expect(formatCurrency(1.5, { maxDecimals: 4 })).toBe('$1.50');
+	});
+
+	it('percent formatters trim to a maximum', () => {
+		expect(formatRatioAsPercentage(0.5, { maxDecimals: 2 })).toBe('50%');
+		expect(formatRatioAsPercentage(0.3333, { maxDecimals: 2 })).toBe('33.33%');
+		expect(formatRatioAsPercentage(0.125, { maxDecimals: 2 })).toBe('12.5%');
+		expect(formatRatioAsPercentage(1, { maxDecimals: 2 })).toBe('100%');
+		expect(formatRatioAsPercentage(0.5, { minDecimals: 1, maxDecimals: 2 })).toBe('50.0%');
+		expect(formatRatioAsPercentage(null, { maxDecimals: 2 })).toBe('N/A');
+		expect(formatPercentage(4.5, { maxDecimals: 2 })).toBe('4.5%');
+		expect(formatPercentage(4, { maxDecimals: 2 })).toBe('4%');
+		expect(formatPercentage('4.567', { maxDecimals: 2 })).toBe('4.57%');
+	});
+
+	it('leaves every fixed-decimals caller unchanged', () => {
+		expect(formatNumber(1234.567, { decimals: 2 })).toBe('1,234.57');
+		expect(formatNumber(1234567)).toBe('1,234,567');
+		expect(formatCurrency(1234.56, { decimals: 0 })).toBe('$1,235');
+		expect(formatCurrency(1234.56)).toBe('$1,234.56');
+		expect(formatPercentage(4.5)).toBe('4.5%');
+		expect(formatPercentage('4.5', { decimals: 2 })).toBe('4.50%');
+		expect(formatRatioAsPercentage(1)).toBe('100.0%');
+		expect(formatRatioAsPercentage(0.045)).toBe('4.5%');
+		expect(formatRatioAsPercentage(0.5, { decimals: 2 })).toBe('50.00%');
+	});
+});

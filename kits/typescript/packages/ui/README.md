@@ -1531,15 +1531,15 @@ so it runs in a load function as happily as in a component.
 
 | Function                               | What it does                                                                                       |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `formatCurrency(dollars, opts)`        | `$1,234.56`. `decimals` (default 2), `currency` (default AUD), `fallback`.                         |
+| `formatCurrency(dollars, opts)`        | `$1,234.56`. `decimals` (default 2) or `minDecimals`/`maxDecimals` (`$1.50`, `$1.2346`), `currency` (default AUD), `fallback`.                         |
 | `formatCurrencyFromCents(cents, opts)` | The same, for money stored as integer cents.                                                       |
 | `formatCurrencyString(str, opts)`      | Groups a money STRING without ever parsing it to a float — for a figure that reaches a tax return. |
 | `compactCurrency(value, opts)`         | `$1.1m` / `$12k`, for a chart axis or a dense tile.                                                |
 | `isNegativeMoney(value)`               | The sign, without a parse, for choosing a tone class.                                              |
 | `dollarsToCents(dollars)`              | Whole cents.                                                                                       |
-| `formatNumber(value, opts)`            | `1,234,567`.                                                                                       |
+| `formatNumber(value, opts)`            | `1,234,567`. `maxDecimals: 8` trims a quantity (`0.125`).                                          |
 | `formatPercentage(value, opts)`        | Value is already in percentage POINTS: `4.5` → `4.5%`.                                             |
-| `formatRatioAsPercentage(value, opts)` | Value is a 0–1 RATIO: `0.045` → `4.5%`.                                                            |
+| `formatRatioAsPercentage(value, opts)` | Value is a 0–1 RATIO: `0.045` → `4.5%`; `maxDecimals: 2` trims `0.5` → `50%`.                                  |
 | `formatDate(value, opts)`              | `19 Dec 2024`, `19 December 2024` (`format: 'long'`) or `19/12/2024` (`format: 'numeric'`).        |
 | `formatDateTime(value, opts)`          | The same plus a 24-hour time: `19 Dec 2024, 14:05`.                                                |
 | `parseApiDate(iso)`                    | Reads an offset-less timestamp as UTC — the naive-UTC backend trap below.                          |

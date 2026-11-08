@@ -51,17 +51,58 @@ export const AU_TIME_ZONE = 'Australia/Brisbane';
 /** What a formatter renders when it has nothing to render. */
 const FALLBACK = 'N/A';
 
+/** Fraction-digit options every numeric formatter shares. */
+export interface DecimalRange {
+	/** Exactly this many fraction digits (min and max both). */
+	decimals?: number;
+	/** At least this many; with `maxDecimals`, trailing zeros between the two are trimmed. */
+	minDecimals?: number;
+	/** At most this many. */
+	maxDecimals?: number;
+}
+
+/**
+ * Resolve a `DecimalRange` to a [min, max] pair. `decimals` alone (or nothing:
+ * `fallbackDecimals`) pins both, so every caller that predates the range reads
+ * as it did. Given a range, an omitted `minDecimals` is `decimals` if set, else
+ * `defaultMin` (0 for a quantity or a percent, 2 for money, which keeps cents).
+ */
+function resolveDecimals(
+	options: DecimalRange,
+	fallbackDecimals: number,
+	defaultMin: number
+): [number, number] {
+	const { decimals, minDecimals, maxDecimals } = options;
+	if (minDecimals === undefined && maxDecimals === undefined) {
+		const n = decimals ?? fallbackDecimals;
+		return [n, n];
+	}
+	const min = minDecimals ?? decimals ?? defaultMin;
+	const max = maxDecimals ?? Math.max(decimals ?? fallbackDecimals, min);
+	return [Math.min(min, max), max];
+}
+
+/** `toFixed(max)` with trailing zeros trimmed down to `min` fraction digits. */
+function toTrimmedFixed(num: number, min: number, max: number): string {
+	const fixed = num.toFixed(max);
+	if (max <= min) return fixed;
+	const [int, frac = ''] = fixed.split('.');
+	let end = frac.length;
+	while (end > min && frac[end - 1] === '0') end--;
+	return end > 0 ? `${int}.${frac.slice(0, end)}` : (int as string);
+}
+
 // --------------------------------------------------------------------------- //
 //  Money                                                                       //
 // --------------------------------------------------------------------------- //
 
-export interface CurrencyOptions {
+export interface CurrencyOptions extends DecimalRange {
 	/**
-	 * Fraction digits. Defaults to 2: dropping cents is a loss of fidelity the
-	 * caller should have to ask for, not the default that quietly rounds
+	 * Fraction digits (`decimals`; `minDecimals`/`maxDecimals` for a range, a
+	 * unit price's 2 to 4). Defaults to 2: dropping cents is a loss of fidelity
+	 * the caller should have to ask for, not the default that quietly rounds
 	 * $1,234.56 up to $1,235. Pass `0` for a dashboard figure.
 	 */
-	decimals?: number;
 	/** Rendered when the value is null, undefined, empty or not a number. */
 	fallback?: string;
 	/**
@@ -104,6 +145,8 @@ function toFiniteNumber(value: string | number | null | undefined): number | nul
  * formatCurrency('1234.56', { decimals: 0 })   // '$1,235'
  * formatCurrency(-500, { decimals: 0 })        // '-$500'
  * formatCurrency(-500, { negative: 'brackets' }) // '($500.00)'
+ * formatCurrency(1.5, { minDecimals: 2, maxDecimals: 4 }) // '$1.50'
+ * formatCurrency(1.23456, { minDecimals: 2, maxDecimals: 4 }) // '$1.2346'
  * formatCurrency(null)                         // 'N/A'
  */
 export function formatCurrency(
@@ -111,7 +154,6 @@ export function formatCurrency(
 	options: CurrencyOptions = {}
 ): string {
 	const {
-		decimals = 2,
 		fallback = FALLBACK,
 		currency = 'AUD',
 		negative = 'sign',
@@ -121,11 +163,12 @@ export function formatCurrency(
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
+	const [minDigits, maxDigits] = resolveDecimals(options, 2, 2);
 	const format = new Intl.NumberFormat(locale, {
 		style: 'currency',
 		currency,
-		minimumFractionDigits: decimals,
-		maximumFractionDigits: decimals
+		minimumFractionDigits: minDigits,
+		maximumFractionDigits: maxDigits
 	});
 	if (negative !== 'brackets' || num >= 0) return format.format(num);
 	// A negative that rounds to nothing is not money out: no brackets around a zero.
@@ -274,20 +317,22 @@ export function isNegativeMoney(value: string | number | null | undefined): bool
  * @example
  * formatNumber(1234567)                  // '1,234,567'
  * formatNumber(1234.567, { decimals: 2 }) // '1,234.57'
+ * formatNumber(0.125, { maxDecimals: 8 }) // '0.125'
  * formatNumber(null)                      // 'N/A'
  */
 export function formatNumber(
 	value: number | string | null | undefined,
-	options: { decimals?: number; fallback?: string } = {}
+	options: DecimalRange & { fallback?: string } = {}
 ): string {
-	const { decimals = 0, fallback = FALLBACK } = options;
+	const { fallback = FALLBACK } = options;
 
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
+	const [minDigits, maxDigits] = resolveDecimals(options, 0, 0);
 	return new Intl.NumberFormat(AU_LOCALE, {
-		minimumFractionDigits: decimals,
-		maximumFractionDigits: decimals
+		minimumFractionDigits: minDigits,
+		maximumFractionDigits: maxDigits
 	}).format(num);
 }
 
@@ -302,18 +347,20 @@ export function formatNumber(
  * @example
  * formatPercentage(4.5)                    // '4.5%'
  * formatPercentage('4.5', { decimals: 2 }) // '4.50%'
+ * formatPercentage(4.5, { maxDecimals: 2 })  // '4.5%'
  * formatPercentage(null)                   // 'N/A'
  */
 export function formatPercentage(
 	value: number | string | null | undefined,
-	options: { decimals?: number; fallback?: string } = {}
+	options: DecimalRange & { fallback?: string } = {}
 ): string {
-	const { decimals = 1, fallback = FALLBACK } = options;
+	const { fallback = FALLBACK } = options;
 
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
-	return `${num.toFixed(decimals)}%`;
+	const [minDigits, maxDigits] = resolveDecimals(options, 1, 0);
+	return `${toTrimmedFixed(num, minDigits, maxDigits)}%`;
 }
 
 /**
@@ -322,18 +369,20 @@ export function formatPercentage(
  * @example
  * formatRatioAsPercentage(0.045)  // '4.5%'
  * formatRatioAsPercentage(1)      // '100.0%'
+ * formatRatioAsPercentage(0.5, { maxDecimals: 2 }) // '50%'
  * formatRatioAsPercentage(null)   // 'N/A'
  */
 export function formatRatioAsPercentage(
 	value: number | string | null | undefined,
-	options: { decimals?: number; fallback?: string } = {}
+	options: DecimalRange & { fallback?: string } = {}
 ): string {
-	const { decimals = 1, fallback = FALLBACK } = options;
+	const { fallback = FALLBACK } = options;
 
 	const num = toFiniteNumber(value);
 	if (num === null) return fallback;
 
-	return `${(num * 100).toFixed(decimals)}%`;
+	const [minDigits, maxDigits] = resolveDecimals(options, 1, 0);
+	return `${toTrimmedFixed(num * 100, minDigits, maxDigits)}%`;
 }
 
 // --------------------------------------------------------------------------- //
