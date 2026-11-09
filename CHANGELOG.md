@@ -17,6 +17,7 @@ Also, for master-project#406: app-factory#32 and #41.
 
 ### Changed
 
+- **`tests/conftest.py`: a failed stop of the test Postgres keeps its metadata file and logs the container id and `org.testcontainers.session-id`**, removing the file only after a successful stop. It was unlinked first, so a stop that timed out under load left a running container nobody could attribute. Consumer: radar-hooves/eight (#303 review).
 - **`require_app_module` refuses with "This needs an entitlement to the app itself; an account admitted to a chat alone has none"** (app-factory#32), not "the people in this app", which fitted only `/users/`. **Consumer must change:** mission-command drops its wording exception.
 - **`mcp/auth.py`: the refused-identity warning logs `client=<12 hex of sha256(client_id)>`**, not the raw `client_id`. redactyl reads a client id as a token and masked it, so the line that should name the failing identity said `<redacted>`; the hash is stable per caller.
 - **`tests/conftest.py`: the test Postgres starts with `max_connections=400`.** The container's default of 100 is exhausted at `-n 8` by any suite of size ("too many clients"); one higher default, no setting.
