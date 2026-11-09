@@ -51,7 +51,7 @@ def _boom():
 def test_failed_stop_keeps_metadata_and_names_the_container(conftest, caplog) -> None:
     conftest.ns["_EPHEMERAL_POSTGRES"] = _container(_boom)
     conftest.ns["_stop_ephemeral_postgres"]()
-    assert conftest.metadata.exists()
+    assert Path(f"{conftest.metadata}.stopping").exists()
     assert "abc123" in caplog.text and "sess-9" in caplog.text
 
 
@@ -59,3 +59,22 @@ def test_successful_stop_removes_metadata(conftest) -> None:
     conftest.ns["_EPHEMERAL_POSTGRES"] = _container(lambda: None)
     conftest.ns["_stop_ephemeral_postgres"]()
     assert not conftest.metadata.exists()
+
+
+def test_settings_unreadable_at_usual_path_during_stop(conftest) -> None:
+    seen = []
+
+    def stop() -> None:
+        seen.append(conftest.metadata.exists())
+
+    conftest.ns["_EPHEMERAL_POSTGRES"] = _container(stop)
+    conftest.ns["_stop_ephemeral_postgres"]()
+    assert seen == [False]
+
+
+def test_failed_stop_keeps_the_renamed_file(conftest, caplog) -> None:
+    conftest.ns["_EPHEMERAL_POSTGRES"] = _container(_boom)
+    conftest.ns["_stop_ephemeral_postgres"]()
+    stopping = Path(f"{conftest.metadata}.stopping")
+    assert stopping.exists() and not conftest.metadata.exists()
+    assert str(stopping) in caplog.text

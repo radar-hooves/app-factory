@@ -223,8 +223,8 @@ def _stop_ephemeral_postgres() -> None:
     that merely read the settings file never reaches past the guard below, and
     only the process that PUBLISHED one clears the file.
 
-    The published settings file is removed only after the stop succeeds; a failed
-    stop logs the container and session ids and keeps it, so a survivor can be
+    The published settings file is renamed to ``.stopping`` under the lock before the
+    stop and removed only after it succeeds; a failed stop logs the container and session ids and keeps it, so a survivor can be
     attributed. Ryuk does not cover this: ``atexit`` stops it before the process
     exits (see ``_start_ephemeral_postgres``), so nothing reaps a survivor.
 
@@ -235,22 +235,27 @@ def _stop_ephemeral_postgres() -> None:
     container, _EPHEMERAL_POSTGRES = _EPHEMERAL_POSTGRES, None
     if container is None:
         return
+    stopping = Path(f"{_SHARED_SERVER_FILE}.stopping")
+    if _PUBLISHED_SHARED_SERVER:
+        # Under the lock and before the stop, so no process can read settings for a
+        # container that is being torn down; renamed rather than removed, so a failed
+        # stop still leaves the record of which container this run owned.
+        with FileLock(f"{_SHARED_SERVER_FILE}.lock"):
+            if _SHARED_SERVER_FILE.exists():
+                _SHARED_SERVER_FILE.replace(stopping)
     try:
         container.stop()
     except Exception as exc:  # teardown must never fail a passing run
-        # The settings file stays: it is the one record of which of several concurrent
-        # test containers this run owned, and the container may still be running.
         logging.warning(
             "Could not stop the ephemeral test Postgres (container %s, testcontainers session %s, "
             "metadata kept at %s): %s",
             *_container_identity(container),
-            _SHARED_SERVER_FILE,
+            stopping,
             exc,
         )
         return
     if _PUBLISHED_SHARED_SERVER:
-        with FileLock(f"{_SHARED_SERVER_FILE}.lock"):
-            _SHARED_SERVER_FILE.unlink(missing_ok=True)
+        stopping.unlink(missing_ok=True)
         Path(f"{_SHARED_SERVER_FILE}.lock").unlink(missing_ok=True)
 
 
