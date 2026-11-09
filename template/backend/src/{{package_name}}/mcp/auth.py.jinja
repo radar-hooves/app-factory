@@ -33,6 +33,7 @@ grows — this module has no domain knowledge of its own.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from contextvars import ContextVar
 from functools import lru_cache
@@ -254,7 +255,15 @@ class ActorGateMiddleware(Middleware):
         try:
             resolve_actor()
         except AuthenticationError as exc:
-            logger.warning("MCP HTTP tool call rejected: %s (client_id=%s)", exc.message, exc.context.get("client_id"))
+            # A short stable hash, never the raw id: redactyl reads a client id as a
+            # token and masks it, so the line that names the failing identity said
+            # `<redacted>`. The hash is the same for the same caller on every line.
+            refused = str(exc.context.get("client_id"))
+            logger.warning(
+                "MCP HTTP tool call rejected: %s (client=%s)",
+                exc.message,
+                hashlib.sha256(refused.encode()).hexdigest()[:12],
+            )
             raise ToolError(exc.message) from exc
 
         return await call_next(context)

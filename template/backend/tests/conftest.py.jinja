@@ -182,6 +182,10 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     # up hundreds, and the disk contention made new servers miss the readiness limit).
     # A tmpfs data directory leaves no volume and starts fast on a busy disk.
     container.with_tmpfs_mount("/var/lib/postgresql/data")
+    # Postgres's default of 100 connections is exhausted by a suite of any size at
+    # `-n 8` ("too many clients"): every worker holds its own pool. Tmpfs memory,
+    # nothing else, pays for the headroom.
+    container.with_command("postgres -c max_connections=400")
     # Claimed and registered BEFORE start(): a start that fails part-way (the Docker
     # API timing out under load) has already created the container, and a cleanup
     # registered only after success leaves that one behind. Stopping a container

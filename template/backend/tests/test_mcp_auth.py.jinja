@@ -610,7 +610,7 @@ async def test_registered_identity_reaches_the_tool(_configured_idp):
 
 
 async def test_middleware_logs_who_was_refused_but_not_the_registry(monkeypatch, caplog):
-    """The warning names the refused client id so an operator can tell who it was, never the registered list."""
+    """The warning carries a stable hash of the refused client id (redactyl masks a raw one), never the registered list."""
     from fastmcp.exceptions import ToolError
 
     from {{ package_name }}.mcp import auth as auth_module
@@ -623,7 +623,10 @@ async def test_middleware_logs_who_was_refused_but_not_the_registry(monkeypatch,
     with caplog.at_level("WARNING"), pytest.raises(ToolError):
         await auth_module.ActorGateMiddleware().on_call_tool(None, call_next)
 
-    assert "client_id=not-in-the-registry" in caplog.text
+    import hashlib
+
+    assert f"client={hashlib.sha256(b'not-in-the-registry').hexdigest()[:12]}" in caplog.text
+    assert "not-in-the-registry" not in caplog.text
     assert "registered" not in caplog.text.replace("not registered", "")
 
 

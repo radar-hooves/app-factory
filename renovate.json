@@ -5,14 +5,19 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "template/frontend/package.json.jinja is real JSON wearing a .jinja extension for its scaffold interpolations elsewhere in the file; Renovate's built-in npm manager only recognises a literal package.json and never opens here. This regex manager reads the two shared design-system floors directly, so a new @poodle64/ui or @poodle64/design-tokens publish reaches this repo exactly as it reaches any consumer app — the shared packageRule below (matchPackageNames, automerge:false) already governs both by name.",
+      "description": "template/frontend/package.json.jinja is real JSON wearing a .jinja extension for its scaffold interpolations elsewhere in the file; Renovate's built-in npm manager only recognises a literal package.json and never opens here. This regex manager reads the shared design-system floors and the three exact pins (@playwright/test, impeccable, @poodle64/librarian) directly, so a new publish of any of them reaches this repo exactly as it reaches any consumer app, where the built-in manager reads the same lines of a real package.json — the shared packageRule below (matchPackageNames, automerge:false) already governs both by name.",
       "managerFilePatterns": ["/^template/frontend/package\\.json\\.jinja$/"],
-      "matchStrings": ["\"(?<depName>@poodle64/(?:design-tokens|ui))\":\\s*\"(?<currentValue>\\^?[^\"]+)\""],
+      "matchStrings": ["\"(?<depName>@poodle64/(?:design-tokens|ui|librarian)|@playwright/test|impeccable)\":\\s*\"(?<currentValue>\\^?[^\"]+)\""],
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     }
   ],
   "packageRules": [
+    {
+      "description": "impeccable 4 is held, as in the stamped renovate.json: the exact pin is what every app's .design-craft-baseline.json was banked against, and a major changes the findings set. Retires when the fleet re-bank is done (the same line there).",
+      "matchPackageNames": ["impeccable"],
+      "allowedVersions": "<4"
+    },
     {
       "description": "TypeScript 7 (the native compiler) is held below 7. Upstream is not ready: typescript-eslint's peer is <6.1, svelte-check's is ^5 || ^6, @sveltejs/kit 3 and @sveltejs/package 3 peer ^6, and `svelte-kit sync`, dev and build crash on 7.0.2 (sveltejs/kit#17537; svelte2tsx and svelte-check crash, sveltejs/language-tools#3063; typescript-eslint tracks it in typescript-eslint/typescript-eslint#10940). Retires when those three land TS 7 support.",
       "matchPackageNames": ["typescript"],

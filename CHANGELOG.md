@@ -4,6 +4,25 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: library's three `.canonical-exceptions` lines for app-factory#72 item 3 (a per-route timeout), #81 (the test Postgres's connection ceiling) and the refused-identity log line. Consumer: radar-hooves/library (master-project#431, app-factory#72, #81); #82's pins for master-project#445.
+
+### Added
+
+- **`frontend/src/lib/api/app.ts` exports `SLOW_PATHS`**, the per-route timeout budgets (milliseconds, by schema path), and `client.ts` reads them. The map was an empty `const` in the factory-owned `client.ts`, so an app needing 180s for one retrieval route had to fork the file. `app.ts` is already the app-owned, sanctioned extension point; empty is the correct state. A test drives the budget through the real client.
+
+### Changed
+
+- **`mcp/auth.py`: the refused-identity warning logs `client=<12 hex of sha256(client_id)>`**, not the raw `client_id`. redactyl reads a client id as a token and masked it, so the line that should name the failing identity said `<redacted>`; the hash is stable per caller.
+- **`tests/conftest.py`: the test Postgres starts with `max_connections=400`.** The container's default of 100 is exhausted at `-n 8` by any suite of size ("too many clients"); one higher default, no setting.
+- **`frontend/package.json`: `@playwright/test` 1.64.1 (was 1.58.2) and `impeccable` 3.6.1 (was 3.5.0)**, the highest each stamped app already declares, so an app in step with the factory fails no dependency floor. The factory's own `renovate.json` regex manager now reads `@playwright/test`, `impeccable` and `@poodle64/librarian` beside the two design-system floors (librarian had no rule), and holds impeccable below 4 as the stamped `renovate.json` does.
+
+### Consumer must change
+
+- Take `client.ts`, `mcp/auth.py`, `tests/conftest.py`, `tests/test_mcp_auth.py`, `client.test.ts` and regenerate `.template-parity.json`.
+- **Add `export const SLOW_PATHS: Record<string, number> = {};` to `frontend/src/lib/api/app.ts`**: `app.ts` is app-owned and copier never overwrites it, so `client.ts` fails `svelte-check` in an app that lacks the export. An app that edited `client.ts` for its own budget (library) moves its entries into `app.ts` and drops its parity exception.
+
 ## [2026.11.36] - 2026-11-09
 
 Need: an app with `run_mode: source` must start on a release carrying `db/guard.py`. Its container mounts the checkout at `/srv/<app>` (so a `.git` sits above the package) but its image has no git binary, so 2026.11.33's guard raised `Cannot verify the checkout against origin ([Errno 2] ... 'git')` at the migration step and caspo's backend crash-looped. Consumer: master-project's weekly factory sweep (caspo reverted to v2026.11.28; godswood next).

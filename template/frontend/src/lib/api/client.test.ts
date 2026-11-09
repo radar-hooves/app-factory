@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SLOW_PATHS } from './app';
 import { api, setViewAs } from './client';
 
 /**
@@ -110,6 +111,25 @@ describe('the API client middleware stack', () => {
 		});
 
 		expect(error).toEqual({ error: 'timeout', message: 'The request timed out.' });
+	});
+
+	it("gives a path in the app's SLOW_PATHS its own budget and every other path the default", async () => {
+		// A fetch that settles only when the request's signal aborts.
+		const hangs = (input: Request) =>
+			new Promise<Response>((_resolve, reject) =>
+				input.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+			);
+		SLOW_PATHS['/api/users/me'] = 180_000;
+		try {
+			const slow = api.GET('/api/users/me', { baseUrl: BASE_URL, fetch: hangs });
+			const fast = api.GET('/api/system/health', { baseUrl: BASE_URL, fetch: hangs });
+			await vi.advanceTimersByTimeAsync(31_000);
+			expect((await fast).error).toEqual({ error: 'timeout', message: 'The request timed out.' });
+			await vi.advanceTimersByTimeAsync(150_000);
+			expect((await slow).error).toEqual({ error: 'timeout', message: 'The request timed out.' });
+		} finally {
+			delete SLOW_PATHS['/api/users/me'];
+		}
 	});
 });
 
