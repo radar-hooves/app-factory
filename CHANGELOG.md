@@ -8,12 +8,16 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 Need: library's three `.canonical-exceptions` lines for app-factory#72 item 3 (a per-route timeout), #81 (the test Postgres's connection ceiling) and the refused-identity log line. Consumer: radar-hooves/library (master-project#431, app-factory#72, #81); #82's pins for master-project#445.
 
+Also, for master-project#406: app-factory#32 and #41.
+
 ### Added
 
+- **`set_value` / `reset_value` (`app_slices.settings.service`) take `machine_actor=<name>` in place of `actor_user_id`** (app-factory#41). A machine caller on the embedded `/mcp` has no `users` row, so the library passed `actor_user_id=None` and the change was recorded with no actor. Exactly one of the two is required (`ValueError` otherwise); `setting_changes.changed_by_machine` records the name and the history's `changed_by` shows it. New migration `e2a8b4c6d1f7`. **Consumer must change:** an app taking this by `copier update` repoints the migration's `down_revision` at its own head; the library drops its `# type: ignore[arg-type]` and passes its caller's name.
 - **`frontend/src/lib/api/slow-paths.ts` holds `SLOW_PATHS`**, the per-route timeout budgets (milliseconds, by schema path), and `client.ts` reads it. The map was an empty `const` in the factory-owned `client.ts`, so an app needing 180s for one retrieval route had to fork the file. An app extends it in its own `app.ts` with `Object.assign(SLOW_PATHS, { ... })`; `client.ts` imports `app.ts` for that effect. An `app.ts` that never mentions it is correct, so no app edits anything to take this. A test drives the budget through the real client.
 
 ### Changed
 
+- **`require_app_module` refuses with "This needs an entitlement to the app itself; an account admitted to a chat alone has none"** (app-factory#32), not "the people in this app", which fitted only `/users/`. **Consumer must change:** mission-command drops its wording exception.
 - **`mcp/auth.py`: the refused-identity warning logs `client=<12 hex of sha256(client_id)>`**, not the raw `client_id`. redactyl reads a client id as a token and masked it, so the line that should name the failing identity said `<redacted>`; the hash is stable per caller.
 - **`tests/conftest.py`: the test Postgres starts with `max_connections=400`.** The container's default of 100 is exhausted at `-n 8` by any suite of size ("too many clients"); one higher default, no setting.
 - **`frontend/package.json`: `@playwright/test` 1.64.1 (was 1.58.2) and `impeccable` 3.6.1 (was 3.5.0)**, the highest each stamped app already declares, so an app in step with the factory fails no dependency floor. The factory's own `renovate.json` regex manager now reads `@playwright/test`, `impeccable` and `@poodle64/librarian` beside the two design-system floors (librarian had no rule), and holds impeccable below 4 as the stamped `renovate.json` does.

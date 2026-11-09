@@ -58,6 +58,7 @@ class SettingChange(KitBase):
     old_value: Mapped[bool | int | float | str | None] = mapped_column(JSONB, nullable=True)
     new_value: Mapped[bool | int | float | str] = mapped_column(JSONB, nullable=False)
     changed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    changed_by_machine: Mapped[str | None] = mapped_column(String(255))
     changed_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

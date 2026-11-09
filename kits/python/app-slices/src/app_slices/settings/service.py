@@ -110,12 +110,18 @@ def build_schema() -> dict[str, Any]:
     return {"type": "object", "properties": properties}
 
 
+def _require_one_actor(actor_user_id: uuid.UUID | None, machine_actor: str | None) -> None:
+    if (actor_user_id is None) == (not machine_actor):
+        raise ValueError("a setting change names exactly one actor: a user id or a machine_actor")
+
+
 def set_value(
     session: Session,
     key: str,
     value: bool | int | float | str,
     *,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None = None,
+    machine_actor: str | None = None,
 ) -> tuple[bool | int | float | str, bool | int | float | str]:
     """Validate and store `value` as `key`'s override; record the change.
 
@@ -124,10 +130,13 @@ def set_value(
     records the value it actually replaced.
 
     Raises:
+        ValueError: not exactly one of `actor_user_id` (a `users` row) and `machine_actor`
+            (the name of a machine caller with no row, recorded in the trail as who it was).
         UndeclaredSetting: nothing declared this key.
         RefusedValue: `value` fails the declared type, bounds, choices, or
             (for `model_alias`) reachability or the app's own `narrow` rule.
     """
+    _require_one_actor(actor_user_id, machine_actor)
     setting = _require_declared(key)
     _validate(setting, value)
 
@@ -144,13 +153,23 @@ def set_value(
         .execution_options(populate_existing=True)
     )
     session.scalars(statement).one()
-    session.add(SettingChange(key=key, old_value=old_value, new_value=value, changed_by_id=actor_user_id))
+    session.add(
+        SettingChange(
+            key=key, old_value=old_value, new_value=value, changed_by_id=actor_user_id, changed_by_machine=machine_actor
+        )
+    )
     session.flush()
     logger.info("Setting changed", extra={"setting_key": key})
     return value, setting.default
 
 
-def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool | int | float | str:
+def reset_value(
+    session: Session,
+    key: str,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    machine_actor: str | None = None,
+) -> bool | int | float | str:
     """Delete `key`'s override, reverting it to its declared default. Records the change.
 
     A no-op that still logs the reset when `key` had no override: the operator
@@ -158,13 +177,23 @@ def reset_value(session: Session, key: str, *, actor_user_id: uuid.UUID) -> bool
     Core `DELETE`, so a concurrent reset that got there first is not an error.
 
     Raises:
+        ValueError: not exactly one of `actor_user_id` and `machine_actor`, as `set_value`.
         UndeclaredSetting: nothing declared this key.
     """
+    _require_one_actor(actor_user_id, machine_actor)
     setting = _require_declared(key)
     _lock(session, key)
     old_value = get_value(session, key)
     session.execute(delete(SettingOverride).where(SettingOverride.key == key))
-    session.add(SettingChange(key=key, old_value=old_value, new_value=setting.default, changed_by_id=actor_user_id))
+    session.add(
+        SettingChange(
+            key=key,
+            old_value=old_value,
+            new_value=setting.default,
+            changed_by_id=actor_user_id,
+            changed_by_machine=machine_actor,
+        )
+    )
     session.flush()
     return setting.default
 
@@ -185,7 +214,7 @@ def list_history(session: Session, *, limit: int, offset: int) -> tuple[list[Set
             key=change.key,
             old_value=change.old_value,
             new_value=change.new_value,
-            changed_by=username,
+            changed_by=username or change.changed_by_machine,
             changed_at=change.changed_at,
         )
         for change, username in rows

@@ -239,3 +239,19 @@ def test_model_alias_degrades_rather_than_refuses_when_the_gateway_is_unreachabl
 def test_get_value_raises_for_an_undeclared_key(sessions: sessionmaker[Session]) -> None:
     with sessions() as db, pytest.raises(UndeclaredSetting):
         get_value(db, "no.such.setting")
+
+
+def test_a_machine_actor_is_recorded_by_name_and_no_actor_is_refused(sessions: sessionmaker[Session]) -> None:
+    """A machine caller has no `users` row: the trail names it, and a change naming no one is a ValueError."""
+    with sessions.begin() as db:
+        service.set_value(db, LIMIT, 50, machine_actor="library-mcp")
+        service.reset_value(db, LIMIT, machine_actor="library-mcp")
+    with sessions() as db:
+        changes, total = service.list_history(db, limit=10, offset=0)
+    assert (total, [(c.new_value, c.changed_by) for c in changes]) == (2, [(20, "library-mcp"), (50, "library-mcp")])
+
+    with sessions.begin() as db:
+        with pytest.raises(ValueError, match="exactly one actor"):
+            service.set_value(db, LIMIT, 60)
+        with pytest.raises(ValueError, match="exactly one actor"):
+            service.reset_value(db, LIMIT, actor_user_id=uuid.uuid4(), machine_actor="library-mcp")

@@ -147,7 +147,7 @@ def require_app_module(identity: CurrentIdentity) -> Identity:
         gated_module="any module but a chat",
         grade="read",
     )
-    raise ForbiddenError("You do not have access to the people in this app")
+    raise ForbiddenError("This needs an entitlement to the app itself; an account admitted to a chat alone has none")
 
 
 def admitted(entitlements: tuple[str, ...]) -> bool:

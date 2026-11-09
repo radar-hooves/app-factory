@@ -141,7 +141,10 @@ async def test_an_account_admitted_only_to_chat_reaches_its_own_record_and_not_t
         "x-authentik-entitlements": "chat-x",
     }
     assert (await client.get("/api/users/me", headers=chat_only)).status_code == 200
-    assert (await client.get("/api/users/", headers=chat_only)).status_code == 403
+    refused = await client.get("/api/users/", headers=chat_only)
+    assert refused.status_code == 403
+    assert "entitlement to the app itself" in refused.json()["message"]
+    assert "people" not in refused.json()["message"]
     admitted = {**chat_only, "x-authentik-entitlements": "chat-x|example"}
     assert (await client.get("/api/users/", headers=admitted)).status_code == 200
 
