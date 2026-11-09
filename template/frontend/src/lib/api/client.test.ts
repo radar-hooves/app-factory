@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SLOW_PATHS } from './app';
 import { api, setViewAs } from './client';
+import { SLOW_PATHS } from './slow-paths';
 
 /**
  * The middleware stack's failure paths, driven through the real client rather

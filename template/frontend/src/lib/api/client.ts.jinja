@@ -10,8 +10,10 @@
 import createClient from 'openapi-fetch';
 import type { Middleware } from 'openapi-fetch';
 
-import { SLOW_PATHS } from './app';
+// The app's own SLOW_PATHS entries are added by app.ts as it loads.
+import './app';
 import type { paths } from './schema';
+import { SLOW_PATHS } from './slow-paths';
 
 export const api = createClient<paths>({
 	baseUrl: import.meta.env.VITE_API_URL ?? '',
@@ -86,13 +88,6 @@ const timeoutIds = new WeakMap<Request, ReturnType<typeof setTimeout>>();
 
 // The budget every call gets unless SLOW_PATHS says otherwise.
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-/*
- * The calls that are legitimately slower than the default come from `./app`'s
- * `SLOW_PATHS`, the app's own seam, so no app edits this file to name one. The
- * map is read per request, never at import: `./app` may re-export modules that
- * import this client.
- */
 
 // Abort a request that outlives its budget.
 const timeoutMiddleware: Middleware = {
