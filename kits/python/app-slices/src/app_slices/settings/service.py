@@ -110,9 +110,17 @@ def build_schema() -> dict[str, Any]:
     return {"type": "object", "properties": properties}
 
 
-def _require_one_actor(actor_user_id: uuid.UUID | None, machine_actor: str | None) -> None:
-    if (actor_user_id is None) == (not machine_actor):
+_MACHINE_ACTOR_MAX = 255
+
+
+def _require_one_actor(actor_user_id: uuid.UUID | None, machine_actor: str | None) -> str | None:
+    """The machine actor's stripped name, or None for a user; ValueError unless exactly one is named."""
+    name = machine_actor.strip() if machine_actor is not None else None
+    if (actor_user_id is None) == (name is None):
         raise ValueError("a setting change names exactly one actor: a user id or a machine_actor")
+    if name is not None and not 0 < len(name) <= _MACHINE_ACTOR_MAX:
+        raise ValueError(f"a machine_actor is a name of 1 to {_MACHINE_ACTOR_MAX} characters")
+    return name
 
 
 def set_value(
@@ -136,7 +144,7 @@ def set_value(
         RefusedValue: `value` fails the declared type, bounds, choices, or
             (for `model_alias`) reachability or the app's own `narrow` rule.
     """
-    _require_one_actor(actor_user_id, machine_actor)
+    machine_actor = _require_one_actor(actor_user_id, machine_actor)
     setting = _require_declared(key)
     _validate(setting, value)
 
@@ -180,7 +188,7 @@ def reset_value(
         ValueError: not exactly one of `actor_user_id` and `machine_actor`, as `set_value`.
         UndeclaredSetting: nothing declared this key.
     """
-    _require_one_actor(actor_user_id, machine_actor)
+    machine_actor = _require_one_actor(actor_user_id, machine_actor)
     setting = _require_declared(key)
     _lock(session, key)
     old_value = get_value(session, key)

@@ -255,3 +255,22 @@ def test_a_machine_actor_is_recorded_by_name_and_no_actor_is_refused(sessions: s
             service.set_value(db, LIMIT, 60)
         with pytest.raises(ValueError, match="exactly one actor"):
             service.reset_value(db, LIMIT, actor_user_id=uuid.uuid4(), machine_actor="library-mcp")
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 256])
+def test_an_empty_blank_or_overlong_machine_actor_is_refused(sessions: sessionmaker[Session], name: str) -> None:
+    with sessions.begin() as db:
+        with pytest.raises(ValueError, match="1 to 255 characters"):
+            service.set_value(db, LIMIT, 50, machine_actor=name)
+        with pytest.raises(ValueError, match="1 to 255 characters"):
+            service.reset_value(db, LIMIT, machine_actor=name)
+
+
+def test_both_actors_given_to_set_value_is_refused_and_a_name_is_stripped(sessions: sessionmaker[Session]) -> None:
+    with sessions.begin() as db:
+        with pytest.raises(ValueError, match="exactly one actor"):
+            service.set_value(db, LIMIT, 50, actor_user_id=uuid.uuid4(), machine_actor="library-mcp")
+        service.set_value(db, LIMIT, 50, machine_actor="  library-mcp ")
+    with sessions() as db:
+        changes, _ = service.list_history(db, limit=10, offset=0)
+    assert [c.changed_by for c in changes] == ["library-mcp"]
