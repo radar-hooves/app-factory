@@ -10,7 +10,7 @@ Need: library's three `.canonical-exceptions` lines for app-factory#72 item 3 (a
 
 ### Added
 
-- **`frontend/src/lib/api/app.ts` exports `SLOW_PATHS`**, the per-route timeout budgets (milliseconds, by schema path), and `client.ts` reads them. The map was an empty `const` in the factory-owned `client.ts`, so an app needing 180s for one retrieval route had to fork the file. `app.ts` is already the app-owned, sanctioned extension point; empty is the correct state. A test drives the budget through the real client.
+- **`frontend/src/lib/api/slow-paths.ts` holds `SLOW_PATHS`**, the per-route timeout budgets (milliseconds, by schema path), and `client.ts` reads it. The map was an empty `const` in the factory-owned `client.ts`, so an app needing 180s for one retrieval route had to fork the file. An app extends it in its own `app.ts` with `Object.assign(SLOW_PATHS, { ... })`; `client.ts` imports `app.ts` for that effect. An `app.ts` that never mentions it is correct, so no app edits anything to take this. A test drives the budget through the real client.
 
 ### Changed
 
@@ -20,8 +20,8 @@ Need: library's three `.canonical-exceptions` lines for app-factory#72 item 3 (a
 
 ### Consumer must change
 
-- Take `client.ts`, `mcp/auth.py`, `tests/conftest.py`, `tests/test_mcp_auth.py`, `client.test.ts` and regenerate `.template-parity.json`.
-- **Add `export const SLOW_PATHS: Record<string, number> = {};` to `frontend/src/lib/api/app.ts`**: `app.ts` is app-owned and copier never overwrites it, so `client.ts` fails `svelte-check` in an app that lacks the export. An app that edited `client.ts` for its own budget (library) moves its entries into `app.ts` and drops its parity exception.
+- Take `client.ts`, `slow-paths.ts`, `client.test.ts`, `mcp/auth.py`, `tests/conftest.py`, `tests/test_mcp_auth.py` and regenerate `.template-parity.json`.
+- An app that edited `client.ts` for its own budget (library) moves its entries into `app.ts` as above and drops its parity exception.
 
 ## [2026.11.36] - 2026-11-09
 
