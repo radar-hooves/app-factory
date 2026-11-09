@@ -117,7 +117,9 @@ describe('the API client middleware stack', () => {
 		// A fetch that settles only when the request's signal aborts.
 		const hangs = (input: Request) =>
 			new Promise<Response>((_resolve, reject) =>
-				input.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+				input.signal.addEventListener('abort', () =>
+					reject(new DOMException('aborted', 'AbortError'))
+				)
 			);
 		SLOW_PATHS['/api/users/me'] = 180_000;
 		try {
