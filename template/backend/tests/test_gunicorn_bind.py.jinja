@@ -1,0 +1,72 @@
+"""The listener leaves the telemetry network unbound (gunicorn.conf.py).
+
+The network a container shares with the OTLP collector is the one Docker's
+resolver answers the collector's name on, so the collector's address names the
+interface to close; every other address, loopback included, is kept.
+"""
+
+import ipaddress
+import runpy
+from pathlib import Path
+
+import pytest
+
+CONF = runpy.run_path(str(Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
+listen_addresses = CONF["listen_addresses"]
+PORT = {{ backend_port }}
+
+LOOPBACK = ipaddress.IPv4Interface("127.0.0.1/8")
+FRONT = ipaddress.IPv4Interface("172.20.0.5/16")
+TELEMETRY = ipaddress.IPv4Interface("172.30.0.9/16")
+
+
+def _ips(*names: str):
+    return [ipaddress.IPv4Address(n) for n in names]
+
+
+def _call(env, interfaces, collector="172.30.0.2"):
+    return listen_addresses(
+        env,
+        interfaces=lambda: interfaces,
+        resolve=lambda host: _ips(collector),
+        wait=0,
+    )
+
+
+ENDPOINT = {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4318"}
+
+
+def test_no_endpoint_listens_everywhere() -> None:
+    assert _call({}, [LOOPBACK, FRONT, TELEMETRY]) == [f"0.0.0.0:{PORT}"]
+
+
+def test_telemetry_interface_is_left_unbound() -> None:
+    assert _call(ENDPOINT, [LOOPBACK, FRONT, TELEMETRY]) == [f"127.0.0.1:{PORT}", f"172.20.0.5:{PORT}"]
+
+
+def test_collector_off_every_shared_subnet_listens_everywhere() -> None:
+    assert _call(ENDPOINT, [LOOPBACK, FRONT], collector="10.9.9.9") == [f"0.0.0.0:{PORT}"]
+
+
+def test_endpoint_without_scheme_still_names_its_host() -> None:
+    seen = []
+    listen_addresses(
+        {"OTEL_EXPORTER_OTLP_ENDPOINT": "alloy:4318"},
+        interfaces=lambda: [LOOPBACK, FRONT, TELEMETRY],
+        resolve=lambda host: seen.append(host) or _ips("172.30.0.2"),
+        wait=0,
+    )
+    assert seen == ["alloy"]
+
+
+def test_collector_on_the_only_network_stops_the_start() -> None:
+    with pytest.raises(RuntimeError, match="only network"):
+        _call(ENDPOINT, [LOOPBACK, TELEMETRY])
+
+
+def test_unresolvable_collector_stops_the_start_rather_than_opening_every_interface() -> None:
+    def refuse(host):
+        raise OSError("Name or service not known")
+
+    with pytest.raises(RuntimeError, match="does not resolve"):
+        listen_addresses(ENDPOINT, interfaces=lambda: [LOOPBACK, FRONT, TELEMETRY], resolve=refuse, wait=0)

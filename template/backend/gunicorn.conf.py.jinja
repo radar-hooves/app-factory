@@ -1,14 +1,96 @@
 """Gunicorn configuration for production deployment.
 
 TLS/HSTS is normally terminated by the reverse proxy; the app also sets HSTS
-itself (middleware.py) so it is safe standalone. Bound to all interfaces
-because the container exposes no ports directly to the host network.
+itself (middleware.py) so it is safe standalone.
 """
 
+import ipaddress
 import logging
 import os
+import socket
+import struct
+import sys
+import time
+from collections.abc import Callable
+from urllib.parse import urlsplit
 
-bind = "0.0.0.0:{{ backend_port }}"
+PORT = {{ backend_port }}
+
+
+def _ipv4_interfaces() -> list[ipaddress.IPv4Interface]:
+    """Every IPv4 address this container holds, with its subnet (Linux SIOCGIFADDR/SIOCGIFNETMASK)."""
+    import fcntl
+
+    found = []
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        for _, name in socket.if_nameindex():
+            request = struct.pack("256s", name.encode()[:15])
+            try:
+                address = socket.inet_ntoa(fcntl.ioctl(probe.fileno(), 0x8915, request)[20:24])
+                netmask = socket.inet_ntoa(fcntl.ioctl(probe.fileno(), 0x891B, request)[20:24])
+            except OSError:  # an interface with no IPv4 address
+                continue
+            found.append(ipaddress.IPv4Interface(f"{address}/{netmask}"))
+    return found
+
+
+def _resolve_ipv4(host: str) -> list[ipaddress.IPv4Address]:
+    return sorted({ipaddress.IPv4Address(info[4][0]) for info in socket.getaddrinfo(host, None, socket.AF_INET)})
+
+
+def listen_addresses(
+    environ: dict[str, str],
+    interfaces: Callable[[], list[ipaddress.IPv4Interface]] = _ipv4_interfaces,
+    resolve: Callable[[str], list[ipaddress.IPv4Address]] = _resolve_ipv4,
+    wait: float = 30.0,
+) -> list[str]:
+    """The addresses to listen on: every one this container holds except the telemetry network's.
+
+    An app joins the shared telemetry network only to dial the OTLP collector
+    (OTEL_EXPORTER_OTLP_ENDPOINT), yet a listener on 0.0.0.0 answers every other
+    member of that network, past the front door, and the app trusts the identity
+    headers the front door sets. Docker's resolver answers the collector's name
+    only from a network the two share, so the collector's address names the
+    interface to leave unbound; a connection the app opens to the collector
+    needs no listener there, so traces are untouched. No address is pinned and
+    no network is named: the deployment already sets the endpoint.
+
+    Without the endpoint (development, a bare host), or with a collector reached
+    through a route rather than a shared subnet, nothing is excluded and the
+    listener stays on 0.0.0.0. A collector name that does not resolve within
+    `wait` seconds stops the start rather than opening every interface: the
+    restart policy brings the app up once the collector does.
+    """
+    endpoint = environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+    host = urlsplit(endpoint if "//" in endpoint else f"//{endpoint}").hostname if endpoint else None
+    if not host or sys.platform != "linux":
+        return [f"0.0.0.0:{PORT}"]
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            collectors = resolve(host)
+            break
+        except OSError as error:
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"OTEL_EXPORTER_OTLP_ENDPOINT host {host!r} does not resolve ({error}); refusing to listen on "
+                    "every network. Start the collector, or unset the endpoint."
+                ) from error
+            time.sleep(1)
+    held = interfaces()
+    closed = [i for i in held if not i.ip.is_loopback and any(c in i.network for c in collectors)]
+    if not closed:
+        return [f"0.0.0.0:{PORT}"]
+    kept = [i for i in held if i not in closed]
+    if not any(not i.ip.is_loopback for i in kept):
+        raise RuntimeError(
+            f"the collector {host!r} shares the app's only network ({closed[0].network}); closing it would "
+            "leave the app unreachable. Give the app a network of its own for the front door."
+        )
+    return [f"{i.ip}:{PORT}" for i in kept]
+
+
+bind = listen_addresses(dict(os.environ))
 backlog = 2048
 
 # Worker count is container-aware. DEBUG runs a single worker. Production

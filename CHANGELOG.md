@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.39] - 2026-11-10
+
+Need: a stamped app answers only on the network its front door reaches it on, not on the shared `telemetry` network it joins to dial the OTLP collector. Consumer: yggdrasil#438 (earworm#96 M2), app-factory#109.
+
+### Changed
+
+- **`gunicorn.conf.py` binds every address the container holds except the one on the collector's network, in place of `0.0.0.0`.** `listen_addresses()` resolves the host of `OTEL_EXPORTER_OTLP_ENDPOINT`; Docker's resolver answers a name only from a network the two share, so the collector's address names the telemetry interface and the listener leaves it unbound. Loopback (the healthcheck) and every other network stay bound. Traces are untouched: the app dials out and needs no listener there. No address is pinned and no setting is added. Considered and not built: a bind by named interface (the name is not stable across Docker versions), an `*_LISTEN_ADDRESSES` setting (needs a pinned IP, which the compose rule forbids), a source-IP check in the app (accepts the connection, trusts a CIDR list a deployment sets broadly), and an OTLP relay sidecar per app (one more container to run for each app).
+- Unset endpoint, or a collector reached by a route rather than a shared subnet: `0.0.0.0`, as before. `tests/test_gunicorn_bind.py` covers the cases; `tests/listener/proof.sh` runs in the self-test on two real Docker networks: own network answered, telemetry network refused, trace delivered.
+
+### Consumer must change
+
+- **A start-time refusal.** With `OTEL_EXPORTER_OTLP_ENDPOINT` set, the app waits 30 s for the collector's name to resolve and then exits (the restart policy retries), and it exits when the collector is the app's only network. A deployment that sets the endpoint to a collector that is not running must start the collector or unset the endpoint. Verify per host that the front door and the app share a network that is not the collector's.
+- Take `gunicorn.conf.py` and `tests/test_gunicorn_bind.py`, and regenerate `.template-parity.json`: a copier update, nothing else. caspo and godswood may drop their `*_LISTEN_ADDRESSES` override.
+
 ## [2026.11.38] - 2026-11-10
 
 Need: a 2xx reply whose body is not JSON comes back as `{ error }`, not a rejection. Consumer: radar-hooves/eight (round 12, #290).

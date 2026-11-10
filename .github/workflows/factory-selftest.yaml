@@ -49,6 +49,7 @@ on:
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
       - 'tests/layout-ownership/**'
+      - 'tests/listener/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
       - 'tests/elements/**'
       - 'kits/python/**'
@@ -70,6 +71,7 @@ on:
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
       - 'tests/layout-ownership/**'
+      - 'tests/listener/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
       - 'tests/elements/**'
       - 'kits/python/**'
@@ -230,6 +232,11 @@ jobs:
           # hook leaves it, or a re-stamp can never commit clean.
           uv run ruff format --check .
           uv run pytest -q -n 4
+
+      - name: Listener — a shared telemetry network is refused, the own network answered
+        # The rendered gunicorn.conf.py on a container joined to its own network
+        # and a telemetry one, with a collector on the second (app-factory#109).
+        run: tests/listener/proof.sh "$SCRATCH/backend" 8398
 
       - name: Set up pnpm
         # Same pin as master-project's frontend-ci.yaml reusable.
