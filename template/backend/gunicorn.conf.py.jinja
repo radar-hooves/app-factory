@@ -12,7 +12,6 @@ import struct
 import sys
 import time
 from collections.abc import Callable
-from urllib.parse import urlsplit
 
 PORT = {{ backend_port }}
 TRUSTED_PROXIES = "{{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS"

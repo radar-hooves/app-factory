@@ -5,12 +5,16 @@ a listener on 0.0.0.0 would answer every container on each.
 """
 
 import ipaddress
+import os
 import runpy
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-CONF = runpy.run_path(str(Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
+# The module resolves its own bind at import; no front door runs here.
+with mock.patch.dict(os.environ, {"FRONT_DOOR_HOST": ""}):
+    CONF = runpy.run_path(str(Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
 listen_addresses = CONF["listen_addresses"]
 PORT = {{ backend_port }}
 PROXIES = "{{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS"
