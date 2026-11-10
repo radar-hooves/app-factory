@@ -4,7 +4,9 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.38] - 2026-11-10
+
+Need: a 2xx reply whose body is not JSON comes back as `{ error }`, not a rejection. Consumer: radar-hooves/eight (round 12, #290).
 
 Need: the factory carries none of python-basics' `asyncio.gather` and process-level `basicConfig`. Consumer: master-project#423.
 
@@ -14,14 +16,6 @@ Need: the factory carries none of python-basics' `asyncio.gather` and process-le
 - **Template tests `test_agent_jobs_api.py` and `test_workspaces_api.py`, and the kit's `agent-common` `test_bridge.py`, use `asyncio.TaskGroup` in place of `gather`.** A failing task now cancels its siblings and raises an `ExceptionGroup`; a failure fails the test either way. The watchers test keeps its poll timeout through `asyncio.timeout`.
 - No `Optional`, `TypeVar`, unnamed logger or library-side logging configuration was found in `template/`, `kits/` or `skeletons/`. The quoted-name loggers (`alembic.roles`, `alembic.rekey`, `<package>.security`) are deliberate shared channels.
 
-### Consumer must change
-
-- Take `db/stamp.py`, `tests/test_agent_jobs_api.py` and `tests/test_workspaces_api.py`, and regenerate `.template-parity.json`: a copier update, nothing else.
-
-## [2026.11.38] - 2026-11-10
-
-Need: a 2xx reply whose body is not JSON comes back as `{ error }`, not a rejection. Consumer: radar-hooves/eight (round 12, #290).
-
 ### Fixed
 
 - **`client.ts`: a 200 whose body is not JSON (a proxy's HTML page, an empty body on a JSON route) returns `{ error: { error: 'invalid_response', message: 'The API sent a reply that could not be read.' } }`, status 502**, through a new `unreadableReplyMiddleware`. openapi-fetch parses a 2xx body after every hook, so `errorNormaliserMiddleware` (onError) never saw it and the call rejected, leaving a page that awaits `{ error }` in its last good state. 204/205, HEAD, a declared zero length and a call with `parseAs` other than `json` are untouched. `error.ts` titles the new code "Unreadable response". A test drives a real HTML 200 and an empty 200 through the client.
@@ -29,6 +23,7 @@ Need: a 2xx reply whose body is not JSON comes back as `{ error }`, not a reject
 ### Consumer must change
 
 - Take `client.ts`, `client.test.ts` and `error.ts`, and regenerate `.template-parity.json`: a copier update to this tag, nothing else.
+- Take `db/stamp.py`, `tests/test_agent_jobs_api.py` and `tests/test_workspaces_api.py`, and regenerate `.template-parity.json`: a copier update, nothing else.
 
 ## [2026.11.37] - 2026-11-10
 
