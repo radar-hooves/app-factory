@@ -233,9 +233,9 @@ jobs:
           uv run ruff format --check .
           uv run pytest -q -n 4
 
-      - name: Listener — a shared telemetry network is refused, the own network answered
-        # The rendered gunicorn.conf.py on a container joined to its own network
-        # and a telemetry one, with a collector on the second (app-factory#109).
+      - name: Listener — answered on the front door's network only
+        # The rendered gunicorn.conf.py on a container joined to the front door's network,
+        # a telemetry one (a collector) and a third (app-factory#109).
         run: tests/listener/proof.sh "$SCRATCH/backend" 8398
 
       - name: Set up pnpm

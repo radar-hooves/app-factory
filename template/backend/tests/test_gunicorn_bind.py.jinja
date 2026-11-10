@@ -1,8 +1,7 @@
-"""The listener leaves the telemetry network unbound (gunicorn.conf.py).
+"""The listener is an allow-list: loopback and the front door's network (gunicorn.conf.py).
 
-The network a container shares with the OTLP collector is the one Docker's
-resolver answers the collector's name on, so the collector's address names the
-interface to close; every other address, loopback included, is kept.
+The app joins other shared networks (telemetry, cortex, mcpnet) outbound-only;
+a listener on 0.0.0.0 would answer every container on each.
 """
 
 import ipaddress
@@ -14,59 +13,66 @@ import pytest
 CONF = runpy.run_path(str(Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
 listen_addresses = CONF["listen_addresses"]
 PORT = {{ backend_port }}
+PROXIES = "{{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS"
 
 LOOPBACK = ipaddress.IPv4Interface("127.0.0.1/8")
-FRONT = ipaddress.IPv4Interface("172.20.0.5/16")
+OWN = ipaddress.IPv4Interface("172.20.0.5/16")
 TELEMETRY = ipaddress.IPv4Interface("172.30.0.9/16")
+CORTEX = ipaddress.IPv4Interface("172.31.0.9/16")
+ALL = [LOOPBACK, OWN, TELEMETRY, CORTEX]
+LOCAL = [f"127.0.0.1:{PORT}", f"172.20.0.5:{PORT}"]
 
 
-def _ips(*names: str):
-    return [ipaddress.IPv4Address(n) for n in names]
-
-
-def _call(env, interfaces, collector="172.30.0.2"):
+def _call(env, interfaces=ALL, front_door="172.20.0.100"):
     return listen_addresses(
         env,
         interfaces=lambda: interfaces,
-        resolve=lambda host: _ips(collector),
+        resolve=lambda host: [ipaddress.IPv4Address(front_door)],
         wait=0,
     )
 
 
-ENDPOINT = {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4318"}
+def test_resolved_front_door_network_is_the_only_one_bound() -> None:
+    assert _call({}) == LOCAL
 
 
-def test_no_endpoint_listens_everywhere() -> None:
-    assert _call({}, [LOOPBACK, FRONT, TELEMETRY]) == [f"0.0.0.0:{PORT}"]
+def test_front_door_on_another_network_binds_that_one() -> None:
+    assert _call({}, front_door="172.31.0.100") == [f"127.0.0.1:{PORT}", f"172.31.0.9:{PORT}"]
 
 
-def test_telemetry_interface_is_left_unbound() -> None:
-    assert _call(ENDPOINT, [LOOPBACK, FRONT, TELEMETRY]) == [f"127.0.0.1:{PORT}", f"172.20.0.5:{PORT}"]
-
-
-def test_collector_off_every_shared_subnet_listens_everywhere() -> None:
-    assert _call(ENDPOINT, [LOOPBACK, FRONT], collector="10.9.9.9") == [f"0.0.0.0:{PORT}"]
-
-
-def test_endpoint_without_scheme_still_names_its_host() -> None:
+def test_default_name_is_nginx_and_the_setting_renames_it() -> None:
     seen = []
-    listen_addresses(
-        {"OTEL_EXPORTER_OTLP_ENDPOINT": "alloy:4318"},
-        interfaces=lambda: [LOOPBACK, FRONT, TELEMETRY],
-        resolve=lambda host: seen.append(host) or _ips("172.30.0.2"),
-        wait=0,
-    )
-    assert seen == ["alloy"]
+    for env in ({}, {"FRONT_DOOR_HOST": "gate"}):
+        listen_addresses(
+            env,
+            interfaces=lambda: ALL,
+            resolve=lambda host: seen.append(host) or [ipaddress.IPv4Address("172.20.0.100")],
+            wait=0,
+        )
+    assert seen == ["nginx", "gate"]
 
 
-def test_collector_on_the_only_network_stops_the_start() -> None:
-    with pytest.raises(RuntimeError, match="only network"):
-        _call(ENDPOINT, [LOOPBACK, TELEMETRY])
+def test_declared_proxy_network_beats_the_name() -> None:
+    # nginx resolves to cortex (its first-joined network) but the deployment names it on the app's own.
+    assert _call({PROXIES: "172.20.0.100/32"}, front_door="172.31.0.100") == LOCAL
 
 
-def test_unresolvable_collector_stops_the_start_rather_than_opening_every_interface() -> None:
+def test_proxy_entry_broader_than_a_subnet_matches_nothing() -> None:
+    assert _call({PROXIES: "172.16.0.0/12"}) == LOCAL
+
+
+def test_empty_setting_listens_everywhere() -> None:
+    assert _call({"FRONT_DOOR_HOST": ""}) == [f"0.0.0.0:{PORT}"]
+
+
+def test_unresolvable_front_door_stops_the_start() -> None:
     def refuse(host):
         raise OSError("Name or service not known")
 
     with pytest.raises(RuntimeError, match="does not resolve"):
-        listen_addresses(ENDPOINT, interfaces=lambda: [LOOPBACK, FRONT, TELEMETRY], resolve=refuse, wait=0)
+        listen_addresses({}, interfaces=lambda: ALL, resolve=refuse, wait=0)
+
+
+def test_front_door_on_none_of_the_apps_networks_stops_the_start() -> None:
+    with pytest.raises(RuntimeError, match="none of the app's networks"):
+        _call({}, front_door="10.9.9.9")

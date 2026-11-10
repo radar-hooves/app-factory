@@ -15,6 +15,7 @@ from collections.abc import Callable
 from urllib.parse import urlsplit
 
 PORT = {{ backend_port }}
+TRUSTED_PROXIES = "{{ project_name | upper | replace('-', '_') }}_TRUSTED_PROXY_NETWORKS"
 
 
 def _ipv4_interfaces() -> list[ipaddress.IPv4Interface]:
@@ -44,50 +45,67 @@ def listen_addresses(
     resolve: Callable[[str], list[ipaddress.IPv4Address]] = _resolve_ipv4,
     wait: float = 30.0,
 ) -> list[str]:
-    """The addresses to listen on: every one this container holds except the telemetry network's.
+    """The addresses to listen on: loopback and the network the front door reaches the app on.
 
-    An app joins the shared telemetry network only to dial the OTLP collector
-    (OTEL_EXPORTER_OTLP_ENDPOINT), yet a listener on 0.0.0.0 answers every other
-    member of that network, past the front door, and the app trusts the identity
-    headers the front door sets. Docker's resolver answers the collector's name
-    only from a network the two share, so the collector's address names the
-    interface to leave unbound; a connection the app opens to the collector
-    needs no listener there, so traces are untouched. No address is pinned and
-    no network is named: the deployment already sets the endpoint.
+    The app trusts the identity headers the front door sets, yet an app joins
+    other shared networks (telemetry to dial the collector, cortex, mcpnet) and a
+    listener on 0.0.0.0 answers every container on each of them. So the listener
+    is an allow-list, resolved at start, with no pinned address: loopback (the
+    healthcheck) and the interface on the front door's network. Every other
+    network is outbound-only for the app.
 
-    Without the endpoint (development, a bare host), or with a collector reached
-    through a route rather than a shared subnet, nothing is excluded and the
-    listener stays on 0.0.0.0. A collector name that does not resolve within
-    `wait` seconds stops the start rather than opening every interface: the
-    restart policy brings the app up once the collector does.
+    The front door's network is, in order:
+      1. the interface whose subnet holds an entry of `<APP>_TRUSTED_PROXY_NETWORKS`
+         (the deployment already names the front door's address there). Docker
+         resolves a name to ONE shared network, the front door's first-joined,
+         so a front door multi-homed on several networks the app also joins
+         (cortex, mcpnet) could name the wrong one; the declaration is exact.
+         An entry broader than an interface's subnet matches nothing.
+      2. the interface whose subnet holds the address `FRONT_DOOR_HOST` resolves
+         to (default `nginx`, the service name in every host's front-door stack).
+         Docker answers a name only from a network the two share.
+
+    `FRONT_DOOR_HOST=` (empty) listens on 0.0.0.0: development, the local image
+    smoke test, a bare host. Nothing else ever does. A name that does not
+    resolve within `wait` seconds, or resolves off every network the app holds,
+    stops the start: the restart policy retries once the front door is up,
+    where a loopback-only listener would stay up and unreachable.
     """
-    endpoint = environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
-    host = urlsplit(endpoint if "//" in endpoint else f"//{endpoint}").hostname if endpoint else None
+    host = environ.get("FRONT_DOOR_HOST", "nginx").strip()
     if not host or sys.platform != "linux":
         return [f"0.0.0.0:{PORT}"]
-    deadline = time.monotonic() + wait
-    while True:
-        try:
-            collectors = resolve(host)
-            break
-        except OSError as error:
-            if time.monotonic() >= deadline:
-                raise RuntimeError(
-                    f"OTEL_EXPORTER_OTLP_ENDPOINT host {host!r} does not resolve ({error}); refusing to listen on "
-                    "every network. Start the collector, or unset the endpoint."
-                ) from error
-            time.sleep(1)
     held = interfaces()
-    closed = [i for i in held if not i.ip.is_loopback and any(c in i.network for c in collectors)]
-    if not closed:
-        return [f"0.0.0.0:{PORT}"]
-    kept = [i for i in held if i not in closed]
-    if not any(not i.ip.is_loopback for i in kept):
-        raise RuntimeError(
-            f"the collector {host!r} shares the app's only network ({closed[0].network}); closing it would "
-            "leave the app unreachable. Give the app a network of its own for the front door."
-        )
-    return [f"{i.ip}:{PORT}" for i in kept]
+    local = [i for i in held if not i.ip.is_loopback]
+    declared = [
+        ipaddress.ip_network(entry.strip(), strict=False)
+        for entry in environ.get(TRUSTED_PROXIES, "").split(",")
+        if entry.strip()
+    ]
+    kept = [i for i in local if any(isinstance(d, ipaddress.IPv4Network) and d.subnet_of(i.network) for d in declared)]
+    source = TRUSTED_PROXIES
+    if not kept:
+        source = f"{host!r}"
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                front_doors = resolve(host)
+                break
+            except OSError as error:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        f"FRONT_DOOR_HOST {host!r} does not resolve ({error}); refusing to listen on every "
+                        "network. Start the front door, or set FRONT_DOOR_HOST= for development."
+                    ) from error
+                time.sleep(1)
+        kept = [i for i in local if any(f in i.network for f in front_doors)]
+        if not kept:
+            raise RuntimeError(
+                f"front door {host!r} ({', '.join(map(str, front_doors))}) is on none of the app's networks; "
+                "refusing to listen on every network. Name its address in the trusted-proxy networks."
+            )
+    addresses = [f"127.0.0.1:{PORT}", *(f"{i.ip}:{PORT}" for i in kept)]
+    print(f"listening on {', '.join(addresses)} (front door from {source})", file=sys.stderr, flush=True)
+    return addresses
 
 
 bind = listen_addresses(dict(os.environ))

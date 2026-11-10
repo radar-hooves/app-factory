@@ -21,12 +21,14 @@ docker run -d --name "$pgname" --network "$net" -e POSTGRES_PASSWORD="$pgpass" p
 # key and nothing else here names a Vended field, so the broker is never asked
 # (config/vend.py) — any Vended field an app's own domain settings later add
 # stays at its empty default instead of failing the boot this gate exists to prove.
+# FRONT_DOOR_HOST= (empty): no front door runs here, so the listener binds every address
+# (gunicorn.conf.py); a deployment leaves it unset.
 # The server serves as the throwaway's own user: this proves the image boots, and
 # the suite proves the database roles (db/roles.py).
 docker run -d --name "$name" --network "$net" \
   -e POSTGRES_HOST="$pgname" -e POSTGRES_PORT=5432 -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD="$pgpass" -e POSTGRES_RUNTIME_USER=postgres -e POSTGRES_RUNTIME_PASSWORD="$pgpass" \
-  -e POSTGRES_DB=postgres -e {{ package_name | upper }}_VEND=off \
+  -e POSTGRES_DB=postgres -e {{ package_name | upper }}_VEND=off -e FRONT_DOOR_HOST= \
   "$IMAGE" gunicorn {{ package_name }}.server:app --config backend/gunicorn.conf.py >/dev/null
 trap 'docker logs "$name" 2>&1 | tail -n 50 || true; docker rm -f "$name" "$pgname" >/dev/null 2>&1 || true; docker network rm "$net" >/dev/null 2>&1 || true' EXIT
 

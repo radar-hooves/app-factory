@@ -4,6 +4,23 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.40] - 2026-11-11
+
+Need: a stamped app accepts connections only on the network its front door reaches it on; every other network it joins (telemetry, cortex, mcpnet) is outbound-only. Consumer: yggdrasil#438 (a throwaway container reached caspo on cortex and mcpnet after .39), app-factory#109.
+
+### Fixed
+
+- **`gunicorn.conf.py` binds an allow-list, not a deny-list: loopback and the interface on the front door's network.** .39 bound every address except the collector's, so an app on cortex and mcpnet answered both; for an app that had pinned its listener (caspo, godswood's `*_LISTEN_ADDRESSES`) it was a step back. The front door's network is the interface whose subnet holds an entry of `<APP>_TRUSTED_PROXY_NETWORKS` (the deployment already names the front door's address there), else the one holding the address `FRONT_DOOR_HOST` resolves to (default `nginx`, the service name in the atlas, titan and mimir front-door stacks). Docker answers a name only from a network the two share, but it answers with ONE: the front door's first-joined, measured on Docker 29.9.1 and independent of the app's order or alphabet. A front door on cortex and mcpnet as well as the app's own network (caspo's case) can therefore name the wrong one, so a declared trusted-proxy entry wins; an entry broader than an interface's subnet matches nothing. No address is pinned, no compose change per app. The collector special case is gone: the telemetry network is simply not the front door's. Traces are untouched (the app dials out).
+- Considered and not built: a bind by named interface (the name is not stable across Docker versions), a per-app listen-address setting (needs a pinned IP), a source-IP check in the app (accepts the connection first), a per-network alias on the front door (a change in every host's stack).
+- `tests/test_gunicorn_bind.py` covers the cases. `tests/listener/proof.sh` runs in the self-test on three real Docker networks, twice (front door found by name; front door multi-homed so the name resolves to the wrong network and the declaration decides): the front door's network answered, the telemetry and the third network refused, a trace delivered to the collector.
+
+### Consumer must change
+
+- **A start-time refusal.** The app now resolves the front door at start: it waits 30 s for `FRONT_DOOR_HOST` (default `nginx`) to resolve and then exits (the restart policy retries once the front door is up), and exits when the front door's address is on none of the app's networks. It never falls back to every address: a loopback-only listener would stay up and unreachable, a restart loop is seen. A host whose front door service is not called `nginx` sets `FRONT_DOOR_HOST`; a deployment fronted by nothing sets it empty to listen on every address. Every deployment verifies, before its merge, that the front door shares a network with the app.
+- **A front door on more than one network the app joins** (caspo: caspo, cortex, mcpnet) sets `<APP>_TRUSTED_PROXY_NETWORKS` to the front door's address on the network it reaches the app on (caspo already does: `172.41.0.100/32`); without it the name may resolve to another network and the app is unreachable from the front door.
+- **Pinned apps:** caspo and godswood drop their `*_LISTEN_ADDRESSES` and the pinned address behind them.
+- `compose.yaml` and `.github/image-smoke.sh` set `FRONT_DOOR_HOST=` empty (no front door beside a local build). Take them, `gunicorn.conf.py`, `tests/test_gunicorn_bind.py` and `backend/.env.example`, and regenerate `.template-parity.json`: a copier update, nothing else.
+
 ## [2026.11.39] - 2026-11-10
 
 Need: a stamped app answers only on the network its front door reaches it on, not on the shared `telemetry` network it joins to dial the OTLP collector. Consumer: yggdrasil#438 (earworm#96 M2), app-factory#109.
