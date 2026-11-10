@@ -152,6 +152,34 @@ const errorNormaliserMiddleware: Middleware = {
 	}
 };
 
+// openapi-fetch parses a 2xx body with JSON.parse AFTER every hook, so a 200
+// whose body is not JSON (a proxy's HTML page, an empty body on a JSON route)
+// would reject the call and strand a page that awaits `{ error }`. Check the
+// body here, once, and hand back the same envelope as any other failure.
+// 204/205, HEAD and a declared zero length carry no body by design, and a call
+// that asked for another `parseAs` (text, blob) is not parsed as JSON at all.
+const unreadableReplyMiddleware: Middleware = {
+	async onResponse({ request, response, options }) {
+		if (!response.ok || (options.parseAs ?? 'json') !== 'json') return response;
+		if (request.method === 'HEAD' || response.status === 204 || response.status === 205) {
+			return response;
+		}
+		if (response.headers.get('Content-Length') === '0') return response;
+		try {
+			JSON.parse(await response.clone().text());
+			return response;
+		} catch {
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_response',
+					message: 'The API sent a reply that could not be read.'
+				}),
+				{ status: 502, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+	}
+};
+
 // Tier 1a is proxy-delegated: there is no app-level login page. An unauthenticated
 // or 401 state means the Authentik session is absent or expired, so bounce the
 // browser to the outpost start URL. The forward-auth proxy intercepts it in prod and
@@ -192,6 +220,7 @@ api.use(workspaceMiddleware);
 api.use(viewAsMiddleware);
 api.use(timeoutMiddleware);
 api.use(authMiddleware);
+api.use(unreadableReplyMiddleware);
 // Last: it turns a throw into a Response, so every middleware above sees a
 // uniform result whichever way the request failed.
 api.use(errorNormaliserMiddleware);

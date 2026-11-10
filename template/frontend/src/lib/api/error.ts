@@ -39,14 +39,15 @@ export interface ApiErrorInfo {
 	description: string;
 }
 
-// Codes the client's onError normaliser emits for a throwing request, mapped to
+// Codes the client's normalisers emit for a throwing request or an unreadable 2xx, mapped to
 // the title a user should see. Keep in step with client.ts.
 // `as const satisfies` and not a `Record<string, string>` annotation: under
 // noUncheckedIndexedAccess the annotation widens the keys, so a direct
 // NORMALISED_TITLES.timeout reads as possibly undefined.
 const NORMALISED_TITLES = {
 	network_error: 'Network error',
-	timeout: 'Request timed out'
+	timeout: 'Request timed out',
+	invalid_response: 'Unreadable response'
 } as const satisfies Record<string, string>;
 
 /**

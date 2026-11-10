@@ -113,6 +113,39 @@ describe('the API client middleware stack', () => {
 		expect(error).toEqual({ error: 'timeout', message: 'The request timed out.' });
 	});
 
+	it.each([
+		['an HTML page', '<html><body>Bad gateway</body></html>', 'text/html'],
+		['an empty body', '', 'application/json']
+	])('returns { error } for a 200 whose body is %s, never a rejection', async (_n, body, type) => {
+		const reply = vi
+			.fn()
+			.mockResolvedValue(new Response(body, { status: 200, headers: { 'Content-Type': type } }));
+
+		const result = await api.GET('/api/users/me', { baseUrl: BASE_URL, fetch: reply });
+
+		expect(result.data).toBeUndefined();
+		expect(result.error).toEqual({
+			error: 'invalid_response',
+			message: 'The API sent a reply that could not be read.'
+		});
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('leaves a 204 and a call that asked for text alone', async () => {
+		const none = await api.GET('/api/users/me', {
+			baseUrl: BASE_URL,
+			fetch: vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+		});
+		expect(none.error).toBeUndefined();
+
+		const text = await api.GET('/api/users/me', {
+			baseUrl: BASE_URL,
+			parseAs: 'text',
+			fetch: vi.fn().mockResolvedValue(new Response('plain', { status: 200 }))
+		});
+		expect(text.data).toBe('plain');
+	});
+
 	it("gives a path in the app's SLOW_PATHS its own budget and every other path the default", async () => {
 		// A fetch that settles only when the request's signal aborts.
 		const hangs = (input: Request) =>
