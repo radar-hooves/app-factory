@@ -44,7 +44,9 @@ async def test_a_token_starts_one_server_at_a_time(tmp_path: Path) -> None:
         connections = [await asyncio.open_connection("127.0.0.1", relayed.port) for _ in range(2)]
         for _, writer in connections:
             writer.write(f"{token}\n".encode())
-        await asyncio.gather(*(writer.drain() for _, writer in connections))
+        async with asyncio.TaskGroup() as group:
+            for _, writer in connections:
+                group.create_task(writer.drain())
 
         reads = [asyncio.create_task(reader.read()) for reader, _ in connections]
         done, pending = await asyncio.wait(reads, timeout=10, return_when=asyncio.FIRST_COMPLETED)

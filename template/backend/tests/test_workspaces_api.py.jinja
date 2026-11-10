@@ -371,7 +371,9 @@ async def test_a_fanned_out_first_load_creates_one_user_and_every_request_succee
         async with AsyncClient(
             transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
         ) as client:
-            responses = await asyncio.gather(*(client.get("/api/users/me", headers=headers) for _ in range(FAN_OUT)))
+            async with asyncio.TaskGroup() as group:
+                requests = [group.create_task(client.get("/api/users/me", headers=headers)) for _ in range(FAN_OUT)]
+            responses = [request.result() for request in requests]
 
         assert [response.status_code for response in responses] == [200] * FAN_OUT
         assert len({response.json()["id"] for response in responses}) == 1

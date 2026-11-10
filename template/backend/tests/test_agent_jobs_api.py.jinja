@@ -450,10 +450,11 @@ async def test_two_watchers_on_one_job_each_see_the_whole_stream(
     async def _drain() -> list[dict[str, object]]:
         return [event async for event in jobs_module.watch(get_session_factory(), job_id, workspace_id=workspace_id)]
 
-    watchers = [asyncio.create_task(_drain()), asyncio.create_task(_drain())]
-    await asyncio.sleep(0.2)
-    await _message(agent_settings, persona, job_id, workspace_id, "seen by both")
-    first, second = await asyncio.wait_for(asyncio.gather(*watchers), timeout=_POLL_TIMEOUT_SECONDS)
+    async with asyncio.timeout(_POLL_TIMEOUT_SECONDS), asyncio.TaskGroup() as group:
+        watchers = [group.create_task(_drain()), group.create_task(_drain())]
+        await asyncio.sleep(0.2)
+        await _message(agent_settings, persona, job_id, workspace_id, "seen by both")
+    first, second = (watcher.result() for watcher in watchers)
 
     assert first == second
     assert [e.get("type") for e in first].count("result") == 2

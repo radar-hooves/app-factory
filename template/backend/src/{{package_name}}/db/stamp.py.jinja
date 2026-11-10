@@ -23,6 +23,7 @@ import sys
 
 from {{ package_name }}.db.environment import DeploymentEnvironment, stamp_environment, stamped_environment
 from {{ package_name }}.db.session import get_engine
+from {{ package_name }}.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Re-stamp a database that already claims to be production.",
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    configure_logging()
 
     target = DeploymentEnvironment(args.environment)
     engine = get_engine()

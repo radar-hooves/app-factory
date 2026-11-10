@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the factory carries none of python-basics' `asyncio.gather` and process-level `basicConfig`. Consumer: master-project#423.
+
+### Changed
+
+- **`db/stamp.py` configures logging through `configure_logging()`, not `logging.basicConfig`.** Its one warning (`--force` on a production database) now prints as the household JSON line instead of a bare message.
+- **Template tests `test_agent_jobs_api.py` and `test_workspaces_api.py`, and the kit's `agent-common` `test_bridge.py`, use `asyncio.TaskGroup` in place of `gather`.** A failing task now cancels its siblings and raises an `ExceptionGroup`; a failure fails the test either way. The watchers test keeps its poll timeout through `asyncio.timeout`.
+- No `Optional`, `TypeVar`, unnamed logger or library-side logging configuration was found in `template/`, `kits/` or `skeletons/`. The quoted-name loggers (`alembic.roles`, `alembic.rekey`, `<package>.security`) are deliberate shared channels.
+
+### Consumer must change
+
+- Take `db/stamp.py`, `tests/test_agent_jobs_api.py` and `tests/test_workspaces_api.py`, and regenerate `.template-parity.json`: a copier update, nothing else.
+
 ## [2026.11.38] - 2026-11-10
 
 Need: a 2xx reply whose body is not JSON comes back as `{ error }`, not a rejection. Consumer: radar-hooves/eight (round 12, #290).
