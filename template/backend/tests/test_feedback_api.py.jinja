@@ -142,7 +142,11 @@ def test_an_empty_repo_says_plainly_that_reports_are_not_filed(monkeypatch: pyte
     assert "no github_repo set" in status
 
 
-async def test_health_says_where_reports_go(client: AsyncClient, filing_disabled: None, app: FastAPI) -> None:
+async def test_health_says_where_reports_go(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from {{ package_name }}.api.system import router as system_router
+
+    off: Settings = get_settings().model_copy(update={"feedback": FeedbackSettings(github_repo="")})
+    monkeypatch.setattr(system_router, "get_settings", lambda: off)
     body = (await client.get("/api/system/health")).json()
     assert body["feedback"].startswith("disabled")
 
