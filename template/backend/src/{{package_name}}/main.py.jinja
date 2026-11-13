@@ -305,6 +305,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "{{ project_name | upper | replace('-', '_') }}_EXCHANGE_ISSUER is unset: personas that read collections answer 503 "
             "and personas reach /mcp as no one. Set it to this app's exchange provider's issuer."
         )
+{%- if 'feedback' not in omitted_slices %}
+    if not settings.feedback.github_repo:
+        _log.warning(
+            "{{ project_name | upper | replace('-', '_') }}_GITHUB_REPO is empty: feedback reports are stored but "
+            "never filed as GitHub issues. Unset it to file to {{ github_repo }}, or name another owner/name."
+        )
+{%- endif %}
     # app_hooks.mcp_auth gates /mcp for an app that is its own machine-identity
     # authority; every other app gets the Authentik bearer gate.
     app_mcp_auth = getattr(app_hooks, "mcp_auth", None)

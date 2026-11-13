@@ -361,6 +361,13 @@ project_title:
   default: "{{ project_name | replace('-', ' ') | title }}"
   help: Display name, for the browser tab and the shell brand. Change it only for an acronym or a spelling the slug cannot give.
 
+github_repo:
+  type: str
+  when: "{{ skeleton == 'web' }}"
+  default: "radar-hooves/{{ project_name }}"
+  help: >-
+    The GitHub repository (owner/name) this app files its feedback reports to as issues. The default is the household org and the project name; set it where the app's repository is named otherwise. A running app overrides it per host with `<APP>_GITHUB_REPO`; an empty override turns filing off, and the app says so at start and in /api/system/health.
+
 team_name:
   type: str
   default: "{{ project_title }}"

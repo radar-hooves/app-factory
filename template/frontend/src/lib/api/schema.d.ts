@@ -1382,6 +1382,8 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+            /** Feedback */
+            feedback: string;
         };
         /**
          * InvitationRead

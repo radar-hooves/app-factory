@@ -1,7 +1,9 @@
 """GitHub issue-filing settings for reported feedback.
 
-Filing is opt-in: an app with no repo configured leaves every report at
-`status="received"` and never calls out (`api/feedback/service.py`). The
+Reports file to the app's own repository, the stamp's `github_repo` answer. An
+app whose repo is set empty (``{{ project_name | upper | replace('-', '_') }}_GITHUB_REPO=``) leaves every report at
+`status="received"` and never calls out (`api/feedback/service.py`); `status`
+says so, at start (`main.py`) and in `/api/system/health`. The
 bearer is a broker credential (`config/vend.py`), vended per use. A host whose
 secrets unit pre-vends it into the container (the app's own identity not being
 granted it) supplies it as ``github_token``, read before any vend.
@@ -25,10 +27,10 @@ class FeedbackSettings(BaseSettings):
         extra="ignore",
     )
 
-    # "owner/name". Empty disables filing — the safe default for a fresh stamp
-    # with no feedback repo set up yet.
+    # "owner/name": the stamp's `github_repo` answer. Override per host with the
+    # env var; an empty value disables filing (reports stay `received`).
     # Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_REPO
-    github_repo: str = ""
+    github_repo: str = "{{ github_repo }}"
 
     # The broker catalogue name for the GitHub token filing an issue needs.
     # Vended per use (`config/vend.py`'s `vend()`), never held on Settings: a
@@ -41,3 +43,10 @@ class FeedbackSettings(BaseSettings):
     # above live. For an app whose own broker identity is not granted that
     # credential. Env: {{ project_name | upper | replace('-', '_') }}_GITHUB_TOKEN
     github_token: SecretStr = SecretStr("")
+
+    @property
+    def status(self) -> str:
+        """Where reports go, in words: the repo, or why they go nowhere."""
+        if self.github_repo:
+            return f"files to {self.github_repo}"
+        return "disabled: no github_repo set, reports stay received"

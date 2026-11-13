@@ -44,6 +44,11 @@ def health_check(session: SessionDep) -> HealthResponse:
         revision=settings.revision,
         environment="development" if settings.debug else "production",
         timestamp=datetime.now(UTC),
+{%- if 'feedback' not in omitted_slices %}
+        feedback=settings.feedback.status,
+{%- else %}
+        feedback="not carried: the app omits the feedback slice",
+{%- endif %}
     )
 
 

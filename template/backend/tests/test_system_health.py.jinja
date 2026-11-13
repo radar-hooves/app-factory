@@ -1,6 +1,10 @@
 """Tests for the /api/system/health endpoint."""
 
 import pytest
+{%- if 'feedback' not in omitted_slices %}
+
+from {{ package_name }}.config import get_settings
+{%- endif %}
 
 
 @pytest.mark.integration
@@ -14,6 +18,9 @@ async def test_health_check_reports_healthy(client):
     assert body["revision"] == ""
     assert "environment" in body
     assert "timestamp" in body
+{%- if 'feedback' not in omitted_slices %}
+    assert body["feedback"] == get_settings().feedback.status
+{%- endif %}
 
 
 @pytest.mark.integration

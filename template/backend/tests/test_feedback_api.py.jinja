@@ -74,6 +74,15 @@ def _reuse_test_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> No
 
 
 @pytest.fixture
+def filing_disabled(app: FastAPI) -> Iterator[None]:
+    """Override `get_settings` with the repo set empty: filing off, as an app opts out."""
+    configured: Settings = get_settings().model_copy(update={"feedback": FeedbackSettings(github_repo="")})
+    app.dependency_overrides[get_settings] = lambda: configured
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+@pytest.fixture
 def filing_enabled(app: FastAPI) -> Iterator[None]:
     """Override `get_settings` so filing is configured, cleaned up afterwards."""
     configured: Settings = get_settings().model_copy(
@@ -94,8 +103,8 @@ def _github_response(status_code: int, **json_body: object) -> httpx.Response:
 # ── Filing disabled (the default) ───────────────────────────────────────────
 
 
-async def test_a_report_stays_received_when_no_repo_is_configured(client: AsyncClient) -> None:
-    """The default: no repo configured, so filing never runs and nothing 5xxs."""
+async def test_a_report_stays_received_when_no_repo_is_configured(client: AsyncClient, filing_disabled: None) -> None:
+    """Repo set empty: filing never runs and nothing 5xxs."""
     created = await client.post("/api/feedback/", json=_report_payload())
     assert created.status_code == 201
     report_id = created.json()["id"]
@@ -109,6 +118,33 @@ async def test_a_report_stays_received_when_no_repo_is_configured(client: AsyncC
     # The stored message is the raw text — redaction only ever touches what
     # would leave the app in a filed issue, and nothing was filed here.
     assert body["message"] == _report_payload()["message"]
+
+
+# ── Where reports go: the stamp's repo, an override, or nowhere ─────────────
+
+
+def test_the_repo_defaults_to_the_one_the_app_was_stamped_with(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("{{ project_name | upper | replace('-', '_') }}_GITHUB_REPO", raising=False)
+    settings = FeedbackSettings()
+    assert settings.github_repo == "{{ github_repo }}"
+    assert settings.status == "files to {{ github_repo }}"
+
+
+def test_the_environment_overrides_the_stamped_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("{{ project_name | upper | replace('-', '_') }}_GITHUB_REPO", "acme/elsewhere")
+    assert FeedbackSettings().github_repo == "acme/elsewhere"
+
+
+def test_an_empty_repo_says_plainly_that_reports_are_not_filed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("{{ project_name | upper | replace('-', '_') }}_GITHUB_REPO", "")
+    status = FeedbackSettings().status
+    assert status.startswith("disabled")
+    assert "no github_repo set" in status
+
+
+async def test_health_says_where_reports_go(client: AsyncClient, filing_disabled: None, app: FastAPI) -> None:
+    body = (await client.get("/api/system/health")).json()
+    assert body["feedback"].startswith("disabled")
 
 
 # ── Filing succeeds ──────────────────────────────────────────────────────────
