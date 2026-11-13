@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.42] - 2026-11-13
+
+Need: a checkout that will never run its backend (a read-only steward clone) enters its directory under direnv with the committed `.envrc` unmodified. Consumer: godswood's steward clone on macintosh-mandy (its devpi credential is not held there, so `uv sync` cannot succeed; a hand-edited `.envrc` blocked checkout-sync's fast-forward).
+
+### Changed
+
+- **`.envrc` skips the `uv sync` and venv block when `no-backend` exists in the repo's git directory.** Opt out with `touch "$(git rev-parse --git-common-dir)/no-backend"`: untracked, so no tracked file changes, and a worktree inherits its primary checkout's choice. `.envrc.local` and the `ANTHROPIC_*` unset still run, last. Dev boxes behave as before.
+
+### Consumer must change
+
+- Regenerate `.template-parity.json` (`converge-to-template.py --apply`). A steward clone creates the marker once.
+
 ## [2026.11.41] - 2026-11-13
 
 Need: one list of the files an app owns, and it is the factory's (operator's ruling at Sitting 14, master-project#454). Consumer: master-orchestrator.

@@ -15,16 +15,22 @@ source_up
 # shellcheck disable=SC2034  # read by direnv's stdlib as a shell variable, not exported
 direnv_layout_dir="${XDG_CACHE_HOME:-$HOME/.cache}/direnv/layouts/$(echo -n "$PWD" | shasum | cut -d' ' -f1)"
 
-if ! has uv; then
-  echo "direnv: 'uv' not found on PATH; install it before working here" >&2
-  return 0
+# A clone that will never run the backend (a read-only steward's) opts out by
+# creating `no-backend` in the repository's git directory: `touch "$(git rev-parse --git-common-dir)/no-backend"`.
+# Untracked by construction, so the committed .envrc stays unmodified and a
+# worktree inherits its primary checkout's choice.
+if [ ! -e "$(git rev-parse --git-common-dir 2>/dev/null)/no-backend" ]; then
+  if ! has uv; then
+    echo "direnv: 'uv' not found on PATH; install it before working here" >&2
+    return 0
+  fi
+
+  watch_file backend/pyproject.toml backend/uv.lock
+  uv sync --project backend --quiet
+
+  export VIRTUAL_ENV="$PWD/backend/.venv"
+  PATH_add "$PWD/backend/.venv/bin"
 fi
-
-watch_file backend/pyproject.toml backend/uv.lock
-uv sync --project backend --quiet
-
-export VIRTUAL_ENV="$PWD/backend/.venv"
-PATH_add "$PWD/backend/.venv/bin"
 
 # This checkout's own machine-local additions, if it has any. Untracked and
 # gitignored, and NOT a way back to an env file: a credential still belongs in
