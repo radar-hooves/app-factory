@@ -64,7 +64,7 @@ a { color: var(--accent); }
 .ask p { max-width: 68ch; }
 .ask::before, .table::before { justify-self: start; font: 600 .68rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; padding: .3em .5em; border-radius: 3px; }
 [data-kind="decide"]::before { content: "Decide"; color: var(--flag); background: var(--flag-wash); }
-[data-kind="do"]::before { content: "Your act"; color: var(--accent); background: var(--accent-wash); }
+[data-kind="read"]::before { content: "Read"; color: var(--accent); background: var(--accent-wash); }
 
 .ask::after { font: .78rem var(--f-mono); color: var(--ink-2); }
 .ask[data-track]::after { content: attr(data-track); }
@@ -121,7 +121,7 @@ Every open item carries a stable data-id (kebab-case, never changed or reused) a
 data-track="#123 owner/repo#45" or data-untracked="<why it has no issue>". Reword an item freely; its id stays.
 An item leaves only done or moved to an issue, and the commit names it: Handoff-closed: <id>, <id>
 An item he ticked in the Cockpit carries data-done="YYYY-MM-DD": the next session verifies the work and removes it, or clears the tick and says why in the item.
-For the operator: <article class="ask" data-kind="decide|do"> (an h4, then one p of at most three lines),
+For the operator: <article class="ask" data-kind="decide|read"> (an h4, then one p of at most three lines),
 or a .row in a .table for like items, inside a section.when grouped by date.
 Threads: <details class="thread">, its summary an h3 and a .state line; then p.next and ul.items > li.
 No scripts, no external loads, no secret values, no names of anyone outside the household.
@@ -130,12 +130,21 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <header class="masthead">
 <p class="eyebrow">app-factory</p>
 <h1>Open work</h1>
-<p class="updated">Updated <time datetime="2026-11-06">06/11/2026</time></p>
+<p class="updated">Updated <time datetime="2026-11-13">13/11/2026</time></p>
 </header>
 
 <section class="operator" aria-labelledby="for-the-operator">
 <h2 id="for-the-operator">For the operator</h2>
-<p class="detail">Nothing is open here that names no issue, so no item is listed. Open work is radar-hooves/app-factory's open issues (<code>gh issue list</code>); #77 and #101 shipped in v2026.11.22, and #103 (the database's owner and runtime roles) in v2026.11.23; each stays open for its dispatcher's verdict.</p>
+<section class="when today">
+<h3>Today</h3>
+<div class="asks">
+<article class="ask" data-id="ratify-library-slice-variants" data-kind="decide" data-track="radar-hooves/app-factory#80">
+<h4>Accept the library's eight departures from the standard app shape</h4>
+<p>The library app differs from the factory's standard in eight files, because it handles its agent and its access rules its own way. This follows your ruling of 31/10 that covered its other 29. Recommendation: accept all eight. Say yes and they become recorded variants; say no and the library must change its code. Detail: <code>docs/research/2026-11-04-holistic-review.md</code>.</p>
+</article>
+</div>
+</section>
+<p class="detail">Open work is radar-hooves/app-factory's open issues (<code>gh issue list</code>).</p>
 </section>
 
 <section class="threads" aria-labelledby="threads">
