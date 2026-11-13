@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.44] - 2026-11-14
+
+Need: a stamped app files its feedback reports as GitHub issues with no hand step. Consumer: master-orchestrator (night shift 14/11, master-project#335).
+
+### Changed
+
+- **`github_repo` is a copier answer, default `radar-hooves/<project_name>`** (web skeleton). `FeedbackSettings.github_repo` defaults to it, so every app files to its own repository from the stamp; `<APP>_GITHUB_REPO` overrides it per host, and an empty value turns filing off.
+- **An app with filing off says so.** `create_app` logs a warning at start, and `GET /api/system/health` gains `feedback` (`files to owner/name`, `disabled: no github_repo set, reports stay received`, or `not carried` where the app omits the slice). Reports are still stored `received`, never dropped.
+
+### Consumer must change
+
+- `copier update` takes the new `github_repo` default (answer it only where the repo is not `radar-hooves/<name>`) and regenerate `.template-parity.json`. An app whose own feedback module ignores `github_repo` keeps its own behaviour until it drops that module. The app's token must be grantable: filing vends `github-feedback` from the broker, so an app whose broker identity lacks it sets `<APP>_GITHUB_TOKEN` or gets the grant, else reports stay `received` with the error on the row.
+- `frontend/src/lib/api/schema.d.ts`: `HealthResponse` gains `feedback: string` (app-owned file; regenerate).
+
 ## [2026.11.43] - 2026-11-13
 
 Need: a fresh stamp must commit clean whatever the app is called. Consumer: wordhoard's scaffold (master-project#454); its `test_alerts_api.py`, `test_db_session_commit_ordering.py` and `test_mcp_person_gate.py` were rewritten by the app's own ruff hook.
