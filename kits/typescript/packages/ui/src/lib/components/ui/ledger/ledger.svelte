@@ -61,7 +61,13 @@
 		windowOf
 	} from './ledger.js';
 	import type { LedgerDateFormat } from './ledger.js';
-	import type { LedgerColumn, LedgerOpenContext, LedgerPreferences, LedgerRow } from './types.js';
+	import type {
+		LedgerColumn,
+		LedgerOpenContext,
+		LedgerPeriod,
+		LedgerPreferences,
+		LedgerRow
+	} from './types.js';
 
 	type Id = R['id'];
 
@@ -215,6 +221,14 @@
 		preferences = next;
 		onPreferencesChange?.(next);
 	}
+	const PERIOD_HINT: Record<LedgerPeriod, string> = {
+		fy: 'Each financial year sits under its own header, which opens and closes.',
+		cy: 'Each calendar year sits under its own header, which opens and closes.',
+		month: 'Each month sits under its own header, which opens and closes.',
+		week: 'Each week sits under its own header, which opens and closes.',
+		day: 'The date heads each day’s rows, so the Date column goes.',
+		none: 'One list, newest first, under the column head.'
+	};
 
 	// ── Layout ──
 	let width = $state(0);
@@ -872,9 +886,16 @@
 		>
 			<LedgerColumns
 				offered={resolved.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))}
-				preferences={prefs}
+				columns={prefs.columns}
+				grouping={{
+					options: LEDGER_PERIODS,
+					value: prefs.period,
+					hint: PERIOD_HINT[prefs.period],
+					onchange: (period) => setPreferences({ ...prefs, period })
+				}}
+				name="Columns, balance and grouping"
 				note={preferencesNote}
-				onchange={setPreferences}
+				oncolumns={(columns) => setPreferences({ ...prefs, columns })}
 				onreset={() => setPreferences(defaults)}
 			/>
 			{@render actions?.()}

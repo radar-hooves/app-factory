@@ -105,6 +105,81 @@ describe('RecordList: groups, on the ground, with their totals', () => {
 	});
 });
 
+describe('RecordList: the viewer’s grouping, in the Columns menu', () => {
+	const GROUPINGS = [
+		{ key: 'status', label: 'Status', group: (r: Row) => r.group ?? '' },
+		{
+			key: 'band',
+			label: 'Value',
+			group: (r: Row) => (r.value >= 600000 ? 'Over $600k' : 'Up to $600k'),
+			order: 'label' as const,
+			hint: 'Properties of a like value together.'
+		}
+	];
+	const labels = (all: (sel: string) => HTMLElement[]) =>
+		all('[data-slot="record-group"] h3').map((h) => h.textContent);
+	async function openMenu(name = 'Columns and grouping') {
+		await fireEvent.click(screen.getByRole('button', { name }));
+		return document.body.querySelector<HTMLElement>('[data-slot="record-columns"]')!;
+	}
+
+	it('groups by the first grouping until the viewer chooses, offering every one and None', async () => {
+		const { all } = mount({ groupings: GROUPINGS });
+		expect(labels(all)).toEqual(['Owned', 'Sold']);
+		const menu = await openMenu();
+		const choice = within(menu).getByRole('group', { name: 'Group by' });
+		expect(within(choice).getAllByRole('radio').map((r) => r.textContent?.trim())).toEqual([
+			'Status',
+			'Value',
+			'None'
+		]);
+		expect(within(menu).getAllByRole('checkbox')).toHaveLength(3);
+	});
+
+	it('regroups on the viewer’s choice, groups by label where the grouping says, and emits it', async () => {
+		const { all, titles, probe } = mount({ groupings: GROUPINGS });
+		const menu = await openMenu();
+		await fireEvent.click(within(menu).getByRole('radio', { name: 'Value' }));
+		expect(labels(all)).toEqual(['Over $600k', 'Up to $600k']);
+		expect(titles()).toEqual(['3. Ashgrove', '5. Coolabah', '4. Banksia', '2. Dorrigo']);
+		expect(menu).toHaveTextContent('Properties of a like value together.');
+		expect(JSON.parse(probe('emitted')!)).toEqual([{ columns: ['value'], group: 'band' }]);
+	});
+
+	it('is one card under None, and keeps the grouping when a column is ticked', async () => {
+		const { all, probe } = mount({ groupings: GROUPINGS });
+		const menu = await openMenu();
+		await fireEvent.click(within(menu).getByRole('radio', { name: 'None' }));
+		expect(all('[data-slot="record-group"]')).toHaveLength(0);
+		expect(all('[data-slot="record-card"]')).toHaveLength(1);
+		await fireEvent.click(within(menu).getByRole('checkbox', { name: 'Loan' }));
+		expect(JSON.parse(probe('emitted')!).at(-1)).toEqual({ columns: ['value', 'loan'], group: 'none' });
+	});
+
+	it('reads a kept grouping, and a stale one as the default', () => {
+		const kept = mount({ groupings: GROUPINGS, kept: { group: 'band' } });
+		expect(labels(kept.all)).toEqual(['Over $600k', 'Up to $600k']);
+		kept.unmount();
+		const stale = mount({ groupings: GROUPINGS, kept: { group: 'manager' } });
+		expect(labels(stale.all)).toEqual(['Owned', 'Sold']);
+	});
+
+	it('resets to the module’s columns and its first grouping', async () => {
+		const { all, probe } = mount({ groupings: GROUPINGS, kept: { group: 'none', columns: [] } });
+		const menu = await openMenu();
+		await fireEvent.click(within(menu).getByRole('button', { name: 'Reset' }));
+		expect(labels(all)).toEqual(['Owned', 'Sold']);
+		expect(JSON.parse(probe('emitted')!)).toEqual([{ columns: ['value'], group: 'status' }]);
+	});
+
+	it('offers the grouping alone on a list without heads', async () => {
+		mount({ groupings: GROUPINGS, head: false });
+		const menu = await openMenu('Grouping');
+		expect(within(menu).queryAllByRole('checkbox')).toHaveLength(0);
+		expect(within(menu).getByRole('group', { name: 'Group by' })).toBeInTheDocument();
+	});
+});
+
 describe('RecordList: the viewer’s sort, inside each group', () => {
 	const sortHead = (name: RegExp) => screen.getByRole('button', { name });
 

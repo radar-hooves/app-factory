@@ -11,6 +11,10 @@
 	 * then the module's columns. It opens by its link (`href`) or by `onOpen`,
 	 * which marks the row `open` names, for a detail beside the list.
 	 *
+	 * The module groups the rows one way (`group`), or offers the viewer ways
+	 * to (`groupings`), chosen in the Columns menu beside the columns, as the
+	 * Ledger's periods are.
+	 *
 	 * It fills its parent's height and scrolls its own rows, so the head card
 	 * stays at the top: give it a bounded parent (`flex-1 min-h-0`). Width picks
 	 * the layout, as the Ledger's does: a phone's list below 480px, the wide
@@ -46,7 +50,12 @@
 	import type { IconComponent } from '../app-shell/types.js';
 	import Thumbnail from './thumbnail.svelte';
 	import { cn } from '#lib/utils.js';
-	import type { RecordListColumn, RecordListPreferences, RecordListRow } from './types.js';
+	import type {
+		RecordListColumn,
+		RecordListGrouping,
+		RecordListPreferences,
+		RecordListRow
+	} from './types.js';
 
 	type Id = R['id'];
 
@@ -64,6 +73,7 @@
 		tools = [],
 		action,
 		group,
+		groupings = [],
 		totalLabel,
 		head = true,
 		icon,
@@ -79,7 +89,7 @@
 		rows: readonly R[];
 		/** The module's columns, in order after the title. See `RecordListColumn`. */
 		columns?: RecordListColumn<R>[];
-		/** The viewer's columns. Missing, the module's defaults. */
+		/** The viewer's columns and grouping. Missing, the module's defaults. */
 		preferences?: Partial<RecordListPreferences>;
 		onPreferencesChange?: (next: RecordListPreferences) => void;
 		/** The Columns menu's footnote: where the choice is kept. */
@@ -99,6 +109,11 @@
 		action?: ListAction;
 		/** A row's group, by its label: groups show in the order their first rows come. */
 		group?: (row: R) => string;
+		/**
+		 * The ways the viewer can group, in the Columns menu with None after
+		 * them; the first is the default. In place of `group`.
+		 */
+		groupings?: RecordListGrouping<R>[];
 		/** Names a card after the rows with each column's total over every row: "All three". */
 		totalLabel?: string;
 		/** The head card. A list whose columns need no heads drops it. */
@@ -152,20 +167,43 @@
 	const WIDE = $derived(mode === 'wide');
 	const PHONE = $derived(mode === 'phone');
 
+	const NONE = 'none';
 	const defaults = $derived<RecordListPreferences>({
 		columns: resolved
 			.filter((c) => !c.locked && (c.on === true || (c.on === 'wide' && WIDE)))
-			.map((c) => c.key)
+			.map((c) => c.key),
+		...(groupings[0] ? { group: groupings[0].key } : {})
 	});
-	const prefs = $derived<RecordListPreferences>({
-		columns: preferences?.columns ?? defaults.columns
+	/** What the consumer kept, read field by field: a stale or foreign key falls back. */
+	const prefs = $derived.by<RecordListPreferences>(() => {
+		const columns = preferences?.columns ?? defaults.columns;
+		if (!groupings.length) return { columns };
+		const kept = preferences?.group;
+		const known = kept === NONE || groupings.some((g) => g.key === kept);
+		return { columns, group: known && kept ? kept : defaults.group };
 	});
 	function setPreferences(next: RecordListPreferences) {
 		preferences = next;
 		onPreferencesChange?.(next);
 	}
-	/** The Columns menu, in the bar, when the heads name a column the viewer can choose. */
+	/** The grouping in force: the viewer's, else the module's one way. */
+	const grouping = $derived<Pick<RecordListGrouping<R>, 'group' | 'order'> | undefined>(
+		groupings.length ? groupings.find((g) => g.key === prefs.group) : group && { group }
+	);
+	/** Columns to tick, while the heads name a column the viewer can choose. */
 	const choosable = $derived(head && resolved.some((c) => !c.locked));
+	const menuName = $derived(
+		groupings.length ? (choosable ? 'Columns and grouping' : 'Grouping') : 'Columns'
+	);
+	const groupingOptions = $derived([
+		...groupings.map((g) => ({ value: g.key, label: g.label })),
+		{ value: NONE, label: 'None' }
+	]);
+	const groupingHint = $derived(
+		prefs.group === NONE
+			? 'One list, without groups.'
+			: groupings.find((g) => g.key === prefs.group)?.hint
+	);
 
 	const shown = $derived(resolved.filter((c) => c.locked || prefs.columns.includes(c.key)));
 	const template = $derived(shown.map((c) => (WIDE ? c.track.wide : c.track.narrow)).join(' '));
@@ -199,15 +237,22 @@
 		return sort && col && sorter(col) ? sort : null;
 	});
 
-	// ── Groups, in the order their first rows come; a sort orders rows inside them ──
+	// ── Groups, in the order their first rows come or by label; a sort orders rows inside them ──
 	const groups = $derived.by(() => {
 		const out: { key: string; rows: R[] }[] = [];
+		const byKey = new Map<string, R[]>();
 		for (const r of rows) {
-			const key = group ? group(r) : '';
-			const g = out.find((x) => x.key === key);
-			if (g) g.rows.push(r);
-			else out.push({ key, rows: [r] });
+			const key = grouping ? grouping.group(r) : '';
+			const g = byKey.get(key);
+			if (g) g.push(r);
+			else {
+				const fresh = [r];
+				byKey.set(key, fresh);
+				out.push({ key, rows: fresh });
+			}
 		}
+		if (grouping?.order === 'label')
+			out.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true, sensitivity: 'base' }));
 		const col = activeSort && shown.find((c) => c.key === activeSort.key);
 		const by = col && sorter(col);
 		return by ? out.map((g) => ({ key: g.key, rows: orderBy(g.rows, by, activeSort!.dir) })) : out;
@@ -381,12 +426,23 @@
 			{action}
 			style="padding-right: {edge};"
 		>
-			{#if choosable}
+			{#if choosable || groupings.length}
 				<LedgerColumns
-					offered={resolved.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))}
-					preferences={prefs}
+					offered={choosable
+						? resolved.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))
+						: []}
+					columns={prefs.columns}
+					grouping={groupings.length
+						? {
+								options: groupingOptions,
+								value: prefs.group ?? NONE,
+								hint: groupingHint,
+								onchange: (group) => setPreferences({ ...prefs, group })
+							}
+						: undefined}
+					name={menuName}
 					note={preferencesNote}
-					onchange={setPreferences}
+					oncolumns={(columns) => setPreferences({ ...prefs, columns })}
 					onreset={() => setPreferences(defaults)}
 					owner="record"
 				/>
@@ -427,7 +483,7 @@
 			{#if empty}{@render empty()}{:else}<EmptyState title="No {noun[1]}" />{/if}
 		{:else}
 			{#each groups as g, gi (g.key)}
-				{#if group}
+				{#if grouping}
 					<div class={groupSpacing(gi)}>
 						<div
 							class={cn(GROUP, PHONE ? 'flex items-center gap-2 px-0.5' : 'grid items-center')}

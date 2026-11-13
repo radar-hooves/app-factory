@@ -4,6 +4,7 @@
 	import RecordList from '#lib/components/ui/record-list/index.js';
 	import type {
 		RecordListColumn,
+		RecordListGrouping,
 		RecordListPreferences,
 		RecordListRow
 	} from '#lib/components/ui/record-list/index.js';
@@ -16,6 +17,8 @@
 		columns,
 		layout = 'narrow',
 		grouped = false,
+		groupings,
+		kept,
 		totalLabel,
 		head = true,
 		tile = false,
@@ -30,6 +33,8 @@
 		columns?: RecordListColumn<Row>[];
 		layout?: 'phone' | 'narrow' | 'wide';
 		grouped?: boolean;
+		groupings?: RecordListGrouping<Row>[];
+		kept?: Partial<RecordListPreferences>;
 		totalLabel?: string;
 		head?: boolean;
 		tile?: boolean;
@@ -43,7 +48,8 @@
 
 	// svelte-ignore state_referenced_locally
 	let live = $state(mutable ? rows : []);
-	let prefs = $state<Partial<RecordListPreferences>>();
+	// svelte-ignore state_referenced_locally
+	let prefs = $state<Partial<RecordListPreferences> | undefined>(kept);
 	let emitted = $state<RecordListPreferences[]>([]);
 	let open = $state<Row['id'] | null>(null);
 	let ran = $state('');
@@ -84,6 +90,7 @@
 	{title}
 	noun={['property', 'properties']}
 	group={grouped ? (r) => r.group ?? '' : undefined}
+	{groupings}
 	icon={tile ? House : undefined}
 	href={linked ? (r) => `/property/${r.id}` : undefined}
 	onOpen={opening ? (r) => (open = r.id) : undefined}

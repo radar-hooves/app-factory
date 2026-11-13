@@ -1,32 +1,44 @@
-<script lang="ts" generics="P extends { columns: string[]; period?: LedgerPeriod }">
+<script lang="ts" generics="G extends string">
 	/**
-	 * The viewer's Columns menu: every column the module offers as a tick (the
-	 * ledger's running balance one more, always last), then, where the list
-	 * groups by a period, the period. An icon button named by its tooltip.
-	 * The RecordList's menu is this one without the period.
+	 * The list's Columns menu, the one place a viewer reshapes a list: every
+	 * column it offers as a tick, then how its rows group. The Ledger's groups
+	 * are periods (and its running balance one more column, always last); a
+	 * RecordList's are the groupings its module offers. Sort is the heads'. An
+	 * icon button named by its tooltip.
 	 */
 	import Columns3 from '@lucide/svelte/icons/columns-3';
 	import { Button, buttonVariants } from '../button/index.js';
 	import { Checkbox } from '../checkbox/index.js';
 	import * as Popover from '../popover/index.js';
-	import { Segmented } from '../segmented/index.js';
+	import { Segmented, type SegmentedOption } from '../segmented/index.js';
 	import * as Tooltip from '../tooltip/index.js';
 	import { cn } from '#lib/utils.js';
-	import { LEDGER_PERIODS } from './ledger.js';
-	import type { LedgerPeriod } from './types.js';
 
 	let {
 		offered,
-		preferences,
+		columns,
+		grouping,
+		name,
 		note,
-		onchange,
+		oncolumns,
 		onreset,
 		owner = 'ledger'
 	}: {
+		/** The columns to tick; none, and the menu holds only the grouping. */
 		offered: { key: string; label: string; locked: boolean }[];
-		preferences: P;
+		/** The ticked columns' keys. */
+		columns: string[];
+		/** How the rows group: the choices, the one in force, and what it does. */
+		grouping?: {
+			options: readonly SegmentedOption<G>[];
+			value: G;
+			hint?: string;
+			onchange: (value: G) => void;
+		};
+		/** The trigger's tooltip and accessible name. */
+		name: string;
 		note?: string;
-		onchange: (next: P) => void;
+		oncolumns: (columns: string[]) => void;
 		onreset: () => void;
 		/** The `data-slot` prefix: the list that owns the menu. */
 		owner?: string;
@@ -34,26 +46,14 @@
 
 	let open = $state(false);
 
-	const HINT: Record<LedgerPeriod, string> = {
-		fy: 'Each financial year sits under its own header, which opens and closes.',
-		cy: 'Each calendar year sits under its own header, which opens and closes.',
-		month: 'Each month sits under its own header, which opens and closes.',
-		week: 'Each week sits under its own header, which opens and closes.',
-		day: 'The date heads each day’s rows, so the Date column goes.',
-		none: 'One list, newest first, under the column head.'
-	};
-
 	function tick(key: string, on: boolean) {
-		const next = on ? [...preferences.columns, key] : preferences.columns.filter((k) => k !== key);
-		onchange({
-			...preferences,
-			columns: offered.map((c) => c.key).filter((k) => next.includes(k))
-		});
+		const next = on ? [...columns, key] : columns.filter((k) => k !== key);
+		oncolumns(offered.map((c) => c.key).filter((k) => next.includes(k)));
 	}
 
 	const eyebrow = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
-	/** The ledger's menu also holds its running balance and its grouping. */
-	const name = $derived(preferences.period ? 'Columns, balance and grouping' : 'Columns');
+	/** Two to a row past three choices, so a label never truncates in the menu's width. */
+	const COLS = ['grid-cols-1', 'grid-cols-2', 'grid-cols-3'];
 </script>
 
 <Popover.Root bind:open>
@@ -75,36 +75,42 @@
 		</Tooltip.Root>
 	</Tooltip.Provider>
 	<Popover.Content align="end" class="w-80 p-0" data-slot="{owner}-columns">
-		<div class="flex flex-col px-2 pt-2.5 pb-2">
-			<span class={cn(eyebrow, 'px-1.5 pb-1.5')}>Columns</span>
-			{#each offered as c (c.key)}
-				{@const on = c.locked || preferences.columns.includes(c.key)}
-				<label
-					class={cn(
-						'flex min-h-8 items-center gap-2.5 rounded-md px-1.5 text-sm',
-						c.locked ? 'text-muted-foreground' : 'hover:bg-accent/50 cursor-pointer'
-					)}
-				>
-					<Checkbox
-						checked={on}
-						disabled={c.locked}
-						onCheckedChange={(v) => tick(c.key, v === true)}
-					/>
-					<span class="min-w-0 flex-1">{c.label}</span>
-					{#if c.locked}<span class="text-xs">Always shown</span>{/if}
-				</label>
-			{/each}
-		</div>
-		{#if preferences.period}
-			<div class="border-border flex flex-col gap-2 border-t px-3.5 pt-2.5 pb-3">
+		{#if offered.length}
+			<div class="flex flex-col px-2 pt-2.5 pb-2">
+				<span class={cn(eyebrow, 'px-1.5 pb-1.5')}>Columns</span>
+				{#each offered as c (c.key)}
+					{@const on = c.locked || columns.includes(c.key)}
+					<label
+						class={cn(
+							'flex min-h-8 items-center gap-2.5 rounded-md px-1.5 text-sm',
+							c.locked ? 'text-muted-foreground' : 'hover:bg-accent/50 cursor-pointer'
+						)}
+					>
+						<Checkbox
+							checked={on}
+							disabled={c.locked}
+							onCheckedChange={(v) => tick(c.key, v === true)}
+						/>
+						<span class="min-w-0 flex-1">{c.label}</span>
+						{#if c.locked}<span class="text-xs">Always shown</span>{/if}
+					</label>
+				{/each}
+			</div>
+		{/if}
+		{#if grouping}
+			{@const g = grouping}
+			<div
+				class={cn('flex flex-col gap-2 px-3.5 pt-2.5 pb-3', offered.length && 'border-border border-t')}
+				data-slot="{owner}-grouping"
+			>
 				<span class={eyebrow}>Group by</span>
 				<Segmented
 					label="Group by"
-					options={LEDGER_PERIODS}
-					bind:value={() => preferences.period!, (period) => onchange({ ...preferences, period })}
-					class="grid w-full grid-cols-2"
+					options={g.options}
+					bind:value={() => g.value, (value) => g.onchange(value)}
+					class={cn('grid w-full', COLS[g.options.length - 1] ?? 'grid-cols-2')}
 				/>
-				<span class="text-muted-foreground text-xs">{HINT[preferences.period]}</span>
+				{#if g.hint}<span class="text-muted-foreground text-xs">{g.hint}</span>{/if}
 			</div>
 		{/if}
 		<div class="bg-surface-2 border-border flex items-center gap-2 border-t py-2 pr-2 pl-3.5">

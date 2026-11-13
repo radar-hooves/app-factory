@@ -37,8 +37,31 @@ export interface RecordListColumn<R extends RecordListRow = RecordListRow> exten
 	total?: (rows: readonly R[]) => string;
 }
 
+/**
+ * A way the viewer can group the list, offered in its Columns menu with None
+ * after the last: the first letter, a status, every word that becomes the same
+ * replacement.
+ */
+export interface RecordListGrouping<R extends RecordListRow = RecordListRow> {
+	/** What the viewer's choice keeps. `none` is the list's own and never a grouping's. */
+	key: string;
+	/** Its name in the menu. */
+	label: string;
+	/** A row's group, by its label. */
+	group: (row: R) => string;
+	/**
+	 * The groups' order: `rows`, the order their first rows come (the
+	 * default); `label`, A to Z by label, numerals as numbers.
+	 */
+	order?: 'rows' | 'label';
+	/** Under the menu's choice: what the grouping does. */
+	hint?: string;
+}
+
 /** The viewer's own choices, which the consumer persists. */
 export interface RecordListPreferences {
 	/** The ticked columns' keys. */
 	columns: string[];
+	/** The chosen grouping's key, or `none`; only on a list that offers groupings. */
+	group?: string;
 }
