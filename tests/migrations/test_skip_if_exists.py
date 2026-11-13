@@ -1,4 +1,4 @@
-"""`_skip_if_exists` names only files this factory ships: copier skips an app-owned file, and the gate reads this list against the rule's sanctioned one."""
+"""`_skip_if_exists` names only files this factory ships: copier skips an app-owned file, and the parity gate reads this list as the one list of what an app owns."""
 
 import re
 from pathlib import Path
@@ -20,9 +20,15 @@ def _shipped() -> set[str]:
 APP_GENERATED = {"frontend/.arbitrary-values-baseline.json"}
 
 
+def _names(entry: str, shipped: set[str]) -> bool:
+    """A file the factory ships, or a directory (trailing slash) holding one."""
+    entry = re.sub(r"\{\{\s*package_name\s*\}\}", "{{package_name}}", entry)
+    return entry in shipped or (entry.endswith("/") and any(f.startswith(entry) for f in shipped))
+
+
 def test_every_skipped_file_is_one_the_factory_ships() -> None:
     shipped = _shipped() | APP_GENERATED
-    stale = [e for e in CONFIG["_skip_if_exists"] if e not in shipped]
+    stale = [e for e in CONFIG["_skip_if_exists"] if not _names(e, shipped)]
     assert not stale, stale
 
 

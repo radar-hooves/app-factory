@@ -74,6 +74,41 @@ _skip_if_exists:
   # THE extension point for frontend/src/routes/(protected)/settings/+layout.svelte:
   # this app's own settings groups, listed before the factory's.
   - frontend/src/lib/settings/app.ts
+  # The one list of what an app owns: the parity gate reads this, never a second
+  # list in a rule. Everything the template stamps and this list does not name is a
+  # carbon copy. A trailing slash names a directory and everything under it.
+  # The app's own prose and release history.
+  - CHANGELOG.md
+  # The palette, the one per-app difference in the design system.
+  - frontend/src/app.css
+  # The app's dependencies; the parity gate holds their floors instead.
+  - backend/pyproject.toml
+  - frontend/package.json
+  # The app's required settings; env-example-complete holds it instead.
+  - backend/.env.example
+  # The Debian packages the app's own domain needs at runtime.
+  - backend/system-packages.txt
+  # The migration series is the app's own: the factory seeds it, it does not own it.
+  - backend/alembic/versions/
+  # The scaffold slice, deleted once the app has a real domain, with its tests.
+  - backend/src/{{ package_name }}/api/example/
+  - backend/src/{{ package_name }}/config/sections/example.py
+  - backend/tests/test_example.py
+  - frontend/tests/e2e/example.spec.ts
+  # The tenancy slice's HTTP test, rewritten against the app's own route once the
+  # scaffold slice it drives is gone.
+  - backend/tests/test_workspaces_api.py
+  # Generated from the app's own OpenAPI document; a build output.
+  - frontend/src/lib/api/schema.d.ts
+  # The machine callers the app admits to its /mcp surface.
+  - config/actors.yaml
+  # Extension points: the factory keeps the file whole and calls into the app's own.
+  - backend/src/{{ package_name }}/app_hooks.py
+  - backend/tests/app_fixtures.py
+  - frontend/tests/e2e/app-web-server.ts
+  - frontend/app-proxy.ts
+  # Names the household's committed master-root file lacks; normally empty.
+  - .mcp.json
 
 # Tests OF factory-owned modules (auth, rate limiting, the admin/agent/feedback
 # APIs, vend, the mcp mount…) are factory content, not app content: an app has

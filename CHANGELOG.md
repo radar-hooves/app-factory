@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: one list of the files an app owns, and it is the factory's (operator's ruling at Sitting 14, master-project#454). Consumer: master-orchestrator.
+
+### Changed
+
+- **`_skip_if_exists` is the app-owned set.** The parity gate reads it, at the factory version the app is stamped from, in place of the rule's `sanctioned-per-app` block. It gains what the block held that a stamped app diverges on: `CHANGELOG.md`, `frontend/src/app.css`, `backend/pyproject.toml`, `frontend/package.json`, `backend/.env.example`, `backend/system-packages.txt`, `backend/alembic/versions/`, the scaffold slice (`api/example/`, `config/sections/example.py`, `tests/test_example.py`, `example.spec.ts`), `backend/tests/test_workspaces_api.py`, `frontend/src/lib/api/schema.d.ts`, `config/actors.yaml`, `app_hooks.py`, `app_fixtures.py`, `app-web-server.ts`, `app-proxy.ts` and `.mcp.json`. A trailing slash names a directory. Everything else stamped is a carbon copy.
+- `variants.yaml` drops portcullis's `shell.ts`, now on the list.
+
+### Consumer must change
+
+- Regenerate `.template-parity.json` (`converge-to-template.py --apply`): it now carries `app_owned`, and the gate refuses a manifest without it. Delete the `parity:` exception lines for `frontend/src/lib/shell.ts` and `.github/renovate-app.json`.
+- `frontend/src/lib/app-frame.svelte` is the factory's, byte-identical: an app still carrying its own takes the factory's copy.
+
 ## [2026.11.40] - 2026-11-11
 
 Need: a stamped app accepts connections only on the network its front door reaches it on; every other network it joins (telemetry, cortex, mcpnet) is outbound-only. Consumer: yggdrasil#438 (a throwaway container reached caspo on cortex and mcpnet after .39), app-factory#109.
