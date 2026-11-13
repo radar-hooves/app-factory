@@ -22,6 +22,7 @@ from {{ package_name }}.api.alerts import service
 from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.mcp.dispatchers import alerts as alerts_dispatcher
 from {{ package_name }}.mcp.server import create_mcp_server
+
 from tests.support.machine_token import AUDIENCE, machine_token
 
 ADMIN = {"x-authentik-uid": "the-admin", "x-authentik-username": "the-admin", "x-authentik-entitlements": "admin:write"}

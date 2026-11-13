@@ -18,6 +18,7 @@ from fastmcp import Client
 
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.mcp.auth import requires
+
 from tests.support.fake_authentik import FakeAuthentik
 from tests.support.machine_token import AUDIENCE, machine_token, token_label
 

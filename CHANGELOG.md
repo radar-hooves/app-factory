@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.43] - 2026-11-13
+
+Need: a fresh stamp must commit clean whatever the app is called. Consumer: wordhoard's scaffold (master-project#454); its `test_alerts_api.py`, `test_db_session_commit_ordering.py` and `test_mcp_person_gate.py` were rewritten by the app's own ruff hook.
+
+### Fixed
+
+- **Import order of `tests` no longer depends on the app's name.** `tests` was first-party beside the app package, so ruff's isort sorted it by name: before an app named after "tests" (wordhoard), after one named before it (the selftest's `factory_selftest`, which is why CI never saw it). `pyproject.toml` now sets `known-local-folder = ["tests"]` (own import group, always last) and nine test files render with the blank line that group needs.
+
+### Consumer must change
+
+- `copier update` (or `converge-to-template.py --apply`) and regenerate `.template-parity.json`; an app that hand-sorted these imports drops its parity exceptions for `test_alerts_api.py`, `test_db_session_commit_ordering.py`, `test_mcp_person_gate.py`.
+
 ## [2026.11.42] - 2026-11-13
 
 Need: a checkout that will never run its backend (a read-only steward clone) enters its directory under direnv with the committed `.envrc` unmodified. Consumer: godswood's steward clone on macintosh-mandy (its devpi credential is not held there, so `uv sync` cannot succeed; a hand-edited `.envrc` blocked checkout-sync's fast-forward).

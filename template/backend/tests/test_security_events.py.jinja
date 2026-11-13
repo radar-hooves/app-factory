@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from {{ package_name }} import security_events
 from {{ package_name }}.api.users.models import User
+
 from tests.support.fake_authentik import FakeAuthentik
 from tests.test_mcp_person_gate import _drive, _person
 from tests.test_mcp_person_gate import fake as fake_authentik  # noqa: F401 -- a fixture, found by name

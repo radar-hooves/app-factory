@@ -40,6 +40,7 @@ import httpx
 
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
+
 from tests.support import live_server
 
 # Measured against FastAPI 0.136.3 over a real loopback socket (no artificial

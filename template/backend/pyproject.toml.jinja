@@ -133,6 +133,11 @@ target-version = "py314"
 select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
 ignore = ["E501", "B008"]
 
+[tool.ruff.lint.isort]
+# The tests package sorts after the app package whatever the app is called; as a
+# plain first-party it sorted by name, so an app named after "tests" reordered it.
+known-local-folder = ["tests"]
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 

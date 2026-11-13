@@ -51,6 +51,7 @@ from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exchange import Asker, Asking, Exchange, Issued
 from {{ package_name }}.rate_limit import limiter
+
 from tests.support import attachments, fake_agent_cli, fake_authentik, fake_library
 from tests.support.fake_clamd import FakeClamd
 

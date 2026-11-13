@@ -61,6 +61,7 @@ from {{ package_name }}.config.sections.agent import AgentSettings
 from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
+
 from tests.support import fake_agent_cli, live_server
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"

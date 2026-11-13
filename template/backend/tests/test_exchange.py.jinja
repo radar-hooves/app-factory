@@ -23,6 +23,7 @@ from {{ package_name }} import exchange as exchange_module
 from {{ package_name }}.config.sections.exchange import ExchangeSettings
 from {{ package_name }}.exceptions import AuthenticationError, ServiceUnavailableError, register_exception_handlers
 from {{ package_name }}.exchange import REUSE_MARGIN_SECONDS, Asker, Asking, CurrentAsker, Exchange, Issued
+
 from tests.support.fake_authentik import LIFETIME, FakeAuthentik
 
 APP = "{{ project_name }}"
