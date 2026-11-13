@@ -2,8 +2,8 @@
 
 Screenshots: on huginn at `/private/tmp/shell-review/before/` (the lane's worktree copy went with its worktree), `<app>-<landing|list|detail>-<1440|390>.png`.
 Taken headless through browser-driver-mac, engine `mine`: casefile, earworm, eight, library.
-Not taken: caspo (own domain, no operator session), godswood and pebblestone (the 502s on
-`*.godswood.au` burned the driver's bot-detection budget; the tool says stop, so I stopped).
+Not taken: caspo (own domain, no operator session), godswood and pebblestone (the 502s on their
+own domain burned the driver's bot-detection budget; the tool says stop, so I stopped).
 Those three are read from `app-frame.svelte` and routes.
 Casefile's landing is its Matters list (same pixels as the list shot).
 Eight's run detail (`/runs/<id>`) shows "This page could not open — Internal Error": an app fault, not a shell one.
