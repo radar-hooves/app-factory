@@ -52,6 +52,18 @@ _skip_if_exists:
   - src-tauri/capabilities/default.json
   - src-tauri/src/lib.rs
   - src-tauri/icons/icon.png
+  # The Android skeleton's first stamp (skeletons/android/), a module of rootstock's
+  # monorepo. What every app shares is rootstock's `rootstock.app` plugin and core
+  # modules, so the skeleton owns only the launcher icon's frame and background:
+  # the build file, manifest, sources, glyph, strings, window chrome and tests are
+  # the app's from here.
+  - build.gradle.kts
+  - src/main/AndroidManifest.xml
+  - src/main/kotlin/
+  - src/main/res/drawable/
+  - src/main/res/values/strings.xml
+  - src/main/res/values/themes.xml
+  - src/test/kotlin/
   # The app's own agent notes and its release jobs, appended after the gate.
   - .claude/CLAUDE.md
   - .github/workflows/release.yaml
@@ -324,14 +336,18 @@ _migrations:
 
 # Which skeleton this app is stamped from, asked first because `_subdirectory`
 # and every question below read it. `web` is the FastAPI + SvelteKit container
-# app in template/; `desktop` the Tauri + SvelteKit app in skeletons/desktop/.
+# app in template/; `desktop` the Tauri + SvelteKit app in skeletons/desktop/;
+# `android` a Rootstock suite app in skeletons/android/, stamped into its module
+# (`copier copy --data skeleton=android gh:radar-hooves/app-factory apps/<name>`),
+# which keeps its own answers file, so `copier update apps/<name>` takes one app.
 skeleton:
   type: str
   default: web
   choices:
     - web
     - desktop
-  help: 'Which skeleton: web (FastAPI + SvelteKit container) or desktop (Tauri + SvelteKit)'
+    - android
+  help: 'Which skeleton: web (FastAPI + SvelteKit container), desktop (Tauri + SvelteKit) or android (a Rootstock suite app, stamped into apps/<name>)'
 
 # A web app with no front end: the backend, its API and its /mcp, and nothing a
 # browser loads. Asked second because every frontend question below reads it.
@@ -344,7 +360,24 @@ headless:
 
 project_name:
   type: str
-  help: 'Project name (kebab-case, e.g. my-app)'
+  help: 'Project name (kebab-case, e.g. my-app); for android, the module directory it is stamped into'
+  # rootstock.app derives the namespace from the module's directory, and
+  # `<android_package>_home` must be a diagnostic Label (40 characters).
+  validator: >-
+    {% if skeleton == 'android' and (project_name | length > 35 or (project_name ~ '-')[0] not in 'abcdefghijklmnopqrstuvwxyz' or project_name | reject('in', 'abcdefghijklmnopqrstuvwxyz-') | list) %}An Android app's name is its module's directory: lowercase letters and hyphens, starting with a letter, at most 35 characters.{% endif %}
+
+# The Android skeleton's Kotlin package and class prefix, derived like package_name:
+# the suite strips hyphens from a package (com.rootstock.voicerecorder) and
+# capitalises each word of a class (VoiceRecorderApplication).
+android_package:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', '') }}"
+
+class_prefix:
+  type: str
+  when: false
+  default: "{{ project_name.split('-') | map('capitalize') | join }}"
 
 # Derived, never asked: nine apps produced nine distinct values and not one
 # overrode the default. `when: false` keeps it available to every template that
@@ -373,7 +406,7 @@ github_repo:
 team_name:
   type: str
   default: "{{ project_title }}"
-  when: "{{ not headless }}"
+  when: "{{ skeleton != 'android' and not headless }}"
   help: Who the feedback dialog says will read a report, as "the <name> team". Set it where the app's own team is not its display name (for example "CASPO").
 
 # Hidden and never answered by an app — `when: false` keeps a real stamp's
@@ -393,7 +426,7 @@ factory_selftest:
 dark_first:
   type: bool
   default: false
-  when: "{{ not headless }}"
+  when: "{{ skeleton != 'android' and not headless }}"
   help: >-
     Does this app rest DARK? Palette-class, like frontend/src/app.css — the one axis apps are allowed to differ on. `true` stamps a pre-hydration seed in app.html that sets mode-watcher's own storage key and class before first paint, and only when the visitor has stored no preference of their own. mode-watcher's `defaultMode` cannot express it: its setInitialMode script is injected at render time, which is late enough to flash light on a cold SPA shell, so an app that answered it by hand ended up excepting the whole file.
 
@@ -415,12 +448,13 @@ density:
   choices:
     - comfortable
     - compact
-  when: "{{ not headless }}"
+  when: "{{ skeleton != 'android' and not headless }}"
   help: >-
     Row and control density for the shared design system, as `data-ds-density` on <html>. Palette-class, and the same one axis: `compact` is for an app whose primary surface is a dense table someone reads all day (portal-tables.md), `comfortable` for everything else. One app hand-edited app.html for this; every other app answers the default and its app.html does not change.
 
 description:
   type: str
+  when: "{{ skeleton != 'android' }}"
   help: 'One-sentence description of the project'
 
 model_module:
@@ -437,7 +471,7 @@ backend_port:
 
 frontend_port:
   type: int
-  when: "{{ not headless }}"
+  when: "{{ skeleton != 'android' and not headless }}"
   help: 'Frontend Vite dev port — allocate from the port registry (web: band 5170-5199; desktop: the tauri band, with the next port its HMR socket); never a framework default'
 
 bundle_identifier:

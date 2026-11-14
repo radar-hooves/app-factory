@@ -1,0 +1,37 @@
+package com.rootstock.{{android_package}}.ui
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.rootstock.designsystem.component.RootstockEmptyState
+import com.rootstock.designsystem.component.RootstockIconAction
+import com.rootstock.designsystem.component.RootstockScaffold
+import com.rootstock.designsystem.component.RootstockTopBar
+import com.rootstock.observability.Label
+import com.rootstock.{{android_package}}.R
+
+/** What the home screen is called in the interaction trace. */
+private val HOME = Label.of("{{android_package}}_home")
+
+/** The app's home: its title, the way to its section in Settings, and what it shows. */
+@Composable
+fun {{class_prefix}}App(onOpenSettings: () -> Unit) {
+    RootstockScaffold(screen = HOME) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            RootstockTopBar(
+                title = stringResource(R.string.app_name),
+                actions = { RootstockIconAction(Icons.Rounded.Settings, "Settings", onClick = onOpenSettings) },
+            )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                RootstockEmptyState(message = "Nothing here yet")
+            }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+package com.rootstock.{{android_package}}.ui
+
+import com.github.takahirom.roborazzi.captureRoboImage
+import com.rootstock.designsystem.theme.RootstockAccent
+import com.rootstock.designsystem.theme.RootstockTheme
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+/**
+ * The home screen's golden. Goldens are Linux renders (`.claude/commands/rs-04-test.md`); until one
+ * is recorded there with `recordRoborazziDebug`, the compare is skipped.
+ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi", application = android.app.Application::class)
+class {{class_prefix}}AppScreenshotTest {
+    @Test
+    fun home() {
+        val golden = "src/test/screenshots/{{project_name}}/home.png"
+        assumeTrue("golden home waits for a Linux record", System.getProperty("roborazzi.test.record") == "true" || File(golden).exists())
+        captureRoboImage(golden) {
+            RootstockTheme(accent = RootstockAccent.Default, darkTheme = false) {
+                {{class_prefix}}App(onOpenSettings = {})
+            }
+        }
+    }
+}

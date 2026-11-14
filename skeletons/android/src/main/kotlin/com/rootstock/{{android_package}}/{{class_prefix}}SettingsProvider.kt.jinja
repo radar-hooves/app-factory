@@ -1,0 +1,13 @@
+package com.rootstock.{{android_package}}
+
+import com.rootstock.appsettings.AppSection
+import com.rootstock.appsettings.AppSettingsProvider
+
+/** This app's section of the Settings app, served from its own stores ([{{class_prefix}}Application]). */
+class {{class_prefix}}SettingsProvider : AppSettingsProvider() {
+    override suspend fun section(): AppSection = AppSection(emptyList())
+
+    override suspend fun set(key: String, value: String): Boolean = false
+
+    override suspend fun invoke(id: String): String? = null
+}

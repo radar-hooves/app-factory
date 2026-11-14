@@ -4,6 +4,23 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.46] - 2026-11-14
+
+Need: every Rootstock Android app stamped from the factory and updated from it per app, as web and desktop apps are (the operator's ruling, 14/11/2026). Consumer: rootstock (radar-hooves/rootstock), through its orchestrator.
+
+### Added
+
+- **`skeleton=android`, `skeletons/android/`**: rootstock's `stamp/skeleton/` module files, byte for byte, rooted at the module. `copier copy --data skeleton=android gh:radar-hooves/app-factory apps/<name>` from a rootstock checkout asks `project_name` (the module's directory, validated) and `project_title`; `copier update apps/<name>` updates that app alone, from the answers file it keeps. Neither needs `--trust`. `android_package` and `class_prefix` are derived. The skeleton owns `values/colors.xml` and `mipmap-anydpi-v26/ic_launcher.xml`; the rest is first-stamp (`_skip_if_exists`). Design: `docs/design/android-skeleton.md`.
+
+### Changed
+
+- `team_name`, `dark_first`, `density`, `frontend_port` and `description` are not asked of an android stamp. Web and desktop renders are byte-identical to 2026.11.45.
+
+### Consumer must change
+
+- Web and desktop apps: nothing.
+- rootstock: `:stamp` renders `skeletons/android/` from tag `v2026.11.46` in place of `stamp/skeleton/`. Its renderer skips the answers-file template `{{ _copier_conf.answers_file }}.jinja`, which is copier's own Jinja. The module intent (`docs/product/modules/<name>/M01-module-intent.md`) and the sweep config (`tools/verify/screens/<name>.json`) sit outside the module, so a stamp does not write them; they join `rs-01-new-app`'s shared-tree steps.
+
 ## [2026.11.45] - 2026-11-14
 
 Needs: one place in every app where a list is reshaped, the same everywhere, lifted from godswood's ledger, whose Columns menu already groups its transactions; wordhoard's Words page grouped by the replacement each word becomes. And an app's whole icon set linked without a parity exception, for wordhoard's new mark (wordhoard `200342085`). Consumers: wordhoard and godswood, through the master orchestrator (the operator, 14/11/2026).

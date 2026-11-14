@@ -1,0 +1,36 @@
+package com.rootstock.{{android_package}}
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import com.rootstock.appsettings.AppSettingsContract
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+
+/** The app as it launches: its manifest, its Application, the suite's theme and its home screen. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class MainActivityTest {
+    @get:Rule
+    val rule = createAndroidComposeRule<MainActivity>()
+
+    @Test
+    fun `it opens on its home screen`() {
+        rule.onNodeWithText(rule.activity.getString(R.string.app_name)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `its settings open its own section in the Settings app`() {
+        rule.onNodeWithContentDescription("Settings").performClick()
+        val opened = shadowOf(rule.activity).nextStartedActivity
+        assertEquals(AppSettingsContract.SETTINGS_ACTIVITY, opened.component?.className)
+        assertEquals(rule.activity.packageName, opened.getStringExtra(AppSettingsContract.EXTRA_OPEN_SECTION))
+    }
+}
