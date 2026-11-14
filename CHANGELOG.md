@@ -4,6 +4,25 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.45] - 2026-11-14
+
+Needs: one place in every app where a list is reshaped, the same everywhere, lifted from godswood's ledger, whose Columns menu already groups its transactions; wordhoard's Words page grouped by the replacement each word becomes. And an app's whole icon set linked without a parity exception, for wordhoard's new mark (wordhoard `200342085`). Consumers: wordhoard and godswood, through the master orchestrator (the operator, 14/11/2026).
+
+### Added
+
+- **`@poodle64/ui` 2026.11.10: `RecordList` `groupings`**, the viewer's choice of grouping in the Columns menu beside the columns, as the Ledger's periods are; None after the last, the first the default, kept in `preferences.group`. The Columns menu is the one place a Ledger or a RecordList is reshaped: columns, then Group by, then Reset. Sort stays on the heads, Find stays the module's. The stamp pins `^2026.11.10`.
+- **`frontend/static/manifest.webmanifest`**, stamped from `project_title` with the two icons below, then the app's (`_skip_if_exists`).
+
+### Changed
+
+- **`app.html` links the app's icon set** from its own `frontend/static/`: `favicon.svg`, `favicon.png` (32px), `apple-touch-icon.png` (180px) and `manifest.webmanifest`. No 16px PNG: a browser that draws SVG draws the mark at 16px, and one that does not scales the 32px.
+
+### Consumer must change
+
+- `copier update` and regenerate `.template-parity.json` (`app.html` changed). Supply `favicon.svg`, `favicon.png` and `apple-touch-icon.png` in `frontend/static/`: a missing one is answered with the SPA shell, which the browser skips for the next icon. wordhoard drops `favicon-16.png`, which nothing links.
+- wordhoard: `@poodle64/ui` `^2026.11.10`, and the Words page's `group={(r) => letterOf(r.title)}` becomes `groupings`: the letter first, then the replacement (`r.row.value`, `order: 'label'`; a spelling, which has none, under a label of its own); its kept preferences gain `group`.
+- godswood: nothing for the ledger, whose menu is unchanged. A RecordList that should let the viewer regroup trades `group` for `groupings`; a `DataTableTanstack` that wants the menu becomes a RecordList.
+
 ## [2026.11.44] - 2026-11-14
 
 Need: a stamped app files its feedback reports as GitHub issues with no hand step. Consumer: master-orchestrator (night shift 14/11, master-project#335).
