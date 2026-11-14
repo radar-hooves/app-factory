@@ -1309,6 +1309,7 @@ the switcher's menu, on `record`.
 | 390px: the phone's list, nothing sideways | layout `phone`, 0px overflow |
 | A click on a row's cells reaches its link; a control in a cell takes its own | `#/property/3`; the tool's own handler ran |
 | Grouped, the rows scroll under a head that stays, each label on the ground above its card | head drift 0px after a 200px scroll |
+| The viewer regroups from the Columns menu, by the first grouping until chosen, a label-ordered one A to Z (`list=managers`) | Managing now, Before, No property on record; by Fee 8.5%, 9%, No fee on file (Chromium, Playwright 1.64.1, 14/11/2026) |
 | The opened item is as tall as what it holds, and in a short window stops at the aside and scrolls inside | 718px in a 1044px aside; bottom 572 inside 600, scrolling |
 | A section's click swaps the column and marks its line, and nothing in the left pane moves | title Insurance, the line `aria-current`, top unmoved |
 | The document takes the item's place in the aside, filling it to its padding, its page inside it | pane height + the aside's block padding = the aside's height (844px) |

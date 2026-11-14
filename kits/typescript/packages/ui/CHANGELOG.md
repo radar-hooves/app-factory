@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.10] - 2026-11-14
+
+Need: one place in every app where a list is reshaped (its columns, its grouping), lifted from godswood's ledger, whose Columns menu already groups its transactions; wordhoard's Words page groups every word under the replacement it becomes. Consumers: wordhoard and godswood, through master-project's orchestrator (the operator, 14/11/2026).
+
+### Added
+
+- **`RecordList` `groupings`**: the ways the viewer may group the list, `{ key, label, group, order, hint }` (`RecordListGrouping`), offered in the Columns menu's Group by with None after the last, the first the default. The choice is `preferences.group`, emitted with the columns; a stale or foreign key reads as the default. `order: 'label'` lists the groups A to Z, numerals as numbers. In place of `group`, which stays the module's one fixed grouping.
+
+### Changed
+
+- **The Columns menu takes any set of groupings**, the Ledger's periods among them: one menu for the Ledger and the RecordList, the columns to tick, then Group by, then Reset. The RecordList's is named "Columns and grouping" where it offers groupings ("Grouping" on a list without heads). The Ledger's is unchanged.
+
 ## [2026.11.9] - 2026-11-08
 
 Need: godswood's commonality step 5 retires its last three local formatters. Consumer: godswood, through master-project's orchestrator (#417).

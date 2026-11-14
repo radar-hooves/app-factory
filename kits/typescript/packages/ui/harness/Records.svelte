@@ -14,7 +14,11 @@
 	import ContextColumn from '../dist/components/ui/context-column/context-column.svelte';
 	import DocumentPane from '../dist/components/ui/document-pane/document-pane.svelte';
 	import RecordList from '../dist/components/ui/record-list/record-list.svelte';
-	import type { RecordListColumn, RecordListRow } from '../dist/components/ui/record-list/index.js';
+	import type {
+		RecordListColumn,
+		RecordListGrouping,
+		RecordListRow
+	} from '../dist/components/ui/record-list/index.js';
 	import RecordSwitcher from '../dist/components/ui/record-switcher/record-switcher.svelte';
 	import type { RecordSwitcherGroup } from '../dist/components/ui/record-switcher/index.js';
 	import { Segmented } from '../dist/components/ui/segmented/index.js';
@@ -199,6 +203,17 @@
 		to: to!,
 		fee
 	}));
+	// The viewer's groupings, in the Columns menu: by status first, or every company on one fee together.
+	const managerGroupings: RecordListGrouping<Manager>[] = [
+		{ key: 'status', label: 'Status', group: (r) => r.status },
+		{
+			key: 'fee',
+			label: 'Fee',
+			group: (r) => r.fee ?? 'No fee on file',
+			order: 'label',
+			hint: 'Every company on the same fee together.'
+		}
+	];
 	const managerColumns: RecordListColumn<Manager>[] = [
 		{ key: 'title', label: 'Company' },
 		{ key: 'from', label: 'From', text: (r) => r.from, width: '7rem' },
@@ -356,7 +371,8 @@
 						columns={managerColumns}
 						noun={['company', 'companies']}
 						title="All managers"
-						group={(r) => r.status}
+						groupings={managerGroupings}
+						preferencesNote="Kept for you on this page"
 						tools={[{ label: 'Download as CSV', icon: Download }]}
 						action={{ label: 'Add manager', icon: Plus }}
 						onOpen={(r) => (opened = r.id)}

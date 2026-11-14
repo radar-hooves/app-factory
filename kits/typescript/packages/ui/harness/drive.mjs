@@ -4702,6 +4702,24 @@ for (const density of ['comfortable', 'compact']) {
 		held.scrolls && held.drift < 0.5 && held.labelOutside,
 		JSON.stringify(held)
 	);
+	// The viewer's grouping sits in the Columns menu beside the columns, as the Ledger's period does.
+	const groupLabels = () =>
+		page.$$eval('[data-slot="record-group"] h3', (hs) => hs.map((h) => h.textContent.trim()));
+	const byStatus = await groupLabels();
+	await page.getByRole('button', { name: 'Columns and grouping' }).click({ timeout: 3000 });
+	const groupMenu = page.locator('[data-slot="record-columns"]');
+	await groupMenu.getByRole('radio', { name: 'Fee' }).click({ timeout: 3000 });
+	const byFee = await groupLabels();
+	const groupMenuBox = await groupMenu.boundingBox();
+	await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/records-grouping-fee.png` });
+	check(
+		'RecordList: the viewer regroups from the Columns menu, by status first, then by fee A to Z',
+		JSON.stringify(byStatus) === JSON.stringify(['Managing now', 'Before', 'No property on record']) &&
+			JSON.stringify(byFee) === JSON.stringify(['8.5%', '9%', 'No fee on file']) &&
+			(await groupMenu.getByRole('radio', { name: 'None' }).count()) === 1 &&
+			groupMenuBox !== null && groupMenuBox.x + groupMenuBox.width <= 1440,
+		`status ${JSON.stringify(byStatus)}, fee ${JSON.stringify(byFee)}, menu ${JSON.stringify(groupMenuBox)}`
+	);
 	check('RecordList, grouped: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 

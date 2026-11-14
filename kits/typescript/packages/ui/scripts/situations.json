@@ -114,7 +114,7 @@
       "components": [
         {
           "name": "RecordList",
-          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, tools?, action?, group?, totalLabel?, icon?, href?, onOpen?, open?",
+          "props": "rows, columns?, preferences?, onPreferencesChange?, title?, tools?, action?, group?, groupings?, totalLabel?, icon?, href?, onOpen?, open?",
           "insteadOf": "a DataTableTanstack, or a boxed Table, for a module's own records (properties, managers, tools, a P&L's lines): the ledger's look (head card, row cards, group labels on the ground) for rows that are not money, so every list in an app reads one way"
         },
         {

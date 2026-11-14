@@ -1076,14 +1076,29 @@ stays for a dense grid of data; a module's own records are a RecordList.
 | --- | --- |
 | `rows` | `RecordListRow`s: `id`, `title`, `note`, `image` (a thumbnail), `icon` (a row's own tile, for a tool), `flags` (what wants the viewer: the first a chip on line two with "+N more" naming the rest, every one on a phone). |
 | `columns` | The module's columns after the title, the Ledger's `ListColumn` shape plus `total`. List `title` to rename, resize or draw it with `cell`. `on: 'wide'` ticks a column only on a wide list (1200px of list), so extra width shows more columns and the viewer can tick it back. |
-| `preferences`, `onPreferencesChange`, `preferencesNote` | The viewer's `{ columns }` from the Columns menu, which the bar carries while the list has heads. The list stores nothing. |
+| `preferences`, `onPreferencesChange`, `preferencesNote` | The viewer's `{ columns, group }` from the Columns menu, which the bar carries while the list has heads or offers groupings. Missing or stale fields take the module's defaults; `group` exists only where the list offers `groupings`. The list stores nothing. |
 | `title`, `meta`, `leading`, `toolbar`, `tools`, `action` | The `ListToolbar`. No title, no bar. |
 | `group` | A row's group label: groups show in the order their first rows come, each label on the ground with its count and each column's `total` over its rows. |
+| `groupings` | The ways the viewer may group, in place of `group`: `{ key, label, group, order, hint }`, offered in the Columns menu's Group by with None after the last, the first the default. `order: 'label'` lists the groups A to Z (numerals as numbers) rather than in the order their first rows come; `hint` says what it does under the choice. |
 | `totalLabel` | A card after the rows with each column's `total` over every row: "All three". |
 | `head` | `false` drops the head card (and the Columns menu): a tools list. |
 | `icon` | The quiet tile a row without a photo or its own `icon` shows; with it every row has a thumbnail. |
 | `href`, `onOpen`, `open` | A row is a link, or a button that opens a detail beside the list; `open` marks that row. A control in a `cell` takes its own click. |
 | `noun`, `empty`, `footer`, `layout` | As the Ledger's. |
+
+**The Columns menu is the one place a list is reshaped**, the same in the Ledger
+and the RecordList: the columns to tick, then Group by (the Ledger's periods, a
+RecordList's `groupings`), then Reset and where the choice is kept. Sort is the
+heads'; Find (search, filters, views) stays the module's.
+
+```svelte
+<RecordList rows={words} {columns} title="Words" bind:preferences
+	groupings={[
+		{ key: 'letter', label: 'Letter', group: (r) => letterOf(r.title) },
+		{ key: 'becomes', label: 'Replacement', group: (r) => r.value, order: 'label',
+		  hint: 'Every word that becomes the same replacement, under it.' }
+	]} />
+```
 
 A sort orders rows inside their groups, largest first (words from A), then
 reversed, then the list's own order. On a phone (below 480px of list) a row is its thumbnail, title
