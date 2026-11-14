@@ -2,7 +2,12 @@
 <html lang="en"{% if density == 'compact' %} data-ds-density="compact"{% endif %}>
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<!-- The app's icon set, from its own frontend/static/: the mark as SVG, a
+		     32px PNG where SVG is not drawn, a 180px touch icon, and the manifest. -->
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" sizes="32x32" type="image/png" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<!-- Fallback title for the static shell: in SPA mode the document is served
          before any page component hydrates, so without this the tab is untitled

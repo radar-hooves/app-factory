@@ -81,6 +81,8 @@ _skip_if_exists:
   - CHANGELOG.md
   # The palette, the one per-app difference in the design system.
   - frontend/src/app.css
+  # The web manifest app.html links: stamped with the app's title and its icons, then the app's.
+  - frontend/static/manifest.webmanifest
   # The app's dependencies; the parity gate holds their floors instead.
   - backend/pyproject.toml
   - frontend/package.json
