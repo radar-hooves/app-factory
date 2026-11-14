@@ -4720,6 +4720,24 @@ for (const density of ['comfortable', 'compact']) {
 			groupMenuBox !== null && groupMenuBox.x + groupMenuBox.width <= 1440,
 		`status ${JSON.stringify(byStatus)}, fee ${JSON.stringify(byFee)}, menu ${JSON.stringify(groupMenuBox)}`
 	);
+	// Every choice a row of its own inside the menu, however long its label: none overlaps another or clips.
+	const choiceBoxes = await groupMenu.getByRole('radio').evaluateAll((els) =>
+		els.map((el) => {
+			const r = el.getBoundingClientRect();
+			const t = el.querySelector('span:last-child');
+			return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, clipped: t.scrollWidth > t.clientWidth };
+		})
+	);
+	const menuBox = await groupMenu.boundingBox();
+	check(
+		'RecordList: the Group by choices stack one a row inside the menu, a long label wrapping, none overlapping or clipped',
+		choiceBoxes.length === 4 &&
+			choiceBoxes.every(
+				(b, i) =>
+					!b.clipped && b.left >= menuBox.x && b.right <= menuBox.x + menuBox.width && (i === 0 || b.top >= choiceBoxes[i - 1].bottom - 0.5)
+			),
+		JSON.stringify(choiceBoxes)
+	);
 	check('RecordList, grouped: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 

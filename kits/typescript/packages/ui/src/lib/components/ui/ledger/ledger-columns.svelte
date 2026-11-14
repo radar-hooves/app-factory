@@ -1,7 +1,7 @@
 <script lang="ts" generics="G extends string">
 	/**
 	 * The list's Columns menu, the one place a viewer reshapes a list: every
-	 * column it offers as a tick, then how its rows group. The Ledger's groups
+	 * column it offers as a tick, then how its rows group, one choice a row as the ticks above are, so no label truncates or overlaps. A choice is named for what it groups by ("Letter"): the heading says "Group by". The Ledger's groups
 	 * are periods (and its running balance one more column, always last); a
 	 * RecordList's are the groupings its module offers. Sort is the heads'. An
 	 * icon button named by its tooltip.
@@ -10,7 +10,8 @@
 	import { Button, buttonVariants } from '../button/index.js';
 	import { Checkbox } from '../checkbox/index.js';
 	import * as Popover from '../popover/index.js';
-	import { Segmented, type SegmentedOption } from '../segmented/index.js';
+	import { RadioGroup } from 'bits-ui';
+	import Check from '@lucide/svelte/icons/check';
 	import * as Tooltip from '../tooltip/index.js';
 	import { cn } from '#lib/utils.js';
 
@@ -30,7 +31,7 @@
 		columns: string[];
 		/** How the rows group: the choices, the one in force, and what it does. */
 		grouping?: {
-			options: readonly SegmentedOption<G>[];
+			options: readonly { value: G; label: string }[];
 			value: G;
 			hint?: string;
 			onchange: (value: G) => void;
@@ -52,8 +53,13 @@
 	}
 
 	const eyebrow = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
-	/** Two to a row past three choices, so a label never truncates in the menu's width. */
-	const COLS = ['grid-cols-1', 'grid-cols-2', 'grid-cols-3'];
+	// The heading says "Group by", so a choice that repeats it reads twice.
+	$effect(() => {
+		if (grouping?.options.some((o) => /^group by\b/i.test(o.label)))
+			console.warn(
+				'Columns menu: grouping labels sit under a "Group by" heading; name the grouping ("Letter"), not "Group by letter".'
+			);
+	});
 </script>
 
 <Popover.Root bind:open>
@@ -104,12 +110,23 @@
 				data-slot="{owner}-grouping"
 			>
 				<span class={eyebrow}>Group by</span>
-				<Segmented
-					label="Group by"
-					options={g.options}
-					bind:value={() => g.value, (value) => g.onchange(value)}
-					class={cn('grid w-full', COLS[g.options.length - 1] ?? 'grid-cols-2')}
-				/>
+				<RadioGroup.Root
+					aria-label="Group by"
+					class="-mx-1.5 flex flex-col"
+					bind:value={() => g.value, (value) => g.onchange(value as G)}
+				>
+					{#each g.options as o (o.value)}
+						<RadioGroup.Item
+							value={o.value}
+							class="hover:bg-accent/50 data-[state=checked]:text-foreground text-muted-foreground flex min-h-8 cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1 text-left text-sm break-words data-[state=checked]:font-medium"
+						>
+							<span class="flex size-4 shrink-0 items-center justify-center">
+								{#if g.value === o.value}<Check class="size-4" />{/if}
+							</span>
+							<span class="min-w-0 flex-1">{o.label}</span>
+						</RadioGroup.Item>
+					{/each}
+				</RadioGroup.Root>
 				{#if g.hint}<span class="text-muted-foreground text-xs">{g.hint}</span>{/if}
 			</div>
 		{/if}

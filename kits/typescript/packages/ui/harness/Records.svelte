@@ -212,7 +212,8 @@
 			group: (r) => r.fee ?? 'No fee on file',
 			order: 'label',
 			hint: 'Every company on the same fee together.'
-		}
+		},
+		{ key: 'long', label: 'Each company under the name it trades by in the other states', group: (r) => r.title }
 	];
 	const managerColumns: RecordListColumn<Manager>[] = [
 		{ key: 'title', label: 'Company' },

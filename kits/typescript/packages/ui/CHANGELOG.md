@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.11] - 2026-11-14
+
+Need: wordhoard's Words page offers three groupings ("Group by letter", "Group by replacement", "None") and the Columns menu printed them over each other and clipped the selected one; godswood's ledger adopts the same menu. Consumer: wordhoard, through master-project's orchestrator (the operator, 14/11/2026).
+
+### Changed
+
+- **The Columns menu's Group by is one choice a row**, as the column ticks above it are, in place of a segmented strip: a label of any length wraps inside the menu and nothing overlaps or clips, at the popover's width and at phone width. The choices are a `radiogroup` named "Group by" (was a toggle group), selected by a tick.
+
+### Added
+
+- A grouping label that starts "Group by" logs a dev-time warning: the heading already says it, so name the grouping ("Letter").
+
 ## [2026.11.10] - 2026-11-14
 
 Need: one place in every app where a list is reshaped (its columns, its grouping), lifted from godswood's ledger, whose Columns menu already groups its transactions; wordhoard's Words page groups every word under the replacement it becomes. Consumers: wordhoard and godswood, through master-project's orchestrator (the operator, 14/11/2026).

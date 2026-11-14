@@ -7,8 +7,8 @@
  * viewer's choice emitted, groups in the order their rows come with their
  * totals, the sort, a row's flags, and how a row opens.
  */
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, within, cleanup } from '@testing-library/svelte';
 import Harness from './record-list.svelte';
 import { orderBy } from '#lib/components/ui/ledger/ledger.js';
 import type { RecordListRow } from '#lib/components/ui/record-list/index.js';
@@ -127,7 +127,7 @@ describe('RecordList: the viewer’s grouping, in the Columns menu', () => {
 		const { all } = mount({ groupings: GROUPINGS });
 		expect(labels(all)).toEqual(['Owned', 'Sold']);
 		const menu = await openMenu();
-		const choice = within(menu).getByRole('group', { name: 'Group by' });
+		const choice = within(menu).getByRole('radiogroup', { name: 'Group by' });
 		expect(within(choice).getAllByRole('radio').map((r) => r.textContent?.trim())).toEqual([
 			'Status',
 			'Value',
@@ -172,11 +172,36 @@ describe('RecordList: the viewer’s grouping, in the Columns menu', () => {
 		expect(JSON.parse(probe('emitted')!)).toEqual([{ columns: ['value'], group: 'status' }]);
 	});
 
+	it('offers three long-labelled choices one a row, whole, and warns of a label that repeats the heading', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const long = [
+			{ key: 'letter', label: 'Group by letter', group: (r: Row) => r.title[3] ?? '' },
+			{ key: 'replacement', label: 'Group by replacement', group: (r: Row) => r.group ?? '' }
+		];
+		mount({ groupings: long });
+		const menu = await openMenu();
+		const radios = within(within(menu).getByRole('radiogroup', { name: 'Group by' })).getAllByRole('radio');
+		expect(radios.map((r) => r.textContent?.trim())).toEqual([
+			'Group by letter',
+			'Group by replacement',
+			'None'
+		]);
+		expect(radios[0]).toHaveAttribute('aria-checked', 'true');
+		expect(radios.every((r) => !r.className.includes('truncate') && !r.className.includes('whitespace-nowrap'))).toBe(true);
+		expect(warn).toHaveBeenCalledOnce();
+		warn.mockClear();
+		cleanup();
+		mount({ groupings: GROUPINGS });
+		await openMenu();
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
 	it('offers the grouping alone on a list without heads', async () => {
 		mount({ groupings: GROUPINGS, head: false });
 		const menu = await openMenu('Grouping');
 		expect(within(menu).queryAllByRole('checkbox')).toHaveLength(0);
-		expect(within(menu).getByRole('group', { name: 'Group by' })).toBeInTheDocument();
+		expect(within(menu).getByRole('radiogroup', { name: 'Group by' })).toBeInTheDocument();
 	});
 });
 
