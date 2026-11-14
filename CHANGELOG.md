@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.47] - 2026-11-14
+
+Need: the android skeleton's activity lacked the portrait default every Rootstock app declares, so rootstock's tuner added it by hand. Consumer: rootstock (radar-hooves/rootstock), via foreman.
+
+### Changed
+
+- **`skeletons/android` `AndroidManifest.xml`**: `MainActivity` declares `android:screenOrientation="portrait"`.
+
+### Consumer must change
+
+- rootstock: bump the pin in `stamp/build.gradle.kts` to `v2026.11.47`. Apps already stamped: `copier update apps/<name>`; tuner already carries the line.
+
 ## [2026.11.46] - 2026-11-14
 
 Need: every Rootstock Android app stamped from the factory and updated from it per app, as web and desktop apps are (the operator's ruling, 14/11/2026). Consumer: rootstock (radar-hooves/rootstock), through its orchestrator.
