@@ -11,9 +11,11 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.{{class_prefix}}">
+        <!-- Portrait, the suite's default. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.{{class_prefix}}">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
