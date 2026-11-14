@@ -38,6 +38,7 @@ Written for the next agent working here, not for onboarding.
 | [The token exchange](docs/design/exchange.md) | Design: how an app carries the signed-in person to a household service and a persona to its own `/mcp`, and how a service verifies them; the provider per app, the estate's one mapping, the ten-minute lifetime, and the adoption steps for an app, a service and an estate. |
 | [Elements](docs/design/elements.md) | Design: an app serving its views to other apps' pages as custom elements drawn from the kit, and placing another app's with one declaration; the sign-in hop, and the steps a service and a placing app take. |
 | [Desktop skeleton](docs/design/desktop-skeleton.md) | Design: the Tauri + SvelteKit skeleton Thoth and Bragi stamp from (`copier copy --data skeleton=desktop`), what is a kit, what the skeleton owns and what each app keeps. |
+| [Android skeleton](docs/design/android-skeleton.md) | Design: the Rootstock suite app each module of rootstock's monorepo stamps from (`copier copy --data skeleton=android … apps/<name>`), updated per app, and the two files it owns. |
 | [CHANGELOG](CHANGELOG.md) | Every shipped change, with the defect each one closed. |
 
 Deliberately not documented here: the file tree, the copier questions and the dependency list. All three are readable from the repo, and a transcription of them is wrong from the first commit that touches anything.

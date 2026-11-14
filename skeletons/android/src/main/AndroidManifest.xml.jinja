@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Hands text to the Mac through Settings' share target, which admits co-signed apps only. -->
+    <uses-permission android:name="com.rootstock.permission.PUBLISH_CONTINUITY" />
+
+    <application
+        android:name=".{{class_prefix}}Application"
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.{{class_prefix}}">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.{{class_prefix}}">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- This app's section of the Settings app, drawn there from this app's own stores. -->
+        <provider
+            android:name=".{{class_prefix}}SettingsProvider"
+            android:authorities="${applicationId}.appsettings"
+            android:exported="true"
+            android:permission="com.rootstock.permission.MANAGE_APP_SETTINGS" />
+    </application>
+</manifest>

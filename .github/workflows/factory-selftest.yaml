@@ -45,6 +45,7 @@ on:
       - 'slices.yaml'
       - 'tests/template/**'
       - 'skeletons/desktop/**'
+      - 'skeletons/android/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
@@ -67,6 +68,7 @@ on:
       - 'slices.yaml'
       - 'tests/template/**'
       - 'skeletons/desktop/**'
+      - 'skeletons/android/**'
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
@@ -161,6 +163,18 @@ jobs:
 
       - name: Copier answers — headless, omitted slices, run mode
         run: uv run --frozen pytest -q tests/template
+
+      - name: Android skeleton — a Rootstock app renders into its module
+        # rootstock's :stamp leg builds it, pinned to a tag; this catches a render
+        # that fails before any tag carries it.
+        run: |
+          set -euo pipefail
+          uvx copier copy --defaults --vcs-ref=HEAD --data skeleton=android \
+            --data project_name=voice-recorder . "$SCRATCH-android/apps/voice-recorder"
+          app="$SCRATCH-android/apps/voice-recorder"
+          test -f "$app/.copier-answers.yml"
+          test -f "$app/src/main/kotlin/com/rootstock/voicerecorder/VoiceRecorderApplication.kt"
+          if grep -rn '{{' "$app/src"; then echo "unrendered Jinja in the android stamp" >&2; exit 1; fi
 
       - name: Arbitrary-values ratchet — the wrapper against the real bin
         run: node --test tests/arbitrary-values/ratchet.test.mjs
