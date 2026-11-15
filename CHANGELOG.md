@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, bragi, via thoth's holistic review, radar-hooves/thoth#208).
+
+### Changed
+
+- **The desktop skeleton's library is an `rlib` alone** (`src-tauri/Cargo.toml`). `staticlib` and `cdylib` are the outputs iOS and Android link; a desktop app's `main.rs` links the `rlib`. In Thoth the two cost every test build a 1.16 GB static archive and a 261 MB shared library that nothing read.
+
+### Consumer must change
+
+- `Cargo.toml` is app-owned, so an existing app sets `crate-type = ["rlib"]` itself (Thoth and Bragi have).
+
 ## [2026.11.56] - 2026-11-16
 
 Needs: Thoth and Bragi become desktop stamps the factory reaches (radar-hooves/app-factory#138; consumers: thoth, bragi, via thoth).
