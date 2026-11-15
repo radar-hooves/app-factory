@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.48] - 2026-11-15
+
+Need: a consumer sets the android launcher icon's background per app and changes it later, without a parity exception (generated value, so no copier answer). Consumer: rootstock (radar-hooves/rootstock#244, radar-hooves/app-factory#129).
+
+### Changed
+
+- **`skeletons/android`**: the adaptive-icon frame reads `@drawable/ic_launcher_background`, a first-stamp drawable under the app-owned `drawable/` (default `#2E7D49`). `values/colors.xml` is removed. The frame stays the factory's.
+
+### Consumer must change
+
+- rootstock: bump the pin to `v2026.11.48`; `copier update apps/<name>` adds `drawable/ic_launcher_background.xml` (only if absent) and deletes `values/colors.xml`. Have the icon generator write the disc colour as `<shape android:shape="rectangle"><solid android:color="#RRGGBB"/></shape>` in that drawable instead of `ic_launcher_background` in `colors.xml`; drop the `parity:src/main/res/values/colors.xml` exceptions. Any other reference to `@color/ic_launcher_background` becomes `@drawable/ic_launcher_background`.
+
 ## [2026.11.47] - 2026-11-14
 
 Need: the android skeleton's activity lacked the portrait default every Rootstock app declares, so rootstock's tuner added it by hand. Consumer: rootstock (radar-hooves/rootstock), via foreman.

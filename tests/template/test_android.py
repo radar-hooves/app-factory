@@ -40,3 +40,12 @@ def test_its_templates_use_only_answers() -> None:
         if re.search(r"\{[{%#]", rest):
             found.append(rel)
     assert found == []
+
+
+def test_the_launcher_background_is_an_app_owned_drawable() -> None:
+    """A consumer writes its generated disc colour into drawable/, which `_skip_if_exists` keeps across updates."""
+    frame = (SKELETON / "src/main/res/mipmap-anydpi-v26/ic_launcher.xml").read_text()
+    assert "@drawable/ic_launcher_background" in frame
+    assert (SKELETON / "src/main/res/drawable/ic_launcher_background.xml").is_file()
+    assert not (SKELETON / "src/main/res/values/colors.xml").exists()
+    assert "src/main/res/drawable/" in COPIER["_skip_if_exists"]
