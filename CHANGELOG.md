@@ -4,7 +4,42 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-<<<<<<< HEAD
+## [2026.11.57] - 2026-11-16
+
+Needs: Thoth and Bragi become desktop stamps the factory reaches (radar-hooves/app-factory#138; consumers: thoth, bragi, via thoth).
+
+### Added
+
+- Desktop skeleton: `scripts/bump-version.sh` (`package.json` is the one version; it sets `Cargo.toml`, `Cargo.lock` and `tauri.conf.json`, and `--check` fails on a difference) and `scripts/update-kit-hash.sh`.
+- Desktop skeleton `flake.nix`: `packages.default` (`cargo-tauri.hook`, `fetchPnpmDeps`), present once both lockfiles are committed; its version is read from `package.json`, and the kit crates' `outputHashes` are derived from `Cargo.lock` and share one `kitHash`.
+- `docs/design/desktop-skeleton.md`: the version and hash rules, and what `copier update` onto an existing desktop app needs (answers file, parity record, where each departure goes).
+
+### Fixed
+
+- `docs/design/desktop-layer.md` no longer says Thoth and Bragi call local traffic-light modules; `desktop-skeleton.md` no longer says the skeleton lists `desktop-ci.yaml`.
+
+### Consumer must change
+
+- thoth, bragi: nothing on the pin. First stamp the app (`docs/design/desktop-skeleton.md` §Moving an existing app onto the stamp) to take these files; their `flake.nix` stays theirs, so each moves its kit hashes to `kitHash` by hand once.
+
+## [2026.11.56] - 2026-11-16
+
+Needs: window hooks and one store for several services (radar-hooves/app-factory#140; consumers: bragi, thoth, via thoth).
+
+### Added
+
+- `desktop_shell::window` 0.4.0: `setup_with` (each close request put to a `hide_on_close` callback; `false` lets the close proceed), `plugins_with` (the window a second launch raises, and a `tracked` filter scoping `tauri-plugin-window-state` to the labels it accepts) and `on_run_event_with` (the window a Dock reopen raises). `plugins`, `setup` and `on_run_event` are these with today's behaviour: hide on close, raise the managed window, track every window.
+- `SecretStore::with_service(name)`: another service in the same file under the same lock, reading entries earlier releases wrote under that name.
+
+### Fixed
+
+- The 2026.11.54 line that `for_app` reads Bragi's entries as they are was wrong: `for_app` keys them under the bundle identifier, Bragi's are under `bragi-jellyfin`, `bragi-llm`, `bragi-subsonic` and `bragi-music-service`.
+
+### Consumer must change
+
+- bragi: build one `SecretStore::new("bragi-jellyfin", path)` and take the rest with `with_service` (one lock, no lost write across services); adopt `window::setup_with` (hide only when its close-to-tray setting is on, or off macOS never), `plugins_with` and `on_run_event_with` raising its active window.
+- thoth: take the pin. Its `plugins` call tracks every window, so with four windows (`main`, `recording-indicator`, `history`, `prompt-guide`) it moves to `plugins_with(builder, |app| window::show(app, "main"), |label| label == "main")` to save and restore the managed window alone.
+
 ## [2026.11.55] - 2026-11-16
 
 Needs: the weekly major upgrades (radar-hooves/app-factory#108), the template's frontend devDependency majors Renovate cannot see (wordhoard#3), one Node baseline, and a stale Python hold. Consumer: master-project's weekly major-upgrade run, via wordhoard.
@@ -24,24 +59,6 @@ Needs: the weekly major upgrades (radar-hooves/app-factory#108), the template's 
 
 - A stamped web app takes the new `package.json` devDependencies by `copier update`, then `pnpm install`, and regenerates its `.template-parity.json`. Its CI and dev Node should be 26 (jsdom 31 and stylelint 18 need `^22.22.2 || ^24.15.0 || >=26`). `stylelint` 18 and `jsdom` 31 can change lint results and computed styles: run the app's own suite once.
 - An app that copied the Python 3.15 hold into its own `renovate.json` deletes it.
-
-## [2026.11.56] - 2026-11-16
-
-Needs: window hooks and one store for several services (radar-hooves/app-factory#140; consumers: bragi, thoth, via thoth).
-
-### Added
-
-- `desktop_shell::window` 0.4.0: `setup_with` (each close request put to a `hide_on_close` callback; `false` lets the close proceed), `plugins_with` (the window a second launch raises, and a `tracked` filter scoping `tauri-plugin-window-state` to the labels it accepts) and `on_run_event_with` (the window a Dock reopen raises). `plugins`, `setup` and `on_run_event` are these with today's behaviour: hide on close, raise the managed window, track every window.
-- `SecretStore::with_service(name)`: another service in the same file under the same lock, reading entries earlier releases wrote under that name.
-
-### Fixed
-
-- The 2026.11.54 line that `for_app` reads Bragi's entries as they are was wrong: `for_app` keys them under the bundle identifier, Bragi's are under `bragi-jellyfin`, `bragi-llm`, `bragi-subsonic` and `bragi-music-service`.
-
-### Consumer must change
-
-- bragi: build one `SecretStore::new("bragi-jellyfin", path)` and take the rest with `with_service` (one lock, no lost write across services); adopt `window::setup_with` (hide only when its close-to-tray setting is on, or off macOS never), `plugins_with` and `on_run_event_with` raising its active window.
-- thoth: take the pin. Its `plugins` call tracks every window, so with four windows (`main`, `recording-indicator`, `history`, `prompt-guide`) it moves to `plugins_with(builder, |app| window::show(app, "main"), |label| label == "main")` to save and restore the managed window alone.
 
 ## [2026.11.54] - 2026-11-15
 
