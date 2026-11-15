@@ -4,6 +4,8 @@
 
 pub mod secrets;
 pub mod traffic_lights;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod window;
 
 /// The `tracing` target a tray fault is reported on. `tauri-plugin-telemetry`
 /// puts it on the allow-list itself, so the fault reaches the household's log
@@ -45,6 +47,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use tracing_subscriber::layer::SubscriberExt;
 
+    /// A callsite first hit while another test's subscriber is being swapped
+    /// can cache "disabled"; the tray tests take turns.
+    static TURN: Mutex<()> = Mutex::new(());
+
     struct Targets(Arc<Mutex<Vec<(String, String)>>>);
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Targets {
@@ -74,12 +80,14 @@ mod tests {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let dispatch =
             tracing::Dispatch::new(tracing_subscriber::registry().with(Targets(seen.clone())));
-        tracing::dispatcher::with_default(&dispatch, f);
+        let _guard = tracing::dispatcher::set_default(&dispatch);
+        f();
         seen.lock().unwrap().clone()
     }
 
     #[test]
     fn a_tray_fault_is_reported_on_the_target_telemetry_allows() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
         let events = events_of(|| {
             guard_tray(|| Err::<(), _>("bare modifier accelerator"));
             guard_tray(|| -> Result<(), String> { panic!("no appindicator") });
@@ -95,16 +103,19 @@ mod tests {
 
     #[test]
     fn a_tray_that_sets_up_is_up() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
         assert!(guard_tray(|| Ok::<(), String>(())));
     }
 
     #[test]
     fn a_tray_that_errs_is_down_and_the_app_carries_on() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
         assert!(!guard_tray(|| Err::<(), _>("no tray")));
     }
 
     #[test]
     fn a_tray_that_panics_is_down_and_the_app_carries_on() {
+        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
         assert!(!guard_tray(|| -> Result<(), String> {
             panic!("Failed to load ayatana-appindicator3 or appindicator3 dynamic library")
         }));

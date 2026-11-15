@@ -20,7 +20,8 @@ impl tauri_plugin_telemetry::TelemetryStore for TelemetrySettings {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default();
+    // One instance, hide on close, Dock reopen and a window back on screen: `desktop_shell::window`.
+    let mut builder = desktop_shell::window::plugins(tauri::Builder::default(), "main");
     // The app updates itself from its own signed releases: the key is `plugins.updater` in tauri.conf.json.
     #[cfg(desktop)]
     {
@@ -40,8 +41,11 @@ pub fn run() {
                 // AppKit centres the buttons in a 52-point title bar: keep the header 52 points.
                 desktop_shell::traffic_lights::setup(&window);
             }
+            // The app's own "start minimised" setting goes where `false` is.
+            desktop_shell::window::setup(app.handle(), "main", false, (800, 600));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running the Tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building the Tauri application")
+        .run(|app, event| desktop_shell::window::on_run_event(app, "main", &event));
 }
