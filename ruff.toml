@@ -10,7 +10,7 @@
 #
 # Keep this in lockstep with template/backend/pyproject.toml's [tool.ruff].
 line-length = 120
-target-version = "py314"
+target-version = "py315"
 
 # The jinja-templated sources are not parseable Python (`from {{ package_name }}
 # import ...`), so they are excluded rather than reported as syntax errors. They

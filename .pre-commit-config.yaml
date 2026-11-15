@@ -4,7 +4,7 @@
 # Install with: pre-commit install
 
 default_language_version:
-  python: python3.14
+  python: python3.15
 
 # Merge commits run no gate without pre-merge-commit; changing this needs `pre-commit install` re-run.
 default_install_hook_types: [pre-commit, pre-merge-commit, commit-msg]

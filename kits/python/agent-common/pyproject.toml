@@ -5,7 +5,7 @@ name = "agent-common"
 # (`.github/workflows/publish-kit-python.yaml`).
 version = "2026.9.57"
 description = "The household's Claude Code agent: the CLI driver, personas, transcripts, and the Agent interface"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 dependencies = [
     # library: the api-clients client of the library's caller door, which
     # `Collections` lists, searches and opens documents through. Resolved off
@@ -30,7 +30,7 @@ build-backend = "hatchling.build"
 packages = ["src/agent_common"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.15"
 strict = true
 show_error_codes = true
 

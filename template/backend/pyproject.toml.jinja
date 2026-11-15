@@ -2,7 +2,7 @@
 name = "{{ project_name }}"
 version = "2026.1.0"
 description = "{{ description }}"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 dependencies = [
     "fastapi>=0.136.3",
 {%- if 'agent' not in omitted_slices %}
@@ -127,7 +127,7 @@ library = { index = "{{ private_index_name }}" }
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+target-version = "py315"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
@@ -142,7 +142,7 @@ known-local-folder = ["tests"]
 "__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.15"
 strict = true
 # mypy-baseline matches on the rendered error line, so these must stay off:
 # `pretty` reflows it and `color_output` injects escape codes.

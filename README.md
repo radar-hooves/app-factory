@@ -22,7 +22,7 @@ Answers are prompted from `copier.yaml`; ports come from the operator's port reg
 
 ## Tech Stack
 
-Python 3.14 · FastAPI · SQLAlchemy 2.0 (sync) · Alembic · PostgreSQL · FastMCP · uv — SvelteKit · Tailwind v4 · `@poodle64/ui` · Vite · Vitest · Playwright — Docker · gunicorn · Authentik forward-auth.
+Python 3.15 · FastAPI · SQLAlchemy 2.0 (sync) · Alembic · PostgreSQL · FastMCP · uv — SvelteKit · Tailwind v4 · `@poodle64/ui` · Vite · Vitest · Playwright — Docker · gunicorn · Authentik forward-auth.
 
 ## Documentation
 

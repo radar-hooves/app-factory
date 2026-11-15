@@ -8,7 +8,7 @@
 # trusted-proxy declaration names the right one. Usage: proof.sh <rendered backend dir> <port>
 set -eu
 here=$(cd "$(dirname "$0")" && pwd); conf=$(cd "$1" && pwd); port=$2
-p="listener-proof-$$"; img=python:3.14-slim
+p="listener-proof-$$"; img=python:3.15-slim
 proxies=$(grep -o '"[A-Z_]*_TRUSTED_PROXY_NETWORKS"' "$conf/gunicorn.conf.py" | tr -d '"' | head -1)
 [ -n "$proxies" ] || { echo "FAIL: gunicorn.conf.py names no trusted-proxy setting"; exit 1; }
 cleanup() {

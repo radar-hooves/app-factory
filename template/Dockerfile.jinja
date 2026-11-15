@@ -41,7 +41,7 @@ RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 
 {% endif -%}
 # Stage 2: Backend dependency build (uv-native)
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.15-trixie-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
@@ -93,7 +93,7 @@ ADD https://deb.debian.org/debian/dists/trixie-updates/InRelease deb.debian.org_
 ADD https://deb.debian.org/debian-security/dists/trixie-security/InRelease deb.debian.org_debian-security_dists_trixie-security_InRelease
 
 # Stage 5: Runtime
-FROM python:3.14-slim-trixie
+FROM python:3.15-slim-trixie
 
 WORKDIR /app
 
@@ -135,13 +135,13 @@ RUN --mount=type=bind,from=debian-archive,target=/run/debian-archive \
 # Neither is in uv.lock, so no app can fix them by bumping a dependency.
 # `rm`, not `pip uninstall`, because pip cannot reliably remove itself.
 RUN rm -rf \
-      /usr/local/lib/python3.14/site-packages/pip \
-      /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
-      /usr/local/lib/python3.14/site-packages/setuptools \
-      /usr/local/lib/python3.14/site-packages/setuptools-*.dist-info \
-      /usr/local/lib/python3.14/site-packages/pkg_resources \
-      /usr/local/lib/python3.14/site-packages/_distutils_hack \
-      /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
+      /usr/local/lib/python3.15/site-packages/pip \
+      /usr/local/lib/python3.15/site-packages/pip-*.dist-info \
+      /usr/local/lib/python3.15/site-packages/setuptools \
+      /usr/local/lib/python3.15/site-packages/setuptools-*.dist-info \
+      /usr/local/lib/python3.15/site-packages/pkg_resources \
+      /usr/local/lib/python3.15/site-packages/_distutils_hack \
+      /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.15
 
 # Non-root user (uid 1000; household container convention). Generic name —
 # every COPY below sets ownership by numeric --chown, so nothing depends on
@@ -173,7 +173,7 @@ RUN curl -fsSL -o /tmp/install-claude.sh https://claude.ai/install.sh \
 # The dependencies, then this app's own package into the same venv: two layers,
 # so a code change leaves the large one cached.
 COPY --from=builder --chown=1000:1000 /app/backend/.venv /app/backend/.venv
-COPY --from=package --chown=1000:1000 /app/package /app/backend/.venv/lib/python3.14/site-packages
+COPY --from=package --chown=1000:1000 /app/package /app/backend/.venv/lib/python3.15/site-packages
 COPY --from=package --chown=1000:1000 /app/package-bin /app/backend/.venv/bin
 ENV PATH="/app/backend/.venv/bin:$PATH"
 
