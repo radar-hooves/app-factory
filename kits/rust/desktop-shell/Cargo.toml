@@ -18,7 +18,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
-keyring = { version = "3", features = ["windows-native", "sync-secret-service"] }
+keyring = { version = "4", features = ["windows-native", "sync-secret-service"] }
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }
