@@ -1,10 +1,14 @@
 """The production write guard (`db/guard.py`): a production-stamped database takes a write only from a clean checkout of origin's default branch."""
 
+import os
 import subprocess
+import sys
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.db import guard
@@ -160,3 +164,59 @@ def test_a_source_run_container_without_git_passes_but_a_host_without_git_is_ref
     monkeypatch.setenv("PATH", "")
     with pytest.raises(ProductionWriteForbiddenError, match="Cannot verify"):
         assert_checkout_on_default_branch(backend_dir=checkout / "backend")
+
+
+def test_a_migration_may_use_autocommit_block_on_a_replay(server_url: Callable[[str], str], tmp_path: Path) -> None:
+    """The guard's own query must not leave a transaction open: Alembic refuses `autocommit_block` inside one.
+
+    A replay from an empty database whose name has no "test" is the only run the guard
+    does not return early on, so the throwaway database is named without it.
+    """
+    from tests.conftest import TEST_DATABASE_NAME, TEST_OWNER
+
+    backend = Path(__file__).resolve().parents[1]
+    database = f"replay_{uuid.uuid4().hex[:10]}"
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    (versions / "0001_autocommit.py").write_text(
+        "from alembic import op\n"
+        'revision = "0001autocommit"\n'
+        "down_revision = None\n"
+        "branch_labels = None\n"
+        "depends_on = None\n"
+        "def upgrade():\n"
+        "    with op.get_context().autocommit_block():\n"
+        '        op.execute("SELECT 1")\n'
+        "def downgrade():\n"
+        "    pass\n"
+    )
+    ini = (
+        (backend / "alembic.ini")
+        .read_text()
+        .replace(
+            "version_locations = %(here)s/alembic/versions",
+            f"script_location = {backend / 'alembic'}\nversion_locations = {backend / 'alembic' / 'versions'}:{versions}",
+        )
+        .replace("script_location = alembic\n", "")
+        .replace("path_separator = os", "path_separator = :")
+    )
+    config = tmp_path / "alembic.ini"
+    config.write_text(ini)
+
+    admin = create_engine(server_url(TEST_DATABASE_NAME), isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{database}" OWNER "{TEST_OWNER}"'))
+        result = subprocess.run(  # fixed argv, no user input reaches it
+            [sys.executable, "-m", "alembic", "-c", str(config), "upgrade", "heads"],
+            cwd=backend,
+            env={**os.environ, "POSTGRES_DB": database},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        with admin.connect() as connection:
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)'))
+        admin.dispose()
+    assert result.returncode == 0, result.stderr
