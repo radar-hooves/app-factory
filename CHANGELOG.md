@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.51] - 2026-11-15
+
+Needs: the estate moves to Python 3.15 in one change, the factory first (radar-hooves/master-project#455; core-memory's Renovate PR moved one Dockerfile stage and the image failed its smoke with `No module named 'uvicorn'`).
+
+### Changed
+
+- **Python 3.15 everywhere the template names a minor:** both Dockerfile stages' base images (`uv:python3.15-trixie-slim`, `python:3.15-slim-trixie`), the base interpreter's `pip`/`setuptools` strip and the `.venv/lib/python3.15/site-packages` copy target, `backend/.python-version`, `requires-python`, ruff `target-version`, mypy `python_version`, the pre-commit `python:` default, the README prerequisite, and the same in the factory's own kits, `ruff.toml`, pre-commit and kit publish workflow. The `renovate.json` hold on Python 3.15 is removed.
+- `uv.lock` (kits workspace) re-resolved for `>=3.15`, with `pydantic-core` 2.50.4 (the first locked release with a cp315 wheel).
+
+### Consumer must change
+
+- `copier update`, then regenerate `.template-parity.json`, then `uv lock` (an app's lock must carry cp315 wheels: `pydantic-core` >= 2.50, `psycopg-binary` 3.3.9). An app's own Dockerfile stages move together or not at all: the venv is built by the builder's interpreter and copied into the runtime stage, so a runtime on another minor fails with `No module named 'uvicorn'` (reproduced here).
+- `pyyaml` 6.0.3 publishes no cp315 wheel; it builds from its sdist (about 45 s, no libyaml, which the allow-list loader does not use). The host's uv must hold a stable 3.15 for that build: uv's managed 3.15.0b2 segfaults it.
+
 ## [2026.11.50] - 2026-11-15
 
 Needs: code and comments state what is required, never who ruled it (godswood, radar-hooves/godswood#945).
