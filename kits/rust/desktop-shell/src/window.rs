@@ -24,18 +24,29 @@ use tauri::{
 use tauri_plugin_window_state::StateFlags;
 
 /// Registers single-instance (a second launch shows and focuses `label`'s
-/// window, then exits) and window-state (everything but visibility). Register
-/// it first: single-instance must run before anything else starts.
+/// window, then exits) and window-state (everything but visibility, for every
+/// window). Register it first: single-instance must run before anything else
+/// starts.
 pub fn plugins<R: Runtime>(builder: Builder<R>, label: &'static str) -> Builder<R> {
+    plugins_with(builder, move |app| show(app, label), |_| true)
+}
+
+/// [`plugins`], with the window a second launch raises chosen by `raise`, and
+/// window-state saving and restoring only the windows `tracked` accepts by
+/// label (an app with auxiliary windows tracks its managed one alone).
+pub fn plugins_with<R: Runtime>(
+    builder: Builder<R>,
+    raise: impl Fn(&AppHandle<R>) + Send + Sync + 'static,
+    tracked: impl Fn(&str) -> bool + Send + Sync + 'static,
+) -> Builder<R> {
     builder
         .plugin(tauri_plugin_single_instance::init(
-            move |app, _argv, _cwd| {
-                show(app, label);
-            },
+            move |app, _argv, _cwd| raise(app),
         ))
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::all().difference(StateFlags::VISIBLE))
+                .with_filter(tracked)
                 .build(),
         )
 }
@@ -50,15 +61,29 @@ pub fn setup<R: Runtime>(
     start_minimised: bool,
     min: (u32, u32),
 ) {
+    setup_with(app, label, start_minimised, min, |_| true);
+}
+
+/// [`setup`], with each close request put to `hide_on_close`: `true` hides the
+/// window, `false` lets the close proceed.
+pub fn setup_with<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &'static str,
+    start_minimised: bool,
+    min: (u32, u32),
+    hide_on_close: impl Fn(&WebviewWindow<R>) -> bool + Send + 'static,
+) {
     let Some(window) = app.get_webview_window(label) else {
         return;
     };
     fit_to_displays(&window, min);
-    let hidden = window.clone();
+    let closing = window.clone();
     window.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
+        if let WindowEvent::CloseRequested { api, .. } = event
+            && hide_on_close(&closing)
+        {
             api.prevent_close();
-            let _ = hidden.hide();
+            let _ = closing.hide();
         }
     });
     if start_minimised {
@@ -79,16 +104,25 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, label: &str) {
 /// From `App::run`'s callback: a Dock click with no visible window brings the
 /// window back (AppKit does not, for a window that was hidden).
 pub fn on_run_event<R: Runtime>(app: &AppHandle<R>, label: &str, event: &RunEvent) {
+    on_run_event_with(app, event, |app| show(app, label));
+}
+
+/// [`on_run_event`], raising whatever `raise` chooses.
+pub fn on_run_event_with<R: Runtime>(
+    app: &AppHandle<R>,
+    event: &RunEvent,
+    raise: impl Fn(&AppHandle<R>),
+) {
     #[cfg(target_os = "macos")]
     if let RunEvent::Reopen {
         has_visible_windows: false,
         ..
     } = event
     {
-        show(app, label);
+        raise(app);
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, label, event);
+    let _ = (app, event, raise);
 }
 
 fn fit_to_displays<R: Runtime>(window: &WebviewWindow<R>, min: (u32, u32)) {
@@ -297,5 +331,27 @@ mod tests {
         setup(app.handle(), "main", false, MIN);
         window.close().unwrap();
         assert!(app.get_webview_window("main").is_some());
+    }
+
+    #[test]
+    fn setup_with_registers_a_close_decision_and_keeps_the_window() {
+        // The mock runtime never delivers CloseRequested, so only registration
+        // is checked here; the decision itself is one `if` on the callback.
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        setup_with(app.handle(), "main", false, MIN, |_| false);
+        assert!(app.get_webview_window("main").is_some());
+    }
+
+    #[test]
+    fn plugins_with_registers_on_a_builder() {
+        let builder = plugins_with(tauri::test::mock_builder(), |_| {}, |l| l == "main");
+        builder
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
     }
 }

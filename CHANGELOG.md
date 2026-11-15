@@ -4,6 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+<<<<<<< HEAD
 ## [2026.11.55] - 2026-11-16
 
 Needs: the weekly major upgrades (radar-hooves/app-factory#108), the template's frontend devDependency majors Renovate cannot see (wordhoard#3), one Node baseline, and a stale Python hold. Consumer: master-project's weekly major-upgrade run, via wordhoard.
@@ -24,6 +25,24 @@ Needs: the weekly major upgrades (radar-hooves/app-factory#108), the template's 
 - A stamped web app takes the new `package.json` devDependencies by `copier update`, then `pnpm install`, and regenerates its `.template-parity.json`. Its CI and dev Node should be 26 (jsdom 31 and stylelint 18 need `^22.22.2 || ^24.15.0 || >=26`). `stylelint` 18 and `jsdom` 31 can change lint results and computed styles: run the app's own suite once.
 - An app that copied the Python 3.15 hold into its own `renovate.json` deletes it.
 
+## [2026.11.56] - 2026-11-16
+
+Needs: window hooks and one store for several services (radar-hooves/app-factory#140; consumers: bragi, thoth, via thoth).
+
+### Added
+
+- `desktop_shell::window` 0.4.0: `setup_with` (each close request put to a `hide_on_close` callback; `false` lets the close proceed), `plugins_with` (the window a second launch raises, and a `tracked` filter scoping `tauri-plugin-window-state` to the labels it accepts) and `on_run_event_with` (the window a Dock reopen raises). `plugins`, `setup` and `on_run_event` are these with today's behaviour: hide on close, raise the managed window, track every window.
+- `SecretStore::with_service(name)`: another service in the same file under the same lock, reading entries earlier releases wrote under that name.
+
+### Fixed
+
+- The 2026.11.54 line that `for_app` reads Bragi's entries as they are was wrong: `for_app` keys them under the bundle identifier, Bragi's are under `bragi-jellyfin`, `bragi-llm`, `bragi-subsonic` and `bragi-music-service`.
+
+### Consumer must change
+
+- bragi: build one `SecretStore::new("bragi-jellyfin", path)` and take the rest with `with_service` (one lock, no lost write across services); adopt `window::setup_with` (hide only when its close-to-tray setting is on, or off macOS never), `plugins_with` and `on_run_event_with` raising its active window.
+- thoth: take the pin. Its `plugins` call tracks every window, so with four windows (`main`, `recording-indicator`, `history`, `prompt-guide`) it moves to `plugins_with(builder, |app| window::show(app, "main"), |label| label == "main")` to save and restore the managed window alone.
+
 ## [2026.11.54] - 2026-11-15
 
 Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/app-factory#139, #135, #136, #137; consumers: thoth, bragi, via thoth).
@@ -43,7 +62,7 @@ Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/
 ### Consumer must change
 
 - #139: an app takes the new pin; nothing else.
-- #135: Thoth replaces `write_private_file` with `desktop_shell::secrets::write_private`, its three callers keeping their own error text. Bragi replaces `credential_store.rs` with `SecretStore::for_app`; its keyring entries and its macOS `credentials.json` (service, key, value) are read as they are, so nothing migrates. Bragi's `keyring` dependency moves to the kit.
+- #135: Thoth replaces `write_private_file` with `desktop_shell::secrets::write_private`, its three callers keeping their own error text. Bragi replaces `credential_store.rs` with `SecretStore`; its keyring entries and its macOS `credentials.json` (service, key, value) are read as they are only under their own service names, which 2026.11.56's `with_service` serves (`for_app` keys everything under the bundle identifier and does not read Bragi's `bragi-*` entries). Bragi's `keyring` dependency moves to the kit.
 - #136: both apps delete their own single-instance, hide-on-close, reopen and start-minimised code and call `desktop_shell::window`. Thoth gains the window-state plugin and `window-state:default` in its capability; Bragi drops its `window.rs` rectangle maths and its window-state registration. An app that has a second window (Bragi's MiniPlayer) keeps its own `show` for it.
 - #137: both apps wrap `generate_handler!` in `tauri_plugin_telemetry::invoke_handler` and delete the `traced*` wrapper from every command that wants no body time (146 sites in Thoth, 123 in Bragi); a Tempo query or dashboard on `ipc_command` children, `outcome` or duration now reads `command_body` for the commands that keep a wrapper.
 

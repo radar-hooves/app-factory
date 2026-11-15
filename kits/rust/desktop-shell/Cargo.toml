@@ -1,6 +1,6 @@
 [package]
 name = "desktop-shell"
-version = "0.3.0"
+version = "0.4.0"
 description = "The shell every household Tauri app has around its own domain code: centred macOS traffic lights and a tray that cannot take the app down, and secret storage, and the main window managed once"
 authors = ["poodle64"]
 license = "MIT"

@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -63,10 +63,16 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
     builder.create(dir)
 }
 
-/// A keyed secret store for one service (the app's identifier).
+/// A keyed secret store for one service (the app's identifier by default).
+/// [`with_service`](Self::with_service) hands out the app's other services over
+/// the same file under the same lock.
 pub struct SecretStore {
-    path: PathBuf,
+    shared: Arc<Shared>,
     service: String,
+}
+
+struct Shared {
+    path: PathBuf,
     lock: Mutex<()>,
 }
 
@@ -78,9 +84,21 @@ impl SecretStore {
     /// on the first `set`.
     pub fn new(service: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {
-            path: path.into(),
+            shared: Arc::new(Shared {
+                path: path.into(),
+                lock: Mutex::new(()),
+            }),
             service: service.into(),
-            lock: Mutex::new(()),
+        }
+    }
+
+    /// A store for another service in the same file, sharing this one's lock,
+    /// so concurrent writes to different services cannot lose one. Entries an
+    /// earlier release wrote under that service name are read as they are.
+    pub fn with_service(&self, service: impl Into<String>) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+            service: service.into(),
         }
     }
 
@@ -95,7 +113,7 @@ impl SecretStore {
     }
 
     pub fn get(&self, key: &str) -> io::Result<Option<String>> {
-        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _held = self.shared.lock.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
         return keyring_get(&self.service, key);
         #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
@@ -107,7 +125,7 @@ impl SecretStore {
     }
 
     pub fn set(&self, key: &str, value: &str) -> io::Result<()> {
-        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _held = self.shared.lock.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
         return keyring_set(&self.service, key, value);
         #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
@@ -123,7 +141,7 @@ impl SecretStore {
 
     /// Idempotent: deleting a key that is not there succeeds.
     pub fn delete(&self, key: &str) -> io::Result<()> {
-        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _held = self.shared.lock.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
         return keyring_delete(&self.service, key);
         #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
@@ -149,14 +167,14 @@ impl SecretStore {
         allow(dead_code)
     )]
     fn read(&self) -> io::Result<Entries> {
-        match std::fs::read(&self.path) {
+        match std::fs::read(&self.shared.path) {
             Ok(bytes) if bytes.iter().all(u8::is_ascii_whitespace) => Ok(HashMap::new()),
             Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!(
                         "secret store {} is not a JSON object of objects of strings",
-                        self.path.display()
+                        self.shared.path.display()
                     ),
                 )
             }),
@@ -171,7 +189,7 @@ impl SecretStore {
     )]
     fn write(&self, entries: &Entries) -> io::Result<()> {
         let json = serde_json::to_vec_pretty(entries).map_err(io::Error::other)?;
-        write_private(&self.path, &json)
+        write_private(&self.shared.path, &json)
     }
 }
 
@@ -230,6 +248,36 @@ mod tests {
         store.delete("token").unwrap();
         assert_eq!(store.get("token").unwrap(), None);
         assert_eq!(store.get("other").unwrap().as_deref(), Some("x"));
+    }
+
+    #[cfg(any(debug_assertions, not(any(target_os = "linux", target_os = "windows"))))]
+    #[test]
+    fn services_share_one_file_and_one_lock_and_read_earlier_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        std::fs::write(&path, r#"{"bragi-llm":{"api_key":"old"}}"#).unwrap();
+        let base = SecretStore::new("bragi-jellyfin", &path);
+        let llm = base.with_service("bragi-llm");
+        assert_eq!(llm.get("api_key").unwrap().as_deref(), Some("old"));
+        let sub = base.with_service("bragi-subsonic");
+        let stores = [base, llm, sub];
+        std::thread::scope(|s| {
+            for (i, store) in stores.iter().enumerate() {
+                s.spawn(move || {
+                    for n in 0..25 {
+                        store.set(&format!("k{i}-{n}"), "v").unwrap();
+                    }
+                });
+            }
+        });
+        for (i, store) in stores.iter().enumerate() {
+            for n in 0..25 {
+                assert!(
+                    store.get(&format!("k{i}-{n}")).unwrap().is_some(),
+                    "{i} {n}"
+                );
+            }
+        }
     }
 
     #[cfg(any(debug_assertions, not(any(target_os = "linux", target_os = "windows"))))]
