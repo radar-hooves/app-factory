@@ -1,7 +1,7 @@
 [package]
 name = "desktop-shell"
 version = "0.3.0"
-description = "The shell every household Tauri app has around its own domain code: centred macOS traffic lights and a tray that cannot take the app down, and owner-only secret files, and the main window managed once"
+description = "The shell every household Tauri app has around its own domain code: centred macOS traffic lights and a tray that cannot take the app down, and secret storage, and the main window managed once"
 authors = ["poodle64"]
 license = "MIT"
 edition = "2024"
@@ -16,6 +16,9 @@ serde_json = "1"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+keyring = { version = "3", features = ["windows-native", "sync-secret-service"] }
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }
