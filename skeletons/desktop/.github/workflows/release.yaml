@@ -1,7 +1,16 @@
 # Tag-triggered, for the installers this app ships. The gate is the first job:
 # the `change` run on the tagged commit must have passed. The app adds its
-# build and publish jobs below, each `needs: gate`; a dispatch builds from any
-# ref and skips the gate. A tag is cut for a batch, by whoever releases it.
+# installers are built and published below: signed, with the updater's
+# `latest.json`, so an installed app offers the next version to itself. A
+# dispatch builds from any ref and skips the gate. A tag is cut for a batch, by
+# whoever releases it.
+#
+# The app holds its own minisign keypair: the public key in tauri.conf.json
+# (`plugins.updater.pubkey`), the private key and its password as the repository
+# secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# (app-factory docs/development/desktop-updater.md). macOS bundles are signed
+# by the runner's APPLE_SIGNING_IDENTITY (scripts/cargo-codesign.sh), so an
+# update keeps the app's Microphone and Accessibility grants.
 name: Release
 
 on:
@@ -36,3 +45,66 @@ jobs:
             sleep 30
           done
           [ "$c" = success ] || { echo "change run on ${{ github.sha }} is '${c:-missing}', not success"; exit 1; }
+
+  build:
+    needs: gate
+    if: always() && contains(fromJSON('["success","skipped"]'), needs.gate.result)
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: macos # Apple Silicon, on the runner holding the signing certificate
+            args: '--target aarch64-apple-darwin'
+          - host: atlas # Linux x86_64: no AppImage (linuxdeploy cannot bundle nix-store libraries), so a Linux install is replaced by hand, never self-updated
+            args: '--bundles deb rpm'
+    runs-on: [self-hosted, '${{ matrix.host }}']
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require the updater's key and secrets
+        env:
+          PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          jq -e '.plugins.updater.pubkey | length > 0' src-tauri/tauri.conf.json >/dev/null \
+            || { echo "::error::plugins.updater.pubkey in src-tauri/tauri.conf.json is empty: mint the app's keypair first"; exit 1; }
+          [ -n "$PRIVATE_KEY" ] && [ -n "$PASSWORD" ] \
+            || { echo "::error::TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD are not both set as repository secrets"; exit 1; }
+
+      - name: Install frontend dependencies
+        run: nix develop --command pnpm install --frozen-lockfile
+
+      - name: Build, sign and upload to the draft release
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tauriScript: nix develop --command pnpm tauri
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: '${{ github.event.repository.name }} ${{ github.ref_name }}'
+          releaseBody: 'See the assets below to download this version and install.'
+          releaseDraft: true
+          # Only a release build writes the updater's `.sig` and `latest.json`: a local `tauri build` has no private key.
+          args: ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Verify signed macOS bundles
+        if: matrix.host == 'macos'
+        run: nix develop --command bash scripts/cargo-codesign.sh verify-bundles src-tauri/target/aarch64-apple-darwin/release/bundle/macos
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: [self-hosted, household]
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft once every platform built
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

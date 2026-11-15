@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.53] - 2026-11-15
+
+Needs: a desktop app updates itself from its own signed releases, built once for every Tauri app (radar-hooves/app-factory#133; consumer: bragi, from thoth's holistic review, via thoth).
+
+### Added
+
+- **Desktop self-update** (`docs/development/desktop-updater.md`): `@poodle64/ui` 2026.11.12's `./updater` (check, download, install, relaunch, six-hourly re-check); `tauri-plugin-telemetry` 0.2.0's `report_update_check`, in `telemetry:default`; and in the desktop skeleton the updater and process plugins, `updater:default` and `process:allow-restart`, `plugins.updater` (endpoint from the project name, an empty pubkey the app fills with its own), the layout starting the checks, and a `release.yaml` that builds, signs and publishes with `latest.json` through `tauri-action`, refusing an empty pubkey or missing secrets.
+
+### Consumer must change
+
+- Every file above except `release.yaml`'s stamped jobs is app-owned and skipped by `copier update`: an existing desktop app takes the lines by hand, mints its own keypair and sets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (`docs/development/desktop-updater.md` §What an existing app changes). A Nix-built app refreshes its `outputHashes` for `tauri-plugin-telemetry-0.2.0`.
+- A fresh desktop stamp's release fails until the app sets `plugins.updater.pubkey`; its dev and local builds are unaffected.
+
 ## [2026.11.52] - 2026-11-15
 
 Needs: Renovate's weekly dependency PRs (radar-hooves/app-factory#107, #64) failed `Build, test and type-check` and `Drive @poodle64/ui in a real browser`; the factory takes what they propose (radar-hooves/master-project, via foreman).

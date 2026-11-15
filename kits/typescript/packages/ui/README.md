@@ -1595,6 +1595,10 @@ one is bound to Xero tax codes besides. Relative time ("2 hours ago") is out
 too — it rides on `date-fns` in the one app that has it, and a display formatter
 is not worth making that a dependency of every consumer.
 
+## Desktop self-update
+
+`@poodle64/ui/updater` is the Tauri-only self-update: `onMount(startUpdateChecks)` in the root layout checks the app's signed GitHub releases at launch and every six hours, and offers the update in a toast. `getUpdaterState()` and `checkForUpdate()` drive a Settings-pane control. It needs the optional peers `@tauri-apps/api`, `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process`, and the host's `tauri-plugin-telemetry`. Setup, keys and adoption: `docs/development/desktop-updater.md` in app-factory.
+
 ## Browser telemetry and the feedback widget
 
 Two exports are app machinery rather than page chrome: `@poodle64/ui/telemetry`

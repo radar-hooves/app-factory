@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-telemetry"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Tauri 2 app switches the household telemetry crate's whole contract on with one .plugin(...) call: init off the async runtime, the Guard dropped on RunEvent::Exit, allow-listed command spans with no argument capture, Settings-pane commands, and the process sampler"
 authors = ["poodle64"]
 license = "MIT"

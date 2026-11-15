@@ -19,7 +19,7 @@ use serde::{Serialize, Serializer};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::TelemetryStore;
-use crate::span::traced;
+use crate::span::{COMMAND_SPAN_TARGET, traced, traced_sync_value};
 
 /// A command's own error, distinct from the crate's `ProbeError`: nothing
 /// here is a transport failure, so plain text is the whole shape
@@ -195,6 +195,25 @@ pub(crate) async fn telemetry_probe(
         })
     })
     .await
+}
+
+/// Record the outcome of the frontend's update check on the host process, the
+/// one thing allowed to emit telemetry: the webview ships nothing of its own.
+/// A failure carries no text from the webview, only that it failed.
+#[tauri::command]
+pub(crate) fn report_update_check(available: bool, version: Option<String>, failed: bool) {
+    traced_sync_value("report_update_check", || {
+        if failed {
+            telemetry::report_error("update_check_failed");
+        } else {
+            tracing::info!(
+                target: COMMAND_SPAN_TARGET,
+                available,
+                version = %version.as_deref().unwrap_or(""),
+                "update_check_complete"
+            );
+        }
+    })
 }
 
 #[cfg(test)]

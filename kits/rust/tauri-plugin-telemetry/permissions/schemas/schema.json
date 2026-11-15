@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the report_update_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-report-update-check",
+          "markdownDescription": "Enables the report_update_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the report_update_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-report-update-check",
+          "markdownDescription": "Denies the report_update_check command without any pre-configured scope."
+        },
+        {
           "description": "Enables the telemetry_get command without any pre-configured scope.",
           "type": "string",
           "const": "allow-telemetry-get",
@@ -331,10 +343,10 @@
           "markdownDescription": "Denies the telemetry_set command without any pre-configured scope."
         },
         {
-          "description": "Read the live and saved telemetry exporter, change it, and test a\ncollector address before saving it. No listening history, dictation or\ncredential ever reaches these commands' arguments or return values —\nonly an endpoint URL and a header-helper command string.\n\n#### This default permission set includes:\n\n- `allow-telemetry-get`\n- `allow-telemetry-set`\n- `allow-telemetry-probe`",
+          "description": "Read the live and saved telemetry exporter, change it, and test a\ncollector address before saving it, and record the outcome of an update check. No listening history, dictation or\ncredential ever reaches these commands' arguments or return values —\nonly an endpoint URL and a header-helper command string.\n\n#### This default permission set includes:\n\n- `allow-telemetry-get`\n- `allow-telemetry-set`\n- `allow-telemetry-probe`\n- `allow-report-update-check`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Read the live and saved telemetry exporter, change it, and test a\ncollector address before saving it. No listening history, dictation or\ncredential ever reaches these commands' arguments or return values —\nonly an endpoint URL and a header-helper command string.\n\n#### This default permission set includes:\n\n- `allow-telemetry-get`\n- `allow-telemetry-set`\n- `allow-telemetry-probe`"
+          "markdownDescription": "Read the live and saved telemetry exporter, change it, and test a\ncollector address before saving it, and record the outcome of an update check. No listening history, dictation or\ncredential ever reaches these commands' arguments or return values —\nonly an endpoint URL and a header-helper command string.\n\n#### This default permission set includes:\n\n- `allow-telemetry-get`\n- `allow-telemetry-set`\n- `allow-telemetry-probe`\n- `allow-report-update-check`"
         }
       ]
     }

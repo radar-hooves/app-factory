@@ -29,7 +29,7 @@
 //! spawned once, in the same setup hook. Command spans, with no argument
 //! capture: see `span` — deliberately not Tauri's own `tracing` cargo
 //! feature, which captures full command arguments and responses by default.
-//! Settings-pane commands (`get`/`set`/`probe`): see `commands`.
+//! Settings-pane commands (`get`/`set`/`probe`) and `report_update_check`: see `commands`.
 //!
 //! Persistence stays each app's own — implement [`TelemetryStore`] over
 //! whatever the app already has (SQLite, a config file) and hand an instance
@@ -92,6 +92,7 @@ pub fn init<R: Runtime>(
             commands::telemetry_get,
             commands::telemetry_set,
             commands::telemetry_probe,
+            commands::report_update_check,
         ])
         .setup(move |app, _api| {
             let guard = telemetry::init(service_name, service_version, combined_allow);

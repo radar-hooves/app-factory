@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.12] - 2026-11-15
+
+Need: a desktop app installs new versions of itself from its signed releases, built once for every Tauri app (radar-hooves/app-factory#133). Consumer: bragi, from thoth's holistic review.
+
+### Added
+
+- **`@poodle64/ui/updater`**: `startUpdateChecks`, `checkForUpdate`, `downloadAndInstall`, `getUpdaterState` over `tauri-plugin-updater`, lifted from thoth's store. Optional peers `@tauri-apps/api`, `@tauri-apps/plugin-updater`, `@tauri-apps/plugin-process`. The download percentage now reads the total from the `Started` event; thoth's read a field `Progress` never carries.
+
 ## [2026.11.11] - 2026-11-14
 
 Need: wordhoard's Words page offers three groupings ("Group by letter", "Group by replacement", "None") and the Columns menu printed them over each other and clipped the selected one; godswood's ledger adopts the same menu. Consumer: wordhoard, through master-project's orchestrator (the operator, 14/11/2026).

@@ -1,7 +1,7 @@
 ## Default Permission
 
 Read the live and saved telemetry exporter, change it, and test a
-collector address before saving it. No listening history, dictation or
+collector address before saving it, and record the outcome of an update check. No listening history, dictation or
 credential ever reaches these commands' arguments or return values —
 only an endpoint URL and a header-helper command string.
 
@@ -10,6 +10,7 @@ only an endpoint URL and a header-helper command string.
 - `allow-telemetry-get`
 - `allow-telemetry-set`
 - `allow-telemetry-probe`
+- `allow-report-update-check`
 
 ## Permission Table
 
@@ -19,6 +20,32 @@ only an endpoint URL and a header-helper command string.
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`telemetry:allow-report-update-check`
+
+</td>
+<td>
+
+Enables the report_update_check command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`telemetry:deny-report-update-check`
+
+</td>
+<td>
+
+Denies the report_update_check command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

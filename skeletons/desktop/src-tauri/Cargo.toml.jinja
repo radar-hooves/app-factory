@@ -21,6 +21,10 @@ tracing = "0.1"
 desktop-shell = { git = "https://github.com/radar-hooves/app-factory", rev = "{{ _copier_conf.vcs_ref_hash }}" }
 tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", rev = "{{ _copier_conf.vcs_ref_hash }}" }
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2.14"
+
 [profile.release]
 codegen-units = 1
 lto = true
