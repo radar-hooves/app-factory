@@ -4,6 +4,26 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.55] - 2026-11-16
+
+Needs: the weekly major upgrades (radar-hooves/app-factory#108), the template's frontend devDependency majors Renovate cannot see (wordhoard#3), one Node baseline, and a stale Python hold. Consumer: master-project's weekly major-upgrade run, via wordhoard.
+
+### Changed
+
+- **Frontend devDependency majors** (template): `globals` ^17, `jsdom` ^31, `stylelint` ^18, `stylelint-config-standard` ^41, `@types/node` ^26. The kits take `jsdom` ^31 and `@types/node` ^26.
+- **One Node baseline, 26** (LTS since October 2026): the Dockerfile's frontend stage was already `node:26-slim`; the factory's CI now sets up Node 26 too, and the factory's own `renovate.json` no longer holds Node, `@types/node` or `actions/node-versions` below it. The stamped `renovate.json` carries no Node hold, so the two now say the same thing.
+- **The Python 3.15 hold is retired** from the stamped `renovate.json`: psycopg-binary 3.3.9 ships cp315 wheels and the template has been on Python 3.15 since 2026.11.51.
+
+### Held
+
+- **keyring 4** (`desktop-shell`): not a bump but a new architecture (`keyring` is now a sample app; apps use `keyring-core` plus a per-platform store crate, and the `windows-native` and `sync-secret-service` features are gone). That entries 2026.11.54's `SecretStore` wrote with keyring 3 read back unchanged under the new Secret Service and Credential Manager stores is not shown, and a failure would sign every user out, so keyring stays on 3.
+- **tauri-action v1**: breaking changes to the release path (`latest.json` download URLs now use the GitHub API URL, `.app.tar.gz` names carry the version, the action fails if `draft: true` meets a non-draft release). The skeleton's release cannot be run from here, so it stays on v0.
+
+### Consumer must change
+
+- A stamped web app takes the new `package.json` devDependencies by `copier update`, then `pnpm install`, and regenerates its `.template-parity.json`. Its CI and dev Node should be 26 (jsdom 31 and stylelint 18 need `^22.22.2 || ^24.15.0 || >=26`). `stylelint` 18 and `jsdom` 31 can change lint results and computed styles: run the app's own suite once.
+- An app that copied the Python 3.15 hold into its own `renovate.json` deletes it.
+
 ## [2026.11.54] - 2026-11-15
 
 Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/app-factory#139, #135, #136, #137; consumers: thoth, bragi, via thoth).

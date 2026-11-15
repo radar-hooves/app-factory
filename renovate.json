@@ -49,12 +49,6 @@
       "enabled": false
     },
     {
-      "description": "Node moves with the estate baseline (24, the LTS every app and the template run), not ahead of it: Node 26 and @types/node 26 are held until master-project moves the baseline, and the factory then moves first.",
-      "matchPackageNames": ["node", "@types/node", "actions/node-versions"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
       "description": "pnpm-workspace.yaml `overrides` are security floors for transitive packages, pinned to the major their dependents import; a major bump breaks them (devalue 6, fast-uri 4 and nanoid 6 break their dependents the same way; cookie's floor is scoped to `cookie@<0.7.0` so SvelteKit 3's own cookie 2 is left alone). The preset disables this for `overrides` dep types; a workspace file's are not read as those, so it is disabled by file.",
       "matchFileNames": ["**/pnpm-workspace.yaml"],
       "matchUpdateTypes": ["major"],

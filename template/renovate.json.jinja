@@ -13,14 +13,6 @@
       "enabled": false
     },
     {
-      "description": "psycopg-binary publishes no Python 3.15 wheel, so a stamped app's backend install fails on a 3.15 image (eight#149, 22/10/2026). Holds the Python runtime and the uv image below 3.15 for every app. Retires when psycopg-binary ships cp315 wheels.",
-      "matchPackageNames": [
-        "python",
-        "ghcr.io/astral-sh/uv"
-      ],
-      "allowedVersions": "<3.15"
-    },
-    {
       "description": "TypeScript 7 (the native compiler) is held below 7. Upstream is not ready: typescript-eslint's peer is <6.1, svelte-check's is ^5 || ^6, @sveltejs/kit 3 and @sveltejs/package 3 peer ^6, and `svelte-kit sync`, dev and build crash on 7.0.2 (sveltejs/kit#17537; svelte2tsx and svelte-check crash, sveltejs/language-tools#3063; typescript-eslint tracks it in typescript-eslint/typescript-eslint#10940). Retires when those three land TS 7 support.",
       "matchPackageNames": [
         "typescript"
