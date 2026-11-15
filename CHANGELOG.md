@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Needs: system/health's 503 body no longer names the database host, port or name (portcullis, radar-hooves/portcullis#280; app-factory#116); a migration may use `autocommit_block` on a replay from an empty production-named database (godswood, #111); the test conftest logs through a named logger (master-orchestrator, godswood lane, #126). #120 was already fixed by `3bed2967` in 2026.11.43.
+
+### Fixed
+
+- **`api/system/router.py`**: the 503 carries no `details`; the driver error is logged with `logger.exception`.
+- **`alembic/env.py`**: the guard's transaction is committed before `context.configure`, so `op.get_context().autocommit_block()` works.
+- **`tests/conftest.py`**: `logger = logging.getLogger(__name__)` in place of three root `logging.warning` calls.
+
+### Consumer must change
+
+- Every stamped app: nothing to set. Each takes the three files on its next `copier update` and regenerates `.template-parity.json`.
+
 ## [2026.11.47] - 2026-11-14
 
 Need: the android skeleton's activity lacked the portrait default every Rootstock app declares, so rootstock's tuner added it by hand. Consumer: rootstock (radar-hooves/rootstock), via foreman.
