@@ -49,6 +49,17 @@
       "enabled": false
     },
     {
+      "description": "keyring 4 is held at 3. It is a new architecture, not a bump: `keyring` becomes a sample app, apps use `keyring-core` with a per-platform store crate, and the `windows-native` and `sync-secret-service` features are gone (Renovate's lock update failed on exactly that, 16/11/2026). `SecretStore` shipped in 2026.11.54 on keyring 3 for thoth and bragi; that its Secret Service and Credential Manager entries read back unchanged under the new stores is not shown, and a miss signs every user out. Retires when a read-back of keyring-3 entries is proven on Linux and Windows.",
+      "matchPackageNames": ["keyring"],
+      "allowedVersions": "<4"
+    },
+    {
+      "description": "tauri-action v1 is held at v0: its breaking changes touch the desktop skeleton's release (latest.json download URLs become the GitHub API URL, .app.tar.gz names carry the version, `draft: true` against a non-draft release fails, `assetNamePattern` and `includeUpdaterJson` are renamed), and a release cannot be run from CI here to show the updater still works. Retires when a skeleton release is proven on v1.",
+      "matchPackageNames": ["tauri-apps/tauri-action"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "pnpm-workspace.yaml `overrides` are security floors for transitive packages, pinned to the major their dependents import; a major bump breaks them (devalue 6, fast-uri 4 and nanoid 6 break their dependents the same way; cookie's floor is scoped to `cookie@<0.7.0` so SvelteKit 3's own cookie 2 is left alone). The preset disables this for `overrides` dep types; a workspace file's are not read as those, so it is disabled by file.",
       "matchFileNames": ["**/pnpm-workspace.yaml"],
       "matchUpdateTypes": ["major"],
