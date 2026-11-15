@@ -22,7 +22,42 @@
           # A macOS release builds both architectures from Apple Silicon.
           targets = pkgs.lib.optionals isDarwin [ "aarch64-apple-darwin" "x86_64-apple-darwin" ];
         };
+        pkg = builtins.fromJSON (builtins.readFile ./package.json);
+        # The kit crates are git dependencies of one repository, so one hash
+        # covers them all; `scripts/update-kit-hash.sh` sets it from Cargo.lock.
+        kitHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        # The package builds once the app has committed both lockfiles.
+        buildable = builtins.pathExists ./pnpm-lock.yaml && builtins.pathExists ./src-tauri/Cargo.lock;
       in {
+        packages = pkgs.lib.optionalAttrs buildable {
+          default = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
+            pname = pkg.name;
+            inherit (pkg) version; # package.json is the one source: scripts/bump-version.sh
+            src = ./.;
+            cargoRoot = "src-tauri";
+            buildAndTestSubdir = "src-tauri";
+            cargoLock = {
+              lockFile = ./src-tauri/Cargo.lock;
+              # Every crate Cargo.lock takes from the factory, so a kit bump moves kitHash alone.
+              outputHashes = builtins.listToAttrs (map
+                (c: { name = "${c.name}-${c.version}"; value = kitHash; })
+                (builtins.filter
+                  (c: pkgs.lib.hasPrefix "git+https://github.com/radar-hooves/app-factory" (c.source or ""))
+                  (builtins.fromTOML (builtins.readFile ./src-tauri/Cargo.lock)).package));
+            };
+            pnpmDeps = pkgs.fetchPnpmDeps {
+              inherit (finalAttrs) pname version src;
+              fetcherVersion = 3;
+              hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            };
+            nativeBuildInputs = with pkgs; [ cargo-tauri.hook pnpmConfigHook pnpm nodejs_22 pkg-config ]
+              ++ lib.optionals isLinux [ wrapGAppsHook4 ];
+            buildInputs = with pkgs; [ openssl ]
+              ++ lib.optionals isLinux [ webkitgtk_4_1 libappindicator-gtk3 librsvg glib libsecret ];
+            doCheck = false; # CI runs the suite inside the devShell
+          });
+        };
+
         # CI and the release build run inside this shell (`nix develop`).
         devShells.default = pkgs.mkShell {
           packages = with pkgs;
