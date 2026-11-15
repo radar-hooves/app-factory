@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -120,7 +121,7 @@ class UpdateKitHashTests(unittest.TestCase):
         self.indent = line[: len(line) - len(line.lstrip())]
         self.assertGreater(len(self.indent), 2)
         self.flake = self.root / "flake.nix"
-        self.flake.write_text(f'{{\n  let\n{line}\n  in 1;\n}}\n')
+        self.flake.write_text(f"{{\n  let\n{line}\n  in 1;\n}}\n")
         (self.root / "src-tauri/Cargo.lock").write_text(
             f'[[package]]\nname = "x"\nsource = "git+https://github.com/radar-hooves/app-factory?rev={REV}#{REV}"\n'
         )
@@ -129,7 +130,9 @@ class UpdateKitHashTests(unittest.TestCase):
         nix.chmod(0o755)
 
     def run_script(self, *args):
-        env = {"PATH": f"{self.root / 'bin'}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+        # The stub nix first, then the caller's PATH: a NixOS runner keeps grep
+        # and sed in the store, not in /usr/bin or /bin.
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"}
         return subprocess.run(
             ["bash", str(self.root / "scripts/update-kit-hash.sh"), *args], capture_output=True, text=True, env=env
         )
@@ -141,5 +144,7 @@ class UpdateKitHashTests(unittest.TestCase):
 
     def test_rewrite_keeps_the_indentation(self):
         self.assertEqual(self.run_script().returncode, 0)
-        self.assertIn(f'{self.indent}kitHash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";', self.flake.read_text())
+        self.assertIn(
+            f'{self.indent}kitHash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";', self.flake.read_text()
+        )
         self.assertEqual(self.run_script("--check").returncode, 0)
