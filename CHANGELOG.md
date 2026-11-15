@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.54] - 2026-11-15
+
+Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/app-factory#139, #135, #136, #137; consumers: thoth, bragi, via thoth).
+
+### Added
+
+- **A tray fault is reported** (#139): `guard_tray` logs on `desktop_shell::tray` (`TRAY_TARGET`), and `tauri-plugin-telemetry` 0.3.0 allows `desktop_shell` itself, so a tray that fails to build reaches the log store.
+
+### Consumer must change
+
+- #139: an app takes the new pin; nothing else.
+
 ## [2026.11.53] - 2026-11-15
 
 Needs: a desktop app updates itself from its own signed releases, built once for every Tauri app (radar-hooves/app-factory#133; consumer: bragi, from thoth's holistic review, via thoth).

@@ -502,13 +502,14 @@ dependencies = [
 
 [[package]]
 name = "desktop-shell"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "block2",
  "objc2",
  "objc2-foundation",
  "tauri",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3259,7 +3260,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-telemetry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",

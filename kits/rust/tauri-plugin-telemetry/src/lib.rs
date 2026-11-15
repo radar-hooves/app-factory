@@ -50,6 +50,10 @@ pub use span::{
 };
 pub use telemetry::{Exporter, Guard, ProbeError};
 
+/// The `tracing` target `desktop-shell` reports its own faults under; `init`
+/// allows it so a tray that failed to build reaches the log store.
+const DESKTOP_SHELL_TARGET: &str = "desktop_shell";
+
 /// What an app's Settings pane needs to read and write to persist a chosen
 /// exporter across restarts. The plugin owns the LIVE pipeline; persistence
 /// stays each app's own (SQLite for one app, a config file for another), so
@@ -81,8 +85,11 @@ pub fn init<R: Runtime>(
     allow: &'static [&'static str],
     store: impl TelemetryStore,
 ) -> TauriPlugin<R> {
-    let mut combined_allow = Vec::with_capacity(allow.len() + 1);
+    let mut combined_allow = Vec::with_capacity(allow.len() + 2);
     combined_allow.push(COMMAND_SPAN_TARGET);
+    // `desktop-shell`'s own faults (a tray that failed to build): a message
+    // about the shell, carrying nothing of the user's.
+    combined_allow.push(DESKTOP_SHELL_TARGET);
     combined_allow.extend_from_slice(allow);
     let combined_allow: &'static [&'static str] = Vec::leak(combined_allow);
     let store: Arc<dyn TelemetryStore> = Arc::new(store);
