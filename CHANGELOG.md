@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.57] - 2026-11-16
 
 Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, bragi, via thoth's holistic review, radar-hooves/thoth#208).
 
