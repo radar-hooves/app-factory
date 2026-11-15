@@ -14,12 +14,18 @@ Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/
 
 - **Owner-only secret files** (#135): `desktop_shell::secrets` 0.3.0: `write_private(path, bytes)` (a `0600` temporary file made with `create_new`, synced, renamed over the target; a new directory `0700`) and `SecretStore` (a keyed JSON file, `for_app` puts it at `credentials.json` in the app's data directory; a corrupt file is an error, never an empty store). One file backend on every platform: no Keychain on macOS without an Apple certificate, and no keyring split.
 - **The main window, managed once** (#136): `desktop_shell::window` 0.3.0 on the official plugins: `plugins(builder, label)` (single-instance, whose second launch shows and focuses the first; window-state without `VISIBLE`), `setup(app, label, start_minimised, min)` (a window saved on a gone display fitted back, hide-on-close, start minimised) and `on_run_event` (Dock reopen). The desktop skeleton uses it, builds then runs with the event callback, declares `tauri-plugin-window-state` and grants `window-state:default`.
+- **Command spans mark the IPC boundary** (#137): `tauri_plugin_telemetry::invoke_handler(generate_handler![..])` opens one `ipc_command` span per webview call, named by Tauri's own message, with no arguments read.
+
+### Changed
+
+- `traced`, `traced_sync`, `traced_sync_value` now open a `command_body` span, no longer `ipc_command`: the name is the boundary's alone.
 
 ### Consumer must change
 
 - #139: an app takes the new pin; nothing else.
 - #135: Thoth replaces `write_private_file` with `desktop_shell::secrets::write_private`, and its three callers keep their own error text. Bragi replaces `credential_store.rs` with `SecretStore` (its macOS path is already `credentials.json` in the data directory); its Linux and Windows keyring entries do not migrate, so a release that drops them reads the keyring once and writes the file, or asks for a sign-in.
 - #136: both apps delete their own single-instance, hide-on-close, reopen and start-minimised code and call `desktop_shell::window`. Thoth gains the window-state plugin and `window-state:default` in its capability; Bragi drops its `window.rs` rectangle maths and its window-state registration. An app that has a second window (Bragi's MiniPlayer) keeps its own `show` for it.
+- #137: both apps wrap `generate_handler!` in `tauri_plugin_telemetry::invoke_handler` and delete the `traced*` wrapper from every command that wants no body time (146 sites in Thoth, 123 in Bragi); a Tempo query or dashboard on `ipc_command` children, `outcome` or duration now reads `command_body` for the commands that keep a wrapper.
 
 ## [2026.11.53] - 2026-11-15
 

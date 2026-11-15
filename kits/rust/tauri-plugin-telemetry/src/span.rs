@@ -1,5 +1,16 @@
 //! One span per Tauri IPC command, on this plugin's own allow-listed target.
 //!
+//! [`invoke_handler`] is the span for the IPC boundary: wrap the app's
+//! `generate_handler!` once and every call from the webview is one
+//! `ipc_command` span carrying the command's name, and a Rust call of a
+//! function that is also a command is none. Tauri gives a handler no hook on
+//! an async command's response, so that span covers the dispatch only: no
+//! `outcome`, and for an `async fn` no body time.
+//!
+//! [`traced`] and its siblings are for a command whose body time or outcome is
+//! worth having: a `command_body` span, which an app wraps by hand where it
+//! wants it, never as a second `ipc_command`.
+//!
 //! [`traced`] wraps a command's whole body as a single span carrying the
 //! command name (a compile-time `&'static str` the caller chooses, never
 //! derived from an argument) and an `outcome` of `ok` or `err`, recorded once
@@ -42,6 +53,31 @@ use tracing::Instrument;
 /// for this one; not for an app's own).
 pub const COMMAND_SPAN_TARGET: &str = "tauri_plugin_telemetry::commands";
 
+/// The app's invoke handler, wrapped so that each call from the webview opens
+/// one `ipc_command` span named by the command, read from Tauri's own message:
+///
+/// ```ignore
+/// builder.invoke_handler(tauri_plugin_telemetry::invoke_handler(
+///     tauri::generate_handler![get_config, toggle_recording],
+/// ))
+/// ```
+///
+/// The span carries the name and nothing of the arguments, which this never
+/// reads. A plugin's own commands (`plugin:name|cmd`) do not pass through the
+/// app's handler and get no span.
+pub fn invoke_handler<R: tauri::Runtime>(
+    inner: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let span = tracing::info_span!(
+            target: COMMAND_SPAN_TARGET,
+            "ipc_command",
+            command = invoke.message.command(),
+        );
+        span.in_scope(|| inner(invoke))
+    }
+}
+
 /// Wrap a command's body in one span carrying only `command` and `outcome`.
 ///
 /// `fut` is the command's own body, already built by the caller — this
@@ -53,7 +89,7 @@ where
     traced_with_span(
         tracing::info_span!(
             target: COMMAND_SPAN_TARGET,
-            "ipc_command",
+            "command_body",
             command,
             outcome = tracing::field::Empty,
         ),
@@ -94,7 +130,7 @@ where
     traced_with_span_sync(
         tracing::info_span!(
             target: COMMAND_SPAN_TARGET,
-            "ipc_command",
+            "command_body",
             command,
             outcome = tracing::field::Empty,
         ),

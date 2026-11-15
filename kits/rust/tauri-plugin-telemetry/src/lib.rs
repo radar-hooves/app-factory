@@ -45,7 +45,7 @@ use tauri::{AppHandle, Manager, RunEvent, Runtime};
 
 pub use commands::{Error, TelemetryProbeResult, TelemetryStatus};
 pub use span::{
-    COMMAND_SPAN_TARGET, traced, traced_sync, traced_sync_value, traced_with_span,
+    COMMAND_SPAN_TARGET, invoke_handler, traced, traced_sync, traced_sync_value, traced_with_span,
     traced_with_span_sync,
 };
 pub use telemetry::{Exporter, Guard, ProbeError};
