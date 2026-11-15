@@ -4,7 +4,7 @@
 # verification leaves nothing on the draft release.
 set -euo pipefail
 nix develop --command pnpm tauri "$@"
-[[ "$(uname -s)" == Darwin ]] || exit 0
+[[ "${1:-}" == build && "$(uname -s)" == Darwin ]] || exit 0
 target=
 prev=
 for arg in "$@"; do
