@@ -31,10 +31,10 @@ A stamp writes only inside the module. rootstock's `rs-01-new-app` makes the sha
 | --- | --- | --- | --- |
 | Build | `rootstock.app` and the plugins it applies | | `build.gradle.kts` |
 | Shell | core/design-system, core/preferences (`SuiteTheme`), core/appsettings, core/observability | | `AndroidManifest.xml`, `src/main/kotlin/` |
-| Resources | | `values/colors.xml` (the launcher background), `mipmap-anydpi-v26/ic_launcher.xml` | `drawable/` (the glyph rootstock's generator writes), `values/strings.xml`, `values/themes.xml` |
+| Resources | | `mipmap-anydpi-v26/ic_launcher.xml` (the frame, reading `@drawable/ic_launcher_background`) | `drawable/` (the glyph and the launcher background, `ic_launcher_background.xml`, which rootstock's generator writes), `values/strings.xml`, `values/themes.xml` |
 | Tests | the test stack, via `rootstock.app` | | `src/test/kotlin/` |
 
-The owned set is the render minus `_skip_if_exists`. It is two files because what every app shares already lives once, in rootstock: across its twenty apps on 14/11/2026, `colors.xml` and the adaptive-icon frame were the only skeleton files identical in all apps that had them. `themes.xml` stays the app's, because Saul's overlay window is translucent.
+The owned set is the render minus `_skip_if_exists`. It is one file because what every app shares already lives once, in rootstock. The background is a drawable, not a colour, so a generated value lands in the app-owned `drawable/` with no copier answer to go stale; the skeleton ships `#2E7D49` as the first-stamp default. `themes.xml` stays the app's, because Saul's overlay window is translucent.
 
 ## Proof
 

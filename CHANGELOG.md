@@ -6,11 +6,12 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [2026.11.49] - 2026-11-15
 
-Needs: an app carrying master's change pipeline passes actionlint with no parity exception (pebblestone, radar-hooves/master-project#413); a code-only commit should not rebuild the frontend (pebblestone).
+Needs: an app carrying master's change pipeline passes actionlint with no parity exception (pebblestone, radar-hooves/master-project#413); a code-only commit should not rebuild the frontend (pebblestone); a consumer sets the android launcher icon's background per app and changes it later, without a parity exception (rootstock, radar-hooves/rootstock#244, #129).
 
 ### Changed
 
 - **`.github/actionlint.yaml`** (template and factory): runner labels are master's own list, `household, light, macos, atlas, titan, mimir`. Master's `change.yaml` runs on `light`; the template's list lacked it.
+- **`skeletons/android`**: the adaptive-icon frame reads `@drawable/ic_launcher_background`, a first-stamp drawable under the app-owned `drawable/` (default `#2E7D49`). `values/colors.xml` is removed. The frame stays the factory's.
 
 ### Refused
 
@@ -19,6 +20,7 @@ Needs: an app carrying master's change pipeline passes actionlint with no parity
 ### Consumer must change
 
 - Every stamped app: nothing to set; regenerate `.template-parity.json` on `copier update`. portcullis may retire its `.github/actionlint.yaml` variant (`atlas` is now listed).
+- rootstock: bump the pin to `v2026.11.49`; `copier update apps/<name>` adds `drawable/ic_launcher_background.xml` (only if absent) and deletes `values/colors.xml`. The icon generator writes the disc colour as `<shape android:shape="rectangle"><solid android:color="#RRGGBB"/></shape>` in that drawable; drop the `parity:src/main/res/values/colors.xml` exceptions; any `@color/ic_launcher_background` becomes `@drawable/ic_launcher_background`.
 
 ## [2026.11.48] - 2026-11-15
 
