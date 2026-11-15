@@ -32,6 +32,12 @@ tauri-plugin-updater = "2.14"
 # Declared here so its permission reaches `capabilities/`; `desktop-shell` registers it.
 tauri-plugin-window-state = "2"
 
+# Debug info stays in the objects' side files, where a debugger reads it, rather
+# than in every linked test binary: each links the whole app library, and a
+# handful at once outruns a 6 GB CI runner. macOS already builds this way.
+[profile.dev]
+split-debuginfo = "unpacked"
+
 [profile.release]
 codegen-units = 1
 lto = true
