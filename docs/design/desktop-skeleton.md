@@ -8,7 +8,7 @@ Thoth and Bragi stamp from one source, `skeletons/desktop/`, and take their shar
 copier.yaml                 one config; `skeleton` picks the tree (default web)
 template/                   the web skeleton, where master's parity, converge and fleet tools read it
 skeletons/desktop/          the desktop skeleton; a symlink into template/ where web and desktop share a file
-kits/rust/desktop-shell     traffic lights and the tray guard
+kits/rust/desktop-shell     traffic lights, the tray guard, owner-only secret files and the main window
 skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness and per-app view sweep (desktop-pitfalls.md)
 .github/workflows/desktop-ci.yaml   the desktop CI; only bragi calls it, until its move to change.yaml retires it
 ```
@@ -21,7 +21,7 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 
 | | Kit (versioned, pinned per app) | Skeleton-owned (stamped, converged) | App-owned (first stamp, then the app's) |
 | --- | --- | --- | --- |
-| Rust shell | `desktop-shell`: `traffic_lights::setup(window)`, `guard_tray`; `telemetry` and `tauri-plugin-telemetry` | `src-tauri/src/main.rs` | `lib.rs` and every module; `Cargo.toml`; `build.rs` |
+| Rust shell | `desktop-shell`: `traffic_lights::setup(window)`, `guard_tray`, `secrets`, `window`; `telemetry` and `tauri-plugin-telemetry` | `src-tauri/src/main.rs` | `lib.rs` and every module; `Cargo.toml`; `build.rs` |
 | Tauri config | | | `tauri.conf.json` (windows, CSP, bundle, updater key), `capabilities/` |
 | Frontend shell | `@poodle64/ui`, `@poodle64/design-tokens` | `vite.config.ts` (the SvelteKit options, port from answers), `vitest.config.ts`, `tsconfig.json`, `components.json`, `.npmrc`, `src/app.html`, `src/routes/+layout.ts`, `src/lib/utils.ts`, `src/test/setup.ts` | `package.json`, `src/app.css` (palette), routes and components |
 | Settings pane | the telemetry section: next, into `@poodle64/ui` once `@poodle64/ui/settings` lands | | the pane's other sections |
