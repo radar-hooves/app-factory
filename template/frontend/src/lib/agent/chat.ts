@@ -98,7 +98,7 @@ export interface ChatExtensions {
 	Turn?: Component<AgentTranscriptProps & { persona: Persona }>;
 	/** A briefing from a Home page's question box (`AskHome`); absent, it
 	 *  offers none. The chat page's own composer never does: a briefing is
-	 *  asked once, not a control to keep clicking (operator, 24/10/2026). */
+	 *  asked once, not a control to keep clicking. */
 	briefing?: (persona: Persona) => Briefing;
 	/** What the chat page says a persona answers from, in place of its own
 	 *  sentence (what it does not hold, how current its collections are). An

@@ -8,7 +8,7 @@
 
   Pointing at a subject only browses it; a row on the right (or a loose
   collection, or "everything") is what sets the scope, and setting it closes
-  the picker. Every name wraps: nothing here truncates (operator, 24/10/2026).
+  the picker. Every name wraps: nothing here truncates.
 
   Focus stays in the search field or on a list, and the active row is named by
   `aria-activedescendant`; a row never takes focus. Tab moves search, subjects,

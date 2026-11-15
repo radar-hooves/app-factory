@@ -3,7 +3,7 @@
 	Setting, rendered from the JSON Schema `GET <endpoint>/` returns, nested by
 	dot path and laid out one group per domain (`nest.ts`), so an app that
 	declares a setting adds no code here. `<SchemaForm>` has no per-field reset,
-	so "default versus override, reset in one act" (the operator's own ask) is
+	so "default versus override, reset in one act" (the page's purpose) is
 	the panel below it. An app mounts it as its settings route's whole body.
 -->
 <script lang="ts" module>

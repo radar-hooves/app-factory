@@ -5,8 +5,7 @@
   bubble against the trailing edge, so a reader scanning back finds their own
   words without reading any of the answer. The answer is prose under it, signed
   with the persona's name and the time, in no box: space and type tell one turn
-  from the next (the operator's bar, 19/10/2026: "clean and elegant, like what
-  you get when you chat with ChatGPT or Claude"). Everything the persona DID is
+  from the next (clean and elegant, like a chat with ChatGPT or Claude). Everything the persona DID is
   one quiet line in the answer, never a stack. And the measure is the package's
   own CSS, never a utility class a consuming app's Tailwind has to discover in
   `dist` — the one that got away compiled to `max-width: none` in production

@@ -4,6 +4,18 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.50] - 2026-11-15
+
+Needs: code and comments state what is required, never who ruled it (godswood, radar-hooves/godswood#945).
+
+### Changed
+
+- Comments and docstrings only, no behaviour change: the operator-ruling attributions are rewritten as the requirement they state, across `template/` (`exchange.py`, `app-frame.svelte`, `shell.test.ts`, `lib/agent/chat.ts`, `chat/[persona]/+page.svelte`, `workspace-menu.svelte`, `check-layout-ownership.mjs`, `check-ui-drift.mjs`), the TypeScript kits (`ui`, `console`, `librarian`), the `telemetry` Rust kit and the desktop release workflow. Issue references are kept.
+
+### Consumer must change
+
+- `copier update` (the stamped files change; regenerate `.template-parity.json` as every update does). `frontend/src/app.css` is app-owned (`_skip_if_exists`): an attribution there is the app's own to rewrite.
+
 ## [2026.11.49] - 2026-11-15
 
 Needs: an app carrying master's change pipeline passes actionlint with no parity exception (pebblestone, radar-hooves/master-project#413); a code-only commit should not rebuild the frontend (pebblestone); a consumer sets the android launcher icon's background per app and changes it later, without a parity exception (rootstock, radar-hooves/rootstock#244, #129).

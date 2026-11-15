@@ -9,7 +9,7 @@
   turn says what is happening now. Once the turn settles the rows fold behind
   one sentence composed from them ("Read your attachment, searched the library
   and the web, and wrote a minute · 6 steps"), so a settled answer is one quiet
-  line of what was done (operator, 19/10/2026) and the rows are a tap away.
+  line of what was done and the rows are a tap away.
 
   The persona's between-tool commentary is a step in here as well. It reaches
   the caller as an ordinary `text` block, not a `thinking` one, so `segment()`

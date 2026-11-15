@@ -1,7 +1,7 @@
 # Tag-triggered, for the installers this app ships. The gate is the first job:
 # the `change` run on the tagged commit must have passed. The app adds its
 # build and publish jobs below, each `needs: gate`; a dispatch builds from any
-# ref and skips the gate. A tag is cut on the operator's word for a batch.
+# ref and skips the gate. A tag is cut for a batch, by whoever releases it.
 name: Release
 
 on:

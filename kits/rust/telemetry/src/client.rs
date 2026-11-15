@@ -11,7 +11,7 @@
 //! duration, exactly as `command_span` documents for its own spans — and
 //! never the query string or an error string.
 //!
-//! The path was added on the operator's ruling of 28/09/2026 (see the crate
+//! The path is exported (see the crate
 //! CHANGELOG): `/Items/{id}` or `/rest/search3.view` is his own listening
 //! history and now travels to his stack. The query string stays withheld —
 //! that is where a Subsonic request signs its token — and `url::Url::path()`

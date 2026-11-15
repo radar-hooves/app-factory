@@ -1,7 +1,7 @@
 /**
  * The ledger's contract, in the environment that can judge it.
  *
- * jsdom has no layout, so what the operator ruled about the LOOK — the head
+ * jsdom has no layout, so what the shell fixes about the LOOK — the head
  * card exactly as wide as the group cards, its columns lined up with theirs,
  * a row's text centred whether or not it has a note — is measured in a real
  * engine (`harness/drive.mjs`, `?surface=ledger`). What is held here is the

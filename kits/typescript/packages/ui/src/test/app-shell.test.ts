@@ -319,8 +319,7 @@ describe('AppShell — rail collapse', () => {
 	});
 
 	it('sits on the sidebar\'s top, before the nav — not in the top bar', () => {
-		// A control that works the sidebar is the sidebar's, at its top (operator,
-		// 03/11/2026). Proven by DOM order, since jsdom applies no layout.
+		// A control that works the sidebar is the sidebar's, at its top. Proven by DOM order, since jsdom applies no layout.
 		render(ShellHarness, { props: { collapsible: true } });
 		const rail = document.querySelector('.ds-shell-rail')!;
 		const header = document.querySelector('header.ds-shell-bar')!;
@@ -479,7 +478,7 @@ describe('AppShell — a collapsed rail peeks', () => {
 	});
 });
 
-describe('AppShell — the bar, to the ruling (03/11/2026)', () => {
+describe('AppShell — the bar', () => {
 	const before = (a: Element, b: Element) =>
 		Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 

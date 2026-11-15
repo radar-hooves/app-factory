@@ -11,7 +11,7 @@
   plain verb for what is happening now (the host's, from `activityNow`), a
   clock that only goes up so a long wait still reads as progress rather than
   as a hang, and Stop. The verb changes when the work does, never on a timer:
-  words swapping on their own read as a light flashing (operator, 24/10/2026).
+  words swapping on their own read as a light flashing.
 -->
 <script lang="ts">
 	import { resolveCopy, type ChatCopy } from '../../copy';

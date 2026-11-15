@@ -146,7 +146,7 @@ for (const f of files.filter((f) => f.endsWith('.svelte'))) {
 // ---------------------------------------------------------------------------
 // 2. A route page that draws its own title.
 //
-// Under the one shell (the operator's ruling of 03/11/2026) the rail names the
+// Under the one shell the rail names the
 // page: the breadcrumbs' last crumb is the title and the shell writes the one
 // hidden <h1>. A page that writes an <h1>, or composes PageHeader (which draws
 // one, and a trail, over the rail's), draws a second title. A section heading

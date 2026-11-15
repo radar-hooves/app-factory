@@ -1,5 +1,5 @@
 /**
- * AppIdentity's initials rule (operator ruling, 07/09/2026): never text in the
+ * AppIdentity's initials rule: never text in the
  * bar, and a bare handle's initials must not read as more than they are — a
  * handle with no separator has no second letter to honestly pair with the
  * first. `initials-of` a display name is unaffected; only the no-display-name

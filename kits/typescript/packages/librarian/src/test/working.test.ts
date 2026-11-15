@@ -15,7 +15,7 @@ describe('Working line', () => {
 	});
 
 	it('keeps its words until the work changes, never swapping them on a timer', () => {
-		// The operator's word for words that swap on their own: "a disco strobe".
+		// Words that swap on their own read as a disco strobe.
 		vi.useFakeTimers();
 		try {
 			render(Working, { props: { copy: copyFor('penny') } });

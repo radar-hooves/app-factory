@@ -4,7 +4,7 @@
 	(app-factory docs/design/agent-console.md). A `panel` page: past questions
 	are its pane, flush against the rail from 1024px, folded to its edge or open
 	as the reader left it, New question at its head and Delete all at its foot;
-	narrower, the bar's own action opens them in a sheet (operator, 24/10/2026).
+	narrower, the bar's own action opens them in a sheet.
 	The shell draws all of that; this page says what goes in it. The address names the persona,
 	the conversation (`?c=<id>`) and the collection a question is narrowed to
 	(`?collection=<name>`), or the subject (`?group=<name>`, every collection
@@ -15,7 +15,7 @@
 	`AskHome` calls), which a pasted link cannot carry. That question never waits on the collection list: it goes as
 	soon as the persona is known, narrowed by the name the address gives.
 	A briefing is asked once, from a Home page, so this composer offers no
-	control for one (operator, 24/10/2026); one handed over still reads as its
+	control for one; one handed over still reads as its
 	card. What differs per app arrives through `#lib/agent/app.js`, never an edit here.
 -->
 <script lang="ts">

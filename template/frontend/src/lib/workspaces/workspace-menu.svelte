@@ -4,8 +4,7 @@
 
 	One control in the shell's `context` slot. With several memberships it is
 	the active one's name over a radio group of the rest, then Members / New
-	workspace; with exactly one it renders NOTHING (operator ruling,
-	07/09/2026) — a caller with nothing to switch to was shown a chip carrying
+	workspace; with exactly one it renders NOTHING — a caller with nothing to switch to was shown a chip carrying
 	their own workspace's name back at them, which at phone width is the same
 	dead-weight-in-the-bar defect as an unnamed AppIdentity handle, and for the
 	same reason: a control with one possible state is not a control.
