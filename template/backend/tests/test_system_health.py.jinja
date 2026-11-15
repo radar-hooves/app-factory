@@ -24,17 +24,19 @@ async def test_health_check_reports_healthy(client):
 
 
 @pytest.mark.integration
-async def test_health_check_returns_503_when_database_is_unreachable(app, client):
+async def test_health_check_returns_503_when_database_is_unreachable(app, client, monkeypatch):
     """The only dependency check allowed to fail this endpoint is the database."""
     from {{ package_name }}.db.session import get_session
 
     class _BrokenSession:
         def execute(self, *args, **kwargs):
-            raise RuntimeError("connection refused")
+            raise RuntimeError("connection to server at db.internal (10.0.0.5), port 5432 failed")
 
     def _broken_session():
         yield _BrokenSession()
 
+    # Debug puts `details` in a 5xx body, so this is the case where a driver error would show.
+    monkeypatch.setattr("{{ package_name }}.exceptions._debug", lambda: True)
     app.dependency_overrides[get_session] = _broken_session
     try:
         response = await client.get("/api/system/health")
@@ -42,3 +44,5 @@ async def test_health_check_returns_503_when_database_is_unreachable(app, client
         app.dependency_overrides.pop(get_session, None)
 
     assert response.status_code == 503
+    assert "db.internal" not in response.text
+    assert "5432" not in response.text
