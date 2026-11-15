@@ -1510,7 +1510,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	}
 
 	// The collapse toggle is the sidebar's own, in its head, on its top and above
-	// the nav (operator, 03/11/2026); the brand beside it aligned on the open rail
+	// the nav; the brand beside it aligned on the open rail
 	// and centred on the slim one. Geometry, so only a real layout can say.
 	{
 		const { context, page } = await open('surface=nested&collapsible=1');
@@ -1570,7 +1570,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
-	// The bar, to the ruling of 03/11/2026: the breadcrumbs on the left, then from
+	// The bar: the breadcrumbs on the left, then from
 	// the far right the account, the day/night toggle, (alerts,) the report and a
 	// SMALL search. Left to right the controls therefore run search, report,
 	// theme, account. Geometry, so only a real layout can say.
@@ -4175,7 +4175,7 @@ for (const density of ['comfortable', 'compact']) {
 }
 
 // ── The ledger (radar-hooves/godswood, 01/10/2026) ──────────────────────────
-// Every look the operator ruled is a layout or paint fact, so it is measured
+// Every look the shell fixes is a layout or paint fact, so it is measured
 // here and nowhere else: the head card exactly as wide as the group cards with
 // its columns on theirs to the pixel, each group its own rounded card on the
 // raised surface with its label on the page ground above it, a row's text
@@ -5096,8 +5096,8 @@ for (const [height, long] of [
 }
 
 // The bar's title is "Section › Page", and the one home of feedback and of
-// Settings (operator ruling, 24/10/2026: "You don't need to have six places to
-// achieve the same thing"). Driven at the expanded rail, the collapsed rail and
+// Settings (six places to
+// achieve the same thing is too many). Driven at the expanded rail, the collapsed rail and
 // the phone drawer, because each lays the same three things out differently.
 {
 	const TITLE = 'Education › Open architecture and autonomy, topic 3';

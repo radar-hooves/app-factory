@@ -3,7 +3,7 @@
 	 * The signed-in user surface for AppShell's `identity` slot.
 	 *
 	 * Graduated from the shell lab (`packages/console/src/routes/lab/+page.svelte`,
-	 * the `identity === 'avatar'` shape) — operator ruling 04/09/2026: avatar
+	 * the `identity === 'avatar'` shape) — avatar
 	 * only at rest, no name, no chevron, and no prop reintroduces a variant.
 	 * Opening it answers who is signed in, which workspace they act in, and the
 	 * ways out — identity first, because a menu that opens on a list of actions
@@ -27,7 +27,7 @@
 	 * `onManageMembers` exists for the caller a workspace switcher has nothing
 	 * to show: `WorkspaceMenu` (the factory template) renders nothing in the
 	 * bar for a single-member workspace, and this is where Members lands
-	 * instead (operator ruling, 07/09/2026, master-project#291's org-of-one
+	 * instead (master-project#291's org-of-one
 	 * case). Wire it whenever the app has a members route, whether or not it
 	 * also renders a switcher.
 	 *
@@ -69,8 +69,7 @@
 		 * `workspace` is unset.
 		 *
 		 * A workspace holding exactly one member has nothing to switch, so the
-		 * app's own workspace switcher renders nothing for it (operator ruling,
-		 * 07/09/2026) — and Members was that switcher's one non-switching act,
+		 * app's own workspace switcher renders nothing for it — and Members was that switcher's one non-switching act,
 		 * the route an org-of-one needs to make its first grant. This is where
 		 * that act lives once the switcher is gone; a switcher still showing for
 		 * several workspaces keeps its own Members entry too, so the two never
@@ -121,7 +120,7 @@
 	 *
 	 * A handle has no word boundaries a name has: `initialsOf` slicing the
 	 * first two characters of one unbroken token produces a pair that reads
-	 * as real initials while meaning nothing (operator ruling, 07/09/2026).
+	 * as real initials while meaning nothing.
 	 * Where the handle itself encodes two parts — `firstname.lastname`,
 	 * `firstname-lastname` — one letter from each reads the same as a real
 	 * name's initials; where it does not, only the first letter is honest.
@@ -133,7 +132,7 @@
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}
 
-	// Never text in the bar (operator ruling, 07/09/2026): with no display
+	// Never text in the bar: with no display
 	// name, the trigger below still renders only this avatar, initialled off
 	// the handle rather than off `shown`, which for this branch just IS the
 	// handle.

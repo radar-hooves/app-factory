@@ -3,9 +3,8 @@
  * Fail when an app carries a layout of its own.
  *
  * The factory owns the rail, the sidebar and the page frames; an app declares
- * data (src/lib/shell.ts) and each route its `pageType` (operator ruling,
- * 03/11/2026: "apps just stop inventing their own layouts and instead they get
- * forced to use one from the app factory"). This reads the source, so it runs
+ * data (src/lib/shell.ts) and each route its `pageType` (an app does not
+ * invent its own layout; it uses the factory's). This reads the source, so it runs
  * in the unit leg every app already runs (src/lib/layout-ownership.test.ts) and
  * as `pnpm lint:layout`, with no browser and no database.
  *

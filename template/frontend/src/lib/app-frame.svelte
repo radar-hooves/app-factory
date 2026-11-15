@@ -6,7 +6,7 @@
 	edits it. What an app is, its name, nav and account links, is data in
 	shell.ts; what a screen is, `pageType`, `title` and `breadcrumbs`, is its
 	route's load data. The rail, the sidebar and the page frames are the kit's
-	(@poodle64/ui/app-shell), to the operator's ruling of 03/11/2026: the rail
+	(@poodle64/ui/app-shell), in one fixed shape: the rail
 	runs, from the far right, account, day/night, alerts, report, search;
 	breadcrumbs on the left; the sidebar toggle on the sidebar's top; Settings
 	in the account menu.

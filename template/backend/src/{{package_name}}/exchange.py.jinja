@@ -1,7 +1,7 @@
 """Who is asking, carried from this app to a household service and to its own tools.
 
 The factory's one way to carry a person is an Authentik token exchange (RFC
-8693; the operator's ruling of 17/10/2026, radar-hooves/master-project#380). A
+8693; radar-hooves/master-project#380). A
 signed-in person's forward-auth answer carries `X-authentik-jwt`, this app's
 proxy provider's access token for them, which nginx forwards on the routes
 that exchange. That token opens the whole website, so it never leaves this

@@ -1,9 +1,9 @@
 /**
  * What an app declares about its shell: data, never markup. The factory's frame
  * (the template's `app-frame.svelte`) reads it and lays the rail, the sidebar
- * and the page frame out to the operator's ruling of 03/11/2026: "Apps just
- * declare what they need in the sidebar... Apps own their own domain logic and
- * what they put on the screens, not what the screens look like."
+ * and the page frame out. Apps declare what they need in the sidebar; they own
+ * their domain logic and what they put on the screens, not what the screens
+ * look like.
  *
  *     export const shell: ShellData<typeof auth> = {
  *       workspaceLabel: 'Household',

@@ -164,7 +164,7 @@
 	const ctx = $derived(peers.length + controls.length + actions.length > 0);
 	const content = $derived(contentOverride ?? section.content);
 	// The roll-out carries the section's PEER VIEWS and nothing else. Actions
-	// left the sidebar for the page (operator ruling, 04/09/2026): a sidebar
+	// left the sidebar for the page: a sidebar
 	// carrying navigation, actions and scope at once is the sidebar doing too
 	// much, and an action belongs beside the thing it acts on.
 	const inZone = $derived(shape !== 'today' && peers.length > 0);
@@ -477,7 +477,7 @@
 					{:else}
 						<!-- No breadcrumb and no peer tabs. Sub-routes live in the sidebar
 						     under their section; listing them here too is the same six items
-						     twice (operator ruling, 04/09/2026). What rises into the top rail
+						     twice. What rises into the top rail
 						     is only what is BOUNDED — a scope control or two — which is why
 						     it still fits at 1280 where a seven-tab strip did not. -->
 						<div bind:this={leftEl} class="flex min-w-0 flex-none items-center gap-2">

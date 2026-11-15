@@ -504,8 +504,8 @@
 	}
 
 	/* One row at every width: the scope chip gives way (its words wrap onto a second
-	   line, never cut) before Send leaves the right-hand end of the box (operator, 24/10/2026:
-	   on a phone it wrapped to the bottom-left). */
+	   line, never cut) before Send leaves the right-hand end of the box (on a phone it
+	   wrapped to the bottom-left). */
 	.ds-lib-controls {
 		display: flex;
 		flex-wrap: nowrap;

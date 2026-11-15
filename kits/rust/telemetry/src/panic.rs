@@ -5,7 +5,7 @@
 //! treats `client::TARGET`), carrying the thread name, the panic location, the
 //! full message and a forced backtrace, always: this is the operator's own
 //! stack, the OTLP endpoint is his own self-hosted collector, and nothing here
-//! leaves his estate. See the CHANGELOG for his ruling in his own words. A
+//! leaves his estate. See the CHANGELOG for the rationale. A
 //! failed request's URL is a different case, still withheld by `client.rs`:
 //! that value can carry a search term or a query-string credential, where a
 //! panic payload built inside this crate's own process cannot.
@@ -124,8 +124,8 @@ pub fn report_error(context: &'static str) {
 ///
 /// A `reqwest::Error` or `reqwest_middleware::Error` anywhere in `error`'s own
 /// chain has its URL scrubbed from the joined text first — see
-/// [`scrub_urls`]. `error` takes `+ 'static` (tightened on the operator's
-/// ruling of 28/09/2026, `full-stack-app-template#55`) so this can downcast
+/// [`scrub_urls`]. `error` takes `+ 'static` (tightened in
+/// `full-stack-app-template#55`) so this can downcast
 /// it; every real caller already hands over an owned error type, so no
 /// existing call site is affected.
 pub fn report_error_with_cause(context: &'static str, error: &(dyn std::error::Error + 'static)) {
@@ -333,8 +333,7 @@ mod tests {
         assert!(rendered.contains("panic.rs"), "{rendered}");
     }
 
-    /// The operator's ruling of 28/09/2026 replaces the v0.3.0 rule that
-    /// withheld this shape of payload: a formatted panic must now export its
+    /// A formatted panic exports its
     /// full message and a backtrace, forced regardless of `RUST_BACKTRACE`.
     #[test]
     #[serial]

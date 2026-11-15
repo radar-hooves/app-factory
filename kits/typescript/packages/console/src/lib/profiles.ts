@@ -21,7 +21,7 @@
  * `peers` are the section's other SUB-ROUTES, never its default one. A module's own
  * root is its dashboard — clicking Securities lands on the Securities dashboard
  * — so an "Overview" peer would be the section listed as a child of itself
- * (operator ruling, 04/09/2026). A section with no peers is the common case and
+ *. A section with no peers is the common case and
  * the one worth checking: the rail's roll-out has to collapse to nothing
  * without leaving a hole where it was.
  */
@@ -31,7 +31,7 @@ export interface Peer { label: string; count?: string; active?: boolean }
  * A control in the TOP RAIL. These change the view of the page you are already
  * on — a financial year, an entity, a chart/table toggle — and never navigate
  * anywhere. That is the whole distinction from `peers`, which are sub-routes and
- * live in the sidebar (operator ruling, 04/09/2026): different axis, different
+ * live in the sidebar: different axis, different
  * home, and a control listed in both places is the same thing twice.
  *
  * `options` makes it a segmented toggle; without it, it is a dropdown.

@@ -11,7 +11,7 @@
 	 *
 	 * It is no longer how an app gets a second navigation COLUMN, because there
 	 * is no longer such a thing: AppShell's `sidebar` slot was removed in
-	 * 2026.8.11 (operator ruling, 21/08/2026 — no app supports an additional
+	 * 2026.8.11 (no app supports an additional
 	 * sidebar). An item carrying `children` discloses them in place, beneath
 	 * itself, and that is where a section's own pages go at every width. See
 	 * `types.ts` on `children` for why the nested rail won over

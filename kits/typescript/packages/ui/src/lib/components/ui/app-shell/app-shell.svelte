@@ -14,13 +14,13 @@
 	 * permanent side rail on md+ (an overlay drawer below it) carrying primary
 	 * navigation and the brand, PLUS a
 	 * real top navbar (search, leading/trailing slots, theme toggle, identity) —
-	 * always both together. Operator ruling, 31/07/2026: every household app
+	 * always both together. Every household app
 	 * renders one shell shape; apps do not choose variants.
 	 *
 	 * The bar, left to right: the breadcrumbs (where you are; the last crumb names
 	 * the page), the app's context and the page's own controls, then from the far
 	 * right the account, the day/night toggle, the alerts, the report button and
-	 * a small search (operator ruling, 03/11/2026). The collapse toggle is the
+	 * a small search. The collapse toggle is the
 	 * sidebar's own, on its top (30/10/2026 and 03/11/2026: a control that works
 	 * the sidebar belongs on the sidebar, not the bar). Settings are the account
 	 * menu's. None of it is a prop an app tunes: an app declares data, and the
@@ -30,7 +30,7 @@
 	 * `reading`, `panel`, `tool` or `bare`, see page.ts) and the shell owns everything
 	 * that follows from it: the column's width and centring, the gutters, the
 	 * pane flush against the rail, the aside beside the content, and which of
-	 * them scrolls. The less an app decides, the better (operator, 24/10/2026).
+	 * them scrolls. The less an app decides, the better.
 	 *
 	 * Content TEXTURE came back the same way, on the same kind of evidence. Two
 	 * apps had separately built one picture — a faint dot-grid floor with a soft
@@ -53,8 +53,8 @@
 	 * `sidebar` was such a slot until 2026.8.11, and what it produced was two
 	 * apps rendering a module's own pages beside the rail while the other seven
 	 * rendered them inside it — the shell shape differing per app, and in one app
-	 * per MODULE, which is the thing this component exists to stop. Operator
-	 * ruling, 21/08/2026, on seeing one app's two modules disagree: no app
+	 * per MODULE, which is the thing this component exists to stop. The
+	 * rule, from seeing one app's two modules disagree: no app
 	 * supports an additional sidebar; a section's own pages roll out beneath it
 	 * in the rail. That is `NavItem.children` (see types.ts), which the rail
 	 * already discloses at every width and folds into the one drawer on a phone.
@@ -152,7 +152,7 @@
 		 * Defaults ON. It was opt-in while the control was being introduced, and
 		 * two of nine household apps opted in — so seven rails could not be
 		 * collapsed, for no reason anyone had chosen. The shell shape is not an
-		 * app's to pick (operator ruling, 31/07/2026); set `false` only where a
+		 * app's to pick; set `false` only where a
 		 * rail genuinely must not collapse.
 		 */
 		collapsible?: boolean;
@@ -726,8 +726,8 @@
 
 			<!--
 				The rail's head: the brand and, from md, the collapse toggle, on the
-				sidebar's top (operator, 03/11/2026: "the sidebar toggle sits on the
-				sidebar itself, at its top, not on the rail"). Collapsed (to icons, or
+				sidebar's top (the sidebar toggle sits on the
+				sidebar itself, at its top, not on the rail). Collapsed (to icons, or
 				peeking) the two stack, the toggle under the mark, so no row moves when
 				the rail peeks.
 			-->
@@ -855,7 +855,7 @@
 			<!-- The bar, left to right: where you are (the breadcrumbs), the app's own
 			     context (a workspace switch), the page's controls, then, from the far
 			     right, the search, the report, the alerts, the day/night toggle and the
-			     account (operator ruling, 03/11/2026). `min-w-0` lets the trail shrink
+			     account. `min-w-0` lets the trail shrink
 			     under crowding rather than floor at its own content and push the
 			     trailing controls past the bar's edge (design-system#111). The trail
 			     stays inline from sm; the page's controls take a second row of the bar
