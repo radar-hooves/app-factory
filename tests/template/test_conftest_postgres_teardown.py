@@ -28,7 +28,7 @@ def conftest(tmp_path: Path):
     metadata = tmp_path / "pg.json"
     metadata.write_text("{}")
     namespace = {
-        "logging": logging,
+        "logger": logging.getLogger("conftest"),
         "Path": Path,
         "FileLock": _Lock,
         "_SHARED_SERVER_FILE": metadata,
@@ -78,3 +78,8 @@ def test_failed_stop_keeps_the_renamed_file(conftest, caplog) -> None:
     stopping = Path(f"{conftest.metadata}.stopping")
     assert stopping.exists() and not conftest.metadata.exists()
     assert str(stopping) in caplog.text
+
+
+def test_conftest_logs_through_a_named_logger():
+    """rules-library/stacks/python-basics.md: no root-logger call, which a stamped app's parity gate cannot let it fix."""
+    assert not re.search(r"\blogging\.(debug|info|warning|error|exception|critical)\(", CONFTEST.read_text())

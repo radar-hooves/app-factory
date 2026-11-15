@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
+logger = logging.getLogger(__name__)
+
 os.environ.setdefault("DEBUG", "true")
 
 # The suite must never depend on a live broker being reachable: the database
@@ -118,7 +120,7 @@ def _shared_ephemeral_postgres() -> dict[str, str]:
         if _WORKER_ID != "master":
             if _SHARED_SERVER_FILE.is_file():
                 return dict(json.loads(_SHARED_SERVER_FILE.read_text()))
-            logging.warning(
+            logger.warning(
                 "%s: the pytest controller did not import conftest.py, so there is no process that "
                 "outlives this run to hold a shared Postgres — starting one for this worker alone, "
                 "as every worker now will. Check that testpaths (or the path argument) reaches the "
@@ -246,7 +248,7 @@ def _stop_ephemeral_postgres() -> None:
     try:
         container.stop()
     except Exception as exc:  # teardown must never fail a passing run
-        logging.warning(
+        logger.warning(
             "Could not stop the ephemeral test Postgres (container %s, testcontainers session %s, "
             "metadata kept at %s): %s",
             *_container_identity(container),
@@ -280,7 +282,7 @@ def _resolve_test_server() -> dict[str, str]:
 
     warning = partial_quartet_warning(explicit)
     if warning:
-        logging.warning(warning)
+        logger.warning(warning)
 
     if all(explicit.values()):
         resolved = {key: value for key, value in explicit.items() if value is not None}
