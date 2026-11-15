@@ -4,7 +4,7 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [2026.11.57] - 2026-11-16
+## [2026.11.56] - 2026-11-16
 
 Needs: Thoth and Bragi become desktop stamps the factory reaches (radar-hooves/app-factory#138; consumers: thoth, bragi, via thoth).
 
@@ -21,8 +21,6 @@ Needs: Thoth and Bragi become desktop stamps the factory reaches (radar-hooves/a
 ### Consumer must change
 
 - thoth, bragi: nothing on the pin. First stamp the app (`docs/design/desktop-skeleton.md` §Moving an existing app onto the stamp) to take these files; their `flake.nix` stays theirs, so each moves its kit hashes to `kitHash` by hand once.
-
-## [2026.11.56] - 2026-11-16
 
 Needs: window hooks and one store for several services (radar-hooves/app-factory#140; consumers: bragi, thoth, via thoth).
 

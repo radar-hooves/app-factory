@@ -17,7 +17,9 @@ grep -q '^  kitHash = ' "$flake" || { echo "flake.nix has no kitHash; nothing to
 [ -f "$lock" ] || { echo "error: $lock missing" >&2; exit 2; }
 command -v nix >/dev/null || { echo "error: nix is not on PATH" >&2; exit 2; }
 
-rev="$(sed -n 's|^source = "git+https://github.com/radar-hooves/app-factory?rev=[^#]*#\([0-9a-f]*\)"|\1|p' "$lock" | sort -u)"
+# A stamp pins `rev =` and an app moving onto the stamp may still pin `tag =`;
+# either way the commit is the hash after `#`.
+rev="$(sed -n 's|^source = "git+https://github.com/radar-hooves/app-factory?[^#]*#\([0-9a-f]*\)"|\1|p' "$lock" | sort -u)"
 [ "$(printf '%s\n' "$rev" | grep -c .)" = 1 ] || { echo "error: Cargo.lock pins no single app-factory revision" >&2; exit 2; }
 
 want="$(nix flake prefetch --json "git+https://github.com/radar-hooves/app-factory?rev=$rev" | jq -r .hash)"
