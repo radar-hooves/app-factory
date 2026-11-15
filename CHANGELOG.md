@@ -12,9 +12,12 @@ Needs: the desktop layer's four gaps from Thoth's holistic review (radar-hooves/
 
 - **A tray fault is reported** (#139): `guard_tray` logs on `desktop_shell::tray` (`TRAY_TARGET`), and `tauri-plugin-telemetry` 0.3.0 allows `desktop_shell` itself, so a tray that fails to build reaches the log store.
 
+- **Owner-only secret files** (#135): `desktop_shell::secrets` 0.3.0: `write_private(path, bytes)` (a `0600` temporary file made with `create_new`, synced, renamed over the target; a new directory `0700`) and `SecretStore` (a keyed JSON file, `for_app` puts it at `credentials.json` in the app's data directory; a corrupt file is an error, never an empty store). One file backend on every platform: no Keychain on macOS without an Apple certificate, and no keyring split.
+
 ### Consumer must change
 
 - #139: an app takes the new pin; nothing else.
+- #135: Thoth replaces `write_private_file` with `desktop_shell::secrets::write_private`, and its three callers keep their own error text. Bragi replaces `credential_store.rs` with `SecretStore` (its macOS path is already `credentials.json` in the data directory); its Linux and Windows keyring entries do not migrate, so a release that drops them reads the keyring once and writes the file, or asks for a sign-in.
 
 ## [2026.11.53] - 2026-11-15
 

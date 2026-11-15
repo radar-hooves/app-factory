@@ -2,6 +2,7 @@
 //! macOS traffic lights centred in the app's header, and a tray that can never
 //! take the app down. An app calls each where its own setup wants it.
 
+pub mod secrets;
 pub mod traffic_lights;
 
 /// The `tracing` target a tray fault is reported on. `tauri-plugin-telemetry`
