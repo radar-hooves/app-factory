@@ -12,9 +12,19 @@ Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, 
 
 - **The desktop skeleton's library is an `rlib` alone** (`src-tauri/Cargo.toml`). `staticlib` and `cdylib` are the outputs iOS and Android link; a desktop app's `main.rs` links the `rlib`. In Thoth the two cost every test build a 1.16 GB static archive and a 261 MB shared library that nothing read.
 
+### Fixed
+
+- **`update-kit-hash.sh` matches `kitHash` at any indentation** and keeps it on rewrite. It anchored on two spaces; the stamped `flake.nix` indents it eight, so on a real stamp it reported "no kitHash" and `--check` passed without checking. Tested against the skeleton's own line, with `nix` stubbed (consumers: thoth, bragi, radar-hooves/thoth#213).
+- **The desktop skeleton stamps its own `src/test/setup.ts`**, no longer a symlink to the web template's, which imports a `mocks/app-state.svelte` a desktop stamp does not have, so vitest could not load. `setup.test.ts` still links the template's, as it asserts only the shims (consumers: thoth, bragi).
+
+### Added
+
+- **`bump-version.sh` refuses a regression and a stray declaration.** The version must exceed both `package.json`'s and the last tag (a tag-only check accepts a reset of untagged commits), and no other tracked file may declare the outgoing version as `version = "X"` or `"version": "X"`; `CHANGELOG.md` and the lockfiles are exempt. Carried from Thoth's script and its cases into `tests/desktop/test_bump_version.py` (consumers: thoth, bragi).
+
 ### Consumer must change
 
 - `Cargo.toml` is app-owned, so an existing app sets `crate-type = ["rlib"]` itself (Thoth and Bragi have).
+- Thoth and Bragi take the skeleton's `bump-version.sh` guards (dropping their own copy and its tests) and its `src/test/setup.ts`; `update-kit-hash.sh --check` now really checks, so a stale `kitHash` that passed before fails until refreshed.
 
 ## [2026.11.56] - 2026-11-16
 
