@@ -2494,7 +2494,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			'texture: on paper the grid and the vignette are suppressed and the region goes white',
 			onScreen.backgroundImage !== 'none' &&
 				onPaper.backgroundImage === 'none' &&
-				onPaper.backgroundColor === 'rgb(255, 255, 255)',
+				// The shell's own print rule strips the region's background (!important),
+				// so it prints as the paper: transparent, or the texture's #fff.
+				['rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)'].includes(onPaper.backgroundColor),
 			`screen ${onScreen.backgroundImage.slice(0, 40)}… → print image ${onPaper.backgroundImage}, colour ${onPaper.backgroundColor}`
 		);
 		check(

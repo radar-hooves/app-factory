@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/svelte';
+import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 afterEach(() => {
@@ -45,3 +46,6 @@ Element.prototype.animate = vi.fn(() => ({
 	pause: () => {},
 	play: () => {}
 })) as unknown as typeof Element.prototype.animate;
+
+// shiki 4.6 inflates its wasm through Blob.stream(), which jsdom's Blob lacks.
+globalThis.Blob = NodeBlob as unknown as typeof Blob;

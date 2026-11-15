@@ -4,6 +4,21 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.52] - 2026-11-15
+
+Needs: Renovate's weekly dependency PRs (radar-hooves/app-factory#107, #64) failed `Build, test and type-check` and `Drive @poodle64/ui in a real browser`; the factory takes what they propose (radar-hooves/master-project, via foreman).
+
+### Changed
+
+- **kits/typescript dependencies:** pnpm 12.18.0, shiki 4.6.0, `@lucide/svelte` 1.69.0, style-dictionary 5.8.0, vitest 5.1.0 and their transitive updates. #64 was stale behind main (it reverted landed work) and is superseded.
+
+### Fixed
+
+- `@poodle64/librarian` tests: shiki 4.6 inflates its wasm through `Blob.stream()`, which jsdom's `Blob` lacks; the test setup uses Node's `Blob`.
+- `@poodle64/ui` browser drive: the "does not print" texture check demanded `#fff`, but the shell's own print rule strips the region's background with `!important`, so it prints as the paper (transparent). The check accepts either; the failure predates the dependency bump.
+
+No stamped-app change.
+
 ## [2026.11.51] - 2026-11-15
 
 Needs: the estate moves to Python 3.15 in one change, the factory first (radar-hooves/master-project#455; core-memory's Renovate PR moved one Dockerfile stage and the image failed its smoke with `No module named 'uvicorn'`).
