@@ -4,6 +4,22 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.49] - 2026-11-15
+
+Needs: an app carrying master's change pipeline passes actionlint with no parity exception (pebblestone, radar-hooves/master-project#413); a code-only commit should not rebuild the frontend (pebblestone).
+
+### Changed
+
+- **`.github/actionlint.yaml`** (template and factory): runner labels are master's own list, `household, light, macos, atlas, titan, mimir`. Master's `change.yaml` runs on `light`; the template's list lacked it.
+
+### Refused
+
+- Build SHA out of the frontend layer: the template already does it. `GIT_SHA` is read only by the final `ARG`/`ENV REVISION`, after every `COPY`, and no `VITE_BUILD_SHA` exists, so a code-only commit hits the frontend layer cache. pebblestone's `ENV VITE_BUILD_SHA` before `pnpm build` is its own; it drops it on its next re-stamp.
+
+### Consumer must change
+
+- Every stamped app: nothing to set; regenerate `.template-parity.json` on `copier update`. portcullis may retire its `.github/actionlint.yaml` variant (`atlas` is now listed).
+
 ## [2026.11.48] - 2026-11-15
 
 Needs: system/health's 503 body no longer names the database host, port or name (portcullis, radar-hooves/portcullis#280; app-factory#116); a migration may use `autocommit_block` on a replay from an empty production-named database (godswood, #111); the test conftest logs through a named logger (master-orchestrator, godswood lane, #126). #120 was already fixed by `3bed2967` in 2026.11.43.
