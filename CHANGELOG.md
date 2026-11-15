@@ -8,13 +8,17 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 Needs: a desktop app updates itself from its own signed releases, built once for every Tauri app (radar-hooves/app-factory#133; consumer: bragi, from thoth's holistic review, via thoth).
 
+### Fixed
+
+- The updater's first cut: a release now fails unless the tag is `v` plus `tauri.conf.json`'s version (`latest.json` carries the config's, so a mismatched tag told every install it was current); macOS bundles are verified by `scripts/tauri-release.sh` before `tauri-action` uploads; `report_update_check` takes two booleans and no webview text, and a failed check is a warning on the command target; the release header comment reads.
+
 ### Added
 
 - **Desktop self-update** (`docs/development/desktop-updater.md`): `@poodle64/ui` 2026.11.12's `./updater` (check, download, install, relaunch, six-hourly re-check); `tauri-plugin-telemetry` 0.2.0's `report_update_check`, in `telemetry:default`; and in the desktop skeleton the updater and process plugins, `updater:default` and `process:allow-restart`, `plugins.updater` (endpoint from the project name, an empty pubkey the app fills with its own), the layout starting the checks, and a `release.yaml` that builds, signs and publishes with `latest.json` through `tauri-action`, refusing an empty pubkey or missing secrets.
 
 ### Consumer must change
 
-- Every file above except `release.yaml`'s stamped jobs is app-owned and skipped by `copier update`: an existing desktop app takes the lines by hand, mints its own keypair and sets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (`docs/development/desktop-updater.md` §What an existing app changes). A Nix-built app refreshes its `outputHashes` for `tauri-plugin-telemetry-0.2.0`.
+- Every file above except `scripts/tauri-release.sh` is app-owned (`release.yaml` included) and skipped by `copier update`: an existing desktop app takes the lines by hand, mints its own keypair and sets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (`docs/development/desktop-updater.md` §What an existing app changes). A Nix-built app refreshes its `outputHashes` for `tauri-plugin-telemetry-0.2.0`.
 - A fresh desktop stamp's release fails until the app sets `plugins.updater.pubkey`; its dev and local builds are unaffected.
 
 ## [2026.11.52] - 2026-11-15

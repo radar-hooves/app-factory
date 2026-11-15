@@ -199,19 +199,16 @@ pub(crate) async fn telemetry_probe(
 
 /// Record the outcome of the frontend's update check on the host process, the
 /// one thing allowed to emit telemetry: the webview ships nothing of its own.
-/// A failure carries no text from the webview, only that it failed.
+/// Only two booleans cross: no version or message from the webview is logged.
+/// A failed check is a warning, never an error: an offline machine, or an app
+/// before its first release, fails every interval.
 #[tauri::command]
-pub(crate) fn report_update_check(available: bool, version: Option<String>, failed: bool) {
+pub(crate) fn report_update_check(available: bool, failed: bool) {
     traced_sync_value("report_update_check", || {
         if failed {
-            telemetry::report_error("update_check_failed");
+            tracing::warn!(target: COMMAND_SPAN_TARGET, "update_check_failed");
         } else {
-            tracing::info!(
-                target: COMMAND_SPAN_TARGET,
-                available,
-                version = %version.as_deref().unwrap_or(""),
-                "update_check_complete"
-            );
+            tracing::info!(target: COMMAND_SPAN_TARGET, available, "update_check_complete");
         }
     })
 }

@@ -27,7 +27,6 @@ describe('checkForUpdate', () => {
 		expect(getUpdaterState().state).toBe('available');
 		expect(invoke).toHaveBeenCalledWith('plugin:telemetry|report_update_check', {
 			available: true,
-			version: '2026.11.9',
 			failed: false
 		});
 		expect(toast.info).toHaveBeenCalledOnce();
@@ -47,7 +46,6 @@ describe('checkForUpdate', () => {
 		expect(getUpdaterState().state).toBe('error');
 		expect(invoke).toHaveBeenCalledWith('plugin:telemetry|report_update_check', {
 			available: false,
-			version: null,
 			failed: true
 		});
 		expect(toast.error).not.toHaveBeenCalled();

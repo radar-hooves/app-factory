@@ -5,7 +5,7 @@ A desktop app stamped from `skeletons/desktop/` installs new versions of itself 
 | Piece | Where |
 | --- | --- |
 | Check, download, install, relaunch, six-hourly re-check, toasts | `@poodle64/ui/updater` (`startUpdateChecks`, `checkForUpdate`, `getUpdaterState`, `downloadAndInstall`) |
-| Outcome of each check as telemetry | `tauri-plugin-telemetry`'s `report_update_check` (in `telemetry:default`; the webview supplies no text) |
+| Outcome of each check as telemetry | `tauri-plugin-telemetry`'s `report_update_check` (in `telemetry:default`; the webview supplies two booleans, no text) |
 | Plugin registration, capabilities, endpoint | the skeleton's `lib.rs`, `capabilities/default.json`, `tauri.conf.json` |
 | Signed build, `latest.json`, draft then publish | the skeleton's `release.yaml` (`tauri-action`) |
 
@@ -21,6 +21,10 @@ The updater verifies a download against the public key in `tauri.conf.json`; a l
 
 The release's first step refuses a build with the key empty or either secret missing. A lost private key strands every installed copy: they can never be updated to a build signed by another key, so keep the key where the operator keeps backups.
 
+## Cutting a release
+
+`latest.json` carries the version in `src-tauri/tauri.conf.json`, never the tag's, so an app whose config says `0.1.0` publishes a release every installed copy calls up to date. The release's build job fails when the pushed tag (`v2026.11.1`) is not `v` plus that version. Before tagging, set `version` in `src-tauri/tauri.conf.json` (and `Cargo.toml`, `package.json`) to the tag's number, and merge it. The signed macOS bundles are verified by `scripts/tauri-release.sh` before `tauri-action` uploads anything.
+
 ## What an existing app changes
 
 Every file below is app-owned (`_skip_if_exists`), so `copier update` does not touch it. Copy the skeleton's lines.
@@ -31,7 +35,7 @@ Every file below is app-owned (`_skip_if_exists`), so `copier update` does not t
 - `src-tauri/capabilities/default.json`: `updater:default`, `process:allow-restart`.
 - `src-tauri/tauri.conf.json`: `plugins.updater` with the app's pubkey and endpoint `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`. Do not set `bundle.createUpdaterArtifacts`: the release passes it, so a local build needs no private key.
 - `src/routes/+layout.svelte`: `onMount(startUpdateChecks)` from `@poodle64/ui/updater`. Import the store's functions from there in the Settings pane; delete the app's own `updater` store.
-- `.github/workflows/release.yaml`: the skeleton's `build` and `publish` jobs, or the app's own with `tauri-action`, the two secrets, and `--config '{"bundle":{"createUpdaterArtifacts":true}}'`. `latest.json` is uploaded to the release and found at `releases/latest/download/`, so the release must be published, not a draft. A release that builds with `pnpm tauri build` and uploads installers by hand (Bragi) swaps to `tauri-action`, which writes `latest.json`.
+- `.github/workflows/release.yaml` and `scripts/tauri-release.sh` (the script is stamped; `copier update` brings it): the skeleton's `build` and `publish` jobs, or the app's own with `tauri-action`, the two secrets, and `--config '{"bundle":{"createUpdaterArtifacts":true}}'`. `latest.json` is uploaded to the release and found at `releases/latest/download/`, so the release must be published, not a draft. A release that builds with `pnpm tauri build` and uploads installers by hand (Bragi) swaps to `tauri-action`, which writes `latest.json`.
 
 An app already shipping an updater (Thoth) keeps its public key and secrets, so installed copies keep updating; it changes only to the kit calls above.
 

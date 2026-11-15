@@ -100,7 +100,7 @@ export async function checkForUpdate({ quiet = false }: { quiet?: boolean } = {}
 			updaterState.state = 'available';
 			updaterState.update = update;
 			updaterState.updateVersion = update.version;
-			void invoke('plugin:telemetry|report_update_check', { available: true, version: update.version, failed: false });
+			void invoke('plugin:telemetry|report_update_check', { available: true, failed: false });
 			toast.info(`Update available: v${update.version}`, {
 				description: `Version ${update.version} is ready to install`,
 				duration: Infinity,
@@ -109,13 +109,13 @@ export async function checkForUpdate({ quiet = false }: { quiet?: boolean } = {}
 			});
 		} else {
 			updaterState.state = 'up-to-date';
-			void invoke('plugin:telemetry|report_update_check', { available: false, version: null, failed: false });
+			void invoke('plugin:telemetry|report_update_check', { available: false, failed: false });
 		}
 	} catch (err) {
 		updaterState.state = 'error';
 		updaterState.error = err instanceof Error ? err.message : 'Failed to check for updates';
 		console.error('Update check failed:', err);
-		void invoke('plugin:telemetry|report_update_check', { available: false, version: null, failed: true });
+		void invoke('plugin:telemetry|report_update_check', { available: false, failed: true });
 		if (quiet) return;
 		toast.error('Failed to check for updates', { description: updaterState.error });
 	}
