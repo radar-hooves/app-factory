@@ -8,6 +8,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, bragi, via radar-hooves/thoth#208).
 
+Need (refused as a hold): an app updated from before 2026.11.51 could not build its image on Python 3.15 (consumer: godswood, radar-hooves/godswood#953). Its `uv.lock` was stale, not the stack: at godswood's locked versions (pydantic-core 2.46.4, cffi 2.0.0, markupsafe 3.0.3, regex 2026.7.10, hiredis 3.4.0, jiter 0.15.0) PyPI has no cp315 wheel, and the builder stage has no compiler. The current release of each (pydantic-core 2.50.4, cffi 2.1.1, markupsafe 3.0.4, regex 2026.11.15, hiredis 3.5.0, jiter 0.19.0, uvloop 0.23.0, httptools 0.9.0, psycopg-binary 3.3.9) ships cp315 wheels, read from PyPI 17/11/2026, and casefile, caspo, earworm, eight, library and portcullis already lock them and build. The hold stays retired; a wheel gate would only repeat what `uv sync` reports.
+
 ### Changed
 
 - **The desktop skeleton's dev profile splits debug info out** (`split-debuginfo = "unpacked"` in `src-tauri/Cargo.toml`). Every test binary links the whole app library; in Thoth eight such links at once held 3.9 GB and the kernel killed a 6 GB runner unit. With the debug info in side files the linker skips it, and a debugger still reads them. Measured on atlas at 8 CPUs, cold: oom-kill at 6 GB before, success at 4 GB after.
@@ -15,6 +17,7 @@ Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, 
 ### Consumer must change
 
 - `Cargo.toml` is app-owned: an existing app adds the `[profile.dev]` lines itself (Thoth and Bragi have).
+- An app whose `backend/uv.lock` predates the Python 3.15 move runs `uv lock --upgrade` before its first image build on 3.15, so every locked package resolves to a release with a cp315 wheel. Pebblestone (locked at pydantic-core 2.46.4) is in godswood's position; wordhoard's lock already resolves.
 
 ## [2026.11.57] - 2026-11-16
 
