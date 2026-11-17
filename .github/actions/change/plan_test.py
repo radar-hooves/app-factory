@@ -27,9 +27,10 @@ ENV = {
 
 
 def run(cwd: Path, *args: str) -> str:
-    return subprocess.run(
-        args, cwd=cwd, env=ENV, check=True, capture_output=True, text=True
-    ).stdout.strip()
+    r = subprocess.run(args, cwd=cwd, env=ENV, capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError(f"{args} exit {r.returncode}: {r.stderr}")
+    return r.stdout.strip()
 
 
 def write(root: Path, files: dict[str, str]) -> None:
