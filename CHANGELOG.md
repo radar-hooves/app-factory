@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.11.58] - 2026-11-18
+
 Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, bragi, via radar-hooves/thoth#208).
 
 Need (refused as a hold): an app updated from before 2026.11.51 could not build its image on Python 3.15 (consumer: godswood, radar-hooves/godswood#953). Its `uv.lock` was stale, not the stack: at godswood's locked versions (pydantic-core 2.46.4, cffi 2.0.0, markupsafe 3.0.3, regex 2026.7.10, hiredis 3.4.0, jiter 0.15.0) PyPI has no cp315 wheel, and the builder stage has no compiler. The current release of each (pydantic-core 2.50.4, cffi 2.1.1, markupsafe 3.0.4, regex 2026.11.15, hiredis 3.5.0, jiter 0.19.0, uvloop 0.23.0, httptools 0.9.0, psycopg-binary 3.3.9) ships cp315 wheels, read from PyPI 17/11/2026, and casefile, caspo, earworm, eight, library and portcullis already lock them and build. The hold stays retired; a wheel gate would only repeat what `uv sync` reports.
