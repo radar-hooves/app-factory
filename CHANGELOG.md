@@ -6,6 +6,18 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.11.59] - 2026-11-18
+
+Need: a public repo calls the change pipeline without carrying a copy (consumer: thoth, via radar-hooves/master-project#460). The runner fetches this repo's composite actions as GitHub's tarball and failed on the governance symlinks that resolve outside the repo (casefile's first caller run).
+
+### Fixed
+
+- **The archive omits the governance links** (`.gitattributes` `export-ignore` for `docs/master`, `.claude/commands/master` and `.claude/skills/*`). They stay committed; GitHub's tarball no longer carries them, so a caller's action download succeeds. The skeletons' in-repo links are unchanged.
+
+### Consumer must change
+
+- Nothing; a caller re-runs.
+
 ## [2026.11.58] - 2026-11-18
 
 Needs: a desktop app's test build that fits a 6 GB CI runner (consumers: thoth, bragi, via radar-hooves/thoth#208).
