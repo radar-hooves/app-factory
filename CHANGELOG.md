@@ -12,10 +12,13 @@ Need (refused as a hold): an app updated from before 2026.11.51 could not build 
 
 ### Changed
 
+- **The change pipeline lives here** (consumers: master-project, radar-hooves/master-project#460; thoth, supacrawl and pebblestone cannot call master's private copy). `.github/workflows/change.yaml`, `.github/actions/change/` (with `plan_test.py`, run by `change-pipeline.yaml`) and `.github/actions/setup-uv/` are moved from master-project, with host names, private issue refs and private doc pointers reworded. Callers use `radar-hooves/app-factory/.github/workflows/change.yaml@main`; the template's and the desktop skeleton's `change.yaml` now do. Master's copy stays until every caller has moved.
+
 - **The desktop skeleton's dev profile splits debug info out** (`split-debuginfo = "unpacked"` in `src-tauri/Cargo.toml`). Every test binary links the whole app library; in Thoth eight such links at once held 3.9 GB and the kernel killed a 6 GB runner unit. With the debug info in side files the linker skips it, and a debugger still reads them. Measured on atlas at 8 CPUs, cold: oom-kill at 6 GB before, success at 4 GB after.
 
 ### Consumer must change
 
+- A stamped app takes the new `change.yaml` caller (one `uses:` line) and a regenerated `.template-parity.json`; until it does, it keeps calling master's copy.
 - `Cargo.toml` is app-owned: an existing app adds the `[profile.dev]` lines itself (Thoth and Bragi have).
 - An app whose `backend/uv.lock` predates the Python 3.15 move runs `uv lock --upgrade` before its first image build on 3.15, so every locked package resolves to a release with a cp315 wheel. Pebblestone (locked at pydantic-core 2.46.4) is in godswood's position; wordhoard's lock already resolves.
 

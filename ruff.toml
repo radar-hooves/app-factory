@@ -18,7 +18,9 @@ target-version = "py315"
 # formatter can actually keep honest. The migrations are excluded too: their
 # import sorting depends on the app's own first-party list (`alembic`), which
 # this repo cannot know.
-extend-exclude = ["*.jinja", "template/backend/alembic"]
+# The change pipeline's scripts are moved whole from master and guarded by plan_test.py; they are not
+# the template's Python, so they are not held to its rule set or width.
+extend-exclude = ["*.jinja", "template/backend/alembic", ".github/actions/change"]
 
 # Mirrored from template/backend/pyproject.toml.jinja, not chosen here: the point
 # is to lint these files as the stamped app will, so this repo must not hold an

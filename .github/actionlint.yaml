@@ -1,4 +1,4 @@
 # The household self-hosted runner labels master's change pipeline and security scan use
 # (master-project/.github/actionlint.yaml), so actionlint accepts runs-on: [self-hosted, household, light].
 self-hosted-runner:
-  labels: [household, light, macos, atlas, titan, mimir]
+  labels: [household, light, linux, release, gradle, macos, atlas, titan, mimir]
