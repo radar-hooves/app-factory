@@ -19,6 +19,8 @@ import plan as planner  # noqa: E402
 ENV = {
     **os.environ,
     "UV_OFFLINE": "1",
+    # The fixtures pin .python-version 3.12 only to be a pin; offline, uv needs an interpreter it has.
+    "UV_PYTHON": sys.executable,
     "GIT_AUTHOR_NAME": "t",
     "GIT_AUTHOR_EMAIL": "t@t",
     "GIT_COMMITTER_NAME": "t",
