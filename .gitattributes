@@ -1,0 +1,6 @@
+# Governance links resolve outside this repo; the runner's tarball download fails on them.
+/.claude/commands/master export-ignore
+/.claude/skills/design-frontend export-ignore
+/.claude/skills/handoff export-ignore
+/.claude/skills/second-read export-ignore
+/docs/master export-ignore
