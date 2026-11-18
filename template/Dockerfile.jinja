@@ -92,8 +92,8 @@ ADD https://deb.debian.org/debian/dists/trixie/InRelease deb.debian.org_debian_d
 ADD https://deb.debian.org/debian/dists/trixie-updates/InRelease deb.debian.org_debian_dists_trixie-updates_InRelease
 ADD https://deb.debian.org/debian-security/dists/trixie-security/InRelease deb.debian.org_debian-security_dists_trixie-security_InRelease
 
-# Stage 5: Runtime
-FROM python:3.15-slim-trixie
+# Stage 5: Runtime. Named so an app's own stages, below the marker, can build on it.
+FROM python:3.15-slim-trixie AS runtime
 
 WORKDIR /app
 
@@ -230,6 +230,12 @@ ENV REVISION=${GIT_SHA}
 # the cache order you want. Three constraints: USER is already set, so a tail step
 # runs as uid 1000 (use `COPY --chown=1000:1000`, not a root RUN); REVISION
 # above changes on every commit, so a tail step reruns on every build and a
-# download here is paid per deploy; and anything the FRONTEND, BUILDER or
-# PACKAGE stage needs cannot live here — that is a real exception, not a tail.
+# download here is paid per deploy; and a step that changes what the FRONTEND,
+# BUILDER or PACKAGE stage produces cannot live here, that is a real exception.
+#
+# An app that builds something of its own (a native tool from source) adds
+# stages here instead: its build stages first, which REVISION never reaches and
+# so stay cached, then a last `FROM runtime AS app` that COPYs from them. The
+# last stage is what `docker build` makes, and it inherits runtime's USER, ENV,
+# CMD and REVISION.
 # App-owned below this line; the factory owns everything above it.

@@ -14,11 +14,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **A person-chosen secret's length is never logged** (need: portcullis, radar-hooves/app-factory#150). `logging.py` passes `password` and `secret` to the telemetry call as low-entropy keys, and an app adds its own through `app_hooks.LOW_ENTROPY_SECRET_KEYS`, so a failed login shows `<redacted, secret>`, never `<redacted, 8 chars>`. The `api-common` floor is `2026.9.5`, the release that takes the argument.
 
+- **An app adds its own build stages below the Dockerfile's marker** (need: portcullis, radar-hooves/app-factory#149; reshaped). The runtime stage is named `runtime`, and the tail may define build stages followed by a last `FROM runtime AS app` that copies from them. The build stages sit below REVISION's cache break, so they stay cached, and no stage above the marker changes: no exception on the whole file.
+
 ### Consumer must change
 
 - Portcullis drops its `logging.py` variant and names its own keys in `app_hooks.py`. Any app takes the new `logging.py`, `app_hooks.py` docstring and a regenerated `.template-parity.json`; an app holding a login password lists its field name.
 
 - Portcullis answers `healthcheck_path: /status` and drops its `compose.yaml` variant. No other app acts.
+
+- Every app takes the new `Dockerfile` and a regenerated `.template-parity.json`. Portcullis moves its two build stages (age, age-plugin-tpm) below the marker and ends on `FROM runtime AS app`, then drops its `parity:Dockerfile` exception (portcullis#320).
 
 ## [2026.11.59] - 2026-11-18
 
