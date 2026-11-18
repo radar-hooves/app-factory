@@ -244,6 +244,42 @@ _tasks:
         # git checkout this task is that render, and must not call the gate back.
         if not subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
             subprocess.run(["household-precommit-template-parity", "--generate", "."], check=True)
+  # The factory's dependency floors reach the app's own backend/pyproject.toml and
+  # frontend/package.json here, from the manifest the task above just generated (its
+  # `deps` are the render's floors at the new `_commit`): a spec below its floor is
+  # replaced by the factory's, one at or above it, an app-only package and a
+  # `deps:<name>` exception are left alone, and the lock that changed is re-resolved.
+  # Same guard as above: inert inside the gate's own render.
+  - when: "{{ skeleton == 'web' }}"
+    command:
+      - python3
+      - -c
+      - |
+        import json, pathlib, re, subprocess
+        if subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
+            raise SystemExit
+        want = json.loads(pathlib.Path(".template-parity.json").read_text())["deps"]
+        ex = pathlib.Path(".canonical-exceptions")
+        skip = {l.split()[0][5:] for l in ex.read_text().splitlines() if l.startswith("deps:")} if ex.exists() else set()
+        def ver(s):
+            m = re.search(r"\d+(?:\.\d+)*", s)
+            return tuple(map(int, m.group().split("."))) if m else None
+        def raise_floors(path, pattern, relock):
+            p = pathlib.Path(path)
+            def fix(m):
+                name = m["name"].lower().replace("_", "-")
+                w = want.get(name)
+                if name in skip or not w or not ver(w) or not ver(m["spec"]) or ver(m["spec"]) >= ver(w):
+                    return m[0]
+                print(f"floor {name}: {m['spec']} -> {w}")
+                return m["pre"] + w + m["post"]
+            text = p.read_text()
+            new = re.sub(pattern, fix, text)
+            if new != text:
+                p.write_text(new)
+                subprocess.run(relock, cwd=p.parent, check=True)
+        raise_floors("backend/pyproject.toml", r'(?P<pre>"(?P<name>[A-Za-z0-9._-]+)(?:\[[^\]]*\])?\s*)(?P<spec>[<>=!~][^"]*)(?P<post>")', ["uv", "lock"])
+        raise_floors("frontend/package.json", r'(?P<pre>"(?P<name>@?[\w./-]+)":\s*")(?P<spec>[^"]+)(?P<post>")', ["pnpm", "install", "--lockfile-only"])
 
 # Files the template has retired and copier cannot delete. A plain update
 # removes a file the old tagged render had and the new one lacks, but not
