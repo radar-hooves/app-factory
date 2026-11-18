@@ -121,6 +121,10 @@ export default defineConfig(({ command, isPreview }) => {
 	return {
 		plugins: [...plugins, requireDevIdentity],
 		define: { __APP_BACKEND_PREFIXES__: JSON.stringify(Object.keys(appRoutes)) },
+		// What src/hooks.client.ts imports: the optimizer's start-up scan does not
+		// reach that file, so without this the first request after a dev-server start
+		// finds the dependency late, Vite reloads, and the first page stays blank.
+		optimizeDeps: { include: ['@poodle64/ui/telemetry'] },
 		server: {
 			port: {{ frontend_port }},
 			...identity.serverOptions,

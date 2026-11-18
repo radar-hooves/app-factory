@@ -13,8 +13,11 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // held to the outcome only where the app renders it.
 async function expectPaletteOpen(page: Page) {
 	await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
-	// The palette's own input, so a dialog opened by something else cannot pass.
-	await expect(page.getByPlaceholder('Search…')).toBeFocused();
+	// The palette's own input, so a dialog opened by something else cannot pass;
+	// found inside the dialog, never by the placeholder an app may change.
+	await expect(
+		page.getByRole('dialog', { name: 'Command palette' }).locator('input')
+	).toBeFocused();
 }
 
 test('the keyboard shortcut opens the command palette @smoke', async ({ page }) => {

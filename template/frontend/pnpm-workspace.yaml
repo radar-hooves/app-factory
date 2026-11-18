@@ -16,5 +16,5 @@ minimumReleaseAgeExclude:
 # which a bare cookie override would drag back to 0.x and break its build.
 overrides:
   js-yaml: ^4.3.2
-  fast-uri: ^3.1.6
+  fast-uri: ^3.1.9
   'cookie@<0.7.0': ^0.7.0

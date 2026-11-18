@@ -148,7 +148,7 @@ def ensure_personal_workspace(session: Session, user: User) -> WorkspaceMembersh
     # without poisoning the transaction, and the winner's membership is returned.
     try:
         with session.begin_nested():
-            workspace = Workspace(slug=f"personal-{user.id}", name=user.username)
+            workspace = Workspace(slug=f"personal-{user.id}", name=user.display_name or "Personal")
             session.add(workspace)
             session.flush()
             membership = WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.OWNER)

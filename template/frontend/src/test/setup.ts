@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/svelte';
+import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, vi } from 'vitest';
 
 import { resetPage as resetStatePage } from './mocks/app-state.svelte';
@@ -24,6 +25,9 @@ afterEach(async () => {
 		await new Promise((resolve) => setTimeout(resolve, 40));
 	}
 });
+
+// shiki 4.6 inflates its wasm through Blob.stream(), which jsdom's Blob lacks.
+globalThis.Blob = NodeBlob as unknown as typeof Blob;
 
 // Mock localStorage
 const localStorageMock = (() => {

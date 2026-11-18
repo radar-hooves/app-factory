@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Fixed
+
+- **Four small template needs** (consumers: caspo #143/#144, library #98, master-project #68). The test setup gives jsdom's `Blob` Node's `stream()` (shiki 4.6); `vite.config.ts` pre-bundles `@poodle64/ui/telemetry` so the first dev page is not blank; a personal workspace is named from the display name, else `Personal`, never the uid; the `fast-uri` override floor is `^3.1.9`; the shell spec finds the palette's input inside its dialog, not by the placeholder an app may change. `variants.yaml` drops portcullis's eight entries that no longer differ (#152). Consumer must change: nothing.
+
 ## [2026.11.62] - 2026-11-18
 
 Need: earworm's update to 2026.11.61, which still took two hand edits (master-project, 18/11/2026).
