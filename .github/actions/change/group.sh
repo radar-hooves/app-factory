@@ -2,16 +2,16 @@
 # A group leg: several members run one after another on one runner (plan.sh's `groups`), each
 # its own test leg and, on a shipping run, its own wait and deploy. A member that fails never
 # stops the rest; the leg ends red naming every one that failed. Gradle members run first, in
-# batches of six per invocation (gradle.sh names the failed ones from the build's output), and
+# batches of six per invocation (gradle.sh confirms each green member from the build's output), and
 # every member's flake shell is one profile realised once (lib.sh's in_flake), never a fetch
 # per member.
 # Usage: group.sh   (env: MEMBERS the group's plan rows as JSON, HEAD_SHA, SHIP, CHANGE_*)
 . "$(dirname "$0")/lib.sh"
 need MEMBERS HEAD_SHA
 ship=${SHIP:-false} failed=()
-CHANGE_FLAKE_ROOTS=$(mktemp -d) GRADLE_FAILED=$(mktemp)
-export CHANGE_FLAKE_ROOTS GRADLE_FAILED
-trap 'rm -rf "$CHANGE_FLAKE_ROOTS" "$GRADLE_FAILED"' EXIT
+CHANGE_FLAKE_ROOTS=$(mktemp -d) GRADLE_PASSED=$(mktemp)
+export CHANGE_FLAKE_ROOTS GRADLE_PASSED
+trap 'rm -rf "$CHANGE_FLAKE_ROOTS" "$GRADLE_PASSED"' EXIT
 declare -A done_rc=()
 rows=$(jq -r '.[] | [.name, (.path | if . == "" then "." end), .toolchain, .test, .deploy, .deploy_now,
   .workers, (.waits | join(" "))] | @tsv' <<<"$MEMBERS")
@@ -22,17 +22,13 @@ while IFS=$'\t' read -r name path toolchain test _; do
 done <<<"$rows"
 for ((i = 0; i < ${#gnames[@]}; i += 6)); do
   echo "::group::gradle ${gnames[*]:i:6}"
-  : >"$GRADLE_FAILED"
-  rc=0
-  "$here/gradle.sh" "${gpaths[@]:i:6}" || rc=1
+  : >"$GRADLE_PASSED"
+  "$here/gradle.sh" "${gpaths[@]:i:6}" || true
+  # A member passes only when gradle.sh confirmed it; a failed, skipped or unnamed one fails.
   for ((j = i; j < i + 6 && j < ${#gnames[@]}; j++)); do
-    done_rc[${gnames[j]}]=0
-    [ "$rc" = 0 ] || if grep -qxF "$(cd "${gpaths[j]}" && pwd)" "$GRADLE_FAILED"; then done_rc[${gnames[j]}]=1; fi
+    done_rc[${gnames[j]}]=1
+    ! grep -qxF "$(cd "${gpaths[j]}" && pwd)" "$GRADLE_PASSED" || done_rc[${gnames[j]}]=0
   done
-  # A red batch that named no member (the wrapper itself failed) fails every one of them.
-  if [ "$rc" = 1 ] && [ ! -s "$GRADLE_FAILED" ]; then
-    for ((j = i; j < i + 6 && j < ${#gnames[@]}; j++)); do done_rc[${gnames[j]}]=1; done
-  fi
   echo "::endgroup::"
 done
 while IFS=$'\t' read -r name path toolchain test deploy now workers waits; do

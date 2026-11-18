@@ -1332,17 +1332,12 @@ def test_an_included_build_is_a_member_run_from_its_parent(droid):
         assert out == f"--no-daemon --stacktrace {task}"
 
 
-def test_a_group_runs_gradle_members_in_one_build_and_names_the_failed_one(tmp_path):
+def gradle_group(tmp_path, script):
+    """group.sh over members a, b, c of one build whose gradlew runs `script`; (exit code, stderr, calls)."""
     repo = tmp_path / "g"
     init(repo, {"settings.gradle": "include ':a', ':b', ':c'\n"})
     log = tmp_path / "calls"
-    write(
-        repo,
-        {
-            "gradlew": f'#!/bin/sh\necho "$@" >>{log}\n'
-            "case \"$*\" in *:b:check*) echo \"Execution failed for task ':b:test'.\"; exit 1;; esac\n",
-        },
-    )
+    write(repo, {"gradlew": f'#!/bin/sh\necho "$@" >>{log}\n{script}\n'})
     (repo / "gradlew").chmod(0o755)
     for d in "abc":
         write(repo, {f"{d}/x": ""})
@@ -1357,10 +1352,30 @@ def test_a_group_runs_gradle_members_in_one_build_and_names_the_failed_one(tmp_p
         env={**ENV, "MEMBERS": json.dumps(members), "HEAD_SHA": "x"},
         capture_output=True, text=True,
     )  # fmt: skip
-    assert r.returncode == 1 and "1 failed: b" in r.stderr
-    assert log.read_text().splitlines() == [
-        "--no-daemon --stacktrace --continue --max-workers=2 :a:check :b:check :c:check"
-    ]
+    return r.returncode, r.stderr, log.read_text().splitlines()
+
+
+ONE_BUILD = "--no-daemon --stacktrace --console=plain --continue --max-workers=2 :a:check :b:check :c:check"
+
+
+def test_a_group_runs_gradle_members_in_one_build_and_names_the_failed_one(tmp_path):
+    # b's test fails; c's check is skipped for it (no line printed), so c failed too.
+    script = (
+        "echo '> Task :a:test'; echo '> Task :a:check'; echo '> Task :b:test FAILED';"
+        " echo '> Task :c:test UP-TO-DATE'; exit 1"
+    )
+    code, err, calls = gradle_group(tmp_path, script)
+    assert code == 1 and "2 failed: b c" in err and calls == [ONE_BUILD]
+
+
+def test_a_green_batch_passes_every_member_and_a_red_one_naming_nobody_fails_them_all(
+    tmp_path,
+):
+    code, err, _ = gradle_group(tmp_path, "exit 0")
+    assert code == 0, err
+    (tmp_path / "x").mkdir()
+    code, err, _ = gradle_group(tmp_path / "x", "echo boom; exit 1")
+    assert code == 1 and "3 failed: a b c" in err
 
 
 def test_included_builds_are_named_by_path_and_one_from_outside_is_skipped(

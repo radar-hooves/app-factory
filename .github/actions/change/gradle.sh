@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Gradle members' leg: each project's `check` (Android's includes Lint), by the build's own
 # wrapper. Several members of one build run as ONE invocation (`--continue`, two workers): the
-# JVM start and the configuring of every project is most of a member's five minutes. A failing
-# one is named from the build's own output into $GRADLE_FAILED (a file), one dir per line; a
-# failed task no member owns names them all. A repo's exclusions and setup belong in its own
+# JVM start and the configuring of every project is most of a member's five minutes. Each
+# member the build's own output confirms green is appended to $GRADLE_PASSED (a file, one dir per
+# line); every other member of a red build failed or was skipped, and the caller names it. A repo's exclusions and setup belong in its own
 # build, never here.
 # Usage: gradle.sh <member-dir>...
 . "$(dirname "$0")/lib.sh"
@@ -15,38 +15,29 @@ up() {  # the nearest dir at or above $1 holding a Gradle settings file, if any
   done
   echo "$d"
 }
-owns() {  # <task path> <member's check task>: the task is a direct one of that member's project
-  local rest=${1#"${2%check}"}
-  [ "$rest" != "$1" ] && [[ $rest != *:* ]]
-}
-run() {  # <root> <member-dir>:<task>... ; the tasks of one build, or `-p <path> check` alone
-  local root=$1 tasks=() dirs=() m log failed=() t i owned rc=0
+run() {  # <root> <member-dir><TAB><task>... ; the tasks of one build, or `-p <path> check` alone
+  local root=$1 tasks=() dirs=() m log i rc=0
   shift
-  for m; do dirs+=("${m%%:*}") tasks+=("${m#*:}"); done
+  for m; do dirs+=("${m%%$'\t'*}") tasks+=("${m#*$'\t'}"); done
   log=$(mktemp)
   if [ "${#tasks[@]}" -eq 1 ]; then
     # shellcheck disable=SC2086 # an included build's task is `-p <path> check`, split on purpose
     in_flake "$root" ./gradlew --no-daemon --stacktrace ${tasks[0]} || rc=1
   else
-    in_flake "$root" ./gradlew --no-daemon --stacktrace --continue --max-workers=2 "${tasks[@]}" 2>&1 |
-      tee "$log" || rc=1
-    mapfile -t failed < <(sed -n "s/.*Execution failed for task '\([^']*\)'.*/\1/p" "$log" | sort -u)
+    in_flake "$root" ./gradlew --no-daemon --stacktrace --console=plain --continue --max-workers=2 \
+      "${tasks[@]}" 2>&1 | tee "$log" || rc=1
+  fi
+  if [ -z "${GRADLE_PASSED:-}" ]; then :
+  elif [ "$rc" = 0 ]; then printf '%s\n' "${dirs[@]}" >>"$GRADLE_PASSED"
+  else
+    # A member passes only when its own `check` is printed as run (`> Task :a:check`, with
+    # UP-TO-DATE or FROM-CACHE after it); one skipped for a failed dependency prints nothing, one
+    # that failed ends in FAILED. Anything else, a red build that printed no such line, fails.
+    for i in "${!dirs[@]}"; do
+      ! grep -qxE "> Task ${tasks[i]}( (UP-TO-DATE|FROM-CACHE|NO-SOURCE))?" "$log" || echo "${dirs[i]}" >>"$GRADLE_PASSED"
+    done
   fi
   rm -f "$log"
-  [ "$rc" = 0 ] || [ -z "${GRADLE_FAILED:-}" ] || {
-    for i in "${!dirs[@]}"; do
-      for t in "${failed[@]}"; do
-        if owns "$t" "${tasks[i]}"; then echo "${dirs[i]}" >>"$GRADLE_FAILED"; break; fi
-      done
-    done
-    # A failure no member owns, or none printed (a configuring error), names every member.
-    owned=1
-    for t in "${failed[@]}"; do
-      for i in "${!dirs[@]}"; do owns "$t" "${tasks[i]}" && continue 2; done
-      owned=
-    done
-    if [ -z "$owned" ] || [ "${#failed[@]}" -eq 0 ]; then printf '%s\n' "${dirs[@]}" >>"$GRADLE_FAILED"; fi
-  }
   return "$rc"
 }
 declare -A batch=()  # root => its "<dir>:<task>" members, space-joined
@@ -66,11 +57,11 @@ for arg in "${@:-.}"; do
 done
 rc=0
 for root in "${!batch[@]}"; do
-  mapfile -t ms < <(printf %s "${batch[$root]}" | tr '\t' ':')
+  mapfile -t ms <<<"${batch[$root]%$'\n'}"
   run "$root" "${ms[@]}" || rc=1
 done
 for a in "${alone[@]}"; do
   IFS=$'\t' read -r dir parent task <<<"$a"
-  run "$parent" "$dir:$task" || rc=1
+  run "$parent" "$dir"$'\t'"$task" || rc=1
 done
 exit "$rc"
