@@ -227,31 +227,23 @@ _exclude:
 
 # The parity manifest is derived, never edited. Every stamp and every update ends
 # by regenerating `.template-parity.json` from the render at the `_commit` just
-# written (master's household gate: the one implementation), then deleting the
-# `.canonical-exceptions` lines that gate itself reports RETIRABLE (the file now
-# matches the factory). What stays hand-written is a NEW exception: the reason,
-# expiry and tracker for a difference no gate can judge. A `_tasks` entry, not a
-# `_migration`, because it runs on every update rather than once at a version.
-# Needs `--trust`, which master's /master:update-app-template passes.
+# written (master's household gate: the one implementation). The settled
+# `.canonical-exceptions` lines are retired by the app's own gate, not here: a
+# task runs before copier re-applies the app's edits, so it would judge the
+# factory's pristine file, not the app's. A `_tasks` entry, not a `_migration`,
+# because it runs on every update rather than once at a version. Needs `--trust`,
+# which master's /master:update-app-template passes.
 _tasks:
   - when: "{{ skeleton == 'web' }}"
     command:
       - python3
       - -c
       - |
-        import pathlib, re, subprocess, sys
-        gate = "household-precommit-template-parity"
+        import subprocess
         # The gate renders this template itself, into a bare temp dir: outside a
         # git checkout this task is that render, and must not call the gate back.
-        if subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
-            raise SystemExit(0)
-        subprocess.run([gate, "--generate", "."], check=True)
-        exc = pathlib.Path(".canonical-exceptions")
-        if exc.exists():
-            out = subprocess.run([gate, "."], capture_output=True, text=True).stdout
-            m = re.search(r"RETIRABLE.*?\n((?:  \S.*\n)+)", out)
-            keys = {l.split()[0] for l in m.group(1).splitlines()} if m else set()
-            exc.write_text("".join(l for l in exc.read_text().splitlines(True) if not l.split() or l.split()[0] not in keys))
+        if not subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
+            subprocess.run(["household-precommit-template-parity", "--generate", "."], check=True)
 
 # Files the template has retired and copier cannot delete. A plain update
 # removes a file the old tagged render had and the new one lacks, but not

@@ -329,19 +329,35 @@ repos:
   # without the command fails the commit loudly (the default for a missing
   # system command): a fence nobody can see go dark is not a fence.
   #
-  # Passes right after a genuine copier update: that operation re-renders the
-  # owed files AND regenerates .template-parity.json in the same motion (either
-  # `converge-to-template.py --apply`, or a plain `copier update` followed by
-  # `household-precommit-template-parity --generate .` to resync the manifest — the
-  # second step is the one a bare `copier update` does not do for you), so the
-  # file this gate compares against moves with the files it is comparing.
+  # The gate also retires what it reports RETIRABLE: a `.canonical-exceptions` line
+  # whose file now matches the factory is deleted (pre-commit then asks for a
+  # re-add), so a settled exception is never a hand edit. A new exception, the
+  # reason and expiry for a difference, stays the person's.
+  #
+  # Passes right after a genuine copier update: a `_tasks` entry in the factory's
+  # copier.yaml regenerates .template-parity.json from the render at the new
+  # `_commit` in the same motion (`converge-to-template.py --apply` does too), so
+  # the file this gate compares against moves with the files it is comparing.
   - repo: local
     hooks:
       - id: template-parity
         name: 'governance - No app edit to a file the factory owns'
-        entry: household-precommit-template-parity .
+        entry: |
+          python3 -c '
+          import pathlib, re, subprocess, sys
+          r = subprocess.run(["household-precommit-template-parity", "."], capture_output=True, text=True)
+          sys.stdout.write(r.stdout); sys.stderr.write(r.stderr)
+          m = re.search(r"RETIRABLE.*?\n((?:  \S.*\n)+)", r.stdout)
+          p = pathlib.Path(".canonical-exceptions")
+          if m and p.exists():
+              keys = {l.split()[0] for l in m.group(1).splitlines()}
+              p.write_text("".join(l for l in p.read_text().splitlines(True) if not l.split() or l.split()[0] not in keys))
+              print("retired " + str(len(keys)) + " settled exception line(s) from .canonical-exceptions")
+          sys.exit(r.returncode)
+          '
         language: system
         pass_filenames: false
+        always_run: true
 
   # ────────────────────────── App-owned hooks ──────────────────────────────
   #
