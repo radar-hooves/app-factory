@@ -12,6 +12,9 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **`mcp_auth` joins `omitted_slices`** (need: portcullis, radar-hooves/app-factory#146; reshaped). An app that authenticates its own machine callers (portcullis mints and verifies attested bearers) plugs in through `app_hooks.mcp_auth` and records that the Authentik gate is not its own: `mcp/http_auth.py`, `mcp/auth.py`, `mcp/actors.py`, `config/sections/mcp.py`, `config/actors.yaml` and the tests that drive them are `slices.yaml`'s `mcp_auth`, absent or differing is conforming, no variant. Like users, the slice stays in the render, since `mcp/server.py`, `main.py` and the alerts and feedback dispatchers compose on it; the app replaces the files. `pyyaml` is not in the slice: `api/agent/chat.py` reads `chat.yaml` with it, and an app that keeps `agent` needs the floor.
 
+- **Files that only an omitted slice reads are that slice's** (need: portcullis, radar-hooves/app-factory#145; reshaped). `slices.yaml` maps `config/sections/identity.py`, `entitlements.py` and `security_events.py` to `users`; `tests/support/machine_token.py` to `users`, `workspaces` and `alerts`; `tests/e2e/shell.spec.ts` (it visits `/chat` and `/settings/members`) to `agent` and `workspaces`; `tests/support/live_server.py` to `agent` and `feedback`; `deps:pyjwt` to `agent`, where `exchange.py` already was. Absent or differing is conforming for an app that omits the slice, with no variant. `elements` is a new slice (`elements.py`, `test_elements.py`) for an app that serves no element. `live_server.py` is the one file that leaves the render, when `agent` and `feedback` are both omitted: its only readers are those two slices' tests.
+- Not taken: `main.py`'s exchange wiring stays. `Exchange` is also the verifier of a person's token another app minted for this one, which the `/mcp` gate admits whatever the agent slice does, so an app that omits `agent` still needs it; an app that replaces `main.py` owes the variant, as composition does.
+
 ### Changed
 
 - **A person-chosen secret's length is never logged** (need: portcullis, radar-hooves/app-factory#150). `logging.py` passes `password` and `secret` to the telemetry call as low-entropy keys, and an app adds its own through `app_hooks.LOW_ENTROPY_SECRET_KEYS`, so a failed login shows `<redacted, secret>`, never `<redacted, 8 chars>`. The `api-common` floor is `2026.9.5`, the release that takes the argument.
@@ -31,6 +34,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 - Portcullis drops its `frontend/src/lib/auth.svelte.ts` variant.
 
 - Portcullis adds `mcp_auth` to `omitted_slices` and drops the `mcp/http_auth.py`, `mcp/auth.py`, `mcp/actors.py` and `config/sections/mcp.py` variants.
+
+- Portcullis adds `elements` to `omitted_slices` and drops the variants for `identity.py`, `entitlements.py`, `security_events.py`, `elements.py`, `machine_token.py`, `live_server.py`, `shell.spec.ts` and `deps:pyjwt`; `main.py` stays a variant. Other apps change nothing, and an app that omits `agent` and `feedback` deletes `live_server.py` in the commit that takes the release.
 
 ## [2026.11.59] - 2026-11-18
 
