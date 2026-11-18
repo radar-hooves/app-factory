@@ -221,6 +221,7 @@ CMD ["./backend/entrypoint.sh"]
 # Usage: docker build --build-arg GIT_SHA=$(git rev-parse HEAD) .
 ARG GIT_SHA=""
 ENV REVISION=${GIT_SHA}
+LABEL org.opencontainers.image.revision=${GIT_SHA}
 
 # A Dockerfile has no include directive, so app image content takes the same
 # terminal extension point `.gitignore` does: everything above this marker is
