@@ -36,9 +36,9 @@ vi.mock('#lib/agent/chat.js', async (importOriginal) => ({
 	handOff: chat.handOff
 }));
 
-// The same glob the frame uses decides whether the Ask row exists to assert.
+{% if 'agent' not in omitted_slices -%}
 const chatModules = import.meta.glob('./agent/chat.ts');
-const hasChat = Object.keys(chatModules).length > 0;
+{% endif -%}
 
 vi.mock('#lib/alerts/admin-alert-bell.svelte', () => import('../test/stubs/alert-bell.svelte'));
 
@@ -240,7 +240,8 @@ describe('the palette', () => {
 		expect(palette.getByText('Sign out')).toBeInTheDocument();
 	});
 
-	it.skipIf(!hasChat)('asks the chat persona what was typed, on Enter', async () => {
+{% if 'agent' not in omitted_slices -%}
+	it('asks the chat persona what was typed, on Enter', async () => {
 		// The frame imports the chat client on first open; the mock factory loads the
 		// real module's graph, which on a loaded runner outlasts findBy's 1s default.
 		// Warm it first (by the frame's own glob, so a render without the slice resolves nothing), and give the row the test's own budget.
@@ -257,6 +258,7 @@ describe('the palette', () => {
 		);
 	});
 
+{% endif -%}
 	it('lists a nav section’s children under the section’s name', async () => {
 		const nav = typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
 		const parents = nav

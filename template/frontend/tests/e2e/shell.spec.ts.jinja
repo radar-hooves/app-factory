@@ -30,7 +30,7 @@ test('the keyboard shortcut opens the command palette @smoke', async ({ page }) 
 	await expectPaletteOpen(page);
 });
 
-test('the top bar search control, where the app draws one, opens the command palette', async ({
+test('the top bar search control opens the command palette', async ({
 	page
 }) => {
 	await page.goto('/');
@@ -38,7 +38,7 @@ test('the top bar search control, where the app draws one, opens the command pal
 	// The shared shell's own test id, so this spec does not depend on the label
 	// an app chooses for its search button.
 	const search = page.getByTestId('ds-shell-search');
-	test.skip((await search.count()) === 0, 'this app draws no visible search control');
+	await expect(search).toBeVisible();
 
 	await search.click();
 
