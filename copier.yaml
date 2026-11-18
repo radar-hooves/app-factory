@@ -494,6 +494,16 @@ frontend_e2e_port:
     Playwright's own Vite dev port — allocate from the port registry (band 5200-5229). Asked rather than derived: the E2E server used to be frontend_port + 1000, which lands outside every band the registry defines, so nothing could tell you it was free and no row recorded it.
 
 
+healthcheck_path:
+  type: str
+  default: /openapi.json
+  when: "{{ skeleton == 'web' }}"
+  validator: >-
+    {% if not healthcheck_path.startswith('/') %}A healthcheck path starts with a slash.{% endif %}
+  help: >-
+    The path the container healthcheck polls on the backend port, never following a redirect. The default `/openapi.json` is liveness: database-free, so a database outage restarts nothing, and the probe requires the schema body. An app whose readiness is more than that answers its own route (`/api/system/health` pings the database; an app with an engine to wait on names the route that reports it). Any other path passes on a 200 alone, so that route must answer non-200 when the app is not ready. Needs an enabled `/openapi.json` only for the default.
+
+
 postgres_host:
   type: str
   when: "{{ skeleton == 'web' }}"

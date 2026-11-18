@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- **The container healthcheck's route is an answer** (need: portcullis, radar-hooves/app-factory#148; reshaped). `healthcheck_path` defaults to `/openapi.json`, so no stamped app changes: the factory keeps its database-free liveness probe, on purpose, so a database outage restarts nothing. An app whose readiness is more (portcullis's `/status`, which reports its engine) answers its own route and the probe passes on a 200 alone, never following a redirect. An included compose fragment cannot override the main file's healthcheck, so the answer is the only way in.
+
 ### Changed
 
 - **A person-chosen secret's length is never logged** (need: portcullis, radar-hooves/app-factory#150). `logging.py` passes `password` and `secret` to the telemetry call as low-entropy keys, and an app adds its own through `app_hooks.LOW_ENTROPY_SECRET_KEYS`, so a failed login shows `<redacted, secret>`, never `<redacted, 8 chars>`. The `api-common` floor is `2026.9.5`, the release that takes the argument.
@@ -13,6 +17,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 ### Consumer must change
 
 - Portcullis drops its `logging.py` variant and names its own keys in `app_hooks.py`. Any app takes the new `logging.py`, `app_hooks.py` docstring and a regenerated `.template-parity.json`; an app holding a login password lists its field name.
+
+- Portcullis answers `healthcheck_path: /status` and drops its `compose.yaml` variant. No other app acts.
 
 ## [2026.11.59] - 2026-11-18
 
@@ -2967,9 +2973,7 @@ The number the previous block was waiting for. Everything below landed after `v2
 
   Deliberately no `--fix`. Prettier and stylelint are formatters, so auto-applying them is safe; ESLint carries semantic rules whose fixes rewrite code that should be read first, and the violation that prompted this one was not auto-fixable anyway. Flags are kept to none so the hook matches CI's bare `eslint .` exactly — a local gate stricter than CI is its own kind of broken. Verified by driving the hook's own entry line against a file carrying the real violation: config resolves from `frontend/`, the rule fires, exit 1.
 
-
 - **A factory file must never name a stamped app, and the parity checker is why.** `normalise()` rewrites an app's OWN name to a placeholder before hashing, so a comment in a factory file naming one app hashes differently in that app than in the reference render — the file is unconvergeable there by construction, and that app's only route to green is a permanent exception nobody can retire. Found the same day the `safe_log_context` promotion landed carrying "Measured in the flagship app": the file was byte-identical to the factory's and still failed parity in the one app it was measured in. The note now says "a stamped app" and records the trap in place, beside the code it constrains.
-
 
 - **The factory ships the workspace primitive — the noun the fleet was missing between "person" and "everyone" (master-project#291).** Two apps had answered the gap in opposite wrong directions: one scopes every domain row to whoever created it, so a second household member signing in through the same SSO sees an empty app, and one scopes nothing at all. Both are the same missing noun — a set of people who share a body of data. The template now stamps `api/users/` (the local projection of the identity provider's account) and `api/workspaces/` (`Workspace` + `WorkspaceMembership`, many-to-many, membership an explicit row an owner writes rather than anything the app infers from two people sharing a proxy).
 
