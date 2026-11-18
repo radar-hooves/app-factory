@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: rootstock (a change leg should not download a large repo's object store). Every `change.yaml` checkout is now a blobless partial clone (`filter: blob:none`, history kept for the plan) with `docs/research/` left out of the working tree, so a leg fetches no blob it does not read. Measured on rootstock: full-history clone 508 MB to 127 MB, depth-1 clone 376 MB to 121 MB. Consumer must change: nothing, unless a leg reads a root `docs/research/` file.
+
 ## [2026.11.60] - 2026-11-18
 
 Needs: portcullis, via master-project (radar-hooves/app-factory#145 to #150; #151 refused: a root entry is the operator's ratified variant, not an answer). Every stamped app takes the new `compose.yaml`, `Dockerfile`, `logging.py` and `app_hooks.py` and a regenerated `.template-parity.json`.
