@@ -8,6 +8,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ### Fixed
 
+- **One `cn()`, the kit's** (consumer: godswood, #92). `src/lib/utils.ts` re-exports `cn` from `@poodle64/ui/utils` (the path `components.json` names stays), and the workspace menu imports it from the kit. Consumer must change: an app's own imports of `#lib/utils.js` keep working; `clsx` and `tailwind-merge` stay in `package.json` for the kit's peer need.
 - **The suite's default module is documented as the app's to replace** (consumer: wordhoard, #125). `playwright.config.ts` says an app whose specs need another module sets it in `env` of `tests/e2e/app-web-server.ts`, which already merges over the default; no app has to change.
 - **No factory test that can only skip** (consumer: casefile, #131). `shell.test.ts` carries the chat hand-off test only where the agent slice is taken, and `shell.spec.ts` asserts the shell's search control (the shell always draws it) instead of skipping when absent. Consumer must change: an app that omits `agent` gets the test out of its next update.
 - **The image names its commit** (consumer: master orchestrator, wordhoard, #122). The Dockerfile sets `org.opencontainers.image.revision` from `GIT_SHA`, so `docker image inspect` reads the deployed commit; nothing for a stamped app to change beyond the update (CI must pass `--build-arg GIT_SHA`, as it does for `REVISION`).

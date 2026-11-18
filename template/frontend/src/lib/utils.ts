@@ -1,11 +1,2 @@
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-export function cn(...inputs: ClassValue[]) {
-	return twMerge(clsx(inputs));
-}
-
-// The WithoutChild / WithoutChildren / WithoutChildrenOrChild / WithElementRef
-// helpers are NOT re-exported here: @poodle64/ui ships its own, and a local
-// copy is a vendored fork (sveltekit-frontend.md §Utils). Import them from the
-// package.
+// The kit's own cn(), kept at the path components.json names so `shadcn add` resolves it.
+export { cn } from '@poodle64/ui/utils';

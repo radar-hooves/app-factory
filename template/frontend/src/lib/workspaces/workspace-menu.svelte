@@ -48,7 +48,7 @@
 	import { Label } from '@poodle64/ui/label';
 	import { api, toastApiError } from '#lib/api/index.js';
 	import { auth } from '#lib/auth.svelte.js';
-	import { cn } from '#lib/utils.js';
+	import { cn } from '@poodle64/ui/utils';
 
 	let {
 		label = 'Workspace',
