@@ -239,10 +239,12 @@ _tasks:
       - python3
       - -c
       - |
-        import subprocess
-        # The gate renders this template itself, into a bare temp dir: outside a
-        # git checkout this task is that render, and must not call the gate back.
-        if not subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
+        import pathlib, subprocess
+        # Only an app's own repo root is stamped for real. The gate's render (a bare
+        # temp dir) and a scratch render inside another checkout (the self-test's)
+        # are not, and must not call the gate back.
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        if top and pathlib.Path(top).resolve() == pathlib.Path.cwd().resolve():
             subprocess.run(["household-precommit-template-parity", "--generate", "."], check=True)
   # The factory's dependency floors reach the app's own backend/pyproject.toml and
   # frontend/package.json here, from the manifest the task above just generated (its
@@ -256,7 +258,8 @@ _tasks:
       - -c
       - |
         import json, pathlib, re, subprocess
-        if subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        if not top or pathlib.Path(top).resolve() != pathlib.Path.cwd().resolve():
             raise SystemExit
         want = json.loads(pathlib.Path(".template-parity.json").read_text())["deps"]
         ex = pathlib.Path(".canonical-exceptions")
