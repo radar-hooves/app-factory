@@ -18,6 +18,11 @@ from importlib.metadata import PackageNotFoundError, version
 
 from api_common.telemetry import configure
 
+# Field names whose value a person chose, so its length is never logged
+# (`<redacted, secret>` in place of `<redacted, 8 chars>`). An app adds its own
+# through `app_hooks.LOW_ENTROPY_SECRET_KEYS`.
+LOW_ENTROPY_SECRET_KEYS = ("password", "secret")
+
 
 def app_version() -> str:
     """Resolve this app's version from its installed package metadata.
@@ -45,8 +50,11 @@ def configure_logging(*, debug: bool = False) -> None:
         debug: Log at DEBUG when True; otherwise the level is LOG_LEVEL's, else
             INFO — the library's own default, not a second one declared here.
     """
+    from {{ package_name }} import app_hooks
+
     configure(
         service_name="{{ project_name }}",
         service_version=app_version(),
         level="DEBUG" if debug else None,
+        low_entropy_secret_keys=[*LOW_ENTROPY_SECRET_KEYS, *getattr(app_hooks, "LOW_ENTROPY_SECRET_KEYS", ())],
     )

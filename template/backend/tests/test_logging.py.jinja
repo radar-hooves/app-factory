@@ -114,6 +114,19 @@ class TestTheLogLine:
         assert line["widget_id"] == 7
 
 
+@pytest.mark.unit
+class TestLowEntropySecrets:
+    """A person-chosen secret's length never reaches a line."""
+
+    def test_a_password_shows_no_length(self, capsys: pytest.CaptureFixture[str]) -> None:
+        configure_logging()
+        logging.getLogger(_PROBE_LOGGER).info("Unlock failed", extra={"password": "hunter22"})
+
+        (line,) = _lines(capsys)
+        assert "hunter22" not in json.dumps(line)
+        assert "8 chars" not in json.dumps(line)
+
+
 @pytest.mark.integration
 class TestCorrelation:
     """The id the caller sent is the id every line of that request carries."""
