@@ -190,6 +190,22 @@ _exclude:
   - "{% if not factory_selftest %}frontend/src/test/superforms-field.svelte{% endif %}"
   # Not a test, the element those tests and tests/elements/ prove the capability on.
   - "{% if not factory_selftest %}frontend/src/elements/selftest-card.svelte{% endif %}"
+  # First-stamp seeds, rendered by `copier copy` alone. `_skip_if_exists` keeps an
+  # app's edit of one, but a file the app deleted (its own migrations replace the
+  # five seed revisions, its own domain replaces the scaffold slice and its tests)
+  # is re-created by every update. The migrations are the seeds an app's own users,
+  # feedback and agent-session history supersede; the later factory revisions
+  # reach an app by update and are not here.
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260731_0000_825a4116c834_add_example_items_table.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260820_1300_a1c4f7e29b03_add_users_workspaces_and_scoping.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260822_0900_c3f8a52d7b16_settle_the_admin_gate_at_the_identity_provider.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260911_1000_1c3b08a0ec2e_add_feedback_reports_table.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260912_1000_c272c6ce5f31_add_agent_sessions_table.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/src/{{ package_name }}/api/example{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/src/{{ package_name }}/config/sections/example.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/tests/test_example.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/tests/test_workspaces_api.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}frontend/tests/e2e/example.spec.ts{% endif %}"
   # A headless app: no front end, so nothing that builds, serves or tests one.
   - "{% if headless %}frontend{% endif %}"
   - "{% if headless %}backend/src/{{ package_name }}/elements.py{% endif %}"
