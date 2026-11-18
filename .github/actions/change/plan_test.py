@@ -1332,6 +1332,37 @@ def test_an_included_build_is_a_member_run_from_its_parent(droid):
         assert out == f"--no-daemon --stacktrace {task}"
 
 
+def test_a_group_runs_gradle_members_in_one_build_and_names_the_failed_one(tmp_path):
+    repo = tmp_path / "g"
+    init(repo, {"settings.gradle": "include ':a', ':b', ':c'\n"})
+    log = tmp_path / "calls"
+    write(
+        repo,
+        {
+            "gradlew": f'#!/bin/sh\necho "$@" >>{log}\n'
+            "case \"$*\" in *:b:check*) echo \"Execution failed for task ':b:test'.\"; exit 1;; esac\n",
+        },
+    )
+    (repo / "gradlew").chmod(0o755)
+    for d in "abc":
+        write(repo, {f"{d}/x": ""})
+    commit(repo)
+    members = [
+        {"name": d, "path": d, "toolchain": "gradle", "test": True, "deploy": "none",
+         "deploy_now": False, "workers": 2, "waits": []}
+        for d in "abc"
+    ]  # fmt: skip
+    r = subprocess.run(
+        ["bash", str(HERE / "group.sh")], cwd=repo,
+        env={**ENV, "MEMBERS": json.dumps(members), "HEAD_SHA": "x"},
+        capture_output=True, text=True,
+    )  # fmt: skip
+    assert r.returncode == 1 and "1 failed: b" in r.stderr
+    assert log.read_text().splitlines() == [
+        "--no-daemon --stacktrace --continue --max-workers=2 :a:check :b:check :c:check"
+    ]
+
+
 def test_included_builds_are_named_by_path_and_one_from_outside_is_skipped(
     tmp_path, capsys
 ):

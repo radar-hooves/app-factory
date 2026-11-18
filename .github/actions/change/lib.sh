@@ -8,11 +8,21 @@ die() { echo "${GITHUB_ACTIONS:+::error::}$*" >&2; exit 1; }
 need() { for v; do [ -n "${!v:-}" ] || die "$v is unset: the runner environment must carry it"; done; }
 
 # <cmd> from <dir>, inside the repo's flake shell when its root holds a flake.nix: the shell
-# its own CI used, carrying the JDK, the SDKs and system libraries such as webkitgtk.
+# its own CI used, carrying the JDK, the SDKs and system libraries such as webkitgtk. Under
+# CHANGE_FLAKE_ROOTS (a group leg's scratch dir) the shell is realised once as a profile there,
+# a GC root: auto-GC on a full store otherwise deletes it between members, and each next one
+# fetched it again (rootstock run 44321045841: 5 h).
 in_flake() {  # <dir> <cmd...>
-  local top
+  local top shell
   top=$(git -C "$1" rev-parse --show-toplevel) || return
-  [ ! -f "$top/flake.nix" ] || set -- "$1" nix develop --accept-flake-config "$top" --command "${@:2}"
+  if [ -f "$top/flake.nix" ]; then
+    shell=$top
+    if [ -n "${CHANGE_FLAKE_ROOTS:-}" ]; then
+      shell=$CHANGE_FLAKE_ROOTS/$(cksum <<<"$top" | cut -d' ' -f1)
+      [ -e "$shell" ] || nix develop --accept-flake-config --profile "$shell" "$top" --command true || return
+    fi
+    set -- "$1" nix develop --accept-flake-config "$shell" --command "${@:2}"
+  fi
   (cd "$1" && "${@:2}")
 }
 
