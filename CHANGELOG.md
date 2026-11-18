@@ -6,6 +6,14 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Changed
+
+- **A person-chosen secret's length is never logged** (need: portcullis, radar-hooves/app-factory#150). `logging.py` passes `password` and `secret` to the telemetry call as low-entropy keys, and an app adds its own through `app_hooks.LOW_ENTROPY_SECRET_KEYS`, so a failed login shows `<redacted, secret>`, never `<redacted, 8 chars>`. The `api-common` floor is `2026.9.5`, the release that takes the argument.
+
+### Consumer must change
+
+- Portcullis drops its `logging.py` variant and names its own keys in `app_hooks.py`. Any app takes the new `logging.py`, `app_hooks.py` docstring and a regenerated `.template-parity.json`; an app holding a login password lists its field name.
+
 ## [2026.11.59] - 2026-11-18
 
 Need: a public repo calls the change pipeline without carrying a copy (consumer: thoth, via radar-hooves/master-project#460). The runner fetches this repo's composite actions as GitHub's tarball and failed on the governance symlinks that resolve outside the repo (casefile's first caller run).
