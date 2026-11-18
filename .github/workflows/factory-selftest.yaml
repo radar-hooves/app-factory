@@ -403,6 +403,20 @@ jobs:
           pnpm check
           pnpm exec eslint .
 
+      - name: Backend — the household packages at their declared floors
+        # A floor is the oldest release the template's code runs on. `uv sync` takes the
+        # newest, so a floor below what the template calls ships green (api-common's
+        # `low_entropy_secret_keys`, 2026.11.60, never held at its floor of 2026.9.5).
+        # Here api-common, redactyl-core, nextcloud and library install at the lowest
+        # release their floor admits, everything else at the version just tested, and the
+        # suite runs again. Last, because it rewrites the scratch app's pyproject and lock.
+        working-directory: ${{ env.SCRATCH }}/backend
+        run: |
+          set -euo pipefail
+          python3 "${GITHUB_WORKSPACE}/tests/template/pin_to_floors.py" .
+          uv sync --no-default-groups --group dev --resolution lowest-direct
+          uv run --no-sync pytest -q -n 4
+
       - name: Clean up the scratch renders
         if: always()
         run: rm -rf "$SCRATCH" "$SCRATCH"-*

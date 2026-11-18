@@ -6,6 +6,15 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.11.62] - 2026-11-18
+
+Need: earworm's update to 2026.11.61, which still took two hand edits (master-project, 18/11/2026).
+
+### Fixed
+
+- **Two floors were below what the template calls** (consumer: earworm). `api-common` is `>=2026.9.319`, the first release whose `make_redactor` path takes `low_entropy_secret_keys` (the 2026.11.60 entry's `2026.9.5` was wrong: earworm's relock kept 2026.9.288 and `test_webhooks` raised `TypeError`), and `redactyl-core` is `>=2026.9.48`, the first release whose `make_redactor` accepts it. The factory self-test now installs `api-common`, `redactyl-core`, `nextcloud` and `library` at the lowest release their floor admits (`tests/template/pin_to_floors.py`, then `uv sync --resolution lowest-direct`; everything else stays at the tested version, since a PyPI floor older than the interpreter has no wheel) and runs the backend suite again, so a floor below what the template's code needs fails the self-test. Consumer must change: nothing; the update's floor task raises both.
+- **An update never re-creates a first-stamp seed the app deleted** (consumer: earworm). `_exclude` hides the five seed migrations (example items, users and workspaces, the admin gate, feedback reports, agent sessions), the scaffold slice (`api/example/`, `config/sections/example.py`) and its tests (`test_example.py`, `test_workspaces_api.py`, `example.spec.ts`) unless `_copier_operation` is `copy`; a new stamp carries all of them. Later factory migrations still reach an app by update.
+
 ## [2026.11.61] - 2026-11-18
 
 Need: rootstock (a change leg should not download a large repo's object store); eight, whose runs broke on it (its app serves `docs/research/sittings/` at runtime and its screen gate clones its own checkout). A repo chooses its checkout by its repository variable `CHANGE_LEAN_CHECKOUT` (the caller is byte-identical in every repo, so a caller input cannot): `true` makes every `change.yaml` checkout a blobless partial clone (`filter: blob:none`, history kept for the plan) with `docs/research/` left out of the working tree; unset, the whole repo with every blob, on every runner: a work directory whose `.git` carries a partial-clone or sparse config from an earlier lean run has that `.git` removed before the checkout (eight's screen gate failed on a reused runner with `could not fetch ... from promisor remote`). Measured on rootstock: full-history clone 508 MB to 127 MB, depth-1 clone 376 MB to 121 MB. Consumer must change: rootstock sets the repository variable `CHANGE_LEAN_CHECKOUT=true`; every other repo changes nothing.
