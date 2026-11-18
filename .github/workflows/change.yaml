@@ -57,6 +57,10 @@ jobs:
       ship: ${{ steps.plan.outputs.ship }}
     steps:
       # A fork's code is never checked out here; plan.sh says so and plans nothing.
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
@@ -112,6 +116,10 @@ jobs:
       CHANGE_WORKERS: ${{ matrix.member.workers }}
       DEPLOY: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) }}
     steps: &member-steps
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -184,6 +192,10 @@ jobs:
       HEAD_SHA: ${{ needs.plan.outputs.head }}
       SHIP: ${{ needs.plan.outputs.ship }}
     steps: &group-steps
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -234,6 +246,10 @@ jobs:
       UV_FROZEN: '1'
       DEPLOY: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) }}
     steps:
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -327,6 +343,10 @@ jobs:
     env:
       UV_FROZEN: '1'
     steps:
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -362,6 +382,10 @@ jobs:
       UV_FROZEN: '1'
       CHANGED_MEMBERS: ${{ needs.plan.outputs.changed }}
     steps:
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -405,6 +429,10 @@ jobs:
     env:
       UV_FROZEN: '1'
     steps:
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -461,6 +489,10 @@ jobs:
       UV_FROZEN: '1'
     steps:
       # Checkout first: a copy's local action is read from the checkout.
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
       - id: checkout
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
