@@ -14,6 +14,8 @@ Need: rootstock (a change leg should not download a large repo's object store); 
 
 - **The factory's dependency floors reach the app's own files on update** (need: master-project, same research: earworm raised `@poodle64/ui`, `api-common` and `impeccable` by hand in `frontend/package.json` and `backend/pyproject.toml` and re-locked). A second `_tasks` entry reads the `deps` of the manifest the first just generated (the render's floors at the new `_commit`), replaces any spec of the app's below its floor with the factory's (extras, an app-only package, a spec at or above the floor and a `deps:<name>` exception are left alone), then runs `uv lock` and/or `pnpm install --lockfile-only` for the file it changed. Chosen over the Renovate preset: it needs no tag-to-PR round trip and the app takes the floor in the very update that moves its manifest. Consumer must change: nothing beyond `--trust`; the machine needs `uv` and `pnpm` and the app's private-index credentials in the environment, as for any lock.
 
+- **Every `copier copy` and `update` of the factory needs `--trust`, whatever the skeleton** (found by the factory self-test's android stamp, which refused with exit 4: copier refuses a template that defines `_tasks` without `--trust`, even where every task's `when` is false). Consumer must change: rootstock's `:stamp` leg passes `--trust` for the android skeleton too.
+
 ## [2026.11.60] - 2026-11-18
 
 Needs: portcullis, via master-project (radar-hooves/app-factory#145 to #150; #151 refused: a root entry is the operator's ratified variant, not an answer). Every stamped app takes the new `compose.yaml`, `Dockerfile`, `logging.py` and `app_hooks.py` and a regenerated `.template-parity.json`.

@@ -166,7 +166,7 @@ jobs:
         # that fails before any tag carries it.
         run: |
           set -euo pipefail
-          uvx copier copy --defaults --vcs-ref=HEAD --data skeleton=android \
+          uvx copier copy --defaults --trust --vcs-ref=HEAD --data skeleton=android \
             --data project_name=voice-recorder . "$SCRATCH-android/apps/voice-recorder"
           app="$SCRATCH-android/apps/voice-recorder"
           test -f "$app/.copier-answers.yml"
