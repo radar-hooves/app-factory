@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+## [2026.11.60] - 2026-11-18
+
+Needs: portcullis, via master-project (radar-hooves/app-factory#145 to #150; #151 refused: a root entry is the operator's ratified variant, not an answer). Every stamped app takes the new `compose.yaml`, `Dockerfile`, `logging.py` and `app_hooks.py` and a regenerated `.template-parity.json`.
+
 ### Added
 
 - **The container healthcheck's route is an answer** (need: portcullis, radar-hooves/app-factory#148; reshaped). `healthcheck_path` defaults to `/openapi.json`, so no stamped app changes: the factory keeps its database-free liveness probe, on purpose, so a database outage restarts nothing. An app whose readiness is more (portcullis's `/status`, which reports its engine) answers its own route and the probe passes on a 200 alone, never following a redirect. An included compose fragment cannot override the main file's healthcheck, so the answer is the only way in.
