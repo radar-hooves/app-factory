@@ -20,6 +20,8 @@ users:
   - backend/tests/test_route_walk.py
   - backend/tests/test_mcp_person_gate.py
   - frontend/src/lib/view-as/*
+  - frontend/src/lib/auth.svelte.ts
+  - frontend/src/lib/auth.svelte.test.ts
 workspaces:
   - backend/src/{package}/api/workspaces/*
   - backend/src/{package}/db/scoping.py
