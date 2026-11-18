@@ -16,6 +16,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **An app adds its own build stages below the Dockerfile's marker** (need: portcullis, radar-hooves/app-factory#149; reshaped). The runtime stage is named `runtime`, and the tail may define build stages followed by a last `FROM runtime AS app` that copies from them. The build stages sit below REVISION's cache break, so they stay cached, and no stage above the marker changes: no exception on the whole file.
 
+- **The shell's identity store belongs to the users slice** (need: portcullis, radar-hooves/app-factory#147; reshaped). `frontend/src/lib/auth.svelte.ts` resolves `/users/me` and `/workspaces/me`, so an app that omits users supplies its own store at the same path with the same surface (`user`, `failure`, `can`, the workspace getters; `rules-library/platform/authentication.md` §Frontend Auth Store Contract), and `slices.yaml` now maps the file and its test to `users`: absent or differing is conforming, with no variant. No second import path: the frame, the layout and fourteen other modules keep importing `#lib/auth.svelte.js`, so one surface serves them all.
+
 ### Consumer must change
 
 - Portcullis drops its `logging.py` variant and names its own keys in `app_hooks.py`. Any app takes the new `logging.py`, `app_hooks.py` docstring and a regenerated `.template-parity.json`; an app holding a login password lists its field name.
@@ -23,6 +25,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 - Portcullis answers `healthcheck_path: /status` and drops its `compose.yaml` variant. No other app acts.
 
 - Every app takes the new `Dockerfile` and a regenerated `.template-parity.json`. Portcullis moves its two build stages (age, age-plugin-tpm) below the marker and ends on `FROM runtime AS app`, then drops its `parity:Dockerfile` exception (portcullis#320).
+
+- Portcullis drops its `frontend/src/lib/auth.svelte.ts` variant.
 
 ## [2026.11.59] - 2026-11-18
 
