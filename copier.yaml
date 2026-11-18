@@ -576,13 +576,14 @@ omitted_slices:
     - feedback
     - agent
     - alerts
+    - mcp_auth
     - settings
     - system
     - files
   validator: >-
     {% for kept in ['alerts', 'files'] %}{% if kept in omitted_slices and 'agent' not in omitted_slices %}The agent slice raises alerts and writes files: omit agent with {{ kept }}, or keep {{ kept }}. {% endif %}{% endfor %}
   help: >-
-    The factory slices this app does not take. Default none: every app takes the whole factory, and a slice the factory adds later reaches it. Declaring one is the app's record that its absence is canonical, never an exception or a variant. agent, feedback, alerts and files, which nothing kept composes on, leave the render: their files are not stamped, main.py, api/main.py, config, the model registry, the MCP server, the image and the frontend shell render without them, and the parity manifest is that render. users, workspaces, admin, settings and system are what the rest composes on, so they stay in the render; declaring one records that the app replaces it, and the gates count the files `slices.yaml` maps to it (at the app's own `_commit`) conforming, absent or differing. alerts and files go only with agent, which uses both. Taking a slice back or giving one up is `copier update --data` with the new list; a slice given up leaves its files standing (copier never deletes a file `_exclude` newly hides), and the app deletes them in the same commit.
+    The factory slices this app does not take. Default none: every app takes the whole factory, and a slice the factory adds later reaches it. Declaring one is the app's record that its absence is canonical, never an exception or a variant. agent, feedback, alerts and files, which nothing kept composes on, leave the render: their files are not stamped, main.py, api/main.py, config, the model registry, the MCP server, the image and the frontend shell render without them, and the parity manifest is that render. users, workspaces, admin, mcp_auth, settings and system are what the rest composes on, so they stay in the render; `mcp_auth` is the Authentik bearer gate and its actor registry, omitted by an app that authenticates its own machine callers through `app_hooks.mcp_auth`; declaring one records that the app replaces it, and the gates count the files `slices.yaml` maps to it (at the app's own `_commit`) conforming, absent or differing. alerts and files go only with agent, which uses both. Taking a slice back or giving one up is `copier update --data` with the new list; a slice given up leaves its files standing (copier never deletes a file `_exclude` newly hides), and the app deletes them in the same commit.
 
 
 runner_labels:
