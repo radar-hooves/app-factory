@@ -16,8 +16,9 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 import plan as planner  # noqa: E402
 
+# A runner's own GITHUB_*/RUNNER_* (its PR event, its work paths) never reach a case.
 ENV = {
-    **os.environ,
+    **{k: v for k, v in os.environ.items() if not k.startswith(("GITHUB_", "RUNNER_"))},
     "UV_OFFLINE": "1",
     # The fixtures pin .python-version 3.12 only to be a pin; offline, uv needs an interpreter it has.
     "UV_PYTHON": sys.executable,
@@ -837,6 +838,7 @@ def host(tmp_path: Path):
         "NETRC": str(cred),
         "CHANGE_STACK_UP": str(bin_ / "stack-up"),
         "RUNNER_TEMP": str(tmp_path),
+        "CHANGE_LOCKS": str(tmp_path / "no-locks"),
     }
 
     def image(boxes: list[tuple[str, ...]], latest: str, *args: str):
