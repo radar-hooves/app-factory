@@ -9,10 +9,9 @@
 # render, since the rest composes on them. Keys are slice names (the choices of
 # `omitted_slices`); patterns are fnmatch globs where `*` crosses `/`, with
 # `{package}` the app's package, and a `deps:<name>` entry names a dependency
-# only that slice declares. A file shared across slices (main.py, mcp/server.py,
-# scripts/__init__.py, elements.py, security_events.py) is composition, not
-# slice-owned, and is listed under no slice: an app that differs there still owes
-# a variant. A path may sit under several slices; any one of them omitted covers it.
+# only that slice declares. A file the whole app composes on (main.py, mcp/server.py,
+# scripts/__init__.py) is composition, not slice-owned, and is listed under no
+# slice: an app that differs there still owes a variant. A path may sit under several slices; any one of them omitted covers it.
 
 users:
   - backend/src/{package}/api/users/*
@@ -22,6 +21,9 @@ users:
   - frontend/src/lib/view-as/*
   - frontend/src/lib/auth.svelte.ts
   - frontend/src/lib/auth.svelte.test.ts
+  - backend/src/{package}/config/sections/identity.py
+  - backend/src/{package}/entitlements.py
+  - backend/src/{package}/security_events.py
 workspaces:
   - backend/src/{package}/api/workspaces/*
   - backend/src/{package}/db/scoping.py
@@ -32,6 +34,8 @@ workspaces:
   - backend/tests/test_mcp_person_gate.py
   - frontend/src/lib/workspaces/*
   - frontend/tests/e2e/workspaces.spec.ts
+  - frontend/tests/e2e/shell.spec.ts
+  - backend/tests/support/machine_token.py
 admin:
   - backend/src/{package}/api/admin/*
   - backend/tests/test_admin_api.py
@@ -41,6 +45,7 @@ feedback:
   - backend/src/{package}/mcp/dispatchers/feedback.py
   - backend/tests/test_feedback_api.py
   - backend/tests/test_db_session_commit_ordering.py
+  - backend/tests/support/live_server.py
 agent:
   - backend/src/{package}/api/agent/*
   - backend/src/{package}/config/sections/agent.py
@@ -59,13 +64,17 @@ agent:
   - frontend/src/test/chat/*
   - frontend/tests/e2e/chat.spec.ts
   - frontend/tests/e2e/chat/*
+  - frontend/tests/e2e/shell.spec.ts
+  - backend/tests/support/live_server.py
   - deps:agent-common
   - deps:library
   - deps:python-multipart
+  - deps:pyjwt
 alerts:
   - backend/src/{package}/api/alerts/*
   - backend/src/{package}/mcp/dispatchers/alerts.py
   - backend/tests/test_alerts_api.py
+  - backend/tests/support/machine_token.py
   - frontend/src/lib/alerts/*
 mcp_auth:
   - backend/src/{package}/mcp/http_auth.py
@@ -75,6 +84,9 @@ mcp_auth:
   - backend/tests/test_mcp_auth.py
   - backend/tests/support/machine_token.py
   - config/actors.yaml
+elements:
+  - backend/src/{package}/elements.py
+  - backend/tests/test_elements.py
 settings:
   - backend/tests/test_settings_api.py
   - frontend/src/lib/settings/sections.ts
