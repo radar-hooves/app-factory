@@ -142,4 +142,23 @@ async def test_the_interactive_api_documents_are_exempt_and_only_they_are(build)
     for path in ("/docs", "/redoc"):
         assert "content-security-policy" not in (await _get(path)).headers, path
     assert "content-security-policy" in (await _get("/openapi.json")).headers
+
+
+async def test_an_app_hook_replaces_the_referrer_and_permissions_policy_and_no_other_header(build, monkeypatch):
+    monkeypatch.setattr(
+        app_hooks,
+        "security_headers",
+        lambda: {"Referrer-Policy": "no-referrer", "Permissions-Policy": "camera=()", "X-Frame-Options": "ALLOWALL"},
+        raising=False,
+    )
+    response = await _get("/")
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["permissions-policy"] == "camera=()"
+    assert response.headers["x-frame-options"] == "DENY"
+
+
+async def test_an_app_that_declares_no_header_keeps_the_defaults(build):
+    response = await _get("/")
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "geolocation=()" in response.headers["permissions-policy"]
 {%- endif %}

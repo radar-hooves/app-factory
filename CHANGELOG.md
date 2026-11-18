@@ -6,6 +6,10 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+### Added
+
+- **An app sets its own `Referrer-Policy` and `Permissions-Policy` through the one security-headers middleware** (consumer: portcullis, #118). `app_hooks.security_headers() -> dict[str, str]` replaces those two defaults; no other header is the app's to set, and an app that declares nothing keeps today's values. Consumer must change: nothing; portcullis deletes its second `SecurityHeadersMiddleware` and returns its two values from the hook after taking the update (`main.py`, `middleware.py` and `app_hooks.py` are factory-owned: `copier update` brings them, then regenerate `.template-parity.json`).
+
 ### Fixed
 
 - **A Gradle group leg finishes inside its limit when the store is full** (consumer: rootstock, run 44321045841). `group.sh` realises the flake shell once as a `nix develop --profile` (a GC root removed on exit) instead of one fetch per member after auto-GC deleted it, and runs its Gradle members in batches of six per invocation (`--continue --max-workers=2`), naming failed members from the build's `Execution failed for task` lines; a failure no member owns names the whole batch. Every member's `check` still runs. Consumer must change: nothing.

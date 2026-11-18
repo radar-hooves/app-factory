@@ -153,13 +153,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     (deprecated; CSP supersedes it). The CSP is given whole (`content_security_policy`)
     and withheld from the interactive API documents only: Swagger UI and ReDoc load
     their scripts from a CDN and run inline, and are served only where
-    OPENAPI_ENABLED leaves them on.
+    OPENAPI_ENABLED leaves them on. `overrides` is the app's own `Referrer-Policy`
+    and `Permissions-Policy` (`app_hooks.security_headers`); no other header is its to set.
     """
 
-    def __init__(self, app: ASGIApp, *, is_production: bool = False, csp: str = "") -> None:
+    def __init__(
+        self, app: ASGIApp, *, is_production: bool = False, csp: str = "", overrides: Mapping[str, str] | None = None
+    ) -> None:
         super().__init__(app)
         self.is_production = is_production
         self.csp = csp
+        self.policies = {
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+        }
+        self.policies.update({name: value for name, value in (overrides or {}).items() if name in self.policies})
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
@@ -171,8 +179,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Content-Security-Policy", self.csp)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+        response.headers.update(self.policies)
         if self.is_production:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response

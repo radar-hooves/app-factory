@@ -41,6 +41,10 @@ none of them behaves exactly as it does today.
     `worker-src`, `style-src`, `script-src`), for an app that shows a map tile
     server, an iframe or a font host. Only `http(s)` origins are taken, so
     `'unsafe-eval'` and `'unsafe-inline'` can be added to nothing.
+  - `security_headers() -> dict[str, str]` — `main.py` hands the one
+    `SecurityHeadersMiddleware` the app's own `Referrer-Policy` and
+    `Permissions-Policy`, replacing the factory's defaults. No other header is
+    an app's to set, so a second middleware class is never needed.
   - `on_exit(server)` — `gunicorn.conf.py` calls it from the arbiter's own exit,
     after every worker is dead, for an app supervising a child process or a
     process-local session a worker must not end.
