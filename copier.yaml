@@ -241,6 +241,10 @@ _tasks:
       - |
         import pathlib, re, subprocess, sys
         gate = "household-precommit-template-parity"
+        # The gate renders this template itself, into a bare temp dir: outside a
+        # git checkout this task is that render, and must not call the gate back.
+        if subprocess.run(["git", "rev-parse"], capture_output=True).returncode:
+            raise SystemExit(0)
         subprocess.run([gate, "--generate", "."], check=True)
         exc = pathlib.Path(".canonical-exceptions")
         if exc.exists():
