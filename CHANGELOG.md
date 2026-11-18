@@ -6,7 +6,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
-Need: rootstock (a change leg should not download a large repo's object store). Every `change.yaml` checkout is now a blobless partial clone (`filter: blob:none`, history kept for the plan) with `docs/research/` left out of the working tree, so a leg fetches no blob it does not read. Measured on rootstock: full-history clone 508 MB to 127 MB, depth-1 clone 376 MB to 121 MB. Consumer must change: nothing, unless a leg reads a root `docs/research/` file.
+Need: rootstock (a change leg should not download a large repo's object store); eight, whose runs broke on it (its app serves `docs/research/sittings/` at runtime and its screen gate clones its own checkout). `change.yaml` takes `lean_checkout` (boolean, default false): true makes every checkout a blobless partial clone (`filter: blob:none`, history kept for the plan) with `docs/research/` left out of the working tree. Measured on rootstock: full-history clone 508 MB to 127 MB, depth-1 clone 376 MB to 121 MB. Consumer must change: rootstock passes `lean_checkout: true` to keep the lean checkout; every other caller gets the full checkout again.
 
 ## [2026.11.60] - 2026-11-18
 

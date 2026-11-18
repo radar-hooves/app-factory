@@ -29,6 +29,10 @@ on:
         description: "'all', or a comma list of members to test and deploy as if changed"
         type: string
         default: ''
+      lean_checkout:
+        description: "Blobless checkouts that leave out docs/research (a large repo's legs fetch no blob they do not read). Off: the whole repo, every blob."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,10 +65,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -72,10 +76,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       - id: plan
@@ -115,10 +119,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -126,10 +130,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       - if: matrix.member.test
@@ -187,10 +191,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ matrix.group.deep && '0' || '1' }}
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -198,10 +202,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ matrix.group.deep && '0' || '1' }}
       - uses: radar-hooves/app-factory/.github/actions/change@main
@@ -237,10 +241,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -248,10 +252,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       - if: matrix.member.test
@@ -330,20 +334,20 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
       - id: checkout_retry
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
       - if: matrix.member.test
         uses: radar-hooves/app-factory/.github/actions/change@main
@@ -365,20 +369,20 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
       - id: checkout_retry
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
       - uses: radar-hooves/app-factory/.github/actions/change@main
         with:
@@ -408,10 +412,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -419,10 +423,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       - name: Every member it holds, and every library in them, passed its leg
@@ -464,10 +468,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
@@ -475,10 +479,10 @@ jobs:
         if: ${{ steps.checkout.outcome == 'failure' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
+          filter: ${{ inputs.lean_checkout && 'blob:none' || '' }}
           sparse-checkout: |
-            /*
-            !/docs/research/
+            ${{ inputs.lean_checkout && '/*' || '' }}
+            ${{ inputs.lean_checkout && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
       - name: Every member it holds, and every library in them, passed its leg
