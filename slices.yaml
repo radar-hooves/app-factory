@@ -67,6 +67,14 @@ alerts:
   - backend/src/{package}/mcp/dispatchers/alerts.py
   - backend/tests/test_alerts_api.py
   - frontend/src/lib/alerts/*
+mcp_auth:
+  - backend/src/{package}/mcp/http_auth.py
+  - backend/src/{package}/mcp/auth.py
+  - backend/src/{package}/mcp/actors.py
+  - backend/src/{package}/config/sections/mcp.py
+  - backend/tests/test_mcp_auth.py
+  - backend/tests/support/machine_token.py
+  - config/actors.yaml
 settings:
   - backend/tests/test_settings_api.py
   - frontend/src/lib/settings/sections.ts

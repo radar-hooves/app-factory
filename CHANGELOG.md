@@ -10,6 +10,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 - **The container healthcheck's route is an answer** (need: portcullis, radar-hooves/app-factory#148; reshaped). `healthcheck_path` defaults to `/openapi.json`, so no stamped app changes: the factory keeps its database-free liveness probe, on purpose, so a database outage restarts nothing. An app whose readiness is more (portcullis's `/status`, which reports its engine) answers its own route and the probe passes on a 200 alone, never following a redirect. An included compose fragment cannot override the main file's healthcheck, so the answer is the only way in.
 
+- **`mcp_auth` joins `omitted_slices`** (need: portcullis, radar-hooves/app-factory#146; reshaped). An app that authenticates its own machine callers (portcullis mints and verifies attested bearers) plugs in through `app_hooks.mcp_auth` and records that the Authentik gate is not its own: `mcp/http_auth.py`, `mcp/auth.py`, `mcp/actors.py`, `config/sections/mcp.py`, `config/actors.yaml` and the tests that drive them are `slices.yaml`'s `mcp_auth`, absent or differing is conforming, no variant. Like users, the slice stays in the render, since `mcp/server.py`, `main.py` and the alerts and feedback dispatchers compose on it; the app replaces the files. `pyyaml` is not in the slice: `api/agent/chat.py` reads `chat.yaml` with it, and an app that keeps `agent` needs the floor.
+
 ### Changed
 
 - **A person-chosen secret's length is never logged** (need: portcullis, radar-hooves/app-factory#150). `logging.py` passes `password` and `secret` to the telemetry call as low-entropy keys, and an app adds its own through `app_hooks.LOW_ENTROPY_SECRET_KEYS`, so a failed login shows `<redacted, secret>`, never `<redacted, 8 chars>`. The `api-common` floor is `2026.9.5`, the release that takes the argument.
@@ -27,6 +29,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 - Every app takes the new `Dockerfile` and a regenerated `.template-parity.json`. Portcullis moves its two build stages (age, age-plugin-tpm) below the marker and ends on `FROM runtime AS app`, then drops its `parity:Dockerfile` exception (portcullis#320).
 
 - Portcullis drops its `frontend/src/lib/auth.svelte.ts` variant.
+
+- Portcullis adds `mcp_auth` to `omitted_slices` and drops the `mcp/http_auth.py`, `mcp/auth.py`, `mcp/actors.py` and `config/sections/mcp.py` variants.
 
 ## [2026.11.59] - 2026-11-18
 
