@@ -166,8 +166,9 @@ def file_issue(*, report_id: uuid.UUID, settings: Settings) -> None:
             # RECEIVED. Not an error — a fresh stamp has nowhere to file yet.
             return
 
-        title = report.message[:_TITLE_MAX_CHARS]
-        body = _issue_body(report, _redacted_message(report.message))
+        redacted = _redacted_message(report.message)
+        title = redacted[:_TITLE_MAX_CHARS]
+        body = _issue_body(report, redacted)
 
         try:
             token = settings.feedback.github_token.get_secret_value() or vend(

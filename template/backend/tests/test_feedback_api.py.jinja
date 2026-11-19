@@ -176,8 +176,9 @@ async def test_a_report_files_as_a_redacted_github_issue(
     assert call["url"] == "https://api.github.com/repos/acme/reports/issues"
     assert call["headers"]["Authorization"] == "Bearer gh-token-123"
     assert call["json"]["labels"] == ["feedback"]
-    # The title is the first 80 characters of the ORIGINAL message.
-    assert call["json"]["title"] == str(payload["message"])[:80]
+    # The title is cut from the REDACTED text, never the original.
+    assert "hunter2" not in call["json"]["title"]
+    assert call["json"]["title"] == service._redacted_message(str(payload["message"]))[:80]
     # The body is REDACTED: the credential-shaped value never reaches GitHub...
     assert "hunter2" not in call["json"]["body"]
     assert "password" in call["json"]["body"]
@@ -283,3 +284,10 @@ async def test_a_report_with_no_screenshot_answers_404_for_one(client: AsyncClie
 async def test_an_invalid_screenshot_value_is_refused(client: AsyncClient) -> None:
     refused = await client.post("/api/feedback/", json=_report_payload(screenshot="not-a-data-url"))
     assert refused.status_code == 400
+
+
+async def test_an_oversize_message_or_screenshot_is_refused(client: AsyncClient) -> None:
+    long_message = await client.post("/api/feedback/", json=_report_payload(message="x" * 10_001))
+    assert long_message.status_code == 422
+    huge = await client.post("/api/feedback/", json=_report_payload(screenshot="x" * 4_000_001))
+    assert huge.status_code == 422

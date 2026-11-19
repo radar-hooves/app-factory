@@ -3,7 +3,7 @@
 import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from {{ package_name }}.api.feedback.models import FeedbackStatus
 
@@ -23,14 +23,14 @@ class FeedbackCreate(BaseModel):
     that has taken it.
     """
 
-    message: str
+    message: str = Field(max_length=10_000)
     route: str
     user_agent: str
     viewport: Viewport
     session_id: str
     # A `data:image/png;base64,...` URL, or None when the widget captured no
     # screenshot. Decoded to bytes in `service.create_report`.
-    screenshot: str | None = None
+    screenshot: str | None = Field(default=None, max_length=4_000_000)
 
 
 class FeedbackCreateResponse(BaseModel):

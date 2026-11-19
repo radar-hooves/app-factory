@@ -25,8 +25,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = logging.getLogger(__name__)
 
 
+_REQUEST_ID = re.compile(r"[0-9a-f]{8}")
+
+
 class RequestIDMiddleware:
-    """Stamp every request with a correlation id, generating one if absent.
+    """Stamp every request with an 8-character correlation id: the caller's if it has that form, else a minted one.
 
     Pure ASGI (not BaseHTTPMiddleware) so the id is bound before any middleware
     beneath this one runs, and every log line emitted for the request —
@@ -45,7 +48,8 @@ class RequestIDMiddleware:
             return
 
         request = Request(scope)
-        request_id = request.headers.get("x-request-id") or str(uuid4())
+        sent = request.headers.get("x-request-id", "")
+        request_id = sent if _REQUEST_ID.fullmatch(sent) else uuid4().hex[:8]
         request.state.request_id = request_id
 
         async def send_wrapper(message: Message) -> None:
