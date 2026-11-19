@@ -4,7 +4,9 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
-## [Unreleased]
+## [2026.11.63] - 2026-11-19
+
+Need: portcullis (#118, security-headers hook) and caspo (#110, feedback caps), both waiting on a tag (master-project, 19/11/2026).
 
 ### Added
 
@@ -20,6 +22,7 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 - **The image names its commit** (consumer: master orchestrator, wordhoard, #122). The Dockerfile sets `org.opencontainers.image.revision` from `GIT_SHA`, so `docker image inspect` reads the deployed commit; nothing for a stamped app to change beyond the update (CI must pass `--build-arg GIT_SHA`, as it does for `REVISION`).
 - **Weekly dependency bumps** (consumer: renovate #141, #142). The template pins `@playwright/test` 1.65.0; the kits move to pnpm 12.20.0, layerchart 2.10.0, nanoid 3.3.20 and refreshed action pins. Consumer must change: a stamped app's next update raises its `@playwright/test` pin to 1.65.0; run `pnpm install` and refresh `pnpm-lock.yaml`.
 - **Four small template needs** (consumers: caspo #143/#144, library #98, master-project #68). The test setup gives jsdom's `Blob` Node's `stream()` (shiki 4.6); `vite.config.ts` pre-bundles `@poodle64/ui/telemetry` so the first dev page is not blank; a personal workspace is named from the display name, else `Personal`, never the uid; the `fast-uri` override floor is `^3.1.9`; the shell spec finds the palette's input inside its dialog, not by the placeholder an app may change. `variants.yaml` drops portcullis's eight entries that no longer differ (#152). Consumer must change: nothing.
+- **A fresh render passes the factory self-test again** (consumer: master orchestrator). The stamped shell test, banner and spec are Prettier-formatted, `waitFor` is imported only with the case that uses it, and the self-test runs the lean render's `shell.test.ts` with the chat client set aside. Consumer must change: nothing.
 
 ## [2026.11.62] - 2026-11-18
 
