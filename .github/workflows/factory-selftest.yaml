@@ -311,17 +311,6 @@ jobs:
             uvx pre-commit run "$hook" --all-files
           done
 
-      - name: Frontend — the shell test without the agent slice
-        # An app with no chat client (the library) runs the same stamped
-        # shell.test.ts: the Ask-row case skips, the rest passes. The slice is
-        # set aside for this one file and put back for the steps after it.
-        working-directory: ${{ env.SCRATCH }}/frontend
-        run: |
-          set -euo pipefail
-          mv src/lib/agent/chat.ts "$RUNNER_TEMP/chat.ts"
-          trap 'mv "$RUNNER_TEMP/chat.ts" src/lib/agent/chat.ts' EXIT
-          pnpm exec vitest run src/lib/shell.test.ts
-
       - name: Elements — one element, two placements, in a real browser
         # The scratch app serves <selftest-card>; the proof stamps a second app in
         # another palette that places it, and drives both pages in Chromium (the
@@ -357,6 +346,20 @@ jobs:
           test ! -e "$SCRATCH-headless/frontend"
           test ! -e "$SCRATCH-headless-lean/backend/src/factory_selftest/api/agent"
           if grep -q claude "$SCRATCH-headless-lean/Dockerfile"; then echo "Claude Code installed without the agent slice" >&2; exit 1; fi
+
+      - name: Frontend — the shell test as the lean render stamps it
+        # An app with no chat client (the library) runs the shell.test.ts its
+        # own render gives it, with the Ask-row case left out at render time.
+        # That file runs here against the default render with the agent slice's
+        # client set aside, put back with the full file for the steps after it.
+        working-directory: ${{ env.SCRATCH }}/frontend
+        run: |
+          set -euo pipefail
+          cp src/lib/shell.test.ts "$RUNNER_TEMP/shell.test.ts"
+          mv src/lib/agent/chat.ts "$RUNNER_TEMP/chat.ts"
+          trap 'mv "$RUNNER_TEMP/chat.ts" src/lib/agent/chat.ts; cp "$RUNNER_TEMP/shell.test.ts" src/lib/shell.test.ts' EXIT
+          cp "${GITHUB_WORKSPACE}/${SCRATCH}-lean/frontend/src/lib/shell.test.ts" src/lib/shell.test.ts
+          pnpm exec vitest run src/lib/shell.test.ts
 
       - name: Other shapes — backend install, lint and test
         # Each takes only the kits its own pyproject names: a lean render that
