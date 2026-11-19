@@ -30,9 +30,7 @@ test('the keyboard shortcut opens the command palette @smoke', async ({ page }) 
 	await expectPaletteOpen(page);
 });
 
-test('the top bar search control opens the command palette', async ({
-	page
-}) => {
+test('the top bar search control opens the command palette', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('banner')).toBeVisible();
 	// The shared shell's own test id, so this spec does not depend on the label

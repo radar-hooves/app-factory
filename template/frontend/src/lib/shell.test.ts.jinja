@@ -240,8 +240,7 @@ describe('the palette', () => {
 		expect(palette.getByText('Sign out')).toBeInTheDocument();
 	});
 
-{% if 'agent' not in omitted_slices -%}
-	it('asks the chat persona what was typed, on Enter', async () => {
+{% if 'agent' not in omitted_slices %}	it('asks the chat persona what was typed, on Enter', async () => {
 		// The frame imports the chat client on first open; the mock factory loads the
 		// real module's graph, which on a loaded runner outlasts findBy's 1s default.
 		// Warm it first (by the frame's own glob, so a render without the slice resolves nothing), and give the row the test's own budget.
@@ -258,8 +257,7 @@ describe('the palette', () => {
 		);
 	});
 
-{% endif -%}
-	it('lists a nav section’s children under the section’s name', async () => {
+{% endif %}	it('lists a nav section’s children under the section’s name', async () => {
 		const nav = typeof shell.nav === 'function' ? shell.nav(viewer) : shell.nav;
 		const parents = nav
 			.flatMap((e) => ('items' in e ? e.items : [e]))

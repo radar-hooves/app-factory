@@ -19,9 +19,9 @@
 {#if auth.viewingAs}
 	<Alert variant="warning" class="mb-4 flex items-center gap-3 py-2" data-testid="view-as-banner">
 		<Eye />
-		<span class="flex-1"
-			>Viewing as a colleague, with {auth.entitlements.length} of your {auth.held.length} entitlements.</span
-		>
+		<span class="flex-1">
+			Viewing as a colleague, with {auth.entitlements.length} of your {auth.held.length} entitlements.
+		</span>
 		<Button size="sm" variant="outline" onclick={stop}>Stop viewing as colleague</Button>
 	</Alert>
 {/if}
