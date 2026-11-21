@@ -1,5 +1,5 @@
 <script lang="ts">
-	import X from '@lucide/svelte/icons/x';
+	import X from '#lib/icons/x.svelte';
 	import Badge from '../../badge/badge.svelte';
 	import Input from '../../input/input.svelte';
 

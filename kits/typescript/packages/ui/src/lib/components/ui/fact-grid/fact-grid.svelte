@@ -77,7 +77,7 @@
 >
 	{#each facts as fact (fact.key)}
 		<div class={cn('min-w-0', fact.value.length > LONG_VALUE && 'col-span-full')}>
-			<dt class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase">
+			<dt class="ds-label">
 				{fact.label}
 			</dt>
 			<dd class={cn('mt-1 break-words', fact.numeric && 'font-mono tabular-nums')}>

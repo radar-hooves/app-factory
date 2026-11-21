@@ -1,5 +1,5 @@
-import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
-import Users from '@lucide/svelte/icons/users';
+import SlidersHorizontal from '@poodle64/ui/icons/sliders-horizontal';
+import Users from '@poodle64/ui/icons/users';
 import { toItems, type NavSource } from '@poodle64/ui/app-shell';
 import { shell } from '#lib/shell.js';
 import { auth } from '#lib/auth.svelte.js';

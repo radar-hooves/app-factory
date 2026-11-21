@@ -15,8 +15,8 @@
   note says "noted" only once the far side confirms it.
 -->
 <script lang="ts">
-	import ThumbsDownIcon from '@lucide/svelte/icons/thumbs-down';
-	import ThumbsUpIcon from '@lucide/svelte/icons/thumbs-up';
+	import ThumbsDownIcon from '@poodle64/ui/icons/thumbs-down';
+	import ThumbsUpIcon from '@poodle64/ui/icons/thumbs-up';
 	import type { Verdict } from '../../chat.svelte';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 

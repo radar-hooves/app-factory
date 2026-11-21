@@ -24,11 +24,11 @@
 	import { cn, type WithElementRef } from '#lib/utils.js';
 	import { Skeleton } from '../skeleton/index.js';
 	import { Button } from '../button/index.js';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Minus from '@lucide/svelte/icons/minus';
-	import Maximize from '@lucide/svelte/icons/maximize';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import Plus from '#lib/icons/plus.svelte';
+	import Minus from '#lib/icons/minus.svelte';
+	import Maximize from '#lib/icons/arrows-out.svelte';
+	import ChevronLeft from '#lib/icons/caret-left.svelte';
+	import ChevronRight from '#lib/icons/caret-right.svelte';
 	import type { PageCanvasRegion, PageCanvasRenderInfo } from './types.js';
 
 	let {

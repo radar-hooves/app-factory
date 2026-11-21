@@ -8,7 +8,7 @@
 	import { PROFILES, type Section } from '#lib/profiles.js';
 	import { toggleMode } from 'mode-watcher';
 	import { AppIdentity } from '@poodle64/ui/app-identity';
-	import ShieldIcon from '@lucide/svelte/icons/shield';
+	import ShieldIcon from '@poodle64/ui/icons/shield';
 
 	type Shape = 'today' | 'sidebar';
 	type Measure = 'fill' | 'wide' | 'page' | 'prose';

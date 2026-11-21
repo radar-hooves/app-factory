@@ -44,12 +44,12 @@
 
 <section
 	bind:this={ref}
-	class="bg-card border-border ds-edge flex shrink-0 flex-col overflow-hidden rounded-lg border {klass}"
+	class="flex shrink-0 flex-col {klass}"
 	{...restProps}
 >
 	{#if !bare}
-		<header class="border-border flex items-center gap-2 border-b px-4 py-3">
-			<h2 class="text-body leading-tight font-semibold tracking-tight">{title}</h2>
+		<header class="border-border flex items-center gap-2 border-b pb-2.5">
+			<h2 class="text-heading font-semibold">{title}</h2>
 			{#if info}
 				<InfoTip
 					text={info}
@@ -61,9 +61,9 @@
 	<dl class="flex flex-col">
 		{#each items as item (item.label)}
 			<div
-				class="border-border/60 flex items-center justify-between gap-3 border-b px-4 py-2.5 last:border-0"
+				class="border-border/60 flex items-center justify-between gap-3 border-b py-2.5 last:border-0"
 			>
-				<dt class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase">
+				<dt class="ds-label">
 					{item.label}
 				</dt>
 				<dd class="flex items-center gap-1.5">
@@ -71,7 +71,7 @@
 						<span class="ds-dot ds-dot-{item.status}"></span>
 					{/if}
 					<span
-						class="ds-tabular text-stat font-mono leading-none font-semibold {item.muted
+						class="ds-tabular text-stat leading-none font-semibold {item.muted
 							? 'text-muted-foreground'
 							: ''}">{item.value}</span
 					>

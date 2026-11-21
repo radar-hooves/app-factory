@@ -93,16 +93,14 @@ export default ts.config(
 			'no-restricted-imports': [
 				'error',
 				{
-					paths: [
+					patterns: [
 						{
-							name: 'lucide-svelte',
-							message: 'Use @lucide/svelte with deep imports: @lucide/svelte/icons/<icon-name>.'
-						},
-						{
-							name: '@lucide/svelte',
+							group: ['@lucide/svelte', '@lucide/svelte/*', 'lucide-svelte', 'lucide-svelte/*'],
 							message:
-								'Barrel import pulls the whole icon set. Deep-import instead: @lucide/svelte/icons/<icon-name>.'
-						},
+								'Icons are the household set: @poodle64/ui/icons/<name>. `pnpm exec ds-icons-from-lucide` moves an app across (app-factory#171).'
+						}
+					],
+					paths: [
 						{
 							name: 'svelte-sonner',
 							importNames: ['Toaster'],

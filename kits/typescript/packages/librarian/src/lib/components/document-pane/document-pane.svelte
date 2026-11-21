@@ -8,7 +8,7 @@
   have meant two behaviours to keep honest; one media query is cheaper.
 -->
 <script lang="ts">
-	import XIcon from '@lucide/svelte/icons/x';
+	import XIcon from '@poodle64/ui/icons/x';
 	import { trustMark, type Citation, type LoadDocument, type LoadedDocument } from '../../citations';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 	import Markdown from '../markdown/markdown.svelte';

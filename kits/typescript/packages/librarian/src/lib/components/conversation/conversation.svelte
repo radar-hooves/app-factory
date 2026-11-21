@@ -16,7 +16,7 @@
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
+	import ArrowDownIcon from '@poodle64/ui/icons/arrow-down';
 	import type { DescribeTool, Turn } from '../../transcript.svelte';
 	import type { Verdict } from '../../chat.svelte';
 	import type { Citation, LoadDocument } from '../../citations';

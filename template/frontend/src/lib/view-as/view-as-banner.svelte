@@ -4,7 +4,7 @@
 	narrowed away, so nothing else in the frame can offer the exit.
 -->
 <script lang="ts">
-	import Eye from '@lucide/svelte/icons/eye';
+	import Eye from '@poodle64/ui/icons/eye';
 	import { Alert } from '@poodle64/ui/alert';
 	import { Button } from '@poodle64/ui/button';
 	import { auth } from '#lib/auth.svelte.js';

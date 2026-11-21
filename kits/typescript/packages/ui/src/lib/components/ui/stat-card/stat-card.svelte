@@ -46,14 +46,15 @@
 
 <div
 	bind:this={ref}
-	class={cn('bg-card border-border ds-edge flex flex-col gap-1.5 rounded-lg border p-4', className)}
+	data-slot="stat-card"
+	class={cn('flex flex-col gap-1.5', className)}
 	{...restProps}
 >
 	<div class="flex items-center gap-2">
 		{#if Icon}
 			<Icon class="text-muted-foreground size-4" />
 		{/if}
-		<span class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase">
+		<span class="ds-label">
 			{label}
 		</span>
 		{#if status}
@@ -62,7 +63,7 @@
 	</div>
 	<div class="flex items-baseline gap-1.5">
 		<span
-			class="ds-tabular text-display font-mono leading-none font-semibold {valueTone
+			class="ds-tabular text-display font-display leading-none font-semibold {valueTone
 				? `ds-ink-${valueTone}`
 				: ''}"
 			data-tone={valueTone}>{value}</span

@@ -140,7 +140,7 @@
 </script>
 
 <div
-	class="bg-card border-border ds-edge flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border"
+	class="bg-card border-border flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border"
 >
 	{#if rows.length === 0}
 		<EmptyState
@@ -187,7 +187,7 @@
 							{@const meta = header.column.columnDef.meta}
 							<TableHead
 								class={cn(
-									'text-muted-foreground border-border bg-card sticky top-0 z-10 text-2xs tracking-eyebrow border-b px-3 py-1.5 text-left font-medium whitespace-nowrap uppercase',
+									'ds-label border-border bg-card sticky top-0 z-10 border-b px-3 py-1.5 text-left whitespace-nowrap',
 									meta?.class,
 									meta?.headClass
 								)}

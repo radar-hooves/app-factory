@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { AppShell, type NavGroup } from '@poodle64/ui/app-shell';
-	import BookOpen from '@lucide/svelte/icons/book-open';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import PanelLeft from '@lucide/svelte/icons/panel-left';
-	import Table from '@lucide/svelte/icons/table';
+	import BookOpen from '@poodle64/ui/icons/book-open';
+	import FileText from '@poodle64/ui/icons/file-text';
+	import PanelLeft from '@poodle64/ui/icons/sidebar-simple';
+	import Table from '@poodle64/ui/icons/table';
 
 	// The console's own pages, composed the way a stamped app's frame composes
 	// them: one shell, and each route says what it is in its load data. /lab and

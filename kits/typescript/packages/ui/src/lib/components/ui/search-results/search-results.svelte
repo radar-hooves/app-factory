@@ -16,7 +16,7 @@
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	import SearchIcon from '#lib/icons/magnifying-glass.svelte';
 	import Button from '../button/button.svelte';
 	import StatusBadge from '../status-badge/status-badge.svelte';
 	import EmptyState from '../empty-state/empty-state.svelte';
@@ -104,7 +104,7 @@
 			result{shownTotal === 1 ? '' : 's'}{query ? ` for “${query}”` : ''}
 		</p>
 
-		<ol class="divide-border border-border ds-edge bg-card divide-y rounded-lg border">
+		<ol class="divide-border border-border bg-card divide-y rounded-lg border">
 			{#each results as result (result.id)}
 				<li>
 					<article class="flex items-start gap-4 px-4 py-3.5">

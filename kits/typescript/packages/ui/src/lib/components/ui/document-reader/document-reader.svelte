@@ -45,7 +45,7 @@
 	 */
 	import { untrack, type Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ChevronRight from '#lib/icons/caret-right.svelte';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 	import Button from '../button/button.svelte';
 	import PageHeader from '../page-header/page-header.svelte';
@@ -310,7 +310,7 @@
 								bind:this={disclosure}
 								data-slot="document-reader-disclosure"
 								class={cn(
-									'group bg-card border-border ds-edge mb-6 rounded-lg border',
+									'group bg-card border-border mb-6 rounded-lg border',
 									!hosted && '@5xl:hidden'
 								)}
 							>

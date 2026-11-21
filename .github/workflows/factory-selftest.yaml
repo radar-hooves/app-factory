@@ -269,17 +269,19 @@ jobs:
         # UV_FROZEN: template/ ships no pnpm-lock.yaml either, so a scratch
         # render has nothing to freeze against — pnpm resolves and writes one.
         #
-        # @poodle64/ui and @poodle64/librarian come from THIS checkout, packed as
-        # a publish would ship them, since the stamp may pin a version npm does not have until this
+        # @poodle64/design-tokens, @poodle64/ui and @poodle64/librarian come from THIS
+        # checkout, packed as a publish would ship them, since the stamp may pin a version npm does not have until this
         # merges. `pnpm add` resolves the whole tree around it but does not
         # always run the app's `prepare`, so svelte-kit sync is run by name.
         working-directory: ${{ env.SCRATCH }}/frontend
         run: |
           set -euo pipefail
-          (cd "${GITHUB_WORKSPACE}/kits/typescript" && pnpm install --frozen-lockfile && pnpm --filter @poodle64/ui --filter @poodle64/librarian run build)
+          (cd "${GITHUB_WORKSPACE}/kits/typescript" && pnpm install --frozen-lockfile && pnpm --filter @poodle64/design-tokens --filter @poodle64/ui --filter @poodle64/librarian run build)
+          pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/design-tokens pack --pack-destination "${RUNNER_TEMP}"
           pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/ui pack --pack-destination "${RUNNER_TEMP}"
           pnpm --dir "${GITHUB_WORKSPACE}/kits/typescript" --filter @poodle64/librarian pack --pack-destination "${RUNNER_TEMP}"
           pnpm add \
+            "@poodle64/design-tokens@file:$(ls "${RUNNER_TEMP}"/poodle64-design-tokens-*.tgz)" \
             "@poodle64/ui@file:$(ls "${RUNNER_TEMP}"/poodle64-ui-*.tgz)" \
             "@poodle64/librarian@file:$(ls "${RUNNER_TEMP}"/poodle64-librarian-*.tgz)"
           # What superforms-field.test.ts renders; a stamp carries none of them.

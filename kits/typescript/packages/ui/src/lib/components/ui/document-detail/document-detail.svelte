@@ -78,7 +78,7 @@
 			<div class="grid min-w-0 gap-4 sm:grid-cols-2">
 				{#if document.fields?.length}
 					<div class="min-w-0">
-						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
+						<h3 class="ds-label mb-2">
 							Details
 						</h3>
 						<dl class="space-y-1 text-sm">
@@ -101,7 +101,7 @@
 
 				{#if document.locations?.length}
 					<div class="min-w-0">
-						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
+						<h3 class="ds-label mb-2">
 							Locations
 						</h3>
 						<ul class="space-y-1 text-sm">
@@ -126,7 +126,7 @@
 
 				{#if document.tags?.length}
 					<div class="min-w-0">
-						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
+						<h3 class="ds-label mb-2">
 							Tags
 						</h3>
 						<div class="flex flex-wrap gap-1.5">
@@ -139,7 +139,7 @@
 
 				{#if document.memberships?.length}
 					<div class="min-w-0">
-						<h3 class="text-muted-foreground text-2xs mb-2 font-semibold tracking-wide uppercase">
+						<h3 class="ds-label mb-2">
 							Collections
 						</h3>
 						<div class="flex flex-wrap gap-1.5">

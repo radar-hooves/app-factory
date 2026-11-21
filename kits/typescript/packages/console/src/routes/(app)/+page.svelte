@@ -3,10 +3,10 @@
 	import { PageSection } from '@poodle64/ui/page-section';
 	import * as Card from '@poodle64/ui/card';
 	import { TileGrid } from '@poodle64/ui/tile-grid';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import PanelLeft from '@lucide/svelte/icons/panel-left';
-	import Table from '@lucide/svelte/icons/table';
-	import FlaskConical from '@lucide/svelte/icons/flask-conical';
+	import FileText from '@poodle64/ui/icons/file-text';
+	import PanelLeft from '@poodle64/ui/icons/sidebar-simple';
+	import Table from '@poodle64/ui/icons/table';
+	import FlaskConical from '@poodle64/ui/icons/flask';
 
 	// The console composes the SHIPPED shell: anything wrong with it shows here
 	// first, on the maintainer's own screen, before it reaches an app.

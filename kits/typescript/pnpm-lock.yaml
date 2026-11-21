@@ -223,9 +223,6 @@ importers:
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.1.0
         version: 5.3.0
-      '@lucide/svelte':
-        specifier: ^1.7.0
-        version: 1.69.0(svelte@5.57.3)
       '@playwright/test':
         specifier: 1.65.0
         version: 1.65.0
@@ -287,12 +284,12 @@ importers:
         specifier: 2.10.0
         version: 2.10.0(svelte@5.57.3)
     devDependencies:
-      '@lucide/svelte':
-        specifier: ^1.7.0
-        version: 1.69.0(svelte@5.57.3)
       '@poodle64/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
+      '@poodle64/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@sveltejs/kit':
         specifier: ^3.0.0
         version: 3.1.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -359,9 +356,6 @@ importers:
       '@jsonforms/core':
         specifier: ^3.8.0
         version: 3.8.0
-      '@lucide/svelte':
-        specifier: ^1.25.0
-        version: 1.69.0(svelte@5.57.3)
       '@tanstack/table-core':
         specifier: ^8.21.3
         version: 8.21.3
@@ -387,6 +381,9 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
+      '@phosphor-icons/core':
+        specifier: ^2.1.1
+        version: 2.1.1
       '@poodle64/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
@@ -916,11 +913,6 @@ packages:
   '@layerstack/utils@2.0.0-next.19':
     resolution: {integrity: sha512-HyXCEz9pge4rFWklrSgFr3YIwdE1gP8WM6GPetmnKPDfYLF1/oetRFKI9FqiE+dw4brnULGPKJsVhjM3vQfD4A==}
 
-  '@lucide/svelte@1.69.0':
-    resolution: {integrity: sha512-Q61KvD5/lGS+BrbpPXJSBt/zgjDEAWOP8X85tBz6OnYueEyVuDxI0Zh/6R4cjobWRxs3ItY2JD4NSwYprBpHHw==}
-    peerDependencies:
-      svelte: ^5
-
   '@opentelemetry/api-logs@0.223.0':
     resolution: {integrity: sha512-Oepm6etVPFCn0VWB1t833iOTgz1eYBDUPxcrOR/XvwzD1+Ag9VzSPSrrKAFNJ/haatj+8CXbG47pZXvdNQKDJw==}
     engines: {node: '>=8.0.0'}
@@ -1127,6 +1119,9 @@ packages:
   '@parcel/watcher@2.5.1':
     resolution: {integrity: sha512-dfUnCxiN9H4ap84DvD2ubjw+3vUNpstxa0TneY/Paat8a3R4uQZDLSvWjmznAY/DoahqTHl9V46HF/Zs3F29pg==}
     engines: {node: '>= 10.0.0'}
+
+  '@phosphor-icons/core@2.1.1':
+    resolution: {integrity: sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==}
 
   '@playwright/test@1.65.0':
     resolution: {integrity: sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ==}
@@ -3654,10 +3649,6 @@ snapshots:
       d3-time: 3.1.0
       d3-time-format: 4.1.0
 
-  '@lucide/svelte@1.69.0(svelte@5.57.3)':
-    dependencies:
-      svelte: 5.57.3
-
   '@opentelemetry/api-logs@0.223.0':
     dependencies:
       '@opentelemetry/api': 1.9.1
@@ -3849,6 +3840,8 @@ snapshots:
       '@parcel/watcher-win32-arm64': 2.5.1
       '@parcel/watcher-win32-ia32': 2.5.1
       '@parcel/watcher-win32-x64': 2.5.1
+
+  '@phosphor-icons/core@2.1.1': {}
 
   '@playwright/test@1.65.0':
     dependencies:

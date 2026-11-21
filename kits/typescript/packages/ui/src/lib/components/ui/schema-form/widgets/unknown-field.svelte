@@ -1,5 +1,5 @@
 <script lang="ts">
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import TriangleAlert from '#lib/icons/warning.svelte';
 	import StatusBadge from '../../status-badge/status-badge.svelte';
 	import Input from '../../input/input.svelte';
 	import Label from '../../label/label.svelte';
@@ -103,7 +103,7 @@
 	</p>
 
 	{#if editable}
-		<Label for={id} class="text-2xs text-muted-foreground uppercase">Raw value</Label>
+		<Label for={id} class="ds-label">Raw value</Label>
 		<Input
 			{id}
 			{disabled}

@@ -17,14 +17,14 @@
   a thumb on a phone reaches all of it.
 -->
 <script lang="ts">
-	import DownloadIcon from '@lucide/svelte/icons/download';
-	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
-	import MoreHorizontalIcon from '@lucide/svelte/icons/more-horizontal';
-	import PanelLeftCloseIcon from '@lucide/svelte/icons/panel-left-close';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import XIcon from '@lucide/svelte/icons/x';
+	import DownloadIcon from '@poodle64/ui/icons/download-simple';
+	import MessageSquareIcon from '@poodle64/ui/icons/chat';
+	import MoreHorizontalIcon from '@poodle64/ui/icons/dots-three';
+	import PanelLeftCloseIcon from '@poodle64/ui/icons/sidebar-simple';
+	import PencilIcon from '@poodle64/ui/icons/pencil-simple';
+	import PlusIcon from '@poodle64/ui/icons/plus';
+	import TrashIcon from '@poodle64/ui/icons/trash';
+	import XIcon from '@poodle64/ui/icons/x';
 	import type { ConversationSummary } from '../../chat.svelte';
 	import { DEFAULT_PERSONA, resolveCopy, type ChatCopy } from '../../copy';
 

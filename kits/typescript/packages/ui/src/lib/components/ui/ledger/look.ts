@@ -29,7 +29,7 @@ export const CARD = 'bg-card border-border overflow-hidden rounded-lg border';
 /** The head card, and the ground behind it that hides the rows scrolling under it. */
 export const HEAD_GROUND = 'bg-background sticky top-0 z-3 pb-3';
 export const HEAD = 'bg-card border-border grid h-9 items-center rounded-lg border';
-export const HEAD_TEXT = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
+export const HEAD_TEXT = 'ds-label';
 /** A group's label line on the ground; the spacing is padding, so a measured height is the height it takes. */
 export const GROUP = 'text-muted-foreground h-6.5 text-xs';
 export const GROUP_LABEL = 'text-[0.8125rem] font-semibold';

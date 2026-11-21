@@ -35,10 +35,10 @@
 	surface; the factory stamps one at /settings/members, in the settings frame.
 -->
 <script lang="ts">
-	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-	import Layers from '@lucide/svelte/icons/layers';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Users from '@lucide/svelte/icons/users';
+	import ChevronsUpDown from '@poodle64/ui/icons/caret-up-down';
+	import Layers from '@poodle64/ui/icons/stack';
+	import Plus from '@poodle64/ui/icons/plus';
+	import Users from '@poodle64/ui/icons/users';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { AppDialog } from '@poodle64/ui/app-dialog';

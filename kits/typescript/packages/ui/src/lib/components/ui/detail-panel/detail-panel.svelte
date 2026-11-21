@@ -2,7 +2,7 @@
 	import type { Snippet, Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
-	import X from '@lucide/svelte/icons/x';
+	import X from '#lib/icons/x.svelte';
 	import StatusBadge from '../status-badge/status-badge.svelte';
 	import type { Status } from '../status/index.js';
 
@@ -43,7 +43,7 @@
 <section
 	bind:this={ref}
 	class={cn(
-		'bg-card border-border ds-edge flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border',
+		'bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg',
 		className
 	)}
 	{...restProps}
@@ -58,7 +58,7 @@
 		{/if}
 		<div class="min-w-0 flex-1">
 			{#if eyebrow}
-				<div class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase">
+				<div class="ds-label">
 					{eyebrow}
 				</div>
 			{/if}

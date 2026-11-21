@@ -16,11 +16,11 @@
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	import CheckIcon from '@poodle64/ui/icons/check';
+	import ChevronDownIcon from '@poodle64/ui/icons/caret-down';
+	import ChevronLeftIcon from '@poodle64/ui/icons/caret-left';
+	import ChevronRightIcon from '@poodle64/ui/icons/caret-right';
+	import SearchIcon from '@poodle64/ui/icons/magnifying-glass';
 	import { fill, type ChatCopy } from '../../copy';
 	import { labelOf, titleOf, type CollectionChoice, type CollectionGroup } from './choices';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import Loader2 from '@lucide/svelte/icons/loader-2';
+	import Loader2 from '#lib/icons/spinner-gap.svelte';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {

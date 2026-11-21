@@ -12,7 +12,7 @@
   is noise in the way of the box.
 -->
 <script lang="ts">
-	import InfoIcon from '@lucide/svelte/icons/info';
+	import InfoIcon from '@poodle64/ui/icons/info';
 	import type { Quota } from '../../chat.svelte';
 	import { fill, resolveCopy, type ChatCopy } from '../../copy';
 

@@ -12,11 +12,11 @@
   and left a 2302px-wide transcript.
 -->
 <script lang="ts">
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import CopyIcon from '@lucide/svelte/icons/copy';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
-	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import CheckIcon from '@poodle64/ui/icons/check';
+	import CopyIcon from '@poodle64/ui/icons/copy';
+	import PencilIcon from '@poodle64/ui/icons/pencil-simple';
+	import FileTextIcon from '@poodle64/ui/icons/file-text';
+	import RefreshCwIcon from '@poodle64/ui/icons/arrows-clockwise';
 	import type { Snippet } from 'svelte';
 	import {
 		outcomeLine,

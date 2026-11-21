@@ -5,8 +5,8 @@
   the source as written.
 -->
 <script lang="ts">
-	import DownloadIcon from '@lucide/svelte/icons/download';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
+	import DownloadIcon from '@poodle64/ui/icons/download-simple';
+	import FileTextIcon from '@poodle64/ui/icons/file-text';
 	import { fill, resolveCopy, type ChatCopy } from '../../copy';
 	import { chipFor, writtenMeta, type Written, type WrittenUrl } from '../../written';
 

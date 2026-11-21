@@ -54,7 +54,7 @@
 >
 	<span class="sr-only">{label}</span>
 	{#if shape === 'rows'}
-		<div class="bg-card border-border ds-edge divide-border divide-y rounded-lg border" aria-hidden="true">
+		<div class="divide-border divide-y" aria-hidden="true">
 			{#each { length: n }, i (i)}
 				<div class="flex flex-col gap-1 px-3 py-2.5">
 					<div class="flex h-5 items-center">
@@ -69,7 +69,7 @@
 	{:else if shape === 'tiles'}
 		<div class="grid grid-cols-1 gap-4 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4" aria-hidden="true">
 			{#each { length: n }, i (i)}
-				<div class="bg-card border-border ds-edge flex flex-col gap-1.5 rounded-lg border p-4">
+				<div class="flex flex-col gap-1.5">
 					<div class="flex h-4 items-center"><Skeleton class="h-2.5 w-1/3" /></div>
 					<div class="flex h-[2.125rem] items-center"><Skeleton class="h-6 w-1/2" /></div>
 					<div class="flex h-4 items-center">

@@ -4,8 +4,8 @@
 	 * a click sorts (largest or newest first, unless `first` says otherwise),
 	 * again reverses, a third time restores the list's own order.
 	 */
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import ChevronDown from '#lib/icons/caret-down.svelte';
+	import ChevronUp from '#lib/icons/caret-up.svelte';
 	import { cn } from '#lib/utils.js';
 	import { CELL, END, HEAD_TEXT, RING_INSET } from './look.js';
 

@@ -24,14 +24,14 @@
 <div
 	bind:this={ref}
 	class={cn(
-		'bg-card border-border ds-edge flex flex-col items-center justify-center rounded-lg border p-8 text-center',
+		'flex flex-col items-center justify-center p-8 text-center',
 		className
 	)}
 	{...restProps}
 >
 	{#if Icon}
-		<div class="bg-muted mb-4 rounded-full p-3">
-			<Icon class="text-muted-foreground size-6" />
+		<div class="mb-3">
+			<Icon class="text-muted-foreground size-8" />
 		</div>
 	{/if}
 	<h3 class="text-foreground mb-1 text-lg font-semibold">{title}</h3>

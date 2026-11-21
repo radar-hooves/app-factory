@@ -11,8 +11,8 @@
   concluded. So both fold, and both fold by default.
 -->
 <script lang="ts">
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
+	import ChevronRightIcon from '@poodle64/ui/icons/caret-right';
+	import LightbulbIcon from '@poodle64/ui/icons/lightbulb';
 	import { fill, resolveCopy, type ChatCopy } from '../../copy';
 	import { thoughtSeconds } from '../../steps';
 	import type { TextBlock, ThinkingBlock } from '../../transcript.svelte';

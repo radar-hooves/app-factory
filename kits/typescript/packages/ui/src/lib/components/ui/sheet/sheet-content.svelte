@@ -24,7 +24,7 @@
 <script lang="ts">
 	import { Dialog as SheetPrimitive } from 'bits-ui';
 	import type { ComponentProps, Snippet } from 'svelte';
-	import XIcon from '@lucide/svelte/icons/x';
+	import XIcon from '#lib/icons/x.svelte';
 	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import SheetOverlay from './sheet-overlay.svelte';

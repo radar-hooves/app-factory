@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import Shield from '@lucide/svelte/icons/shield';
+import Shield from '#lib/icons/shield.svelte';
 import { AppIdentity } from '#lib/components/ui/app-identity/index.js';
 
 describe('AppIdentity — handle initials with no display name', () => {

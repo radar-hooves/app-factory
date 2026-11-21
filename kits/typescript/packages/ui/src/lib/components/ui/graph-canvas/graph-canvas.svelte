@@ -8,14 +8,14 @@
 	 */
 	import { onMount, tick, untrack, type Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import Search from '@lucide/svelte/icons/search';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Minus from '@lucide/svelte/icons/minus';
-	import Maximize from '@lucide/svelte/icons/maximize';
-	import Shuffle from '@lucide/svelte/icons/shuffle';
-	import Focus from '@lucide/svelte/icons/focus';
-	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
-	import X from '@lucide/svelte/icons/x';
+	import Search from '#lib/icons/magnifying-glass.svelte';
+	import Plus from '#lib/icons/plus.svelte';
+	import Minus from '#lib/icons/minus.svelte';
+	import Maximize from '#lib/icons/arrows-out.svelte';
+	import Shuffle from '#lib/icons/shuffle.svelte';
+	import Focus from '#lib/icons/crosshair-simple.svelte';
+	import ArrowUpRight from '#lib/icons/arrow-up-right.svelte';
+	import X from '#lib/icons/x.svelte';
 	import Button from '../button/button.svelte';
 	import { Input } from '../input/index.js';
 	import { cn } from '#lib/utils.js';
@@ -767,7 +767,7 @@
 	<!-- Find and legend: a column on the left of a wide graph, a bar across the top of a narrow one. -->
 	<div
 		bind:this={panel}
-		class="border-border bg-surface-2/90 absolute inset-x-3 top-3 z-10 flex flex-col gap-2 ds-edge rounded-xl border p-2 backdrop-blur-md @2xl:inset-x-auto @2xl:left-4 @2xl:top-4 @2xl:w-64 @2xl:gap-3 @2xl:p-3"
+		class="border-border bg-surface-2/90 absolute inset-x-3 top-3 z-10 flex flex-col gap-2 rounded-xl border p-2 backdrop-blur-md @2xl:inset-x-auto @2xl:left-4 @2xl:top-4 @2xl:w-64 @2xl:gap-3 @2xl:p-3"
 	>
 		{#if search}
 			<div class="relative">
@@ -881,7 +881,7 @@
 	<!-- View controls. A narrow graph's card covers them, so they step aside for it. -->
 	<div
 		class={cn(
-			'border-border bg-surface-2/90 absolute right-3 bottom-3 z-10 flex flex-col ds-edge rounded-xl border p-1 backdrop-blur-md @2xl:right-4 @2xl:bottom-4',
+			'border-border bg-surface-2/90 absolute right-3 bottom-3 z-10 flex flex-col rounded-xl border p-1 backdrop-blur-md @2xl:right-4 @2xl:bottom-4',
 			current && 'hidden @2xl:flex'
 		)}
 	>
@@ -908,7 +908,7 @@
 	{#if current}
 		<section
 			bind:this={card}
-			class="border-border bg-surface-2/95 absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col ds-edge overflow-hidden rounded-xl border backdrop-blur-md @2xl:inset-x-auto @2xl:top-4 @2xl:right-4 @2xl:bottom-auto @2xl:max-h-[calc(100%-2rem)] @2xl:w-80"
+			class="border-border bg-surface-2/95 absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col overflow-hidden rounded-xl border backdrop-blur-md @2xl:inset-x-auto @2xl:top-4 @2xl:right-4 @2xl:bottom-auto @2xl:max-h-[calc(100%-2rem)] @2xl:w-80"
 			aria-label={current.label}
 		>
 			<div class="overflow-y-auto overscroll-contain p-4">

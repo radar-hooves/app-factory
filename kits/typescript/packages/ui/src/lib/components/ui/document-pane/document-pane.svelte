@@ -15,7 +15,7 @@
 	 */
 	import { untrack, type Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import X from '@lucide/svelte/icons/x';
+	import X from '#lib/icons/x.svelte';
 	import Panel from '../panel/panel.svelte';
 	import PageCanvas from '../page-canvas/page-canvas.svelte';
 	import type { PageCanvasRenderInfo } from '../page-canvas/types.js';

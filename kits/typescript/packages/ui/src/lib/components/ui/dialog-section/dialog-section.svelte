@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	// One section of a dialogue body. An optional uppercase section label sits above
+	// One section of a dialogue body. An optional section label sits above
 	// the content; a horizontal divider is drawn automatically between adjacent
 	// sections (see `.ds-dialog-section + .ds-dialog-section` in
 	// @poodle64/ui/styles.css), so every dialogue separates its information the
@@ -12,7 +12,7 @@
 
 <section class="ds-dialog-section space-y-3">
 	{#if label}
-		<div class="text-muted-foreground text-2xs tracking-eyebrow font-medium uppercase">
+		<div class="ds-label">
 			{label}
 		</div>
 	{/if}

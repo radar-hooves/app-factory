@@ -12,8 +12,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
-import Download from '@lucide/svelte/icons/download';
-import Plus from '@lucide/svelte/icons/plus';
+import Download from '#lib/icons/download-simple.svelte';
+import Plus from '#lib/icons/plus.svelte';
 import Harness from './ledger.svelte';
 import {
 	blocksOf,

@@ -12,8 +12,8 @@
 </script>
 
 <script lang="ts">
-	import Bell from '@lucide/svelte/icons/bell';
-	import X from '@lucide/svelte/icons/x';
+	import Bell from '#lib/icons/bell.svelte';
+	import X from '#lib/icons/x.svelte';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '../ui/badge/index.js';

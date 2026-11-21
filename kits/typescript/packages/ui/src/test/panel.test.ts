@@ -74,12 +74,11 @@ describe('Panel — the footer', () => {
 		expect(footer()).not.toBeInTheDocument();
 	});
 
-	it('renders the actions on a top-bordered muted strip, right-aligned', () => {
+	it('renders the actions over a hairline, right-aligned', () => {
 		render(Harness, { props: { withFooter: true } });
 		const strip = footer() as HTMLElement;
 		expect(strip).toBeInTheDocument();
 		expect(strip.className).toContain('border-t');
-		expect(strip.className).toContain('bg-muted/50');
 		expect(strip.className).toContain('justify-end');
 		expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
@@ -93,14 +92,17 @@ describe('Panel — the destructive tone', () => {
 		// never names a tone is byte-identical to one from before the prop existed.
 		render(Harness);
 		expect(section().hasAttribute('data-tone')).toBe(false);
-		expect(section().className).toContain('border-border');
+		expect((section().querySelector('header') as HTMLElement).className).toContain('border-border');
+	});
+
+	it('is an open section, never a box (app-factory#171)', () => {
+		render(Harness);
+		expect(section().className).not.toMatch(/\b(border|bg-card|rounded-\w+)\b/);
 	});
 
 	it('moves the rule and the title to the destructive ink', () => {
 		render(Harness, { props: { title: 'Delete this workspace', tone: 'destructive' } });
 		expect(section()).toHaveAttribute('data-tone', 'destructive');
-		expect(section().className).toContain('border-destructive/40');
-		expect(section().className).not.toContain('border-border');
 
 		const heading = screen.getByRole('heading', { name: 'Delete this workspace' });
 		expect(heading.className).toContain('text-destructive');

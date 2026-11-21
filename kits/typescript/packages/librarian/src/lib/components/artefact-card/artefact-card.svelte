@@ -10,7 +10,7 @@
   so a thumb that lands on the summary still opens it.
 -->
 <script lang="ts">
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
+	import FileTextIcon from '@poodle64/ui/icons/file-text';
 	import type { Artefact } from '../../transcript.svelte';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 

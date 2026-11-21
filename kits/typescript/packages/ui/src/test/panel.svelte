@@ -7,7 +7,7 @@
 	// inside an `{#if}` in Panel's body: a snippet becomes a prop only where it is
 	// a direct child of the component, so the conditional has to be on the value.
 	import Panel from '#lib/components/ui/panel/panel.svelte';
-	import Trash from '@lucide/svelte/icons/trash-2';
+	import Trash from '#lib/icons/trash.svelte';
 
 	let {
 		title = 'Delegation limits',

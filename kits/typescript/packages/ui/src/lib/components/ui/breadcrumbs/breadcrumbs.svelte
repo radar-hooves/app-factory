@@ -22,7 +22,7 @@
 	 * as wide as its content, so 40% of it would truncate at any width.
 	 */
 	import type { HTMLAttributes } from 'svelte/elements';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ChevronRight from '#lib/icons/caret-right.svelte';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	let {

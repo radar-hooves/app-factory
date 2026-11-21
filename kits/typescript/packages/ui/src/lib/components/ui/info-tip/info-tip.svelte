@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import * as Tooltip from '../tooltip/index.js';
-	import Info from '@lucide/svelte/icons/info';
+	import Info from '#lib/icons/info.svelte';
 
 	// One tooltip pattern for the whole app. Pass `text` for the hint; wrap an
 	// existing affordance by passing it as children (e.g. a status dot or a

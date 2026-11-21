@@ -94,7 +94,7 @@
 				<Breadcrumbs items={breadcrumbs} class="mb-1.5" />
 			{/if}
 			{#if eyebrow}
-				<div class="text-primary text-2xs tracking-eyebrow mb-1 font-medium uppercase">
+				<div class="ds-label mb-1">
 					{eyebrow}
 				</div>
 			{/if}

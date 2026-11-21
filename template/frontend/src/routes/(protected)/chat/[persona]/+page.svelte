@@ -21,10 +21,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import HistoryIcon from '@lucide/svelte/icons/history';
-	import PanelLeftOpenIcon from '@lucide/svelte/icons/panel-left-open';
-	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
+	import HistoryIcon from '@poodle64/ui/icons/clock-counter-clockwise';
+	import PanelLeftOpenIcon from '@poodle64/ui/icons/sidebar-simple';
+	import SquarePenIcon from '@poodle64/ui/icons/note-pencil';
+	import TrashIcon from '@poodle64/ui/icons/trash';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { AgentTranscriptProps } from '@poodle64/librarian/agent-transcript';

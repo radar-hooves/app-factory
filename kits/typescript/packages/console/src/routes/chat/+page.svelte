@@ -14,8 +14,8 @@
 	 */
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
-	import HistoryIcon from '@lucide/svelte/icons/history';
-	import SquarePenIcon from '@lucide/svelte/icons/square-pen';
+	import HistoryIcon from '@poodle64/ui/icons/clock-counter-clockwise';
+	import SquarePenIcon from '@poodle64/ui/icons/note-pencil';
 	import { Button } from '@poodle64/ui/button';
 	import * as Sheet from '@poodle64/ui/sheet';
 	import Conversation from '@poodle64/librarian/conversation';

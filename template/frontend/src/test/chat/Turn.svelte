@@ -38,7 +38,7 @@
 					<li>
 						<button
 							type="button"
-							class="bg-primary/10 text-primary hover:bg-primary/20 focus-visible:ring-ring rounded-full px-3 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+							class="bg-primary/10 text-primary hover:bg-primary/20 focus-visible:ring-ring rounded-md px-3 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
 							onclick={() => turn.oncite?.(citation)}
 						>
 							{citation.section ? `${citation.title}, ${citation.section}` : citation.title}

@@ -1,6 +1,6 @@
 {
 	"name": "@poodle64/librarian",
-	"version": "2026.11.1",
+	"version": "2026.11.2",
 	"description": "An agent's conversation surface as a consumable Svelte 5 package: the stream client, transcript state and self-styling chat components (transcript, composer, markdown) every household app renders instead of rebuilding, speaking as whichever persona the app names.",
 	"type": "module",
 	"license": "MIT",
@@ -71,7 +71,7 @@
 	"peerDependencies": {
 		"svelte": "^5.54.0",
 		"@poodle64/design-tokens": "^2026.10.2",
-		"@lucide/svelte": "^1.7.0",
+		"@poodle64/ui": "^2026.11.13",
 		"marked": "^18.0.11",
 		"isomorphic-dompurify": "^3.23.0 || ^4.0.0",
 		"shiki": "^4.4.3"
@@ -80,8 +80,8 @@
 		"layerchart": "2.10.0"
 	},
 	"devDependencies": {
-		"@lucide/svelte": "^1.7.0",
 		"@poodle64/design-tokens": "workspace:*",
+		"@poodle64/ui": "workspace:*",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",

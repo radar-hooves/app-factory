@@ -12,14 +12,14 @@
   found instead, as small cards.
 -->
 <script lang="ts">
-	import BookOpenTextIcon from '@lucide/svelte/icons/book-open-text';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import CircleIcon from '@lucide/svelte/icons/circle';
-	import FilePenIcon from '@lucide/svelte/icons/file-pen';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
-	import GlobeIcon from '@lucide/svelte/icons/globe';
-	import LibraryIcon from '@lucide/svelte/icons/library';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import BookOpenTextIcon from '@poodle64/ui/icons/book-open-text';
+	import ChevronRightIcon from '@poodle64/ui/icons/caret-right';
+	import CircleIcon from '@poodle64/ui/icons/circle';
+	import FilePenIcon from '@poodle64/ui/icons/note-pencil';
+	import FileTextIcon from '@poodle64/ui/icons/file-text';
+	import GlobeIcon from '@poodle64/ui/icons/globe';
+	import LibraryIcon from '@poodle64/ui/icons/books';
+	import PencilIcon from '@poodle64/ui/icons/pencil-simple';
 	import { describe, type ToolBlock, type ToolWords } from '../../transcript.svelte';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 	import { stepKind, stepMeta, type StepKind } from '../../steps';

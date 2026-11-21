@@ -10,7 +10,7 @@
 
 /** Header cell. */
 export const TH_CLASS =
-	'text-muted-foreground border-border border-b px-3 py-2 text-left text-2xs font-medium tracking-eyebrow uppercase';
+	'ds-label border-border border-b px-3 py-2 text-left';
 
 /** Body cell. */
 export const TD_CLASS = 'px-3 py-2.5';

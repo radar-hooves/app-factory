@@ -280,7 +280,7 @@ describe('bordered content containers', () => {
 		const offenders = files.flatMap((f) => scanFile(readFileSync(f, 'utf8'), relative(packageRoot, f)));
 		expect(
 			offenders.map((o) => `${o.file}:${o.line} <${o.tag}> — ${o.classes}`),
-			'bordered content containers that paint nothing (add the bg-card border-border ds-edge surface)'
+			'bordered content containers that paint nothing (add the bg-card border-border surface)'
 		).toEqual([]);
 	});
 });

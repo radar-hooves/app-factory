@@ -2566,10 +2566,10 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	}
 
 	// ── The default, in the browser ──────────────────────────────────────────
-	// `surface=shell` names no texture, and since 2026.8.8 that is the shell every
-	// consumer gets: the house floor arrives without an app asking for it, at every
-	// width. It shipped opt-in and the estate answered by drifting — three apps
-	// hand-rolled the same picture in their own app.css — so the default moved.
+	// `surface=shell` names no texture, and since the household skin
+	// (app-factory#171) that is a plain ground at every width: a dot grid and a
+	// glow behind the page are the stock generated look. `grid` stays the one
+	// sanctioned atmosphere an app asks for by name.
 	for (const width of [2560, 1440, 360]) {
 		const { context, page } = await open('surface=shell', { width, height: 900 });
 		await page.waitForSelector('#ds-main');
@@ -2577,12 +2577,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 
 		check(
-			`texture @${width}px: a shell that never names texture still paints the house floor`,
-			bare.hasClass &&
-				bare.attribute === 'grid' &&
-				bare.backgroundImage.includes('radial-gradient') &&
-				bare.children === 1,
-			`class ${bare.hasClass}, attribute ${bare.attribute}, background-image ${bare.backgroundImage}, ${bare.children} child`
+			`texture @${width}px: a shell that never names texture paints a plain ground`,
+			!bare.hasClass && bare.attribute === null && bare.backgroundImage === 'none',
+			`class ${bare.hasClass}, attribute ${bare.attribute}, background-image ${bare.backgroundImage}`
 		);
 	}
 
@@ -5160,7 +5157,7 @@ for (const [height, long] of [
 		);
 		check(`${label}: the rail has no Settings row`, !v.settingsRow, JSON.stringify(v));
 		check(`${label}: the page does not scroll sideways`, v.overflow <= 0, JSON.stringify(v));
-		check(`${label}: the bar's icon is a bug`, (await page.locator('[data-testid="ds-shell-report"] svg.lucide-bug').count()) === 1, 'not a bug');
+		check(`${label}: the bar's icon is a bug`, (await page.locator('[data-testid="ds-shell-report"] svg.ds-icon-bug').count()) === 1, 'not a bug');
 		check(`${label}: the bar's icon opens the report dialogue`, await opens(page, page.getByTestId('ds-shell-report')), 'no dialogue');
 		check(`${label}: no page error`, errors.length === 0, JSON.stringify(errors));
 		await context.close();
@@ -5194,7 +5191,7 @@ for (const [height, long] of [
 			row.text === 'Report a problem' && row.inside && row.height >= 32,
 			JSON.stringify(row)
 		);
-		check(`phone at ${width}px: the drawer row's icon is a bug`, (await page.locator('[data-testid="ds-shell-drawer-report"] svg.lucide-bug').count()) === 1, 'not a bug');
+		check(`phone at ${width}px: the drawer row's icon is a bug`, (await page.locator('[data-testid="ds-shell-drawer-report"] svg.ds-icon-bug').count()) === 1, 'not a bug');
 		await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/drawer-${width}.png` });
 		await page.getByTestId('ds-shell-drawer-report').click();
 		const opened = await page.getByRole('dialog').getByText('Report a problem').first().waitFor({ timeout: 3000 }).then(() => true, () => false);

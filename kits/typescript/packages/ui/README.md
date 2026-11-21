@@ -26,6 +26,16 @@ component code and the mapping those names resolve through now live once, here.
 Apps differ by palette and nothing else. Override `--ds-color-*` and the whole
 shadcn surface follows; a consuming app writes no alias layer of its own.
 
+**The look is the household's skin, not shadcn's stock one** (app-factory#171): the
+stock look is what the AI app builders generate, and every app read as machine-made
+in it. Sections are open, a heading over a hairline, never a bordered card each
+(`Panel`, `StatList`, `StatCard`); a surface is a tonal step with no ring or shadow
+(`Card`, `DetailPanel`). Labels and column heads are sentence case (`.ds-label`),
+never small caps. Status is a dot and a word, coloured only where it needs someone.
+Tabs are underlined, the page ground is plain, corners are tight (`--ds-radius-lg`
+0.5rem) and icons are the household set (§Icons). A change that brings a stock
+default back is a regression of that issue.
+
 ## What is here
 
 ```text
@@ -35,8 +45,9 @@ src/lib/
                           numbers — en-AU, AUD, Australia/Brisbane
   telemetry.ts          browser telemetry: one initBrowserTelemetry() call, one Faro
                           instance, one session id (see below)
-  styles.css            the component stylesheet: scale keys, .ds-edge, .ds-chip/.ds-dot,
-                          the dialogue-section divider rule
+  styles.css            the component stylesheet: scale keys, .ds-label, .ds-chip/.ds-dot,
+                          the icon tone, the dialogue-section divider rule
+  icon-props.ts         the household icons' props (icons/ is generated at build, gitignored)
   components/ui/         one directory per component: the shadcn-svelte primitives
                           (bits-ui behaviour + shadcn markup/variants) and the composed
                           page-chrome components built on top of them
@@ -99,7 +110,7 @@ rather than rebuilding it:
 | `page-section`                                  | A section of a page: `title` at `level` 2 or 3, an optional `description`, `count` and `actions`, and its content at one distance below. |
 | `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose`, and a contents list from its own headings, which a shell places as the page's aside. See [A document to read](#a-document-to-read). |
 | `content-skeleton`                              | A region loading, shaped like what replaces it: `rows`, `tiles` or `prose`. A whole page waiting is LoadingState. |
-| `panel`                                         | The generic titled card, and the settings section: optional icon, a short `subtitle` or a longer `description`, both wrapping, trailing `action`s, a body that can opt out of padding or scroll inside the card (`scroll`), an optional `footer` strip for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
+| `panel`                                         | The generic titled section, open rather than boxed, and the settings section: optional icon, a short `subtitle` or a longer `description`, both wrapping, trailing `action`s, a body that can opt out of padding or scroll inside the section (`scroll`), an optional `footer` over a hairline for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
 | `list-toolbar`                                  | The bar above a list, on the page ground: title, count (both wrap when crowded, after the controls drop to their own line), icon actions named by their tooltips, one labelled action. The Ledger and the RecordList draw theirs with it. |
 | `record-list`                                   | The ledger's look for a list that is not money. See [Lists that are not money](#lists-that-are-not-money). |
 | `record-switcher`                               | The open record's whole name as the top bar's control, its menu finding, grouping and picturing every record, and the record's pages as tabs. |
@@ -303,11 +314,11 @@ the label takes a second. Pass the icon form wherever a label could collide
 (a tag with words in it, any row that also has `children`):
 
 ```ts
-import Lock from '@lucide/svelte/icons/lock';
+import Lock from '@poodle64/ui/icons/lock';
 { label: 'Strategy paper', href: '/strategy', icon: FileText, badge: { icon: Lock, label: 'Only you' } }
 ```
 
-It draws as a compact pill holding only the icon (12px, muted), with `label` as
+It draws as a compact tag holding only the icon (12px, muted), with `label` as
 its tooltip and accessible name. `NavBadge` is the type.
 
 `NavItem` / `NavGroup` are exported so an app types its own config against them.
@@ -370,8 +381,8 @@ the pane and the content beside it, each scrolling on its own, and names
 	import AppShell from '@poodle64/ui/app-shell';
 	import type { NavSource } from '@poodle64/ui/app-shell';
 	import SettingsShell from '@poodle64/ui/settings-shell';
-	import Users from '@lucide/svelte/icons/users';
-	import Gavel from '@lucide/svelte/icons/gavel';
+	import Users from '@poodle64/ui/icons/users';
+	import Gavel from '@poodle64/ui/icons/gavel';
 
 	// Grouped by WHOSE setting it is: the person's, then the workspace's. It is
 	// the only split a reader can predict: "yours" changes what you see, "this
@@ -477,7 +488,7 @@ from the bar instead.
 ```svelte
 <script lang="ts">
 	import { PagePane } from '@poodle64/ui/app-shell';
-	import History from '@lucide/svelte/icons/history';
+	import History from '@poodle64/ui/icons/clock-counter-clockwise';
 </script>
 
 <!-- +page.ts returns { pageType: 'panel' } -->
@@ -1056,7 +1067,7 @@ stays for a dense grid of data; a module's own records are a RecordList.
 ```svelte
 <script lang="ts">
 	import RecordList, { type RecordListColumn, type RecordListRow } from '@poodle64/ui/record-list';
-	import House from '@lucide/svelte/icons/house';
+	import House from '@poodle64/ui/icons/house';
 
 	type Property = RecordListRow & { value: number; loan: number };
 	const columns: RecordListColumn<Property>[] = [
@@ -1380,6 +1391,26 @@ under Svelte 5 in this package before it was adopted, on 21/08/2026 — scope
 resolution through `$ref`, `SHOW`/`HIDE`/`DISABLE` evaluation, and
 `Generate.uiSchema` all exercised live. It is the package's only runtime
 dependency beyond what was already here.
+
+## Icons
+
+The household icon set is every [Phosphor](https://phosphoricons.com) glyph (MIT) in its duotone weight, one component per glyph, generated at build from `@phosphor-icons/core` (`scripts/generate-icons.mjs`):
+
+```svelte
+<script lang="ts">
+	import House from '@poodle64/ui/icons/house';
+</script>
+
+<House class="size-4" />
+```
+
+A glyph is an outline in the text colour over a tone layer (`.ds-icon-tone`). The tone is the outline's own colour at a fifth unless a surface names another: the rail sets `--ds-icon-tone: var(--primary)`, so each app's accent shows in its rail without being asked to be legible text. `size` sets width and height (default `1em`); any SVG attribute passes through; it carries `aria-hidden` unless the caller overrides it. Names are Phosphor's own (`magnifying-glass`, `gear`, `caret-down`); browse them at phosphoricons.com.
+
+An app on Lucide moves across with one command, which rewrites every `@lucide/svelte/icons/<name>` import to its household name and drops `strokeWidth` from those tags; a name it has no map for is listed and left alone:
+
+```bash
+pnpm exec ds-icons-from-lucide src
+```
 
 ## Consuming the package
 

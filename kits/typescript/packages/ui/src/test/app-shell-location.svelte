@@ -4,7 +4,7 @@
 	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
 	import ShellControls from '#lib/components/ui/app-shell/shell-controls.svelte';
 	import ShellActions from '#lib/components/ui/app-shell/shell-actions.svelte';
-	import Download from '@lucide/svelte/icons/download';
+	import Download from '#lib/icons/download-simple.svelte';
 	import { Segmented } from '#lib/components/ui/segmented/index.js';
 	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
 

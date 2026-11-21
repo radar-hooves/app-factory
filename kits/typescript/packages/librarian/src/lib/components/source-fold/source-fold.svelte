@@ -6,10 +6,10 @@
   link with the same chip a library source gets.
 -->
 <script lang="ts">
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
-	import GlobeIcon from '@lucide/svelte/icons/globe';
-	import LibraryIcon from '@lucide/svelte/icons/library';
+	import ChevronDownIcon from '@poodle64/ui/icons/caret-down';
+	import ChevronUpIcon from '@poodle64/ui/icons/caret-up';
+	import GlobeIcon from '@poodle64/ui/icons/globe';
+	import LibraryIcon from '@poodle64/ui/icons/books';
 	import type { Citation } from '../../citations';
 	import { fill, type ChatCopy } from '../../copy';
 	import type { WebSource } from '../../web-sources';

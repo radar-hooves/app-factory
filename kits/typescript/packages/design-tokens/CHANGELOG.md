@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.1] - 2026-11-21
+
+Need: every household app reads to the operator as AI-generated ("our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one the AI app builders generate (radar-hooves/app-factory#171). Consumer: eight, relayed by master-project's orchestrator; every stamped app takes it by version bump.
+
+### Changed
+
+- **Tighter corners.** `--ds-radius-sm` 0.1875rem (was 0.225), `md` 0.375rem (0.425), `lg` 0.5rem (0.625, the base `--radius`), `xl` 0.75rem (0.825). Nothing for a consumer to change.
+
 ## [2026.10.2] - 2026-10-24
 
 Consumer: caspo (the operator, 24/10/2026: an app chooses a page type and writes no width of its own).

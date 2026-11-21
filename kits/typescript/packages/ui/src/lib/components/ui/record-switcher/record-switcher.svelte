@@ -20,8 +20,8 @@
 	 *     </ShellControls>
 	 */
 	import { Command as CommandPrimitive, computeCommandScore } from 'bits-ui';
-	import Check from '@lucide/svelte/icons/check';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Check from '#lib/icons/check.svelte';
+	import ChevronDown from '#lib/icons/caret-down.svelte';
 	import { buttonVariants } from '../button/index.js';
 	import * as Command from '../command/index.js';
 	import * as Popover from '../popover/index.js';
@@ -108,7 +108,7 @@
 		return () => watch.disconnect();
 	});
 	const fade = (edge: boolean) => (edge ? '1.5rem' : '0px');
-	const eyebrow = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
+	const eyebrow = 'ds-label';
 </script>
 
 <div class={cn('flex min-w-0 items-center gap-2 sm:gap-3', className)} data-slot="record-switcher">

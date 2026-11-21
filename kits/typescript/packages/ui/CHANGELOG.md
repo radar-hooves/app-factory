@@ -2,6 +2,32 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.13] - 2026-11-21
+
+Need: every household app reads to the operator as AI-generated ("our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one the AI app builders generate (radar-hooves/app-factory#171). Consumer: eight, relayed by master-project's orchestrator; every stamped app takes it by version bump.
+
+### Added
+
+- **The household icon set, `@poodle64/ui/icons/<name>`**: every Phosphor glyph (MIT) in its duotone weight, one component per glyph, generated at build from `@phosphor-icons/core` (`scripts/generate-icons.mjs`; `src/lib/icons/` is gitignored). Two paths a glyph, an outline over a `.ds-icon-tone` layer that a surface may tint (`--ds-icon-tone`, `--ds-icon-tone-opacity`); `size` (default `1em`), any SVG attribute, `aria-hidden` by default, and a `ds-icon-<name>` class.
+- **`ds-icons-from-lucide`**: rewrites an app's `@lucide/svelte/icons/<name>` imports to the household names (`bin/lucide-to-household.json`, every name the estate imported) and drops `strokeWidth` from those tags.
+- **`.ds-label`**, the one label style (13px, medium, the muted ink, sentence case), and the `text-heading` type step (1.0625rem) an open section's heading takes.
+
+### Changed
+
+- **Sections are open, never a bordered card each.** `Panel`, `StatList` and `StatCard` draw no border, radius, surface or shadow: a heading over a hairline, and a footer over a hairline. `Card` and `DetailPanel` are a tonal surface with no ring or border. `EmptyState` and `ErrorState` lose their box and the circle behind the icon. `.ds-edge` and `--ds-card-edge` are gone.
+- **No small caps.** Every eyebrow, column head, fact caption and rail group name takes `.ds-label` (was `text-2xs tracking-eyebrow uppercase`); `PageHeader` and `PageLead` eyebrows are muted, not the accent.
+- **Status is a dot and a word.** `.ds-chip` has no tinted pill: warning and error colour the word as well as the dot, success, info and neutral keep the muted ink.
+- **`PageLead`'s answer is the largest type on the page** (`text-display`, was `text-xl`), its subtitle 1rem.
+- **Tabs are underlined** (a hairline under the list, the active tab's 2px rule in the accent), not a tinted track with a raised pill.
+- **`AppShell` `texture` defaults to `none`**: a plain ground. `grid` stays for an app that names it.
+- **The rail's icons carry the accent** in their tone layer; `Badge` and the nav count are a 3px-radius tag, not a pill; `StatCard`'s figure is set in the display face.
+- **The kit's own icons are the household set**, and `@lucide/svelte` is no longer a dependency.
+
+### Consumer must change
+
+- An app's own `@lucide/svelte` imports: run `pnpm exec ds-icons-from-lucide src`, check the names it lists as unmapped, then drop `@lucide/svelte`.
+- An app relying on `.ds-edge` or the dot grid by default: name `texture="grid"` on `AppShell` to keep the grid; `.ds-edge` has no replacement.
+
 ## [2026.11.12] - 2026-11-15
 
 Need: a desktop app installs new versions of itself from its signed releases, built once for every Tauri app (radar-hooves/app-factory#133). Consumer: bragi, from thoth's holistic review.

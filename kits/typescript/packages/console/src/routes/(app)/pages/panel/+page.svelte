@@ -3,10 +3,10 @@
 	import { SettingsRow } from '@poodle64/ui/settings-row';
 	import { SettingsShell, type SettingsSectionGroup } from '@poodle64/ui/settings-shell';
 	import { Switch } from '@poodle64/ui/switch';
-	import User from '@lucide/svelte/icons/user';
-	import Bell from '@lucide/svelte/icons/bell';
-	import Building from '@lucide/svelte/icons/building';
-	import Users from '@lucide/svelte/icons/users';
+	import User from '@poodle64/ui/icons/user';
+	import Bell from '@poodle64/ui/icons/bell';
+	import Building from '@poodle64/ui/icons/buildings';
+	import Users from '@poodle64/ui/icons/users';
 
 	// A panel page, shaped like an app's settings: the sections are the pane,
 	// the section you are on the page. State-driven, as a single-route app's is.

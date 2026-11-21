@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.2] - 2026-11-21
+
+Need: every household app reads to the operator as AI-generated ("our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one the AI app builders generate (radar-hooves/app-factory#171). Consumer: eight, relayed by master-project's orchestrator; every stamped app takes it by version bump.
+
+### Changed
+
+- **Its icons are the household set** (`@poodle64/ui/icons/<name>`). Peer `@poodle64/ui` `^2026.11.13` replaces peer `@lucide/svelte`. Consumer must change: an app on the factory already has `@poodle64/ui`; raise it to 2026.11.13.
+
 ## [2026.11.1] - 2026-11-02
 
 Consumer: the whole app fleet (the weekly major-upgrade lane, app-factory#27).

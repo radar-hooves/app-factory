@@ -12,11 +12,11 @@
   only ever one, in the same place, closing whichever was there.
 -->
 <script lang="ts">
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import CopyIcon from '@lucide/svelte/icons/copy';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import DownloadIcon from '@lucide/svelte/icons/download';
-	import XIcon from '@lucide/svelte/icons/x';
+	import ChevronDownIcon from '@poodle64/ui/icons/caret-down';
+	import CopyIcon from '@poodle64/ui/icons/copy';
+	import CheckIcon from '@poodle64/ui/icons/check';
+	import DownloadIcon from '@poodle64/ui/icons/download-simple';
+	import XIcon from '@poodle64/ui/icons/x';
 	import { untrack } from 'svelte';
 	import { segment, type TextBlock, type Turn } from '../../transcript.svelte';
 	import { resolveCitations, splitSources, type Citation } from '../../citations';

@@ -28,7 +28,7 @@
 <div class="space-y-4">
 	{#each facets as facet (facet.key)}
 		<div>
-			<h3 class="text-muted-foreground text-2xs mb-1 font-semibold tracking-wide uppercase">
+			<h3 class="ds-label mb-1">
 				{facet.label}
 			</h3>
 			{#if facet.options.length === 0}

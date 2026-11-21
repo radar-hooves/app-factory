@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
-import Download from '@lucide/svelte/icons/download';
+import Download from '#lib/icons/download-simple.svelte';
 import Harness from './context-column-record.svelte';
 import DocumentPane from '#lib/components/ui/document-pane/index.js';
 import { windowWidth } from './window-width.js';

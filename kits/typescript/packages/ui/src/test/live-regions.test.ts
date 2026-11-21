@@ -54,8 +54,8 @@ describe('async-outcome announcements', () => {
 	});
 
 	// Unlike the assertions above, this one cannot be driven red from the
-	// components: @lucide/svelte adds aria-hidden itself to any icon given no
-	// aria-*/role/title and no children, so it holds whether or not either
+	// components: every household icon (@poodle64/ui/icons) carries aria-hidden
+	// unless its caller overrides it, so it holds whether or not either
 	// component writes the attribute. It is a pin on the emitted output — the
 	// contract a consumer actually sees — against that upstream default moving,
 	// not coverage of the components' own source.

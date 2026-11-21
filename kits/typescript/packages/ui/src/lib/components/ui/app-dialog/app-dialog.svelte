@@ -3,7 +3,7 @@
 	import * as Dialog from '../dialog/index.js';
 	import InfoTip from '../info-tip/info-tip.svelte';
 	import ColumnScope from '../app-shell/column-scope.svelte';
-	import X from '@lucide/svelte/icons/x';
+	import X from '#lib/icons/x.svelte';
 
 	// The one dialogue frame: a titled header with optional icon and subtitle, a
 	// scrollable body, and an optional footer action bar. Compose the body from
@@ -72,7 +72,7 @@
 
 <Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Content
-		class="border-border-strong ds-edge flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 {widths[
+		class="border-border-strong flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 {widths[
 			size
 		]}"
 		showCloseButton={false}

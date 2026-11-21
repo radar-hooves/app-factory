@@ -88,7 +88,7 @@
 	{:else if element.type === 'Control'}
 		<SchemaFormControl element={element as ControlElement} />
 	{:else if element.type === 'Label'}
-		<p class="text-2xs text-muted-foreground font-semibold tracking-wide uppercase">
+		<p class="ds-label">
 			{(element as { text?: string }).text ?? label ?? ''}
 		</p>
 	{:else}

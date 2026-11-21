@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { cn } from '#lib/utils.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import Eye from '@lucide/svelte/icons/eye';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import Eye from '#lib/icons/eye.svelte';
+	import EyeOff from '#lib/icons/eye-slash.svelte';
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
 	type Props = Omit<HTMLInputAttributes, 'type' | 'files'> & {

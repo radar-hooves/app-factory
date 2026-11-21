@@ -174,9 +174,8 @@ describe('ErrorState', () => {
 		expect(alert).toHaveAttribute('aria-live', 'assertive');
 		expect(alert).toHaveTextContent('Could not load the estate.');
 		// The glyph is decorative; the message carries the meaning. This one
-		// cannot be driven red from the component: @lucide/svelte adds
-		// aria-hidden itself to any icon given no aria-*/role/title and no
-		// children, so it holds whether or not the component writes it. What it
+		// cannot be driven red from the component: every household icon
+		// (@poodle64/ui/icons) carries aria-hidden unless its caller overrides it, so it holds whether or not the component writes it. What it
 		// pins is the emitted output — which is the contract a consumer sees —
 		// against that default ever changing.
 		expect(alert.querySelector('[aria-hidden="true"]')).not.toBeNull();
@@ -246,7 +245,7 @@ describe('StatusBadge / StatCard / StatList', () => {
 
 		// The number is the loss; the dot is the health of the feed reporting it.
 		expect(figure).toHaveClass('ds-ink-error');
-		const card = figure.closest('.bg-card');
+		const card = figure.closest('[data-slot="stat-card"]');
 		expect(card?.querySelector('.ds-dot-success')).not.toBeNull();
 		expect(card?.querySelector('.ds-dot-error')).toBeNull();
 	});

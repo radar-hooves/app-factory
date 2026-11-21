@@ -9,7 +9,7 @@
 	// untouched, or nesting has changed something a consumer never asked for.
 	import AppShell from '#lib/components/ui/app-shell/app-shell.svelte';
 	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
-	import Package from '@lucide/svelte/icons/package';
+	import Package from '#lib/icons/package.svelte';
 
 	let {
 		currentPath = $bindable('/overview'),

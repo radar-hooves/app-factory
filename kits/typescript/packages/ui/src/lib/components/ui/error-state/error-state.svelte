@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import AlertCircle from '@lucide/svelte/icons/circle-alert';
+	import AlertCircle from '#lib/icons/warning-circle.svelte';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
@@ -35,15 +35,15 @@
 <div
 	bind:this={ref}
 	class={cn(
-		'bg-card border-destructive/40 ds-edge flex flex-col items-center justify-center rounded-lg border p-8 text-center',
+		'flex flex-col items-center justify-center p-8 text-center',
 		className
 	)}
 	role="alert"
 	aria-live="assertive"
 	{...restProps}
 >
-	<div class="bg-destructive/10 mb-4 rounded-full p-3">
-		<AlertCircle class="text-destructive size-6" aria-hidden="true" />
+	<div class="mb-3">
+		<AlertCircle class="text-destructive size-8" aria-hidden="true" />
 	</div>
 	<p class="text-destructive mb-4 max-w-sm text-sm">{message}</p>
 	{#if action}

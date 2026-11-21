@@ -18,9 +18,9 @@
 	caller's role says cannot succeed.
 -->
 <script lang="ts">
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import UserPlus from '@lucide/svelte/icons/user-plus';
-	import Users from '@lucide/svelte/icons/users';
+	import Pencil from '@poodle64/ui/icons/pencil-simple';
+	import UserPlus from '@poodle64/ui/icons/user-plus';
+	import Users from '@poodle64/ui/icons/users';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import * as AlertDialog from '@poodle64/ui/alert-dialog';

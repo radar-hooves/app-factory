@@ -19,7 +19,7 @@
 import type { Component } from 'svelte';
 import type { BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';
 
-/** A Lucide (or equivalent) icon component: takes a class, renders an SVG. */
+/** A household icon (`@poodle64/ui/icons/<name>`), or any icon component that takes a class and renders an SVG. */
 export type IconComponent = Component<{ class?: string }>;
 
 /**

@@ -34,12 +34,17 @@ function attributes(el: HTMLElement): Record<string, string> {
 }
 
 describe('AppShell — the texture is additive', () => {
-	// The house atmosphere arrives without an app asking. It shipped opt-in so its
-	// introduction moved nobody, and the estate's answer was that five of nine
-	// apps wore it and three of those had hand-rolled their own copy — an opt-in
-	// house style measures who remembered, not what the house looks like.
-	it('paints the texture when the prop is never named', () => {
-		const { container } = render(ShellHarness);
+	// The household skin is a plain ground: a dot grid and a glow behind the page
+	// are the stock generated look (app-factory#171). `grid` is the one
+	// atmosphere an app asks for by name, so none hand-rolls its own again.
+	it('leaves a plain ground when the prop is never named', () => {
+		const main = contentRegion(render(ShellHarness).container);
+		expect(main.classList.contains('ds-shell-texture')).toBe(false);
+		expect(main.getAttribute('data-texture')).toBeNull();
+	});
+
+	it('paints the grid when an app names it', () => {
+		const { container } = render(ShellHarness, { props: { texture: 'grid' } });
 		const main = contentRegion(container);
 
 		expect(main.classList.contains('ds-shell-texture')).toBe(true);

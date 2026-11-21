@@ -161,9 +161,9 @@ difference in the whole read was `role`/`aria-live` going from `null/null` to
 (the only `[role=…]` rules are the table's `[&:has([role=checkbox])]`).
 
 One thing the baseline settled that the source did not: the icon carried
-`aria-hidden="true"` **before** the change too. `@lucide/svelte` v1 adds it to
-any icon given no `aria-*`/`role`/`title` and no children, so the glyph was
-never being announced. The explicit attribute here is a pin against that
+`aria-hidden="true"` **before** the change too. Every household icon
+(`@poodle64/ui/icons`) carries it unless its caller overrides it, so the glyph
+is never announced. The explicit attribute here is a pin against that
 default moving, and matches how `LoadingState` already writes it — not a fix
 for a live defect.
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	/** The page's actions in the bar: buttons from `sm`, one "More actions" menu below it. */
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import Ellipsis from '#lib/icons/dots-three.svelte';
 	import { Button } from '../button/index.js';
 	import * as DropdownMenu from '../dropdown-menu/index.js';
 	import type { BarActionsSlot } from './controls.js';

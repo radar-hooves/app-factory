@@ -3,10 +3,12 @@
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
-	// The generic titled card. Where DetailPanel is the *entity* surface (and owns
-	// a status and a close affordance), Panel is the plain sectioning card any
-	// route reaches for: an optional header with icon, subtitle and trailing
-	// actions, over a body that can opt out of padding for a flush table.
+	// The generic titled section. Where DetailPanel is the *entity* surface (and
+	// owns a status and a close affordance), Panel is the plain section any route
+	// reaches for: a heading over a hairline, with icon, subtitle and trailing
+	// actions, over a body that can opt out of its top padding for a flush table.
+	// Open, never a box: a bordered card around every section is the stock
+	// generated look (app-factory#171).
 	//
 	// It is also the settings SECTION, and there is no second component for that.
 	// A `SettingsSection` would have been this card with a different name — same
@@ -57,9 +59,8 @@
 		icon?: Component<{ class?: string }>;
 		action?: Snippet;
 		/**
-		 * The section's actions — a Save/Cancel pair — on a top-bordered muted
-		 * strip at the foot, right-aligned. Same treatment as CardFooter's, so a
-		 * panel's foot and a card's foot are the same foot.
+		 * The section's actions — a Save/Cancel pair — over a hairline at the
+		 * foot, right-aligned.
 		 */
 		footer?: Snippet;
 		/**
@@ -72,7 +73,7 @@
 		children: Snippet;
 		pad?: boolean;
 		/**
-		 * The body scrolls inside the card, under a header that stays: the card
+		 * The body scrolls inside the section, under a header that stays: the section
 		 * is as tall as what it holds up to the height its container gives it,
 		 * and the full height when given one (`h-full`).
 		 */
@@ -87,8 +88,7 @@
 	data-tone={tone === 'default' ? undefined : tone}
 	data-fill={scroll ? '' : undefined}
 	class={cn(
-		'bg-card ds-edge flex flex-col overflow-hidden rounded-lg border',
-		destructive ? 'border-destructive/40' : 'border-border',
+		'flex min-h-0 flex-col',
 		klass
 	)}
 	{...restProps}
@@ -101,7 +101,7 @@
 		-->
 		<header
 			class={cn(
-				'flex gap-2.5 border-b px-4 py-3',
+				'flex gap-2.5 border-b pb-2.5',
 				description ? 'items-start' : 'items-center',
 				destructive ? 'border-destructive/25' : 'border-border'
 			)}
@@ -114,7 +114,7 @@
 			<div class="min-w-0">
 				<h2
 					class={cn(
-						'text-body leading-tight font-semibold tracking-tight',
+						'text-heading font-semibold',
 						destructive && 'text-destructive'
 					)}
 				>
@@ -132,7 +132,7 @@
 			{/if}
 		</header>
 	{/if}
-	<div class={cn(pad && 'p-4', scroll && 'min-h-0 flex-1 overflow-y-auto')} data-slot="panel-body">
+	<div class={cn(pad && 'pt-4', scroll && 'min-h-0 flex-1 overflow-y-auto')} data-slot="panel-body">
 		{@render children()}
 	</div>
 	{#if footer}
@@ -143,7 +143,7 @@
 		-->
 		<div
 			class={cn(
-				'bg-muted/50 mt-auto flex items-center justify-end gap-2 border-t px-4 py-3',
+				'mt-auto flex items-center justify-end gap-2 border-t pt-3',
 				destructive ? 'border-destructive/25' : 'border-border'
 			)}
 			data-slot="panel-footer"

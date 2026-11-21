@@ -17,8 +17,8 @@
   as a ThinkingRow beside the tools, open while the turn runs.
 -->
 <script lang="ts">
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
+	import ChevronDownIcon from '@poodle64/ui/icons/caret-down';
+	import ChevronUpIcon from '@poodle64/ui/icons/caret-up';
 	// Aliased: a component and a type of one name make svelte-package emit a
 	// declaration whose default export is the type, which no consumer can render.
 	import type { ActivityGroup as Group } from '../../transcript.svelte';

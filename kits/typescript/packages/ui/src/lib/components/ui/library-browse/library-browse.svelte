@@ -13,10 +13,10 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
-	import Search from '@lucide/svelte/icons/search';
-	import LibraryIcon from '@lucide/svelte/icons/library';
-	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
-	import X from '@lucide/svelte/icons/x';
+	import Search from '#lib/icons/magnifying-glass.svelte';
+	import LibraryIcon from '#lib/icons/books.svelte';
+	import SlidersHorizontal from '#lib/icons/sliders-horizontal.svelte';
+	import X from '#lib/icons/x.svelte';
 	import { Input } from '../input/index.js';
 	import Button from '../button/button.svelte';
 	import { Badge } from '../badge/index.js';

@@ -9,7 +9,7 @@
 	before any page has asked.
 -->
 <script lang="ts">
-	import Layers from '@lucide/svelte/icons/layers';
+	import Layers from '@poodle64/ui/icons/stack';
 	import { Button } from '@poodle64/ui/button';
 	import { EmptyState } from '@poodle64/ui/empty-state';
 	import { auth } from '#lib/auth.svelte.js';

@@ -48,7 +48,7 @@
 	 * callbacks so the parent page keeps the single source of truth.
 	 */
 
-	import Search from '@lucide/svelte/icons/search';
+	import Search from '#lib/icons/magnifying-glass.svelte';
 
 	let {
 		searchValue,

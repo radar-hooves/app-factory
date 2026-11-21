@@ -94,7 +94,7 @@
 		LedgerPreferences,
 		LedgerRow
 	} from '../dist/components/ui/ledger/index.js';
-	import Plus from '@lucide/svelte/icons/plus';
+	import Plus from '#lib/icons/plus.svelte';
 	let auditYear = $state('FY26');
 	import { DataTableTanstack } from '../dist/components/ui/data-table-tanstack/index.js';
 	import type { ColumnDef } from '../dist/components/ui/data-table-tanstack/index.js';
@@ -111,18 +111,18 @@
 	import Separator from '../dist/components/ui/separator/separator.svelte';
 	import { Alert, AlertTitle, AlertDescription } from '../dist/components/ui/alert/index.js';
 	import { DS_PALETTES } from '@poodle64/design-tokens/palettes';
-	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
-	import Package from '@lucide/svelte/icons/package';
-	import KeySquare from '@lucide/svelte/icons/key-square';
-	import Lock from '@lucide/svelte/icons/lock';
-	import ScrollText from '@lucide/svelte/icons/scroll-text';
-	import BookOpen from '@lucide/svelte/icons/book-open';
-	import Users from '@lucide/svelte/icons/users';
-	import Gavel from '@lucide/svelte/icons/gavel';
-	import Receipt from '@lucide/svelte/icons/receipt';
-	import Zap from '@lucide/svelte/icons/zap';
-	import Info from '@lucide/svelte/icons/info';
-	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import LayoutDashboard from '#lib/icons/squares-four.svelte';
+	import Package from '#lib/icons/package.svelte';
+	import KeySquare from '#lib/icons/key.svelte';
+	import Lock from '#lib/icons/lock.svelte';
+	import ScrollText from '#lib/icons/scroll.svelte';
+	import BookOpen from '#lib/icons/book-open.svelte';
+	import Users from '#lib/icons/users.svelte';
+	import Gavel from '#lib/icons/gavel.svelte';
+	import Receipt from '#lib/icons/receipt.svelte';
+	import Zap from '#lib/icons/lightning.svelte';
+	import Info from '#lib/icons/info.svelte';
+	import Trash2 from '#lib/icons/trash.svelte';
 
 	// `?surface=nested` drives nested navigation. Three of its four claims are
 	// beyond jsdom entirely: the indent geometry is a layout fact, the chevron's
@@ -1731,7 +1731,7 @@
 				The shell paints the house atmosphere once, on the region that scrolls, so an app cannot
 				end up wearing it on some routes and not others.
 			</p>
-			<div class="bg-card border-border ds-edge mt-6 rounded-lg border p-4" data-probe="texture-card">
+			<div class="bg-card border-border mt-6 rounded-lg border p-4" data-probe="texture-card">
 				<p class="text-sm">A card on the floor: content paints over the texture, never under it.</p>
 				<button class="border-border mt-3 rounded-md border px-3 py-1.5 text-sm" data-probe="texture-button">
 					A control the texture must not swallow

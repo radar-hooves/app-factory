@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.64] - 2026-11-21
+
+Need: every household app reads to the operator as AI-generated ("I'm still dissatisfied with the front end of basically all my apps"; "our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one v0, Lovable and Bolt generate (#171). Consumer: eight's orchestrator, relayed by master-project's orchestrator; every stamped app.
+
+### Changed
+
+- **The household skin** (`@poodle64/ui` 2026.11.13, `@poodle64/design-tokens` 2026.11.1, `@poodle64/librarian` 2026.11.2): open sections in place of a bordered card each, sentence-case labels in place of small caps, status as a dot and a word, the answer as the page's largest type, underlined tabs, a plain ground in place of the dot grid, tighter corners, and the household icon set (Phosphor duotone, the accent in the rail's icons). Chosen over two other directions drawn in the kit's own CSS against eight's road page (tonal cards after Home Assistant; ruled monospace after Vercel), and matching the direction eight's orchestrator reached independently for its own landing page.
+- **The template's icons are the household set**, and its lint refuses `@lucide/svelte` and `lucide-svelte`, naming the codemod. `@lucide/svelte` leaves the template's dependencies; the kit floors rise to the releases above. The factory self-test packs `@poodle64/design-tokens` from the checkout as it does the other two.
+
+### Consumer must change
+
+- Take the update (the floors task raises the three kit pins), then run `pnpm exec ds-icons-from-lucide src` in `frontend/`: it rewrites every Lucide import to its household name and lists any it cannot. Choose those by hand at phosphoricons.com, remove `@lucide/svelte` from `package.json`, and run `pnpm install`. Lint fails on a Lucide import until then.
+- An app that wants the dot grid back names `texture="grid"` on `AppShell`.
+
 ## [2026.11.63] - 2026-11-19
 
 Need: portcullis (#118, security-headers hook) and caspo (#110, feedback caps), both waiting on a tag (master-project, 19/11/2026).

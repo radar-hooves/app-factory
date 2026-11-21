@@ -16,10 +16,10 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { DEV } from 'esm-env';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import Paperclip from '@lucide/svelte/icons/paperclip';
-	import X from '@lucide/svelte/icons/x';
+	import ChevronDown from '#lib/icons/caret-down.svelte';
+	import ChevronRight from '#lib/icons/caret-right.svelte';
+	import Paperclip from '#lib/icons/paperclip.svelte';
+	import X from '#lib/icons/x.svelte';
 	import Button from '../button/button.svelte';
 	import { Checkbox } from '../checkbox/index.js';
 	import EmptyState from '../empty-state/empty-state.svelte';

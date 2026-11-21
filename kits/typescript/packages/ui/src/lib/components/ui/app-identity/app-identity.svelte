@@ -191,14 +191,14 @@
 		</div>
 		{#if workspace}
 			<DropdownMenu.Separator />
-			<DropdownMenu.Label class="text-muted-foreground text-[10px] tracking-[0.1em] uppercase">
+			<DropdownMenu.Label class="ds-label">
 				Workspace
 			</DropdownMenu.Label>
 			<div class="flex items-center justify-between gap-2 px-2 pb-1.5">
 				<span class="truncate text-[13px]">{workspace}</span>
 				{#if role}
 					<span
-						class="border-border text-muted-foreground rounded-full border px-1.5 py-px text-[10px] capitalize"
+						class="text-muted-foreground text-[11px] capitalize"
 					>
 						{role}
 					</span>

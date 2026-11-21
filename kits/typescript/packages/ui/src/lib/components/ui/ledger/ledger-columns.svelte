@@ -6,12 +6,12 @@
 	 * RecordList's are the groupings its module offers. Sort is the heads'. An
 	 * icon button named by its tooltip.
 	 */
-	import Columns3 from '@lucide/svelte/icons/columns-3';
+	import Columns3 from '#lib/icons/columns.svelte';
 	import { Button, buttonVariants } from '../button/index.js';
 	import { Checkbox } from '../checkbox/index.js';
 	import * as Popover from '../popover/index.js';
 	import { RadioGroup } from 'bits-ui';
-	import Check from '@lucide/svelte/icons/check';
+	import Check from '#lib/icons/check.svelte';
 	import * as Tooltip from '../tooltip/index.js';
 	import { cn } from '#lib/utils.js';
 
@@ -52,7 +52,7 @@
 		oncolumns(offered.map((c) => c.key).filter((k) => next.includes(k)));
 	}
 
-	const eyebrow = 'text-muted-foreground text-2xs tracking-eyebrow font-semibold uppercase';
+	const eyebrow = 'ds-label';
 	// The heading says "Group by", so a choice that repeats it reads twice.
 	$effect(() => {
 		if (grouping?.options.some((o) => /^group by\b/i.test(o.label)))

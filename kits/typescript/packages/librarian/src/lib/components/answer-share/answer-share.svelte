@@ -10,9 +10,9 @@
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import Share2Icon from '@lucide/svelte/icons/share-2';
+	import CheckIcon from '@poodle64/ui/icons/check';
+	import LinkIcon from '@poodle64/ui/icons/link';
+	import Share2Icon from '@poodle64/ui/icons/share-network';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {

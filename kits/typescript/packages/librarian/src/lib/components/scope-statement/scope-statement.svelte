@@ -15,8 +15,8 @@
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import InfoIcon from '@lucide/svelte/icons/info';
+	import ChevronDownIcon from '@poodle64/ui/icons/caret-down';
+	import InfoIcon from '@poodle64/ui/icons/info';
 	import { resolveCopy, type ChatCopy } from '../../copy';
 
 	interface Props {

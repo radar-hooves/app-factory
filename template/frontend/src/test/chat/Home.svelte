@@ -17,7 +17,7 @@
 </script>
 
 <section aria-label="Lately" data-testid="app-home" class="flex flex-col gap-2">
-	<h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+	<h2 class="ds-label">
 		Lately in {persona.name}
 	</h2>
 	<ul class="border-border divide-border flex flex-col divide-y border-y">

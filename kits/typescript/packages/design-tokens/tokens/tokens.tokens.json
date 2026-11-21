@@ -145,24 +145,24 @@
 		"$description": "Semantic --ds-* tokens consumed directly by components and @theme blocks. Two groups: base (mode-independent) and colour (mode-sensitive, produced as :root + .dark blocks).",
 
 		"radius": {
-			"$description": "Corner radius scale — binding across all household apps. Base is 0.625rem.",
+			"$description": "Corner radius scale — binding across all household apps. Base is 0.5rem: tighter than the stock generated look's 0.625rem cards and pill chips (app-factory#171).",
 			"none": { "$value": "0rem", "$type": "dimension" },
 			"sm": {
-				"$value": "0.225rem",
+				"$value": "0.1875rem",
 				"$type": "dimension",
-				"$description": "chips, badges, inputs: calc(var(--ds-radius-lg) - 4px)"
+				"$description": "badges, tags, small controls"
 			},
 			"md": {
-				"$value": "0.425rem",
+				"$value": "0.375rem",
 				"$type": "dimension",
-				"$description": "calc(var(--ds-radius-lg) - 2px)"
+				"$description": "rail rows, menu items"
 			},
 			"lg": {
-				"$value": "0.625rem",
+				"$value": "0.5rem",
 				"$type": "dimension",
-				"$description": "base --radius; cards, panels"
+				"$description": "base --radius; buttons, inputs, tonal cards"
 			},
-			"xl": { "$value": "0.825rem", "$type": "dimension", "$description": "dialogues, modals" },
+			"xl": { "$value": "0.75rem", "$type": "dimension", "$description": "dialogues, modals" },
 			"full": { "$value": "9999px", "$type": "dimension", "$description": "pill / fully-rounded" }
 		},
 

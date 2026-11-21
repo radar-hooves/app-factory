@@ -26,17 +26,17 @@
 	import StatusBadge from '../dist/components/ui/status-badge/status-badge.svelte';
 	import Panel from '../dist/components/ui/panel/panel.svelte';
 	import FactGrid from '../dist/components/ui/fact-grid/fact-grid.svelte';
-	import Home from '@lucide/svelte/icons/house';
-	import Landmark from '@lucide/svelte/icons/landmark';
-	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Shield from '@lucide/svelte/icons/shield';
-	import User from '@lucide/svelte/icons/user';
-	import Receipt from '@lucide/svelte/icons/receipt';
-	import Wrench from '@lucide/svelte/icons/wrench';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import Download from '@lucide/svelte/icons/download';
-	import Plus from '@lucide/svelte/icons/plus';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Home from '#lib/icons/house.svelte';
+	import Landmark from '#lib/icons/bank.svelte';
+	import RefreshCw from '#lib/icons/arrows-clockwise.svelte';
+	import Shield from '#lib/icons/shield.svelte';
+	import User from '#lib/icons/user.svelte';
+	import Receipt from '#lib/icons/receipt.svelte';
+	import Wrench from '#lib/icons/wrench.svelte';
+	import FileText from '#lib/icons/file-text.svelte';
+	import Download from '#lib/icons/download-simple.svelte';
+	import Plus from '#lib/icons/plus.svelte';
+	import TriangleAlert from '#lib/icons/warning.svelte';
 
 	let { surface, params }: { surface: 'records' | 'record'; params: URLSearchParams } = $props();
 

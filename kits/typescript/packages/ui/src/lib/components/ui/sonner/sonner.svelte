@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { Toaster as Sonner, type ToasterProps as SonnerProps } from 'svelte-sonner';
 	import { mode } from 'mode-watcher';
-	import Loader2Icon from '@lucide/svelte/icons/loader-2';
-	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
-	import OctagonXIcon from '@lucide/svelte/icons/octagon-x';
-	import InfoIcon from '@lucide/svelte/icons/info';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import Loader2Icon from '#lib/icons/spinner-gap.svelte';
+	import CircleCheckIcon from '#lib/icons/check-circle.svelte';
+	import OctagonXIcon from '#lib/icons/warning-octagon.svelte';
+	import InfoIcon from '#lib/icons/info.svelte';
+	import TriangleAlertIcon from '#lib/icons/warning.svelte';
 
 	let { toastOptions = {}, ...restProps }: SonnerProps = $props();
 	const options = $derived({

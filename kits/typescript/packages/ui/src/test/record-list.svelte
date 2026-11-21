@@ -8,7 +8,7 @@
 		RecordListPreferences,
 		RecordListRow
 	} from '#lib/components/ui/record-list/index.js';
-	import House from '@lucide/svelte/icons/house';
+	import House from '#lib/icons/house.svelte';
 
 	type Row = RecordListRow & { value: number; group?: string; fee?: string };
 

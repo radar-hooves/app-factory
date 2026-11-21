@@ -7,9 +7,9 @@
 	import SettingsShell from '#lib/components/ui/settings-shell/settings-shell.svelte';
 	import type { NavSource } from '#lib/components/ui/app-shell/types.js';
 	import Panel from '#lib/components/ui/panel/panel.svelte';
-	import Users from '@lucide/svelte/icons/users';
-	import Gavel from '@lucide/svelte/icons/gavel';
-	import Info from '@lucide/svelte/icons/info';
+	import Users from '#lib/icons/users.svelte';
+	import Gavel from '#lib/icons/gavel.svelte';
+	import Info from '#lib/icons/info.svelte';
 
 	let {
 		currentPath = $bindable('/settings/users'),

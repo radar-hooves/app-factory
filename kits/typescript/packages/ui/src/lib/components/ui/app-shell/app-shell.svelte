@@ -77,16 +77,16 @@
 	import ColumnScope from './column-scope.svelte';
 	import type { ShellTexture } from './texture.js';
 	import { toggleMode } from 'mode-watcher';
-	import Menu from '@lucide/svelte/icons/menu';
-	import X from '@lucide/svelte/icons/x';
-	import Search from '@lucide/svelte/icons/search';
-	import Bug from '@lucide/svelte/icons/bug';
-	import Sun from '@lucide/svelte/icons/sun';
-	import Moon from '@lucide/svelte/icons/moon';
-	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
-	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
-	import PanelLeft from '@lucide/svelte/icons/panel-left';
-	import PanelRight from '@lucide/svelte/icons/panel-right';
+	import Menu from '#lib/icons/list.svelte';
+	import X from '#lib/icons/x.svelte';
+	import Search from '#lib/icons/magnifying-glass.svelte';
+	import Bug from '#lib/icons/bug.svelte';
+	import Sun from '#lib/icons/sun.svelte';
+	import Moon from '#lib/icons/moon.svelte';
+	import PanelLeftClose from '#lib/icons/sidebar-simple.svelte';
+	import PanelLeftOpen from '#lib/icons/sidebar-simple.svelte';
+	import PanelLeft from '#lib/icons/sidebar-simple.svelte';
+	import PanelRight from '#lib/icons/sidebar-simple.svelte';
 	import * as Sheet from '../sheet/index.js';
 	import AppNav from './app-nav.svelte';
 	import { navTrail, TITLE_SEPARATOR, toItems, type NavSource } from './types.js';
@@ -126,7 +126,7 @@
 		pageType = 'reading',
 		title,
 		breadcrumbs,
-		texture = 'grid',
+		texture = 'none',
 		children
 	}: {
 		/** Navigation: bare items, groups, or a mix. Filter for permissions first. */
@@ -212,15 +212,12 @@
 		 * The house atmosphere on the content region: `grid` (a dot-grid floor
 		 * plus a corner vignette) or `none`.
 		 *
-		 * Defaults to `grid` — the house atmosphere every app wears. It shipped
-		 * as `none` so its introduction moved nobody, and the result was the drift
-		 * it was built to end: five of nine apps had it, three of those through a
-		 * hand-rolled `*-dotgrid` class in their own app.css under three names,
-		 * two ink variables and two pitches, only one carrying the
-		 * `background-attachment: local` that stops the floor sliding under the
-		 * scroller. One default retires all three. The inks and the pitch are
-		 * `--ds-shell-texture-*` custom properties an app retunes in one
-		 * declaration; `none` turns it off.
+		 * Defaults to `none`: a dot grid and a glow behind the page are the stock
+		 * generated look (app-factory#171), and the household skin is a plain
+		 * ground. `grid` is the one sanctioned atmosphere for an app that asks
+		 * for it, so no app hand-rolls its own `*-dotgrid` class again; its inks
+		 * and pitch are `--ds-shell-texture-*` custom properties an app retunes in
+		 * one declaration.
 		 */
 		texture?: ShellTexture;
 		children: Snippet;

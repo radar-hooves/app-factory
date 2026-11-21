@@ -3,7 +3,7 @@
 	import { PageHeader } from '@poodle64/ui/page-header';
 	import { PageSection } from '@poodle64/ui/page-section';
 	import { Panel } from '@poodle64/ui/panel';
-	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import ArrowRight from '@poodle64/ui/icons/arrow-right';
 
 	// A reading page with an aside, shaped like an app's security page: a
 	// verdict, a run of questions, and two notes beside them.
@@ -33,7 +33,7 @@
 
 <PageHeader title="Can I use it?" />
 
-<div class="bg-card border-border ds-edge rounded-lg border p-5">
+<div class="bg-card border-border rounded-lg border p-5">
 	<p class="text-lg font-semibold">Yes, for public, open-source work.</p>
 	<p class="text-muted-foreground mt-2 text-sm leading-relaxed">
 		Never put classified information in it, whether typed, pasted, uploaded or from memory. A

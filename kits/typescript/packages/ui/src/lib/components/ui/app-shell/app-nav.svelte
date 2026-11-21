@@ -17,7 +17,7 @@
 	 * `types.ts` on `children` for why the nested rail won over
 	 * modules-on-the-top-bar, and why the depth cap is one.
 	 */
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ChevronRight from '#lib/icons/caret-right.svelte';
 	import {
 		hasActiveNavChild,
 		isNavItemActive,

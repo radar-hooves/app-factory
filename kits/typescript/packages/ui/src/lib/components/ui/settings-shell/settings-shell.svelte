@@ -36,8 +36,8 @@
 	 * row for Settings (it opens from the account menu), so the pane says it.
 	 */
 	import type { Snippet } from 'svelte';
-	import X from '@lucide/svelte/icons/x';
-	import SettingsIcon from '@lucide/svelte/icons/settings';
+	import X from '#lib/icons/x.svelte';
+	import SettingsIcon from '#lib/icons/gear.svelte';
 	import AppNav from '../app-shell/app-nav.svelte';
 	import PagePane from '../app-shell/page-pane.svelte';
 	import { getPageSlots } from '../app-shell/page.js';

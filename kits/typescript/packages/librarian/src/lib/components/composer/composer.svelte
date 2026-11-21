@@ -14,12 +14,12 @@
   the box open, with Send beside Stop.
 -->
 <script lang="ts">
-	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
-	import ClockIcon from '@lucide/svelte/icons/clock';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
-	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
-	import SquareIcon from '@lucide/svelte/icons/square';
-	import XIcon from '@lucide/svelte/icons/x';
+	import ArrowUpIcon from '@poodle64/ui/icons/arrow-up';
+	import ClockIcon from '@poodle64/ui/icons/clock';
+	import FileTextIcon from '@poodle64/ui/icons/file-text';
+	import PaperclipIcon from '@poodle64/ui/icons/paperclip';
+	import SquareIcon from '@poodle64/ui/icons/square';
+	import XIcon from '@poodle64/ui/icons/x';
 	import {
 		ACCEPT_ATTRIBUTE,
 		acceptFiles,

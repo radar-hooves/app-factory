@@ -8,9 +8,9 @@
 
 <script lang="ts">
 	import { toPng } from 'html-to-image';
-	import Check from '@lucide/svelte/icons/check';
-	import CircleAlert from '@lucide/svelte/icons/circle-alert';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Check from '#lib/icons/check.svelte';
+	import CircleAlert from '#lib/icons/warning-circle.svelte';
+	import LoaderCircle from '#lib/icons/circle-notch.svelte';
 	import AppDialog from '../ui/app-dialog/app-dialog.svelte';
 	import { Button } from '../ui/button/index.js';
 	import { Checkbox } from '../ui/checkbox/index.js';

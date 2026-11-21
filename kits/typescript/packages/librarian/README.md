@@ -49,10 +49,10 @@ src/lib/
 ## Installation
 
 ```bash
-pnpm add @poodle64/librarian @lucide/svelte
+pnpm add @poodle64/librarian @poodle64/ui
 ```
 
-`svelte`, `@lucide/svelte`, `marked`, `isomorphic-dompurify` and `shiki` are
+`svelte`, `@poodle64/ui` (its icons), `marked`, `isomorphic-dompurify` and `shiki` are
 peer dependencies: declare them yourself so Renovate tracks their versions and
 `pnpm ls` shows them.
 

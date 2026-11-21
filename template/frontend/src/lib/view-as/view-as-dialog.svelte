@@ -7,7 +7,7 @@
 	tab (the auth store), so a new tab is the admin's own view again.
 -->
 <script lang="ts">
-	import Eye from '@lucide/svelte/icons/eye';
+	import Eye from '@poodle64/ui/icons/eye';
 	import { AppDialog } from '@poodle64/ui/app-dialog';
 	import { Button } from '@poodle64/ui/button';
 	import { Checkbox } from '@poodle64/ui/checkbox';

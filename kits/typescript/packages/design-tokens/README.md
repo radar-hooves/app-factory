@@ -29,7 +29,7 @@ an app does choose are its accent and a catalogued palette, both below.
 
 | Constraint         | Value                                                         |
 | ------------------ | ------------------------------------------------------------- |
-| Corner radius base | `0.625rem` (`--ds-radius-lg`)                                 |
+| Corner radius base | `0.5rem` (`--ds-radius-lg`)                                   |
 | Display font       | Fraunces                                                      |
 | Body font          | Avenir Next (Apple system font), else Hanken Grotesk Variable |
 | Code / data font   | JetBrains Mono                                                |

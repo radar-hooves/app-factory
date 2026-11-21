@@ -6,7 +6,7 @@
 	import * as Tooltip from '../tooltip/index.js';
 	import IconAction from '../list-toolbar/icon-action.svelte';
 	import PageAside from '../app-shell/page-aside.svelte';
-	import X from '@lucide/svelte/icons/x';
+	import X from '#lib/icons/x.svelte';
 
 	// The page's context, in one of two forms, as the page's aside: the shell
 	// places it by the route's page type (`PageAside`), at a tool page's right
