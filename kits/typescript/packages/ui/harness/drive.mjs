@@ -3308,9 +3308,7 @@ for (const scheme of ['light', 'dark']) {
 			return {
 				checked: paint('checkbox'),
 				unchecked: paint('checkbox-unchecked'),
-				indeterminate: paint('checkbox-indeterminate'),
-				tabActive: paint('tab-active'),
-				tabInactive: paint('tab-inactive')
+				indeterminate: paint('checkbox-indeterminate')
 			};
 		});
 
@@ -3327,10 +3325,19 @@ for (const scheme of ['light', 'dark']) {
 		JSON.stringify(rest.indeterminate) === JSON.stringify(rest.checked),
 		`indeterminate rgb(${rest.indeterminate.join(' ')}) vs checked rgb(${rest.checked.join(' ')})`
 	);
+	// The selected tab is marked by its underline and its ink, not a fill
+	// (app-factory#171: no tinted track with a raised pill).
+	const tabs = await page.evaluate(() => {
+		const read = (probe) => {
+			const style = getComputedStyle(document.querySelector(`[data-probe="${probe}"]`));
+			return { rule: style.borderBottomColor, ink: style.color };
+		};
+		return { active: read('tab-active'), inactive: read('tab-inactive') };
+	});
 	check(
-		`tabs (${scheme}): the selected trigger does not paint the same as an unselected one`,
-		apart(rest.tabActive, rest.tabInactive) >= 8,
-		`active rgb(${rest.tabActive.join(' ')}) vs inactive rgb(${rest.tabInactive.join(' ')})`
+		`tabs (${scheme}): the selected trigger carries a rule and an ink an unselected one does not`,
+		tabs.active.rule !== tabs.inactive.rule && tabs.active.ink !== tabs.inactive.ink,
+		`rule ${tabs.active.rule} vs ${tabs.inactive.rule}; ink ${tabs.active.ink} vs ${tabs.inactive.ink}`
 	);
 
 	// The check that pins the FIX rather than the symptom: a fill that is really
@@ -3682,9 +3689,9 @@ for (const width of [375, 320]) {
 }
 
 // Panel's settings-section props, which have no meaning without a layout: a
-// description that WRAPS (the whole reason it is not `subtitle`), a footer strip
-// at the foot of the card, and a destructive tone that is actually a different
-// colour from the default one.
+// description that WRAPS (the whole reason it is not `subtitle`), a footer over
+// a hairline at the foot of the section, and a destructive tone that is
+// actually a different colour from the default one.
 {
 	const { context, page, errors } = await open('surface=settings', { width: 900, height: 900 });
 	await page.waitForSelector('.ds-page-main > section');
@@ -3703,12 +3710,11 @@ for (const width of [375, 320]) {
 			footerTop: footer.getBoundingClientRect().top,
 			bodyBottom: users.querySelector('header').nextElementSibling.getBoundingClientRect().bottom,
 			footerBorderTop: getComputedStyle(footer).borderTopWidth,
-			footerBackground: getComputedStyle(footer).backgroundColor,
-			// Right-aligned: the last button's right edge is at the strip's
-			// padding edge, not its left one.
+			// Right-aligned: the last button's right edge is at the footer's
+			// edge, not its left one.
 			footerJustify: getComputedStyle(footer).justifyContent,
-			defaultBorder: getComputedStyle(users).borderTopColor,
-			dangerBorder: getComputedStyle(danger).borderTopColor,
+			defaultBorder: getComputedStyle(users.querySelector('header')).borderBottomColor,
+			dangerBorder: getComputedStyle(danger.querySelector('header')).borderBottomColor,
 			dangerTitle: getComputedStyle(danger.querySelector('h2')).color,
 			defaultTitle: getComputedStyle(users.querySelector('h2')).color
 		};
@@ -3720,15 +3726,14 @@ for (const width of [375, 320]) {
 		`${panels.descriptionHeight.toFixed(1)}px over a ${panels.descriptionLine.toFixed(1)}px line`
 	);
 	check(
-		'settings: the footer sits below the body on a top-bordered tinted strip, right-aligned',
+		'settings: the footer sits below the body over a hairline, right-aligned',
 		panels.footerTop >= panels.bodyBottom - 0.5 &&
 			parseFloat(panels.footerBorderTop) > 0 &&
-			panels.footerBackground !== 'rgba(0, 0, 0, 0)' &&
 			panels.footerJustify === 'flex-end',
-		`footer top ${panels.footerTop.toFixed(1)} vs body bottom ${panels.bodyBottom.toFixed(1)}, border ${panels.footerBorderTop}, bg ${panels.footerBackground}, justify ${panels.footerJustify}`
+		`footer top ${panels.footerTop.toFixed(1)} vs body bottom ${panels.bodyBottom.toFixed(1)}, border ${panels.footerBorderTop}, justify ${panels.footerJustify}`
 	);
 	// A tone that resolved to the same colour is the dead affordance this package
-	// treats as worse than an absent one, and `border-destructive/40` compiling
+	// treats as worse than an absent one, and `border-destructive/25` compiling
 	// to nothing would look exactly like this passing.
 	check(
 		'settings: the destructive tone actually paints a different rule and title',
@@ -4064,10 +4069,10 @@ for (const density of ['comfortable', 'compact']) {
 	await context.close();
 }
 
-// ── FactGrid inside a Panel: no double border (#839) ─────────────────────────
-// The whole reason FactGrid exists beside StatList: a Panel already draws the
-// card, so FactGrid must draw none of its own — a claim about a resolved
-// border WIDTH, which jsdom cannot make (fact-grid.test.ts already covers the
+// ── FactGrid inside a Panel: no box at all (#839, app-factory#171) ───────────
+// A Panel is an open section, a heading over a hairline, and FactGrid draws no
+// border of its own either — a claim about a resolved border WIDTH, which jsdom
+// cannot make (fact-grid.test.ts already covers the
 // class-name half: numeric-vs-plain-words and the long-value row span).
 {
 	const { context, page, errors } = await open('surface=fact-grid');
@@ -4080,6 +4085,7 @@ for (const density of ['comfortable', 'compact']) {
 		const find = (text) => cells.find((c) => c.textContent.includes(text));
 		return {
 			panelBorder: getComputedStyle(panel).borderWidth,
+			panelRule: getComputedStyle(panel.querySelector('header')).borderBottomWidth,
 			gridBorder: getComputedStyle(dl).borderWidth,
 			addressWidth: find('Address').getBoundingClientRect().width,
 			gridWidth: dl.getBoundingClientRect().width,
@@ -4088,7 +4094,11 @@ for (const density of ['comfortable', 'compact']) {
 		};
 	});
 
-	check('FactGrid: the Panel draws a real border', measured.panelBorder !== '0px', measured.panelBorder);
+	check(
+		'FactGrid: the Panel is open, its heading over a real hairline',
+		measured.panelBorder === '0px' && measured.panelRule !== '0px',
+		`border ${measured.panelBorder}, rule ${measured.panelRule}`
+	);
 	check('FactGrid: FactGrid itself draws none — no box in a box', measured.gridBorder === '0px', measured.gridBorder);
 	check(
 		'FactGrid: a long value spans the full grid row width',
