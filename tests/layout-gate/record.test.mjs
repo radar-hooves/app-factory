@@ -34,9 +34,10 @@ const commit = (message) => {
 };
 const check = (env = { CHANGE_BASE: base, CI: 'true' }) =>
 	sh('node', ['scripts/check-layout-gate.mjs'], env);
-// What the gate records for these route verdicts on the tree as it stands, kept beside
-// the routes it already holds, as a judged run does.
-const judge = (verdicts) =>
+// What the gate records for these route verdicts on the tree as it stands, judged on
+// `prompt` (null: a record from before it carried one), kept beside the routes it already
+// holds, as a judged run does.
+const judge = (verdicts, prompt = 'p1') =>
 	sh('node', [
 		'--input-type=module',
 		'-e',
@@ -44,8 +45,9 @@ const judge = (verdicts) =>
 		 import { RECORD, drawnFiles, treeKey } from './scripts/layout-gate.mjs';
 		 const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
 		 const tree = treeKey(drawnFiles());
+		 const prompt = ${JSON.stringify(prompt)};
 		 for (const [route, verdict] of Object.entries(${JSON.stringify(verdicts)}))
-		   record.routes[route] = { tree, verdict, samples: [verdict + ' c1', verdict + ' c2', verdict + ' c3'] };
+		   record.routes[route] = { tree, ...(prompt ? { prompt } : {}), verdict, samples: [verdict + ' c1', verdict + ' c2', verdict + ' c3'] };
 		 writeFileSync(RECORD, JSON.stringify(record));`
 	]);
 const answers = (tag) => writeFileSync(path.join(repo, '.copier-answers.yml'), `_commit: ${tag}\n`);
@@ -191,6 +193,28 @@ test("a CI leg's one-commit checkout fetches the base and its record", () => {
 	base = head;
 });
 
+test('a factory update compares verdicts on one prompt: a stricter judge is no regression', () => {
+	// The base's record judged /settings ship on prompt p1.
+	answers('v4');
+	put('src/lib/x.ts', 'export const x = 5;\n');
+	assert.equal(judge({ '/': 'fix', '/settings': 'fix' }, 'p2').status, 0);
+	assert.equal(check().status, 0);
+	assert.equal(judge({ '/settings': 'fix' }).status, 0);
+	assert.match(
+		check().stderr,
+		/\/settings judges fix after this factory update and judged ship before it, on the same prompt/
+	);
+	// A base judged before the record carried its prompt counts as never judged.
+	answers('v3');
+	assert.equal(judge({ '/': 'fix', '/settings': 'ship' }, null).status, 0);
+	base = commit('the record before the update, with no prompt');
+	answers('v4');
+	put('src/lib/x.ts', 'export const x = 6;\n');
+	assert.equal(judge({ '/': 'fix', '/settings': 'fix' }).status, 0);
+	assert.equal(check().status, 0);
+	base = commit('update to v4, judged');
+});
+
 // `pnpm layout-gate` with Playwright stood in by a script that writes the report a run would.
 const gate = (report, status) => {
 	const bin = path.join(repo, 'bin');
@@ -213,10 +237,11 @@ const run = (a, b, more = {}) => ({
 		{
 			path: '/a',
 			verdict: a.filter((v) => v === 'ship').length >= 2 ? 'pass' : 'broken',
+			prompt: 'p7',
 			failures: [],
 			samples: a.map((verdict, i) => ({ verdict, call: `c${i + 1}` }))
 		},
-		{ path: '/b', verdict: 'broken', failures: b, samples: [] }
+		{ path: '/b', verdict: 'broken', prompt: 'p7', failures: b, samples: [] }
 	],
 	...more
 });
@@ -229,6 +254,7 @@ test('a finished judged run records every route, fix and measured faults include
 	assert.equal(r.status, 1);
 	const routes = recorded();
 	assert.equal(routes['/a'].verdict, 'fix');
+	assert.equal(routes['/a'].prompt, 'p7');
 	assert.deepEqual(routes['/a'].samples, ['ship c1', 'fix c2', 'fix c3']);
 	assert.equal(routes['/b'].verdict, 'fix');
 	assert.deepEqual(routes['/b'].failures, ['390 px: page scrolls sideways (by 12 px)']);

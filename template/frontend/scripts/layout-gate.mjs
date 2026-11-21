@@ -6,8 +6,9 @@
 //   --list                                print the routes that would be gated and stop
 // A shared file (src/lib, a +layout, app.css) reaches routes no diff can name, so
 // with only those changed the run stops and asks for the routes by name.
-// A judged run writes each route's verdict into RECORD, against the drawn tree it judged;
-// commit it with the change, since the change pipeline reads it (check-layout-gate.mjs).
+// A judged run writes each route's verdict into RECORD, against the drawn tree it judged and
+// the prompt that judged it; commit it with the change, since the change pipeline reads it
+// (check-layout-gate.mjs).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -104,6 +105,7 @@ function writeRecord(tree) {
 		record.routes[r.path] = {
 			tree,
 			judged,
+			prompt: r.prompt,
 			verdict: r.verdict === 'pass' ? 'ship' : 'fix',
 			...(r.failures.length
 				? { failures: r.failures }

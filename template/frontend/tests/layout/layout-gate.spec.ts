@@ -18,6 +18,7 @@
  *   layout-gate`); both are required while the judge is on. The key is never
  *   printed or written.
  */
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -74,6 +75,8 @@ interface RouteResult {
 	path: string;
 	landed: string;
 	pageType: string | null;
+	/** The judge's prompt and model as sent for this route, hashed: verdicts compare only under one. */
+	prompt: string;
 	shots: Shot[];
 	failures: string[];
 	samples: Sample[];
@@ -106,8 +109,9 @@ The criteria:
 4. Alignment and rhythm: shared edges and baselines; spacing from a scale.
 5. Edges: nothing stranded outside the block it belongs to, such as a label or icon floating far beyond the edge of its content. A control aligned to the edge of the block it serves, such as a view switch above a full-width table, is not stranded.
 6. Width: on a wide screen the content uses the width; never held in a column narrower than about two thirds of the screen with empty bands beside it. Space below the last content is not a fault.
-7. AI tells: a card per item where a list would do; equal tiles of uneven content; an icon on every label; gradient text, glow, side-tab borders, nested cards, the purple AI palette; a flat page where every block has the same weight.
-8. Craft: designed by someone who cares, or assembled from defaults.
+7. AI tells: a card per item where a list would do; equal tiles of uneven content; a decorative icon on every label that says nothing the label does not; gradient text, glow, side-tab borders, nested cards, the purple AI palette; a flat page where every block has the same weight.
+8. Colour and icons: the app's palette and icons give the eye places to land before it reads. The accent marks what matters most and the primary action; status, change and kind each wear a colour of their own; icons mark sections, kinds of thing and states. Judge the content area: the rail and the top bar do not count.
+9. Craft: designed by someone who cares, or assembled from defaults.
 
 Severity is "major" for these faults only, each as a reader sees it at a glance:
 - text, a table, card or panel that blends into the background behind it;
@@ -116,7 +120,8 @@ Severity is "major" for these faults only, each as a reader sees it at a glance:
 - an element stranded outside the block it belongs to;
 - content held in a column narrower than about two thirds of a wide screen;
 - content clipped, overlapping or cut off with no cue that more follows (a row of tabs or chips cut at the screen's edge is that cue; text cut inside its own control is minor);
-- an AI tell from criterion 7 that dominates the page.
+- an AI tell from criterion 7 that dominates the page;
+- a flat, text-based content area: the eye meets only text in ink and grey, the palette shows as no more than a dot, a button or an avatar, and no icon marks a section, a kind or a state.
 Everything else is "minor": worth fixing, never a reason to hold the page back.
 
 Verdict "ship" when nothing is major; "fix" otherwise.`;
@@ -147,6 +152,7 @@ const SCHEMA = {
 							'edges',
 							'width',
 							'ai-tells',
+							'colour-and-icons',
 							'craft'
 						]
 					},
@@ -331,10 +337,15 @@ async function renderRoute(browser: Browser, baseURL: string, path: string): Pro
 		}
 	}
 	const failures = deterministic(path, new URL(baseURL).origin, shots);
+	const pageType = shots[0]?.pageType ?? null;
 	return {
 		path,
 		landed,
-		pageType: shots[0]?.pageType ?? null,
+		pageType,
+		prompt: createHash('sha256')
+			.update(`${MODEL}\n${prompt(pageType)}`)
+			.digest('hex')
+			.slice(0, 12),
 		shots,
 		failures,
 		samples: [],

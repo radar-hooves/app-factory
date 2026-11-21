@@ -5,7 +5,8 @@
 //     judged on this tree ships.
 //   A factory update (.copier-answers.yml's _commit moved): SHELL_ROUTES and any factory
 //     page it changed are judged on this tree, and no route the base's record judged ship
-//     now judges fix. A route already at fix, or never judged, does not hold it.
+//     on the same prompt now judges fix. A route already at fix, never judged, or judged on
+//     another prompt (a stricter judge is not a regression the update caused) does not hold it.
 //   No base (CI with no CHANGE_BASE): the tree as it stands carries a judgement.
 // A change that redraws nothing is never asked.
 //   CHANGE_BASE  the commit the change is measured from (the pipeline's plan); by hand, the
@@ -45,9 +46,12 @@ export function refusal(now, was, record, { update = false, before = null } = {}
 			return `${list(fix)} fix on this tree, and an app's own redraw lands only when every route it shows on ships; the record names each sample's call.`;
 		return null;
 	}
-	const fell = fix.filter((p) => before?.routes?.[p]?.verdict === 'ship');
+	const fell = fix.filter((p) => {
+		const was = before?.routes?.[p];
+		return was?.verdict === 'ship' && !!was.prompt && was.prompt === record.routes[p].prompt;
+	});
 	if (fell.length)
-		return `${list(fell)} fix after this factory update and judged ship before it; the update lands when ${fell.length > 1 ? 'they ship' : 'it ships'} again.`;
+		return `${list(fell)} fix after this factory update and judged ship before it, on the same prompt; the update lands when ${fell.length > 1 ? 'they ship' : 'it ships'} again.`;
 	return null;
 }
 
