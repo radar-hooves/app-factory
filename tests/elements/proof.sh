@@ -32,7 +32,6 @@ uvx copier copy --defaults --trust --vcs-ref=HEAD --quiet \
 	--data portcullis_url=http://127.0.0.1:1 \
 	--data private_index_name=godswood --data private_index_url=http://172.21.0.2:3141/poodle64/prod/+simple/ \
 	--data registry_host=registry.invalid --data registry_credential_file=/dev/null \
-	--data watchtower_url=http://127.0.0.1:1 \
 	"$factory" "$placer"
 
 # The placer's one palette knob, its accent, moved off the factory default.

@@ -613,7 +613,7 @@ registry_host:
   type: str
   when: "{{ skeleton == 'web' }}"
   help: >-
-    Container registry the image is pushed to and Watchtower pulls from (e.g. `registry.example.com`). No factory default, for the same reason as private_index_name.
+    Container registry the image is pushed to and the deploying host pulls from (e.g. `registry.example.com`). No factory default, for the same reason as private_index_name.
 
 
 registry_credential_file:
@@ -621,13 +621,6 @@ registry_credential_file:
   when: "{{ skeleton == 'web' }}"
   help: >-
     Runner-host path to a `user:password` line that logs in to registry_host; the credential stays on the runner host, never a GitHub secret. No factory default.
-
-
-watchtower_url:
-  type: str
-  when: "{{ skeleton == 'web' }}"
-  help: >-
-    Base URL of the deploying host's Watchtower HTTP API, asked to pull the image just pushed (e.g. `http://127.0.0.1:8080`). No factory default.
 
 
 run_mode:
@@ -638,7 +631,7 @@ run_mode:
     - image
     - source
   help: >-
-    Where production runs this app's code from. `image` (default): the image the change pipeline pushes and Watchtower pulls. `source`: a checkout of `main` on the host, moved by the app's own deploy unit, with the image carrying only the system and toolchain. Both are canonical and neither is an exception; the answer is the app's record of which it is, read by the shape gate and fleet convergence in place of `registry-and-tag` and `health-revision` exceptions. Flipping it is this one line in `.copier-answers.yml`, and does not move the app: the host's stack and deploy unit do.
+    Where production runs this app's code from. `image` (default): the image the change pipeline pushes and the host's stack-up recreates its containers on. `source`: a checkout of `main` on the host, moved by the app's own deploy unit, with the image carrying only the system and toolchain. Both are canonical and neither is an exception; the answer is the app's record of which it is, read by the shape gate and fleet convergence in place of `registry-and-tag` and `health-revision` exceptions. Flipping it is this one line in `.copier-answers.yml`, and does not move the app: the host's stack and deploy unit do.
 
 
 omitted_slices:

@@ -774,25 +774,17 @@ def test_a_source_naming_no_root_image_is_fatal(mono):
         plan(repo, head, head, source=("emb",))
 
 
-# docker and curl as image.sh calls them: a registry whose :latest is $STUB/latest, this host's
+# docker as image.sh calls it: a registry whose :latest is $STUB/latest, and this host's
 # containers of it in $STUB/boxes (id, revision, run-from-source label, compose one-off label,
-# `adhoc` for a bare `docker run`), and a label-enabled Watchtower, which moves each unlabelled
-# one onto :latest and none whose label its host dropped, nor a one-off `docker compose run` container.
+# `adhoc` for a bare `docker run`).
 STUB = r"""#!/usr/bin/env bash
 s=$STUB last=${*: -1}
 echo "${0##*/} $*" >>"$s/calls"
 case "${0##*/} $1 $2 $3" in
-  curl*)
-    cat >/dev/null
-    awk -F'\t' -v r="$(sed 's/^d-//' "$s/latest")" 'BEGIN {OFS = FS} $3 != "true" && $4 != "True" {$2 = r} 1' \
-      "$s/boxes" >"$s/b"
-    n=$(diff "$s/boxes" "$s/b" | grep -c '^>')
-    mv "$s/b" "$s/boxes"
-    echo "{\"summary\": {\"failed\": 0, \"updated\": $n}}" ;;
   "docker ps"*) cut -f1 "$s/boxes" ;;
   "docker inspect"*)
     awk -F'\t' -v i="$STUB_REF:latest" 'BEGIN {OFS = FS} {print i, $2, "healthy", $1, 0, "img-" $2, $3, "/box-" $1, $4, $5 == "adhoc" ? "" : "app"}' "$s/boxes" ;;
-  "docker image inspect"*) case $4 in *RepoDigests*) cat "$s/digests" 2>/dev/null || echo 1 ;; *REVISION*) echo "${last##*:}" ;; *) echo "img-${last##*:}" ;; esac ;;
+  "docker image inspect"*) case $4 in *REVISION*) echo "${last##*:}" ;; *) echo "img-${last##*:}" ;; esac ;;
   "docker login"*) cat >/dev/null ;;
   "docker buildx imagetools inspect")
     case $last in
@@ -802,6 +794,16 @@ case "${0##*/} $1 $2 $3" in
     echo "{\"digest\": \"$d\"}" ;;
   "docker buildx imagetools create") case $last in *@*) echo "${last##*@}" ;; *) echo "d-${last##*:}" ;; esac >"$s/latest" ;;
 esac
+"""
+# The host's stack-up: each container named, box-<id>, recreated on what :latest is now.
+STACK_UP = r"""#!/usr/bin/env bash
+echo "stack-up $*" >>"$STUB/calls"
+[ ! -e "$STUB/up-fails" ] || exit 1
+for c; do
+  awk -F'\t' -v c="${c#box-}" -v r="$(sed 's/^d-//' "$STUB/latest")" 'BEGIN {OFS = FS} $1 == c {$2 = r} 1' \
+    "$STUB/boxes" >"$STUB/b"
+  mv "$STUB/b" "$STUB/boxes"
+done
 """
 REF = "reg.test/radar-hooves/app"
 LABELS = pytest.mark.parametrize(
@@ -818,12 +820,8 @@ def host(tmp_path: Path):
     bin_.mkdir()
     s.mkdir()
     cred.write_text("u:p\n")
-    (bin_ / "stack-up").write_text(
-        '#!/usr/bin/env bash\necho "stack-up $*" >>"$STUB/calls"\n[ ! -e "$STUB/up-fails" ]\n'
-    )
-    (bin_ / "stack-up").chmod(0o755)
-    for tool in ("docker", "curl"):
-        (bin_ / tool).write_text(STUB)
+    for tool, script in (("docker", STUB), ("stack-up", STACK_UP)):
+        (bin_ / tool).write_text(script)
         (bin_ / tool).chmod(0o755)
     env = {
         **ENV,
@@ -833,8 +831,6 @@ def host(tmp_path: Path):
         "CHANGE_REGISTRY": "reg.test",
         "GITHUB_REPOSITORY_OWNER": "radar-hooves",
         "CHANGE_REGISTRY_CREDENTIAL_FILE": str(cred),
-        "CHANGE_WATCHTOWER_URL": "http://watchtower.test",
-        "CHANGE_WATCHTOWER_TOKEN_FILE": str(cred),
         "NETRC": str(cred),
         "CHANGE_STACK_UP": str(bin_ / "stack-up"),
         "RUNNER_TEMP": str(tmp_path),
@@ -859,8 +855,8 @@ def host(tmp_path: Path):
     return old, new, image
 
 
-def asked(calls: list[str]) -> bool:
-    return any(c.startswith("curl ") for c in calls)
+def asked(calls: list[str]) -> list[str]:
+    return [c for c in calls if c.startswith("stack-up")]
 
 
 @LABELS
@@ -877,40 +873,33 @@ def test_image_publishes_and_leaves_a_source_run_container_to_its_host(host, lab
         )
         and latest == f"d-{new}"
     )
-    # Watchtower is asked, and watched, only for what it takes.
-    assert asked(calls) == ("" in labels)
+    # stack-up is asked, and watched, only for what the pipeline moves.
+    assert bool(asked(calls)) == ("" in labels)
     assert after == [(old if lab else new, lab) for lab in labels]
     assert ("for this host to adopt in its 1" in r.stdout) == ("true" in labels)
     assert ("healthy on this host" in r.stdout) == ("" in labels)
 
 
-def test_the_host_applies_its_compose_config_to_what_watchtower_took(host):
-    old, new, image = host
-    r, _, _, calls = image([(old, ""), (old, "true")], old, new)
-    assert r.returncode == 0, r.stdout + r.stderr
-    # Only the Watchtower-taken container, after Watchtower.
-    assert calls.count("stack-up box-c0") == 1 and not any("box-c1" in c for c in calls)
-    assert calls.index("stack-up box-c0") > next(
-        i for i, c in enumerate(calls) if c.startswith("curl ")
-    )
-
-
-def test_the_host_applies_its_compose_config_to_every_container_of_the_image_in_one_call(
+def test_stack_up_recreates_every_container_of_the_image_in_one_call_after_latest_moved(
     host,
 ):
     old, new, image = host
-    r, _, _, calls = image([(old, ""), (old, ""), (old, "true")], old, new)
+    r, _, after, calls = image([(old, ""), (old, ""), (old, "true")], old, new)
     assert r.returncode == 0, r.stdout + r.stderr
-    # Every Watchtower-taken container, once, by name; the source-run one is left out.
-    assert [c for c in calls if c.startswith("stack-up")] == ["stack-up box-c0 box-c1"]
+    # Every container the pipeline moves, once, by name; the source-run one is left out.
+    assert asked(calls) == ["stack-up box-c0 box-c1"]
+    assert calls.index("stack-up box-c0 box-c1") > next(
+        i for i, c in enumerate(calls) if c.startswith("docker buildx imagetools create")
+    )
+    assert after == [(new, ""), (new, ""), (old, "true")]
 
 
-def test_a_failed_compose_apply_rolls_the_release_back(host, tmp_path):
+def test_a_failed_stack_up_rolls_the_release_back(host, tmp_path):
     old, new, image = host
     (tmp_path / "stub").mkdir(exist_ok=True)
     (tmp_path / "stub" / "up-fails").write_text("")
     r, latest, _, _ = image([(old, "")], old, new)
-    assert r.returncode != 0 and "did not apply its compose config" in r.stderr
+    assert r.returncode != 0 and "stack-up did not recreate" in r.stderr
     assert latest == f"d-{old}"
 
 
@@ -925,16 +914,18 @@ def test_a_rollback_leaves_a_source_run_container_to_its_host(host, labels, tmp_
     old, new, image = host
     took, state = labels.count(""), tmp_path / "change-image-app.rollback"
     was = f"old={old} oldimg=img-{old}" if took else "old= oldimg="
+    names = [f"box-c{i}" for i, lab in enumerate(labels) if not lab]
     state.write_text(
         f"ref={REF} name=app sha={new} img=img-{new} prev=d-{old} pid=0 "
-        f"before={took} held={len(labels) - took} {was}\n"
+        f"before={took} held={len(labels) - took} {was}\nnames=({' '.join(names)})\n"
     )
-    # :latest moved and Watchtower took what it takes; the host adopted nothing yet.
+    # :latest moved and stack-up took what the pipeline moves; the host adopted nothing yet.
     boxes = [(old if lab else new, lab) for lab in labels]
     r, latest, after, calls = image(boxes, new, "--rollback")
     assert r.returncode == 0, r.stdout + r.stderr
     assert latest == f"d-{old}" and not state.exists()
-    assert asked(calls) == bool(took) and after == [(old, lab) for lab in labels]
+    assert asked(calls) == ([f"stack-up {' '.join(names)}"] if took else [])
+    assert after == [(old, lab) for lab in labels]
 
 
 def test_the_build_pushes_a_single_manifest_with_no_attestations(host):
@@ -973,15 +964,6 @@ def test_a_second_run_waits_for_the_image_lock_then_skips(host, tmp_path):
     assert time.monotonic() - start > 1 and "skipping" in r.stdout
 
 
-def test_a_stale_source_run_container_never_asks_watchtower_again(host):
-    old, new, image = host
-    # A re-run: what Watchtower takes already runs it, so it updates nothing.
-    r, _, after, calls = image([(new, ""), (old, "true")], new, new)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert sum(c.startswith("curl ") for c in calls) == 1
-    assert after == [(new, ""), (old, "true")]
-
-
 @pytest.mark.parametrize(
     "service", ["", "False"], ids=["unlabelled", "compose-service"]
 )
@@ -997,11 +979,11 @@ def test_a_one_off_run_container_of_the_image_is_not_the_stacks_to_watch(host, s
 
 def test_a_bare_docker_run_of_the_image_is_not_the_stacks_to_apply_or_watch(host):
     old, new, image = host
-    # A session's `docker run` of :latest carries the image's Watchtower label but has no stack.
+    # A session's `docker run` of :latest has no stack.
     r, latest, _, calls = image([(old, "", "", "adhoc"), (old, "")], old, new)
     assert r.returncode == 0, r.stdout + r.stderr
     assert latest == f"d-{new}" and "healthy on this host" in r.stdout
-    assert [c for c in calls if c.startswith("stack-up")] == ["stack-up box-c1"]
+    assert asked(calls) == ["stack-up box-c1"]
 
 
 def test_a_host_running_only_a_one_off_container_of_the_image_has_nothing_to_watch(
@@ -1011,17 +993,6 @@ def test_a_host_running_only_a_one_off_container_of_the_image_has_nothing_to_wat
     r, latest, _, calls = image([(old, "", "True")], old, new)
     assert r.returncode == 0, r.stdout + r.stderr
     assert latest == f"d-{new}" and "nothing runs" in r.stdout
-
-
-def test_a_container_on_a_hand_tagged_image_is_refused_at_once(host, tmp_path):
-    old, new, image = host
-    (tmp_path / "stub").joinpath("digests").write_text("0\n")
-    r, latest, _, calls = image([(old, "")], old, new)
-    assert r.returncode != 0
-    assert (
-        "container box-c0" in r.stderr and "pull" in r.stderr and "recreate" in r.stderr
-    )
-    assert latest == f"d-{old}" and not asked(calls)
 
 
 def test_copied_reads_the_context_paths_a_dockerfile_takes():

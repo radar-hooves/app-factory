@@ -4,6 +4,20 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [2026.11.65] - 2026-11-21
+
+Need: a deploy never races another recreate of the same containers. At 14:42 21/11/2026 a library deploy through Watchtower's `/v1/update` stopped library, library-worker and library-worker-vision while stack-follow recreated them for a compose change; Watchtower failed on `Conflict. The container name "/library-worker" is already in use` and stack-follow alerted high. Consumer: yggdrasil's maintenance-day orchestrator; every repo with an image member.
+
+### Changed
+
+- **An image deploy, and its rollback, go through the host's stack-up alone.** `image.sh` moves `:latest` in the registry as before, then calls `CHANGE_STACK_UP` with the containers of `:latest` it moves (none that run from source). stack-up pulls, takes the stack's writer lock that stack-follow, container-recovery and image-refresh hold, and recreates a service whose image or config moved. A rollback puts `:latest` back and calls stack-up again. Watchtower is never called: `CHANGE_WATCHTOWER_URL` and `CHANGE_WATCHTOWER_TOKEN_FILE` go unread, and the hand-tagged-image refusal and re-ask loop that served Watchtower are gone (compose pulls the tag whatever the host holds locally). Every repo calls the change pipeline at `main`, so this reaches them all when it lands, not at this tag.
+- **The `watchtower_url` copier question is gone**; nothing read it. An app's next update drops it from `.copier-answers.yml`.
+
+### Consumer must change
+
+- Every deploying host (atlas, mimir) runs yggdrasil's stack-up that pulls and recreates onto a moved tag before this lands. With the older stack-up an image-only deploy recreates nothing, its watch times out and it rolls back.
+- A stamped app: nothing.
+
 ## [2026.11.64] - 2026-11-21
 
 Need: every household app reads to the operator as AI-generated ("I'm still dissatisfied with the front end of basically all my apps"; "our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one v0, Lovable and Bolt generate (#171). Consumer: eight's orchestrator, relayed by master-project's orchestrator; every stamped app.
