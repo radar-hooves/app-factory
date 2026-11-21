@@ -33,7 +33,10 @@
 </script>
 
 <Overlays>
-	<Card.Root class="max-w-sm">
+	<!-- The ring is the probe tests/elements/drive.mjs reads ("the card's ring draws", and on a
+	     bare page): Tailwind's ring resolves only through the @property values the element
+	     registers. The kit's Card draws no ring of its own since the household skin (#171). -->
+	<Card.Root class="ring-foreground/10 max-w-sm ring-1">
 		<Card.Header>
 			<Card.Title>Self-test element</Card.Title>
 			<Card.Description>{app ? `Placed in ${app}` : 'On its own page'}</Card.Description>
