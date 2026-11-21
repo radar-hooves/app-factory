@@ -4,6 +4,19 @@ All notable changes to this template are documented here. The format follows [Ke
 
 The git tag is this repo's single source of truth for its version: `copier` resolves a template by its latest tag, so there is no `VERSION` file to drift against it. A change is not shipped until the tag is pushed.
 
+## [Unreleased]
+
+Need: the public repo reads as a professional one. Consumer: master-project's orchestrator, via the Bragi go-public lane.
+
+### Added
+
+- **`LICENSE` (MIT, poodle64)** at the root, so GitHub detects it; every kit manifest that declares a licence already says MIT. The copier templates' own licence handling is unchanged.
+
+### Fixed
+
+- **The desktop skeleton's actionlint config lists the `atlas` label** its `release.yaml` matrix uses, so actionlint no longer fails a stamped desktop app.
+- Links to `radar-hooves/bragi#243` read `radar-hooves/bragi-archive#243`, the old repo's new name.
+
 ## [2026.11.65] - 2026-11-21
 
 Need: a deploy never races another recreate of the same containers. At 14:42 21/11/2026 a library deploy through Watchtower's `/v1/update` stopped library, library-worker and library-worker-vision while stack-follow recreated them for a compose change; Watchtower failed on `Conflict. The container name "/library-worker" is already in use` and stack-follow alerted high. Consumer: yggdrasil's maintenance-day orchestrator; every repo with an image member.
@@ -1785,7 +1798,7 @@ Need: eight (radar-hooves/eight), 16/10/2026.
 
 ## [2026.10.39] - 2026-10-15
 
-Need: bragi (radar-hooves/bragi#243), 15/10/2026.
+Need: bragi (radar-hooves/bragi-archive#243), 15/10/2026.
 
 ### Fixed
 
@@ -1797,7 +1810,7 @@ Need: bragi (radar-hooves/bragi#243), 15/10/2026.
 
 ## [2026.10.38] - 2026-10-15
 
-The desktop layout harness sweeps every view for overlap, overflow and clipping. Need: bragi (radar-hooves/bragi#243), 15/10/2026, whose own sweep found 282 real layout faults by hand-built detection; `@poodle64/ui` 2026.10.15 ships with it.
+The desktop layout harness sweeps every view for overlap, overflow and clipping. Need: bragi (radar-hooves/bragi-archive#243), 15/10/2026, whose own sweep found 282 real layout faults by hand-built detection; `@poodle64/ui` 2026.10.15 ships with it.
 
 ### Added
 
@@ -1809,7 +1822,7 @@ The desktop layout harness sweeps every view for overlap, overflow and clipping.
 
 ## [2026.10.37] - 2026-10-15
 
-Bragi's hard-won desktop lessons land in the factory. Need: bragi (radar-hooves/bragi#243), 15/10/2026, before its history is dropped.
+Bragi's hard-won desktop lessons land in the factory. Need: bragi (radar-hooves/bragi-archive#243), 15/10/2026, before its history is dropped.
 
 ### Changed
 

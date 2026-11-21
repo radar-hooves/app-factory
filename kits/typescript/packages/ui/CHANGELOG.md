@@ -362,7 +362,7 @@ Need: casefile, through the elements capability (radar-hooves/master-project#380
 
 ## [2026.10.15] - 2026-10-15
 
-Need: bragi (radar-hooves/bragi#243), 15/10/2026.
+Need: bragi (radar-hooves/bragi-archive#243), 15/10/2026.
 
 ### Fixed
 
