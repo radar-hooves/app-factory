@@ -31,7 +31,8 @@ stock look is what the AI app builders generate, and every app read as machine-m
 in it. Sections are open, a heading over a hairline, never a bordered card each
 (`Panel`, `StatList`, `StatCard`); a surface is a tonal step with no ring or shadow
 (`Card`, `DetailPanel`). Labels and column heads are sentence case (`.ds-label`),
-never small caps. Status is a dot and a word, coloured only where it needs someone.
+never small caps. Status is its own glyph in its own colour, and a word. An icon in
+the content, a section's or a figure's mark, takes the accent in its tone layer.
 Tabs are underlined, the page ground is plain, corners are tight (`--ds-radius-lg`
 0.5rem) and icons are the household set (§Icons). A change that brings a stock
 default back is a regression of that issue.
@@ -45,7 +46,7 @@ src/lib/
                           numbers — en-AU, AUD, Australia/Brisbane
   telemetry.ts          browser telemetry: one initBrowserTelemetry() call, one Faro
                           instance, one session id (see below)
-  styles.css            the component stylesheet: scale keys, .ds-label, .ds-chip/.ds-dot,
+  styles.css            the component stylesheet: scale keys, .ds-label, .ds-chip/.ds-status-icon,
                           the icon tone, the dialogue-section divider rule
   icon-props.ts         the household icons' props (icons/ is generated at build, gitignored)
   components/ui/         one directory per component: the shadcn-svelte primitives
@@ -107,7 +108,7 @@ rather than rebuilding it:
 | `breadcrumbs`                                   | The trail: `items` of `{ label, href? }`, a named landmark, chevrons, each step truncating rather than wrapping. PageHeader draws it from `breadcrumbs={[…]}`. See [The page](#the-page-container-sections-and-the-type-scale). |
 | `page-container`                                | A route's page at the one rhythm: header, sections and panels 1.5rem apart, filling the content box. |
 | `page-lead`                                     | A page's lead, under the rail's title: one answer sentence (`lead`, an `h2`), an optional `eyebrow`, `subtitle` and `meta` row. Its actions go to `ShellActions`. |
-| `page-section`                                  | A section of a page: `title` at `level` 2 or 3, an optional `description`, `count` and `actions`, and its content at one distance below. |
+| `page-section`                                  | A section of a page: `title` at `level` 2 or 3, an optional `icon`, `description`, `count` and `actions`, and its content at one distance below. |
 | `document-reader`                               | A document to read: PageHeader, the body (`html` the app sanitised, or `children`) in `.ds-prose`, and a contents list from its own headings, which a shell places as the page's aside. See [A document to read](#a-document-to-read). |
 | `content-skeleton`                              | A region loading, shaped like what replaces it: `rows`, `tiles` or `prose`. A whole page waiting is LoadingState. |
 | `panel`                                         | The generic titled section, open rather than boxed, and the settings section: optional icon, a short `subtitle` or a longer `description`, both wrapping, trailing `action`s, a body that can opt out of padding or scroll inside the section (`scroll`), an optional `footer` over a hairline for Save/Cancel, and `tone="destructive"` for a danger zone. There is no `SettingsSection`; see [The settings destination](#the-settings-destination). |
@@ -121,13 +122,13 @@ rather than rebuilding it:
 | `context-column`                                | The page's right-hand context, as its aside (`PageAside`). A list page's: a standing `StatList` plus an optional detail that flows in on select. A record page's (`title`, `children`): the one opened item, closable, scrolling inside itself, and its `documentPane` in the item's place. The page type places it; below the aside's width it opens from the bar as a sheet. See [A record's page](#a-records-page). |
 | `app-dialog`                                    | The dialogue frame: titled header, scrollable body, footer action bar, five sizes (`xs`…`xl`), and an `onOpenChange` for the dismissals the caller did not drive.                                                                                                                                                                                                       |
 | `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                            |
-| `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status dot, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
+| `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status glyph, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
 | `stat-list`                                     | A route's low-context integers as a label→value list. Zero-aware: `muted` keeps a healthy zero quiet.                                                                                                                                                                                                                                                                   |
 | `arc-gauge`                                     | A radial capacity/percentage ring for a single 0–100 metric, in a footprint too compact for a `stat-card`.                                                                                                                                                                                                                                                              |
 | `bar-row`                                       | A labelled horizontal bar with a trailing tabular value, for a ranked list (usage, rank, token burn).                                                                                                                                                                                                                                                                   |
 | `scorecard`                                     | A compact 0/1/2 dot-row health strip for several independent checks read at a glance.                                                                                                                                                                                                                                                                                   |
 | `sparkline`                                     | An inline multi-series area+line trend for a row or card with room for a trend but not a full chart.                                                                                                                                                                                                                                                                    |
-| `status` / `status-badge`                       | The fixed five-state vocabulary (`success \| warning \| error \| info \| neutral`) and the one state chip, with `pulse` for a state still in motion and `class` for placement. `status-badge` alone also accepts `'primary'`, a brand-emphasis extension outside the shared vocabulary — `stat-card`, `stat-list` and `data-table-toolbar` never see it.                |
+| `status` / `status-badge`                       | The fixed five-state vocabulary (`success \| warning \| error \| info \| neutral`) and the one state chip, with `pulse` for a state still in motion and `class` for placement. `StatusIcon` is a state's glyph alone: check, triangle, cross, `i`, minus, in its status ink. `status-badge` alone also accepts `'primary'`, a brand-emphasis extension outside the shared vocabulary — `stat-card`, `stat-list` and `data-table-toolbar` never see it.                |
 | `empty-state` / `error-state` / `loading-state` | The shared blank, error and loading surfaces. Never hand-roll one.                                                                                                                                                                                                                                                                                                      |
 | `info-tip`                                      | One tooltip pattern: a small info trigger, or wrap an existing affordance as children.                                                                                                                                                                                                                                                                                  |
 | `data-table-toolbar`                            | Search field plus filter-chip groups for a TanStack table. Owns no state; fires callbacks.                                                                                                                                                                                                                                                                              |
@@ -1018,7 +1019,7 @@ Settled here, the same in every module, and not props:
 - **Two lines a row**, the note under the title, the pair centred on the row; a
   row with no note centres its title. The checkbox, the review chip, the date and
   every single-value cell centre too.
-- **One mark per kind.** A review chip (StatusBadge's dot and label on a tint)
+- **One mark per kind.** A review chip (StatusBadge's glyph and label)
   beside the title on line one, which wraps (to two lines at most) before the chip gives any width; a synthetic row's "Not as printed" badge leads its second line and
   opens the row in place to the lines it was made from.
 - **PocketSmith's look.** No panel around the list; a head card exactly as wide
@@ -1476,7 +1477,7 @@ unnoticed through a full app migration (#3).
 
 Second, what the variable layer does not cover: the `text-display` / `text-body` /
 `text-stat` / `tracking-eyebrow` scale keys, the `.ds-edge` card treatment, the
-`.ds-dialog-section` divider rule, the `.ds-chip` / `.ds-dot` / `.ds-ink` status
+`.ds-dialog-section` divider rule, the `.ds-chip` / `.ds-status-icon` / `.ds-ink` status
 classes, the `--ds-control-*` geometry the density option turns (below), and the
 two things that make this package's overlays animate at all — a
 `@custom-variant` per `data-state` value (bits-ui emits `data-state="open"`, so

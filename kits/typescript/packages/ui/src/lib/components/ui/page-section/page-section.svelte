@@ -15,7 +15,7 @@
 	 * kicker form: a small caps label above content is the column head of a
 	 * table or a nav group, never a heading.
 	 */
-	import type { Snippet } from 'svelte';
+	import type { Component, Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
@@ -24,6 +24,7 @@
 		level = 2,
 		description,
 		count,
+		icon: Icon,
 		actions,
 		children,
 		id,
@@ -38,6 +39,8 @@
 		description?: string;
 		/** How many things the section holds, set beside the heading. */
 		count?: number;
+		/** The section's mark, a household icon, before the heading, its tone in the accent. */
+		icon?: Component<{ class?: string }>;
 		/** Controls for the section, trailing the heading. */
 		actions?: Snippet;
 		children?: Snippet;
@@ -70,6 +73,9 @@
 						: 'text-body leading-tight tracking-tight'
 				)}
 			>
+				{#if Icon}
+					<Icon class="ds-icon-accent flex-none self-center" />
+				{/if}
 				<span class="min-w-0">{title}</span>
 				{#if count !== undefined}
 					<span

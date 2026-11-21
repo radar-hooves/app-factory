@@ -37,7 +37,7 @@
 	{/if}
 	<div class="flex min-w-0 items-center gap-2.5">
 		{#if icon}
-			<span class="text-muted-foreground grid size-6 flex-none place-items-center" data-slot="page-lead-icon">
+			<span class="ds-icon-accent text-muted-foreground grid size-6 flex-none place-items-center" data-slot="page-lead-icon">
 				{@render icon()}
 			</span>
 		{/if}

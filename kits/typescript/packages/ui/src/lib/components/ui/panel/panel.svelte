@@ -108,7 +108,10 @@
 		>
 			{#if Icon}
 				<Icon
-					class={cn('size-4', destructive ? 'text-destructive' : 'text-muted-foreground')}
+					class={cn(
+						'size-4',
+						destructive ? 'text-destructive' : 'ds-icon-accent text-muted-foreground'
+					)}
 				/>
 			{/if}
 			<div class="min-w-0">

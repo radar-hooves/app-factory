@@ -1,10 +1,10 @@
 /**
  * The `status-badge` primitive: the one state chip, styled by `.ds-chip`/
- * `.ds-dot` in `styles.css`.
+ * `.ds-status-icon` in `styles.css`.
  *
  * The claim that matters is that `status` actually maps to the matching
- * `.ds-chip-{status}`/`.ds-dot-{status}` pair, not a fixed pair every value
- * happens to render — covering the shared five-state vocabulary plus this
+ * `.ds-chip-{status}` and a glyph of its own in `.ds-ink-{status}`, not a fixed
+ * pair every value happens to render — covering the shared five-state vocabulary plus this
  * component's own `'primary'` extension (design-system#15), which the shared
  * `Status` type does not carry.
  */
@@ -20,18 +20,29 @@ function chip(): HTMLElement {
 	return el as HTMLElement;
 }
 
-function dot(): HTMLElement {
-	const el = document.querySelector('.ds-dot');
+function mark(): string {
+	const el = document.querySelector('.ds-chip .ds-status-icon');
 	expect(el).not.toBeNull();
-	return el as HTMLElement;
+	return el?.getAttribute('class') ?? '';
 }
 
-describe('StatusBadge maps status to its own chip/dot pair', () => {
-	it.each(STATES)('renders the %s chip and dot classes, and the label', (status) => {
+describe('StatusBadge maps status to its own chip and glyph', () => {
+	it.each(STATES)('renders the %s chip, its glyph in its ink, and the label', (status) => {
 		render(StatusBadgeHarness, { props: { status, label: `Status ${status}` } });
 		expect(chip().className).toContain(`ds-chip-${status}`);
-		expect(dot().className).toContain(`ds-dot-${status}`);
+		expect(mark()).toContain(`ds-ink-${status}`);
 		expect(screen.getByText(`Status ${status}`)).toBeInTheDocument();
+	});
+
+	it('draws each state in a glyph of its own, so states differ in shape as well as hue', () => {
+		const glyphs = STATES.map((status) => {
+			const { unmount } = render(StatusBadgeHarness, { props: { status, label: status } });
+			const glyph = /ds-icon-(?!tone)[\w-]+/.exec(mark())?.[0];
+			unmount();
+			return glyph;
+		});
+		expect(glyphs.every(Boolean)).toBe(true);
+		expect(new Set(glyphs).size).toBe(STATES.length);
 	});
 });
 
@@ -46,12 +57,12 @@ describe("StatusBadge's primary extension", () => {
 describe('StatusBadge pulse', () => {
 	it('carries no pulse class by default', () => {
 		render(StatusBadgeHarness, { props: { status: 'info', label: 'Idle' } });
-		expect(dot().className).not.toContain('ds-dot-pulse');
+		expect(mark()).not.toContain('ds-dot-pulse');
 	});
 
 	it('adds the pulse class when a state is still moving', () => {
 		render(StatusBadgeHarness, { props: { status: 'info', label: 'Syncing', pulse: true } });
-		expect(dot().className).toContain('ds-dot-pulse');
+		expect(mark()).toContain('ds-dot-pulse');
 	});
 });
 

@@ -1846,6 +1846,7 @@
 
 			<PageSection
 				title="Recent claims"
+				icon={Receipt}
 				count={12}
 				description="Claims lodged in the last 30 days, newest first. A claim leaves this list once it has been paid."
 			>

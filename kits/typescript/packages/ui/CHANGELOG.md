@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.14] - 2026-11-21
+
+Need: a page built from the kit's defaults is not flat and text-based. The operator on eight's /rounds redraw: "very flat and text based … it could use more of the colour palette and more icons to help with the visual acuity and flair" (22:20 21/11/2026). Every state was the same grey-worded dot, a section heading took no icon, and an icon passed to a section or a figure was grey. Consumer: master-project's orchestrator (master-project-bb); every stamped app takes it by version bump.
+
+### Added
+
+- **`StatusIcon`** (`@poodle64/ui/status`): a state's own glyph in its status ink (success a check, warning a triangle, error a cross, info an `i`, neutral a minus, `primary` a circle), so states differ in shape as well as hue. `.ds-status-icon` sizes it at 1.125em; `.ds-ink-primary` joins the status inks.
+- **`PageSection` takes `icon`**, a household icon drawn before the heading.
+- **`.ds-icon-accent`**: an icon's tone layer in the app's accent, the rail's treatment.
+
+### Changed
+
+- **Status is a glyph and a word.** `StatusBadge`, `StatCard`'s `status` and `StatList`'s item `status` draw the state's `StatusIcon` in place of the dot; `pulse` breathes the glyph. `.ds-dot` stays for `Scorecard`'s row.
+- **An icon in the content wears the accent.** `PageSection`'s, `Panel`'s, `StatCard`'s and `PageLead`'s icons take `.ds-icon-accent`; `PageHeader`'s was already accent.
+
+### Consumer must change
+
+- Nothing to take the glyphs. An app that selected `.ds-dot-<status>` inside a chip, card or list (a test, a style) selects `[data-status="<status>"]` or `.ds-status-icon`.
+
 ## [2026.11.13] - 2026-11-21
 
 Need: every household app reads to the operator as AI-generated ("our icons are shit", 21/11/2026), because the kit wore shadcn's stock look, the one the AI app builders generate (radar-hooves/app-factory#171). Consumer: eight, relayed by master-project's orchestrator; every stamped app takes it by version bump.

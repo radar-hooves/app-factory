@@ -2,7 +2,7 @@
 // §"Behaviour vs Appearance"). Anything with state or a callback is DRIVEN and its
 // outcome read from a non-visual probe; the purely declarative components are
 // asserted on the branch logic they actually own (a status maps to a chip class,
-// a muted stat suppresses its dot), not on the fact that they rendered.
+// a muted stat suppresses its mark), not on the fact that they rendered.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import ChromeHarness from './composed-chrome.svelte';
@@ -108,7 +108,7 @@ describe('DetailPanel', () => {
 		const panel = screen.getByText('record-99').closest('section');
 		expect(panel).not.toBeNull();
 		expect(panel?.querySelector('.ds-chip')).toBeNull();
-		expect(panel?.querySelector('.ds-dot-error')).toBeNull();
+		expect(panel?.querySelector('[data-status]')).toBeNull();
 	});
 });
 
@@ -211,14 +211,15 @@ describe('InfoTip', () => {
 });
 
 describe('StatusBadge / StatCard / StatList', () => {
-	it('maps a status onto the shared chip and dot vocabulary', () => {
+	it('maps a status onto the shared chip and glyph vocabulary', () => {
 		render(ChromeHarness);
 		const badge = screen.getByText('Healthy').closest('.ds-chip');
 		expect(badge?.className).toContain('ds-chip-success');
-		expect(badge?.querySelector('.ds-dot-success')).not.toBeNull();
+		const mark = badge?.querySelector('[data-status="success"]');
+		expect(mark?.getAttribute('class')).toContain('ds-ink-success');
 	});
 
-	it('animates the dot only when the state is still moving', () => {
+	it('animates the mark only when the state is still moving', () => {
 		render(ChromeHarness);
 		const settled = screen.getByText('Healthy').closest('.ds-chip');
 		const moving = screen.getByText('Syncing').closest('.ds-chip');
@@ -227,7 +228,7 @@ describe('StatusBadge / StatCard / StatList', () => {
 		expect(moving?.querySelector('.ds-dot-pulse')).not.toBeNull();
 		// Motion refines the colour; it never replaces it, so a reader who cannot
 		// perceive the animation still gets the state (WCAG 1.4.1).
-		expect(moving?.querySelector('.ds-dot-info')).not.toBeNull();
+		expect(moving?.querySelector('[data-status="info"]')).not.toBeNull();
 	});
 
 	it('takes a class for placement without losing its own chip identity', () => {
@@ -243,11 +244,11 @@ describe('StatusBadge / StatCard / StatList', () => {
 		render(ChromeHarness);
 		const figure = screen.getByText('-1,204.55');
 
-		// The number is the loss; the dot is the health of the feed reporting it.
+		// The number is the loss; the mark is the health of the feed reporting it.
 		expect(figure).toHaveClass('ds-ink-error');
 		const card = figure.closest('[data-slot="stat-card"]');
-		expect(card?.querySelector('.ds-dot-success')).not.toBeNull();
-		expect(card?.querySelector('.ds-dot-error')).toBeNull();
+		expect(card?.querySelector('[data-status="success"]')).not.toBeNull();
+		expect(card?.querySelector('[data-status="error"]')).toBeNull();
 	});
 
 	it('leaves an untoned figure in the default foreground', () => {
@@ -259,22 +260,22 @@ describe('StatusBadge / StatCard / StatList', () => {
 		expect(figure.getAttribute('data-tone')).toBeNull();
 	});
 
-	it('shows a StatCard dot for its status and renders unit and sub', () => {
+	it('shows a StatCard mark for its status and renders unit and sub', () => {
 		render(ChromeHarness);
 		const card = screen.getByText('Sessions').closest('div')?.parentElement;
-		expect(card?.querySelector('.ds-dot-info')).not.toBeNull();
+		expect(card?.querySelector('[data-status="info"]')).not.toBeNull();
 		expect(screen.getByText('live')).toBeInTheDocument();
 		expect(screen.getByText('last hour')).toBeInTheDocument();
 	});
 
-	it('suppresses the dot on a muted stat but keeps one on a live stat', () => {
+	it('suppresses the mark on a muted stat but keeps one on a live stat', () => {
 		render(ChromeHarness);
 		const warm = screen.getByText('Warm').closest('div');
 		const cold = screen.getByText('Cold').closest('div');
 
-		expect(warm?.querySelector('.ds-dot-success')).not.toBeNull();
-		// Cold is a healthy zero: status is set, muted wins, so no dot is drawn.
-		expect(cold?.querySelector('.ds-dot-error')).toBeNull();
+		expect(warm?.querySelector('[data-status="success"]')).not.toBeNull();
+		// Cold is a healthy zero: status is set, muted wins, so no mark is drawn.
+		expect(cold?.querySelector('[data-status="error"]')).toBeNull();
 	});
 });
 

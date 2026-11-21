@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
 import PageSection from '#lib/components/ui/page-section/page-section.svelte';
+import Tray from '#lib/icons/tray.svelte';
 import Harness from './page-section.svelte';
 
 describe('PageSection', () => {
@@ -45,6 +46,20 @@ describe('PageSection', () => {
 		const heading = screen.getByRole('heading', { level: 2 });
 		expect(within(heading).getByText('Recent')).toBeInTheDocument();
 		expect(within(heading).getByText('7')).toBeInTheDocument();
+	});
+
+	it("draws its icon inside the heading, before the title, its tone in the app's accent", () => {
+		render(Harness, { props: { icon: Tray } });
+		const heading = screen.getByRole('heading', { level: 2 });
+		const mark = heading.querySelector('svg');
+		expect(mark?.getAttribute('class')).toContain('ds-icon-accent');
+		expect(mark?.nextElementSibling).toHaveTextContent('Recent');
+		expect(heading).toHaveAccessibleName('Recent');
+	});
+
+	it('draws no icon unless given one', () => {
+		render(Harness);
+		expect(screen.getByRole('heading', { level: 2 }).querySelector('svg')).toBeNull();
 	});
 
 	it('renders the description, the actions and the body', () => {

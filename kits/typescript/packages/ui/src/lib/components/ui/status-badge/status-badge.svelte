@@ -1,10 +1,11 @@
 <script lang="ts">
+	import StatusIcon from '../status/status-icon.svelte';
 	import type { Status } from '../status/index.js';
 	import { cn } from '#lib/utils.js';
 
-	// The one state chip: a coloured dot plus a label on a tinted pill. Styling
-	// comes from .ds-chip / .ds-dot in @poodle64/ui/styles.css, so the whole app's
-	// status vocabulary changes in one place.
+	// The one state chip: the state's glyph in its colour, and a label. Styling
+	// comes from .ds-chip / .ds-status-icon in @poodle64/ui/styles.css, so the whole
+	// app's status vocabulary changes in one place.
 	let {
 		status,
 		label,
@@ -14,14 +15,14 @@
 		/**
 		 * The shared five-state Status vocabulary, plus `'primary'` — a
 		 * StatusBadge-only extension for brand-emphasis chips (not a health
-		 * state), backed by `.ds-chip-primary`/`.ds-dot-primary`. The shared
+		 * state), backed by `.ds-chip-primary`/`.ds-ink-primary`. The shared
 		 * `Status` type itself stays closed at five states; StatCard, StatList
 		 * and DataTableToolbar never see `'primary'`.
 		 */
 		status: Status | 'primary';
 		label: string;
 		/**
-		 * Animate the dot, for a state that is still moving.
+		 * Animate the mark, for a state that is still moving.
 		 *
 		 * The vocabulary is five settled states, and an app kept a local badge
 		 * purely because none of them says "in progress": a sync that is running
@@ -31,7 +32,7 @@
 		 * adding a sixth state to a vocabulary that is deliberately closed.
 		 *
 		 * Motion is honoured only where it is welcome: under
-		 * `prefers-reduced-motion: reduce` the dot goes still (`.ds-dot-pulse` in
+		 * `prefers-reduced-motion: reduce` the mark goes still (`.ds-dot-pulse` in
 		 * styles.css). It is therefore never the only carrier of meaning — the
 		 * label still says what is happening (WCAG 1.4.1).
 		 */
@@ -48,6 +49,6 @@
 </script>
 
 <span class={cn('ds-chip', `ds-chip-${status}`, className)}>
-	<span class={cn('ds-dot', `ds-dot-${status}`, pulse && 'ds-dot-pulse')}></span>
+	<StatusIcon {status} {pulse} />
 	{label}
 </span>

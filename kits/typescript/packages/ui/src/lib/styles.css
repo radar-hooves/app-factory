@@ -495,6 +495,16 @@
 	}
 
 	/**
+	 * An icon in the content, a section's or a figure's mark, takes the rail's
+	 * treatment: the outline in its own ink, the tone layer in the app's accent, so
+	 * the palette lands where the eye does.
+	 */
+	.ds-icon-accent {
+		--ds-icon-tone: var(--primary);
+		--ds-icon-tone-opacity: 0.45;
+	}
+
+	/**
 	 * How the display face is set. An app says it once in its palette
 	 * (`--ds-font-display-transform: uppercase; --ds-font-display-tracking:
 	 * 0.04em`) and every place the factory sets --ds-font-display follows: this
@@ -551,6 +561,17 @@
 		line-height: 1.25rem;
 		font-weight: 500;
 		white-space: nowrap;
+	}
+
+	/**
+	 * A state's glyph (StatusIcon): its own shape and its status ink, the tone
+	 * layer a quarter of that ink, a little larger than the text beside it.
+	 */
+	.ds-status-icon {
+		width: 1.125em;
+		height: 1.125em;
+		flex: none;
+		--ds-icon-tone-opacity: 0.25;
 	}
 
 	.ds-dot {
@@ -623,6 +644,9 @@
 	}
 	.ds-ink-neutral {
 		color: var(--muted-foreground);
+	}
+	.ds-ink-primary {
+		color: var(--ds-color-primary-ink, var(--ds-color-primary));
 	}
 
 	/**

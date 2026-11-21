@@ -1,4 +1,5 @@
 <script lang="ts">
+	import StatusIcon from '../status/status-icon.svelte';
 	import type { Status } from '../status/index.js';
 	import type { Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
@@ -22,7 +23,7 @@
 		value: string | number;
 		unit?: string;
 		sub?: string;
-		/** Lights the dot beside the LABEL: the state of the thing being measured. */
+		/** Marks the LABEL with the state's glyph: the state of the thing being measured. */
 		status?: Status;
 		/**
 		 * Colours the FIGURE itself: the sign of the number, not the health of its
@@ -52,13 +53,13 @@
 >
 	<div class="flex items-center gap-2">
 		{#if Icon}
-			<Icon class="text-muted-foreground size-4" />
+			<Icon class="ds-icon-accent text-muted-foreground size-4" />
 		{/if}
 		<span class="ds-label">
 			{label}
 		</span>
 		{#if status}
-			<span class="ds-dot ds-dot-{status} ml-auto"></span>
+			<StatusIcon {status} class="ml-auto" />
 		{/if}
 	</div>
 	<div class="flex items-baseline gap-1.5">
