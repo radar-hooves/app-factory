@@ -6,10 +6,10 @@
 //   --list                                print the routes that would be gated and stop
 // A shared file (src/lib, a +layout, app.css) reaches routes no diff can name, so
 // with only those changed the run stops and asks for the routes by name.
-// A judged pass writes RECORD, keyed to the drawn tree; commit it with the change,
-// since the change pipeline refuses a redrawn src/ without it (check-layout-gate.mjs).
+// A judged run writes each route's verdict into RECORD, against the drawn tree it judged;
+// commit it with the change, since the change pipeline reads it (check-layout-gate.mjs).
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -88,19 +88,33 @@ export function treeKey(files) {
 }
 
 function writeRecord(tree) {
+	if (!existsSync(REPORT)) return;
 	const report = JSON.parse(readFileSync(REPORT, 'utf8'));
-	if (!report.judging) return;
-	const record = {
-		tree,
-		judged: new Date().toISOString(),
-		model: report.model,
-		viewports: report.viewports,
-		routes: Object.fromEntries(
-			report.routes.map((r) => [r.path, r.samples.map((s) => `${s.verdict} ${s.call}`.trim())])
-		)
-	};
+	if (!report.judging || !report.done) return;
+	const unanswered = report.routes.filter((r) => r.samples.some((s) => s.verdict === 'error'));
+	if (unanswered.length) {
+		console.error(
+			`layout-gate: ${report.model} did not answer every sample for ${unanswered.map((r) => r.path).join(', ')}, so nothing is recorded; run it again.`
+		);
+		return;
+	}
+	const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
+	const judged = new Date().toISOString();
+	for (const r of report.routes) {
+		record.routes[r.path] = {
+			tree,
+			judged,
+			verdict: r.verdict === 'pass' ? 'ship' : 'fix',
+			...(r.failures.length
+				? { failures: r.failures }
+				: { samples: r.samples.map((s) => `${s.verdict} ${s.call}`.trim()) })
+		};
+	}
+	record.routes = Object.fromEntries(
+		Object.entries(record.routes).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+	);
 	writeFileSync(RECORD, `${JSON.stringify(record, null, '\t')}\n`);
-	console.log(`layout-gate: judged; commit ${RECORD} with the change.`);
+	console.log(`layout-gate: recorded; commit ${RECORD} with the change.`);
 }
 
 function changedFiles() {
@@ -149,11 +163,12 @@ function main(argv) {
 	if (all) delete env.LAYOUT_GATE_ROUTES;
 	else env.LAYOUT_GATE_ROUTES = routes.join(',');
 	const tree = treeKey(drawnFiles());
+	rmSync(REPORT, { force: true });
 	const r = spawnSync('playwright', ['test', '--config', 'playwright.layout.config.ts'], {
 		stdio: 'inherit',
 		env
 	});
-	if (r.status === 0) writeRecord(tree);
+	writeRecord(tree);
 	return r.status ?? 1;
 }
 

@@ -23,8 +23,9 @@ rc=0
 scripts=("${@:2}")
 [ "${#scripts[@]}" -gt 0 ] || scripts=(check test)
 for s in "${scripts[@]}"; do (cd "$dir" && pnpm run --if-present "$s") || rc=1; done
-# A factory app's frontend refuses a redrawn src/ that carries no passing layout-gate
-# judgement of its tree, measured from the plan's CHANGE_BASE. Only an app on a factory
-# release that stamps the check has one, so an app takes it with its update, never at once.
+# A factory app's frontend refuses a redrawn src/ that its layout-gate record does not
+# judge as it lands, measured from the plan's CHANGE_BASE (the check's header has the rule).
+# Only an app on a factory release that stamps the check has one, so an app takes it with
+# its update, never at once.
 [ ! -f "$dir/scripts/check-layout-gate.mjs" ] || (cd "$dir" && node scripts/check-layout-gate.mjs) || rc=1
 exit "$rc"

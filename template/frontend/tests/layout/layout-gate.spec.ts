@@ -5,8 +5,8 @@
  * pictures for craft: three samples, the majority verdict. A route that does not
  * ship, or breaks a measured rule, fails the run. `pnpm layout-gate`
  * (scripts/layout-gate.mjs) names the routes a change touches, `--all` is the
- * whole sweep, and a pass writes the record the change pipeline asks for.
- * Writes nothing to the app.
+ * whole sweep, and a finished judged run records each route's verdict for the
+ * change pipeline. Writes nothing to the app.
  *
  * Environment:
  * - LAYOUT_GATE_BASE_URL   (config) gate a server already running.
@@ -489,11 +489,12 @@ test('layout gate', async ({ browser, baseURL }) => {
 	const paths = named?.length ? named : await discover(browser, baseURL, cap);
 
 	const results: RouteResult[] = [];
-	const write = () => {
+	const write = (done = false) => {
 		results.sort((a, b) => a.path.localeCompare(b.path));
 		const md = report(results, judging);
 		const json = {
 			judging,
+			done,
 			model: MODEL,
 			viewports: VIEWPORTS.map((vp) => `${vp.width}x${vp.height}`),
 			routes: results
@@ -507,7 +508,7 @@ test('layout gate', async ({ browser, baseURL }) => {
 		write();
 	}
 	if (judging) await judge(results, write);
-	const md = write();
+	const md = write(true);
 	console.log(`${md.trim().split('\n').pop()}\nreport: ${join(process.cwd(), OUT, 'report.md')}`);
 
 	const broken = results.filter((r) => r.verdict === 'broken').map((r) => r.path);
