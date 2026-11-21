@@ -519,6 +519,12 @@ factory_fonts:
   help: >-
     Which of the factory's self-hosted faces this app loads. Palette-class, like app.css: an app that brings its own face for a role (its own @font-face behind --ds-font-display, say) drops that one, and neither its package nor its import ships. Leave all three for an app that uses the factory's faces.
 
+layout_gate_viewports:
+  type: str
+  when: "{{ skeleton == 'web' and not headless }}"
+  help: >-
+    The screens the app's owner reads it on, as CSS px `WIDTHxHEIGHT` pairs, comma-separated, widest first (e.g. `1920x1080,1440x900,390x844`). The layout gate (frontend/tests/layout/) renders every page it judges at these widths, and the vision judge is told the first is the owner's main screen. No factory default, for the same reason as private_index_name: a fleet supplies it from its own declaration.
+
 density:
   type: str
   default: comfortable

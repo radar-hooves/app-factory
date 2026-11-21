@@ -21,6 +21,8 @@ src/lib/elements/placed.d.ts
 .arbitrary-values-baseline.json
 .design-craft-baseline.json
 .ui-drift-baseline.json
+# The layout gate writes its judgement record with its own layout, the same way.
+.layout-gate-record.json
 
 # ============================================================================
 # App-owned

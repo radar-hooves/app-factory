@@ -42,6 +42,7 @@ What reaches both renders is copier's own settings file. A fleet declares its va
 defaults:
   private_index_name: <name>
   private_index_url: https://<index>/+simple/
+  layout_gate_viewports: <width>x<height>,<width>x<height>
 ```
 
 A recorded answer still wins, so an app answering differently keeps its own. The update then records the value, and the next one needs nothing.

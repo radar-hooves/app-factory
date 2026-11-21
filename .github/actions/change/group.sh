@@ -13,8 +13,9 @@ CHANGE_FLAKE_ROOTS=$(mktemp -d) GRADLE_PASSED=$(mktemp)
 export CHANGE_FLAKE_ROOTS GRADLE_PASSED
 trap 'rm -rf "$CHANGE_FLAKE_ROOTS" "$GRADLE_PASSED"' EXIT
 declare -A done_rc=()
+# `-` for no base: read's tab IFS folds an empty field into its neighbour.
 rows=$(jq -r '.[] | [.name, (.path | if . == "" then "." end), .toolchain, .test, .deploy, .deploy_now,
-  .workers, (.waits | join(" "))] | @tsv' <<<"$MEMBERS")
+  .workers, (.base // "-"), (.waits | join(" "))] | @tsv' <<<"$MEMBERS")
 gnames=() gpaths=()
 while IFS=$'\t' read -r name path toolchain test _; do
   [ "$toolchain" = gradle ] && [ "$test" = true ] || continue
@@ -31,11 +32,12 @@ for ((i = 0; i < ${#gnames[@]}; i += 6)); do
   done
   echo "::endgroup::"
 done
-while IFS=$'\t' read -r name path toolchain test deploy now workers waits; do
+while IFS=$'\t' read -r name path toolchain test deploy now workers base waits; do
   echo "::group::$name"
   rc=0
+  [ "$base" != - ] || base=
   if [ -n "${done_rc[$name]:-}" ]; then rc=${done_rc[$name]}
-  else [ "$test" != true ] || CHANGE_WORKERS=$workers "$here/$toolchain.sh" "$path" || rc=1
+  else [ "$test" != true ] || CHANGE_BASE=$base CHANGE_WORKERS=$workers "$here/$toolchain.sh" "$path" || rc=1
   fi
   if [ "$rc" = 0 ] && [ "$ship" = true ] && [ "$now" = true ] && [[ $deploy =~ ^(wheel|mcp)$ ]]; then
     # Per member, as the single leg's steps are: 26 minutes to wait, 20 to deploy.

@@ -49,6 +49,7 @@ on:
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
+      - 'tests/layout-gate/**'
       - 'tests/layout-ownership/**'
       - 'tests/listener/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
@@ -72,6 +73,7 @@ on:
       - 'tests/desktop/**'
       - 'tests/migrations/**'
       - 'tests/arbitrary-values/**'
+      - 'tests/layout-gate/**'
       - 'tests/layout-ownership/**'
       - 'tests/listener/**'
       - 'kits/typescript/packages/design-tokens/bin/**'
@@ -176,8 +178,8 @@ jobs:
       - name: Arbitrary-values ratchet — the wrapper against the real bin
         run: node --test tests/arbitrary-values/ratchet.test.mjs
 
-      - name: Layout gate — which routes a change names
-        run: node --test tests/layout-gate/routes.test.mjs
+      - name: Layout gate — which routes a change names, and what its record refuses
+        run: node --test tests/layout-gate/routes.test.mjs tests/layout-gate/record.test.mjs
 
       - name: Layout ownership gate — what it refuses
         run: node --test tests/layout-ownership/ownership.test.mjs
@@ -219,6 +221,7 @@ jobs:
             --data portcullis_url=http://127.0.0.1:1 \
             --data private_index_name=godswood --data private_index_url=http://172.21.0.2:3141/poodle64/prod/+simple/ \
             --data registry_host=registry.invalid --data registry_credential_file=/dev/null \
+            --data layout_gate_viewports=1920x1080,390x844 \
             . "$SCRATCH"
         # private_index_url is the one household devpi every real app resolves
         # from, by the LAN address the root pyproject.toml gives, read
@@ -336,6 +339,7 @@ jobs:
               --data portcullis_url=http://127.0.0.1:1 \
               --data private_index_name=godswood --data private_index_url=http://172.21.0.2:3141/poodle64/prod/+simple/ \
               --data registry_host=registry.invalid --data registry_credential_file=/dev/null \
+              --data layout_gate_viewports=1920x1080,390x844 \
               "$@" . "$dest"
           }
           lean='omitted_slices=[agent, alerts, feedback, files]'

@@ -20,6 +20,7 @@ ANSWERS = {
     "private_index_url": "http://127.0.0.1:1/+simple/",
     "registry_host": "registry.invalid",
     "registry_credential_file": "/dev/null",
+    "layout_gate_viewports": "1920x1080,390x844",
 }
 
 

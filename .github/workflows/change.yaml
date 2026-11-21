@@ -115,6 +115,7 @@ jobs:
       UV_FROZEN: '1'
       CHANGED_MEMBERS: ${{ needs.plan.outputs.changed }}
       CHANGE_WORKERS: ${{ matrix.member.workers }}
+      CHANGE_BASE: ${{ matrix.member.base }}
       DEPLOY: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) }}
     steps: &member-steps
       # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.

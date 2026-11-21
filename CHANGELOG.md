@@ -8,14 +8,28 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 Need: the public repo reads as a professional one. Consumer: master-project's orchestrator, via the Bragi go-public lane.
 
+Need: every front-end change in a factory app is judged as a rendered picture, at the owner's own widths, by another lab's model, before it deploys, and no lane can skip it ("I'm so sick and tired of my front ends looking like a script kiddie put it together", the operator, 21/11/2026). The layout gate existed but nothing made anyone run it, it rendered at 1673 and 390, its rubric was structural only, and its judge never answered (google/pro 403; openai/sol refuses a system message). Consumer: master-project's orchestrator (lane foreman/wt-7a8f2ec8) on eight's /rounds incident; every stamped app.
+
 ### Added
 
 - **`LICENSE` (MIT, poodle64)** at the root, so GitHub detects it; every kit manifest that declares a licence already says MIT. The copier templates' own licence handling is unchanged.
+- **`layout_gate_viewports` copier question**, with no factory default: `WIDTHxHEIGHT` pairs, widest first. A fleet supplies it from its own declaration, as with `private_index_name`.
+
+### Changed
+
+- **The layout gate is the picture judge.** It renders at the new `layout_gate_viewports` answer, and openai/sol judges each route three times on the household's craft prompt (legibility, hierarchy, typography, alignment, edges, width, AI tells, craft), all of it as the user's message. A major comes from a closed list, and a route ships on a majority of the three. A route that a measured rule already broke is not sent to the judge. On a `reading` page the judge is told that a prose column held at its measure is the design, not a width fault. The google/pro primary and its fallback are gone.
+- **A judged pass writes `frontend/.layout-gate-record.json`**: the key of the drawn tree (`src/` less tests and type declarations), with the routes judged and each sample's verdict and call id. A dry run (`LAYOUT_GATE_JUDGE=off`) or a failure writes none.
+- **The change pipeline refuses a redrawn `src/` without a matching record.** The pnpm leg runs the stamped `scripts/check-layout-gate.mjs`, measured from the plan's base, which the member and group legs now pass as `CHANGE_BASE`. It refuses when the drawn tree changed and the record is missing, judged another tree, or leaves out a route whose page changed. A change that draws nothing is never asked, and an app has the check only once it updates to this release. The pipeline is called at `main`, so `CHANGE_BASE` reaches every repo when this lands. No repo acts on it until its app carries the check.
 
 ### Fixed
 
 - **The desktop skeleton's actionlint config lists the `atlas` label** its `release.yaml` matrix uses, so actionlint no longer fails a stamped desktop app.
 - Links to `radar-hooves/bragi#243` read `radar-hooves/bragi-archive#243`, the old repo's new name.
+
+### Consumer must change
+
+- A stamped app's update needs `layout_gate_viewports` answered: master's household values carry it, and `/master:converge-fleet` fills it.
+- From then on, a change that touches the app's drawn `src/` lands with its record: run `pnpm layout-gate <routes>` against the running app with `LITELLM_URL` and the app's own broker-vended gateway key (`portcullis exec --identity <app>-dev --vend LITELLM_VIRTUAL_KEY=litellm-<app> -- pnpm layout-gate …`), then commit `frontend/.layout-gate-record.json` with the change. An update that brings factory changes to `src/` is such a change.
 
 ## [2026.11.65] - 2026-11-21
 

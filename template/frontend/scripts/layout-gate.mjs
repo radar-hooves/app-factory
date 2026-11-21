@@ -6,9 +6,20 @@
 //   --list                                print the routes that would be gated and stop
 // A shared file (src/lib, a +layout, app.css) reaches routes no diff can name, so
 // with only those changed the run stops and asks for the routes by name.
+// A judged pass writes RECORD, keyed to the drawn tree; commit it with the change,
+// since the change pipeline refuses a redrawn src/ without it (check-layout-gate.mjs).
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PAGE = /^src\/routes\/(.*?)\+page\.(?:svelte|ts|js)$/;
+export const RECORD = '.layout-gate-record.json';
+const REPORT = 'test-results/layout-gate/report.json';
+
+/** A file that draws the picture: src/ less its tests and type declarations. */
+export const drawn = (file) =>
+	file.startsWith('src/') && !/\.(?:test|spec)\.[jt]s$|\.d\.ts$|^src\/test\//.test(file);
 
 /** Route paths named by changed files, plus the changed files that name none. */
 export function routesFromChanges(files) {
@@ -16,7 +27,7 @@ export function routesFromChanges(files) {
 	const shared = [];
 	const unresolved = [];
 	for (const file of files) {
-		if (!file.startsWith('src/') || /\.(?:test|spec)\.[jt]s$/.test(file)) continue;
+		if (!drawn(file)) continue;
 		const m = PAGE.exec(file);
 		if (!m) {
 			shared.push(file);
@@ -34,6 +45,62 @@ export function routesFromChanges(files) {
 function git(...args) {
 	const r = spawnSync('git', args, { encoding: 'utf8' });
 	return r.status === 0 ? r.stdout.split('\n').filter(Boolean) : null;
+}
+
+function gitz(...args) {
+	const r = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 1 << 28 });
+	if (r.status !== 0) throw new Error(`git ${args[0]}: ${r.stderr.trim()}`);
+	return r.stdout.split('\0').filter(Boolean);
+}
+
+/** path → blob id of every drawn file: in the working tree, or at commit `ref`. */
+export function drawnFiles(ref) {
+	const out = new Map();
+	if (ref) {
+		for (const entry of gitz('ls-tree', '-r', '-z', ref, '--', 'src')) {
+			const [meta, path] = entry.split('\t');
+			const [, type, blob] = meta.split(' ');
+			if (type === 'blob' && drawn(path)) out.set(path, blob);
+		}
+		return out;
+	}
+	const paths = [
+		...new Set(gitz('ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'src'))
+	].filter((p) => drawn(p) && existsSync(p));
+	// Absolute: git reads --stdin-paths from the top of the work tree, not from here.
+	const r = spawnSync('git', ['hash-object', '--stdin-paths'], {
+		input: paths.map((p) => resolve(p)).join('\n'),
+		encoding: 'utf8',
+		maxBuffer: 1 << 28
+	});
+	if (r.status !== 0) throw new Error(`git hash-object: ${r.stderr.trim()}`);
+	const blobs = r.stdout.split('\n');
+	paths.forEach((p, i) => out.set(p, blobs[i]));
+	return out;
+}
+
+/** One key for a drawn tree, whichever way it was read. */
+export function treeKey(files) {
+	const lines = [...files]
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([path, blob]) => `${blob} ${path}\n`);
+	return createHash('sha256').update(lines.join('')).digest('hex');
+}
+
+function writeRecord(tree) {
+	const report = JSON.parse(readFileSync(REPORT, 'utf8'));
+	if (!report.judging) return;
+	const record = {
+		tree,
+		judged: new Date().toISOString(),
+		model: report.model,
+		viewports: report.viewports,
+		routes: Object.fromEntries(
+			report.routes.map((r) => [r.path, r.samples.map((s) => `${s.verdict} ${s.call}`.trim())])
+		)
+	};
+	writeFileSync(RECORD, `${JSON.stringify(record, null, '\t')}\n`);
+	console.log(`layout-gate: judged; commit ${RECORD} with the change.`);
 }
 
 function changedFiles() {
@@ -81,10 +148,12 @@ function main(argv) {
 	const env = { ...process.env };
 	if (all) delete env.LAYOUT_GATE_ROUTES;
 	else env.LAYOUT_GATE_ROUTES = routes.join(',');
+	const tree = treeKey(drawnFiles());
 	const r = spawnSync('playwright', ['test', '--config', 'playwright.layout.config.ts'], {
 		stdio: 'inherit',
 		env
 	});
+	if (r.status === 0) writeRecord(tree);
 	return r.status ?? 1;
 }
 
