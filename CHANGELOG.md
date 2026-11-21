@@ -35,7 +35,7 @@ Need: the judge flags a flat, text-only page the way his eye does. eight's /roun
 ### Consumer must change
 
 - A stamped app's update needs `layout_gate_viewports` answered: master's household values carry it, and `/master:converge-fleet` fills it.
-- The update that brings this release, and every later one that redraws `src/`, lands with its record: run `pnpm layout-gate / /settings` (the check names any factory page to add) against the running app with `LITELLM_URL` and the app's own broker-vended gateway key (`portcullis exec --identity <app>-dev --vend LITELLM_VIRTUAL_KEY=litellm-<app> -- pnpm layout-gate …`), then commit `frontend/.layout-gate-record.json` with the update. A route judged fix does not hold it; the run fails and still records.
+- The update that brings this release, and every later one that redraws `src/`, lands with its record: run `pnpm layout-gate / /settings` (the check names any factory page to add) against the running app with `LITELLM_URL` and the app's own broker-vended gateway key (`portcullis exec --identity <app>-dev --vend LITELLM_VIRTUAL_KEY=litellm-api-<app> -- pnpm layout-gate …`), then commit `frontend/.layout-gate-record.json` with the update. A route judged fix does not hold it; the run fails and still records.
 - From then on, an app's own change to its drawn `src/` lands with `pnpm layout-gate <routes>` run the same way, every route it shows on judged ship.
 
 ## [2026.11.65] - 2026-11-21
