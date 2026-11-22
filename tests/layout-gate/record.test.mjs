@@ -16,8 +16,10 @@ const SCRIPTS = path.resolve(
 const RECORD = '.layout-gate-record.json';
 let repo, fe, base;
 
+// No runner's key or store is ever the real one: a test names its own, or none.
+const NO_KEY = { LAYOUT_GATE_KEY_FILE: '/nonexistent/layout-gate', LAYOUT_GATE_STORE: '/nonexistent/store' };
 const sh = (cmd, args, env = {}) =>
-	spawnSync(cmd, args, { cwd: fe, encoding: 'utf8', env: { ...process.env, ...env } });
+	spawnSync(cmd, args, { cwd: fe, encoding: 'utf8', env: { ...process.env, ...NO_KEY, ...env } });
 const git = (...args) => {
 	const r = sh('git', args);
 	assert.equal(r.status, 0, r.stderr);
@@ -175,7 +177,7 @@ test("a CI leg's one-commit checkout fetches the base and its record", () => {
 		spawnSync(args[0], args.slice(1), {
 			cwd: path.join(clone, 'frontend'),
 			encoding: 'utf8',
-			env: { ...process.env, CHANGE_BASE: was, CI: 'true' }
+			env: { ...process.env, ...NO_KEY, CHANGE_BASE: was, CI: 'true' }
 		});
 	assert.notEqual(inClone('git', 'cat-file', '-e', `${was}^{commit}`).status, 0);
 	assert.equal(inClone('node', 'scripts/check-layout-gate.mjs').status, 0);
@@ -289,4 +291,64 @@ test('a deleted drawn file is a redraw', () => {
 	]);
 	assert.match(refusal(new Map([['src/a.ts', '1']]), was, null), /no judgement/);
 	assert.equal(refusal(new Map(was), was, null), null);
+});
+
+test('a runner with the judge key judges a factory update once, and keeps the verdicts by repo and tree', () => {
+	const dir = mkdtempSync(path.join(tmpdir(), 'layout-store-'));
+	const keyFile = path.join(dir, 'key');
+	const store = path.join(dir, 'store');
+	const calls = path.join(dir, 'calls');
+	const bin = path.join(dir, 'bin');
+	mkdirSync(bin);
+	writeFileSync(keyFile, 'k\n');
+	// `pnpm layout-gate <routes>` stood in: records each route it is asked, at ship, and notes the call.
+	writeFileSync(
+		path.join(bin, 'pnpm'),
+		`#!/bin/sh\necho "$LITELLM_URL $*" >> ${calls}\nshift\nnode --input-type=module -e "
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { RECORD, drawnFiles, treeKey } from './scripts/layout-gate.mjs';
+const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
+for (const r of process.argv.slice(1)) record.routes[r] = { tree: treeKey(drawnFiles()), prompt: 'p1', verdict: 'ship', samples: [] };
+writeFileSync(RECORD, JSON.stringify(record));" "$@"\n`,
+		{ mode: 0o755 }
+	);
+	const env = {
+		CI: 'true',
+		GITHUB_REPOSITORY: 'org/app',
+		LAYOUT_GATE_KEY_FILE: keyFile,
+		LAYOUT_GATE_STORE: store,
+		PATH: `${bin}:${process.env.PATH}`
+	};
+	rmSync(path.join(fe, RECORD), { force: true });
+	git('commit', '-qam', 'drop the record', '--allow-empty');
+	const was = git('rev-parse', 'HEAD');
+	answers('v9');
+	put('src/lib/x.ts', 'export const x = 9;\n');
+	const at = { ...env, CHANGE_BASE: was };
+	let r = check(at);
+	assert.equal(r.status, 0, r.stderr);
+	assert.equal(readFileSync(calls, 'utf8').trim(), 'http://172.38.0.8:4000 layout-gate / /settings');
+	// The push after the merge: no record committed, the same tree, no second judgement.
+	rmSync(path.join(fe, RECORD), { force: true });
+	r = check(at);
+	assert.equal(r.status, 0, r.stderr);
+	assert.equal(readFileSync(calls, 'utf8').trim().split('\n').length, 1);
+	// Another tree is judged afresh; an app's own change (the _commit unmoved) is never judged here.
+	put('src/lib/x.ts', 'export const x = 10;\n');
+	rmSync(path.join(fe, RECORD), { force: true });
+	assert.equal(check(at).status, 0);
+	assert.equal(readFileSync(calls, 'utf8').trim().split('\n').length, 2);
+	answers('v1');
+	git('commit', '-qam', 'v1', '--allow-empty');
+	put('src/lib/x.ts', 'export const x = 11;\n');
+	rmSync(path.join(fe, RECORD), { force: true });
+	r = check({ ...env, CHANGE_BASE: git('rev-parse', 'HEAD') });
+	assert.equal(r.status, 1);
+	assert.equal(readFileSync(calls, 'utf8').trim().split('\n').length, 2);
+	// No key file: the check behaves as before.
+	answers('v9');
+	rmSync(path.join(fe, RECORD), { force: true });
+	r = check({ ...at, LAYOUT_GATE_KEY_FILE: path.join(dir, 'absent') });
+	assert.equal(r.status, 1);
+	rmSync(dir, { recursive: true, force: true });
 });

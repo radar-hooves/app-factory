@@ -8,11 +8,17 @@
 //     on the same prompt now judges fix. A route already at fix, never judged, or judged on
 //     another prompt (a stricter judge is not a regression the update caused) does not hold it.
 //   No base (CI with no CHANGE_BASE): the tree as it stands carries a judgement.
+// A factory update no agent committed a record for (Renovate's) is judged here, on a runner
+// that holds the judge's key (KEY_FILE; absent, nothing is judged and the rules above stand).
+// The verdicts are kept on the runner host, in STORE by repo and drawn tree, never in
+// GitHub's storage or the repo: the push after the merge reads the same judgement of the same
+// tree instead of asking again, and no job holds a credential that can push.
 // A change that redraws nothing is never asked.
 //   CHANGE_BASE  the commit the change is measured from (the pipeline's plan); by hand, the
 //                merge-base with origin/main.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import { RECORD, drawnFiles, routesFromChanges, treeKey } from './layout-gate.mjs';
 
@@ -20,10 +26,20 @@ import { RECORD, drawnFiles, routesFromChanges, treeKey } from './layout-gate.mj
 // settings page, both drawn in the shell. Six judge calls an app.
 export const SHELL_ROUTES = ['/', '/settings'];
 const ANSWERS = '../.copier-answers.yml';
+const STORE = process.env.LAYOUT_GATE_STORE ?? '/var/lib/github-runner-home/shared/layout-gate';
+const KEY_FILE = process.env.LAYOUT_GATE_KEY_FILE ?? '/etc/litellm/layout-gate';
+const GATEWAY = process.env.LAYOUT_GATE_URL ?? 'http://172.38.0.8:4000';
 
 const ask = (routes) =>
 	`run \`pnpm layout-gate ${routes.join(' ') || '<the routes that show it>'}\` and commit ${RECORD}`;
 const list = (routes) => `${routes.join(', ')} ${routes.length > 1 ? 'judge' : 'judges'}`;
+
+/** What a factory update is judged on: the shell, and every factory page it changed. */
+export function routesToJudge(now, was, update) {
+	const changed = [...now].filter(([p, blob]) => was.get(p) !== blob).map(([p]) => p);
+	const { routes } = routesFromChanges(changed);
+	return update ? [...new Set([...SHELL_ROUTES, ...routes])].sort() : routes;
+}
 
 /** Why the change at `now` (path → blob) cannot land over `was`, or null when it can.
  * `before` is the base's record; `update` says the factory's _commit moved. */
@@ -31,8 +47,7 @@ export function refusal(now, was, record, { update = false, before = null } = {}
 	const changed = [...now].filter(([p, blob]) => was.get(p) !== blob).map(([p]) => p);
 	if (!changed.length && now.size === was.size) return null;
 	const tree = treeKey(now);
-	const { routes } = routesFromChanges(changed);
-	const want = update ? [...new Set([...SHELL_ROUTES, ...routes])].sort() : routes;
+	const want = routesToJudge(now, was, update);
 	if (!record) return `src/ is redrawn and no judgement of it is committed: ${ask(want)}.`;
 	const judged = Object.entries(record.routes ?? {}).filter(([, r]) => r.tree === tree);
 	if (!judged.length)
@@ -72,13 +87,65 @@ const recordAt = (base) => {
 	return r.status === 0 ? JSON.parse(r.stdout) : null;
 };
 
-function main() {
+const keyReadable = () => {
+	try {
+		accessSync(KEY_FILE, constants.R_OK);
+		return true;
+	} catch {
+		return false;
+	}
+};
+const storeFile = (repo, tree) => join(STORE, repo, `${tree}.json`);
+
+/** The record with what this runner host judged of this tree laid beside it. */
+function withStored(record, repo, tree) {
+	if (!repo) return record;
+	let kept;
+	try {
+		kept = JSON.parse(readFileSync(storeFile(repo, tree), 'utf8'));
+	} catch {
+		return record;
+	}
+	const routes = { ...record?.routes };
+	for (const [p, r] of Object.entries(kept.routes ?? {})) if (routes[p]?.tree !== tree) routes[p] = r;
+	return { ...record, routes };
+}
+
+/** Judge `routes` on this runner with the layout gate's own key; keep the verdicts in STORE. */
+function judgeHere(routes, repo, tree) {
+	console.log(`layout gate: judging ${routes.join(', ')} on this runner.`);
+	const key = readFileSync(KEY_FILE, 'utf8').trim();
+	spawnSync('pnpm', ['layout-gate', ...routes], {
+		stdio: 'inherit',
+		env: { ...process.env, LITELLM_URL: GATEWAY, LITELLM_VIRTUAL_KEY: key }
+	});
 	const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : null;
+	const fresh = Object.entries(record?.routes ?? {}).filter(([, r]) => r.tree === tree);
+	if (fresh.length) {
+		try {
+			mkdirSync(dirname(storeFile(repo, tree)), { recursive: true });
+			writeFileSync(storeFile(repo, tree), `${JSON.stringify({ routes: Object.fromEntries(fresh) })}\n`);
+		} catch (e) {
+			console.error(`layout gate: the verdicts are not kept (${e.message}); the push will judge again.`);
+		}
+	}
+	return record;
+}
+
+function main() {
+	const repo = process.env.CI ? process.env.GITHUB_REPOSITORY : '';
+	const now = drawnFiles();
+	const tree = treeKey(now);
+	let record = withStored(
+		existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : null,
+		repo,
+		tree
+	);
 	const base =
 		process.env.CHANGE_BASE ||
 		(process.env.CI ? '' : git('merge-base', 'origin/main', 'HEAD').stdout.trim() || 'HEAD');
 	let why;
-	if (!base) why = unmeasured(drawnFiles(), record);
+	if (!base) why = unmeasured(now, record);
 	else {
 		if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
 			const f = git('fetch', '--no-tags', '--depth=1', 'origin', base);
@@ -88,11 +155,16 @@ function main() {
 			}
 		}
 		const was = factoryCommit(git('show', `${base}:${ANSWERS}`).stdout);
-		const now = existsSync(ANSWERS) ? factoryCommit(readFileSync(ANSWERS, 'utf8')) : null;
-		why = refusal(drawnFiles(), drawnFiles(base), record, {
-			update: was !== now,
-			before: recordAt(base)
-		});
+		const update =
+			was !== (existsSync(ANSWERS) ? factoryCommit(readFileSync(ANSWERS, 'utf8')) : null);
+		const was_ = drawnFiles(base);
+		const before = recordAt(base);
+		const redrawn = now.size !== was_.size || [...now].some(([p, blob]) => was_.get(p) !== blob);
+		const missing = routesToJudge(now, was_, update).filter((r) => record?.routes?.[r]?.tree !== tree);
+		if (repo && update && redrawn && missing.length && keyReadable()) {
+			record = withStored(judgeHere(missing, repo, tree), repo, tree);
+		}
+		why = refusal(now, was_, record, { update, before });
 	}
 	if (why) {
 		console.error(`layout gate: ${why}`);

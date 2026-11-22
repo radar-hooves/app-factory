@@ -6,13 +6,6 @@
   ],
   "packageRules": [
     {
-      "description": "The copier template source in .copier-answers.yml has no Renovate datasource \u2014 a bare `gh:` path resolves as git-tags and always reports 'no-result', which every stamped app then carries as a permanent repository problem on its Dependency Dashboard. The value is correct and is bumped by `copier update`, never by Renovate.",
-      "matchPackageNames": [
-        "gh:radar-hooves/app-factory"
-      ],
-      "enabled": false
-    },
-    {
       "description": "TypeScript 7 (the native compiler) is held below 7. Upstream is not ready: typescript-eslint's peer is <6.1, svelte-check's is ^5 || ^6, @sveltejs/kit 3 and @sveltejs/package 3 peer ^6, and `svelte-kit sync`, dev and build crash on 7.0.2 (sveltejs/kit#17537; svelte2tsx and svelte-check crash, sveltejs/language-tools#3063; typescript-eslint tracks it in typescript-eslint/typescript-eslint#10940). Retires when those three land TS 7 support.",
       "matchPackageNames": [
         "typescript"

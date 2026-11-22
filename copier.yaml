@@ -255,13 +255,17 @@ _tasks:
       - python3
       - -c
       - |
-        import pathlib, subprocess
+        import os, pathlib, subprocess
+        # Renovate runs this over a clone another uid owns, where git refuses ("dubious
+        # ownership") and `top` below would read empty: the task skips itself without a word.
+        n = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
+        env = {**os.environ, "GIT_CONFIG_COUNT": str(n + 1), f"GIT_CONFIG_KEY_{n}": "safe.directory", f"GIT_CONFIG_VALUE_{n}": "*"}
         # Only an app's own repo root is stamped for real. The gate's render (a bare
         # temp dir) and a scratch render inside another checkout (the self-test's)
         # are not, and must not call the gate back.
-        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, env=env).stdout.strip()
         if top and pathlib.Path(top).resolve() == pathlib.Path.cwd().resolve():
-            subprocess.run(["household-precommit-template-parity", "--generate", "."], check=True)
+            subprocess.run(["household-precommit-template-parity", "--generate", "."], check=True, env=env)
   # The factory's dependency floors reach the app's own backend/pyproject.toml and
   # frontend/package.json here, from the manifest the task above just generated (its
   # `deps` are the render's floors at the new `_commit`): a spec below its floor is
@@ -273,8 +277,12 @@ _tasks:
       - python3
       - -c
       - |
-        import json, pathlib, re, subprocess
-        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        import json, os, pathlib, re, subprocess
+        # Renovate runs this over a clone another uid owns, where git refuses ("dubious
+        # ownership") and `top` below would read empty: the task skips itself without a word.
+        n = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
+        env = {**os.environ, "GIT_CONFIG_COUNT": str(n + 1), f"GIT_CONFIG_KEY_{n}": "safe.directory", f"GIT_CONFIG_VALUE_{n}": "*"}
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, env=env).stdout.strip()
         if not top or pathlib.Path(top).resolve() != pathlib.Path.cwd().resolve():
             raise SystemExit
         want = json.loads(pathlib.Path(".template-parity.json").read_text())["deps"]
