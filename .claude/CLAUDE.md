@@ -4,7 +4,7 @@ The copier source for every household full-stack app (FastAPI, SvelteKit SPA, em
 
 ## Pitfalls (differ from the household default)
 
-- **Copier resolves the latest git tag, never `main`.** An untagged `template/` change reaches nothing and nothing errors. Releasing is a `v*` tag by whoever merges; a lane on a branch never tags (a tag on any branch publishes unmerged work).
+- **Copier resolves the latest git tag, never `main`.** An untagged `template/` change reaches nothing and nothing errors. The one publisher is `.github/workflows/release.yaml`, once a day at most, when main changed and its self-test is green; nobody tags by hand, and a lane on a branch never does (a tag on any branch publishes unmerged work).
 - **A stamped-file change owes every app a regenerated `.template-parity.json`.** An app with an old manifest measures itself against an old factory and stays green. A release that adds a start-time refusal names the new setting in its CHANGELOG notes to stamped apps.
 - **A kit release is never a package tag.** Kits (`kits/python`, `kits/rust`, npm) publish through `publish-kit-*.yaml`; only the factory's own `v*` are tags (`.claude/rules/kit-release.md`).
 - **This repo's own config is not the stamp.** The template's ignores, hooks and CI live under `template/`; the root `.gitignore`, `.pre-commit-config.yaml` and workflows are the factory's own. A gate added for apps is added to both.

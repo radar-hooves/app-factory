@@ -1,0 +1,83 @@
+name: Release
+
+# The factory's one publisher. Copier resolves the latest `v*` tag, so this workflow is the
+# only thing that makes one: at most once a day, and only when main's shipped paths moved
+# since the last tag and the factory self-test is green on main as it stands. A person or a
+# lane never tags (.claude/rules/kit-release.md); a change merged today reaches the apps in
+# tomorrow's tag.
+#
+# A tag pushed with the workflow token starts no other workflow, so the Python kit's
+# publish (on `v*`) is dispatched on the new tag explicitly. The TypeScript kits publish
+# on their own package.json pushes and need nothing here.
+
+on:
+  schedule:
+    # 16:00 UTC is 02:00 AEST, before the estate's Renovate looks (01:00 and 03:00 AEST).
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # What a stamped app or a fresh stamp receives; a change elsewhere (docs, CI) ships nothing.
+  SHIPPED: template copier.yaml variants.yaml slices.yaml skeletons kits
+  # What the self-test runs on (factory-selftest.yaml's paths).
+  TESTED: template copier.yaml variants.yaml slices.yaml tests skeletons kits pyproject.toml uv.lock .github/workflows/factory-selftest.yaml
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Tag main when it has changed and its self-test is green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          last=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if git diff --quiet "$last" "$head" -- $SHIPPED; then
+            echo "main ships nothing since $last; no tag."
+            exit 0
+          fi
+
+          # The newest finished self-test on main: it must have passed, and nothing
+          # after the commit it ran on may touch what it tests.
+          run=$(gh run list --workflow factory-selftest.yaml --branch main --status completed \
+            --limit 1 --json conclusion,headSha --jq '.[0] | "\(.conclusion) \(.headSha)"')
+          conclusion=${run% *}
+          tested=${run#* }
+          if [ "$conclusion" != success ]; then
+            echo "the newest self-test on main is '$conclusion'; no tag."
+            exit 0
+          fi
+          if ! git diff --quiet "$tested" "$head" -- $TESTED; then
+            echo "main moved past the tested commit $tested in tested paths; no tag."
+            exit 0
+          fi
+          if gh run list --workflow factory-selftest.yaml --branch main --status in_progress \
+            --limit 1 --json databaseId --jq 'length' | grep -qx 1; then
+            echo "a self-test is still running on main; no tag."
+            exit 0
+          fi
+
+          month=$(date -u +%Y.%-m)
+          n=$(git tag --list "v$month.*" | sed -E "s/^v${month//./\\.}\.([0-9]+).*/\1/" | sort -n | tail -n1)
+          tag="v$month.$(( ${n:-0} + 1 ))"
+          git config user.name "app-factory release"
+          git config user.email "noreply@github.com"
+          git tag -a "$tag" -m "Release ${tag#v}" "$head"
+          git push origin "$tag"
+          gh workflow run publish-kit-python.yaml --ref "$tag"
+          echo "tagged $tag at $head."

@@ -6,14 +6,7 @@ Read before editing anything under `template/`. Two disciplines here fail **sile
 
 `copier` resolves a template by its **latest git tag**, never the tip of `main`. A change pushed without a tag is invisible: apps keep stamping against the previous tag with no error. So a template change is not shipped until it is tagged.
 
-```bash
-git tag -a v2026.8.16 -m "Release 2026.8.16"   # CalVer, core/git-workflow.md
-git push origin main v2026.8.16
-```
-
-Tag once per logical change set, not per commit, and only once something will actually consume it — `git-workflow.md` §Release Cadence: a version is earned by reaching a consumer. The corollary is easy to miss: the fleet mostly converges by taking files directly rather than by `copier update`, so a tag is usually owed to the *next fresh stamp*, not to the apps that already have the change. When in doubt, record the work under `[Unreleased]` and let the next release spend the number.
-
-Tagging by hand is discipline, not a ratchet. If template changes ever start missing their tags, the fix is to stamp the tag in CI, not to try harder.
+`.github/workflows/release.yaml` is the one publisher: at 02:00 AEST it tags `main` (`v<year>.<month>.<n+1>`) when `template/`, `kits/`, `skeletons/` or the copier files moved since the last tag and the newest factory self-test on `main` is green and covers `main`'s tip. At most one tag a day; a person or a lane never tags. A change merged today reaches the apps in tomorrow's tag, and a red self-test holds the tag until fixed forward. Record the work under `[Unreleased]` in the same change.
 
 ## Silent failure 2: a stale parity manifest measures against an old factory
 
