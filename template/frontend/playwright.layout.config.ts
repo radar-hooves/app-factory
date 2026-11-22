@@ -17,7 +17,8 @@ export default defineConfig({
 	grep: undefined,
 	retries: 0,
 	workers: 1,
-	timeout: 60 * 60_000,
+	// The Gemini fallback judges one sample at a time, about ten minutes each.
+	timeout: 4 * 60 * 60_000,
 	reporter: [['list']],
 	use: { ...base.use, baseURL },
 	webServer: external ? undefined : base.webServer

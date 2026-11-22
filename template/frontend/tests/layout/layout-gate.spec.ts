@@ -53,6 +53,8 @@ const AGY_MODEL = 'gemini-4-carbon-high';
 const AGY_HOME = process.env.AGY_HOME ?? '/var/lib/agy/google';
 const SAMPLES = 3;
 const JUDGE_TIMEOUT_MS = 240_000;
+// Carbon reads the three pictures and thinks: one sample took 587 s (23/11/2026), so its own bound.
+const AGY_TIMEOUT_MS = 900_000;
 const JUDGE_CONCURRENCY = 3;
 
 interface Metrics {
@@ -471,7 +473,7 @@ Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(
 				{
 					cwd: resolve(OUT),
 					env: { PATH: process.env.PATH, HOME: AGY_HOME },
-					timeout: JUDGE_TIMEOUT_MS,
+					timeout: AGY_TIMEOUT_MS,
 					maxBuffer: 1 << 26
 				},
 				(error, stdout) => {
