@@ -32,6 +32,9 @@ from {{ package_name }}.db.roles import (
 )
 from {{ package_name }}.db.session import get_engine
 
+# Some tests below take no database fixture yet reach the database; this one binds the test server.
+pytestmark = pytest.mark.usefixtures("server_url")
+
 
 def _url(user: str, password: str, database: str | None = None) -> str:
     settings = get_settings().database
