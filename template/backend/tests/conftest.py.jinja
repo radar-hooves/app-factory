@@ -315,7 +315,9 @@ TEST_RUNTIME = "{{ package_name }}_test_runtime"
 
 
 def _role_password(role: str) -> str:
-    assert _TEST_SERVER is not None, "role passwords derive from the test server, bound only for a test needing a database"
+    assert _TEST_SERVER is not None, (
+        "role passwords derive from the test server, bound only for a test needing a database"
+    )
     return hashlib.sha256(f"{_TEST_SERVER['password']}:{role}".encode()).hexdigest()
 
 
@@ -576,7 +578,9 @@ def pytest_sessionstart(session) -> None:
 
 def pytest_collection_finish(session) -> None:
     """Bind the test server when a selected test needs a database; a run of none starts nothing."""
-    if not session.config.option.collectonly and any(_DATABASE_FIXTURES & set(item.fixturenames) for item in session.items):
+    if not session.config.option.collectonly and any(
+        _DATABASE_FIXTURES & set(item.fixturenames) for item in session.items
+    ):
         _bind_test_server(session)
 
 
