@@ -6,12 +6,12 @@
 //   --list                                print the routes that would be gated and stop
 // A shared file (src/lib, a +layout, app.css) reaches routes no diff can name, so
 // with only those changed the run stops and asks for the routes by name.
-// A judged run writes each route's verdict into RECORD, against the drawn tree it judged and
-// the prompt that judged it; commit it with the change, since the change pipeline reads it
+// A judged run writes each route's verdict into RECORD, against the route's key (routeKey: the
+// files it renders) and the prompt that judged it; commit it with the change, since the change pipeline reads it
 // (check-layout-gate.mjs).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PAGE = /^src\/routes\/(.*?)\+page\.(?:svelte|ts|js)$/;
@@ -63,6 +63,13 @@ export function drawnFiles(ref) {
 			const [, type, blob] = meta.split(' ');
 			if (type === 'blob' && drawn(path)) out.set(path, blob);
 		}
+		out.read = (path) => {
+			const r = spawnSync('git', ['cat-file', 'blob', out.get(path)], {
+				encoding: 'utf8',
+				maxBuffer: 1 << 28
+			});
+			return r.status === 0 ? r.stdout : '';
+		};
 		return out;
 	}
 	const paths = [
@@ -77,6 +84,7 @@ export function drawnFiles(ref) {
 	if (r.status !== 0) throw new Error(`git hash-object: ${r.stderr.trim()}`);
 	const blobs = r.stdout.split('\n');
 	paths.forEach((p, i) => out.set(p, blobs[i]));
+	out.read = (path) => readFileSync(path, 'utf8');
 	return out;
 }
 
@@ -88,7 +96,131 @@ export function treeKey(files) {
 	return createHash('sha256').update(lines.join('')).digest('hex');
 }
 
-function writeRecord(tree) {
+const SOURCE = /\.(?:svelte|[cm]?[jt]s|css)$/;
+const EXT = ['', '.ts', '.js', '.svelte', '.svelte.ts', '.svelte.js', '.css', '.json', '.mjs'];
+const SPECIFIER = [
+	/\b(?:from|import|require)\s*\(?\s*(['"])([^'"\n]+)\1/g,
+	/@(?:import|reference|plugin|config)\s+(?:url\(\s*)?(['"])([^'"\n]+)\1/g,
+	/\burl\(\s*(['"]?)([^'")\s]+)\1\s*\)/g,
+	/\bnew URL\(\s*(['"])([^'"\n]+)\1\s*,\s*import\.meta\.url/g
+];
+// An import no static read can follow: the route's closure cannot be known, so it is the whole tree.
+const OPAQUE = /\bimport\s*\(\s*[^'"\s)]|\brequire\s*\(\s*[^'"\s)]/;
+// import.meta.glob with literal patterns names the files it pulls in; any other argument is opaque.
+const GLOB = /import\.meta\.glob\s*(?:<[\s\S]*?>)?\s*\(/g;
+const GLOB_LITERAL =
+	/import\.meta\.glob\s*(?:<[\s\S]*?>)?\s*\(\s*(\[[^\]]*\]|'[^']*'|"[^"]*"|`[^`$]*`)/g;
+const globRegex = (pattern) =>
+	new RegExp(
+		`^${pattern
+			.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+			.replace(/\*\*\/?/g, '\0')
+			.replace(/\*/g, '[^/]*')
+			.replace(/\?/g, '[^/]')
+			.replace(/\0/g, '(?:.*/)?')}$`
+	);
+
+const matches = (pattern, segs) => {
+	if (!pattern.length) return !segs.length;
+	const [p, ...rest] = pattern;
+	if (p.startsWith('[...')) return true;
+	if (p.startsWith('[['))
+		return matches(rest, segs) || (segs.length > 0 && matches(rest, segs.slice(1)));
+	if (!segs.length) return false;
+	return (p.startsWith('[') || p === segs[0]) && matches(rest, segs.slice(1));
+};
+
+/** The drawn file a specifier names from `from`, null when it is a package or a file nothing draws; undefined when it cannot be followed. */
+function target(files, spec, from) {
+	const bare = spec.replace(/(?:\?|(?<=.)#).*$/, '');
+	let base;
+	if (bare.startsWith('.')) base = join(dirname(from), bare);
+	else if (bare === '$lib' || bare.startsWith('$lib/')) base = `src/lib${bare.slice(4)}`;
+	else if (bare.startsWith('#lib/')) base = `src/lib${bare.slice(4)}`;
+	else if (/^[$#]/.test(bare) && !/^\$(?:app|env|service-worker)(?:\/|$)/.test(bare))
+		return undefined;
+	else return null;
+	const stem = base.replace(/\.js$/, '');
+	for (const b of [base, stem])
+		for (const x of [...EXT, ...EXT.map((e) => `/index${e}`)]) if (files.has(b + x)) return b + x;
+	return null;
+}
+
+/**
+ * The drawn files a route renders: the closure of its page, its layouts, the app shell files
+ * and every import (a route's URL is matched to its page directories, all that match are
+ * taken; a URL that matches no page renders only the shell). Anything the read cannot follow
+ * (an unresolved alias, a computed import, a glob) is the whole drawn tree.
+ */
+export function renders(files, route) {
+	const read = files.read ?? (() => '');
+	const segs = route.split('/').filter(Boolean);
+	const pageDirs = new Set();
+	for (const p of files.keys()) {
+		const m = /^(src\/routes(?:\/.*)?)\/\+page[.@]/.exec(p);
+		if (!m) continue;
+		const own = m[1]
+			.slice('src/routes'.length)
+			.split('/')
+			.filter((s) => s && !/^\(.*\)$/.test(s));
+		if (matches(own, segs)) pageDirs.add(m[1]);
+	}
+	const seen = new Set();
+	const queue = [];
+	const add = (p) => {
+		if (!seen.has(p)) (seen.add(p), queue.push(p));
+	};
+	for (const p of files.keys()) {
+		const dir = dirname(p);
+		const name = p.slice(dir.length + 1);
+		if (/^src\/(?:app\.|hooks[.\/])/.test(p)) add(p);
+		else if (p.startsWith('src/routes/')) {
+			if (/^\+page[.@]/.test(name) && pageDirs.has(dir)) add(p);
+			else if (
+				/^\+(?:layout|error)[.@]/.test(name) &&
+				[...pageDirs].some((d) => d === dir || d.startsWith(`${dir}/`))
+			)
+				add(p);
+		}
+	}
+	while (queue.length) {
+		const from = queue.pop();
+		if (!SOURCE.test(from)) continue;
+		const text = read(from);
+		if (OPAQUE.test(text)) return new Set(files.keys());
+		const globs = [...text.matchAll(GLOB_LITERAL)];
+		if (globs.length !== [...text.matchAll(GLOB)].length) return new Set(files.keys());
+		for (const g of globs)
+			for (const [, , pattern] of g[1].matchAll(/(['"`])(.*?)\1/g)) {
+				if (pattern.startsWith('!')) continue;
+				const root = pattern.startsWith('/') ? pattern.slice(1) : pattern;
+				const at = /^[$#]lib\//.test(root)
+					? `src/lib${root.slice(4)}`
+					: root.startsWith('.')
+						? join(dirname(from), root)
+						: pattern.startsWith('/')
+							? root
+							: null;
+				if (at === null) return new Set(files.keys());
+				const re = globRegex(at);
+				for (const p of files.keys()) if (re.test(p)) add(p);
+			}
+		for (const re of SPECIFIER)
+			for (const m of text.matchAll(re)) {
+				if (re === SPECIFIER[2] && !/^(?:\.|\$lib|#lib)/.test(m[2])) continue;
+				const to = target(files, m[2], from);
+				if (to === undefined) return new Set(files.keys());
+				if (to) add(to);
+			}
+	}
+	return seen;
+}
+
+/** The key a route is judged against: its rendered files and their blobs. A change outside them leaves it, and the judgement, valid. */
+export const routeKey = (files, route) =>
+	treeKey(new Map([...renders(files, route)].map((p) => [p, files.get(p)])));
+
+function writeRecord(files) {
 	if (!existsSync(REPORT)) return;
 	const report = JSON.parse(readFileSync(REPORT, 'utf8'));
 	if (!report.judging || !report.done) return;
@@ -103,7 +235,7 @@ function writeRecord(tree) {
 	const judged = new Date().toISOString();
 	for (const r of report.routes) {
 		record.routes[r.path] = {
-			tree,
+			tree: routeKey(files, r.path),
 			judged,
 			prompt: r.prompt,
 			judge: [...new Set(r.samples.map((s) => s.judge))].join(' and ') || undefined,
@@ -165,13 +297,13 @@ function main(argv) {
 	const env = { ...process.env };
 	if (all) delete env.LAYOUT_GATE_ROUTES;
 	else env.LAYOUT_GATE_ROUTES = routes.join(',');
-	const tree = treeKey(drawnFiles());
+	const files = drawnFiles();
 	rmSync(REPORT, { force: true });
 	const r = spawnSync('playwright', ['test', '--config', 'playwright.layout.config.ts'], {
 		stdio: 'inherit',
 		env
 	});
-	writeRecord(tree);
+	writeRecord(files);
 	return r.status ?? 1;
 }
 

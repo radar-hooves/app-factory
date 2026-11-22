@@ -44,12 +44,12 @@ const judge = (verdicts, prompt = 'p1') =>
 		'--input-type=module',
 		'-e',
 		`import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-		 import { RECORD, drawnFiles, treeKey } from './scripts/layout-gate.mjs';
+		 import { RECORD, drawnFiles, routeKey } from './scripts/layout-gate.mjs';
 		 const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
-		 const tree = treeKey(drawnFiles());
+		 const files = drawnFiles();
 		 const prompt = ${JSON.stringify(prompt)};
 		 for (const [route, verdict] of Object.entries(${JSON.stringify(verdicts)}))
-		   record.routes[route] = { tree, ...(prompt ? { prompt } : {}), verdict, samples: [verdict + ' c1', verdict + ' c2', verdict + ' c3'] };
+		   record.routes[route] = { tree: routeKey(files, route), ...(prompt ? { prompt } : {}), verdict, samples: [verdict + ' c1', verdict + ' c2', verdict + ' c3'] };
 		 writeFileSync(RECORD, JSON.stringify(record));`
 	]);
 const answers = (tag) => writeFileSync(path.join(repo, '.copier-answers.yml'), `_commit: ${tag}\n`);
@@ -64,6 +64,9 @@ before(() => {
 	git('config', 'user.name', 'selftest');
 	answers('v1');
 	put('src/routes/a/+page.svelte', '<p>a</p>\n');
+	put('src/routes/b/+page.svelte', '<p>b</p>\n');
+	put('src/routes/+page.svelte', "<script>import { x } from '$lib/x';</script>\n<p>{x}</p>\n");
+	put('src/routes/(protected)/settings/+page.svelte', "<script>import { x } from '$lib/x';</script>\n<p>{x}</p>\n");
 	put('src/lib/x.ts', 'export const x = 1;\n');
 	put('src/lib/x.test.ts', 'test\n');
 	base = commit('base');
@@ -107,15 +110,70 @@ test('a record that does not judge the changed route on this tree is refused', (
 	assert.match(r.stderr, /\/a changed and/);
 });
 
-test('src/ changed after the judgement: refused', () => {
+test('a file no judged route renders, changed after the judgement: refused', () => {
 	assert.equal(judge({ '/a': 'ship' }).status, 0);
 	put('src/lib/x.ts', 'export const x = 2;\n');
 	const r = check();
 	assert.equal(r.status, 1);
-	assert.match(r.stderr, /judged another tree/);
+	assert.match(r.stderr, /src\/lib\/x\.ts changed and no judged route renders it/);
+});
+
+test("another lane's change to files a judged route does not render leaves its judgement valid", () => {
+	git('checkout', '--', 'src', RECORD);
+	git('clean', '-fdq', 'src');
+	put('src/routes/a/+page.svelte', "<script>import { y } from '#lib/y.js';</script>\n<p>{y}</p>\n");
+	put('src/lib/y.ts', 'export const y = 1;\n');
+	put('src/routes/b/+page.svelte', "<script>import z from '$lib/z.svelte';</script>\n<z />\n");
+	put('src/lib/z.svelte', '<p>z</p>\n');
+	assert.equal(judge({ '/a': 'ship', '/b': 'ship' }).status, 0);
+	// The landing merge folds in an unrelated lane's change to /b's component.
+	put('src/lib/z.svelte', '<p>z, by another lane</p>\n');
+	let r = check();
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, /\/b changed and/);
+	// /a was judged on files that did not move, so only /b is asked.
+	assert.doesNotMatch(r.stderr, /\/a/);
+	assert.equal(judge({ '/b': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	// A change a judged route renders through an import voids it.
+	put('src/lib/y.ts', 'export const y = 2;\n');
+	r = check();
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, /\/a changed and/);
+	assert.equal(judge({ '/a': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	// A computed import cannot be followed: the route is keyed on the whole tree.
+	put('src/routes/b/+page.svelte', "<script>const m = import(name);</script>\n");
+	assert.equal(judge({ '/a': 'ship', '/b': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	put('src/lib/unrelated.ts', 'export {};\n');
+	r = check();
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, /\/b changed and/);
+	assert.equal(judge({ '/b': 'ship' }).status, 0);
+	// A literal import.meta.glob names the files it pulls in; a computed one is opaque.
+	put('src/routes/a/+page.svelte', "<script>const m = import.meta.glob('$lib/mods/*.ts');</script>\n");
+	put('src/lib/mods/m.ts', 'export {};\n');
+	put('src/routes/b/+page.svelte', '<p>b</p>\n');
+	for (const f of ['src/lib/y.ts', 'src/lib/z.svelte', 'src/lib/unrelated.ts'])
+		rmSync(path.join(fe, f), { force: true });
+	assert.equal(judge({ '/a': 'ship', '/b': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	put('src/lib/mods/m.ts', 'export const m = 1;\n');
+	assert.match(check().stderr, /\/a changed and/);
+	assert.equal(judge({ '/a': 'ship' }).status, 0);
+	put('src/lib/unrelated.ts', 'export const u = 2;\n');
+	assert.match(check().stderr, /unrelated\.ts changed and no judged route renders it/);
+	put('src/routes/a/+page.svelte', '<script>const m = import.meta.glob(pattern);</script>\n');
+	assert.equal(judge({ '/a': 'ship', '/b': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	// Restore the base's shape for the tests that follow.
+	git('checkout', '--', 'src', RECORD);
+	git('clean', '-fdq', 'src');
 });
 
 test('no base in CI: refused until the tree as it stands is judged, at any verdict', () => {
+	put('src/routes/a/+page.svelte', '<p>a, nothing judged of it</p>\n');
 	const r = check({ CHANGE_BASE: '', CI: 'true' });
 	assert.equal(r.status, 1);
 	assert.match(r.stderr, /no base to measure the change from.*pnpm layout-gate \/ \/settings/);
@@ -133,7 +191,7 @@ test('a factory update lands on a fix judgement, and is refused when a ship rout
 	put('src/lib/x.ts', 'export const x = 3;\n');
 	let r = check();
 	assert.equal(r.status, 1);
-	assert.match(r.stderr, /judged another tree.*pnpm layout-gate \/ \/settings/);
+	assert.match(r.stderr, /\/, \/settings show this factory update.*pnpm layout-gate \/ \/settings/);
 	assert.equal(judge({ '/': 'fix', '/settings': 'ship' }).status, 0);
 	assert.equal(check().status, 0);
 	// A route never judged before, at fix, holds nothing either.
@@ -261,9 +319,9 @@ test('a finished judged run records every route, fix and measured faults include
 	assert.equal(routes['/b'].verdict, 'fix');
 	assert.deepEqual(routes['/b'].failures, ['390 px: page scrolls sideways (by 12 px)']);
 	assert.deepEqual(routes['/settings'], kept);
-	assert.equal(routes['/a'].tree, routes['/b'].tree);
+	assert.notEqual(routes['/a'].tree, routes['/b'].tree);
 	assert.notEqual(routes['/a'].tree, kept.tree);
-	assert.match(check().stderr, /\/a, \/b judge fix on this tree/);
+	assert.match(check().stderr, /\/a judges fix on this tree/);
 });
 
 test('a dry run, an unfinished run or an unanswered sample records nothing', () => {
@@ -306,9 +364,10 @@ test('a runner with the judge key judges a factory update once, and keeps the ve
 		path.join(bin, 'pnpm'),
 		`#!/bin/sh\necho "$LITELLM_URL $*" >> ${calls}\nshift\nnode --input-type=module -e "
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { RECORD, drawnFiles, treeKey } from './scripts/layout-gate.mjs';
+import { RECORD, drawnFiles, routeKey } from './scripts/layout-gate.mjs';
+const files = drawnFiles();
 const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
-for (const r of process.argv.slice(1)) record.routes[r] = { tree: treeKey(drawnFiles()), prompt: 'p1', verdict: 'ship', samples: [] };
+for (const r of process.argv.slice(1)) record.routes[r] = { tree: routeKey(files, r), prompt: 'p1', verdict: 'ship', samples: [] };
 writeFileSync(RECORD, JSON.stringify(record));" "$@"\n`,
 		{ mode: 0o755 }
 	);
