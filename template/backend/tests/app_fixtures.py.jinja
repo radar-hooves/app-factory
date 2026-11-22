@@ -2,9 +2,10 @@
 
 `conftest.py` belongs to the factory and is owed byte-identical, so everything
 this suite needs beyond it lives here. conftest star-imports this module at the
-one point where both of its guarantees hold: the throwaway test database is
-resolved and every ``POSTGRES_*`` is assigned, and no app module has been
-imported yet.
+one point where both of its guarantees hold: every ``POSTGRES_*`` is assigned (host and
+port are placeholders until a selected test needs a database, when conftest binds the
+throwaway server and clears the app's cached settings and engine), and no app module has
+been imported yet.
 
 Which means both shapes work, and neither has to fight the file that carries
 them:

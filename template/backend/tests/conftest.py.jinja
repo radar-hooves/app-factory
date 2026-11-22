@@ -327,8 +327,8 @@ os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
 # ── THE extension point for this file (canonical-app-shape.md §Extension Points)
 # conftest.py is the factory's and is owed byte-identical, so an app's own test
-# surface lives in tests/app_fixtures.py. Imported HERE, deliberately: after the
-# test server is resolved and every POSTGRES_* is assigned, so a module that
+# surface lives in tests/app_fixtures.py. Imported HERE, deliberately: after
+# every POSTGRES_* is assigned, so a module that
 # imports the app gets the throwaway database — and before the first app import
 # below, so a module that must set an environment variable ahead of the app
 # reading it still can. The module body runs once, at this line.
