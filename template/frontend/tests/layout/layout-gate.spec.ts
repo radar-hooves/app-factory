@@ -45,9 +45,11 @@ const WIDEST = VIEWPORTS[0]!;
 const MODEL = 'openai/sol';
 // The fallback when MODEL is unavailable: Gemini through the genuine agy CLI on the owner's
 // own login (foreman's google:cli route: `-p`, stream-json, `--dangerously-skip-permissions`,
-// the seat profile's `argon`), never through the gateway.
-const FALLBACK = 'google/argon';
-const AGY_MODEL = 'gemini-4-argon-high';
+// the seat profile's `carbon`), never through the gateway. Carbon is Google's strongest
+// reasoning model (Argon is its cheaper, faster sibling) and the Ultra plan carries it; a
+// judge should be the strongest model available.
+const FALLBACK = 'google/carbon';
+const AGY_MODEL = 'gemini-4-carbon-high';
 const AGY_HOME = process.env.AGY_HOME ?? '/var/lib/agy/google';
 const SAMPLES = 3;
 const JUDGE_TIMEOUT_MS = 240_000;
