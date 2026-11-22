@@ -16,6 +16,7 @@
 	import RecordList from '../dist/components/ui/record-list/record-list.svelte';
 	import type {
 		RecordListColumn,
+		RecordListGroup,
 		RecordListGrouping,
 		RecordListRow
 	} from '../dist/components/ui/record-list/index.js';
@@ -26,6 +27,8 @@
 	import StatusBadge from '../dist/components/ui/status-badge/status-badge.svelte';
 	import Panel from '../dist/components/ui/panel/panel.svelte';
 	import FactGrid from '../dist/components/ui/fact-grid/fact-grid.svelte';
+	import PageContainer from '../dist/components/ui/page-container/page-container.svelte';
+	import PageLead from '../dist/components/ui/page-lead/page-lead.svelte';
 	import Home from '#lib/icons/house.svelte';
 	import Landmark from '#lib/icons/bank.svelte';
 	import RefreshCw from '#lib/icons/arrows-clockwise.svelte';
@@ -37,6 +40,9 @@
 	import Download from '#lib/icons/download-simple.svelte';
 	import Plus from '#lib/icons/plus.svelte';
 	import TriangleAlert from '#lib/icons/warning.svelte';
+	import HandCoins from '#lib/icons/hand-coins.svelte';
+	import ArrowsLeftRight from '#lib/icons/arrows-left-right.svelte';
+	import Coins from '#lib/icons/coins.svelte';
 
 	let { surface, params }: { surface: 'records' | 'record'; params: URLSearchParams } = $props();
 
@@ -256,6 +262,51 @@
 	];
 	let ran = $state('');
 
+	// ── Categories: grouped by kind, a page of nothing but the kit (godswood's /spending/categories-and-rules) ──
+	type Category = RecordListRow & { kind: string; used: number };
+	// Each kind's mark, on its group's heading: never one tile down every row.
+	const KINDS: Record<string, RecordListGroup> = {
+		Expense: { label: 'Expense', icon: Receipt },
+		Income: { label: 'Income', icon: HandCoins },
+		Transfer: { label: 'Transfer', icon: ArrowsLeftRight },
+		Loan: { label: 'Loan', icon: Landmark },
+		Distribution: { label: 'Distribution', icon: Coins }
+	};
+	const categories: Category[] = (
+		[
+			['Groceries', 'Expense', 142, true],
+			['Fuel', 'Expense', 61, false],
+			['Insurance', 'Expense', 12, true],
+			['Council rates', 'Expense', 4, true],
+			['Repairs and maintenance', 'Expense', 9, true],
+			['Dining out', 'Expense', 0, false],
+			['Salary', 'Income', 26, false],
+			['Rent received', 'Income', 52, false],
+			['Interest', 'Income', 12, false],
+			['Between own accounts', 'Transfer', 38, false],
+			['Credit card payment', 'Transfer', 12, false],
+			['Home loan repayment', 'Loan', 26, false],
+			['Investment loan interest', 'Loan', 12, true],
+			['Trust distribution', 'Distribution', 2, false]
+		] as const
+	).map(([title, kind, used, deductible], i) => ({
+		id: i + 1,
+		title,
+		kind,
+		used,
+		flags: deductible ? [{ status: 'success' as const, label: 'Deductible' }] : []
+	}));
+	const categoryColumns: RecordListColumn<Category>[] = [
+		{
+			key: 'used',
+			label: 'This year',
+			align: 'end',
+			width: '11rem',
+			sort: (r) => r.used,
+			text: (r) => (r.used === 0 ? 'Not used' : `${r.used} ${r.used === 1 ? 'line' : 'lines'}`)
+		}
+	];
+
 	const list = params.get('list') ?? 'properties';
 	// `?long=1`: more properties than a phone holds, so the list scrolls to an end.
 	const owned = params.get('long') === '1' ? [0, 1, 2, 3, 4, 5].flatMap((n) => properties.map((p) => ({ ...p, id: p.id + 10 * n }))) : properties;
@@ -353,7 +404,26 @@
 	/>
 {/snippet}
 
-{#if surface === 'records'}
+{#if surface === 'records' && list === 'categories'}
+	<AppShell {nav} currentPath="#/spending/categories" brandTitle="Godswood" title="Categories and rules" onSearch={() => {}} texture="grid" pageType="tool">
+		<PageContainer>
+			<PageLead
+				lead="12 of 14 categories took a line since 1 July."
+				subtitle="Busiest first within each kind."
+			/>
+			<RecordList
+				rows={categories}
+				columns={categoryColumns}
+				noun={['category', 'categories']}
+				title="Categories"
+				group={(r) => KINDS[r.kind]!}
+				onOpen={(r) => (opened = r.id)}
+				open={opened}
+				data-probe="record-list"
+			/>
+		</PageContainer>
+	</AppShell>
+{:else if surface === 'records'}
 	{@const here = list === 'managers' ? '#/property/managers' : list === 'pnl' ? '#/property/pnl' : list === 'tools' ? '#/property/tools' : '#/property'}
 	<AppShell {nav} currentPath={here} brandTitle="Godswood" onSearch={() => {}} texture="grid" pageType="tool">
 		<ContextColumn

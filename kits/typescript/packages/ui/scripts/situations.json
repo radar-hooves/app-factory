@@ -26,6 +26,18 @@
       ]
     },
     {
+      "key": "key-figures",
+      "title": "A page's key figures",
+      "description": "The two to five figures a page leads with, read across in one row under its lead: each figure as wide as its number, a hairline between two.",
+      "components": [
+        {
+          "name": "KeyFigures",
+          "props": "figures, label?",
+          "insteadOf": "a grid of Cards or StatCards, a tile and an icon per figure, mostly empty at a wide screen"
+        }
+      ]
+    },
+    {
       "key": "compact-figures",
       "title": "Several bare figures together",
       "description": "A block of plain figures read at a glance — an 'at a glance' strip — where each number is too small to earn its own StatCard.",

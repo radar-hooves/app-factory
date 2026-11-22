@@ -31,8 +31,9 @@ export const HEAD_GROUND = 'bg-background sticky top-0 z-3 pb-3';
 export const HEAD = 'bg-card border-border grid h-9 items-center rounded-lg border';
 export const HEAD_TEXT = 'ds-label';
 /** A group's label line on the ground; the spacing is padding, so a measured height is the height it takes. */
-export const GROUP = 'text-muted-foreground h-6.5 text-xs';
-export const GROUP_LABEL = 'text-[0.8125rem] font-semibold';
+export const GROUP = 'text-muted-foreground h-7 text-xs';
+/** A group's heading, a subsection's on the type scale: a step over the rows, a step under the list's title. */
+export const GROUP_LABEL = 'text-foreground text-body font-semibold';
 export const groupSpacing = (index: number) => (index > 0 ? 'pt-4.5 pb-1.5' : 'pb-1.5');
 /** The house focus ring, and the same ring drawn inside a control that fills a clipped card. */
 export const RING = 'focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none';

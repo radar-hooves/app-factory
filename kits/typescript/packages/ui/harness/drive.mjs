@@ -5470,6 +5470,63 @@ for (const surface of ['page-kit', 'document-reader']) {
 	}
 }
 
+// A page of nothing but the kit (godswood's categories and admin pages, 23/11/2026): the
+// list's title a section's size over its groups', a kind's mark once a group and no tile a
+// row, a list that scrolls fading its foot until its last row, and a line of key figures
+// never starting on a rule.
+{
+	let { context, page, errors } = await open('surface=records&list=categories', { width: 1440, height: 700 }, 'light');
+	await page.waitForSelector('[data-slot="record-group"]');
+	const fade = () => page.evaluate(() => getComputedStyle(document.querySelector('[data-slot="record-rows"]')).getPropertyValue('--ds-scroll-fade').trim());
+	const kinds = await page.evaluate(() => {
+		const size = (el) => el && getComputedStyle(el).fontSize;
+		return {
+			title: size(document.querySelector('[data-slot="list-toolbar"] h2')),
+			group: size(document.querySelector('[data-slot="record-group"] h3')),
+			row: size(document.querySelector('[data-slot="record-row"]')),
+			marks: document.querySelectorAll('[data-slot="record-group"] [data-slot="record-group-mark"]').length,
+			groups: document.querySelectorAll('[data-slot="record-group"]').length,
+			tiles: document.querySelectorAll('[data-slot="record-thumbnail"]').length
+		};
+	});
+	check(
+		'RecordList by kind: title 20px over groups 15px over rows 13px, a mark a group, no tile a row',
+		kinds.title === '20px' && kinds.group === '15px' && kinds.row === '13px' && kinds.groups === 5 && kinds.marks === 5 && kinds.tiles === 0,
+		JSON.stringify(kinds)
+	);
+	const atTop = await fade();
+	await page.evaluate(() => {
+		const rows = document.querySelector('[data-slot="record-rows"]');
+		rows.scrollTop = rows.scrollHeight;
+	});
+	await page.waitForTimeout(200);
+	const atEnd = await fade();
+	check('RecordList: a list that scrolls fades its foot, and not at its last row', atTop === '24px' && atEnd === '0px', `top ${atTop}, end ${atEnd}`);
+	check('RecordList by kind: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+
+	({ context, page, errors } = await open('surface=figures', { width: 390, height: 844 }, 'dark'));
+	await page.waitForSelector('[data-slot="key-figures"]');
+	const figures = await page.evaluate(() => {
+		const row = document.querySelector('[data-slot="key-figures"]');
+		const edge = row.getBoundingClientRect().left;
+		const items = [...row.children].map((el) => {
+			const r = el.getBoundingClientRect();
+			const rule = r.left + parseFloat(getComputedStyle(el, '::before').left);
+			return { top: Math.round(r.top), starts: r.left - edge < 1, ruled: rule >= edge };
+		});
+		const region = document.querySelector('[data-slot="app-shell-content"]');
+		return { lines: new Set(items.map((i) => i.top)).size, items, overflow: region.scrollWidth - region.clientWidth };
+	});
+	check(
+		'KeyFigures at 390px: the row wraps, and a line starts on a figure, never a rule',
+		figures.lines > 1 && figures.items.every((i) => i.ruled === !i.starts) && figures.overflow <= 0,
+		JSON.stringify(figures)
+	);
+	check('KeyFigures at 390px: no page error', errors.length === 0, JSON.stringify(errors));
+	await context.close();
+}
+
 await browser.close();
 await webkitBrowser.close();
 server.close();

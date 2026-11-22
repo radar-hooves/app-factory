@@ -52,6 +52,7 @@
 	import { cn } from '#lib/utils.js';
 	import type {
 		RecordListColumn,
+		RecordListGroup,
 		RecordListGrouping,
 		RecordListPreferences,
 		RecordListRow
@@ -107,8 +108,12 @@
 		tools?: ListIconAction[];
 		/** The bar's one labelled action, last. */
 		action?: ListAction;
-		/** A row's group, by its label: groups show in the order their first rows come. */
-		group?: (row: R) => string;
+		/**
+		 * A row's group, by its label: groups show in the order their first rows
+		 * come. A group that is a kind of thing returns its heading with the
+		 * kind's mark (`{ label, icon, tone }`).
+		 */
+		group?: (row: R) => string | RecordListGroup;
 		/**
 		 * The ways the viewer can group, in the Columns menu with None after
 		 * them; the first is the default. In place of `group`.
@@ -239,23 +244,24 @@
 
 	// ── Groups, in the order their first rows come or by label; a sort orders rows inside them ──
 	const groups = $derived.by(() => {
-		const out: { key: string; rows: R[] }[] = [];
+		const out: { key: string; mark?: RecordListGroup; rows: R[] }[] = [];
 		const byKey = new Map<string, R[]>();
 		for (const r of rows) {
-			const key = grouping ? grouping.group(r) : '';
+			const heading = grouping ? grouping.group(r) : '';
+			const key = typeof heading === 'string' ? heading : heading.label;
 			const g = byKey.get(key);
 			if (g) g.push(r);
 			else {
 				const fresh = [r];
 				byKey.set(key, fresh);
-				out.push({ key, rows: fresh });
+				out.push({ key, mark: typeof heading === 'string' ? undefined : heading, rows: fresh });
 			}
 		}
 		if (grouping?.order === 'label')
 			out.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true, sensitivity: 'base' }));
 		const col = activeSort && shown.find((c) => c.key === activeSort.key);
 		const by = col && sorter(col);
-		return by ? out.map((g) => ({ key: g.key, rows: orderBy(g.rows, by, activeSort!.dir) })) : out;
+		return by ? out.map((g) => ({ ...g, rows: orderBy(g.rows, by, activeSort!.dir) })) : out;
 	});
 
 	const thumbs = $derived(!!icon || rows.some((r) => r.image || r.icon));
@@ -266,6 +272,20 @@
 
 {#snippet value(c: (typeof shown)[number], r: R)}
 	{#if c.cell}{@render c.cell(r, c)}{:else}{c.text?.(r) ?? ''}{/if}
+{/snippet}
+
+{#snippet mark(m: RecordListGroup | undefined)}
+	{#if m?.icon}
+		<span
+			class={cn(
+				'grid flex-none place-items-center self-center',
+				m.tone ? `ds-ink-${m.tone}` : 'ds-icon-accent text-foreground'
+			)}
+			data-slot="record-group-mark"
+		>
+			<m.icon class="size-4.5" />
+		</span>
+	{/if}
 {/snippet}
 
 {#snippet flags(r: R, all: boolean)}
@@ -454,7 +474,7 @@
 	<div
 		bind:offsetWidth={listOuter}
 		bind:clientWidth={listInner}
-		class="relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
+		class="ds-scroll-fade relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="record-rows"
 	>
@@ -491,6 +511,7 @@
 							data-slot="record-group"
 						>
 							{#if PHONE}
+								{@render mark(g.mark)}
 								<h3 class={cn(GROUP_LABEL, 'whitespace-nowrap')}>{g.key}</h3>
 								<span class="min-w-0 flex-1 truncate">{g.rows.length.toLocaleString()}</span>
 							{:else}
@@ -498,6 +519,7 @@
 									class="flex min-w-0 items-baseline gap-3 overflow-hidden pl-3 whitespace-nowrap"
 									style="grid-column: 1;"
 								>
+									{@render mark(g.mark)}
 									<h3 class={GROUP_LABEL}>{g.key}</h3>
 									<span class="min-w-0 truncate">{count(g.rows.length)}</span>
 								</div>

@@ -124,6 +124,7 @@ rather than rebuilding it:
 | `dialog-section`                                | One section of a dialogue body; adjacent sections are divided automatically.                                                                                                                                                                                                                                                                                            |
 | `stat-card`                                     | A single metric that earns its space (label, value, unit, sub, status glyph, and `valueTone` to colour the figure itself).                                                                                                                                                                                                                                                |
 | `stat-list`                                     | A route's low-context integers as a label→value list. Zero-aware: `muted` keeps a healthy zero quiet.                                                                                                                                                                                                                                                                   |
+| `key-figures` | A page's key figures in one row under its lead: each a `stat-card`, as wide as its figure, a hairline between two, no icon of its own; crowded, it wraps and a line starts on a figure. |
 | `arc-gauge`                                     | A radial capacity/percentage ring for a single 0–100 metric, in a footprint too compact for a `stat-card`.                                                                                                                                                                                                                                                              |
 | `bar-row`                                       | A labelled horizontal bar with a trailing tabular value, for a ranked list (usage, rank, token burn).                                                                                                                                                                                                                                                                   |
 | `scorecard`                                     | A compact 0/1/2 dot-row health strip for several independent checks read at a glance.                                                                                                                                                                                                                                                                                   |
@@ -612,8 +613,8 @@ own and composes the component that owns the role:
 | Role | Utility | Size | Face | Owned by |
 | --- | --- | --- | --- | --- |
 | Page title | `text-display` | 1.75rem | display, semibold | PageHeader |
-| Section | `text-section` | 1.25rem | display, semibold | PageSection `level={2}` |
-| Panel title, subsection | `text-body` | 0.9375rem | body, semibold | Panel, PageSection `level={3}` |
+| Section, a list's title | `text-section` | 1.25rem | display, semibold | PageSection `level={2}`, ListToolbar |
+| Panel title, subsection, a list's group | `text-body` | 0.9375rem | body, semibold | Panel, PageSection `level={3}`, a RecordList's and a Ledger's groups |
 | Readout | `text-stat` | 1.0625rem | body | StatList |
 | Reading text | `text-base` | 1rem | body | DocumentReader |
 | Body | `text-sm` | 0.875rem | body | the default |
@@ -1090,11 +1091,11 @@ stays for a dense grid of data; a module's own records are a RecordList.
 | `columns` | The module's columns after the title, the Ledger's `ListColumn` shape plus `total`. List `title` to rename, resize or draw it with `cell`. `on: 'wide'` ticks a column only on a wide list (1200px of list), so extra width shows more columns and the viewer can tick it back. |
 | `preferences`, `onPreferencesChange`, `preferencesNote` | The viewer's `{ columns, group }` from the Columns menu, which the bar carries while the list has heads or offers groupings. Missing or stale fields take the module's defaults; `group` exists only where the list offers `groupings`. The list stores nothing. |
 | `title`, `meta`, `leading`, `toolbar`, `tools`, `action` | The `ListToolbar`. No title, no bar. |
-| `group` | A row's group label: groups show in the order their first rows come, each label on the ground with its count and each column's `total` over its rows. |
-| `groupings` | The ways the viewer may group, in place of `group`: `{ key, label, group, order, hint }`, offered in the Columns menu's Group by with None after the last, the first the default. `order: 'label'` lists the groups A to Z (numerals as numbers) rather than in the order their first rows come; `hint` says what it does under the choice. |
+| `group` | A row's group label: groups show in the order their first rows come, each heading on the ground with its count and each column's `total` over its rows. A group that is a kind of thing returns `{ label, icon, tone }`: the kind's mark before its heading, in the accent's tone, or in a status ink where the kind means one (money in, money out). |
+| `groupings` | The ways the viewer may group, in place of `group`: `{ key, label, group, order, hint }`, `group` as `group`'s, offered in the Columns menu's Group by with None after the last, the first the default. `order: 'label'` lists the groups A to Z (numerals as numbers) rather than in the order their first rows come; `hint` says what it does under the choice. |
 | `totalLabel` | A card after the rows with each column's `total` over every row: "All three". |
 | `head` | `false` drops the head card (and the Columns menu): a tools list. |
-| `icon` | The quiet tile a row without a photo or its own `icon` shows; with it every row has a thumbnail. |
+| `icon` | The quiet tile a row without a photo or its own `icon` shows, in a list of photos; with it every row has a thumbnail. A list with no photos marks its kinds on its groups instead: one tile repeated down every row is the generated look the layout gate's judge refuses. |
 | `href`, `onOpen`, `open` | A row is a link, or a button that opens a detail beside the list; `open` marks that row. A control in a `cell` takes its own click. |
 | `noun`, `empty`, `footer`, `layout` | As the Ledger's. |
 
@@ -1111,6 +1112,8 @@ heads'; Find (search, filters, views) stays the module's.
 		  hint: 'Every word that becomes the same replacement, under it.' }
 	]} />
 ```
+
+The list's title is a section's heading, a group's a subsection's, and the rows' text a step under that, so the three never read as one size. A list that scrolls inside itself fades its foot while rows wait below it, and not at its last row.
 
 A sort orders rows inside their groups, largest first (words from A), then
 reversed, then the list's own order. On a phone (below 480px of list) a row is its thumbnail, title

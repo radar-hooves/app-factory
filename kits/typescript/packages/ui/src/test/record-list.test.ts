@@ -12,6 +12,7 @@ import { render, screen, fireEvent, within, cleanup } from '@testing-library/sve
 import Harness from './record-list.svelte';
 import { orderBy } from '#lib/components/ui/ledger/ledger.js';
 import type { RecordListRow } from '#lib/components/ui/record-list/index.js';
+import House from '#lib/icons/house.svelte';
 
 type Row = RecordListRow & { value: number; group?: string };
 
@@ -154,6 +155,27 @@ describe('RecordList: the viewer’s grouping, in the Columns menu', () => {
 		expect(all('[data-slot="record-card"]')).toHaveLength(1);
 		await fireEvent.click(within(menu).getByRole('checkbox', { name: 'Loan' }));
 		expect(JSON.parse(probe('emitted')!).at(-1)).toEqual({ columns: ['value', 'loan'], group: 'none' });
+	});
+
+	it('heads a group that is a kind with its mark, once a group and never on a row', () => {
+		const KIND = [
+			{
+				key: 'kind',
+				label: 'Kind',
+				group: (r: Row) => ({ label: r.group ?? '', icon: House, tone: r.group === 'Sold' ? ('neutral' as const) : undefined })
+			}
+		];
+		const { all, titles } = mount({ groupings: KIND });
+		expect(labels(all)).toEqual(['Owned', 'Sold']);
+		expect(titles()).toEqual(['3. Ashgrove', '4. Banksia', '5. Coolabah', '2. Dorrigo']);
+		const marks = all('[data-slot="record-group-mark"]');
+		expect(marks.map((m) => m.closest('[data-slot="record-group"]')!.querySelector('h3')!.textContent)).toEqual([
+			'Owned',
+			'Sold'
+		]);
+		expect(marks[0]).toHaveClass('ds-icon-accent');
+		expect(marks[1]).toHaveClass('ds-ink-neutral');
+		expect(all('[data-slot="record-card"] [data-slot="record-group-mark"]')).toHaveLength(0);
 	});
 
 	it('reads a kept grouping, and a stale one as the default', () => {

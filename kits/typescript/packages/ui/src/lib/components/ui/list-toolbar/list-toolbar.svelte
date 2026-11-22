@@ -62,7 +62,9 @@
 	-->
 	{#if title || meta}
 		<div class="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
-			{#if title}<h2 class="text-body min-w-0 font-semibold break-words">{title}</h2>{/if}
+			{#if title}<h2
+					class="font-display text-section min-w-0 font-semibold tracking-[var(--ds-font-display-tracking,-0.015em)] break-words"
+				>{title}</h2>{/if}
 			{#if meta}<span class="text-muted-foreground min-w-0 text-sm break-words">{meta}</span>{/if}
 		</div>
 	{/if}

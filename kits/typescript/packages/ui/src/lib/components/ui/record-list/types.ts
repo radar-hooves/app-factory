@@ -38,6 +38,19 @@ export interface RecordListColumn<R extends RecordListRow = RecordListRow> exten
 }
 
 /**
+ * A group's heading where the group is a kind of thing: its label, and the
+ * kind's mark before it. A group function returns one in place of a bare
+ * label; groups still key by `label`.
+ */
+export interface RecordListGroup {
+	label: string;
+	/** The kind's mark, a household icon, its tone in the accent. */
+	icon?: IconComponent;
+	/** The mark in a status ink instead, where the kind means one (money in, money out). */
+	tone?: Status;
+}
+
+/**
  * A way the viewer can group the list, offered in its Columns menu with None
  * after the last: the first letter, a status, every word that becomes the same
  * replacement.
@@ -47,8 +60,8 @@ export interface RecordListGrouping<R extends RecordListRow = RecordListRow> {
 	key: string;
 	/** Its name in the menu. */
 	label: string;
-	/** A row's group, by its label. */
-	group: (row: R) => string;
+	/** A row's group, by its label, or a heading with the kind's mark. */
+	group: (row: R) => string | RecordListGroup;
 	/**
 	 * The groups' order: `rows`, the order their first rows come (the
 	 * default); `label`, A to Z by label, numerals as numbers.

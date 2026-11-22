@@ -87,6 +87,7 @@
 	import { ReportWidget } from '../dist/components/feedback/index.js';
 	import Ledger from '../dist/components/ui/ledger/ledger.svelte';
 	import Records from './Records.svelte';
+	import Figures from './Figures.svelte';
 	import Graph from './Graph.svelte';
 	import type {
 		LedgerColumn,
@@ -1926,6 +1927,8 @@
 		/>
 	</div>
 	<div data-probe="row-tap-selected">{tapSelectedId ?? 'none'}</div>
+{:else if surface === 'figures'}
+	<Figures />
 {:else if surface === 'records' || surface === 'record'}
 	<Records {surface} {params} />
 	<ReportWidget />
