@@ -545,6 +545,12 @@ def _bind_test_server(session) -> None:
     _TEST_SERVER = _resolve_test_server()
     os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
     os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
+    # Anything the app read from the placeholders at import is stale: its settings, and an engine built on them.
+    from {{ package_name }}.config import get_settings
+    from {{ package_name }}.db import session as db_session
+
+    get_settings.cache_clear()
+    db_session._engine = None
     if session.config.pluginmanager.hasplugin("dsession"):  # xdist registers it in the controller only
         _ensure_test_database_ready()
         return
