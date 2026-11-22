@@ -296,26 +296,33 @@ def _resolve_test_server() -> dict[str, str]:
     return _shared_ephemeral_postgres()
 
 
-_TEST_SERVER = _resolve_test_server()
+# The server is NOT resolved here: a run that selects no test needing a database (a
+# sandboxed seat with no Docker socket running a pure unit test) must not start a
+# container. `_bind_test_server` resolves it, once, when a selected test first needs one
+# (`pytest_collection_finish`), and moves POSTGRES_HOST/PORT from these placeholders to the
+# server's. Everything else the app reads at import is fixed below without it.
+_TEST_SERVER: dict[str, str] | None = None
 
 # The suite connects as a deployment does (`db/roles.py`): the migrations as an owner role
 # that is not a superuser, the app as the runtime role the first migration creates. The
 # server's own user makes the owner role and the databases, and nothing else. The passwords
-# derive from the server's, so every process of a run agrees on them.
+# derive from a per-run secret, minted by the controller and inherited by its xdist workers,
+# so every process of a run agrees on them without the server existing yet.
 TEST_OWNER = "{{ package_name }}_test_owner"
 TEST_RUNTIME = "{{ package_name }}_test_runtime"
+_RUN_SECRET = os.environ.setdefault(f"{_TEST_ENV_PREFIX}RUN_SECRET", secrets.token_hex(16))
 
 
 def _role_password(role: str) -> str:
-    return hashlib.sha256(f"{_TEST_SERVER['password']}:{role}".encode()).hexdigest()
+    return hashlib.sha256(f"{_RUN_SECRET}:{role}".encode()).hexdigest()
 
 
 os.environ["POSTGRES_USER"] = TEST_OWNER
 os.environ["POSTGRES_PASSWORD"] = _role_password(TEST_OWNER)
 os.environ["POSTGRES_RUNTIME_USER"] = TEST_RUNTIME
 os.environ["POSTGRES_RUNTIME_PASSWORD"] = _role_password(TEST_RUNTIME)
-os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
-os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
+os.environ["POSTGRES_HOST"] = "127.0.0.1"  # placeholders until `_bind_test_server`
+os.environ["POSTGRES_PORT"] = "5432"
 os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
 # ── THE extension point for this file (canonical-app-shape.md §Extension Points)
@@ -485,6 +492,7 @@ def _maintenance_url(database: str = "postgres") -> str:
     """The test server's own user, by default on its maintenance database: what makes the owner role and the databases."""
     from tests.support.explicit_server_guard import explicit_server_url
 
+    assert _TEST_SERVER is not None, "the test server is bound only for a run that selects a test needing a database"
     return explicit_server_url(_TEST_SERVER, database)
 
 
@@ -506,13 +514,18 @@ def pytest_configure(config: pytest.Config) -> None:
         raise pytest.UsageError(f"this suite's config is {own}, not {config.inipath}: run pytest from backend/")
 
 
-def pytest_sessionstart(session) -> None:
-    """Build the test database before anything can try to connect to it.
+# Fixtures that reach the database; a test's closure naming one needs the server.
+_DATABASE_FIXTURES = frozenset({"session", "client", "app", "server_url", "make_user"})
+_BOUND = False
 
-    Not inside a fixture: the application lifespan runs its own database
-    connectivity check when the app is first created, and fixture ordering
-    does not guarantee a schema-building fixture wins that race. A
-    session-start hook precedes every fixture, so there is no race to lose.
+
+def _bind_test_server(session) -> None:
+    """Resolve the Postgres, point POSTGRES_* at it and build the test database, once.
+
+    Not at import and not in a fixture: the application lifespan runs its own database
+    connectivity check when the app is first created, and fixture ordering does not
+    guarantee a schema-building fixture wins that race. This runs before any test, and
+    only when the run selects one that needs a database.
 
     Under xdist the migrations run ONCE, in the controller, and each worker
     copies the result (`CREATE DATABASE … TEMPLATE`) rather than migrating its
@@ -520,11 +533,18 @@ def pytest_sessionstart(session) -> None:
     server: 64 slots per connection, 7,808 in all on postgres:17's defaults, and
     one of a fleet app's migrations holds about 3,000 until it commits, so workers
     in step died "out of shared memory" (that app's CI at `-n 8`, 27/09/2026; 14
-    of 20 on atlas). Twenty copies at once held 111 locks. The controller builds
-    before any worker exists, because xdist spawns them from a `trylast`
-    sessionstart of its own; `pytest_configure_node` hands each the name, and a
-    worker handed none migrates its own.
+    of 20 on atlas). The controller collects nothing, so it binds at session start,
+    before xdist spawns a worker from a `trylast` sessionstart of its own;
+    `pytest_configure_node` hands each the name, and a worker handed none migrates
+    its own.
     """
+    global _TEST_SERVER, _BOUND
+    if _BOUND:
+        return
+    _BOUND = True
+    _TEST_SERVER = _resolve_test_server()
+    os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
+    os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
     if session.config.pluginmanager.hasplugin("dsession"):  # xdist registers it in the controller only
         _ensure_test_database_ready()
         return
@@ -536,6 +556,18 @@ def pytest_sessionstart(session) -> None:
     # Whatever this app needs doing once, after the schema exists and before any
     # test runs (tests/app_fixtures.py). No-op unless the app defines one.
     app_session_start()
+
+
+def pytest_sessionstart(session) -> None:
+    """The xdist controller collects no tests, so it cannot know whether one needs a database: it binds now."""
+    if session.config.pluginmanager.hasplugin("dsession"):
+        _bind_test_server(session)
+
+
+def pytest_collection_finish(session) -> None:
+    """Bind the test server when a selected test needs a database; a run of none starts nothing."""
+    if not session.config.option.collectonly and any(_DATABASE_FIXTURES & set(item.fixturenames) for item in session.items):
+        _bind_test_server(session)
 
 
 @pytest.hookimpl(optionalhook=True)  # xdist's hook; optional, so the file still loads without xdist
