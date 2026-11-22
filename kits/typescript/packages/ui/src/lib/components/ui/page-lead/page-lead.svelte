@@ -35,14 +35,14 @@
 	{#if eyebrow}
 		<div class="ds-label mb-1.5">{eyebrow}</div>
 	{/if}
-	<div class="flex min-w-0 items-center gap-2.5">
+	<div class="flex min-w-0 items-start gap-2.5">
 		{#if icon}
-			<span class="ds-icon-accent text-muted-foreground grid size-6 flex-none place-items-center" data-slot="page-lead-icon">
+			<span class="ds-icon-accent text-muted-foreground mt-1.25 grid size-6 flex-none place-items-center" data-slot="page-lead-icon">
 				{@render icon()}
 			</span>
 		{/if}
 		<h2
-			class="font-display text-display max-w-3xl font-semibold tracking-[var(--ds-font-display-tracking,-0.02em)]"
+			class="font-display text-display max-w-3xl font-semibold tracking-[var(--ds-font-display-tracking,-0.02em)] text-balance"
 			data-answer
 		>
 			{lead}
