@@ -1284,6 +1284,13 @@
 		max-width: var(--ds-page-panel);
 	}
 
+	/* A block that holds a table is tabular, not prose: its measure is the frame's,
+	   so a list of people does not stop at the width a paragraph reads at and leave
+	   an empty band beside it. Prose and forms keep the panel measure. */
+	.ds-page[data-page='panel']:not([data-fill]) > .ds-page-main > :has([data-slot='table']) {
+		max-width: none;
+	}
+
 	.ds-page[data-page='panel'][data-fill] > .ds-page-main {
 		padding: 0;
 		overflow: hidden;

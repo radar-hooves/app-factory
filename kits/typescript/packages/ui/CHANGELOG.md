@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.15] - 2026-11-22
+
+Need: the factory's `/settings` reads as designed at 2550, 1728 and 411 px, so every app's layout gate stops judging it `fix`. Consumer: master-project, from the v2026.11.67 fleet sweep (casefile, earworm, wordhoard and portcullis, majors at 2550 and 1728 px). openai/sol, 3 samples, on the factory's own scratch app: before `fix, fix, fix` (a members block held at 832 px in a ~2050 px pane, and no rule under the last member row); after `ship, ship, ship`, the two majors gone at all three widths.
+
+### Changed
+
+- **A `panel` page's block that holds a table takes the frame's width.** The panel measure (`--ds-page-panel`, 52rem) caps prose and forms, as before; a block with a `[data-slot='table']` in it is tabular, and no longer stops at the width a paragraph reads at.
+- **A flush `Panel` (`pad={false}`) closes with a rule under its body**, since a table's last row carries none.
+
 ## [2026.11.14] - 2026-11-21
 
 Need: a page built from the kit's defaults is not flat and text-based. The operator on eight's /rounds redraw: "very flat and text based … it could use more of the colour palette and more icons to help with the visual acuity and flair" (22:20 21/11/2026). Every state was the same grey-worded dot, a section heading took no icon, and an icon passed to a section or a figure was grey. Consumer: master-project's orchestrator (master-project-bb); every stamped app takes it by version bump.

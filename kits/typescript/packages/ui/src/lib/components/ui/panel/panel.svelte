@@ -135,7 +135,15 @@
 			{/if}
 		</header>
 	{/if}
-	<div class={cn(pad && 'pt-4', scroll && 'min-h-0 flex-1 overflow-y-auto')} data-slot="panel-body">
+	<div
+		class={cn(
+			pad && 'pt-4',
+			// A flush table has no padding to end it, and its last row carries no rule of its own.
+			!pad && 'border-border border-b',
+			scroll && 'min-h-0 flex-1 overflow-y-auto'
+		)}
+		data-slot="panel-body"
+	>
 		{@render children()}
 	</div>
 	{#if footer}

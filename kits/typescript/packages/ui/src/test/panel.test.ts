@@ -85,6 +85,20 @@ describe('Panel — the footer', () => {
 	});
 });
 
+describe('Panel — a flush body', () => {
+	const body = () => document.querySelector('[data-slot="panel-body"]') as HTMLElement;
+
+	it('is closed by a rule, since a table in it carries none under its last row', () => {
+		render(Harness, { props: { pad: false } });
+		expect(body().className).toContain('border-b');
+	});
+
+	it('carries no rule when padded', () => {
+		render(Harness);
+		expect(body().className).not.toContain('border-b');
+	});
+});
+
 describe('Panel — the destructive tone', () => {
 	it('carries no tone attribute by default, so the prop is additive', () => {
 		// The same reasoning as the shell's `measure` and `texture`: at the default

@@ -14,6 +14,8 @@ Need: a factory update, and the security fixes it carries, is never held until e
 
 Need: the judge flags a flat, text-only page the way his eye does. eight's /rounds redraw (eight PR #684's boards) passed the picture test on every board, and he called it "very flat and text based … it could use more of the colour palette and more icons to help with the visual acuity and flair" (the operator, 22:20 21/11/2026). A stricter judge must not read as a regression a factory update caused. Consumer: master-project's orchestrator (master-project-bb), relayed by eight's orchestrator.
 
+Need: the factory's `/settings` reads as designed at 2550x1410, 1728x1117 and 411x820, so every app's layout gate stops judging it `fix`. Consumer: master-project, from the v2026.11.67 fleet sweep (casefile, earworm, wordhoard, portcullis: the same width major at 2550 and 1728 px, and no closing rule under the last member row). Measured on the factory's own scratch app, openai/sol, 3 samples: before `fix, fix, fix`, after `ship, ship, ship`. `@poodle64/ui` 2026.11.15 lets a `panel` page's table-holding block take the frame's width (prose and forms keep 52rem) and closes a flush `Panel` with a rule; the owner badge in Members takes the quiet `secondary` tint so it no longer repeats the primary action's green. Findings the judge raised on apps' own settings pages (a title stranding its last word, caption-size helper text, input and Save heights, breadcrumbs at 411 px) are not the factory's own page and stay with each app.
+
 ### Added
 
 - **`LICENSE` (MIT, poodle64)** at the root, so GitHub detects it; every kit manifest that declares a licence already says MIT. The copier templates' own licence handling is unchanged.

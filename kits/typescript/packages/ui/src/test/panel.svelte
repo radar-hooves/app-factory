@@ -16,7 +16,8 @@
 		tone = 'default',
 		withFooter = false,
 		withIcon = false,
-		withAction = false
+		withAction = false,
+		pad = true
 	}: {
 		title?: string;
 		subtitle?: string;
@@ -25,6 +26,7 @@
 		withFooter?: boolean;
 		withIcon?: boolean;
 		withAction?: boolean;
+		pad?: boolean;
 	} = $props();
 </script>
 
@@ -42,6 +44,7 @@
 	{subtitle}
 	{description}
 	{tone}
+	{pad}
 	icon={withIcon ? Trash : undefined}
 	action={withAction ? headerAction : undefined}
 	footer={withFooter ? footerActions : undefined}
