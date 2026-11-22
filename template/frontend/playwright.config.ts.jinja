@@ -6,6 +6,8 @@ import { hostChromium } from './tests/e2e/host-browser';
 const CI = !!process.env.CI;
 // NixOS runs no downloaded browser; tests/e2e/host-browser.ts finds the one the
 // host declares, so `pnpm exec playwright test` runs there as it does on CI.
+// No zygote: a runner's unit forbids capset, which the zygote calls, and the
+// browser dies on its first page.
 const HOST_CHROMIUM = hostChromium();
 
 // There is one database and no staging environment (dev-environment.md
@@ -70,7 +72,7 @@ export default defineConfig({
 			name: 'chromium',
 			use: {
 				...devices['Desktop Chrome'],
-				...(HOST_CHROMIUM && { launchOptions: { executablePath: HOST_CHROMIUM } })
+				...(HOST_CHROMIUM && { launchOptions: { executablePath: HOST_CHROMIUM, args: ['--no-zygote'] } })
 			}
 		}
 	],

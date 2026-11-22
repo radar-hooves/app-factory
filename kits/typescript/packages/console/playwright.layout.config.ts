@@ -46,7 +46,7 @@ export default defineConfig({
 			name: 'chromium',
 			use: {
 				...devices['Desktop Chrome'],
-				...(HOST_CHROMIUM && { launchOptions: { executablePath: HOST_CHROMIUM } })
+				...(HOST_CHROMIUM && { launchOptions: { executablePath: HOST_CHROMIUM, args: ['--no-zygote'] } })
 			}
 		}
 	],

@@ -43,7 +43,7 @@ export async function warmRoutes(baseURL: string): Promise<void> {
 	if (!routes.length) return;
 	let browser;
 	try {
-		browser = await chromium.launch({ executablePath: hostChromium() });
+		browser = await chromium.launch({ executablePath: hostChromium(), args: ['--no-zygote'] });
 		const page = await browser.newPage();
 		for (const route of routes) {
 			try {
