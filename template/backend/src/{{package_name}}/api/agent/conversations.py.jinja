@@ -257,7 +257,8 @@ def mark(db: Session, conversation: AgentConversation, position: int, *, helpful
 
 def _record(db: Session, conversation_id: uuid.UUID, position: int, **fields: Any) -> None:
     """Set `fields` on question `position`'s record; nothing when the conversation or the question is gone."""
-    conversation = db.get(AgentConversation, conversation_id)
+    # The answer, its passages and its artefacts write this one row at once; each reads it locked.
+    conversation = db.get(AgentConversation, conversation_id, with_for_update=True)
     if conversation is None or position >= len(conversation.turns):
         return
     turns = [dict(turn) for turn in conversation.turns]
