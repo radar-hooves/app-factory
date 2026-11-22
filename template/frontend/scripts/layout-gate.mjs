@@ -54,14 +54,19 @@ function gitz(...args) {
 	return r.stdout.split('\0').filter(Boolean);
 }
 
-/** path → blob id of every drawn file: in the working tree, or at commit `ref`. */
+/** The build's inputs outside src/ that draw every route: static assets, the bundler's and compiler's config, path aliases. */
+export const GLOBAL =
+	/^(?:static\/.*|[\w.-]*(?:vite|svelte|tailwind|postcss)[\w.-]*\.config\.[cm]?[jt]s|tsconfig[\w.-]*\.json)$/;
+const keeps = (path) => drawn(path) || GLOBAL.test(path);
+
+/** path → blob id of every drawn file and global build input: in the working tree, or at commit `ref`. */
 export function drawnFiles(ref) {
 	const out = new Map();
 	if (ref) {
-		for (const entry of gitz('ls-tree', '-r', '-z', ref, '--', 'src')) {
+		for (const entry of gitz('ls-tree', '-r', '-z', ref)) {
 			const [meta, path] = entry.split('\t');
 			const [, type, blob] = meta.split(' ');
-			if (type === 'blob' && drawn(path)) out.set(path, blob);
+			if (type === 'blob' && keeps(path)) out.set(path, blob);
 		}
 		out.read = (path) => {
 			const r = spawnSync('git', ['cat-file', 'blob', out.get(path)], {
@@ -73,8 +78,8 @@ export function drawnFiles(ref) {
 		return out;
 	}
 	const paths = [
-		...new Set(gitz('ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'src'))
-	].filter((p) => drawn(p) && existsSync(p));
+		...new Set(gitz('ls-files', '-z', '--cached', '--others', '--exclude-standard'))
+	].filter((p) => keeps(p) && existsSync(p));
 	// Absolute: git reads --stdin-paths from the top of the work tree, not from here.
 	const r = spawnSync('git', ['hash-object', '--stdin-paths'], {
 		input: paths.map((p) => resolve(p)).join('\n'),
@@ -110,24 +115,48 @@ const OPAQUE = /\bimport\s*\(\s*[^'"\s)]|\brequire\s*\(\s*[^'"\s)]/;
 const GLOB = /import\.meta\.glob\s*(?:<[\s\S]*?>)?\s*\(/g;
 const GLOB_LITERAL =
 	/import\.meta\.glob\s*(?:<[\s\S]*?>)?\s*\(\s*(\[[^\]]*\]|'[^']*'|"[^"]*"|`[^`$]*`)/g;
-const globRegex = (pattern) =>
-	new RegExp(
-		`^${pattern
-			.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-			.replace(/\*\*\/?/g, '\0')
-			.replace(/\*/g, '[^/]*')
-			.replace(/\?/g, '[^/]')
-			.replace(/\0/g, '(?:.*/)?')}$`
-	);
+const globRegex = (pattern) => {
+	let out = '';
+	let depth = 0;
+	for (let i = 0; i < pattern.length; i++) {
+		const c = pattern[i];
+		if (c === '*' && pattern[i + 1] === '*') {
+			out += '(?:.*/)?';
+			i += pattern[i + 2] === '/' ? 2 : 1;
+		} else if (c === '*') out += '[^/]*';
+		else if (c === '?') out += '[^/]';
+		else if (c === '{') ((out += '(?:'), depth++);
+		else if (c === '}' && depth) ((out += ')'), depth--);
+		else if (c === ',' && depth) out += '|';
+		else out += c.replace(/[.+^$()|[\]\\{}]/g, '\\$&');
+	}
+	return new RegExp(`^${out}$`);
+};
 
+// SvelteKit's route segments: [[optional]], [...rest], [param] or [param=matcher] anywhere in a
+// segment, and [x+3a] / [u+003a] for a literal character. A matcher cannot be run, so a
+// param matches any text: more pages than SvelteKit would pick, never fewer.
+const TOKEN = /\[\[[^\]]+\]\]|\[\.\.\.[^\]]+\]|\[(?:x\+[0-9a-f]{2}|u\+[0-9a-f]{4,6})\]|\[[^\]]+\]/g;
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function segment(dir) {
+	if (/^\[\[[^\]]+\]\]$/.test(dir)) return { optional: true, re: /^.*$/ };
+	if (/^\[\.\.\.[^\]]+\]$/.test(dir)) return { rest: true };
+	let re = '';
+	let last = 0;
+	for (const m of dir.matchAll(TOKEN)) {
+		re += escapeRe(dir.slice(last, m.index));
+		const hex = /^\[(?:x\+([0-9a-f]{2})|u\+([0-9a-f]{4,6}))\]$/.exec(m[0]);
+		re += hex ? escapeRe(String.fromCodePoint(parseInt(hex[1] ?? hex[2], 16))) : '.+';
+		last = m.index + m[0].length;
+	}
+	return { re: new RegExp(`^${re}${escapeRe(dir.slice(last))}$`) };
+}
 const matches = (pattern, segs) => {
 	if (!pattern.length) return !segs.length;
 	const [p, ...rest] = pattern;
-	if (p.startsWith('[...')) return true;
-	if (p.startsWith('[['))
-		return matches(rest, segs) || (segs.length > 0 && matches(rest, segs.slice(1)));
-	if (!segs.length) return false;
-	return (p.startsWith('[') || p === segs[0]) && matches(rest, segs.slice(1));
+	if (p.rest) return true;
+	if (p.optional) return matches(rest, segs) || (segs.length > 0 && matches(rest, segs.slice(1)));
+	return segs.length > 0 && p.re.test(segs[0]) && matches(rest, segs.slice(1));
 };
 
 /** The drawn file a specifier names from `from`, null when it is a package or a file nothing draws; undefined when it cannot be followed. */
@@ -162,7 +191,8 @@ export function renders(files, route) {
 		const own = m[1]
 			.slice('src/routes'.length)
 			.split('/')
-			.filter((s) => s && !/^\(.*\)$/.test(s));
+			.filter((s) => s && !/^\(.*\)$/.test(s))
+			.map(segment);
 		if (matches(own, segs)) pageDirs.add(m[1]);
 	}
 	const seen = new Set();
@@ -173,7 +203,10 @@ export function renders(files, route) {
 	for (const p of files.keys()) {
 		const dir = dirname(p);
 		const name = p.slice(dir.length + 1);
-		if (/^src\/(?:app\.|hooks[.\/])/.test(p)) add(p);
+		// Everything every route draws, or can reach: the build's global inputs, the shell, the
+		// param matchers that pick a page, and every endpoint a load or a component can fetch.
+		if (GLOBAL.test(p) || /^src\/(?:app\.|hooks[.\/]|params\/)/.test(p)) add(p);
+		else if (/^src\/routes\/(?:.*\/)?\+server\./.test(p)) add(p);
 		else if (p.startsWith('src/routes/')) {
 			if (/^\+page[.@]/.test(name) && pageDirs.has(dir)) add(p);
 			else if (
@@ -207,8 +240,12 @@ export function renders(files, route) {
 			}
 		for (const re of SPECIFIER)
 			for (const m of text.matchAll(re)) {
-				if (re === SPECIFIER[2] && !/^(?:\.|\$lib|#lib)/.test(m[2])) continue;
-				const to = target(files, m[2], from);
+				let spec = m[2];
+				if (re === SPECIFIER[2]) {
+					if (/^(?:[a-z][a-z0-9+.-]*:|[/#])/i.test(spec)) continue;
+					if (!/^(?:\.|\$lib|#lib)/.test(spec)) spec = `./${spec}`;
+				}
+				const to = target(files, spec, from);
 				if (to === undefined) return new Set(files.keys());
 				if (to) add(to);
 			}

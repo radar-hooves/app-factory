@@ -60,7 +60,8 @@ export function refusal(now, was, record, { update = false, before = null } = {}
 	const valid = (p) => record.routes?.[p]?.tree === key(p);
 	// A judged route whose files this change touched is judged again, like a page it redrew.
 	const touched = Object.keys(at).filter((p) => routeKey(was, p) !== at[p]);
-	const need = [...new Set([...want, ...touched])].sort();
+	// A factory update owes the shell and the pages it changed; an app's own change also owes every judged route it touched.
+	const need = [...new Set(update ? want : [...want, ...touched])].sort();
 	const judged = Object.keys(record.routes ?? {}).filter(valid);
 	if (!update) {
 		// A drawn file no judged or asked route renders reaches routes nothing names.

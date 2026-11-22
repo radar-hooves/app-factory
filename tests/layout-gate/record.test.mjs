@@ -172,6 +172,92 @@ test("another lane's change to files a judged route does not render leaves its j
 	git('clean', '-fdq', 'src');
 });
 
+const reset = () => {
+	git('checkout', '--', 'src', RECORD);
+	git('clean', '-fdq', 'src', 'static');
+	rmSync(path.join(fe, 'vite.config.ts'), { force: true });
+};
+// Judges /a (and /b) as they stand: the check passes; then `change` redraws what /a renders
+// from outside its page, and the check must ask for /a again.
+const holds = (setup, change, route = '/a') => {
+	reset();
+	setup();
+	assert.equal(judge({ [route]: 'ship', '/b': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	change();
+	const r = check();
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, new RegExp(`${route.replace('/', '\\/')}(?:,| changed)`));
+	reset();
+};
+const page = (text = '<p>a</p>\n') => put('src/routes/a/+page.svelte', text);
+
+test("the build's inputs outside src/ redraw every route: static assets and the bundler's config", () => {
+	holds(
+		() => {
+			page('<p>a, for the static test</p>\n');
+			put('static/dark-seed.js', 'document.documentElement.dataset.theme = "dark";\n');
+		},
+		() => put('static/dark-seed.js', 'document.documentElement.dataset.theme = "light";\n')
+	);
+	holds(
+		() => {
+			page('<p>a, for the config test</p>\n');
+			put('vite.config.ts', 'export default {};\n');
+		},
+		() => put('vite.config.ts', 'export default { css: { transformer: "x" } };\n')
+	);
+});
+
+test('a param inside a segment still keys the concrete URL on its page and imports', () => {
+	holds(
+		() => {
+			put('src/routes/item-[id]/+page.svelte', "<script>import { t } from '$lib/title';</script>\n<h1>{t}</h1>\n");
+			put('src/lib/title.ts', 'export const t = "a";\n');
+		},
+		() => put('src/lib/title.ts', 'export const t = "b";\n'),
+		'/item-42'
+	);
+	// Optional, rest and matcher segments, and a group around them.
+	holds(
+		() => {
+			put('src/routes/(g)/[[lang]]/doc/[...path]/+page.svelte', "<script>import { t } from '$lib/title';</script>\n");
+			put('src/lib/title.ts', 'export const t = "a";\n');
+		},
+		() => put('src/lib/title.ts', 'export const t = "b";\n'),
+		'/en/doc/a/b'
+	);
+});
+
+test('an endpoint a route can fetch is part of what the route renders', () => {
+	holds(
+		() => {
+			page('<p>a, fetching</p>\n');
+			put('src/routes/a/+page.ts', "export const load = ({ fetch }) => fetch('/api').then((r) => r.json());\n");
+			put('src/routes/api/+server.ts', 'export const GET = () => Response.json({ title: "a" });\n');
+		},
+		() => put('src/routes/api/+server.ts', 'export const GET = () => Response.json({ title: "b" });\n')
+	);
+});
+
+test('a brace glob and a css url with no ./ name the files they pull in', () => {
+	holds(
+		() => {
+			page("<script>const m = import.meta.glob('./cards/*.{js,ts}');</script>\n");
+			put('src/routes/a/cards/c.ts', 'export {};\n');
+		},
+		() => put('src/routes/a/cards/c.ts', 'export const c = 1;\n')
+	);
+	holds(
+		() => {
+			page("<script>import './s.css';</script>\n");
+			put('src/routes/a/s.css', 'p { background: url(tile.svg); }\n');
+			put('src/routes/a/tile.svg', '<svg/>\n');
+		},
+		() => put('src/routes/a/tile.svg', '<svg width="2"/>\n')
+	);
+});
+
 test('no base in CI: refused until the tree as it stands is judged, at any verdict', () => {
 	put('src/routes/a/+page.svelte', '<p>a, nothing judged of it</p>\n');
 	const r = check({ CHANGE_BASE: '', CI: 'true' });
