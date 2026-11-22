@@ -128,12 +128,10 @@ const globRegex = (pattern) => {
 		else if (c === '{') {
 			out += '(?:';
 			depth++;
-		}
-		else if (c === '}' && depth) {
+		} else if (c === '}' && depth) {
 			out += ')';
 			depth--;
-		}
-		else if (c === ',' && depth) out += '|';
+		} else if (c === ',' && depth) out += '|';
 		else out += c.replace(/[.+^$()|[\]\\{}]/g, '\\$&');
 	}
 	return new RegExp(`^${out}$`);
