@@ -107,7 +107,8 @@ function withStored(record, repo, tree) {
 		return record;
 	}
 	const routes = { ...record?.routes };
-	for (const [p, r] of Object.entries(kept.routes ?? {})) if (routes[p]?.tree !== tree) routes[p] = r;
+	for (const [p, r] of Object.entries(kept.routes ?? {}))
+		if (routes[p]?.tree !== tree) routes[p] = r;
 	return { ...record, routes };
 }
 
@@ -124,9 +125,14 @@ function judgeHere(routes, repo, tree) {
 	if (fresh.length) {
 		try {
 			mkdirSync(dirname(storeFile(repo, tree)), { recursive: true });
-			writeFileSync(storeFile(repo, tree), `${JSON.stringify({ routes: Object.fromEntries(fresh) })}\n`);
+			writeFileSync(
+				storeFile(repo, tree),
+				`${JSON.stringify({ routes: Object.fromEntries(fresh) })}\n`
+			);
 		} catch (e) {
-			console.error(`layout gate: the verdicts are not kept (${e.message}); the push will judge again.`);
+			console.error(
+				`layout gate: the verdicts are not kept (${e.message}); the push will judge again.`
+			);
 		}
 	}
 	return record;
@@ -160,7 +166,9 @@ function main() {
 		const was_ = drawnFiles(base);
 		const before = recordAt(base);
 		const redrawn = now.size !== was_.size || [...now].some(([p, blob]) => was_.get(p) !== blob);
-		const missing = routesToJudge(now, was_, update).filter((r) => record?.routes?.[r]?.tree !== tree);
+		const missing = routesToJudge(now, was_, update).filter(
+			(r) => record?.routes?.[r]?.tree !== tree
+		);
 		if (repo && update && redrawn && missing.length && keyReadable()) {
 			record = withStored(judgeHere(missing, repo, tree), repo, tree);
 		}
