@@ -299,29 +299,31 @@ def _resolve_test_server() -> dict[str, str]:
 # The server is NOT resolved here: a run that selects no test needing a database (a
 # sandboxed seat with no Docker socket running a pure unit test) must not start a
 # container. `_bind_test_server` resolves it, once, when a selected test first needs one
-# (`pytest_collection_finish`), and moves POSTGRES_HOST/PORT from these placeholders to the
-# server's. Everything else the app reads at import is fixed below without it.
+# (`pytest_collection_finish`), and replaces the placeholders below with the server's
+# host, port and role passwords. The placeholder host cannot resolve, so a test that
+# reaches the database without a fixture from `_DATABASE_FIXTURES` fails loudly and never
+# reaches a Postgres that happens to listen on this machine.
 _TEST_SERVER: dict[str, str] | None = None
 
 # The suite connects as a deployment does (`db/roles.py`): the migrations as an owner role
 # that is not a superuser, the app as the runtime role the first migration creates. The
 # server's own user makes the owner role and the databases, and nothing else. The passwords
-# derive from a per-run secret, minted by the controller and inherited by its xdist workers,
-# so every process of a run agrees on them without the server existing yet.
+# derive from the server's, so every process of a run agrees on them, and so does a later run
+# against the same explicit server, whose runtime role an earlier run already made.
 TEST_OWNER = "{{ package_name }}_test_owner"
 TEST_RUNTIME = "{{ package_name }}_test_runtime"
-_RUN_SECRET = os.environ.setdefault(f"{_TEST_ENV_PREFIX}RUN_SECRET", secrets.token_hex(16))
 
 
 def _role_password(role: str) -> str:
-    return hashlib.sha256(f"{_RUN_SECRET}:{role}".encode()).hexdigest()
+    assert _TEST_SERVER is not None, "role passwords derive from the test server, bound only for a test needing a database"
+    return hashlib.sha256(f"{_TEST_SERVER['password']}:{role}".encode()).hexdigest()
 
 
 os.environ["POSTGRES_USER"] = TEST_OWNER
-os.environ["POSTGRES_PASSWORD"] = _role_password(TEST_OWNER)
+os.environ["POSTGRES_PASSWORD"] = "test-server-not-bound"
 os.environ["POSTGRES_RUNTIME_USER"] = TEST_RUNTIME
-os.environ["POSTGRES_RUNTIME_PASSWORD"] = _role_password(TEST_RUNTIME)
-os.environ["POSTGRES_HOST"] = "127.0.0.1"  # placeholders until `_bind_test_server`
+os.environ["POSTGRES_RUNTIME_PASSWORD"] = "test-server-not-bound"
+os.environ["POSTGRES_HOST"] = "test-server-not-bound.invalid"
 os.environ["POSTGRES_PORT"] = "5432"
 os.environ["POSTGRES_DB"] = TEST_DATABASE_NAME
 
@@ -545,6 +547,8 @@ def _bind_test_server(session) -> None:
     _TEST_SERVER = _resolve_test_server()
     os.environ["POSTGRES_HOST"] = _TEST_SERVER["host"]
     os.environ["POSTGRES_PORT"] = _TEST_SERVER["port"]
+    os.environ["POSTGRES_PASSWORD"] = _role_password(TEST_OWNER)
+    os.environ["POSTGRES_RUNTIME_PASSWORD"] = _role_password(TEST_RUNTIME)
     # Anything the app read from the placeholders at import is stale: its settings, and an engine built on them.
     from {{ package_name }}.config import get_settings
     from {{ package_name }}.db import session as db_session
