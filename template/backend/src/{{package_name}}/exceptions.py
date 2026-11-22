@@ -227,6 +227,8 @@ def safe_log_context(context: dict[str, object]) -> dict[str, object]:
 def _log_exception(request: Request, exc: BackendBaseException) -> None:
     """Log one typed exception with everything that names WHY it was raised.
 
+    A 4xx logs at WARNING, a 5xx at ERROR.
+
     Three things reach the log, and each was missing at least once:
 
     * ``exc.message`` and ``exc.context`` — as before.
@@ -256,7 +258,11 @@ def _log_exception(request: Request, exc: BackendBaseException) -> None:
     log_context = safe_log_context({"path": request.url.path, "method": request.method, **exc.context})
     if exc.details:
         log_context["details"] = exc.details
-    logger.error(
+    # A typed 4xx is the service answering as designed, a refusal the caller
+    # caused; only a 5xx is a fault. The level says which, so an alert or a
+    # reader of ERROR lines never meets an expected refusal.
+    logger.log(
+        logging.WARNING if exc.status_code < 500 else logging.ERROR,
         "%s: %s",
         exc.__class__.__name__,
         exc.message,

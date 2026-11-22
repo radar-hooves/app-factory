@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: a typed client error (BadRequestError, NotFoundError, ForbiddenError and every other 4xx) is logged at WARNING, not ERROR; a 5xx typed error and an unhandled exception stay ERROR with their cause chain, and no response body changes. godswood logged 2,732 expected ingest refusals at ERROR in 30 days (radar-hooves/app-factory#177). Consumer: godswood. Consumer must change: nothing; an app's per-route catch of a 4xx to quiet the log can go, and an alert keyed on ERROR no longer sees refusals.
+
 Need: the public repo reads as a professional one. Consumer: master-project's orchestrator, via the Bragi go-public lane.
 
 Need: every front-end change in a factory app is judged as a rendered picture, at the owner's own widths, by another lab's model, before it deploys, and no lane can skip it ("I'm so sick and tired of my front ends looking like a script kiddie put it together", the operator, 21/11/2026). The layout gate existed but nothing made anyone run it, it rendered at 1673 and 390, its rubric was structural only, and its judge never answered (google/pro 403; openai/sol refuses a system message). Consumer: master-project's orchestrator (lane foreman/wt-7a8f2ec8) on eight's /rounds incident; every stamped app.

@@ -6,6 +6,7 @@ body to the caller does not (`debug` off). A 4xx keeps it: the workspace chooser
 and the entitlement refusal read their details to act.
 """
 
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -75,3 +76,13 @@ async def test_a_4xx_body_keeps_its_details(probe: FastAPI, debug: bool) -> None
 
     assert response.status_code == 400
     assert response.json()["details"] == {"field": "x"}
+
+
+async def test_a_4xx_logs_at_warning_and_a_5xx_at_error(probe: FastAPI, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.DEBUG):
+        await _get(probe, "/bad")
+        await _get(probe, "/upstream")
+
+    levels = {record.getMessage().split(":")[0]: record.levelno for record in caplog.records}
+    assert levels["BadRequestError"] == logging.WARNING
+    assert levels["UpstreamServiceError"] == logging.ERROR
