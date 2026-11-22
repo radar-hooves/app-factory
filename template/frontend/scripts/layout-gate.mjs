@@ -95,7 +95,7 @@ function writeRecord(tree) {
 	const unanswered = report.routes.filter((r) => r.samples.some((s) => s.verdict === 'error'));
 	if (unanswered.length) {
 		console.error(
-			`layout-gate: ${report.model} did not answer every sample for ${unanswered.map((r) => r.path).join(', ')}, so nothing is recorded; run it again.`
+			`layout-gate: the judge did not answer every sample for ${unanswered.map((r) => r.path).join(', ')}, so nothing is recorded; run it again.`
 		);
 		return;
 	}
@@ -106,6 +106,7 @@ function writeRecord(tree) {
 			tree,
 			judged,
 			prompt: r.prompt,
+			judge: [...new Set(r.samples.map((s) => s.judge))].join(' and ') || undefined,
 			verdict: r.verdict === 'pass' ? 'ship' : 'fix',
 			...(r.failures.length
 				? { failures: r.failures }

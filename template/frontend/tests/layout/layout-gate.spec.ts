@@ -17,10 +17,15 @@
  *   (`portcullis exec --vend LITELLM_VIRTUAL_KEY=<the app's gateway key> -- pnpm
  *   layout-gate`); both are required while the judge is on. The key is never
  *   printed or written.
+ * - AGY_HOME               the Gemini seat's home (default /var/lib/agy/google on atlas),
+ *   where `agy` holds the household's Google AI Ultra login. When openai/sol is
+ *   unavailable (a 5xx, a usage limit, no answer) a sample goes to `agy -p` instead, on
+ *   the same prompt; never on sol's verdict.
  */
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
@@ -38,6 +43,12 @@ const WIDEST = VIEWPORTS[0]!;
 // master-project); one sample is unstable on a good page, a majority of three is not,
 // and more than three calls at once draw the gateway's 500s.
 const MODEL = 'openai/sol';
+// The fallback when MODEL is unavailable: Gemini through the genuine agy CLI on the owner's
+// own login (foreman's google:cli route: `-p`, stream-json, `--dangerously-skip-permissions`,
+// the seat profile's `argon`), never through the gateway.
+const FALLBACK = 'google/argon';
+const AGY_MODEL = 'gemini-4-argon-high';
+const AGY_HOME = process.env.AGY_HOME ?? '/var/lib/agy/google';
 const SAMPLES = 3;
 const JUDGE_TIMEOUT_MS = 240_000;
 const JUDGE_CONCURRENCY = 3;
@@ -66,6 +77,7 @@ interface Finding {
 	fix: string;
 }
 interface Sample {
+	judge: string;
 	verdict: 'ship' | 'fix' | 'error';
 	call: string;
 	summary: string;
@@ -379,7 +391,10 @@ function parseSample(text: string, call: string): Sample {
 	};
 }
 
-async function ask(result: RouteResult): Promise<Sample> {
+/** The primary judge cannot be had: not its verdict, which is never a reason to ask another. */
+class Unavailable extends Error {}
+
+async function askSol(result: RouteResult): Promise<Sample> {
 	const images = VIEWPORTS.map((vp) => ({
 		type: 'image_url',
 		image_url: {
@@ -408,17 +423,71 @@ async function ask(result: RouteResult): Promise<Sample> {
 			}),
 			signal: controller.signal
 		});
-		if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
+		if (!res.ok) throw new Unavailable(`HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
 		const json = (await res.json()) as {
 			id?: string;
 			choices?: { message?: { content?: string } }[];
 		};
 		const call = res.headers.get('x-litellm-call-id') ?? json.id ?? '';
-		return parseSample(String(json.choices?.[0]?.message?.content ?? ''), call);
+		return { ...parseSample(String(json.choices?.[0]?.message?.content ?? ''), call), judge: MODEL };
 	} catch (error) {
-		throw new Error(controller.signal.aborted ? 'timed out' : (error as Error).message);
+		if (controller.signal.aborted) throw new Unavailable('timed out');
+		// fetch itself failing (no route, reset) is unavailable; a reply that does not parse is not.
+		throw error instanceof Unavailable || !(error instanceof TypeError)
+			? error
+			: new Unavailable(error.message);
 	} finally {
 		clearTimeout(timer);
+	}
+}
+
+// One agy call at a time: the seat is one login, and the owner's rule for it is one lane.
+let agyQueue: Promise<unknown> = Promise.resolve();
+
+function askAgy(result: RouteResult): Promise<Sample> {
+	const files = VIEWPORTS.map((vp) => resolve(shotPath(result.path, vp.width)));
+	const text = `${prompt(result.pageType)}
+
+The images are files, in this order; read each one: ${files.join(', ')}.
+Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(SCHEMA)}`;
+	const run = () =>
+		new Promise<Sample>((done, fail) => {
+			execFile(
+				'agy',
+				['-p', text, '--output-format', 'stream-json', '--dangerously-skip-permissions', '--model', AGY_MODEL],
+				{
+					cwd: resolve(OUT),
+					env: { PATH: process.env.PATH, HOME: AGY_HOME },
+					timeout: JUDGE_TIMEOUT_MS,
+					maxBuffer: 1 << 26
+				},
+				(error, stdout) => {
+					try {
+						const last = stdout
+							.split('\n')
+							.filter((l) => l.startsWith('{"event":"result"'))
+							.pop();
+						if (!last) throw new Error(error ? error.message : 'no result event');
+						const r = (JSON.parse(last) as { result: Record<string, string> }).result;
+						if (r.status !== 'SUCCESS') throw new Error(`agy ${r.status}`);
+						done({ ...parseSample(r.response ?? '', r.conversation_id ?? ''), judge: FALLBACK });
+					} catch (e) {
+						fail(e);
+					}
+				}
+			);
+		});
+	const next = agyQueue.then(run, run);
+	agyQueue = next.catch(() => undefined);
+	return next;
+}
+
+async function ask(result: RouteResult): Promise<Sample> {
+	try {
+		return await askSol(result);
+	} catch (error) {
+		if (!(error instanceof Unavailable)) throw error;
+		return askAgy(result);
 	}
 }
 
@@ -442,9 +511,10 @@ async function judge(results: RouteResult[], write: () => void): Promise<void> {
 				r.samples.push(await ask(r));
 			} catch (error) {
 				r.samples.push({
+					judge: '',
 					verdict: 'error',
 					call: '',
-					summary: `${MODEL} failed: ${(error as Error).message}`,
+					summary: `judge failed: ${(error as Error).message}`,
 					findings: []
 				});
 			}
@@ -459,7 +529,10 @@ async function judge(results: RouteResult[], write: () => void): Promise<void> {
 function report(results: RouteResult[], judging: boolean): string {
 	const broken = results.filter((r) => r.verdict === 'broken').length;
 	const widths = VIEWPORTS.map((vp) => vp.width).join(', ');
-	const by = judging ? `judged by ${MODEL}, ${SAMPLES} samples a route` : 'judge off';
+	const judges = [...new Set(results.flatMap((r) => r.samples.map((s) => s.judge)))].filter(Boolean);
+	const by = judging
+		? `judged by ${judges.join(' and ') || MODEL}, ${SAMPLES} samples a route`
+		: 'judge off';
 	const summary = `${results.length} routes, ${broken} broken, at ${widths} px, ${by}`;
 	const rank = (f: Finding) => (f.severity === 'major' ? 0 : 1);
 	const lines: string[] = [];
