@@ -125,8 +125,14 @@ const globRegex = (pattern) => {
 			i += pattern[i + 2] === '/' ? 2 : 1;
 		} else if (c === '*') out += '[^/]*';
 		else if (c === '?') out += '[^/]';
-		else if (c === '{') ((out += '(?:'), depth++);
-		else if (c === '}' && depth) ((out += ')'), depth--);
+		else if (c === '{') {
+			out += '(?:';
+			depth++;
+		}
+		else if (c === '}' && depth) {
+			out += ')';
+			depth--;
+		}
 		else if (c === ',' && depth) out += '|';
 		else out += c.replace(/[.+^$()|[\]\\{}]/g, '\\$&');
 	}
@@ -198,7 +204,10 @@ export function renders(files, route) {
 	const seen = new Set();
 	const queue = [];
 	const add = (p) => {
-		if (!seen.has(p)) (seen.add(p), queue.push(p));
+		if (!seen.has(p)) {
+			seen.add(p);
+			queue.push(p);
+		}
 	};
 	for (const p of files.keys()) {
 		const dir = dirname(p);
