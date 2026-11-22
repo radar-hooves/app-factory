@@ -32,6 +32,9 @@ from {{ package_name }}.db.scoping import bind_session, unscoped
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
 
+# These reach the database through `get_session_factory`, not a fixture; this one binds the test server.
+pytestmark = pytest.mark.usefixtures("server_url")
+
 DOMAIN = "example/lessons-test"
 SITUATION = ["reading", "unit-test"]
 

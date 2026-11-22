@@ -37,11 +37,15 @@ permanent factory furniture no app ever deletes.
 import uuid
 
 import httpx
+import pytest
 
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
 
 from tests.support import live_server
+
+# The test reaches the database through a live server, not a fixture; this one binds the test server.
+pytestmark = pytest.mark.usefixtures("server_url")
 
 # Measured against FastAPI 0.136.3 over a real loopback socket (no artificial
 # delay in get_session's own commit): the default "request" scope misses the
