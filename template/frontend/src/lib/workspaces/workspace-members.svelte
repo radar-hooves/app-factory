@@ -298,7 +298,9 @@
 							{/if}
 						</Table.Cell>
 						<Table.Cell>
-							<Badge variant={member.role === 'owner' ? 'secondary' : 'outline'}>{member.role}</Badge>
+							<Badge variant={member.role === 'owner' ? 'secondary' : 'outline'}
+								>{member.role}</Badge
+							>
 							{#if member.status === 'pending'}
 								<Badge variant="secondary" data-testid="workspace-member-pending">invited</Badge>
 							{/if}
