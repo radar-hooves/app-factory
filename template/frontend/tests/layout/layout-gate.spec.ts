@@ -365,7 +365,7 @@ async function renderRoute(browser: Browser, baseURL: string, path: string): Pro
 	};
 }
 
-function parseSample(text: string, call: string): Sample {
+function parseSample(text: string, call: string): Omit<Sample, 'judge'> {
 	const body = text.replace(/```(?:json)?/gi, '');
 	const start = body.indexOf('{');
 	const end = body.lastIndexOf('}');
@@ -429,7 +429,10 @@ async function askSol(result: RouteResult): Promise<Sample> {
 			choices?: { message?: { content?: string } }[];
 		};
 		const call = res.headers.get('x-litellm-call-id') ?? json.id ?? '';
-		return { ...parseSample(String(json.choices?.[0]?.message?.content ?? ''), call), judge: MODEL };
+		return {
+			...parseSample(String(json.choices?.[0]?.message?.content ?? ''), call),
+			judge: MODEL
+		};
 	} catch (error) {
 		if (controller.signal.aborted) throw new Unavailable('timed out');
 		// fetch itself failing (no route, reset) is unavailable; a reply that does not parse is not.
@@ -454,7 +457,15 @@ Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(
 		new Promise<Sample>((done, fail) => {
 			execFile(
 				'agy',
-				['-p', text, '--output-format', 'stream-json', '--dangerously-skip-permissions', '--model', AGY_MODEL],
+				[
+					'-p',
+					text,
+					'--output-format',
+					'stream-json',
+					'--dangerously-skip-permissions',
+					'--model',
+					AGY_MODEL
+				],
 				{
 					cwd: resolve(OUT),
 					env: { PATH: process.env.PATH, HOME: AGY_HOME },
@@ -514,7 +525,7 @@ async function judge(results: RouteResult[], write: () => void): Promise<void> {
 					judge: '',
 					verdict: 'error',
 					call: '',
-					summary: `judge failed: ${(error as Error).message}`,
+					summary: `judge failed: ${(error as Error).message.slice(0, 200)}`,
 					findings: []
 				});
 			}
@@ -529,7 +540,9 @@ async function judge(results: RouteResult[], write: () => void): Promise<void> {
 function report(results: RouteResult[], judging: boolean): string {
 	const broken = results.filter((r) => r.verdict === 'broken').length;
 	const widths = VIEWPORTS.map((vp) => vp.width).join(', ');
-	const judges = [...new Set(results.flatMap((r) => r.samples.map((s) => s.judge)))].filter(Boolean);
+	const judges = [...new Set(results.flatMap((r) => r.samples.map((s) => s.judge)))].filter(
+		Boolean
+	);
 	const by = judging
 		? `judged by ${judges.join(' and ') || MODEL}, ${SAMPLES} samples a route`
 		: 'judge off';
