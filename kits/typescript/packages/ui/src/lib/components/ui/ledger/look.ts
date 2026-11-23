@@ -16,6 +16,21 @@ export function listLayout(width: number): 'phone' | 'narrow' | 'wide' {
 	return width === 0 ? 'narrow' : width < PHONE_BELOW ? 'phone' : width >= WIDE_FROM ? 'wide' : 'narrow';
 }
 
+/**
+ * A wide list reads as columns of rows, never one row across the whole screen:
+ * a name and its value 100rem apart cannot be followed by the eye, and a list
+ * held to a measure leaves a band beside it. Rows flow into as many lanes as
+ * each hold a lane's own minimum (the name track, 9rem a further column and a
+ * margin, never under 40rem) and at least four rows, so a list of five columns
+ * keeps one lane until the frame is twice its minimum.
+ */
+export const LANE_GAP = 1.5;
+export function laneCount(width: number, columns: number, rows: number): number {
+	const min = Math.max(40, 24 + 9 * (columns - 1));
+	const fit = Math.floor((width / 16 + LANE_GAP) / (min + LANE_GAP));
+	return Math.max(1, Math.min(fit, Math.floor(rows / 4)));
+}
+
 export const CELL = 'min-w-0 truncate px-2';
 export const END = 'pr-5 text-right';
 /** The row's height rides the package's density ramp: 3.5rem, 3rem compact. */

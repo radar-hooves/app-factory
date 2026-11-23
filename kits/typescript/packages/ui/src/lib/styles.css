@@ -1305,7 +1305,8 @@
 	   column of rows leaves two thirds of the page empty. From 86rem of frame
 	   (the rail's pane, then two columns of rows and their gutters) the block
 	   takes the frame's width and its rows flow across it, in as many columns
-	   as hold 30rem each; narrower, it keeps the panel measure and one column.
+	   as hold 30rem each and never more than it has rows (auto-fit drops the
+   empty tracks); narrower, it keeps the panel measure and one column.
 	   A row's rule is under it, so every column ends on one, and the body's own
 	   closing rule is dropped. */
 	.ds-page[data-page='panel'] [data-slot='panel-body']:has(> [data-slot='settings-row']) {
@@ -1319,7 +1320,7 @@
 
 		.ds-page[data-page='panel'] [data-slot='panel-body']:has(> [data-slot='settings-row']) {
 			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
 			column-gap: 3rem;
 		}
 	}

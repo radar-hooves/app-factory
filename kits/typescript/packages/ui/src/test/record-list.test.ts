@@ -333,6 +333,22 @@ describe('list layout by the list’s own width', () => {
 	});
 });
 
+describe('lanes by the list’s own width', () => {
+	it('splits a wide list into as many lanes as hold their minimum, and never a lane of under four rows', async () => {
+		const { laneCount } = await import('#lib/components/ui/ledger/look.js');
+		// A name and one value: 40rem a lane. 2550px of frame is about 143rem.
+		expect(laneCount(143 * 16, 2, 20)).toBe(3);
+		expect(laneCount(90 * 16, 2, 20)).toBe(2);
+		expect(laneCount(60 * 16, 2, 20)).toBe(1);
+		expect(laneCount(143 * 16, 2, 9)).toBe(2);
+		expect(laneCount(143 * 16, 2, 3)).toBe(1);
+		// Six columns need 69rem a lane: two from 139rem, one below.
+		expect(laneCount(143 * 16, 6, 20)).toBe(2);
+		expect(laneCount(120 * 16, 6, 20)).toBe(1);
+		expect(laneCount(0, 2, 20)).toBe(1);
+	});
+});
+
 describe('RecordList: a cell follows its row', () => {
 	const figures = (c: HTMLElement) =>
 		[...c.querySelectorAll<HTMLElement>('[data-probe="figure"]')].map((s) => s.textContent);

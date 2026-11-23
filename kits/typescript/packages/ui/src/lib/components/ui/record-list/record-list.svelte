@@ -20,7 +20,9 @@
 	 * the layout, as the Ledger's does: a phone's list below 480px, the wide
 	 * tracks and the `'wide'` columns from 1200px. On a phone a row is its
 	 * thumbnail, title and lines, with the first end-aligned column's value
-	 * beside the title.
+	 * beside the title. A wide list flows its groups (ungrouped, its rows) into
+	 * side-by-side lanes, each as wide as its columns need, so no row runs the
+	 * whole screen and no band stands beside the list: no page caps it.
 	 */
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
@@ -44,6 +46,7 @@
 		RULE,
 		THROUGH,
 		groupSpacing,
+		laneCount,
 		listLayout
 	} from '../ledger/look.js';
 	import ListToolbar from '../list-toolbar/list-toolbar.svelte';
@@ -265,6 +268,27 @@
 		return by ? out.map((g) => ({ ...g, rows: orderBy(g.rows, by, activeSort!.dir) })) : out;
 	});
 
+	// ── Lanes: a wide list's groups (or, ungrouped, its rows) in order, cut into side-by-side lists ──
+	type Group = (typeof groups)[number];
+	const lanes = $derived.by<Group[][]>(() => {
+		const n = WIDE ? laneCount(width, shown.length, rows.length) : 1;
+		if (n < 2) return [groups];
+		if (!grouping) {
+			const per = Math.ceil(rows.length / n);
+			return Array.from({ length: n }, (_, i) => [
+				{ ...groups[0]!, key: `lane-${i}`, rows: groups[0]!.rows.slice(i * per, (i + 1) * per) }
+			]).filter((lane) => lane[0]!.rows.length);
+		}
+		const out: Group[][] = [[]];
+		let seen = 0;
+		for (const g of groups) {
+			if (out.length < n && out.at(-1)!.length && seen >= (rows.length / n) * out.length) out.push([]);
+			out.at(-1)!.push(g);
+			seen += g.rows.length;
+		}
+		return out;
+	});
+
 	const thumbs = $derived(!!icon || rows.some((r) => r.image || r.icon));
 	const openable = $derived(!!href || !!onOpen);
 	const totals = $derived(!!totalLabel && shown.some((c) => c.total));
@@ -433,7 +457,7 @@
 
 <div
 	bind:clientWidth={width}
-	class={cn('relative -mx-2 flex min-h-0 max-w-[calc(96rem+1rem)] flex-1 flex-col', className)}
+	class={cn('relative -mx-2 flex min-h-0 flex-1 flex-col', className)}
 	data-slot="record-list"
 	data-layout={mode}
 	{...restProps}
@@ -479,85 +503,95 @@
 		style="scrollbar-gutter: stable;"
 		data-slot="record-rows"
 	>
-		{#if head && !PHONE}
-			<div class={HEAD_GROUND}>
-				<div
-					class={cn(HEAD, grouping && HEAD_GROUPED)}
-					style:grid-template-columns={template} data-slot="record-head">
-					{#each shown as c, i (c.key)}
-						{@const mine = activeSort?.key === c.key ? activeSort : null}
-						<HeadCell
-							label={c.head ?? c.label}
-							name={c.label}
-							align={c.align}
-							sortable={!!sorter(c)}
-							sort={mine ? (mine.dir === -1 ? 'desc' : 'asc') : null}
-							first={firstOf(c) === 1 ? 'asc' : 'desc'}
-							onsort={() => sortBy(c.key)}
-							owner="record"
-							class={i === 0 ? FIRST : undefined}
-						/>
-					{/each}
-				</div>
-			</div>
-		{/if}
-
-		{#if rows.length === 0}
-			{#if empty}{@render empty()}{:else}<EmptyState title="No {noun[1]}" />{/if}
-		{:else}
-			{#each groups as g, gi (g.key)}
-				{#if grouping}
-					<div class={groupSpacing(gi)}>
+		<div
+			class="grid items-start gap-x-6"
+			style="grid-template-columns: repeat({lanes.length}, minmax(0, 1fr));"
+			data-slot="record-lanes"
+		>
+			{#each lanes as lane, li (li)}
+				<div class="min-w-0" data-slot="record-lane">
+				{#if head && !PHONE}
+					<div class={HEAD_GROUND}>
 						<div
-							class={cn(GROUP, PHONE ? 'flex items-center gap-2 px-0.5' : 'grid items-center')}
-							style:grid-template-columns={PHONE ? undefined : template}
-							data-slot="record-group"
-						>
-							{#if PHONE}
-								{@render mark(g.mark)}
-								<h3 class={cn(GROUP_LABEL, 'whitespace-nowrap')}>{g.key}</h3>
-								<span class="min-w-0 flex-1 truncate">{g.rows.length.toLocaleString()}</span>
-							{:else}
-								<div
-									class="flex min-w-0 items-baseline gap-3 overflow-hidden pl-3 whitespace-nowrap"
-									style="grid-column: 1;"
-								>
-									{@render mark(g.mark)}
-									<h3 class={GROUP_LABEL}>{g.key}</h3>
-									<span class="min-w-0 truncate">{count(g.rows.length)}</span>
-								</div>
-								{#each shown as c, i (c.key)}
-									{#if i > 0 && c.total}
-										<span
-											class={cn(CELL, c.align === 'end' && END, 'tabular-nums')}
-											style="grid-column: {i + 1};">{c.total(g.rows)}</span
-										>
-									{/if}
-								{/each}
-							{/if}
+							class={cn(HEAD, grouping && HEAD_GROUPED)}
+							style:grid-template-columns={template} data-slot="record-head">
+							{#each shown as c, i (c.key)}
+								{@const mine = activeSort?.key === c.key ? activeSort : null}
+								<HeadCell
+									label={c.head ?? c.label}
+									name={c.label}
+									align={c.align}
+									sortable={!!sorter(c)}
+									sort={mine ? (mine.dir === -1 ? 'desc' : 'asc') : null}
+									first={firstOf(c) === 1 ? 'asc' : 'desc'}
+									onsort={() => sortBy(c.key)}
+									owner="record"
+									class={i === 0 ? FIRST : undefined}
+								/>
+							{/each}
 						</div>
 					</div>
 				{/if}
-				<div class={CARD} data-slot="record-card">
-					{#each g.rows as r, ri (r.id)}
-						{@render row(r, ri === 0)}
+
+				{#if rows.length === 0 && li === 0}
+					{#if empty}{@render empty()}{:else}<EmptyState title="No {noun[1]}" />{/if}
+				{:else if rows.length}
+					{#each lane as g, gi (g.key)}
+						{#if grouping}
+							<div class={groupSpacing(gi)}>
+								<div
+									class={cn(GROUP, PHONE ? 'flex items-center gap-2 px-0.5' : 'grid items-center')}
+									style:grid-template-columns={PHONE ? undefined : template}
+									data-slot="record-group"
+								>
+									{#if PHONE}
+										{@render mark(g.mark)}
+										<h3 class={cn(GROUP_LABEL, 'whitespace-nowrap')}>{g.key}</h3>
+										<span class="min-w-0 flex-1 truncate">{g.rows.length.toLocaleString()}</span>
+									{:else}
+										<div
+											class="flex min-w-0 items-baseline gap-3 overflow-hidden pl-3 whitespace-nowrap"
+											style="grid-column: 1;"
+										>
+											{@render mark(g.mark)}
+											<h3 class={GROUP_LABEL}>{g.key}</h3>
+											<span class="min-w-0 truncate">{count(g.rows.length)}</span>
+										</div>
+										{#each shown as c, i (c.key)}
+											{#if i > 0 && c.total}
+												<span
+													class={cn(CELL, c.align === 'end' && END, 'tabular-nums')}
+													style="grid-column: {i + 1};">{c.total(g.rows)}</span
+												>
+											{/if}
+										{/each}
+									{/if}
+								</div>
+							</div>
+						{/if}
+						<div class={CARD} data-slot="record-card">
+							{#each g.rows as r, ri (r.id)}
+								{@render row(r, ri === 0)}
+							{/each}
+						</div>
 					{/each}
+					{#if totals && li === 0}
+						<div class={cn(CARD, 'mt-3')} data-slot="record-total">
+							<div
+								class={cn(
+									'font-semibold',
+									PHONE ? 'flex items-center gap-3 px-3 py-3 text-sm' : cn('grid items-center', ROW_TEXT)
+								)}
+								style={PHONE ? undefined : `grid-template-columns: ${template}; ${ROW_HEIGHT}`}
+							>
+								{@render total()}
+							</div>
+						</div>
+					{/if}
+				{/if}
 				</div>
 			{/each}
-			{#if totals}
-				<div class={cn(CARD, 'mt-3')} data-slot="record-total">
-					<div
-						class={cn(
-							'font-semibold',
-							PHONE ? 'flex items-center gap-3 px-3 py-3 text-sm' : cn('grid items-center', ROW_TEXT)
-						)}
-						style={PHONE ? undefined : `grid-template-columns: ${template}; ${ROW_HEIGHT}`}
-					>
-						{@render total()}
-					</div>
-				</div>
-			{/if}
-		{/if}
+		</div>
 		{@render footer?.()}
 	</div>
 </div>

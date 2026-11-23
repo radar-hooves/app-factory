@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.19] - 2026-11-23
+
+Need: a page built on `RecordList` passes the layout gate's judge at 2550, 1728 and 411 px with no `max-w-none` on the page; a settings section of two rows does not draw an empty third column. Consumer: godswood via master-project (RecordList on /admin, /admin/users, /networth/ownership; /settings with two `SettingsRow`s). Judged on the factory's scratch app (google/argon, 3 samples a route): two- and six-column lists, flat and grouped, and profile sections of two, three and six rows; verdicts in the factory CHANGELOG.
+
+### Changed
+
+- **A wide `RecordList` flows its rows into lanes.** The 96rem cap is gone. From 1200px the list cuts its groups (ungrouped, its rows) in order into side-by-side lanes, each with its own head, as many as hold a lane's minimum: 40rem, or 24rem and 9rem a column past the name for a list of many columns, and never a lane of under four rows. A name and one value is three lanes of about 46rem at 2550px and two at 1728px; a list of five value columns keeps one lane until the frame is twice its minimum; a short list, a phone and a narrow list are one lane as before. A group is never split between lanes, so its count and totals stay true; a list read down a lane and then the next, as a newspaper is. Full width left a name and its value 100rem apart and a capped list a band beside it; GitHub and Stripe hold a table to a measure, Linear and Notion run it full width with the gap, and neither read as finished to the judge or the owner.
+- **A settings section never has more columns than rows.** The grid's tracks are `auto-fit`, so two rows are two columns across the page and the third track is dropped, where they filled two of three with the rules running on past the last value.
+- **`ListToolbar`'s controls stay on the title's line on a phone** when they fit, right-aligned as on a wide list, and drop together to a line of their own only when they do not; 2026.11.18 forced them to a line of their own always.
+
+### Consumer must change
+
+- Nothing to take it. A page that put `max-w-none` on a `RecordList` page to get past the cap may drop it: the cap is gone, and the list is no longer one wide table at 2550px.
+
 ## [2026.11.18] - 2026-11-23
 
 Need: a settings page with a short list of rows passes the layout gate's judge at 2550, 1728 and 411 px with no per-app patching. Consumer: godswood via master-project (radar-hooves/godswood#965 slice 1); its /settings/integrations (six `SettingsRow`s in one `Panel`) was judged fix in 9 of 9 samples on the 52rem column. Judged on the factory's scratch app with three shapes of that page (a Panel with icon, title and subtitle; a PageHeader over an untitled Panel; a Panel with title and description), google/argon, 3 samples a route: before fix, fix, fix on each (a width major at 2550 and 1728, and a truncated subtitle at 411); after ship, ship, ship on each. The factory's own /settings (Members) judged ship, ship, ship before and after.
