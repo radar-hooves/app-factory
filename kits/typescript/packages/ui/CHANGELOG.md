@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.20] - 2026-11-23
+
+Need: three godswood routes the layout gate's judge refused after 2026.11.19 (consumer: godswood via master-project, radar-hooves/godswood#965 slice 1): an empty `RecordList` judged fix for blending into the page, `/settings/integrations` judged fix for ink and grey with no service icons, and a phone's search box stopping short of the row's edge. Judged on the factory's scratch app (google/argon, 3 samples a route, 2550, 1728 and 411 px, godswood's own markup for the empty state, the toolbar and six rows): before, empty list fix x3 (major legibility: no surface or border; major colour-and-icons), six rows fix x3 (major colour-and-icons); after, empty list on a card fix, fix, ship with only the colour-and-icons finding left, the same list with an icon on its `EmptyState` ship x3, six rows with `icon` ship x3.
+
+### Changed
+
+- **An empty `RecordList` sits on a card of its own**, under the head card, whether it draws the default `EmptyState` or the consumer's `empty` snippet; it stood bare on the page ground. The default `EmptyState` takes the list's `icon`.
+- **`SettingsRow` takes `icon`**, a mark before the name (a service's glyph, a kind of setting), in the kit's accent tone. A state beside the control is already a `StatusBadge` child, which carries the kit's tone: a row that reads grey has been given `neutral`.
+- **`ListToolbar`'s search box grows to the row's end on a phone**, never under 14rem, so the placeholder stays whole. Any `InputGroup` placed in the toolbar's controls does so; an app's `max-sm:flex-1` is no longer needed.
+
+### Consumer must change
+
+- Nothing to take it. An app's own `empty` snippet gets its icon by passing `icon` to its `EmptyState`: the judge still reads a card with no mark as flat. A `SettingsRow` list gains `icon` where each row is a thing with a glyph, and `StatusBadge` `warning` or `info` where a state wants a tone.
+
 ## [2026.11.19] - 2026-11-23
 
 Need: a page built on `RecordList` passes the layout gate's judge at 2550, 1728 and 411 px with no `max-w-none` on the page; a settings section of two rows does not draw an empty third column. Consumer: godswood via master-project (RecordList on /admin, /admin/users, /networth/ownership; /settings with two `SettingsRow`s). Judged on the factory's scratch app (google/argon, 3 samples a route): two- and six-column lists, flat and grouped, and profile sections of two, three and six rows; verdicts in the factory CHANGELOG.

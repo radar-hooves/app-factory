@@ -46,6 +46,16 @@ async function openColumns() {
 	return document.body.querySelector<HTMLElement>('[data-slot="record-columns"]')!;
 }
 
+describe('RecordList: an empty list', () => {
+	it('sits on a card of its own, with the list’s tile on its empty state', () => {
+		const r = mount({ rows: [], tile: true });
+		const card = r.container.querySelector('[data-slot="record-empty"]')!;
+		expect(card.className).toContain('border');
+		expect(card).toHaveTextContent('No properties');
+		expect(card.querySelector('svg')).not.toBeNull();
+	});
+});
+
 describe('RecordList: the title, then the module’s columns', () => {
 	it('heads the title column first, then the module’s, a wide-only column held back', () => {
 		const { heads } = mount();

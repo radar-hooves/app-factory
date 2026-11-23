@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import type { Component, Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 
@@ -13,6 +13,7 @@
 	let {
 		label,
 		description,
+		icon: Icon,
 		controlId,
 		children,
 		ref = $bindable(null),
@@ -22,6 +23,8 @@
 		label: string;
 		/** What the setting does or costs; wraps beneath the label. */
 		description?: string;
+		/** The setting's mark, before its name: a service's glyph, a kind of setting. */
+		icon?: Component<{ class?: string }>;
 		/** The control's `id`: the label then names it (click focuses, screen reader announces). */
 		controlId?: string;
 		/** The control. */
@@ -38,6 +41,7 @@
 	)}
 	{...restProps}
 >
+	{#if Icon}<Icon class="ds-icon-accent text-muted-foreground size-5 flex-none" />{/if}
 	<div class="min-w-48 flex-1">
 		{#if controlId}
 			<label for={controlId} class="text-body block leading-tight font-medium">{label}</label>

@@ -58,7 +58,8 @@
 	<!--
 		Crowded, nothing ends in an ellipsis: the controls drop together to a
 		line of their own, still at the end, then the count drops under the
-		title, then the title wraps.
+		title, then the title wraps. A search box on a phone grows to the row's end, never
+		under 14rem, so its placeholder stays whole.
 	-->
 	{#if title || meta}
 		<div class="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
@@ -69,7 +70,7 @@
 		</div>
 	{/if}
 	<div
-		class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-sm:flex-auto [&:not(:has(>*))]:hidden"
+		class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-sm:flex-auto max-sm:[&>[data-slot=input-group]]:flex-[1_1_14rem] [&:not(:has(>*))]:hidden"
 		data-slot="list-toolbar-controls"
 	>
 		{@render children?.()}

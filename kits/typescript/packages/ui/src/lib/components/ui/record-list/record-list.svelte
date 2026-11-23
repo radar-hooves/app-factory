@@ -534,7 +534,9 @@
 				{/if}
 
 				{#if rows.length === 0 && li === 0}
-					{#if empty}{@render empty()}{:else}<EmptyState title="No {noun[1]}" />{/if}
+					<div class={CARD} data-slot="record-empty">
+						{#if empty}{@render empty()}{:else}<EmptyState {icon} title="No {noun[1]}" />{/if}
+					</div>
 				{:else if rows.length}
 					{#each lane as g, gi (g.key)}
 						{#if grouping}

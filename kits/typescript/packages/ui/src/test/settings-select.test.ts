@@ -28,6 +28,13 @@ describe('SettingsRow', () => {
 		expect(screen.getByText('On start.')).toBeInTheDocument();
 	});
 
+	it('marks a row with its icon before the name, and leaves a row without one bare', () => {
+		render(Harness);
+		const [first, second] = [...document.querySelectorAll('[data-slot="settings-row"]')];
+		expect(first!.querySelector(':scope > svg')).toBeNull();
+		expect(second!.querySelector(':scope > svg')).not.toBeNull();
+	});
+
 	it('is a slotted row with a rule under it, flush with the panel edge', () => {
 		render(Harness);
 		const rows = [...document.querySelectorAll('[data-slot="settings-row"]')];
