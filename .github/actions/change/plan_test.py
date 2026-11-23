@@ -1902,3 +1902,98 @@ def test_a_library_keeps_its_own_leg(mono, tmp_path):
     groups, singles = groups_of(out)
     assert json.loads(out["libraries"])[0]["name"] == "lib"
     assert "lib" not in {n for g in groups for n in g["names"]} | {m["name"] for m in singles}
+
+
+def test_a_shipping_leg_publishes_in_its_own_job_and_a_group_member_in_its_group(mono, tmp_path):
+    repo, base = mono
+    head = change(repo, {"packages/lib/lib.py": "x = 3\n", "packages/a/a.py": "x = 3\n", "packages/b/b.py": "x = 3\n"})
+    (tmp_path / "own").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "own")
+    ships = {s["name"]: s for s in json.loads(out["ships"])}
+    assert (ships["a"]["kind"], ships["a"]["markers"]) == ("mcp", ["passed-a", "passed-lib"])
+    assert json.loads(out["lib_ships"]) == []
+    (tmp_path / "grouped").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "grouped", CHANGE_GROUPS="1")
+    assert "a" not in {s["name"] for s in json.loads(out["ships"])}
+    (tmp_path / "branch").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "branch", GITHUB_REF="refs/heads/x")
+    assert json.loads(out["ships"]) == []
+
+
+def test_a_dependant_publishes_only_after_its_library_is_published(mono, tmp_path):
+    repo, _ = mono
+    base = change(repo, {"pyproject.toml": ROOT.replace("CLIENTS", "") + '[tool.change]\npublish = "wheels"\n'})
+    head = change(
+        repo,
+        {"packages/lib/lib.py": "x = 4\n", "packages/a/a.py": "x = 4\n", "packages/b/b.py": "x = 4\n"},
+    )
+    (tmp_path / "own").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "own")
+    # The library publishes in its own job; the carriers' publish waits for it.
+    assert [(s["kind"], s["name"], s["markers"]) for s in json.loads(out["lib_ships"])] == [
+        ("wheel", "lib", ["passed-lib"])
+    ]
+    ships = {s["name"]: s["markers"] for s in json.loads(out["ships"])}
+    assert ships == {
+        "a": ["passed-a", "passed-lib", "published-lib"],
+        "b": ["passed-b", "passed-lib", "published-lib"],
+    }
+    # A group's members publish in the group's leg, which waits for the same marker.
+    (tmp_path / "grouped").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "grouped", CHANGE_GROUPS="1")
+    members = [m for g in json.loads(out["carrier_groups"]) for m in g["members"]]
+    assert sorted((m["name"], m["pwaits"]) for m in members) == [("a", ["published-lib"]), ("b", ["published-lib"])]
+    assert json.loads(out["ships"]) == []
+
+
+STUB = """#!/bin/sh
+# gh api --paginate <path> --jq <expr>: serves the jobs of the attempt asked for, `all` or `latest`.
+case "$*" in *filter=latest*) f=latest;; *) f=all;; esac
+while [ "$1" != --jq ]; do shift; done
+jq -c "$2" "$JOBS/$f.json"
+"""
+
+
+def job(name, conclusion, passed=True, attempt=1):
+    steps = [{"name": "passed", "conclusion": "success" if passed else None}]
+    return {"name": f"change / {name}", "status": "completed", "conclusion": conclusion, "steps": steps}
+
+
+def wait(tmp_path, jobs_all, jobs_latest, marker):
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "gh").write_text(STUB)
+    (tmp_path / "bin" / "gh").chmod(0o755)
+    for name, jobs in (("all", jobs_all), ("latest", jobs_latest)):
+        (tmp_path / f"{name}.json").write_text(json.dumps({"jobs": jobs}))
+    return subprocess.run(
+        [str(HERE / "wait.sh"), ".", marker],
+        env={
+            **ENV,
+            "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}",
+            "JOBS": str(tmp_path),
+            "GITHUB_REPOSITORY": "o/r",
+            "GITHUB_RUN_ID": "1",
+            "GH_TOKEN": "t",
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_a_wait_reads_only_the_latest_execution_of_a_leg(tmp_path):
+    first = job("test a", "success")
+    rerun = job("test a", "failure", passed=False, attempt=2)
+    r = wait(tmp_path, [first, rerun], [rerun], "passed-a")
+    assert r.returncode != 0 and "finished its leg without passing" in r.stderr + r.stdout
+
+
+def test_a_wait_passes_on_the_latest_pass_and_on_a_published_library(tmp_path):
+    ok = job("test a", "success")
+    assert wait(tmp_path / "t", [ok], [ok], "passed-a").returncode == 0 if (tmp_path / "t").mkdir() is None else False
+    pub = job("publish lib", "success", passed=False)
+    (tmp_path / "p").mkdir()
+    assert wait(tmp_path / "p", [pub], [pub], "published-lib").returncode == 0
+    bad = job("publish lib", "failure", passed=False)
+    (tmp_path / "q").mkdir()
+    assert wait(tmp_path / "q", [bad], [bad], "published-lib").returncode != 0

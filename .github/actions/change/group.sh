@@ -15,7 +15,7 @@ trap 'rm -rf "$CHANGE_FLAKE_ROOTS" "$GRADLE_PASSED"' EXIT
 declare -A done_rc=()
 # `-` for no base: read's tab IFS folds an empty field into its neighbour.
 rows=$(jq -r '.[] | [.name, (.path | if . == "" then "." end), .toolchain, .test, .deploy, .deploy_now,
-  .workers, (.base // "-"), (.waits | join(" "))] | @tsv' <<<"$MEMBERS")
+  .workers, (.base // "-"), ((.waits + .pwaits) | join(" "))] | @tsv' <<<"$MEMBERS")
 gnames=() gpaths=()
 while IFS=$'\t' read -r name path toolchain test _; do
   [ "$toolchain" = gradle ] && [ "$test" = true ] || continue

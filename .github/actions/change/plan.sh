@@ -134,6 +134,12 @@ plan=$(jq -c 'def marker: "passed-" + gsub("[^A-Za-z0-9._-]"; "_");
   | .libraries |= sort_by(. as $l | [$under[] | select(any(.[]; . == $l))] | length)' <<<"$plan")
 ship=false
 [ "${GITHUB_REF:-}" = refs/heads/main ] && [[ $ev =~ ^(push|workflow_dispatch)$ ]] && ship=true
+# A leg that publishes a wheel or an MCP server, and its `pwaits`: the libraries it waits on whose own
+# publish this run makes, since a dependant publishes only once its library has.
+plan=$(jq -c --argjson s "$ship" 'def rel: .deploy_now and $s and (.deploy | IN("wheel", "mcp"));
+  def marker: gsub("[^A-Za-z0-9._-]"; "_");
+  .libraries as $l | [.members[] | select(rel and (.name | IN($l[]))) | "published-" + (.name | marker)] as $lp
+  | .members |= map(. + {pwaits: [.waits[] | sub("^passed-"; "published-") | select(IN($lp[]))]})' <<<"$plan")
 # Images build after the tests, off the test legs: BuildKit's memory is outside every runner's cap.
 # One whose build runner differs from its deploy runner is `split`: it builds in its own job.
 deploys=$(jq -c --argjson s "$ship" '(.members | map({key: .name, value: .}) | from_entries) as $by
@@ -160,6 +166,14 @@ split=$(jq -c --argjson s "$ship" --argjson n "$groups" --argjson gn "$gradle" '
   | ($run - [$g[].members[], $cg[].members[]]) as $own
   | {groups: $g, members: [$own[] | select(class != "carrier-")],
      carrier_groups: $cg, carriers: [$own[] | select(class == "carrier-")]}' <<<"$plan")
+# A wheel or an MCP server of a leg of its own publishes after its leg passed, in `publish-library`
+# (a library, one at a time and dependencies first) or `publish` (the rest, once the libraries are on
+# the index); a group's members publish inside the group's leg.
+ship_row='select(.deploy_now and $s and (.deploy | IN("wheel", "mcp")))
+  | {kind: .deploy, path: (.path | if . == "" then "." end), name, markers: ([.marker] + .waits + .pwaits)}'
+ships=$(jq -c --argjson s "$ship" --argjson sp "$split" '([$sp.members[], $sp.carriers[]] | map(.name)) as $legs
+  | [.members[] | select(.name | IN($legs[])) | '"$ship_row"']' <<<"$plan")
+lib_ships=$(jq -c --argjson s "$ship" '. as $p | [.libraries[] as $n | $p.members[] | select(.name == $n) | '"$ship_row"']' <<<"$plan")
 {
   echo "plan=$plan"
   echo "head=$head"
@@ -169,6 +183,8 @@ split=$(jq -c --argjson s "$ship" --argjson n "$groups" --argjson gn "$gradle" '
   echo "carrier_groups=$(jq -c .carrier_groups <<<"$split")"
   echo "libraries=$(jq -c '[.libraries[] as $n | .members[] | select(.name == $n)]' <<<"$plan")"
   echo "deploys=$deploys"
+  echo "ships=$ships"
+  echo "lib_ships=$lib_ships"
   echo "builds=$(jq -c '[.[] | select(.split) | .phase = "build"]' <<<"$deploys")"
   echo "repo=$(jq -r '[(.repo_suites | select(.) | "suites"), (.typecheck_all | select(.) | "typecheck")] | join(" ")' <<<"$plan")"
   echo "changed=$(jq -r .changed_members <<<"$plan" | tr -cd 'A-Za-z0-9._,-')"

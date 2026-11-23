@@ -52,6 +52,8 @@ jobs:
       libraries: ${{ steps.plan.outputs.libraries }}
       deploys: ${{ steps.plan.outputs.deploys }}
       builds: ${{ steps.plan.outputs.builds }}
+      ships: ${{ steps.plan.outputs.ships }}
+      lib_ships: ${{ steps.plan.outputs.lib_ships }}
       repo: ${{ steps.plan.outputs.repo }}
       changed: ${{ steps.plan.outputs.changed }}
       ship: ${{ steps.plan.outputs.ship }}
@@ -98,9 +100,8 @@ jobs:
     # A Gradle leg needs a runner that can hold its JVMs: the pool labels those `gradle`, and only
     # a gradle-dedicated runner carries it without `linux`, so no other repo's leg competes for it
     # (GitHub does not hand a runner its oldest job). Those runners are Linux, which Roborazzi's
-    # goldens need: a macOS run compares none and still passes. A leg that ships a wheel or an MCP server takes `release`, a label only runners
-    # holding the release environment (CHANGE_MCP_RELEASE, CHANGE_INDEX_*) carry; a leg that only tests runs on any, and so does every leg of a run that ships nothing (a branch, a PR): only a main run publishes.
-    runs-on: &member-runs-on ${{ matrix.member.test_on || matrix.member.toolchain == 'gradle' && fromJSON('["self-hosted","household","gradle"]') || (needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) && fromJSON('["self-hosted","household","linux","release"]') || fromJSON('["self-hosted","household","linux"]')) }}
+    # goldens need: a macOS run compares none and still passes. A leg only tests, so it takes any linux unit: a wheel or an MCP server publishes in `publish`, on `release`, once its leg passed.
+    runs-on: &member-runs-on ${{ matrix.member.test_on || matrix.member.toolchain == 'gradle' && fromJSON('["self-hosted","household","gradle"]') || fromJSON('["self-hosted","household","linux"]') }}
     timeout-minutes: 75
     permissions: &read-jobs
       contents: read
@@ -116,7 +117,6 @@ jobs:
       CHANGED_MEMBERS: ${{ needs.plan.outputs.changed }}
       CHANGE_WORKERS: ${{ matrix.member.workers }}
       CHANGE_BASE: ${{ matrix.member.base }}
-      DEPLOY: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) }}
     steps: &member-steps
       # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
       - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
@@ -131,7 +131,6 @@ jobs:
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
-          fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
       - id: checkout_retry
         if: ${{ steps.checkout.outcome == 'failure' }}
@@ -142,7 +141,6 @@ jobs:
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
-          fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       - if: matrix.member.test
         uses: radar-hooves/app-factory/.github/actions/change@main
         with:
@@ -151,22 +149,6 @@ jobs:
       # The pass marker wait.sh reads from this run's jobs: no artifact, so no vendor storage.
       - name: passed
         run: 'true'
-      # It ships none of this run's libraries red: each must pass its own leg first.
-      - if: env.DEPLOY == 'true' && join(matrix.member.waits, '') != ''
-        timeout-minutes: 26
-        uses: radar-hooves/app-factory/.github/actions/change@main
-        with:
-          step: wait
-          args: ${{ join(matrix.member.waits, ' ') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - if: env.DEPLOY == 'true'
-        timeout-minutes: 20
-        uses: radar-hooves/app-factory/.github/actions/change@main
-        with:
-          step: ${{ matrix.member.deploy }}
-          path: ${{ matrix.member.path || '.' }}
-          args: ${{ matrix.member.name }} ${{ needs.plan.outputs.head }}
 
   # Members past six of one runner class share six legs, each member still its own test, wait and
   # deploy, a failure naming it (group.sh). The queue is made of legs: 94 of them cost api-clients
@@ -232,8 +214,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.libraries != '[]'
     name: library ${{ matrix.member.name }}
-    # As `member`: a leg that ships (main only) takes `release`, where the release environment is.
-    runs-on: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) && fromJSON('["self-hosted","household","linux","release"]') || fromJSON('["self-hosted","household","linux"]') }}
+    runs-on: [self-hosted, household, linux]
     timeout-minutes: 75
     permissions:
       contents: read
@@ -246,7 +227,6 @@ jobs:
         member: ${{ fromJSON(needs.plan.outputs.libraries) }}
     env:
       UV_FROZEN: '1'
-      DEPLOY: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && contains(fromJSON('["wheel","mcp"]'), matrix.member.deploy) }}
     steps:
       # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
       - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
@@ -261,7 +241,6 @@ jobs:
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
-          fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
       - id: checkout_retry
         if: ${{ steps.checkout.outcome == 'failure' }}
@@ -272,7 +251,6 @@ jobs:
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
-          fetch-depth: ${{ needs.plan.outputs.ship == 'true' && matrix.member.deploy_now && '0' || '1' }}
       - if: matrix.member.test
         uses: radar-hooves/app-factory/.github/actions/change@main
         with:
@@ -280,21 +258,6 @@ jobs:
           path: ${{ matrix.member.path || '.' }}
       - name: passed
         run: 'true'
-      - if: env.DEPLOY == 'true' && join(matrix.member.waits, '') != ''
-        timeout-minutes: 26
-        uses: radar-hooves/app-factory/.github/actions/change@main
-        with:
-          step: wait
-          args: ${{ join(matrix.member.waits, ' ') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - if: env.DEPLOY == 'true'
-        timeout-minutes: 20
-        uses: radar-hooves/app-factory/.github/actions/change@main
-        with:
-          step: ${{ matrix.member.deploy }}
-          path: ${{ matrix.member.path || '.' }}
-          args: ${{ matrix.member.name }} ${{ needs.plan.outputs.head }}
 
   # A member that ships with a library of this run (a carrier) starts once the library legs end:
   # a leg waiting on a library's marker holds a runner the library needs, so a run of carriers
@@ -316,7 +279,7 @@ jobs:
     steps: *member-steps
 
   carrier-group:
-    needs: [plan, library]
+    needs: [plan, library, publish-library]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.carrier_groups != '[]' }}
     name: test ${{ matrix.group.name }}
     runs-on: *group-runs-on
@@ -540,9 +503,86 @@ jobs:
           path: ${{ matrix.deploy.path }}
           args: ${{ matrix.deploy.name }} --rollback
 
+  # A wheel or an MCP server publishes on a `release` unit (the label only runners holding the release
+  # environment, CHANGE_MCP_RELEASE and CHANGE_INDEX_*, carry) once its test leg passed: the leg
+  # itself tests on any linux unit, so no test waits for one of the few that can publish. The order
+  # the legs had holds: libraries first (`publish-library`, one at a time, dependencies first), then
+  # the rest (`publish`), each of which waits for its libraries' own publish. A member of a group
+  # publishes inside its group's leg (group.sh), which starts after the libraries published.
+  publish-library:
+    needs: [plan, library]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.lib_ships != '[]' }}
+    name: publish ${{ matrix.ship.name }}
+    runs-on: [self-hosted, household, linux, release]
+    timeout-minutes: 60
+    permissions: *read-jobs
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        ship: ${{ fromJSON(needs.plan.outputs.lib_ships) }}
+    env: &publish-env
+      UV_FROZEN: '1'
+    steps: &publish-steps
+      # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
+      - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
+        shell: sh
+        run: git -C "$GITHUB_WORKSPACE" config --get-regexp '^(remote\.origin\.(promisor|partialclonefilter)|extensions\.partialclone|core\.sparsecheckout)$' >/dev/null 2>&1 && rm -rf "$GITHUB_WORKSPACE/.git" || true
+      - id: checkout
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && 'blob:none' || '' }}
+          sparse-checkout: |
+            ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
+            ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
+          sparse-checkout-cone-mode: false
+          fetch-depth: 0
+      # A stalled fetch is transient on a runner's link: one more try, from a clean tree.
+      - id: checkout_retry
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && 'blob:none' || '' }}
+          sparse-checkout: |
+            ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '/*' || '' }}
+            ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
+          sparse-checkout-cone-mode: false
+          fetch-depth: 0
+      # It ships none red, and none before the libraries it carries are published: each must have passed its leg and published.
+      - timeout-minutes: 26
+        uses: radar-hooves/app-factory/.github/actions/change@main
+        with:
+          step: wait
+          args: ${{ join(matrix.ship.markers, ' ') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - timeout-minutes: 20
+        uses: radar-hooves/app-factory/.github/actions/change@main
+        with:
+          step: ${{ matrix.ship.kind }}
+          path: ${{ matrix.ship.path }}
+          args: ${{ matrix.ship.name }} ${{ needs.plan.outputs.head }}
+
+  publish:
+    needs: [plan, member, group, carrier, carrier-group, library, publish-library]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.ships != '[]' }}
+    name: publish ${{ matrix.ship.name }}
+    runs-on: [self-hosted, household, linux, release]
+    timeout-minutes: 60
+    permissions: *read-jobs
+    strategy:
+      fail-fast: false
+      # The release pool's size.
+      max-parallel: 4
+      matrix:
+        ship: ${{ fromJSON(needs.plan.outputs.ships) }}
+    env: *publish-env
+    steps: *publish-steps
+
   change:
     if: always()
-    needs: [plan, member, group, carrier, carrier-group, library, sweep, repo, build, deploy]
+    needs: [plan, member, group, carrier, carrier-group, library, sweep, repo, build, deploy, publish-library, publish]
     runs-on: [self-hosted, household, light]
     timeout-minutes: 5
     steps:
