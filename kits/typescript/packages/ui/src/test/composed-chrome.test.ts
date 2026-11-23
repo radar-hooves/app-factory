@@ -280,11 +280,11 @@ describe('StatusBadge / StatCard / StatList', () => {
 });
 
 describe('PageHeader / Panel', () => {
-	it('renders the eyebrow, title, clamped subtitle and actions slot', () => {
+	it('renders the eyebrow, title, a subtitle that wraps rather than clamps, and the actions slot', () => {
 		render(ChromeHarness);
 		expect(screen.getByRole('heading', { level: 1, name: 'Chrome harness' })).toBeInTheDocument();
 		expect(screen.getByText('Section')).toBeInTheDocument();
-		expect(screen.getByText('One line, clamped.')).toHaveClass('line-clamp-1');
+		expect(screen.getByText('A short line that wraps on a phone.')).not.toHaveClass('line-clamp-1');
 		expect(screen.getByRole('button', { name: 'Primary action' })).toBeInTheDocument();
 	});
 

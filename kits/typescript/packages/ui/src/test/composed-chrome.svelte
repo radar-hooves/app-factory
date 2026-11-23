@@ -31,7 +31,7 @@
 <PageHeader
 	eyebrow="Section"
 	title="Chrome harness"
-	subtitle="One line, clamped."
+	subtitle="A short line that wraps on a phone."
 	info="Explains the page."
 	id="page-header-root"
 	data-testid="page-header-root"
