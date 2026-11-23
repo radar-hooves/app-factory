@@ -37,6 +37,7 @@
 		GROUP_LABEL,
 		HEAD,
 		HEAD_GROUND,
+		HEAD_GROUPED,
 		RING_INSET,
 		ROW_HEIGHT,
 		ROW_TEXT,
@@ -432,7 +433,7 @@
 
 <div
 	bind:clientWidth={width}
-	class={cn('relative flex min-h-0 flex-1 flex-col', className)}
+	class={cn('relative -mx-2 flex min-h-0 max-w-[calc(96rem+1rem)] flex-1 flex-col', className)}
 	data-slot="record-list"
 	data-layout={mode}
 	{...restProps}
@@ -480,7 +481,9 @@
 	>
 		{#if head && !PHONE}
 			<div class={HEAD_GROUND}>
-				<div class={HEAD} style:grid-template-columns={template} data-slot="record-head">
+				<div
+					class={cn(HEAD, grouping && HEAD_GROUPED)}
+					style:grid-template-columns={template} data-slot="record-head">
 					{#each shown as c, i (c.key)}
 						{@const mine = activeSort?.key === c.key ? activeSort : null}
 						<HeadCell

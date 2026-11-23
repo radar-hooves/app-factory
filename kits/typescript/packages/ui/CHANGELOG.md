@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.17] - 2026-11-23
+
+Need: the layout gate's judge passes a phone's top bar, a key-figures row and a list's left edge. Consumer: godswood via master-project-4e (radar-hooves/godswood#965). Rendered on the harness at 2550, 1728 and 411 px before and after; the judge itself was not run (see the factory CHANGELOG).
+
+### Changed
+
+- **The phone top bar keeps its trail legible.** At phone widths the breadcrumb trail has a 10rem floor, so a crowded bar wraps its actions to a second row rather than squeezing the trail to "> P" or "Cate…".
+- **A `StatCard` status glyph sits beside its label**, as its doc says, not at the far edge of a wide cell (a `KeyFigures` cell at 411 px).
+- **A `RecordList` aligns with `PageLead` and `KeyFigures`**: its heading and cards sit on the page's content edge, not 8px inside it, and it stops at 96rem rather than leaving 1,900 px between a row's name and its value at 2550 px (`max-w-none` restores the full width).
+- **A grouped `RecordList`'s column heads are labels on a hairline**, not a pill detached above the first group heading.
+
 ## [2026.11.16] - 2026-11-23
 
 Need: a page built only from the kit passes the layout gate's judge. Consumer: godswood via master-project-4e. Its /spending/categories-and-rules (PageLead and RecordList only) was judged fix three times ("entirely flat ink-and-grey text with no icons or palette colour"; "'Categories' heading matches the 14px table row text size"), and a tile a row added to answer it was judged a tell ("identical bordered tag-icon tile down the full height"). Its /admin was judged fix on "three oversized, mostly empty stat tiles each carry a tiny decorative user icon", with no kit row for key figures. Judged on the factory's scratch app, kit-only copies of both pages at 2550, 1728 and 411 px, by the gate's own prompt (f4fca20a5936) on google/carbon, sol being at its usage limit: the categories page ship, ship, ship and the key-figures page ship, ship, ship in light, as the gate recorded them; one dark sample each, ship. godswood's own record before (google/argon, 22/11): fix, fix, fix and ship, fix, fix.

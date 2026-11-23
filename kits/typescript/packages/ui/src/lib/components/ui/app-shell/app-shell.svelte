@@ -868,7 +868,7 @@
 					{#if trail.length > 0}
 						<Breadcrumbs
 							items={trail}
-							class="min-w-0 max-sm:flex-1 max-sm:basis-0"
+							class="min-w-0 max-sm:min-w-40 max-sm:flex-1 max-sm:basis-0"
 							data-testid="ds-shell-title"
 						/>
 					{/if}

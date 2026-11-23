@@ -59,7 +59,7 @@
 			{label}
 		</span>
 		{#if status}
-			<StatusIcon {status} class="ml-auto" />
+			<StatusIcon {status} />
 		{/if}
 	</div>
 	<div class="flex items-baseline gap-1.5">
