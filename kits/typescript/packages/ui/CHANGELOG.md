@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.16] - 2026-11-23
+
+Need: a page built only from the kit passes the layout gate's judge. Consumer: godswood via master-project-4e. Its /spending/categories-and-rules (PageLead and RecordList only) was judged fix three times ("entirely flat ink-and-grey text with no icons or palette colour"; "'Categories' heading matches the 14px table row text size"), and a tile a row added to answer it was judged a tell ("identical bordered tag-icon tile down the full height"). Its /admin was judged fix on "three oversized, mostly empty stat tiles each carry a tiny decorative user icon", with no kit row for key figures. Judged on the factory's scratch app, kit-only copies of both pages at 2550, 1728 and 411 px, by the gate's own prompt (f4fca20a5936) on google/carbon, sol being at its usage limit: the categories page ship, ship, ship and the key-figures page ship, ship, ship in light, as the gate recorded them; one dark sample each, ship. godswood's own record before (google/argon, 22/11): fix, fix, fix and ship, fix, fix.
+
+### Added
+
+- **`KeyFigures`** (`@poodle64/ui/key-figures`): a page's key figures in one row under its lead, a `StatCard` each, as wide as its figure, a hairline between two and none starting a line, no icon of its own.
+- **A group that is a kind carries its mark.** RecordList's `group` (and a grouping's) may return `{ label, icon, tone }`: the kind's icon before its heading, once a group, in the accent's tone, or in a status ink where the kind means one. Groups still key by label.
+
+### Changed
+
+- **A list's headings are on the type scale.** A RecordList's and a Ledger's group heading is a subsection's (`text-body`, semibold, in the foreground ink, 15px), and a list's title (`ListToolbar`) a section's (`text-section`, the display face, 20px), so the title, its groups and its 13px rows never read as one size.
+- **A tool page whose last block is a RecordList or a Ledger runs it to the frame's foot**, so the window's edge cuts the rows that wait below. Cut over the frame's 1.75rem band of ground, the judge read the list as clipped with no cue that more follows (a major in 1 of 3 samples in light and 1 of 1 in dark), and a Mac's or a phone's scroll bar shows only while scrolling.
+- **A page's lead balances its lines** (`text-wrap: balance`) and holds its icon beside the first, so a two-line lead breaks between phrases.
+- **`cn` merges the type scale's keys as sizes.** `text-display`, `text-section`, `text-heading`, `text-body` and `text-stat` read to tailwind-merge as colours, so `cn('text-foreground text-body', …)` dropped the colour.
+
+### Consumer must change
+
+- Nothing to take it. A list of kinds marks them on its groups (`group: (r) => ({ label, icon })`); one tile repeated down every row (RecordList `icon` in a list with no photos) is the look the judge refuses. A page's key figures are `KeyFigures` under its `PageLead`, never Cards in a grid.
+
 ## [2026.11.15] - 2026-11-22
 
 Need: the factory's `/settings` reads as designed at 2550, 1728 and 411 px, so every app's layout gate stops judging it `fix`. Consumer: master-project, from the v2026.11.67 fleet sweep (casefile, earworm, wordhoard and portcullis, majors at 2550 and 1728 px). openai/sol, 3 samples, on the factory's own scratch app: before `fix, fix, fix` (a members block held at 832 px in a ~2050 px pane, and no rule under the last member row); after `ship, ship, ship`, the two majors gone at all three widths.
