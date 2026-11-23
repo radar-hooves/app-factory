@@ -5472,12 +5472,11 @@ for (const surface of ['page-kit', 'document-reader']) {
 
 // A page of nothing but the kit (godswood's categories and admin pages, 23/11/2026): the
 // list's title a section's size over its groups', a kind's mark once a group and no tile a
-// row, a list that scrolls fading its foot until its last row, and a line of key figures
-// never starting on a rule.
+// row, a tool's list running to the frame's foot, and a line of key figures never
+// starting on a rule.
 {
 	let { context, page, errors } = await open('surface=records&list=categories', { width: 1440, height: 700 }, 'light');
 	await page.waitForSelector('[data-slot="record-group"]');
-	const fade = () => page.evaluate(() => getComputedStyle(document.querySelector('[data-slot="record-rows"]')).getPropertyValue('--ds-scroll-fade').trim());
 	const kinds = await page.evaluate(() => {
 		const size = (el) => el && getComputedStyle(el).fontSize;
 		return {
@@ -5494,14 +5493,12 @@ for (const surface of ['page-kit', 'document-reader']) {
 		kinds.title === '20px' && kinds.group === '15px' && kinds.row === '13px' && kinds.groups === 5 && kinds.marks === 5 && kinds.tiles === 0,
 		JSON.stringify(kinds)
 	);
-	const atTop = await fade();
-	await page.evaluate(() => {
-		const rows = document.querySelector('[data-slot="record-rows"]');
-		rows.scrollTop = rows.scrollHeight;
+	const foot = await page.evaluate(() => {
+		const rows = document.querySelector('[data-slot="record-rows"]').getBoundingClientRect();
+		const frame = document.querySelector('.ds-page-main').getBoundingClientRect();
+		return { rows: Math.round(rows.bottom), frame: Math.round(frame.bottom) };
 	});
-	await page.waitForTimeout(200);
-	const atEnd = await fade();
-	check('RecordList: a list that scrolls fades its foot, and not at its last row', atTop === '24px' && atEnd === '0px', `top ${atTop}, end ${atEnd}`);
+	check('RecordList, a tool page’s last block: its rows run to the frame’s foot', foot.rows === foot.frame, JSON.stringify(foot));
 	check('RecordList by kind: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 

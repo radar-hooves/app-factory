@@ -470,13 +470,6 @@
 	}
 }
 
-/* `.ds-scroll-fade`'s fade, a length so its keyframes interpolate. */
-@property --ds-scroll-fade {
-	syntax: '<length>';
-	inherits: false;
-	initial-value: 0px;
-}
-
 @layer base {
 	/**
 	 * The label: a field's name, a column head, a fact's caption, a rail group.
@@ -522,28 +515,6 @@
 	.font-display {
 		text-transform: var(--ds-font-display-transform, inherit);
 		letter-spacing: var(--ds-font-display-tracking, inherit);
-	}
-
-	/**
-	 * A list that scrolls inside itself (the Ledger's rows, a RecordList's) fades
-	 * its foot while rows wait below, so a row its edge cuts reads as more to
-	 * come; the fade thins as the list scrolls and is gone at the last row. A list
-	 * that fits has no scroll timeline and no fade; an engine without scroll
-	 * timelines draws the edge as before.
-	 */
-	.ds-scroll-fade {
-		mask-image: linear-gradient(to bottom, #000 calc(100% - var(--ds-scroll-fade)), transparent);
-		animation: ds-scroll-fade linear both;
-		animation-timeline: scroll(self);
-	}
-
-	@keyframes ds-scroll-fade {
-		from {
-			--ds-scroll-fade: 1.5rem;
-		}
-		to {
-			--ds-scroll-fade: 0px;
-		}
 	}
 
 	/** Tabular figures, so a column of numbers aligns. */
@@ -1304,6 +1275,16 @@
 	.ds-page[data-page='panel'][data-fill] > .ds-page-main > :last-child {
 		flex: 1 1 0%;
 		min-height: 0;
+	}
+
+	/* A tool whose last block is a list that scrolls its own rows (a RecordList,
+	   a Ledger) runs the list to the frame's foot: a row the window's edge cuts
+	   reads as more to come, where one cut over a band of ground read as clipped,
+	   and a phone's or a Mac's scroll bar shows only while scrolling. */
+	.ds-page[data-page='tool'] > .ds-page-main:has(> :last-child:is([data-slot='record-list'], [data-slot='ledger'])),
+	.ds-page[data-page='tool']
+		> .ds-page-main:has(> [data-slot='page-container']:last-child > :last-child:is([data-slot='record-list'], [data-slot='ledger'])) {
+		padding-bottom: env(safe-area-inset-bottom);
 	}
 
 	/* Panel: the content beside the pane is left-aligned to it, each block at

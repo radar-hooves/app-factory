@@ -1113,7 +1113,7 @@ heads'; Find (search, filters, views) stays the module's.
 	]} />
 ```
 
-The list's title is a section's heading, a group's a subsection's, and the rows' text a step under that, so the three never read as one size. A list that scrolls inside itself fades its foot while rows wait below it, and not at its last row.
+The list's title is a section's heading, a group's a subsection's, and the rows' text a step under that, so the three never read as one size. A tool page whose last block is the list runs it to the frame's foot, so the window's edge cuts the rows that wait below.
 
 A sort orders rows inside their groups, largest first (words from A), then
 reversed, then the list's own order. On a phone (below 480px of list) a row is its thumbnail, title
