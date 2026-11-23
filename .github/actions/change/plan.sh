@@ -160,6 +160,11 @@ split=$(jq -c --argjson s "$ship" --argjson n "$groups" --argjson gn "$gradle" '
   | ($run - [$g[].members[], $cg[].members[]]) as $own
   | {groups: $g, members: [$own[] | select(class != "carrier-")],
      carrier_groups: $cg, carriers: [$own[] | select(class == "carrier-")]}' <<<"$plan")
+# A wheel or an MCP server of a leg of its own publishes in `publish`, after its leg passed; a group's
+# members publish inside the group's leg.
+ships=$(jq -c --argjson s "$ship" --argjson sp "$split" '([$sp.members[], $sp.carriers[]] | map(.name)) + .libraries as $legs
+  | [.members[] | select(.deploy_now and $s and (.deploy | IN("wheel", "mcp")) and (.name | IN($legs[])))
+     | {kind: .deploy, path: (.path | if . == "" then "." end), name, markers: ([.marker] + .waits)}]' <<<"$plan")
 {
   echo "plan=$plan"
   echo "head=$head"
@@ -169,6 +174,7 @@ split=$(jq -c --argjson s "$ship" --argjson n "$groups" --argjson gn "$gradle" '
   echo "carrier_groups=$(jq -c .carrier_groups <<<"$split")"
   echo "libraries=$(jq -c '[.libraries[] as $n | .members[] | select(.name == $n)]' <<<"$plan")"
   echo "deploys=$deploys"
+  echo "ships=$ships"
   echo "builds=$(jq -c '[.[] | select(.split) | .phase = "build"]' <<<"$deploys")"
   echo "repo=$(jq -r '[(.repo_suites | select(.) | "suites"), (.typecheck_all | select(.) | "typecheck")] | join(" ")' <<<"$plan")"
   echo "changed=$(jq -r .changed_members <<<"$plan" | tr -cd 'A-Za-z0-9._,-')"

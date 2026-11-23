@@ -1902,3 +1902,18 @@ def test_a_library_keeps_its_own_leg(mono, tmp_path):
     groups, singles = groups_of(out)
     assert json.loads(out["libraries"])[0]["name"] == "lib"
     assert "lib" not in {n for g in groups for n in g["names"]} | {m["name"] for m in singles}
+
+
+def test_a_shipping_leg_publishes_in_its_own_job_and_a_group_member_in_its_group(mono, tmp_path):
+    repo, base = mono
+    head = change(repo, {"packages/lib/lib.py": "x = 3\n", "packages/a/a.py": "x = 3\n", "packages/b/b.py": "x = 3\n"})
+    (tmp_path / "own").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "own")
+    ships = {s["name"]: s for s in json.loads(out["ships"])}
+    assert (ships["a"]["kind"], ships["a"]["markers"]) == ("mcp", ["passed-a", "passed-lib"])
+    (tmp_path / "grouped").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "grouped", CHANGE_GROUPS="1")
+    assert "a" not in {s["name"] for s in json.loads(out["ships"])}
+    (tmp_path / "branch").mkdir()
+    out = run_plan_sh(repo, head, [(base, "success")], tmp_path / "branch", GITHUB_REF="refs/heads/x")
+    assert json.loads(out["ships"]) == []

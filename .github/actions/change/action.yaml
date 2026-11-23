@@ -31,6 +31,7 @@ outputs:
   libraries: { description: 'member rows needing a library leg', value: '${{ steps.run.outputs.libraries }}' }
   deploys: { description: 'root artefacts to build: kind, path, name, markers, runner labels', value: '${{ steps.run.outputs.deploys }}' }
   builds: { description: 'the deploys whose build runs on another runner than their deploy', value: '${{ steps.run.outputs.builds }}' }
+  ships: { description: 'wheel and MCP members to publish on a release unit once their leg passed: kind, path, name, markers', value: '${{ steps.run.outputs.ships }}' }
   repo: { description: 'repo legs to run: suites, typecheck', value: '${{ steps.run.outputs.repo }}' }
   changed: { description: 'CHANGED_MEMBERS for repo-wide suites', value: '${{ steps.run.outputs.changed }}' }
   ship: { description: "'true' when this run deploys", value: '${{ steps.run.outputs.ship }}' }
