@@ -549,6 +549,8 @@ def _needs_database(item: pytest.Item) -> bool:
                 return True
             pending.extend(fixturedef.argnames)
     return False
+
+
 _BOUND = False
 
 
