@@ -69,7 +69,7 @@
 		</div>
 	{/if}
 	<div
-		class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 [&:not(:has(>*))]:hidden"
+		class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-sm:w-full max-sm:justify-start [&:not(:has(>*))]:hidden"
 		data-slot="list-toolbar-controls"
 	>
 		{@render children?.()}

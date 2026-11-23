@@ -416,7 +416,7 @@ the pane and the content beside it, each scrolling on its own, and names
 | `title`       | What the bar and the sheet call the destination. Defaults to `Settings`.       |
 | `selected`, `onSelect` | A single-route app (no `/settings/*` routes): instead of `currentPath`, pass sections as `{ id, label, icon? }`, the current `id` and a callback. Rows become buttons; the app owns the state. |
 
-A setting inside a section is a `SettingsRow`: `label`, optional `description`, the control as children (a Switch, a Select, a Button), and `controlId` to tie the label to the control. Use it in `<Panel pad={false}>`; the row carries its own padding and the rule between rows.
+A setting inside a section is a `SettingsRow`: `label`, optional `description`, the control as children (a Switch, a Select, a Button), and `controlId` to tie the label to the control. Use it in `<Panel pad={false}>`; the row sits on the panel's own edge with a rule under it. From 86rem of frame, in a `panel` page, a section of rows takes the frame's width and the rows flow across it in as many 30rem columns as fit, so a short list fills a wide screen instead of standing in a 52rem column.
 
 ```svelte
 <SettingsShell sections={[{ items: [{ id: 'library', label: 'Library' }] }]} selected={active} onSelect={(id) => (active = id)}>

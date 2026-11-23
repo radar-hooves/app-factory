@@ -1301,6 +1301,29 @@
 		max-width: none;
 	}
 
+	/* A section of settings rows is a short list, and on a wide screen a short
+	   column of rows leaves two thirds of the page empty. From 86rem of frame
+	   (the rail's pane, then two columns of rows and their gutters) the block
+	   takes the frame's width and its rows flow across it, in as many columns
+	   as hold 30rem each; narrower, it keeps the panel measure and one column.
+	   A row's rule is under it, so every column ends on one, and the body's own
+	   closing rule is dropped. */
+	.ds-page[data-page='panel'] [data-slot='panel-body']:has(> [data-slot='settings-row']) {
+		border-bottom-width: 0;
+	}
+
+	@container ds-page (min-width: 86rem) {
+		.ds-page[data-page='panel']:not([data-fill]) > .ds-page-main > :has(> [data-slot='panel-body'] > [data-slot='settings-row']) {
+			max-width: none;
+		}
+
+		.ds-page[data-page='panel'] [data-slot='panel-body']:has(> [data-slot='settings-row']) {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+			column-gap: 3rem;
+		}
+	}
+
 	.ds-page[data-page='panel'][data-fill] > .ds-page-main {
 		padding: 0;
 		overflow: hidden;

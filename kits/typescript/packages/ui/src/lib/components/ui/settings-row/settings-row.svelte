@@ -7,9 +7,9 @@
 	// right (a Switch, a Select, a Button). Every settings page in the estate
 	// hand-built this, and each spaced it differently.
 	//
-	// Put rows in a Panel with `pad={false}`: the row carries its own padding so
-	// the rule between adjacent rows runs edge to edge, and the first row has no
-	// rule above it.
+	// Put rows in a Panel with `pad={false}`: the row sits on the panel's own
+	// edge, as its title does, with a rule under it, so the rule between adjacent
+	// rows runs edge to edge. The panel's body closes without a rule of its own.
 	let {
 		label,
 		description,
@@ -33,7 +33,7 @@
 	bind:this={ref}
 	data-slot="settings-row"
 	class={cn(
-		'border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t px-4 py-3 first:border-t-0',
+		'border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b py-3',
 		className
 	)}
 	{...restProps}
@@ -48,5 +48,5 @@
 			<p class="text-muted-foreground mt-1 text-sm">{description}</p>
 		{/if}
 	</div>
-	<div class="flex max-w-full min-w-0 flex-none flex-wrap items-center gap-2 *:max-w-full">{@render children()}</div>
+	<div class="ms-auto flex max-w-full min-w-0 flex-none flex-wrap items-center justify-end gap-2 *:max-w-full">{@render children()}</div>
 </div>

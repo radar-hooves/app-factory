@@ -6,8 +6,8 @@
 	import Breadcrumbs, { type BreadcrumbItem } from '../breadcrumbs/breadcrumbs.svelte';
 
 	/**
-	 * The one page-title pattern for every route. `subtitle` is a short, single
-	 * line that never wraps (line-clamp-1); reserve longer explanation for `info`,
+	 * The one page-title pattern for every route. `subtitle` is a short line that
+	 * wraps on a phone rather than ending in an ellipsis; reserve longer explanation for `info`,
 	 * which renders an (i) tooltip beside the title, so the page never carries a
 	 * standing explainer banner.
 	 *
@@ -122,7 +122,7 @@
 				</div>
 			{/if}
 			{#if subtitle}
-				<p class="text-muted-foreground mt-1.5 line-clamp-1 max-w-4xl text-sm">{subtitle}</p>
+				<p class="text-muted-foreground mt-1.5 max-w-4xl text-sm">{subtitle}</p>
 			{/if}
 			{#if meta}
 				<!-- `min-w-0` for the reason the actions row carries it: this is a flex

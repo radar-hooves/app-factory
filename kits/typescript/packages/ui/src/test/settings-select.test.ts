@@ -28,12 +28,14 @@ describe('SettingsRow', () => {
 		expect(screen.getByText('On start.')).toBeInTheDocument();
 	});
 
-	it('is a slotted row with a rule above every row but the first', () => {
+	it('is a slotted row with a rule under it, flush with the panel edge', () => {
 		render(Harness);
 		const rows = [...document.querySelectorAll('[data-slot="settings-row"]')];
 		expect(rows).toHaveLength(2);
-		expect(rows[0].className).toContain('first:border-t-0');
-		expect(rows[1].className).toContain('border-t');
+		for (const row of rows) {
+			expect(row.className).toContain('border-b');
+			expect(row.className).not.toContain('px-4');
+		}
 	});
 
 	it('lets a wide control shrink or wrap inside the card instead of overflowing it', () => {

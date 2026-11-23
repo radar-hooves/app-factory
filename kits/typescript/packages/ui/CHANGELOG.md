@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.18] - 2026-11-23
+
+Need: a settings page with a short list of rows passes the layout gate's judge at 2550, 1728 and 411 px with no per-app patching. Consumer: godswood via master-project (radar-hooves/godswood#965 slice 1); its /settings/integrations (six `SettingsRow`s in one `Panel`) was judged fix in 9 of 9 samples on the 52rem column. Judged on the factory's scratch app with three shapes of that page (a Panel with icon, title and subtitle; a PageHeader over an untitled Panel; a Panel with title and description), google/argon, 3 samples a route: before fix, fix, fix on each (a width major at 2550 and 1728, and a truncated subtitle at 411); after ship, ship, ship on each. The factory's own /settings (Members) judged ship, ship, ship before and after.
+
+### Changed
+
+- **A section of settings rows fills a wide `panel` page.** From 86rem of frame, a block whose body is `SettingsRow`s takes the frame's width and its rows flow across it, in as many 30rem columns as fit (one at 1440 px, two at 1728, three at 2550), a rule under each row. Narrower, nothing moves: the 52rem measure and one column. GitHub, Linear and Vercel hold a short settings list in a centred column and leave a band; the judge and the owner read the band as empty, and rows are the one thing here that reads the same in columns.
+- **`SettingsRow` sits on the panel's own edge.** It lost its `px-4`, so its label shares the Panel title's left edge, and its rule is under it (the Panel's closing rule is dropped for a body of rows). Its control keeps to the right when it wraps below the label on a phone.
+- **`PageHeader`'s subtitle wraps** where it ended in an ellipsis at 411 px.
+- **`ListToolbar`'s controls start on a line of their own, at the left, on a phone**, so wrapped rows share one left edge instead of a ragged right-aligned stack.
+
+### Consumer must change
+
+- Nothing to take it. A hand-built row list (bordered cards, `space-y-3`) becomes `SettingsRow`s in a `Panel pad={false}` to get the wide layout.
+
+Checked on 2026.11.17 and not changed: the phone breadcrumb ("Settings > Short A" whole at 411 px) and `RecordList`'s edge (heading and cards on `PageLead`'s edge, 16px) are already right. `RecordList` has no row selection; adding it is not small (a leading checkbox column on the grid and the phone rows, a selection bound to the consumer, a bar of actions over the list, group-level select and keyboard) and is left for godswood to file as a need.
+
 ## [2026.11.17] - 2026-11-23
 
 Need: the layout gate's judge passes a phone's top bar, a key-figures row and a list's left edge. Consumer: godswood via master-project-4e (radar-hooves/godswood#965). Rendered on the harness at 2550, 1728 and 411 px before and after; the judge itself was not run (see the factory CHANGELOG).
