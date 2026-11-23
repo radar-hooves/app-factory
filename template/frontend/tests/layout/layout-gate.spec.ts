@@ -20,7 +20,8 @@
  * - AGY_HOME               the Gemini seat's home (default /var/lib/agy/google on atlas),
  *   where `agy` holds the household's Google AI Ultra login. When openai/sol is
  *   unavailable (a 5xx, a usage limit, no answer) a sample goes to `agy -p` instead, on
- *   the same prompt; never on sol's verdict.
+ *   the same prompt; never on sol's verdict. A route the fallback judged ships only on all
+ *   three samples.
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -45,16 +46,17 @@ const WIDEST = VIEWPORTS[0]!;
 const MODEL = 'openai/sol';
 // The fallback when MODEL is unavailable: Gemini through the genuine agy CLI on the owner's
 // own login (foreman's google:cli route: `-p`, stream-json, `--dangerously-skip-permissions`,
-// the seat profile's `carbon`), never through the gateway. Carbon is Google's strongest
-// reasoning model (Argon is its cheaper, faster sibling) and the Ultra plan carries it; a
-// judge should be the strongest model available.
-const FALLBACK = 'google/carbon';
-const AGY_MODEL = 'gemini-4-carbon-high';
+// the seat profile's `argon`), never through the gateway. Carbon, its stronger sibling, took
+// 443-688 s a sample on atlas (23/11/2026, load 22-43), past any timeout and a half hour a
+// route in the one lane the seat allows; Argon took 85-110 s. Being the weaker judge, it
+// ships a route only unanimously (see judge()).
+const FALLBACK = 'google/argon';
+const AGY_MODEL = 'gemini-4-argon-high';
 const AGY_HOME = process.env.AGY_HOME ?? '/var/lib/agy/google';
 const SAMPLES = 3;
 const JUDGE_TIMEOUT_MS = 240_000;
-// Carbon reads the three pictures and thinks: one sample took 587 s (23/11/2026), so its own bound.
-const AGY_TIMEOUT_MS = 900_000;
+// Argon reads the three pictures in 85-110 s a sample on a loaded atlas (23/11/2026): its own bound.
+const AGY_TIMEOUT_MS = 300_000;
 const JUDGE_CONCURRENCY = 3;
 
 interface Metrics {
@@ -515,7 +517,7 @@ async function pool<T>(items: T[], size: number, run: (item: T) => Promise<void>
 	);
 }
 
-/** Three samples a measured-clean route; it ships on a majority of the three. */
+/** Three samples a measured-clean route; it ships on a majority of the three, or on all three when the fallback judged any. */
 async function judge(results: RouteResult[], write: () => void): Promise<void> {
 	const clean = results.filter((r) => !r.failures.length);
 	await pool(
@@ -537,7 +539,11 @@ async function judge(results: RouteResult[], write: () => void): Promise<void> {
 		}
 	);
 	for (const r of clean) {
-		if (r.samples.filter((s) => s.verdict === 'ship').length * 2 <= SAMPLES) r.verdict = 'broken';
+		const ships = r.samples.filter((s) => s.verdict === 'ship').length;
+		const needed = r.samples.some((s) => s.judge === FALLBACK)
+			? SAMPLES
+			: Math.floor(SAMPLES / 2) + 1;
+		if (ships < needed) r.verdict = 'broken';
 	}
 }
 
