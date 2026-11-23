@@ -1128,7 +1128,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 						status,
 						{
 							chip: getComputedStyle(root.querySelector('.ds-chip')).color,
-							dot: getComputedStyle(root.querySelector('.ds-dot')).backgroundColor
+							icon: getComputedStyle(root.querySelector('.ds-status-icon')).color
 						}
 					];
 				})
@@ -1176,9 +1176,9 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			measured.badge[status].chip
 		);
 		check(
-			`StatusBadge ${status}: dot fill resolves to a real colour`,
-			isResolvedColour(measured.badge[status].dot),
-			measured.badge[status].dot
+			`StatusBadge ${status}: status icon ink resolves to a real colour`,
+			isResolvedColour(measured.badge[status].icon),
+			measured.badge[status].icon
 		);
 	}
 	check(

@@ -12,6 +12,11 @@ name: kits/typescript
 # kit-rust.yaml.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'kits/typescript/**'
+      - '.github/workflows/kit-typescript.yaml'
   pull_request:
     paths:
       - 'kits/typescript/**'

@@ -511,7 +511,7 @@
 			/>
 		</ShellControls>
 		<div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto" data-fill data-probe="record-row">
-				<Panel title="12 Banksia Place, Tarragindi" subtitle="House and granny flat 2B · held by Owner A 50% · Owner B 50%">
+				<Panel title="12 Banksia Place, Tarragindi" subtitle="House and granny flat 2B · held by Owner A 50% · Owner B 50% · bought 14/03/2019, settled through the Tarragindi title, rented to two households">
 					<FactGrid
 						facts={[
 							{ key: 'value', label: 'Value', value: '$575,000' },
