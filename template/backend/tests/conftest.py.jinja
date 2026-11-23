@@ -520,6 +520,35 @@ def pytest_configure(config: pytest.Config) -> None:
 
 # Fixtures that reach the database; a test's closure naming one needs the server.
 _DATABASE_FIXTURES = frozenset({"session", "client", "app", "server_url", "make_user"})
+
+
+def _needs_database(item: pytest.Item) -> bool:
+    """Whether a test asks, directly or through other fixtures, for the factory's or the app's database surface.
+
+    Walks the fixtures the test requests (its arguments and `usefixtures`, never an autouse one,
+    which every test carries) down their own arguments: a name in `_DATABASE_FIXTURES`, or any
+    fixture `tests/app_fixtures.py` defines, counts. An app's engine, session or user fixture lives
+    there, so a test reaching the database through it binds the server like one asking for `session`.
+    """
+    info = getattr(item, "_fixtureinfo", None)
+    if info is None:
+        return False
+    pending = list(info.argnames)
+    for mark in item.iter_markers("usefixtures"):
+        pending.extend(mark.args)
+    seen: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        if name in _DATABASE_FIXTURES:
+            return True
+        for fixturedef in info.name2fixturedefs.get(name, ())[-1:]:
+            if getattr(fixturedef.func, "__module__", None) == _app_fixtures.__name__:
+                return True
+            pending.extend(fixturedef.argnames)
+    return False
 _BOUND = False
 
 
@@ -578,9 +607,7 @@ def pytest_sessionstart(session) -> None:
 
 def pytest_collection_finish(session) -> None:
     """Bind the test server when a selected test needs a database; a run of none starts nothing."""
-    if not session.config.option.collectonly and any(
-        _DATABASE_FIXTURES & set(item.fixturenames) for item in session.items
-    ):
+    if not session.config.option.collectonly and any(_needs_database(item) for item in session.items):
         _bind_test_server(session)
 
 

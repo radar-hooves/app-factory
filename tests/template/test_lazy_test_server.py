@@ -35,7 +35,17 @@ STUBS = {
     "pkg/api/users/__init__.py": "",
     "pkg/api/users/service.py": "def upsert_from_identity(*_a, **_k): ...\n",
     "tests/__init__.py": "",
-    "tests/app_fixtures.py": "def app_session_start(): ...\n",
+    "tests/app_fixtures.py": (
+        "import pytest\ndef app_session_start(): ...\n"
+        "@pytest.fixture\ndef _engine(): return object()\n"
+        "@pytest.fixture\ndef db_session(_engine): return _engine\n"
+        "@pytest.fixture(autouse=True)\ndef _guard(): ...\n"
+    ),
+    "tests/app_chain/__init__.py": "",
+    "tests/app_chain/conftest.py": "import pytest\n@pytest.fixture\ndef bound(db_session): return db_session\n",
+    "tests/app_chain/test_chain.py": (
+        "import os\ndef test_chain(bound):\n    assert os.environ['POSTGRES_HOST'] == 'db.test'\n"
+    ),
     # What the real `_resolve_test_server` would start, replaced by a marker; the migrations are the app's, not under test.
     "tests/probe.py": (
         "import os, sys\n"
@@ -117,5 +127,11 @@ def test_collect_only_binds_nothing(tmp_path: Path) -> None:
 
 def test_a_run_selecting_a_database_test_binds_once(tmp_path: Path) -> None:
     result, binds = _run(_project(tmp_path), "tests", expect_host="db.test")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert binds == 1
+
+
+def test_a_test_reaching_the_database_through_the_apps_own_fixtures_binds_once(tmp_path: Path) -> None:
+    result, binds = _run(_project(tmp_path), "tests/app_chain", expect_host="db.test")
     assert result.returncode == 0, result.stdout + result.stderr
     assert binds == 1
