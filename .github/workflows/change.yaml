@@ -53,6 +53,7 @@ jobs:
       deploys: ${{ steps.plan.outputs.deploys }}
       builds: ${{ steps.plan.outputs.builds }}
       ships: ${{ steps.plan.outputs.ships }}
+      lib_ships: ${{ steps.plan.outputs.lib_ships }}
       repo: ${{ steps.plan.outputs.repo }}
       changed: ${{ steps.plan.outputs.changed }}
       ship: ${{ steps.plan.outputs.ship }}
@@ -278,7 +279,7 @@ jobs:
     steps: *member-steps
 
   carrier-group:
-    needs: [plan, library]
+    needs: [plan, library, publish-library]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.carrier_groups != '[]' }}
     name: test ${{ matrix.group.name }}
     runs-on: *group-runs-on
@@ -502,26 +503,27 @@ jobs:
           path: ${{ matrix.deploy.path }}
           args: ${{ matrix.deploy.name }} --rollback
 
-  # A wheel or an MCP server publishes here, on a `release` unit (the label only runners holding the
-  # release environment, CHANGE_MCP_RELEASE and CHANGE_INDEX_*, carry), once its test leg passed: the
-  # leg itself tests on any linux unit, so no test waits for one of the few that can publish. A
-  # member of a group publishes inside its group's leg (group.sh).
-  publish:
-    needs: [plan, member, group, carrier, carrier-group, library]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.ships != '[]' }}
+  # A wheel or an MCP server publishes on a `release` unit (the label only runners holding the release
+  # environment, CHANGE_MCP_RELEASE and CHANGE_INDEX_*, carry) once its test leg passed: the leg
+  # itself tests on any linux unit, so no test waits for one of the few that can publish. The order
+  # the legs had holds: libraries first (`publish-library`, one at a time, dependencies first), then
+  # the rest (`publish`), each of which waits for its libraries' own publish. A member of a group
+  # publishes inside its group's leg (group.sh), which starts after the libraries published.
+  publish-library:
+    needs: [plan, library]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.lib_ships != '[]' }}
     name: publish ${{ matrix.ship.name }}
     runs-on: [self-hosted, household, linux, release]
     timeout-minutes: 60
     permissions: *read-jobs
     strategy:
       fail-fast: false
-      # The release pool's size.
-      max-parallel: 4
+      max-parallel: 1
       matrix:
-        ship: ${{ fromJSON(needs.plan.outputs.ships) }}
-    env:
+        ship: ${{ fromJSON(needs.plan.outputs.lib_ships) }}
+    env: &publish-env
       UV_FROZEN: '1'
-    steps:
+    steps: &publish-steps
       # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
       - if: vars.CHANGE_LEAN_CHECKOUT != 'true'
         shell: sh
@@ -547,7 +549,7 @@ jobs:
             ${{ vars.CHANGE_LEAN_CHECKOUT == 'true' && '!/docs/research/' || '' }}
           sparse-checkout-cone-mode: false
           fetch-depth: 0
-      # It ships none red, nor any of this run's libraries it carries: each must pass its own leg first.
+      # It ships none red, and none before the libraries it carries are published: each must have passed its leg and published.
       - timeout-minutes: 26
         uses: radar-hooves/app-factory/.github/actions/change@main
         with:
@@ -562,9 +564,25 @@ jobs:
           path: ${{ matrix.ship.path }}
           args: ${{ matrix.ship.name }} ${{ needs.plan.outputs.head }}
 
+  publish:
+    needs: [plan, member, group, carrier, carrier-group, library, publish-library]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.ships != '[]' }}
+    name: publish ${{ matrix.ship.name }}
+    runs-on: [self-hosted, household, linux, release]
+    timeout-minutes: 60
+    permissions: *read-jobs
+    strategy:
+      fail-fast: false
+      # The release pool's size.
+      max-parallel: 4
+      matrix:
+        ship: ${{ fromJSON(needs.plan.outputs.ships) }}
+    env: *publish-env
+    steps: *publish-steps
+
   change:
     if: always()
-    needs: [plan, member, group, carrier, carrier-group, library, sweep, repo, build, deploy, publish]
+    needs: [plan, member, group, carrier, carrier-group, library, sweep, repo, build, deploy, publish-library, publish]
     runs-on: [self-hosted, household, light]
     timeout-minutes: 5
     steps:
