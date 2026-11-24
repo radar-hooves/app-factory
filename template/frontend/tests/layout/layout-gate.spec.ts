@@ -2,7 +2,9 @@
  * The layout gate. Renders each route under test (the app's whole navigation
  * only when nothing names them) at the owner's widths (./viewports.ts), signed
  * in as the E2E suite is, and has another lab's vision model judge each route's
- * pictures for craft: three samples, the majority verdict. A route that does not
+ * pictures for craft: three samples, the majority verdict. A route whose three pictures
+ * hash as the record's ship under the same prompt is not asked again, and a sample that
+ * cannot change a verdict already fixed (the fallback's after any fix) is never asked. A route that does not
  * ship, or breaks a measured rule, fails the run. `pnpm layout-gate`
  * (scripts/layout-gate.mjs) names the routes a change touches, `--all` is the
  * whole sweep, and a finished judged run records each route's verdict for the
@@ -17,6 +19,7 @@
  *   (`portcullis exec --vend LITELLM_VIRTUAL_KEY=<the app's gateway key> -- pnpm
  *   layout-gate`); both are required while the judge is on. The key is never
  *   printed or written.
+ * - LAYOUT_GATE_REJUDGE   `1` judges a route whose pictures the record already holds as ship.
  * - AGY_HOME               the Gemini seat's home (default /var/lib/agy/google on atlas),
  *   where `agy` holds the household's Google AI Ultra login. When openai/sol is
  *   unavailable (a 5xx, a usage limit, no answer) a sample goes to `agy -p` instead, on
@@ -25,7 +28,7 @@
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -33,6 +36,12 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { VIEWPORTS as ANSWER } from './viewports';
 
 const OUT = 'test-results/layout-gate';
+const RECORD = '.layout-gate-record.json';
+interface KeptRoute {
+	verdict?: string;
+	prompt?: string;
+	pictures?: string;
+}
 const VIEWPORTS = ANSWER.split(',').map((pair) => {
 	const m = /^\s*(\d+)x(\d+)\s*$/.exec(pair);
 	if (!m) throw new Error(`layout gate: layout_gate_viewports holds "${pair}", not WIDTHxHEIGHT`);
@@ -95,6 +104,10 @@ interface RouteResult {
 	pageType: string | null;
 	/** The judge's prompt and model as sent for this route, hashed: verdicts compare only under one. */
 	prompt: string;
+	/** The pictures themselves, hashed with the viewports: a rerun that draws the same ones asks nobody again. */
+	pictures: string;
+	/** Set when the record already holds a ship for these pictures under this prompt; no judge was asked. */
+	reused: boolean;
 	shots: Shot[];
 	failures: string[];
 	samples: Sample[];
@@ -355,6 +368,9 @@ async function renderRoute(browser: Browser, baseURL: string, path: string): Pro
 		}
 	}
 	const failures = deterministic(path, new URL(baseURL).origin, shots);
+	const pictures = createHash('sha256');
+	for (const vp of VIEWPORTS)
+		pictures.update(`${vp.width}x${vp.height} `).update(readFileSync(shotPath(path, vp.width)));
 	const pageType = shots[0]?.pageType ?? null;
 	return {
 		path,
@@ -364,6 +380,8 @@ async function renderRoute(browser: Browser, baseURL: string, path: string): Pro
 			.update(`${MODEL}\n${prompt(pageType)}`)
 			.digest('hex')
 			.slice(0, 12),
+		pictures: pictures.digest('hex'),
+		reused: false,
 		shots,
 		failures,
 		samples: [],
@@ -399,6 +417,9 @@ function parseSample(text: string, call: string): Omit<Sample, 'judge'> {
 
 /** The primary judge cannot be had: not its verdict, which is never a reason to ask another. */
 class Unavailable extends Error {}
+
+/** A sample that cannot change the route's verdict, so nobody is asked for it. */
+class Settled extends Error {}
 
 async function askSol(result: RouteResult): Promise<Sample> {
 	const images = VIEWPORTS.map((vp) => ({
@@ -461,6 +482,8 @@ The images are files, in this order; read each one: ${files.join(', ')}.
 Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(SCHEMA)}`;
 	const run = () =>
 		new Promise<Sample>((done, fail) => {
+			// A fix already in breaks the route whatever this answers: the fallback ships only unanimously.
+			if (result.samples.some((s) => s.verdict === 'fix')) return fail(new Settled());
 			execFile(
 				'agy',
 				[
@@ -487,7 +510,13 @@ Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(
 						if (!last) throw new Error(error ? error.message : 'no result event');
 						const r = (JSON.parse(last) as { result: Record<string, string> }).result;
 						if (r.status !== 'SUCCESS') throw new Error(`agy ${r.status}`);
-						done({ ...parseSample(r.response ?? '', r.conversation_id ?? ''), judge: FALLBACK });
+						const sample = {
+							...parseSample(r.response ?? '', r.conversation_id ?? ''),
+							judge: FALLBACK
+						};
+						// In the sample list before the next queued call looks at it.
+						result.samples.push(sample);
+						done(sample);
 					} catch (e) {
 						fail(e);
 					}
@@ -499,12 +528,12 @@ Reply with only one JSON object that matches this JSON schema: ${JSON.stringify(
 	return next;
 }
 
-async function ask(result: RouteResult): Promise<Sample> {
+async function ask(result: RouteResult): Promise<void> {
 	try {
-		return await askSol(result);
+		result.samples.push(await askSol(result));
 	} catch (error) {
 		if (!(error instanceof Unavailable)) throw error;
-		return askAgy(result);
+		await askAgy(result);
 	}
 }
 
@@ -519,14 +548,27 @@ async function pool<T>(items: T[], size: number, run: (item: T) => Promise<void>
 
 /** Three samples a measured-clean route; it ships on a majority of the three, or on all three when the fallback judged any. */
 async function judge(results: RouteResult[], write: () => void): Promise<void> {
-	const clean = results.filter((r) => !r.failures.length);
+	const kept = existsSync(RECORD)
+		? (JSON.parse(readFileSync(RECORD, 'utf8')) as { routes?: Record<string, KeptRoute> }).routes
+		: undefined;
+	for (const r of results) {
+		const was = kept?.[r.path];
+		r.reused =
+			!r.failures.length &&
+			process.env.LAYOUT_GATE_REJUDGE !== '1' &&
+			was?.verdict === 'ship' &&
+			was.prompt === r.prompt &&
+			was.pictures === r.pictures;
+	}
+	const clean = results.filter((r) => !r.failures.length && !r.reused);
 	await pool(
 		clean.flatMap((r) => Array.from({ length: SAMPLES }, () => r)),
 		JUDGE_CONCURRENCY,
 		async (r) => {
 			try {
-				r.samples.push(await ask(r));
+				await ask(r);
 			} catch (error) {
+				if (error instanceof Settled) return;
 				r.samples.push({
 					judge: '',
 					verdict: 'error',
@@ -560,7 +602,11 @@ function report(results: RouteResult[], judging: boolean): string {
 	const rank = (f: Finding) => (f.severity === 'major' ? 0 : 1);
 	const lines: string[] = [];
 	for (const r of results) {
-		const tally = r.samples.length ? `  ${r.samples.map((s) => s.verdict).join(', ')}` : '';
+		const tally = r.reused
+			? '  ship (same pictures as the record)'
+			: r.samples.length
+				? `  ${r.samples.map((s) => s.verdict).join(', ')}`
+				: '';
 		lines.push(
 			`${r.verdict === 'pass' ? 'PASS' : 'BROKEN'}  ${r.path}  ${r.pageType ?? 'no page type'}${tally}`
 		);

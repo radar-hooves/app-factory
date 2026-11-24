@@ -278,8 +278,14 @@ function writeRecord(files) {
 	const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { routes: {} };
 	const judged = new Date().toISOString();
 	for (const r of report.routes) {
+		// The picture is the one the record already judged ship: only the files that drew it moved.
+		if (r.reused && record.routes[r.path]) {
+			record.routes[r.path] = { ...record.routes[r.path], tree: routeKey(files, r.path) };
+			continue;
+		}
 		record.routes[r.path] = {
 			tree: routeKey(files, r.path),
+			pictures: r.pictures,
 			judged,
 			prompt: r.prompt,
 			judge: [...new Set(r.samples.map((s) => s.judge))].join(' and ') || undefined,
