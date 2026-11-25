@@ -6,6 +6,8 @@ The git tag is this repo's single source of truth for its version: `copier` reso
 
 ## [Unreleased]
 
+Need: a desktop app's pre-commit hooks install on the Mac it is developed on (consumer: Thoth and Bragi via master-project, the desktop-layer review of 26/11/2026). The desktop skeleton pinned `python3.15`, which huginn does not have (it has 3.14), so both apps edited the stamped file: Thoth under a parity exception, Bragi without one, which fails its parity gate. The pin is gone; the one Python hook builds under the Python that runs pre-commit. Consumer must change: take `.pre-commit-config.yaml` by `copier update`, drop its `.pre-commit-config.yaml` exception, regenerate `.template-parity.json`.
+
 Need: a fresh desktop stamp resolves current crates (consumer: Thoth and Bragi via master-project, the desktop-layer review of 26/11/2026). The skeleton and the three Rust kits declared `rust-version = "1.87"`, below what they build on (the kits' let-chains need 1.88; `sysinfo` 0.39 needs 1.95), and edition 2024's resolver held 19 crates behind for it: `cargo generate-lockfile` on a stamp took `tauri-plugin-process` 2.3.1 while `package.json` floated `@tauri-apps/plugin-process` to 2.4. All four now say 1.95 and the same stamp holds none back. Consumer must change: set `rust-version = "1.95"` in `src-tauri/Cargo.toml`.
 
 Need: a desktop app's outbound call joins the trace it was made from (consumer: Thoth and Bragi via master-project, the desktop-layer review of 26/11/2026). The `telemetry` kit's `http_client()` sent no `traceparent` (0.7.1's CHANGELOG has the cause). New test `a_request_carries_its_client_span_as_traceparent` failed before and passes. Consumer must change: move the kit pin to this release and run `scripts/update-kit-hash.sh`.
