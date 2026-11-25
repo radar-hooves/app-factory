@@ -15,7 +15,7 @@ skeletons/desktop/scripts/webkit-layout   headless WebKit layout harness and per
 
 Copier reads a git source's config from its root alone, so both skeletons answer one `copier.yaml`, and `_subdirectory` is rendered from the `skeleton` answer. A web app's answers file predates the question, takes the default, and renders byte-identical to before (proven against casefile's answers: 212 files identical, the answers file gains `skeleton: web`). `template/` becomes `skeletons/web/` in one move once master's canonical-app-migration tools read the path from `_subdirectory` instead of hard-coding `template/`.
 
-A symlink copier follows is how the two skeletons share a source: the drift and craft lints, the stylelint and TypeScript configs, `app.html`, the test harness. The design-craft lint is the one shared file that differs by skeleton: a desktop app has no phone width.
+A symlink copier follows is how the two skeletons share a source: the drift and craft lints, the stylelint and TypeScript configs, the dark-first seed, the test harness. The design-craft lint is the one shared file that differs by skeleton: a desktop app has no phone width. `app.html` is the desktop's own: a webview has no tab icon or web manifest, and no backend serves `/elements/`.
 
 ## What lives where
 

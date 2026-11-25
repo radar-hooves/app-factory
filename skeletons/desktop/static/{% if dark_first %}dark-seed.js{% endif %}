@@ -1,0 +1,1 @@
+../../../template/frontend/static/{% if dark_first %}dark-seed.js{% endif %}
