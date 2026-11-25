@@ -29,8 +29,6 @@ tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2.14"
-# Declared here so its permission reaches `capabilities/`; `desktop-shell` registers it.
-tauri-plugin-window-state = "2"
 
 # Debug info stays in the objects' side files, where a debugger reads it, rather
 # than in every linked test binary: each links the whole app library, and a
