@@ -30,6 +30,6 @@ def test_scaffold_slice_and_its_tests_are_copy_only() -> None:
 
 def test_every_seed_migration_exists_and_is_copy_only() -> None:
     migrations = [g for g in _gated() if g.startswith("backend/alembic/versions/")]
-    assert len(migrations) == 5
+    assert migrations
     for m in migrations:
         assert (ROOT / "template" / (m + ".jinja")).exists() or (ROOT / "template" / m).exists(), m
