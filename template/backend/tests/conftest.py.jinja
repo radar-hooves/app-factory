@@ -7,13 +7,16 @@ per-session Postgres testcontainer — the household hermetic-test pattern
 
 import atexit
 import hashlib
+import io
 import json
 import logging
 import os
 import secrets
 import subprocess
 import sys
+import tarfile
 import tempfile
+import time
 import uuid
 from collections.abc import AsyncGenerator, Callable, Generator
 from pathlib import Path
@@ -93,6 +96,7 @@ TEST_DATABASE_NAME = "{{ package_name }}_test" if _WORKER_ID == "master" else f"
 
 _EPHEMERAL_POSTGRES = None
 _PUBLISHED_SHARED_SERVER = False
+_POSTGRES_IMAGE = "postgres:17-alpine"
 
 
 def _shared_ephemeral_postgres() -> dict[str, str]:
@@ -173,7 +177,7 @@ def _start_ephemeral_postgres() -> dict[str, str]:
     from testcontainers.community.postgres import PostgresContainer
 
     container = PostgresContainer(
-        image="postgres:17-alpine",
+        image=_POSTGRES_IMAGE,
         username="postgres",
         password=secrets.token_urlsafe(16),
         dbname="postgres",
@@ -413,9 +417,6 @@ def _ensure_test_database_ready() -> None:
     """
     from sqlalchemy import create_engine, text
 
-    from {{ package_name }}.config import get_settings
-
-    settings = get_settings().database
     engine = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as conn:
@@ -436,6 +437,19 @@ def _ensure_test_database_ready() -> None:
         engine.dispose()
 
     backend_root = Path(__file__).resolve().parent.parent
+    cached = _schema_cache_path(backend_root)
+    if cached is not None and cached.is_file() and _load_cached_schema(cached):
+        cached.touch()
+    else:
+        _migrate_test_database(backend_root)
+        if cached is not None:
+            _store_cached_schema(cached)
+
+    _check_test_database_at_heads(backend_root)
+
+
+def _migrate_test_database(backend_root: Path) -> None:
+    """Replay every migration into the test database."""
     result = subprocess.run(  # fixed argv, no user input reaches it
         [sys.executable, "-m", "alembic", "upgrade", "heads"],
         cwd=backend_root,
@@ -448,6 +462,14 @@ def _ensure_test_database_ready() -> None:
         raise RuntimeError(
             f"Could not migrate the test database {TEST_DATABASE_NAME!r}.\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
+
+
+def _check_test_database_at_heads(backend_root: Path) -> None:
+    from sqlalchemy import create_engine, text
+
+    from {{ package_name }}.config import get_settings
+
+    settings = get_settings().database
 
     from alembic.config import Config
     from alembic.script import ScriptDirectory
@@ -472,6 +494,101 @@ def _ensure_test_database_ready() -> None:
             f"expected heads {sorted(head_revisions)!r}. `alembic upgrade heads` did not leave the database "
             "where it should be."
         )
+
+
+# ── The migrated schema, replayed only when a migration changed ─────────────
+# The replay is 23 s of every run on a chain of a few hundred revisions, and nothing it
+# produces differs between two runs of the same migrations. The result is kept as a
+# pg_dump, keyed on every file that decides it: a new or edited migration (or env.py, or
+# the roles module that settles the runtime role) is a different key, so it is always
+# replayed and its real DDL always runs. Only the ephemeral container is cached: it is
+# the one server this process can run pg_dump inside, since the host has no client tools.
+_SCHEMA_CACHE_INPUTS = ("alembic/versions/*.py", "alembic/env.py", "src/{{ package_name }}/db/roles.py")
+
+
+def _schema_cache_path(backend_root: Path) -> Path | None:
+    """Where this migration chain's dump lives, or None when the run's server is not the ephemeral container."""
+    if _EPHEMERAL_POSTGRES is None:
+        return None
+    digest = hashlib.sha256(_POSTGRES_IMAGE.encode())
+    for pattern in _SCHEMA_CACHE_INPUTS:
+        for path in sorted(backend_root.glob(pattern)):
+            digest.update(f"{path.relative_to(backend_root)}\0".encode())
+            digest.update(path.read_bytes())
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return base / "{{ package_name }}-test-schema" / f"{digest.hexdigest()}.dump"
+
+
+def _container_exec(args: list[str]) -> None:
+    result = _EPHEMERAL_POSTGRES.exec(args)  # type: ignore[union-attr]
+    if result.exit_code != 0:
+        raise RuntimeError(f"{args[0]} exited {result.exit_code}: {result.output.decode(errors='replace')[-2000:]}")
+
+
+def _load_cached_schema(dump: Path) -> bool:
+    """Restore `dump` into the freshly created test database; False (and the dump removed) when it cannot be."""
+    from sqlalchemy import create_engine, text
+
+    container = _EPHEMERAL_POSTGRES.get_wrapped_container()  # type: ignore[union-attr]
+    inside = f"schema-{uuid.uuid4().hex}.dump"  # the container is shared: a test in another worker uses it too
+    try:
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w") as tar:
+            tar.add(dump, arcname=inside)
+        container.put_archive("/tmp", archive.getvalue())
+        engine = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
+        try:
+            with engine.connect() as conn:
+                # The runtime role, as the owner makes it in the first migration: a dump carries
+                # grants to it, not the role, and the owner (CREATEROLE) is its creator.
+                conn.execute(text(f'SET ROLE "{TEST_OWNER}"'))
+                if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": TEST_RUNTIME}).scalar():
+                    conn.execute(
+                        text(f"CREATE ROLE \"{TEST_RUNTIME}\" WITH LOGIN PASSWORD '{_role_password(TEST_RUNTIME)}'")
+                    )
+        finally:
+            engine.dispose()
+        _container_exec(["pg_restore", "-U", "postgres", "-d", TEST_DATABASE_NAME, "--exit-on-error", f"/tmp/{inside}"])
+    except Exception as exc:  # a dump that will not load is replaced by a replay, never a failed run
+        logger.warning("The cached test schema %s did not load (%s); replaying the migrations.", dump.name, exc)
+        dump.unlink(missing_ok=True)
+        _recreate_test_database()
+        return False
+    return True
+
+
+def _recreate_test_database() -> None:
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{TEST_DATABASE_NAME}" OWNER "{TEST_OWNER}"'))
+    finally:
+        engine.dispose()
+
+
+def _store_cached_schema(dump: Path) -> None:
+    """Dump the migrated database beside its key, atomically: a reader sees the whole file or none."""
+    inside = f"schema-{uuid.uuid4().hex}.dump"
+    try:
+        _container_exec(["pg_dump", "-U", "postgres", "-Fc", "-f", f"/tmp/{inside}", TEST_DATABASE_NAME])
+        stream, _ = _EPHEMERAL_POSTGRES.get_wrapped_container().get_archive(f"/tmp/{inside}")  # type: ignore[union-attr]
+        with tarfile.open(fileobj=io.BytesIO(b"".join(stream))) as tar:
+            member = tar.extractfile(inside)
+            assert member is not None
+            data = member.read()
+        dump.parent.mkdir(parents=True, exist_ok=True)
+        partial = dump.with_name(f"{dump.name}.{os.getpid()}.partial")
+        partial.write_bytes(data)
+        partial.replace(dump)
+        cutoff = time.time() - 14 * 86400
+        for old in dump.parent.glob("*.dump"):
+            if old.stat().st_mtime < cutoff:
+                old.unlink(missing_ok=True)
+    except Exception as exc:  # the cache is an optimisation: this run's schema is already migrated
+        logger.warning("Could not cache the migrated test schema (%s); the next run replays the migrations.", exc)
 
 
 def _copy_test_database(template: str) -> None:
