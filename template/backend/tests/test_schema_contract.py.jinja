@@ -26,26 +26,27 @@ _FIX = (
 _METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 
+def _indent(line: str) -> str:
+    """Leading whitespace, tabs or spaces: prettier's `useTabs` decides which the committed file has."""
+    return line[: len(line) - len(line.lstrip())]
+
+
 def _block(lines: list[str], opener: str) -> list[str]:
     """The lines inside the first line that is `opener`, up to its closing brace at the same indent."""
     start = next(i for i, line in enumerate(lines) if line.strip() == opener)
-    indent = len(lines[start]) - len(lines[start].lstrip())
-    end = next(
-        i
-        for i in range(start + 1, len(lines))
-        if lines[i].startswith(" " * indent + "}") or (indent == 0 and lines[i].startswith("}"))
-    )
+    indent = _indent(lines[start])
+    end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith(indent + "}"))
     return lines[start + 1 : end]
 
 
 def _children(block: list[str]) -> dict[str, list[str]]:
     """Each direct member of a block, by name, with the lines under it."""
     first = next(line for line in block if line.strip())
-    indent = len(first) - len(first.lstrip())
+    indent = _indent(first)
     members: dict[str, list[str]] = {}
     current: list[str] = []
     for line in block:
-        if len(line) - len(line.lstrip()) == indent and (m := re.match(r'\s*"?([^"?:\s]+)"?\??: ', line)):
+        if _indent(line) == indent and (m := re.match(r'\s*(?:readonly\s+)?"?([^"?:\s]+)"?\??: ', line)):
             current = members.setdefault(m.group(1), [])
             current.append(line)
         else:
@@ -118,3 +119,37 @@ def test_a_stale_client_is_detected(app: FastAPI, monkeypatch: pytest.MonkeyPatc
     found = drift(app)
     assert any(first_path in line for line in found)
     assert any("fields differ" in line for line in found)
+
+
+def test_tabs_and_computed_fields_are_read(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A tab-indented file and a `readonly` member (a Pydantic computed field) match; a missing field still fails."""
+    from pydantic import BaseModel, computed_field
+
+    class Row(BaseModel):
+        id: int
+
+        @computed_field  # type: ignore[prop-decorator]
+        @property
+        def active(self) -> bool:
+            return True
+
+    small = FastAPI()
+
+    @small.get("/rows", operation_id="list_rows")
+    def list_rows() -> Row:
+        return Row(id=1)
+
+    types = (
+        "export interface paths {\n"
+        '\t"/rows": {\n\t\tget: operations["list_rows"];\n\t};\n'
+        "}\n"
+        "export interface components {\n\tschemas: {\n"
+        "\t\tRow: {\n\t\t\tid: number;\n\t\t\treadonly active: boolean;\n\t\t};\n"
+        "\t};\n}\n"
+    )
+    path = tmp_path / "schema.d.ts"
+    path.write_text(types)
+    monkeypatch.setattr(f"{__name__}._TYPES", path)
+    assert drift(small) == []
+    path.write_text(types.replace("\t\t\treadonly active: boolean;\n", ""))
+    assert any("Row: fields differ by ['active']" in line for line in drift(small))
