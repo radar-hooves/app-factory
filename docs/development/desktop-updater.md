@@ -7,7 +7,8 @@ A desktop app stamped from `skeletons/desktop/` installs new versions of itself 
 | Check, download, install, relaunch, six-hourly re-check, toasts | `@poodle64/ui/updater` (`startUpdateChecks`, `checkForUpdate`, `getUpdaterState`, `downloadAndInstall`) |
 | Outcome of each check as telemetry | `tauri-plugin-telemetry`'s `report_update_check` (in `telemetry:default`; the webview supplies two booleans, no text) |
 | Plugin registration, capabilities, endpoint | the skeleton's `lib.rs`, `capabilities/default.json`, `tauri.conf.json` |
-| Signed build, `latest.json`, draft then publish | the skeleton's `release.yaml` (`tauri-action`) |
+| Signed build, `latest.json`, draft | the skeleton's `release.yaml` (`tauri-action`) |
+| Publish: `latest.json` carries every signed artifact of the tag with its signature, notes from `CHANGELOG.md`, `latest` unless an older tag | `scripts/publish-release.sh` (stamped) |
 
 The skeleton's layout starts the checks. An app shows the check in its own Settings pane from `getUpdaterState()` and a button calling `checkForUpdate()`.
 
@@ -23,7 +24,7 @@ The release's first step refuses a build with the key empty or either secret mis
 
 ## Cutting a release
 
-`latest.json` carries the version in `src-tauri/tauri.conf.json`, never the tag's, so an app whose config says `0.1.0` publishes a release every installed copy calls up to date. The release's build job fails when the pushed tag (`v2026.11.1`) is not `v` plus that version. Before tagging, set `version` in `src-tauri/tauri.conf.json` (and `Cargo.toml`, `package.json`) to the tag's number, and merge it. The signed macOS bundles are verified by `scripts/tauri-release.sh` before `tauri-action` uploads anything.
+`latest.json` carries the version in `src-tauri/tauri.conf.json`, never the tag's, so an app whose config says `0.1.0` publishes a release every installed copy calls up to date. The release's build job fails when the pushed tag (`v2026.11.1`) is not `v` plus that version. Before tagging, set the version with `scripts/bump-version.sh`, give `CHANGELOG.md` a `## [<version>]` section (the release's notes; publishing refuses a tag without one), and merge it. The signed macOS bundles are verified by `scripts/tauri-release.sh` before `tauri-action` uploads anything.
 
 ## What an existing app changes
 
@@ -35,14 +36,14 @@ Every file below is app-owned (`_skip_if_exists`), so `copier update` does not t
 - `src-tauri/capabilities/default.json`: `updater:default`, `process:allow-restart`.
 - `src-tauri/tauri.conf.json`: `plugins.updater` with the app's pubkey and endpoint `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`. Do not set `bundle.createUpdaterArtifacts`: the release passes it, so a local build needs no private key.
 - `src/routes/+layout.svelte`: `onMount(startUpdateChecks)` from `@poodle64/ui/updater`. Import the store's functions from there in the Settings pane; delete the app's own `updater` store.
-- `.github/workflows/release.yaml` and `scripts/tauri-release.sh` (the script is stamped; `copier update` brings it): the skeleton's `build` and `publish` jobs, or the app's own with `tauri-action`, the two secrets, and `--config '{"bundle":{"createUpdaterArtifacts":true}}'`. `latest.json` is uploaded to the release and found at `releases/latest/download/`, so the release must be published, not a draft. A release that builds with `pnpm tauri build` and uploads installers by hand (Bragi) swaps to `tauri-action`, which writes `latest.json`.
+- `.github/workflows/release.yaml` with `scripts/tauri-release.sh` and `scripts/publish-release.sh` (both stamped; `copier update` brings them): the skeleton's `build` and `publish` jobs, or the app's own with `tauri-action`, the two secrets, `--config '{"bundle":{"createUpdaterArtifacts":true}}'`, and a publish job that checks out and runs `bash scripts/publish-release.sh "$GITHUB_REF_NAME" [notes footer]`. `latest.json` is uploaded to the release and found at `releases/latest/download/`, so the release must be published, not a draft. A release that builds with `pnpm tauri build` and uploads installers by hand (Bragi) swaps to `tauri-action`, which writes `latest.json`.
 
 An app already shipping an updater (Thoth) keeps its public key and secrets, so installed copies keep updating; it changes only to the kit calls above.
 
 ## Platforms
 
 - **macOS**: the updater replaces the `.app` with the `.app.tar.gz` the release builds. The bundle is signed by the runner's `APPLE_SIGNING_IDENTITY` (`scripts/cargo-codesign.sh`), so the designated requirement, and the Microphone and Accessibility grants keyed to it, survive an update. The release's last step verifies it.
-- **Linux**: the updater replaces an AppImage only. The skeleton builds `.deb` and `.rpm` on the NixOS runner, where linuxdeploy cannot make an AppImage, so a Linux install is reinstalled by hand and its check reports no Linux platform. An app that ships an AppImage builds it on a runner that can, and its `latest.json` then carries Linux.
+- **Linux**: the updater installs whichever bundle the app was installed from: an AppImage in place, a `.deb` with `dpkg -i` and an `.rpm` with `rpm -U`, both through pkexec, which asks for the user's password (tauri-plugin-updater 2.14's `install_deb`, `install_rpm`). The skeleton builds `.deb` and `.rpm` on the NixOS runner, where linuxdeploy cannot make an AppImage; `latest.json` carries `linux-x86_64-deb` and `linux-x86_64-rpm` (Bragi 2026.11.1's does). A Nix-store install is read-only and never self-updates.
 
 ## Verified, and not
 

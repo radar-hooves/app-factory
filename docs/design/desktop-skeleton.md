@@ -26,7 +26,7 @@ A symlink copier follows is how the two skeletons share a source: the drift and 
 | Settings pane | the telemetry section: next, into `@poodle64/ui` once `@poodle64/ui/settings` lands | | the pane's other sections |
 | CI | | `.github/workflows/change.yaml`, master's one caller copied unchanged (no `ci.yaml`, no `security.yaml`: the weekly scan is master's) | `release.yaml`: stamped with its gate, a green `change` run on the tagged commit, then the signed build and publish jobs, the app's to extend; `.claude/CLAUDE.md` |
 | macOS signing | | `scripts/cargo-codesign.sh`: build/sign/verify; read-only final bundle verification; explicit local ad-hoc mode; releases/configured signing fail closed; execute the signed dev binary | `tauri.conf.json`: runner and local `signingIdentity: "-"`; build host declares `APPLE_SIGNING_IDENTITY` for both signers; `flake.nix`: `jq` |
-| Updater | `@poodle64/ui/updater`; `tauri-plugin-telemetry`'s `report_update_check` | `release.yaml`'s build and publish jobs, once an app has taken them | `tauri.conf.json` (`plugins.updater`), `lib.rs`, `capabilities/`, `+layout.svelte`: `desktop-updater.md` |
+| Updater | `@poodle64/ui/updater`; `tauri-plugin-telemetry`'s `report_update_check` | `scripts/publish-release.sh`, `scripts/tauri-release.sh` | `tauri.conf.json` (`plugins.updater`), `lib.rs`, `capabilities/`, `+layout.svelte`: `desktop-updater.md` |
 | Lints and formatters | | `stylelint.config.js`, the drift and craft lints, `.pre-commit-config.yaml` | the lints' baselines |
 | Version | | `scripts/bump-version.sh` | `package.json`: the one source `flake.nix` reads |
 | Nix hashes | | `scripts/update-pnpm-deps-hash.sh`, `scripts/update-kit-hash.sh` | `flake.nix`'s `kitHash` and `pnpmDeps` hash |
@@ -50,7 +50,7 @@ The proposed shared desktop layer is `desktop-layer.md`; no app adoption is incl
 
 ## Not built, and why
 
-- **One release workflow for every app.** The skeleton stamps a signed build with the updater's `latest.json` (`docs/development/desktop-updater.md`); an app with other legs extends it. Linux self-update is not built: it needs an AppImage, which the NixOS runner cannot make.
+- **One release workflow for every app.** Each app's legs differ (runners, targets, toolchains), so `release.yaml` is the app's; what every app's release must do is in the stamped scripts it calls (`docs/development/desktop-updater.md`).
 - **The telemetry settings section.** Both apps render the plugin's `get`/`set`/`probe` in different components. It belongs beside the settings page `@poodle64/ui/settings` is becoming, which another lane is building now.
 - **A Nix kit.** Both flakes share a shape (a rust-overlay toolchain, `buildRustPackage` over `src-tauri`, `fetchPnpmDeps`) but little text; Thoth's carries CUDA, Bragi's mpv. A first stamp gets a devShell, plus a `packages.default` that evaluates once the app commits `pnpm-lock.yaml` and `src-tauri/Cargo.lock` (`cargo-tauri.hook`, `fetchPnpmDeps`); CUDA, mpv and the like are the app's to add.
 

@@ -58,7 +58,7 @@ jobs:
         include:
           - host: macos # Apple Silicon, on the runner holding the signing certificate
             args: '--target aarch64-apple-darwin'
-          - host: atlas # Linux x86_64: no AppImage (linuxdeploy cannot bundle nix-store libraries), so a Linux install is replaced by hand, never self-updated
+          - host: atlas # Linux x86_64 .deb and .rpm, which the updater installs through pkexec; no AppImage (linuxdeploy cannot bundle nix-store libraries)
             args: '--bundles deb rpm'
     runs-on: [self-hosted, '${{ matrix.host }}']
     timeout-minutes: 120
@@ -108,7 +108,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Publish the draft once every platform built
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Publish the draft once every platform built, with this version's CHANGELOG.md notes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        run: bash scripts/publish-release.sh "$GITHUB_REF_NAME"
