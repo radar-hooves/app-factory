@@ -18,7 +18,7 @@ tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", 
 
 No `path` key: Cargo traverses a git repository's whole file tree looking for the named crate's `Cargo.toml`, so a uniquely-named crate resolves regardless of where in the tree it lives. Pin `tag` to whatever release tag the change you need landed in — this repo's own calendar tags (`vYYYY.M.x`), never a crate-internal version.
 
-**A Nix-built app must also refresh its own `flake.nix`.** Thoth and Bragi build via `rustPlatform.buildRustPackage` with `cargoLock.lockFile = ./src-tauri/Cargo.lock` and a per-git-dependency `outputHashes` entry keyed `"<crate-name>-<version>"`, e.g. `"telemetry-0.6.0" = "sha256-...";`. A crate's version bump changes its key, and an app that only edits `Cargo.toml`'s `tag =` and forgets `outputHashes` fails Nix's fixed-output check. Each kit crate consumed needs its own entry (`desktop-shell`, `telemetry`, `tauri-plugin-telemetry`). After editing `Cargo.toml` and running `cargo update -p <crate>` in the consuming app: set the entry's value to `pkgs.lib.fakeHash`, run `nix build`, and paste back the hash Nix reports.
+**A Nix-built app refreshes `kitHash` after a kit bump.** The stamped `flake.nix` derives each kit crate's `outputHashes` key (`"<crate>-<version>"`) from `Cargo.lock` and gives every one `kitHash`; after `cargo update -p <crate>`, `scripts/update-kit-hash.sh` sets it (`--check` for CI).
 
 ## Building this workspace
 
