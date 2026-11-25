@@ -12,9 +12,16 @@ from tests import conftest
 def _backend(root: Path, migration: str) -> Path:
     (root / "alembic" / "versions").mkdir(parents=True)
     (root / "alembic" / "versions" / "0001_a.py").write_text(migration)
-    (root / "alembic" / "env.py").write_text("# env\n")
-    (root / "src" / "{{ package_name }}" / "db").mkdir(parents=True)
-    (root / "src" / "{{ package_name }}" / "db" / "roles.py").write_text("# roles\n")
+    (root / "alembic" / "env.py").write_text("from {{ package_name }}.db import roles\n")
+    (root / "alembic.ini").write_text("[alembic]\n")
+    package = root / "src" / "{{ package_name }}"
+    (package / "db").mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "db" / "__init__.py").write_text("")
+    (package / "db" / "roles.py").write_text("# roles\n")
+    (package / "db" / "scoping.py").write_text("from {{ package_name }}.db.helper import scope\n")
+    (package / "db" / "helper.py").write_text("def scope(): return 'v1'\n")
+    (package / "db" / "unrelated.py").write_text("# nothing imports this\n")
     return root
 
 
@@ -35,6 +42,41 @@ def test_an_edited_or_added_migration_is_a_different_key_so_it_replays(
 
     (backend / "alembic" / "versions" / "0002_b.py").write_text("revision = '2'\n")
     assert conftest._schema_cache_path(backend) not in (key, edited)
+
+
+def test_a_module_a_migration_imports_is_part_of_the_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(conftest, "_EPHEMERAL_POSTGRES", object())
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    backend = _backend(tmp_path / "backend", "from {{ package_name }}.db.scoping import scope\n")
+    package = backend / "src" / "{{ package_name }}" / "db"
+    key = conftest._schema_cache_path(backend)
+
+    (package / "unrelated.py").write_text("# edited, but no migration reaches it\n")
+    assert conftest._schema_cache_path(backend) == key
+
+    (package / "helper.py").write_text("def scope(): return 'v2'\n")  # reached through scoping
+    assert conftest._schema_cache_path(backend) != key
+
+    keyed = conftest._schema_cache_path(backend)
+    (package / "roles.py").write_text("# roles, edited\n")  # reached through env.py
+    assert conftest._schema_cache_path(backend) != keyed
+    keyed = conftest._schema_cache_path(backend)
+    (backend / "alembic.ini").write_text("[alembic]\nversion_locations = elsewhere\n")
+    assert conftest._schema_cache_path(backend) != keyed
+
+
+def test_a_cache_that_cannot_be_placed_or_read_is_a_miss_not_a_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(conftest, "_EPHEMERAL_POSTGRES", object())
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+
+    def no_home() -> Path:
+        raise RuntimeError("Could not determine home directory.")
+
+    monkeypatch.setattr(Path, "home", staticmethod(no_home))
+    assert conftest._schema_cache_path(_backend(tmp_path, "revision = '1'\n")) is None
+    assert "replaying the migrations" in caplog.text
 
 
 def test_an_explicit_server_is_never_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,6 +137,27 @@ def _revisions_and_runtime_read(database: str) -> tuple[set[str], bool]:
     return revisions, readable
 
 
+def _ownership_and_privileges(database: str) -> list[tuple[object, ...]]:
+    """Every table's owner and ACL, and the runtime role's rights on it: what a replay leaves, as a restore must."""
+    engine = create_engine(conftest._maintenance_url(database))
+    try:
+        with engine.connect() as conn:
+            return [
+                tuple(row)
+                for row in conn.execute(
+                    text(
+                        "SELECT c.relname, pg_get_userbyid(c.relowner), c.relacl::text,"
+                        " has_table_privilege(:role, c.oid, 'SELECT'), has_table_privilege(:role, c.oid, 'INSERT')"
+                        " FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+                        " WHERE n.nspname = 'public' ORDER BY c.relname"
+                    ),
+                    {"role": conftest.TEST_RUNTIME},
+                )
+            ]
+    finally:
+        engine.dispose()
+
+
 def test_a_dump_of_the_migrated_database_loads_into_a_fresh_one(
     tmp_path: Path, migrated_server: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -106,6 +169,7 @@ def test_a_dump_of_the_migrated_database_loads_into_a_fresh_one(
     conftest._recreate_test_database()
     assert conftest._load_cached_schema(dump) is True
     assert _revisions_and_runtime_read("fresh") == ({"abc"}, True)
+    assert _ownership_and_privileges("fresh") == _ownership_and_privileges("migrated")
 
 
 def test_a_dump_that_will_not_load_is_removed_and_leaves_a_usable_database(
