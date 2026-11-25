@@ -26,6 +26,7 @@ from httpx import AsyncClient
 from {{ package_name }} import app_hooks
 from {{ package_name }}.entitlements import require_module
 from {{ package_name }}.main import _API_PREFIX
+
 from tests.support.api import API
 
 #: Routes any signed-in person may reach, each gated by something other than a module.

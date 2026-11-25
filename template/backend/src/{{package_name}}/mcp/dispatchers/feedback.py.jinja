@@ -34,7 +34,9 @@ def _report_dict(report: FeedbackReport) -> dict[str, object]:
         "status": report.status.value,
         "issue_url": report.issue_url,
         "error": report.error,
-        "screenshot_url": f"/api/feedback/{report.id}/screenshot" if report.screenshot is not None else None,
+        "screenshot_url": (
+            f"{service.api_prefix()}/feedback/{report.id}/screenshot" if report.screenshot is not None else None
+        ),
     }
 
 

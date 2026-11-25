@@ -52,8 +52,8 @@ from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exchange import Asker, Asking, Exchange, Issued
 from {{ package_name }}.rate_limit import limiter
 
-from tests.support.api import API
 from tests.support import attachments, fake_agent_cli, fake_authentik, fake_library
+from tests.support.api import API
 from tests.support.fake_clamd import FakeClamd
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
@@ -351,7 +351,9 @@ async def test_a_library_that_cannot_be_read_is_503_not_this_apps_500(
     library.fail_with = 403
     who = _person("chat-manual")
     assert (await client.get(f"{API}/agent/manual/collections", headers=who)).status_code == 503
-    assert (await client.get(f"{API}/agent/manual/documents/{fake_library.DOCUMENT_ID}", headers=who)).status_code == 503
+    assert (
+        await client.get(f"{API}/agent/manual/documents/{fake_library.DOCUMENT_ID}", headers=who)
+    ).status_code == 503
 
 
 # ── Retrieval ────────────────────────────────────────────────────────────
@@ -860,7 +862,9 @@ async def test_clearing_forgets_every_settled_conversation_of_this_persons_with_
     assert [c["id"] for c in listed] == [answering]
     assert await agent.read(session) is None
     assert [c["id"] for c in (await client.get(f"{API}/agent/manual/conversations", headers=who)).json()] == [other]
-    assert [c["id"] for c in (await client.get(f"{API}/agent/helper/conversations", headers=stranger)).json()] == [theirs]
+    assert [c["id"] for c in (await client.get(f"{API}/agent/helper/conversations", headers=stranger)).json()] == [
+        theirs
+    ]
     # A persona the person may not enter refuses; one with nothing to clear is no error.
     assert (await client.delete(f"{API}/agent/manual/conversations", headers=stranger)).status_code == 403
     assert (await client.delete(f"{API}/agent/helper/conversations", headers=_person("chat-helper"))).status_code == 204
@@ -912,7 +916,9 @@ async def _retain(client: AsyncClient, days: int) -> None:
         "x-authentik-username": "the-operator",
         "x-authentik-entitlements": "admin:write",
     }
-    written = await client.patch(f"{API}/settings/agent.conversation_retention_days", json={"value": days}, headers=admin)
+    written = await client.patch(
+        f"{API}/settings/agent.conversation_retention_days", json={"value": days}, headers=admin
+    )
     assert written.status_code == 200
 
 
@@ -1773,7 +1779,9 @@ async def test_a_body_that_lies_about_its_length_or_has_none_is_cut_off_at_the_l
 
 async def test_a_json_body_is_bounded_too(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(router_module, "BODY_OVERHEAD", 500)
-    refused = await client.post(f"{API}/agent/helper/ask", json={"question": "x" * 2000}, headers=_person("chat-helper"))
+    refused = await client.post(
+        f"{API}/agent/helper/ask", json={"question": "x" * 2000}, headers=_person("chat-helper")
+    )
     assert refused.status_code == 413
 
 

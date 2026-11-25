@@ -9,6 +9,7 @@ from httpx import AsyncClient
 
 from {{ package_name }}.api.users.dependencies import Identity
 from {{ package_name }}.api.users.models import User
+
 from tests.support.api import API
 
 GRANTED = "admin|reports|reports:write|example"

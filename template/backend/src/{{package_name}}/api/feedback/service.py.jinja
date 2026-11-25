@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from {{ package_name }} import app_hooks
 from {{ package_name }}.api.feedback.models import FeedbackReport, FeedbackStatus
 from {{ package_name }}.api.feedback.schemas import FeedbackCreate
 from {{ package_name }}.config import Settings
@@ -116,6 +117,11 @@ def _loki_hint(session_id: str) -> str:
     return '{service_name="' + _SERVICE_NAME + '"} |= "' + session_id + '"'
 
 
+def api_prefix() -> str:
+    """Where this app mounts its API: the declared `app_hooks.API_PREFIX`, as `main.py` reads it."""
+    return "/" + getattr(app_hooks, "API_PREFIX", "/api").strip("/")
+
+
 def _issue_body(report: FeedbackReport, redacted_message: str) -> str:
     """The GitHub issue body: the redacted report plus enough to act on it."""
     return (
@@ -125,7 +131,7 @@ def _issue_body(report: FeedbackReport, redacted_message: str) -> str:
         f"Viewport: {report.viewport_width}x{report.viewport_height}\n"
         f"User agent: {report.user_agent}\n"
         f"Session: {report.session_id}\n"
-        f"Admin: /api/feedback/{report.id}\n"
+        f"Admin: {api_prefix()}/feedback/{report.id}\n"
         f"Loki: {_loki_hint(report.session_id)}\n"
     )
 

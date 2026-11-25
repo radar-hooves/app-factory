@@ -27,6 +27,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 
 from {{ package_name }}.logging import app_version, configure_logging
+
 from tests.support.api import API
 
 _PROBE_LOGGER = "{{ package_name }}.probe"

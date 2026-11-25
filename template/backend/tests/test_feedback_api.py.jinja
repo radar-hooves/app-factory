@@ -26,6 +26,7 @@ from {{ package_name }}.api.feedback import service
 from {{ package_name }}.api.feedback.models import FeedbackStatus
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.feedback import FeedbackSettings
+
 from tests.support.api import API
 
 # A minimal 1x1 transparent PNG, for the screenshot round trip.
@@ -184,7 +185,7 @@ async def test_a_report_files_as_a_redacted_github_issue(
     assert "hunter2" not in call["json"]["body"]
     assert "password" in call["json"]["body"]
     # ...and carries enough to act on the report without opening the app.
-    assert f"Admin: /api/feedback/{report_id}" in call["json"]["body"]
+    assert f"Admin: {API}/feedback/{report_id}" in call["json"]["body"]
     assert 'Loki: {service_name="' in call["json"]["body"]
     assert payload["session_id"] in call["json"]["body"]
 

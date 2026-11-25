@@ -62,8 +62,8 @@ from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
 
-from tests.support.api import API
 from tests.support import fake_agent_cli, live_server
+from tests.support.api import API
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
 

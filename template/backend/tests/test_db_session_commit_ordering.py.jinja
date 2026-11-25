@@ -42,8 +42,8 @@ import pytest
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
 
-from tests.support.api import API
 from tests.support import live_server
+from tests.support.api import API
 
 # The test reaches the database through a live server, not a fixture; this one binds the test server.
 pytestmark = pytest.mark.usefixtures("server_url")

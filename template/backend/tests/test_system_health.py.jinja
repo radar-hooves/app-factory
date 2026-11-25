@@ -4,6 +4,7 @@ import pytest
 {%- if 'feedback' not in omitted_slices %}
 
 from {{ package_name }}.config import get_settings
+
 from tests.support.api import API
 {%- endif %}
 

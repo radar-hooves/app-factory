@@ -37,6 +37,7 @@ from httpx import ASGITransport, AsyncClient, Response
 from {{ package_name }} import app_hooks, main
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
+
 from tests.support.api import API
 
 BOOTSTRAP = "{ __sveltekit_x = { base: '' }; import('./_app/immutable/entry/start.js'); }"
