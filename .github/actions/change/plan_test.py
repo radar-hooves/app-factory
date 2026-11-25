@@ -1951,7 +1951,7 @@ def test_a_dependant_publishes_only_after_its_library_is_published(mono, tmp_pat
     assert json.loads(out["ships"]) == []
 
 
-STUB = """#!/bin/sh
+GH_STUB = """#!/bin/sh
 # gh api --paginate <path> --jq <expr>: serves the jobs of the attempt asked for, `all` or `latest`.
 case "$*" in *filter=latest*) f=latest;; *) f=all;; esac
 while [ "$1" != --jq ]; do shift; done
@@ -1966,7 +1966,7 @@ def job(name, conclusion, passed=True, attempt=1):
 
 def wait(tmp_path, jobs_all, jobs_latest, marker):
     (tmp_path / "bin").mkdir()
-    (tmp_path / "bin" / "gh").write_text(STUB)
+    (tmp_path / "bin" / "gh").write_text(GH_STUB)
     (tmp_path / "bin" / "gh").chmod(0o755)
     for name, jobs in (("all", jobs_all), ("latest", jobs_latest)):
         (tmp_path / f"{name}.json").write_text(json.dumps({"jobs": jobs}))
