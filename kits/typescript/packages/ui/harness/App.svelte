@@ -829,7 +829,7 @@
 	// Every claim it carries is a layout or paint fact: the head card exactly as
 	// wide as the group cards with its columns on theirs, a row's text centred
 	// with or without a note, money in painted green, figures in the body face.
-	// `period`, `balance=1` and `open=<id>` reach the states the drive measures.
+	// `period`, `balance=1`, `open=<id>` and `ticks=0` reach the states the drive measures.
 	type LedgerFixtureRow = LedgerRow & { category: string; dwelling: string; labels?: string[] };
 	const ledgerRows: LedgerFixtureRow[] = [
 		{ id: 1, date: '2026-10-01', title: 'Urban Utilities', note: 'Water, July to September', amount: -312.4, balance: 5997.7, category: 'Water', dwelling: 'Both' },
@@ -917,6 +917,10 @@
 			data-probe="ledger-label">{label}</button
 		>
 	{/each}
+{/snippet}
+
+{#snippet ledgerBulk()}
+	<Button size="sm">Mark reviewed</Button>
 {/snippet}
 
 {#if surface === 'graph'}
@@ -1943,10 +1947,8 @@
 			bind:selected={ledgerSelected}
 			bind:open={ledgerOpen}
 			onAttachment={() => {}}
+			bulkActions={params.get('ticks') === '0' ? undefined : ledgerBulk}
 		>
-			{#snippet bulkActions()}
-				<Button size="sm">Mark reviewed</Button>
-			{/snippet}
 			{#snippet editor(row, ctx)}
 				<div class="flex items-center gap-3 p-4 text-sm" data-probe="ledger-editor">
 					<span class="flex-1">Editing {row.title}</span>

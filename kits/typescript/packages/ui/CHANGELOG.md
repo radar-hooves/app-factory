@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.21] - 2026-11-25
+
+Need: two from the operator's look at godswood's Transactions in production, PocketSmith's ledger his exemplar (consumer: godswood, radar-hooves/godswood#958). Grouped by day with no ticks, the ledger's leading gutter held nothing, so the Payee column, its head and every day heading started 48px in from the card's edge and the headings read as "floating randomly to the right"; and an opened row sat 8px from the rows either side, so it was not plain which it belonged to. Measured in the harness at 1440px (`drive.mjs`): by day and by none with no ticks, the head, the rows and the day headings now start 16px inside the card, together; grouped by month with no ticks 48px, and with ticks 64px, as before; an opened row 16px clear of the cards above and below, its edge the accent.
+
+### Changed
+
+- **A `Ledger` gutter with nothing to hold is the card's inset alone.** By day or none, with no `bulkActions`, the leading track is 0.5rem, so with a cell's own padding the first column, the column heads and the day headings start 1rem inside the card, a Card's inner padding. A gutter holding the group chevron (month, week, year) or the tick boxes is unchanged, and so is a phone. Column numbering is unchanged: the gutter is still line 1, so an `editor` placed with `column()` and `template` moves with the columns.
+- **An opened `Ledger` row stands apart.** It has 1rem of room above and below (was 0.5rem), counted in the height the window measures, and its edge is the accent (`border-primary`), as PocketSmith marks the row being edited. Its surface, radius and shadow are unchanged.
+
+### Consumer must change
+
+- Nothing to take it. An `editor` that drew its own leading space to clear the 2.5rem gutter (godswood's header line sits 1rem in) now lines up with the columns without it.
+
 ## [2026.11.20] - 2026-11-23
 
 Need: three godswood routes the layout gate's judge refused after 2026.11.19 (consumer: godswood via master-project, radar-hooves/godswood#965 slice 1): an empty `RecordList` judged fix for blending into the page, `/settings/integrations` judged fix for ink and grey with no service icons, and a phone's search box stopping short of the row's edge. Judged on the factory's scratch app (google/argon, 3 samples a route, 2550, 1728 and 411 px, godswood's own markup for the empty state, the toolbar and six rows): before, empty list fix x3 (major legibility: no surface or border; major colour-and-icons), six rows fix x3 (major colour-and-icons); after, empty list on a card fix, fix, ship with only the colour-and-icons finding left, the same list with an icon on its `EmptyState` ship x3, six rows with `icon` ship x3.

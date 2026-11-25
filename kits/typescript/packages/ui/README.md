@@ -1011,7 +1011,7 @@ no module rebuilds them and a need one module finds becomes a toggle for all.
 | `locale`, `currency` | Every figure, amounts, nets and counts, in this locale (`AU_LOCALE` by default) and currency (AUD). Dates keep the drawn "15 Sep": the ledger's words are English. |
 | `title`, `meta`, `actions`, `tools`, `action` | The bar on the page ground, a `ListToolbar`: its title (a heading), the count beside it, the module's own controls after the Columns menu, its icon actions (each named by its tooltip) and its one labelled action. |
 | `selected`, `bulkActions` | Ticking exists only with `bulkActions`, whose snippet gets the ticked rows in the bar that replaces the toolbar. |
-| `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
+| `open`, `editor` | Opening exists only with `editor`: the row lifts out of its card as its own surface with the accent edge, 1rem clear of the rows either side, holding the snippet. Its second argument carries the row's `template` and each column's grid line, so fields can sit under their columns. |
 | `originActions`, `onAttachment` | Split, join and undo under a synthetic row's statement lines; the paperclip as a button. |
 | `noun`, `empty`, `footer`, `layout` | "line" for a printed layer; the empty state; "Show more" after the last group; a forced `phone`/`narrow`/`wide` where the ledger's own width (below 480px, from 1200px) should not decide. |
 
@@ -1035,7 +1035,9 @@ Settled here, the same in every module, and not props:
   head shows its state: a down chevron descending, an up chevron ascending,
   none at rest. Until the viewer sorts, rows sit newest first. A chevron in the head's
   gutter opens or closes every group at once; where rows tick, the gutter
-  widens to hold it beside the select-all checkbox.
+  widens to hold it beside the select-all checkbox. With nothing to hold (by
+  day or none, no ticks) the gutter is only the card's 1rem inset, where the
+  heads, the rows and the day headings start together.
 - **The Columns menu** holds every column as a tick, the three fixed ones
   locked and the running balance last, then the period: financial year,
   calendar year, month, week (from Monday), day (the date heads the group and

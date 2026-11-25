@@ -176,6 +176,8 @@
 	/** Ticking adds a checkbox to the gutter, so it widens to hold the chevron beside it. */
 	const GUTTER = '2.5rem';
 	const GUTTER_TICKS = '3.5rem';
+	/** A gutter with nothing to hold is the card's inset alone: with a cell's own padding, a Card's 1rem. */
+	const INSET = '0.5rem';
 
 	// ── Columns: the ledger's own three, the module's, the balance last ──
 	const resolved = $derived.by(() => {
@@ -269,7 +271,7 @@
 		)
 	);
 	const template = $derived(
-		`${selectable ? GUTTER_TICKS : GUTTER} ${shown.map((c) => (WIDE ? c.track.wide : c.track.narrow)).join(' ')}`
+		`${selectable ? GUTTER_TICKS : grouped && !BY_DAY ? GUTTER : INSET} ${shown.map((c) => (WIDE ? c.track.wide : c.track.narrow)).join(' ')}`
 	);
 	/** A column's grid line, the gutter being 1; 0 when it is not shown. */
 	const column = (key: string) => {
@@ -976,9 +978,10 @@
 					{#if block.kind === 'head'}
 						{@render groupHead(groups[block.group]!, block.group)}
 					{:else if block.kind === 'open'}
-						<div class="py-2" {@attach measure(block.key)}>
+						<!-- Room either side says which rows it sits between; the accent edge, that it is being edited. -->
+						<div class="py-4" {@attach measure(block.key)}>
 							<div
-								class="bg-popover border-border-strong rounded-lg border shadow-md"
+								class="bg-popover border-primary rounded-lg border shadow-md"
 								data-slot="ledger-open"
 							>
 								{@render editor?.(block.row, context)}

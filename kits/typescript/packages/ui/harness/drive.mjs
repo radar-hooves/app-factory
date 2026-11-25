@@ -4229,7 +4229,16 @@ for (const density of ['comfortable', 'compact']) {
 			const income = rows.map((r) => r.querySelector('[data-slot="ledger-amount"]')).find((a) => !a.textContent.includes('('));
 			const outgo = rows.map((r) => r.querySelector('[data-slot="ledger-amount"]')).find((a) => a.textContent.includes('('));
 			const region = document.querySelector('[data-slot="ledger-rows"]');
+			// Where the first column's text starts, from the card's inner edge.
+			const edge = cards[0] && cards[0].getBoundingClientRect().left + parseFloat(getComputedStyle(cards[0]).borderLeftWidth);
+			const lead = (el) => (el ? el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft) - edge : null);
 			return {
+				rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+				lead: edge !== undefined && {
+					head: lead(headCells[0]),
+					row: first ? lead(cellsOf(first)[0]) : null,
+					group: lead(groups[0]?.children[1])
+				},
 				head: head ? box(head) : null,
 				cards: cards.map(box),
 				cardRadius: cards[0] ? getComputedStyle(cards[0]).borderTopLeftRadius : '',
@@ -4252,7 +4261,7 @@ for (const density of ['comfortable', 'compact']) {
 				noNote: noNote && {
 					row: mid(noNote),
 					title: mid(titleOf(noNote).firstElementChild),
-					box: mid(noNote.querySelector('[data-slot="checkbox"]')),
+					box: noNote.querySelector('[data-slot="checkbox"]') ? mid(noNote.querySelector('[data-slot="checkbox"]')) : null,
 					amount: mid(noNote.querySelector('[data-slot="ledger-amount"]')),
 					dot: noNote.querySelector('[data-slot="ledger-review"]') ? mid(noNote.querySelector('[data-slot="ledger-review"]')) : null
 				},
@@ -4468,6 +4477,30 @@ for (const density of ['comfortable', 'compact']) {
 	check('Ledger by day: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
 
+	// The gutter holds the group chevron and the tick boxes; holding neither, it is the card's inset
+	// alone, and the column heads, the rows and the group headings start there together (godswood, 25/11/2026).
+	for (const [query, gutter, holds] of [
+		['period=day&ticks=0', 0.5, 'nothing'],
+		['period=none&ticks=0', 0.5, 'nothing'],
+		['period=month&ticks=0', 2.5, 'the chevron'],
+		['period=day', 3.5, 'the tick box'],
+		['period=month', 3.5, 'the chevron and the tick box']
+	]) {
+		({ context, page, errors } = await open(`surface=ledger&${query}`, { width: 1440, height: 900 }, 'dark'));
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-slot="ledger-row"]');
+		m = await measureLedger();
+		const want = (gutter + 0.5) * m.rem; // the gutter and a cell's own padding
+		const starts = [m.lead.head, m.lead.row, ...(query.includes('none') ? [] : [m.lead.group])];
+		check(
+			`Ledger ${query}: a gutter holding ${holds} starts the head, the rows and the headings ${gutter + 0.5}rem in`,
+			starts.every((x) => x !== null && Math.abs(x - want) < 0.5),
+			`want ${want}px; ${JSON.stringify(m.lead)}`
+		);
+		check(`Ledger ${query}: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
 	// A row opened in place lifts out of its card: the card splits around it.
 	({ context, page, errors } = await open('surface=ledger&open=3', { width: 1440, height: 900 }, 'dark'));
 	await page.addStyleTag({ content: SETTLE });
@@ -4477,12 +4510,25 @@ for (const density of ['comfortable', 'compact']) {
 		const r = open.getBoundingClientRect();
 		const above = open.parentElement.previousElementSibling.getBoundingClientRect();
 		const below = open.parentElement.nextElementSibling.getBoundingClientRect();
-		return { gapAbove: r.top - above.bottom, gapBelow: below.top - r.bottom, shadow: getComputedStyle(open).boxShadow };
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--color-primary)';
+		document.body.append(probe);
+		const accent = getComputedStyle(probe).color;
+		probe.remove();
+		const style = getComputedStyle(open);
+		return {
+			gapAbove: r.top - above.bottom,
+			gapBelow: below.top - r.bottom,
+			rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+			shadow: style.boxShadow,
+			edge: style.borderTopColor,
+			accent
+		};
 	});
 	check(
-		'Ledger: an opened row lifts out of its card, set apart by space and shadow',
-		lifted.gapAbove >= 6 && lifted.gapBelow >= 6 && lifted.shadow !== 'none',
-		`gap ${lifted.gapAbove.toFixed(1)}/${lifted.gapBelow.toFixed(1)}, shadow ${lifted.shadow}`
+		'Ledger: an opened row lifts out of its card, a clear 1rem from the rows either side, with shadow and the accent edge',
+		lifted.gapAbove >= lifted.rem - 0.5 && lifted.gapBelow >= lifted.rem - 0.5 && lifted.shadow !== 'none' && lifted.edge === lifted.accent,
+		`gap ${lifted.gapAbove.toFixed(1)}/${lifted.gapBelow.toFixed(1)} on a ${lifted.rem}px rem, shadow ${lifted.shadow}, edge ${lifted.edge} (accent ${lifted.accent})`
 	);
 	check('Ledger opened: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
