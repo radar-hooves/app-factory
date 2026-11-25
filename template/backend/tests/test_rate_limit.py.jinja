@@ -29,6 +29,7 @@ import {{ package_name }}.app_hooks as app_hooks
 import {{ package_name }}.rate_limit as rate_limit
 from {{ package_name }}.proxy_trust import client_ip, client_ip_from_scope, peer_is_trusted
 from {{ package_name }}.rate_limit import RateLimitExceeded, build_limiter, rate_limit_handler, rate_limit_key
+from tests.support.api import API
 
 
 def _request(peer: str | None, headers: dict[str, str] | None = None) -> Request:
@@ -46,8 +47,8 @@ def _request(peer: str | None, headers: dict[str, str] | None = None) -> Request
             "scheme": "http",
             "method": "GET",
             "root_path": "",
-            "path": "/api/example",
-            "raw_path": b"/api/example",
+            "path": f"{API}/example",
+            "raw_path": f"{API}/example".encode(),
             "query_string": b"",
             "server": ("testserver", 80),
             "client": (peer, 51234) if peer else None,
@@ -130,7 +131,8 @@ class TestTrustBoundary:
 class TestKeyFunction:
     """Which field the limiter counts on — the address, or this app's own key."""
 
-    def test_the_default_key_is_the_resolved_caller_address(self) -> None:
+    def test_the_default_key_is_the_resolved_caller_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delattr(app_hooks, "rate_limit_key", raising=False)
         req = _request("203.0.113.9")
         assert rate_limit._key_func(req) == rate_limit_key(req) == "203.0.113.9"
 
@@ -211,7 +213,7 @@ class TestDefaultLimitBinds:
             Limiter(key_func=rate_limit_key, default_limits=["3/minute"], enabled=True),
         )
 
-        codes = [(await client.get("/api/system/health")).status_code for _ in range(6)]
+        codes = [(await client.get(f"{API}/system/health")).status_code for _ in range(6)]
 
         assert codes.count(200) == 3, f"default limit did not bind: {codes}"
         assert codes.count(429) == 3, f"default limit did not bind: {codes}"
@@ -228,7 +230,7 @@ class TestDefaultLimitBinds:
             Limiter(key_func=rate_limit_key, default_limits=["3/minute"], enabled=False),
         )
 
-        codes = [(await client.get("/api/system/health")).status_code for _ in range(6)]
+        codes = [(await client.get(f"{API}/system/health")).status_code for _ in range(6)]
 
         assert codes == [200] * 6
 
@@ -264,13 +266,13 @@ class TestDefaultLimitBinds:
         async def status() -> dict[str, bool]:
             return {"ok": True}
 
-        app.include_router(router, prefix="/api", dependencies=[Depends(rate_limit.enforce_default_rate_limit)])
+        app.include_router(router, prefix=API, dependencies=[Depends(rate_limit.enforce_default_rate_limit)])
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            plain_codes = [(await ac.get("/api/plain")).status_code for _ in range(6)]
-            cheap_codes = [(await ac.get("/api/cheap")).status_code for _ in range(6)]
-            status_codes = [(await ac.get("/api/status")).status_code for _ in range(6)]
+            plain_codes = [(await ac.get(f"{API}/plain")).status_code for _ in range(6)]
+            cheap_codes = [(await ac.get(f"{API}/cheap")).status_code for _ in range(6)]
+            status_codes = [(await ac.get(f"{API}/status")).status_code for _ in range(6)]
 
         assert plain_codes.count(200) == 3, f"default did not bind on an undecorated route: {plain_codes}"
         assert cheap_codes.count(200) == 2, f"per-route limit not honoured (or double-counted): {cheap_codes}"

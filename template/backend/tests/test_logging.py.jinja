@@ -27,6 +27,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 
 from {{ package_name }}.logging import app_version, configure_logging
+from tests.support.api import API
 
 _PROBE_LOGGER = "{{ package_name }}.probe"
 
@@ -135,7 +136,7 @@ class TestCorrelation:
         self, client: AsyncClient, capsys: pytest.CaptureFixture[str]
     ) -> None:
         configure_logging()
-        response = await client.get("/openapi.json", headers={"x-request-id": "a1b2c3d4"})
+        response = await client.get(f"{API}/system/health", headers={"x-request-id": "a1b2c3d4"})
 
         assert response.headers["x-request-id"] == "a1b2c3d4"
         request_lines = [line for line in _lines(capsys) if line["message"] == "Request completed"]
@@ -144,7 +145,7 @@ class TestCorrelation:
 
     async def test_an_id_not_in_the_eight_character_form_is_replaced(self, client: AsyncClient) -> None:
         for sent in ("probe-id", "A1B2C3D4", "a1b2c3d4e5"):
-            response = await client.get("/openapi.json", headers={"x-request-id": sent})
+            response = await client.get(f"{API}/system/health", headers={"x-request-id": sent})
             assert response.headers["x-request-id"] != sent
             assert len(response.headers["x-request-id"]) == 8
 
@@ -152,7 +153,7 @@ class TestCorrelation:
         self, client: AsyncClient, capsys: pytest.CaptureFixture[str]
     ) -> None:
         configure_logging()
-        await client.get("/openapi.json", headers={"x-request-id": "a1b2c3d4"})
+        await client.get(f"{API}/system/health", headers={"x-request-id": "a1b2c3d4"})
         logging.getLogger(_PROBE_LOGGER).info("After the request")
 
         after = [line for line in _lines(capsys) if line["message"] == "After the request"]

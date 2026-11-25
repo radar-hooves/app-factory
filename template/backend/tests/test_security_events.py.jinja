@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from {{ package_name }} import security_events
 from {{ package_name }}.api.users.models import User
 
+from tests.support.api import API
 from tests.support.fake_authentik import FakeAuthentik
 from tests.test_mcp_person_gate import _drive, _person
 from tests.test_mcp_person_gate import fake as fake_authentik  # noqa: F401 -- a fixture, found by name
@@ -51,7 +52,7 @@ async def test_a_denied_module_gate_records_the_module_and_grade(
     client: AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.INFO, logger=LOGGER)
-    refused = await client.get("/api/admin/users", headers=_headers("somebody", "reports|chat-helper"))
+    refused = await client.get(f"{API}/admin/users", headers=_headers("somebody", "reports|chat-helper"))
     assert refused.status_code == 403
 
     (event,) = _events(caplog, "entitlement_denied")
@@ -66,26 +67,26 @@ async def test_a_denied_module_gate_records_the_module_and_grade(
     assert event.actor_id  # type: ignore[attr-defined]
     assert event.actor_entitlements == ["reports", "chat-helper"]  # type: ignore[attr-defined]
     assert event.http_method == "GET"  # type: ignore[attr-defined]
-    assert event.http_path == "/api/admin/users"  # type: ignore[attr-defined]
+    assert event.http_path == f"{API}/admin/users"  # type: ignore[attr-defined]
     assert event.source_ip  # type: ignore[attr-defined]
     _nothing_secret(_events(caplog))
 
 
 async def test_the_http_path_carries_no_query_string(client: AsyncClient, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger=LOGGER)
-    await client.get("/api/admin/users?search=alice", headers=_headers("somebody"))
+    await client.get(f"{API}/admin/users?search=alice", headers=_headers("somebody"))
     (event,) = _events(caplog, "entitlement_denied")
-    assert event.http_path == "/api/admin/users"  # type: ignore[attr-defined]
+    assert event.http_path == f"{API}/admin/users"  # type: ignore[attr-defined]
 
 
 async def test_a_write_denial_names_the_write_grade(
     client: AsyncClient, caplog: pytest.LogCaptureFixture, session: Session
 ) -> None:
-    await client.get("/api/users/me", headers=_headers("the-subject"))
+    await client.get(f"{API}/users/me", headers=_headers("the-subject"))
     subject = session.execute(select(User).where(User.authentik_uid == "the-subject")).scalar_one()
     caplog.set_level(logging.INFO, logger=LOGGER)
     refused = await client.patch(
-        f"/api/admin/users/{subject.id}", json={"is_active": False}, headers=_headers("viewer", "admin")
+        f"{API}/admin/users/{subject.id}", json={"is_active": False}, headers=_headers("viewer", "admin")
     )
     assert refused.status_code == 403
     (event,) = _events(caplog, "entitlement_denied")
@@ -96,12 +97,12 @@ async def test_a_write_denial_names_the_write_grade(
 async def test_an_admin_update_records_the_change_and_the_actor(
     client: AsyncClient, caplog: pytest.LogCaptureFixture, session: Session
 ) -> None:
-    await client.get("/api/users/me", headers=_headers("the-subject"))
+    await client.get(f"{API}/users/me", headers=_headers("the-subject"))
     subject = session.execute(select(User).where(User.authentik_uid == "the-subject")).scalar_one()
     caplog.set_level(logging.INFO, logger=LOGGER)
 
     done = await client.patch(
-        f"/api/admin/users/{subject.id}", json={"is_active": False}, headers=_headers("the-admin", "admin:write")
+        f"{API}/admin/users/{subject.id}", json={"is_active": False}, headers=_headers("the-admin", "admin:write")
     )
     assert done.status_code == 200
 
@@ -118,18 +119,18 @@ async def test_an_admin_update_records_the_change_and_the_actor(
 
 async def test_an_app_gate_refusal_is_recorded(client: AsyncClient, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger=LOGGER)
-    refused = await client.get("/api/users/", headers=_headers("chatter", "chat-helper"))
+    refused = await client.get(f"{API}/users/", headers=_headers("chatter", "chat-helper"))
     assert refused.status_code == 403
     (event,) = _events(caplog, "entitlement_denied")
     assert event.actor_entitlements == ["chat-helper"]  # type: ignore[attr-defined]
-    assert event.http_path == "/api/users/"  # type: ignore[attr-defined]
+    assert event.http_path == f"{API}/users/"  # type: ignore[attr-defined]
 
 
 async def test_view_as_is_recorded_once_per_asked_set(client: AsyncClient, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger=LOGGER)
     headers = _headers("the-admin", "admin|reports|example", **{"x-view-as": "reports"})
     for _ in range(5):
-        assert (await client.get("/api/users/me", headers=headers)).status_code == 200
+        assert (await client.get(f"{API}/users/me", headers=headers)).status_code == 200
 
     (event,) = _events(caplog, "view_as_used")
     assert event.outcome == "allowed"  # type: ignore[attr-defined]
@@ -138,7 +139,7 @@ async def test_view_as_is_recorded_once_per_asked_set(client: AsyncClient, caplo
     assert event.actor_uid == "the-admin"  # type: ignore[attr-defined]
 
     other = _headers("the-admin", "admin|reports|example", **{"x-view-as": "example"})
-    await client.get("/api/users/me", headers=other)
+    await client.get(f"{API}/users/me", headers=other)
     assert len(_events(caplog, "view_as_used")) == 2
 
 
@@ -148,7 +149,7 @@ async def test_a_view_as_header_without_admin_is_recorded_as_denied_once(
     caplog.set_level(logging.INFO, logger=LOGGER)
     headers = _headers("sneaky", "reports", **{"x-view-as": "reports|admin"})
     for _ in range(3):
-        assert (await client.get("/api/users/me", headers=headers)).status_code == 200
+        assert (await client.get(f"{API}/users/me", headers=headers)).status_code == 200
 
     assert _events(caplog, "view_as_used") == []
     (event,) = _events(caplog, "view_as_denied")
@@ -160,7 +161,7 @@ async def test_a_view_as_header_without_admin_is_recorded_as_denied_once(
 
 async def test_no_view_as_header_records_nothing(client: AsyncClient, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger=LOGGER)
-    await client.get("/api/users/me", headers=_headers("the-admin", "admin"))
+    await client.get(f"{API}/users/me", headers=_headers("the-admin", "admin"))
     assert _events(caplog) == []
 
 

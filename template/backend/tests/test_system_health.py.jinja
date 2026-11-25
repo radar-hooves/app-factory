@@ -4,13 +4,14 @@ import pytest
 {%- if 'feedback' not in omitted_slices %}
 
 from {{ package_name }}.config import get_settings
+from tests.support.api import API
 {%- endif %}
 
 
 @pytest.mark.integration
 async def test_health_check_reports_healthy(client):
     """A healthy database round-trips to a 200 with the expected fields."""
-    response = await client.get("/api/system/health")
+    response = await client.get(f"{API}/system/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "healthy"
@@ -39,7 +40,7 @@ async def test_health_check_returns_503_when_database_is_unreachable(app, client
     monkeypatch.setattr("{{ package_name }}.exceptions._debug", lambda: True)
     app.dependency_overrides[get_session] = _broken_session
     try:
-        response = await client.get("/api/system/health")
+        response = await client.get(f"{API}/system/health")
     finally:
         app.dependency_overrides.pop(get_session, None)
 

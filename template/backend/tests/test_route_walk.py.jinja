@@ -26,6 +26,7 @@ from httpx import AsyncClient
 from {{ package_name }} import app_hooks
 from {{ package_name }}.entitlements import require_module
 from {{ package_name }}.main import _API_PREFIX
+from tests.support.api import API
 
 #: Routes any signed-in person may reach, each gated by something other than a module.
 PERSON_FACING = {
@@ -140,16 +141,16 @@ async def test_an_account_admitted_only_to_chat_reaches_its_own_record_and_not_t
         "x-authentik-username": "chat-only",
         "x-authentik-entitlements": "chat-x",
     }
-    assert (await client.get("/api/users/me", headers=chat_only)).status_code == 200
-    refused = await client.get("/api/users/", headers=chat_only)
+    assert (await client.get(f"{API}/users/me", headers=chat_only)).status_code == 200
+    refused = await client.get(f"{API}/users/", headers=chat_only)
     assert refused.status_code == 403
     assert "entitlement to the app itself" in refused.json()["message"]
     assert "people" not in refused.json()["message"]
     admitted = {**chat_only, "x-authentik-entitlements": "chat-x|example"}
-    assert (await client.get("/api/users/", headers=admitted)).status_code == 200
+    assert (await client.get(f"{API}/users/", headers=admitted)).status_code == 200
 
 
 async def test_an_account_holding_no_entitlement_is_refused_the_people(client: AsyncClient) -> None:
     """Refused, so an account the identity provider admitted without a grant (an invited reviewer, an outpost forwarding no header) never lists everyone. The picker's people hold a non-chat entitlement."""
     bare = {"x-authentik-uid": "no-grants", "x-authentik-username": "no-grants", "x-authentik-entitlements": ""}
-    assert (await client.get("/api/users/", headers=bare)).status_code == 403
+    assert (await client.get(f"{API}/users/", headers=bare)).status_code == 403

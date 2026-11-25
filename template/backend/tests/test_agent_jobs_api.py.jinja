@@ -62,6 +62,7 @@ from {{ package_name }}.db.scoping import bind_session
 from {{ package_name }}.db.session import get_session_factory
 from {{ package_name }}.exceptions import BadRequestError
 
+from tests.support.api import API
 from tests.support import fake_agent_cli, live_server
 
 FAKE_CLI = Path(__file__).parent / "support" / "fake_agent_cli.py"
@@ -367,7 +368,7 @@ async def test_watching_a_finished_job_replays_both_sides_of_the_conversation_in
     await _message(agent_settings, persona, job_id, workspace_id, "a follow-up")
     await _wait_until_settled(job_id, workspace_id)
 
-    response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
+    response = await client.get(f"{API}/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
     assert response.status_code == 200
     spoken = [
         ("asked", e["message"]["content"][0]["text"])
@@ -385,7 +386,7 @@ async def test_watching_a_finished_job_replays_both_sides_of_the_conversation_in
 
 
 async def test_watching_a_job_that_never_existed_answers_not_found(client: AsyncClient) -> None:
-    response = await client.get("/api/agent/jobagent/jobs/never-issued/watch", headers=ENTITLED)
+    response = await client.get(f"{API}/agent/jobagent/jobs/never-issued/watch", headers=ENTITLED)
     assert response.status_code == 404
 
 
@@ -397,7 +398,7 @@ async def test_watching_is_gated_on_the_persona_entitlement(
 ) -> None:
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
-    response = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=UNENTITLED)
+    response = await client.get(f"{API}/agent/jobagent/jobs/{job_id}/watch", headers=UNENTITLED)
     assert response.status_code == 403
     await _wait_until_settled(job_id, workspace_id)
 
@@ -414,7 +415,7 @@ async def test_watching_a_job_from_a_different_workspace_is_refused_even_with_th
     job_id = await _start(agent_settings, persona, workspace_id, prompt="private to job-1's workspace")
     await _wait_until_settled(job_id, workspace_id)
 
-    refused = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=OTHER_WORKSPACE)
+    refused = await client.get(f"{API}/agent/jobagent/jobs/{job_id}/watch", headers=OTHER_WORKSPACE)
     assert refused.status_code == 404  # NOT 403 -- one answer for "not yours" and "never existed"
 
 
@@ -435,7 +436,7 @@ async def test_a_job_of_a_different_persona_is_refused_on_every_route_even_in_th
     await _wait_until_settled(job_id, workspace_id)
 
     refused = await client.request(
-        method, f"/api/agent/jobagent/jobs/{job_id}/{route}", json={"text": "hi"}, headers=ENTITLED
+        method, f"{API}/agent/jobagent/jobs/{job_id}/{route}", json={"text": "hi"}, headers=ENTITLED
     )
     assert refused.status_code == 404
     assert len(_answers(job_id, workspace_id)) == 1  # nothing resumed it
@@ -531,7 +532,7 @@ async def test_messaging_is_gated_on_the_persona_entitlement(
 ) -> None:
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
-    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "hi"}, headers=UNENTITLED)
+    response = await client.post(f"{API}/agent/jobagent/jobs/{job_id}/message", json={"text": "hi"}, headers=UNENTITLED)
     assert response.status_code == 403
     await _wait_until_settled(job_id, workspace_id)
 
@@ -546,7 +547,7 @@ async def test_messaging_a_job_from_a_different_workspace_is_refused(
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     await _wait_until_settled(job_id, workspace_id)
     refused = await client.post(
-        f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "steer this"}, headers=OTHER_WORKSPACE
+        f"{API}/agent/jobagent/jobs/{job_id}/message", json={"text": "steer this"}, headers=OTHER_WORKSPACE
     )
     assert refused.status_code == 404
 
@@ -701,7 +702,7 @@ async def test_the_output_hook_rewrites_every_event_before_it_is_kept_or_watched
     assert CARD not in json.dumps(_events(job_id, workspace_id))
     assert "[card]" in json.dumps(_events(job_id, workspace_id))
     assert job.structured_output is not None and CARD not in job.structured_output["text"]
-    watched = await client.get(f"/api/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
+    watched = await client.get(f"{API}/agent/jobagent/jobs/{job_id}/watch", headers=ENTITLED)
     assert CARD not in watched.text
 
 
@@ -951,7 +952,7 @@ async def test_a_job_can_be_stopped_while_it_is_working(
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until_running(job_id)
 
-    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
+    response = await client.post(f"{API}/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
 
     job = await _wait_until_settled(job_id, workspace_id)
@@ -969,7 +970,7 @@ async def test_stopping_an_already_finished_job_is_a_no_op(
     job_id = await _start(agent_settings, persona, workspace_id, prompt="hi")
     await _wait_until_settled(job_id, workspace_id)
 
-    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
+    response = await client.post(f"{API}/agent/jobagent/jobs/{job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
     assert _job(job_id, workspace_id).status == jobs_models.COMPLETED
 
@@ -982,7 +983,7 @@ async def test_stopping_is_gated_on_the_persona_entitlement(
 ) -> None:
     _, workspace_id = identity
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
-    response = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=UNENTITLED)
+    response = await client.post(f"{API}/agent/jobagent/jobs/{job_id}/stop", headers=UNENTITLED)
     assert response.status_code == 403
     assert _job(job_id, workspace_id).status == jobs_models.RUNNING  # the refused caller reached nothing
     await jobs_module.stop(get_session_factory(), job_id, workspace_id=workspace_id)
@@ -999,7 +1000,7 @@ async def test_stopping_a_job_from_a_different_workspace_is_refused(
     job_id = await _start(agent_settings, persona, workspace_id, prompt=fake_agent_cli.HANG_TRIGGER)
     await _wait_until_running(job_id)
 
-    refused = await client.post(f"/api/agent/jobagent/jobs/{job_id}/stop", headers=OTHER_WORKSPACE)
+    refused = await client.post(f"{API}/agent/jobagent/jobs/{job_id}/stop", headers=OTHER_WORKSPACE)
     assert refused.status_code == 404
     await asyncio.sleep(0.2)  # several polls: nothing was asked of the running process
     assert _job(job_id, workspace_id).status == jobs_models.RUNNING
@@ -1074,7 +1075,7 @@ async def test_a_stop_that_loses_the_row_lock_race_to_the_runs_own_settle_is_a_n
 
     # The stopping worker's request lands a beat too late to have flagged it in time -- the route
     # answers exactly as it does for any job that has already finished.
-    response = await client.post(f"/api/agent/jobagent/jobs/{spec.job_id}/stop", headers=ENTITLED)
+    response = await client.post(f"{API}/agent/jobagent/jobs/{spec.job_id}/stop", headers=ENTITLED)
     assert response.status_code == 204
 
     job = _job(spec.job_id, workspace_id)
@@ -1136,17 +1137,17 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
         # Booted, and swept for dead runs, beside a live one.
         assert _job(hanging, workspace_id).status == jobs_models.RUNNING
 
-        assert (await other.post(f"/api/agent/jobagent/jobs/{hanging}/stop")).status_code == 204
+        assert (await other.post(f"{API}/agent/jobagent/jobs/{hanging}/stop")).status_code == 204
         assert (await _wait_until_settled(hanging, workspace_id)).status == jobs_models.CANCELLED
 
         job_id = await _start(patient, persona, workspace_id, prompt=fake_agent_cli.AWAIT_MESSAGE_TRIGGER)
         await _wait_until_running(job_id)
         watched: list[dict[str, Any]] = []
-        async with other.stream("GET", f"/api/agent/jobagent/jobs/{job_id}/watch") as response:
+        async with other.stream("GET", f"{API}/agent/jobagent/jobs/{job_id}/watch") as response:
             assert response.status_code == 200
             follower = asyncio.create_task(_collect(response.aiter_lines(), watched))
             await _wait_until(lambda: any(e.get("isReplay") for e in watched))
-            sent = await other.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "from elsewhere"})
+            sent = await other.post(f"{API}/agent/jobagent/jobs/{job_id}/message", json={"text": "from elsewhere"})
             assert sent.status_code == 204
             await asyncio.wait_for(follower, timeout=_POLL_TIMEOUT_SECONDS)  # ends as the run settles
 
@@ -1157,7 +1158,7 @@ async def test_a_second_worker_process_watches_messages_stops_and_resumes_a_job(
         assert _echo_field(second, "ppid") == str(os.getpid())  # this worker's own CLI answered it
         assert [e.get("type") for e in watched].count("result") == 2
 
-        resumed = await other.post(f"/api/agent/jobagent/jobs/{job_id}/message", json={"text": "resume there"})
+        resumed = await other.post(f"{API}/agent/jobagent/jobs/{job_id}/message", json={"text": "resume there"})
         assert resumed.status_code == 204
         await _wait_until(lambda: len(_answers(job_id, workspace_id)) == 3)
         await _wait_until_settled(job_id, workspace_id)

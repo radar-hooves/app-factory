@@ -22,6 +22,8 @@ from pathlib import Path
 
 import httpx
 
+from tests.support.api import API
+
 BACKEND = Path(__file__).resolve().parents[2]
 
 # A quiet host's start budget. It stretches by the host's run queue per core: a
@@ -65,7 +67,7 @@ async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[s
             while True:
                 assert process.poll() is None, "the server process exited during startup"
                 with contextlib.suppress(httpx.TransportError):
-                    if (await probe.get("/openapi.json")).status_code == 200:
+                    if (await probe.get(f"{API}/system/health")).status_code == 200:
                         break
                 waited, budget = time.monotonic() - started, start_budget()
                 assert waited < budget, f"the server did not answer within {waited:.0f}s (budget {budget:.0f}s)"

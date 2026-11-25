@@ -1,0 +1,47 @@
+"""A test reaches the app through its declared seams, never through the template's defaults.
+
+An app may mount its slices elsewhere (`app_hooks.API_PREFIX`) and may close the
+OpenAPI document and its UIs (`openapi_enabled`). A test that writes `/api/...` or
+fetches `/openapi.json` to prove something else passes on the default stamp and
+fails on a stamp that differs. Paths come from `tests/support/api.py`; a test that
+needs any successful endpoint uses `{API}/system/health`, open under every posture.
+`test_app_posture.py` is the one place the document routes are named, because it is
+what proves them open or closed.
+"""
+
+import ast
+from pathlib import Path
+
+TESTS = Path(__file__).parent
+PREFIX = "/" + "api"
+DOCUMENT = "/" + "openapi"
+POSTURE = {"test_app_posture.py", "test_declared_seams.py"}
+
+
+def _literals(path: Path):
+    tree = ast.parse(path.read_text())
+    docstrings = {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+        and node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and id(node) not in docstrings and isinstance(node.value, str | bytes):
+            text = node.value if isinstance(node.value, str) else node.value.decode(errors="replace")
+            yield node.lineno, text
+
+
+def test_no_test_names_the_default_api_prefix_or_the_openapi_document() -> None:
+    found = [
+        f"{path.relative_to(TESTS)}:{line}: {text!r}"
+        for path in sorted(TESTS.rglob("*.py"))
+        if path.name not in POSTURE
+        for line, text in _literals(path)
+        if text.startswith(PREFIX) or text.startswith(DOCUMENT) or f" {PREFIX}/" in text
+    ]
+    assert not found, "reach the API through tests.support.api.API and a route open under every posture:\n" + "\n".join(
+        found
+    )

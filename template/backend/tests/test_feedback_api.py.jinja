@@ -26,6 +26,7 @@ from {{ package_name }}.api.feedback import service
 from {{ package_name }}.api.feedback.models import FeedbackStatus
 from {{ package_name }}.config import Settings, get_settings
 from {{ package_name }}.config.sections.feedback import FeedbackSettings
+from tests.support.api import API
 
 # A minimal 1x1 transparent PNG, for the screenshot round trip.
 _PNG_DATA_URL = (
@@ -105,11 +106,11 @@ def _github_response(status_code: int, **json_body: object) -> httpx.Response:
 
 async def test_a_report_stays_received_when_no_repo_is_configured(client: AsyncClient, filing_disabled: None) -> None:
     """Repo set empty: filing never runs and nothing 5xxs."""
-    created = await client.post("/api/feedback/", json=_report_payload())
+    created = await client.post(f"{API}/feedback/", json=_report_payload())
     assert created.status_code == 201
     report_id = created.json()["id"]
 
-    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    read = await client.get(f"{API}/feedback/{report_id}", headers=_admin_headers())
     assert read.status_code == 200
     body = read.json()
     assert body["status"] == FeedbackStatus.RECEIVED.value
@@ -147,7 +148,7 @@ async def test_health_says_where_reports_go(client: AsyncClient, monkeypatch: py
 
     off: Settings = get_settings().model_copy(update={"feedback": FeedbackSettings(github_repo="")})
     monkeypatch.setattr(system_router, "get_settings", lambda: off)
-    body = (await client.get("/api/system/health")).json()
+    body = (await client.get(f"{API}/system/health")).json()
     assert body["feedback"].startswith("disabled")
 
 
@@ -168,7 +169,7 @@ async def test_a_report_files_as_a_redacted_github_issue(
     monkeypatch.setattr(service, "vend", lambda credential, field: "gh-token-123")
 
     payload = _report_payload()
-    created = await client.post("/api/feedback/", json=payload)
+    created = await client.post(f"{API}/feedback/", json=payload)
     report_id = created.json()["id"]
 
     assert len(posted) == 1
@@ -187,7 +188,7 @@ async def test_a_report_files_as_a_redacted_github_issue(
     assert 'Loki: {service_name="' in call["json"]["body"]
     assert payload["session_id"] in call["json"]["body"]
 
-    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    read = await client.get(f"{API}/feedback/{report_id}", headers=_admin_headers())
     body = read.json()
     assert body["status"] == FeedbackStatus.FILED.value
     assert body["issue_url"] == "https://github.com/acme/reports/issues/42"
@@ -216,7 +217,7 @@ async def test_a_pre_vended_token_is_used_without_calling_vend(
     monkeypatch.setattr(httpx, "post", _fake_post)
     monkeypatch.setattr(service, "vend", _no_vend)
     try:
-        created = await client.post("/api/feedback/", json=_report_payload())
+        created = await client.post(f"{API}/feedback/", json=_report_payload())
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
@@ -238,11 +239,11 @@ async def test_a_failed_github_call_leaves_the_report_received_with_the_error(
     monkeypatch.setattr(httpx, "post", _failing_post)
     monkeypatch.setattr(service, "vend", lambda credential, field: "gh-token-123")
 
-    created = await client.post("/api/feedback/", json=_report_payload())
+    created = await client.post(f"{API}/feedback/", json=_report_payload())
     assert created.status_code == 201
     report_id = created.json()["id"]
 
-    read = await client.get(f"/api/feedback/{report_id}", headers=_admin_headers())
+    read = await client.get(f"{API}/feedback/{report_id}", headers=_admin_headers())
     body = read.json()
     assert body["status"] == FeedbackStatus.RECEIVED.value
     assert body["issue_url"] is None
@@ -253,10 +254,10 @@ async def test_a_failed_github_call_leaves_the_report_received_with_the_error(
 
 
 async def test_a_caller_without_the_admin_entitlement_cannot_read_a_report(client: AsyncClient) -> None:
-    created = await client.post("/api/feedback/", json=_report_payload())
+    created = await client.post(f"{API}/feedback/", json=_report_payload())
     report_id = created.json()["id"]
 
-    refused = await client.get(f"/api/feedback/{report_id}")
+    refused = await client.get(f"{API}/feedback/{report_id}")
     assert refused.status_code == 403
 
 
@@ -264,30 +265,30 @@ async def test_a_caller_without_the_admin_entitlement_cannot_read_a_report(clien
 
 
 async def test_the_screenshot_endpoint_serves_the_stored_png_bytes(client: AsyncClient) -> None:
-    created = await client.post("/api/feedback/", json=_report_payload(screenshot=_PNG_DATA_URL))
+    created = await client.post(f"{API}/feedback/", json=_report_payload(screenshot=_PNG_DATA_URL))
     report_id = created.json()["id"]
 
-    screenshot = await client.get(f"/api/feedback/{report_id}/screenshot", headers=_admin_headers())
+    screenshot = await client.get(f"{API}/feedback/{report_id}/screenshot", headers=_admin_headers())
     assert screenshot.status_code == 200
     assert screenshot.headers["content-type"] == "image/png"
     assert screenshot.content == base64.b64decode(_PNG_DATA_URL.split(",", 1)[1])
 
 
 async def test_a_report_with_no_screenshot_answers_404_for_one(client: AsyncClient) -> None:
-    created = await client.post("/api/feedback/", json=_report_payload())
+    created = await client.post(f"{API}/feedback/", json=_report_payload())
     report_id = created.json()["id"]
 
-    screenshot = await client.get(f"/api/feedback/{report_id}/screenshot", headers=_admin_headers())
+    screenshot = await client.get(f"{API}/feedback/{report_id}/screenshot", headers=_admin_headers())
     assert screenshot.status_code == 404
 
 
 async def test_an_invalid_screenshot_value_is_refused(client: AsyncClient) -> None:
-    refused = await client.post("/api/feedback/", json=_report_payload(screenshot="not-a-data-url"))
+    refused = await client.post(f"{API}/feedback/", json=_report_payload(screenshot="not-a-data-url"))
     assert refused.status_code == 400
 
 
 async def test_an_oversize_message_or_screenshot_is_refused(client: AsyncClient) -> None:
-    long_message = await client.post("/api/feedback/", json=_report_payload(message="x" * 10_001))
+    long_message = await client.post(f"{API}/feedback/", json=_report_payload(message="x" * 10_001))
     assert long_message.status_code == 422
-    huge = await client.post("/api/feedback/", json=_report_payload(screenshot="x" * 4_000_001))
+    huge = await client.post(f"{API}/feedback/", json=_report_payload(screenshot="x" * 4_000_001))
     assert huge.status_code == 422

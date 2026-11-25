@@ -23,6 +23,7 @@ from {{ package_name }}.api.alerts.schemas import AlertRaise
 from {{ package_name }}.mcp.dispatchers import alerts as alerts_dispatcher
 from {{ package_name }}.mcp.server import create_mcp_server
 
+from tests.support.api import API
 from tests.support.machine_token import AUDIENCE, machine_token
 
 ADMIN = {"x-authentik-uid": "the-admin", "x-authentik-username": "the-admin", "x-authentik-entitlements": "admin:write"}
@@ -49,7 +50,7 @@ def _reuse_test_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> No
 
 
 async def _list(client: AsyncClient) -> dict[str, Any]:
-    response = await client.get("/api/alerts/", headers=ADMIN)
+    response = await client.get(f"{API}/alerts/", headers=ADMIN)
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()
     return body
@@ -78,7 +79,7 @@ async def test_raising_a_key_again_updates_it_in_place_and_makes_it_unread(
 ) -> None:
     first = service.raise_alert(session, AlertRaise(key="osint:dry:q1", title="q1 dry 3 runs", link="/queries/1"))
     first_raised_at = first.raised_at
-    await client.post(f"/api/alerts/{first.id}/read", headers=ADMIN)
+    await client.post(f"{API}/alerts/{first.id}/read", headers=ADMIN)
 
     second = service.raise_alert(session, AlertRaise(key="osint:dry:q1", title="q1 dry 4 runs"))
 
@@ -119,10 +120,10 @@ def test_an_app_path_or_web_url_is_accepted(link: str) -> None:
 async def test_reading_marks_it_read_once(client: AsyncClient, session: Session) -> None:
     alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
 
-    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
+    assert (await client.post(f"{API}/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
     first_read = (await _list(client))["alerts"][0]["read_at"]
     assert first_read is not None
-    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
+    assert (await client.post(f"{API}/alerts/{alert.id}/read", headers=ADMIN)).status_code == 204
 
     listed = await _list(client)
     assert listed["unread"] == 0
@@ -132,7 +133,7 @@ async def test_reading_marks_it_read_once(client: AsyncClient, session: Session)
 async def test_a_dismissed_alert_is_gone_until_raised_again(client: AsyncClient, session: Session) -> None:
     alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
 
-    assert (await client.delete(f"/api/alerts/{alert.id}", headers=ADMIN)).status_code == 204
+    assert (await client.delete(f"{API}/alerts/{alert.id}", headers=ADMIN)).status_code == 204
     assert (await _list(client))["total"] == 0
 
     service.raise_alert(session, AlertRaise(key="k", title="t again"))
@@ -143,20 +144,20 @@ async def test_a_dismissed_alert_is_gone_until_raised_again(client: AsyncClient,
 
 async def test_an_unknown_alert_answers_404(client: AsyncClient) -> None:
     missing = uuid.uuid7()
-    assert (await client.post(f"/api/alerts/{missing}/read", headers=ADMIN)).status_code == 404
-    assert (await client.delete(f"/api/alerts/{missing}", headers=ADMIN)).status_code == 404
+    assert (await client.post(f"{API}/alerts/{missing}/read", headers=ADMIN)).status_code == 404
+    assert (await client.delete(f"{API}/alerts/{missing}", headers=ADMIN)).status_code == 404
 
 
 async def test_a_caller_without_admin_cannot_see_alerts(client: AsyncClient) -> None:
-    assert (await client.get("/api/alerts/")).status_code == 403
+    assert (await client.get(f"{API}/alerts/")).status_code == 403
 
 
 async def test_acting_on_an_alert_needs_admin_write(client: AsyncClient, session: Session) -> None:
     alert = service.raise_alert(session, AlertRaise(key="k", title="t"))
 
-    assert (await client.get("/api/alerts/", headers=READ_ONLY_ADMIN)).status_code == 200
-    assert (await client.post(f"/api/alerts/{alert.id}/read", headers=READ_ONLY_ADMIN)).status_code == 403
-    assert (await client.delete(f"/api/alerts/{alert.id}", headers=READ_ONLY_ADMIN)).status_code == 403
+    assert (await client.get(f"{API}/alerts/", headers=READ_ONLY_ADMIN)).status_code == 200
+    assert (await client.post(f"{API}/alerts/{alert.id}/read", headers=READ_ONLY_ADMIN)).status_code == 403
+    assert (await client.delete(f"{API}/alerts/{alert.id}", headers=READ_ONLY_ADMIN)).status_code == 403
 
 
 # ── The producer's door: the `alerts` MCP tool ───────────────────────────────

@@ -27,11 +27,12 @@ from {{ package_name }}.api.users import service as users_service
 from {{ package_name }}.api.users.models import User
 from {{ package_name }}.api.workspaces.models import Workspace, WorkspaceMembership
 from {{ package_name }}.db.session import get_session, get_session_factory
+from tests.support.api import API
 
 
 async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
     return await client.post(
-        "/api/example/",
+        f"{API}/example/",
         json={"title": title},
         headers={"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "example"},
     )
@@ -39,7 +40,7 @@ async def _create_item(client: AsyncClient, uid: str, title: str) -> Response:
 
 async def _list_items(client: AsyncClient, uid: str) -> Response:
     return await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={"x-authentik-uid": uid, "x-authentik-username": uid, "x-authentik-entitlements": "example"},
     )
 
@@ -49,24 +50,24 @@ def _identity(uid: str) -> dict[str, str]:
 
 
 async def _workspace_of(client: AsyncClient, uid: str) -> str:
-    return (await client.get("/api/workspaces/me", headers=_identity(uid))).json()[0]["workspace"]["id"]
+    return (await client.get(f"{API}/workspaces/me", headers=_identity(uid))).json()[0]["workspace"]["id"]
 
 
 async def _user_id(client: AsyncClient, session: Session, uid: str) -> str:
-    await client.get("/api/workspaces/me", headers=_identity(uid))
+    await client.get(f"{API}/workspaces/me", headers=_identity(uid))
     return str(session.execute(select(User).where(User.authentik_uid == uid)).scalar_one().id)
 
 
 async def _invite(client: AsyncClient, owner: str, workspace_id: str, user_id: str, role: str = "member") -> Response:
     return await client.post(
-        f"/api/workspaces/{workspace_id}/members",
+        f"{API}/workspaces/{workspace_id}/members",
         json={"user_id": user_id, "role": role},
         headers=_identity(owner),
     )
 
 
 async def _accept(client: AsyncClient, uid: str, workspace_id: str | uuid.UUID) -> Response:
-    return await client.post(f"/api/workspaces/{workspace_id}/invitation/accept", headers=_identity(uid))
+    return await client.post(f"{API}/workspaces/{workspace_id}/invitation/accept", headers=_identity(uid))
 
 
 # ── The wall, over HTTP ──────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
 
     memberships = (
         await client.get(
-            "/api/workspaces/me",
+            f"{API}/workspaces/me",
             headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
         )
     ).json()
@@ -110,7 +111,7 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
 
     # The offer, then her yes — the two acts the whole primitive exists for.
     invited = await client.post(
-        f"/api/workspaces/{household_id}/members",
+        f"{API}/workspaces/{household_id}/members",
         # str(): user ids are UUIDs, which the JSON encoder will not take raw.
         json={"user_id": str(partner.id), "role": "member"},
         headers={"x-authentik-uid": "the-operator", "x-authentik-username": "the-operator"},
@@ -125,7 +126,7 @@ async def test_a_second_member_of_a_workspace_sees_what_the_first_created(
     assert len(ambiguous.json()["details"]["workspaces"]) == 2
 
     shared = await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={
             "x-authentik-uid": "the-partner",
             "x-authentik-username": "the-partner",
@@ -153,35 +154,35 @@ async def test_a_member_can_see_who_shares_the_workspace_and_a_stranger_cannot(
     partner = {"x-authentik-uid": "the-partner", "x-authentik-username": "the-partner"}
     stranger = {"x-authentik-uid": "a-stranger", "x-authentik-username": "a-stranger"}
 
-    household_id = (await client.get("/api/workspaces/me", headers=operator)).json()[0]["workspace"]["id"]
+    household_id = (await client.get(f"{API}/workspaces/me", headers=operator)).json()[0]["workspace"]["id"]
     # Everyone signs in once, so the app knows them.
-    assert (await client.get("/api/workspaces/me", headers=partner)).status_code == 200
-    assert (await client.get("/api/workspaces/me", headers=stranger)).status_code == 200
+    assert (await client.get(f"{API}/workspaces/me", headers=partner)).status_code == 200
+    assert (await client.get(f"{API}/workspaces/me", headers=stranger)).status_code == 200
 
     # The grant picker: the people the app has seen, and ONLY the three fields a
     # picker needs. Email and last-seen are deliberately not here.
-    people = (await client.get("/api/users/", headers=operator)).json()
+    people = (await client.get(f"{API}/users/", headers=operator)).json()
     by_username = {person["username"]: person for person in people}
     assert {"the-operator", "the-partner", "a-stranger"} <= set(by_username)
     assert set(by_username["the-partner"]) == {"id", "username", "display_name"}
 
     invited = await client.post(
-        f"/api/workspaces/{household_id}/members",
+        f"{API}/workspaces/{household_id}/members",
         json={"user_id": by_username["the-partner"]["id"], "role": "member"},
         headers=operator,
     )
     assert invited.status_code == 201
-    assert (await client.post(f"/api/workspaces/{household_id}/invitation/accept", headers=partner)).status_code == 200
+    assert (await client.post(f"{API}/workspaces/{household_id}/invitation/accept", headers=partner)).status_code == 200
 
     # A member — not only an owner — may see who shares the data.
-    members = (await client.get(f"/api/workspaces/{household_id}/members", headers=partner)).json()
+    members = (await client.get(f"{API}/workspaces/{household_id}/members", headers=partner)).json()
     assert [(m["user"]["username"], m["role"]) for m in members] == [
         ("the-operator", "owner"),
         ("the-partner", "member"),
     ]
 
     # A stranger gets the same 403 the owner-only routes give, never a 404.
-    assert (await client.get(f"/api/workspaces/{household_id}/members", headers=stranger)).status_code == 403
+    assert (await client.get(f"{API}/workspaces/{household_id}/members", headers=stranger)).status_code == 403
 
 
 async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: AsyncClient) -> None:
@@ -189,13 +190,13 @@ async def test_a_non_member_cannot_reach_a_workspace_by_asking_for_it(client: As
     await _create_item(client, "insider", "private item")
     memberships = (
         await client.get(
-            "/api/workspaces/me", headers={"x-authentik-uid": "insider", "x-authentik-username": "insider"}
+            f"{API}/workspaces/me", headers={"x-authentik-uid": "insider", "x-authentik-username": "insider"}
         )
     ).json()
     insider_workspace = memberships[0]["workspace"]["id"]
 
     refused = await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={
             "x-authentik-uid": "outsider",
             "x-authentik-username": "outsider",
@@ -223,25 +224,25 @@ async def test_an_invitation_grants_nothing_until_the_invitee_accepts(client: As
     assert (await _invite(client, "owner", owner_ws, target)).status_code == 201
 
     # No second membership, no 409, no access to the owner's data.
-    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 1
+    assert len((await client.get(f"{API}/workspaces/me", headers=_identity("target"))).json()) == 1
     assert (await _list_items(client, "target")).status_code == 200
-    forced = await client.get("/api/example/", headers={**_identity("target"), "x-workspace-id": owner_ws})
+    forced = await client.get(f"{API}/example/", headers={**_identity("target"), "x-workspace-id": owner_ws})
     assert forced.status_code == 403
-    assert (await client.get(f"/api/workspaces/{owner_ws}/members", headers=_identity("target"))).status_code == 403
+    assert (await client.get(f"{API}/workspaces/{owner_ws}/members", headers=_identity("target"))).status_code == 403
 
     # The invitee sees it, and only the invitee.
-    waiting = (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json()
+    waiting = (await client.get(f"{API}/workspaces/invitations", headers=_identity("target"))).json()
     assert [(i["workspace"]["id"], i["role"]) for i in waiting] == [(owner_ws, "member")]
-    assert (await client.get("/api/workspaces/invitations", headers=_identity("owner"))).json() == []
+    assert (await client.get(f"{API}/workspaces/invitations", headers=_identity("owner"))).json() == []
 
     # The owner sees it as pending and cannot invite twice.
-    members = (await client.get(f"/api/workspaces/{owner_ws}/members", headers=_identity("owner"))).json()
+    members = (await client.get(f"{API}/workspaces/{owner_ws}/members", headers=_identity("owner"))).json()
     assert [(m["user"]["username"], m["status"]) for m in members] == [("owner", "accepted"), ("target", "pending")]
     assert (await _invite(client, "owner", owner_ws, target)).status_code == 409
 
     assert (await _accept(client, "target", owner_ws)).status_code == 200
-    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
-    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 2
+    assert (await client.get(f"{API}/workspaces/invitations", headers=_identity("target"))).json() == []
+    assert len((await client.get(f"{API}/workspaces/me", headers=_identity("target"))).json()) == 2
 
 
 async def test_only_the_invitee_can_accept_or_decline(client: AsyncClient, session: Session) -> None:
@@ -255,14 +256,14 @@ async def test_only_the_invitee_can_accept_or_decline(client: AsyncClient, sessi
     assert (await _accept(client, "owner", owner_ws)).status_code == 404
     assert (await _accept(client, "bystander", owner_ws)).status_code == 404
     declined_by_other = await client.post(
-        f"/api/workspaces/{owner_ws}/invitation/decline", headers=_identity("bystander")
+        f"{API}/workspaces/{owner_ws}/invitation/decline", headers=_identity("bystander")
     )
     assert declined_by_other.status_code == 404
 
-    declined = await client.post(f"/api/workspaces/{owner_ws}/invitation/decline", headers=_identity("target"))
+    declined = await client.post(f"{API}/workspaces/{owner_ws}/invitation/decline", headers=_identity("target"))
     assert declined.status_code == 204
-    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
-    assert len((await client.get("/api/workspaces/me", headers=_identity("target"))).json()) == 1
+    assert (await client.get(f"{API}/workspaces/invitations", headers=_identity("target"))).json() == []
+    assert len((await client.get(f"{API}/workspaces/me", headers=_identity("target"))).json()) == 1
     # Declined means gone: an owner may ask again, and the answer is still the invitee's.
     assert (await _invite(client, "owner", owner_ws, target)).status_code == 201
 
@@ -277,14 +278,14 @@ async def test_a_pending_owner_invitation_confers_no_owner_rights_and_is_not_an_
     owner_id = await _user_id(client, session, "owner")
     await _invite(client, "owner", owner_ws, target, role="owner")
 
-    renamed = await client.patch(f"/api/workspaces/{owner_ws}", json={"name": "mine now"}, headers=_identity("target"))
+    renamed = await client.patch(f"{API}/workspaces/{owner_ws}", json={"name": "mine now"}, headers=_identity("target"))
     assert renamed.status_code == 403
     # A second workspace so the sole owner is stopped by the owner rule, not the last-workspace rule.
-    second = await client.post("/api/workspaces/", json={"name": "second"}, headers=_identity("owner"))
+    second = await client.post(f"{API}/workspaces/", json={"name": "second"}, headers=_identity("owner"))
     assert second.status_code == 201
-    left = await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("owner"))
+    left = await client.post(f"{API}/workspaces/{owner_ws}/leave", headers=_identity("owner"))
     assert left.status_code == 409
-    removed = await client.delete(f"/api/workspaces/{owner_ws}/members/{owner_id}", headers=_identity("owner"))
+    removed = await client.delete(f"{API}/workspaces/{owner_ws}/members/{owner_id}", headers=_identity("owner"))
     assert removed.status_code == 409
 
 
@@ -298,18 +299,18 @@ async def test_a_member_can_leave_but_never_as_the_last_owner_nor_from_their_las
     await _invite(client, "owner", owner_ws, guest)
     await _accept(client, "guest", owner_ws)
 
-    left = await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("guest"))
+    left = await client.post(f"{API}/workspaces/{owner_ws}/leave", headers=_identity("guest"))
     assert left.status_code == 204
     assert [
-        m["workspace"]["id"] for m in (await client.get("/api/workspaces/me", headers=_identity("guest"))).json()
+        m["workspace"]["id"] for m in (await client.get(f"{API}/workspaces/me", headers=_identity("guest"))).json()
     ] == [await _workspace_of(client, "guest")]
 
     # Not a member any more: the same refusal a stranger gets.
-    assert (await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("guest"))).status_code == 403
+    assert (await client.post(f"{API}/workspaces/{owner_ws}/leave", headers=_identity("guest"))).status_code == 403
     # The last workspace is never left, and the last owner never leaves.
     own = await _workspace_of(client, "guest")
-    assert (await client.post(f"/api/workspaces/{own}/leave", headers=_identity("guest"))).status_code == 409
-    assert (await client.post(f"/api/workspaces/{owner_ws}/leave", headers=_identity("owner"))).status_code == 409
+    assert (await client.post(f"{API}/workspaces/{own}/leave", headers=_identity("guest"))).status_code == 409
+    assert (await client.post(f"{API}/workspaces/{owner_ws}/leave", headers=_identity("owner"))).status_code == 409
 
 
 async def test_an_owner_can_withdraw_a_pending_invitation(client: AsyncClient, session: Session) -> None:
@@ -318,10 +319,10 @@ async def test_an_owner_can_withdraw_a_pending_invitation(client: AsyncClient, s
     target = await _user_id(client, session, "target")
     await _invite(client, "owner", owner_ws, target)
 
-    withdrawn = await client.delete(f"/api/workspaces/{owner_ws}/members/{target}", headers=_identity("owner"))
+    withdrawn = await client.delete(f"{API}/workspaces/{owner_ws}/members/{target}", headers=_identity("owner"))
 
     assert withdrawn.status_code == 204
-    assert (await client.get("/api/workspaces/invitations", headers=_identity("target"))).json() == []
+    assert (await client.get(f"{API}/workspaces/invitations", headers=_identity("target"))).json() == []
 
 
 # ── First sight is race-safe ────────────────────────────────────────────────
@@ -372,7 +373,7 @@ async def test_a_fanned_out_first_load_creates_one_user_and_every_request_succee
             transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
         ) as client:
             async with asyncio.TaskGroup() as group:
-                requests = [group.create_task(client.get("/api/users/me", headers=headers)) for _ in range(FAN_OUT)]
+                requests = [group.create_task(client.get(f"{API}/users/me", headers=headers)) for _ in range(FAN_OUT)]
             responses = [request.result() for request in requests]
 
         assert [response.status_code for response in responses] == [200] * FAN_OUT
@@ -402,7 +403,7 @@ async def test_a_fanned_out_first_load_creates_one_user_and_every_request_succee
 async def test_a_declared_machine_principal_is_not_given_a_user_row(client: AsyncClient) -> None:
     """The just-in-time machine principal tenancy.md forbids, refused at the factory rather than per app."""
     refused = await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={
             "x-authentik-uid": "some-service-account",
             "x-authentik-username": "some-service-account",
@@ -416,7 +417,7 @@ async def test_a_caller_with_no_declared_type_is_still_treated_as_a_person(clien
     """The header is absent on exactly the request it exists to catch, so its
     absence must never narrow the ordinary human path."""
     admitted = await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={
             "x-authentik-uid": "an-ordinary-person",
             "x-authentik-username": "an-ordinary-person",
@@ -436,7 +437,7 @@ async def test_a_caller_in_the_machine_group_is_not_given_a_user_row(
     monkeypatch.setattr(settings.identity, "authentik_machine_group", "app-machines")
 
     refused = await client.get(
-        "/api/example/",
+        f"{API}/example/",
         headers={
             "x-authentik-uid": "under-scoped-token",
             "x-authentik-username": "under-scoped-token",

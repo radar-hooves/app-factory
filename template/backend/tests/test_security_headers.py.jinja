@@ -19,7 +19,7 @@ def _directive(response: Response, name: str) -> list[str]:
 
 
 async def test_a_headless_api_carries_a_default_deny_policy_with_no_shell_to_trust():
-    for path in ("/api/system/health", "/api/no-such-route", "/"):
+    for path in (f"{API}/system/health", f"{API}/no-such-route", "/"):
         response = await _get(path)
         assert _directive(response, "default-src") == ["'none'"], path
         assert _directive(response, "script-src") == ["'self'"], path
@@ -37,6 +37,7 @@ from httpx import ASGITransport, AsyncClient, Response
 from {{ package_name }} import app_hooks, main
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
+from tests.support.api import API
 
 BOOTSTRAP = "{ __sveltekit_x = { base: '' }; import('./_app/immutable/entry/start.js'); }"
 SEED = "document.documentElement.classList.add('dark');"
@@ -69,7 +70,7 @@ def _directive(response: Response, name: str) -> list[str]:
 
 
 async def test_the_shell_and_the_api_carry_a_default_deny_policy(build):
-    for path in ("/", "/some/client/route", "/api/system/health", "/api/no-such-route"):
+    for path in ("/", "/some/client/route", f"{API}/system/health", f"{API}/no-such-route"):
         response = await _get(path)
         assert _directive(response, "default-src") == ["'none'"], path
         assert _directive(response, "frame-ancestors") == ["'none'"], path
@@ -141,7 +142,7 @@ async def test_an_app_hook_cannot_add_a_keyword_or_a_directive_the_factory_owns(
 async def test_the_interactive_api_documents_are_exempt_and_only_they_are(build):
     for path in ("/docs", "/redoc"):
         assert "content-security-policy" not in (await _get(path)).headers, path
-    assert "content-security-policy" in (await _get("/openapi.json")).headers
+    assert "content-security-policy" in (await _get(f"{API}/system/health")).headers
 
 
 async def test_an_app_hook_replaces_the_referrer_and_permissions_policy_and_no_other_header(build, monkeypatch):

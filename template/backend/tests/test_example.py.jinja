@@ -7,6 +7,7 @@ Replace with tests for the first real domain when the example slice is removed.
 import uuid
 
 import pytest
+from tests.support.api import API
 
 #: The example module's own grant, which its router requires.
 ENTITLED = {"x-authentik-entitlements": "example"}
@@ -26,7 +27,7 @@ def test_example_schema_validation():
 @pytest.mark.integration
 async def test_list_items_empty(client):
     """GET /api/example/ returns an empty list on a fresh database."""
-    response = await client.get("/api/example/", headers=ENTITLED)
+    response = await client.get(f"{API}/example/", headers=ENTITLED)
     assert response.status_code == 200
     assert response.json() == []
 
@@ -35,14 +36,14 @@ async def test_list_items_empty(client):
 async def test_create_and_get_item(client):
     """POST then GET round-trips correctly."""
     # Create
-    create_resp = await client.post("/api/example/", headers=ENTITLED, json={"title": "Hello", "body": "World"})
+    create_resp = await client.post(f"{API}/example/", headers=ENTITLED, json={"title": "Hello", "body": "World"})
     assert create_resp.status_code == 201
     item = create_resp.json()
     assert item["title"] == "Hello"
     item_id = item["id"]
 
     # Get by id
-    get_resp = await client.get(f"/api/example/{item_id}", headers=ENTITLED)
+    get_resp = await client.get(f"{API}/example/{item_id}", headers=ENTITLED)
     assert get_resp.status_code == 200
     assert get_resp.json()["title"] == "Hello"
 
@@ -50,7 +51,7 @@ async def test_create_and_get_item(client):
 @pytest.mark.integration
 async def test_get_item_not_found(client):
     """GET for a missing item returns 404."""
-    response = await client.get(f"/api/example/{uuid.uuid7()}", headers=ENTITLED)
+    response = await client.get(f"{API}/example/{uuid.uuid7()}", headers=ENTITLED)
     assert response.status_code == 404
 
 
@@ -64,5 +65,5 @@ async def test_auth_required(client):
     app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as unauthenticated:
-        response = await unauthenticated.get("/api/example/")
+        response = await unauthenticated.get(f"{API}/example/")
     assert response.status_code == 401

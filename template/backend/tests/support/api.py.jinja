@@ -1,0 +1,9 @@
+"""The API mount a test reaches an endpoint through: the app's own declared prefix.
+
+`app_hooks.API_PREFIX` (default `/api`) is where `main.py` mounts every slice, so a
+test names a path as `f"{API}/users/me"` and never writes the prefix itself.
+"""
+
+from {{ package_name }}.main import _API_PREFIX
+
+API = "/" + _API_PREFIX.strip("/") if _API_PREFIX.strip("/") else ""

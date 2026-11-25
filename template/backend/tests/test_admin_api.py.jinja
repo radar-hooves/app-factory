@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from {{ package_name }}.api.users.models import User
+from tests.support.api import API
 
 
 def _headers(uid: str, entitlements: str | None = None) -> dict[str, str]:
@@ -24,7 +25,7 @@ def _headers(uid: str, entitlements: str | None = None) -> dict[str, str]:
 
 async def _sign_in(client: AsyncClient, uid: str) -> Response:
     """A first authenticated request — what creates the local user record."""
-    return await client.get("/api/users/me", headers=_headers(uid))
+    return await client.get(f"{API}/users/me", headers=_headers(uid))
 
 
 # ── The gate ─────────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ async def _sign_in(client: AsyncClient, uid: str) -> Response:
 
 async def test_a_caller_without_the_admin_entitlement_is_refused(client: AsyncClient) -> None:
     """Default-deny: no entitlements header at all closes the admin area."""
-    refused = await client.get("/api/admin/users", headers=_headers("somebody"))
+    refused = await client.get(f"{API}/admin/users", headers=_headers("somebody"))
     assert refused.status_code == 403
     assert refused.json()["details"] == {"module": "admin", "grade": "read"}
 
@@ -42,11 +43,11 @@ async def test_a_read_admin_can_look_but_not_act(client: AsyncClient, session: S
     await _sign_in(client, "the-subject")
     subject = session.execute(select(User).where(User.authentik_uid == "the-subject")).scalar_one()
 
-    listed = await client.get("/api/admin/users", headers=_headers("the-viewer", "admin"))
+    listed = await client.get(f"{API}/admin/users", headers=_headers("the-viewer", "admin"))
     assert listed.status_code == 200
 
     refused = await client.patch(
-        f"/api/admin/users/{subject.id}",
+        f"{API}/admin/users/{subject.id}",
         json={"is_active": False},
         headers=_headers("the-viewer", "admin"),
     )
@@ -57,7 +58,7 @@ async def test_a_read_admin_can_look_but_not_act(client: AsyncClient, session: S
 async def test_a_name_granted_by_two_bindings_is_held_once(client: AsyncClient) -> None:
     """Authentik repeats a name once per binding that grants it; the caller holds it once, in order."""
     granted = "admin|reports|admin|reports:write|reports"
-    me = await client.get("/api/users/me", headers=_headers("twice-bound", granted))
+    me = await client.get(f"{API}/users/me", headers=_headers("twice-bound", granted))
     assert me.status_code == 200
     assert me.json()["entitlements"] == ["admin", "reports", "reports:write"]
 
@@ -70,7 +71,7 @@ async def test_the_list_shows_who_has_signed_in(client: AsyncClient) -> None:
     await _sign_in(client, "person-one")
     await _sign_in(client, "person-two")
 
-    page = (await client.get("/api/admin/users", headers=_headers("the-admin", "admin"))).json()
+    page = (await client.get(f"{API}/admin/users", headers=_headers("the-admin", "admin"))).json()
     usernames = {user["username"] for user in page["users"]}
     assert {"person-one", "person-two"} <= usernames
     assert page["total"] >= 2
@@ -88,7 +89,7 @@ async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(client: 
     # The username is deliberately NOT the uid: were they equal, the assertion
     # below would pass with the defect in place.
     await client.get(
-        "/api/users/me",
+        f"{API}/users/me",
         headers={
             "x-authentik-uid": "uid-unchanged",
             "x-authentik-username": "changeling",
@@ -100,7 +101,7 @@ async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(client: 
     # Built and stripped rather than passed as a dict: per-request headers MERGE
     # over the client's defaults, so a dict cannot express "this header is
     # absent" — and absent is the whole case under test.
-    bare = client.build_request("GET", "/api/users/me", headers={"x-authentik-uid": "uid-unchanged"})
+    bare = client.build_request("GET", f"{API}/users/me", headers={"x-authentik-uid": "uid-unchanged"})
     for header in ("x-authentik-username", "x-authentik-name", "x-authentik-email"):
         bare.headers.pop(header, None)
     assert (await client.send(bare)).status_code == 200
@@ -116,7 +117,7 @@ async def test_a_request_carrying_only_the_uid_leaves_the_profile_alone(client: 
 async def test_search_matches_the_synced_display_fields(client: AsyncClient) -> None:
     """The filter searches what the operator sees: username, display name, email."""
     await client.get(
-        "/api/users/me",
+        f"{API}/users/me",
         headers={
             **_headers("uid-someone"),
             "x-authentik-name": "Some One",
@@ -126,7 +127,7 @@ async def test_search_matches_the_synced_display_fields(client: AsyncClient) -> 
     await _sign_in(client, "uid-other")
 
     found = (
-        await client.get("/api/admin/users", params={"search": "Some One"}, headers=_headers("the-admin", "admin"))
+        await client.get(f"{API}/admin/users", params={"search": "Some One"}, headers=_headers("the-admin", "admin"))
     ).json()
     assert [user["display_name"] for user in found["users"]] == ["Some One"]
 
@@ -140,7 +141,7 @@ async def test_deactivation_refuses_the_persons_next_request(client: AsyncClient
     refused_user = session.execute(select(User).where(User.authentik_uid == "the-refused")).scalar_one()
 
     deactivated = await client.patch(
-        f"/api/admin/users/{refused_user.id}",
+        f"{API}/admin/users/{refused_user.id}",
         json={"is_active": False},
         headers=_headers("the-admin", "admin:write"),
     )
@@ -154,7 +155,7 @@ async def test_deactivation_refuses_the_persons_next_request(client: AsyncClient
     assert refused.json() == {"error": "account_inactive", "message": "This account is not active"}
 
     reinstated = await client.patch(
-        f"/api/admin/users/{refused_user.id}",
+        f"{API}/admin/users/{refused_user.id}",
         json={"is_active": True},
         headers=_headers("the-admin", "admin:write"),
     )
@@ -168,7 +169,7 @@ async def test_an_admin_cannot_deactivate_their_own_account(client: AsyncClient,
     admin_user = session.execute(select(User).where(User.authentik_uid == "the-admin")).scalar_one()
 
     refused = await client.patch(
-        f"/api/admin/users/{admin_user.id}",
+        f"{API}/admin/users/{admin_user.id}",
         json={"is_active": False},
         headers=_headers("the-admin", "admin:write"),
     )

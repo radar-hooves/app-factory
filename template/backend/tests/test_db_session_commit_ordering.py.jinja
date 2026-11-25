@@ -42,6 +42,7 @@ import pytest
 from {{ package_name }}.api.feedback.models import FeedbackReport
 from {{ package_name }}.db.session import get_session_factory
 
+from tests.support.api import API
 from tests.support import live_server
 
 # The test reaches the database through a live server, not a fixture; this one binds the test server.
@@ -63,7 +64,7 @@ async def test_a_written_row_is_visible_to_a_second_session_immediately_after_th
         for i in range(ITERATIONS):
             uid = f"race-{uuid.uuid4()}"
             response = await client.post(
-                "/api/feedback/",
+                f"{API}/feedback/",
                 json={
                     "message": f"race probe {i}",
                     "route": "/race-probe",
