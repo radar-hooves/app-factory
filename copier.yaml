@@ -155,6 +155,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_fanout.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_gateway_models_check.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_gunicorn_bind.py{% endif %}"
+  - "{% if not factory_selftest %}backend/tests/test_gunicorn_hup.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_feedback_api.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_files_settings.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_logging.py{% endif %}"
@@ -372,6 +373,7 @@ _migrations:
       - backend/tests/test_fanout.py
       - backend/tests/test_gateway_models_check.py
       - backend/tests/test_gunicorn_bind.py
+      - backend/tests/test_gunicorn_hup.py
       - backend/tests/test_feedback_api.py
       - backend/tests/test_files_settings.py
       - backend/tests/test_logging.py
