@@ -6,16 +6,20 @@ fetches `/openapi.json` to prove something else passes on the default stamp and
 fails on a stamp that differs. Paths come from `tests/support/api.py`; a test that
 needs any successful endpoint uses `{API}/system/health`, open under every posture.
 `test_app_posture.py` is the one place the document routes are named, because it is
-what proves them open or closed.
+what proves them open or closed. Only the tests the factory stamps are held to this
+(the files `.template-parity.json` lists under `backend/tests/`); an app's own tests
+are the app's.
 """
 
 import ast
+import json
 from pathlib import Path
 
 TESTS = Path(__file__).parent
 PREFIX = "/" + "api"
 DOCUMENT = "/" + "openapi"
 POSTURE = {"test_app_posture.py", "test_declared_seams.py"}
+STAMPED = json.loads((TESTS.parents[1] / ".template-parity.json").read_text())["files"]
 
 
 def _literals(path: Path):
@@ -38,7 +42,7 @@ def test_no_test_names_the_default_api_prefix_or_the_openapi_document() -> None:
     found = [
         f"{path.relative_to(TESTS)}:{line}: {text!r}"
         for path in sorted(TESTS.rglob("*.py"))
-        if path.name not in POSTURE
+        if path.name not in POSTURE and path.relative_to(TESTS.parents[1]).as_posix() in STAMPED
         for line, text in _literals(path)
         if text.startswith(PREFIX) or text.startswith(DOCUMENT) or f" {PREFIX}/" in text
     ]
