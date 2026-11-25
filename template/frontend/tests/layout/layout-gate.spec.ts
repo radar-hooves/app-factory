@@ -21,7 +21,7 @@
  *   printed or written.
  * - LAYOUT_GATE_REJUDGE   `1` judges a route whose pictures the record already holds as ship.
  * - AGY_HOME               the Gemini seat's home (default /var/lib/agy/google on atlas),
- *   where `agy` holds the household's Google AI Ultra login. When openai/sol is
+ *   where `agy` holds the household's Google AI Ultra login. When codex/sol is
  *   unavailable (a 5xx, a usage limit, no answer) a sample goes to `agy -p` instead, on
  *   the same prompt; never on sol's verdict. A route the fallback judged ships only on all
  *   three samples.
@@ -49,10 +49,15 @@ const VIEWPORTS = ANSWER.split(',').map((pair) => {
 });
 const WIDEST = VIEWPORTS[0]!;
 
-// openai/sol answered every measured run (docs/research/2026-11-21-design-judge.md in
-// master-project); one sample is unstable on a good page, a majority of three is not,
-// and more than three calls at once draw the gateway's 500s.
-const MODEL = 'openai/sol';
+// GPT sol judges (docs/research/2026-11-21-design-judge.md in master-project); one sample is
+// unstable on a good page, a majority of three is not, and more than three calls at once draw
+// the gateway's 500s. codex/sol is the gateway's `codex exec` route on the ChatGPT plan's own
+// windows; its openai/sol row answers 502 under Subscription Sharing's cap. On the same pictures
+// both ship the factory's /settings 3 of 3 (25/11/2026). A sample carries about 25k prompt tokens
+// and takes 30-40 s. The record's prompt hash names the judge family (RUBRIC_JUDGE), not the
+// route, so no app's record is invalidated by the route changing.
+const MODEL = 'codex/sol';
+const RUBRIC_JUDGE = 'openai/sol';
 // The fallback when MODEL is unavailable: Gemini through the genuine agy CLI on the owner's
 // own login (foreman's google:cli route: `-p`, stream-json, `--dangerously-skip-permissions`,
 // the seat profile's `argon`), never through the gateway. Carbon, its stronger sibling, took
@@ -377,7 +382,7 @@ async function renderRoute(browser: Browser, baseURL: string, path: string): Pro
 		landed,
 		pageType,
 		prompt: createHash('sha256')
-			.update(`${MODEL}\n${prompt(pageType)}`)
+			.update(`${RUBRIC_JUDGE}\n${prompt(pageType)}`)
 			.digest('hex')
 			.slice(0, 12),
 		pictures: pictures.digest('hex'),
@@ -439,7 +444,7 @@ async function askSol(result: RouteResult): Promise<Sample> {
 			},
 			body: JSON.stringify({
 				model: MODEL,
-				// All of it is the user's message: openai/sol refuses a system message.
+				// All of it is the user's message: sol refuses a system message.
 				messages: [
 					{ role: 'user', content: [{ type: 'text', text: prompt(result.pageType) }, ...images] }
 				],
