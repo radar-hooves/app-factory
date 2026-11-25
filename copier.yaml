@@ -598,13 +598,6 @@ bundle_identifier:
   help: >-
     The desktop app's reverse-DNS bundle identifier (e.g. `com.example.app`), which names its data directories and its macOS bundle. Asked, never derived: changing it later moves every user's data out from under the app.
 
-linux_cargo_args:
-  type: str
-  default: ''
-  when: "{{ skeleton == 'desktop' }}"
-  help: >-
-    Extra cargo arguments for the desktop app's Linux CI build and tests (e.g. `--no-default-features --features vulkan`), for an app whose default features only build on macOS. Empty for most apps.
-
 frontend_e2e_port:
   type: int
   when: "{{ skeleton == 'web' and not headless }}"

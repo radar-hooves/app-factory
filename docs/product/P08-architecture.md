@@ -56,7 +56,7 @@ flowchart TD
 
 ### Desktop skeleton (`skeletons/desktop/`)
 
-- **Does**: one source for Thoth and Bragi, chosen by the `skeleton` answer in the same `copier.yaml`; shares files with `template/` by symlink. `desktop-ci.yaml` is the reusable CI apps call.
+- **Does**: one source for Thoth and Bragi, chosen by the `skeleton` answer in the same `copier.yaml`; shares files with `template/` by symlink. CI is the change pipeline's caller, `change.yaml`.
 - **Does NOT**: own `lib.rs`, `Cargo.toml` or `tauri.conf.json`; those are the app's after first stamp (`docs/design/desktop-skeleton.md`).
 
 ### CI (`.github/workflows/`)
