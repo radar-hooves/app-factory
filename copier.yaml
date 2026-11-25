@@ -193,10 +193,11 @@ _exclude:
   # First-stamp seeds, rendered by `copier copy` alone. `_skip_if_exists` keeps an
   # app's edit of one, but a file the app deleted (its own migrations replace the
   # five seed revisions, its own domain replaces the scaffold slice and its tests)
-  # is re-created by every update. The migrations are the seeds an app's own users,
+  # is re-created by every update. The migrations are the seeds an app's own baseline, users,
   # feedback and agent-session history supersede; the later factory revisions
   # reach an app by update and are not here.
   - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260731_0000_825a4116c834_add_example_items_table.py{% endif %}"
+  - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260813_2010_d29753436024_add_deployment_environment_marker.py{% endif %}"
   - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260820_1300_a1c4f7e29b03_add_users_workspaces_and_scoping.py{% endif %}"
   - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260822_0900_c3f8a52d7b16_settle_the_admin_gate_at_the_identity_provider.py{% endif %}"
   - "{% if _copier_operation != 'copy' %}backend/alembic/versions/20260911_1000_1c3b08a0ec2e_add_feedback_reports_table.py{% endif %}"
@@ -307,6 +308,29 @@ _tasks:
                 subprocess.run(relock, cwd=p.parent, check=True)
         raise_floors("backend/pyproject.toml", r'(?P<pre>"(?P<name>[A-Za-z0-9._-]+)(?:\[[^\]]*\])?\s*)(?P<spec>[<>=!~][^"]*)(?P<post>")', ["uv", "lock"])
         raise_floors("frontend/package.json", r'(?P<pre>"(?P<name>@?[\w./-]+)":\s*")(?P<spec>[^"]+)(?P<post>")', ["pnpm", "install", "--lockfile-only"])
+  # A migration an app already carries under another filename (renamed to its own
+  # timeline) comes back from every update as a second file with the same revision
+  # id, which alembic refuses as a duplicate. Files untracked by git that share a
+  # revision with a tracked one are the update's re-creations: removed here.
+  - when: "{{ skeleton == 'web' and _copier_operation == 'update' }}"
+    command:
+      - python3
+      - -c
+      - |
+        import pathlib, re, subprocess
+        versions = pathlib.Path("backend/alembic/versions")
+        tracked = set(subprocess.run(["git", "ls-files", str(versions)], capture_output=True, text=True).stdout.split())
+        by_rev = {}
+        for f in versions.glob("*.py"):
+            m = re.search(r"^revision(?::[^=]+)?\s*=\s*[\"'](\w+)", f.read_text(), re.M)
+            if m:
+                by_rev.setdefault(m.group(1), []).append(f)
+        for fs in by_rev.values():
+            if any(str(f) in tracked for f in fs):
+                for f in fs:
+                    if str(f) not in tracked:
+                        f.unlink()
+                        print(f"carried already, not re-created: {f.name}")
 
 # Files the template has retired and copier cannot delete. A plain update
 # removes a file the old tagged render had and the new one lacks, but not
