@@ -42,11 +42,8 @@ def free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-@contextlib.asynccontextmanager
-async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[str, int]]:
-    """Run `{{ package_name }}.server:app` under uvicorn in its own process; yield its base URL and pid."""
-    port = free_port()
-    process = subprocess.Popen(
+def _spawn(port: int, env: dict[str, str] | None) -> subprocess.Popen[bytes]:
+    return subprocess.Popen(
         [
             sys.executable,
             "-m",
@@ -60,19 +57,39 @@ async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[s
         cwd=BACKEND,
         env={**os.environ, **(env or {})},
     )
-    base_url = f"http://127.0.0.1:{port}"
+
+
+async def _await_ready(process: subprocess.Popen[bytes], base_url: str) -> bool:
+    """True once the app answers; False if the process exited first (its own output is on stderr)."""
     started = time.monotonic()
-    try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
-            while True:
-                assert process.poll() is None, "the server process exited during startup"
-                with contextlib.suppress(httpx.TransportError):
-                    if (await probe.get(f"{API}/system/health")).status_code == 200:
-                        break
-                waited, budget = time.monotonic() - started, start_budget()
-                assert waited < budget, f"the server did not answer within {waited:.0f}s (budget {budget:.0f}s)"
-                await asyncio.sleep(0.1)
-        yield base_url, process.pid
-    finally:
-        process.terminate()
-        process.wait(timeout=30)
+    async with httpx.AsyncClient(base_url=base_url, timeout=1) as probe:
+        while process.poll() is None:
+            with contextlib.suppress(httpx.TransportError):
+                if (await probe.get(f"{API}/system/health")).status_code == 200:
+                    return True
+            waited, budget = time.monotonic() - started, start_budget()
+            assert waited < budget, f"the server did not answer within {waited:.0f}s (budget {budget:.0f}s)"
+            await asyncio.sleep(0.1)
+    return False
+
+
+@contextlib.asynccontextmanager
+async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[str, int]]:
+    """Run `{{ package_name }}.server:app` under uvicorn in its own process; yield its base URL and pid.
+
+    `free_port` releases the port before uvicorn binds it, so another process on the host can take it
+    first ("address already in use" in the server's own output). A server that exits before answering
+    is started again on a new port, up to three times.
+    """
+    for attempt in range(3):
+        port = free_port()
+        process = _spawn(port, env)
+        base_url = f"http://127.0.0.1:{port}"
+        try:
+            if await _await_ready(process, base_url):
+                yield base_url, process.pid
+                return
+        finally:
+            process.terminate()
+            process.wait(timeout=30)
+    raise AssertionError(f"the server exited during startup on all {attempt + 1} tries (exit {process.returncode})")
