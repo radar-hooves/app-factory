@@ -150,24 +150,14 @@ preload_app = True
 
 loglevel = "debug" if os.getenv("DEBUG", "false").lower() == "true" else "warning"
 accesslog = None  # disabled; access logs flow through uvicorn.access -> the app's own root handler
-# No handler of gunicorn's own: its master-process messages propagate to the root
-# handler api_common.telemetry.configure() installs, so they are JSON too.
-errorlog = None
-# Incremental: gunicorn re-applies this on every HUP, and a full dictConfig (or its
-# CONFIG_DEFAULTS root, which carries a console handler) replaces the root handlers,
-# so the next line came out plain text and configure() (idempotent) never put the JSON
-# handler back. Incremental sets levels and propagation and leaves every handler alone;
-# the empty formatters/handlers override CONFIG_DEFAULTS', which an incremental
-# config cannot name. tests/test_gunicorn_hup.py sends a real HUP.
+errorlog = "-"  # stderr for Gunicorn's own master-process messages only
 logconfig_dict = {
     "version": 1,
-    "incremental": True,
-    "formatters": {},
-    "handlers": {},
-    "root": {"level": "INFO"},
+    "disable_existing_loggers": False,
+    "root": {"level": "INFO", "handlers": []},
     "loggers": {
-        "gunicorn.error": {"level": "INFO", "propagate": True},
-        "gunicorn.access": {"level": "INFO", "propagate": True},
+        "gunicorn.error": {"level": "INFO", "handlers": [], "propagate": True},
+        "gunicorn.access": {"level": "INFO", "handlers": [], "propagate": True},
     },
 }
 
