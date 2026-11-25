@@ -81,7 +81,7 @@ async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[s
     first ("address already in use" in the server's own output). A server that exits before answering
     is started again on a new port, up to three times.
     """
-    for attempt in range(3):
+    for _ in range(3):
         port = free_port()
         process = _spawn(port, env)
         base_url = f"http://127.0.0.1:{port}"
@@ -92,4 +92,4 @@ async def run_server(env: dict[str, str] | None = None) -> AsyncIterator[tuple[s
         finally:
             process.terminate()
             process.wait(timeout=30)
-    raise AssertionError(f"the server exited during startup on all {attempt + 1} tries (exit {process.returncode})")
+    raise AssertionError(f"the server exited during startup on all 3 tries (exit {process.returncode})")
