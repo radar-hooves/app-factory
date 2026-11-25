@@ -10,6 +10,8 @@
 //     page it changed are judged on this tree, and no route the base's record judged ship
 //     on the same prompt now judges fix. A route already at fix, never judged, or judged on
 //     another prompt (a stricter judge is not a regression the update caused) does not hold it.
+//   A branch (not main) is measured on what it changed itself: a file whose content is main's
+//     own is main's change, and a record main left stale is judged by main's own run.
 //   No base (CI with no CHANGE_BASE): the tree as it stands carries a judgement.
 // A factory update no agent committed a record for (Renovate's) is judged here, on a runner
 // that holds the judge's key (KEY_FILE; absent, nothing is judged and the rules above stand).
@@ -159,6 +161,23 @@ function judgeHere(routes, repo, now) {
 	return record;
 }
 
+/** `was` with the files the branch took from main's tip left as they are in `now`. */
+export function ownChanges(now, was, tip) {
+	const own = new Map(was);
+	for (const p of new Set([...now.keys(), ...was.keys()])) {
+		if (now.get(p) === was.get(p) || now.get(p) !== tip.get(p)) continue;
+		if (now.has(p)) own.set(p, now.get(p));
+		else own.delete(p);
+	}
+	return own;
+}
+
+function mainTip() {
+	if (process.env.CI && process.env.GITHUB_REF === 'refs/heads/main') return null;
+	if (git('fetch', '--no-tags', '--depth=1', 'origin', 'main').status !== 0) return null;
+	return drawnFiles('FETCH_HEAD');
+}
+
 function main() {
 	const repo = process.env.CI ? process.env.GITHUB_REPOSITORY : '';
 	const now = drawnFiles();
@@ -183,7 +202,8 @@ function main() {
 		const was = factoryCommit(git('show', `${base}:${ANSWERS}`).stdout);
 		const update =
 			was !== (existsSync(ANSWERS) ? factoryCommit(readFileSync(ANSWERS, 'utf8')) : null);
-		const was_ = drawnFiles(base);
+		const tip = mainTip();
+		const was_ = tip ? ownChanges(now, drawnFiles(base), tip) : drawnFiles(base);
 		const before = recordAt(base);
 		const redrawn = now.size !== was_.size || [...now].some(([p, blob]) => was_.get(p) !== blob);
 		const missing = routesToJudge(now, was_, update).filter(

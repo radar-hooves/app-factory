@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { refusal } from '../../template/frontend/scripts/check-layout-gate.mjs';
+import { ownChanges, refusal } from '../../template/frontend/scripts/check-layout-gate.mjs';
 
 const SCRIPTS = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -496,4 +496,17 @@ writeFileSync(RECORD, JSON.stringify(record));" "$@"\n`,
 	r = check({ ...at, LAYOUT_GATE_KEY_FILE: path.join(dir, 'absent') });
 	assert.equal(r.status, 1);
 	rmSync(dir, { recursive: true, force: true });
+});
+
+test("a branch's own changes leave out what it took from main's tip", () => {
+	const was = new Map([['src/a', '1'], ['src/b', '1'], ['src/c', '1']]);
+	const now = new Map([['src/a', '2'], ['src/b', '3'], ['src/d', '4']]);
+	const tip = new Map([['src/a', '2'], ['src/b', '2'], ['src/d', '4']]);
+	const own = ownChanges(now, was, tip);
+	// a and d are main's, c's deletion is main's too; only b is the branch's own.
+	assert.deepEqual([...own].sort(), [['src/a', '2'], ['src/b', '1'], ['src/d', '4']]);
+	assert.equal(own.has('src/c'), false);
+	const record = { routes: {} };
+	assert.equal(refusal(now, ownChanges(now, was, new Map(now)), record), null);
+	assert.notEqual(refusal(now, own, record), null);
 });
