@@ -1509,7 +1509,8 @@ def test_a_root_members_suite_runs_the_nested_tests_and_fails_with_them(rooted, 
         f'exec "{sys.executable}" "$@"\n'
     )
     shim.chmod(0o755)
-    env = {**ENV, "PATH": f"{shim.parent}{os.pathsep}{ENV['PATH']}"}
+    summary = shim.parent / "summary.md"
+    env = {**ENV, "PATH": f"{shim.parent}{os.pathsep}{ENV['PATH']}", "GITHUB_STEP_SUMMARY": str(summary)}
     top = os.path.realpath(rooted)
 
     def suite() -> subprocess.CompletedProcess[str]:
@@ -1521,6 +1522,10 @@ def test_a_root_members_suite_runs_the_nested_tests_and_fails_with_them(rooted, 
     assert r.returncode == 0, r.stdout + r.stderr
     assert "scripts/x/tests/test_x.py ." in r.stdout and "tests/test_r.py ." in r.stdout
     assert "test_b.py" not in r.stdout and "test_t.py" not in r.stdout
+    # The run's summary page carries each pytest run's wall time and its slowest tests.
+    page = summary.read_text()
+    assert "- pytest scripts/x/tests: " in page and "- pytest tests: " in page
+    assert "slowest 30 durations" in page and "test_x" in page and " passed" not in page
     write(rooted, {"scripts/x/tests/test_x.py": "def test_x():\n    assert False\n"})
     r = suite()
     assert r.returncode != 0 and "scripts/x/tests/test_x.py F" in r.stdout

@@ -7,6 +7,15 @@ note() { echo "${GITHUB_ACTIONS:+::notice::}$*"; }
 die() { echo "${GITHUB_ACTIONS:+::error::}$*" >&2; exit 1; }
 need() { for v; do [ -n "${!v:-}" ] || die "$v is unset: the runner environment must carry it"; done; }
 
+# <cmd...> timed: its wall time becomes a line of the run's summary page, and its exit status is
+# its own. The summary shows where a job's minutes go.
+timed() {  # <label> <cmd...>
+  local t=$SECONDS rc=0
+  "${@:2}" || rc=$?
+  echo "- $1: $((SECONDS - t)) s$([ "$rc" = 0 ] || echo " (exit $rc)")" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+  return "$rc"
+}
+
 # <cmd> from <dir>, inside the repo's flake shell when its root holds a flake.nix: the shell
 # its own CI used, carrying the JDK, the SDKs and system libraries such as webkitgtk. Under
 # CHANGE_FLAKE_ROOTS (a group leg's scratch dir) the shell is realised once as a profile there,
@@ -65,7 +74,21 @@ typecheck() {  # <root> <dir> <name>
 tests() {  # <root> <cwd> <path> [NAME=value...]
   local args=(-p no:cacheprovider)
   (cd "$1" && uv run --no-sync python -c 'import xdist' 2>/dev/null) && args+=(-n "${CHANGE_WORKERS:-2}")
-  (cd "$2" && env "${@:4}" uv run --no-sync --project "$1" python -m pytest "$(realpath "$3")" "${args[@]}")
+  # pytest's slowest 30 tests go to the run's summary page; its own output and status stand.
+  local out rc=0 t=$SECONDS
+  out=$(mktemp)
+  (cd "$2" && env "${@:4}" uv run --no-sync --project "$1" python -m pytest "$(realpath "$3")" "${args[@]}" --durations=30 --durations-min=0) | tee "$out" || rc=$?
+  {
+    echo "- pytest $3: $((SECONDS - t)) s$([ "$rc" = 0 ] || echo " (exit $rc)")"
+    echo "<details><summary>pytest $3: slowest tests</summary>"
+    echo
+    echo '```'
+    sed -n '/ slowest .* durations /,/^=\+ .* =\+$/p' "$out" | sed '$d'
+    echo '```'
+    echo "</details>"
+  } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+  rm -f "$out"
+  return "$rc"
 }
 
 # Every tracked tests/ in the repo at <top> outside the members at the given paths (the root

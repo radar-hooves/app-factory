@@ -206,7 +206,7 @@ if [ "$phase" != release ]; then
     docker buildx inspect household >/dev/null 2>&1 ||
     die "cannot create the household builder"
   login
-  docker buildx build --builder household --push --provenance=false --sbom=false --pull --build-arg "GIT_SHA=$sha" \
+  timed "image build+push" docker buildx build --builder household --push --provenance=false --sbom=false --pull --build-arg "GIT_SHA=$sha" \
     "${secrets[@]}" -f "$dir/Dockerfile" -t "$ref:$sha" "$ctx"
   docker pull -q "$ref:$sha" >/dev/null
   img=$(docker image inspect --format '{{.ID}}' "$ref:$sha")
@@ -216,9 +216,9 @@ if [ "$phase" != release ]; then
   probe=$dir/.github/image-smoke.sh
   [ -f "$probe" ] || probe=$dir/image-smoke.sh
   if [ -f "$probe" ]; then
-    IMAGE=$ref:$sha bash "$probe" || die "smoke: ${probe#"$dir"/} failed on $ref:$sha; not released"
+    timed "image smoke" env IMAGE=$ref:$sha bash "$probe" || die "smoke: ${probe#"$dir"/} failed on $ref:$sha; not released"
   else
-    boot "$ref:$sha" || die "smoke: $ref:$sha did not come up; not released"
+    timed "image smoke" boot "$ref:$sha" || die "smoke: $ref:$sha did not come up; not released"
   fi
 else
   # Built elsewhere: the image id a container here runs is the config digest of the :<sha> manifest.

@@ -18,14 +18,14 @@ jq -e .packageManager "$root/package.json" >/dev/null ||
   die "$root/package.json names no packageManager, so corepack would fetch whichever pnpm is newest"
 filter=()
 [ "$root" = "$dir" ] || filter=(--filter "$(jq -r .name "$dir/package.json")...")
-(cd "$root" && pnpm install --frozen-lockfile "${filter[@]}")
+timed "pnpm install" bash -c 'cd "$1" && shift && pnpm install --frozen-lockfile "$@"' _ "$root" "${filter[@]}"
 rc=0
 scripts=("${@:2}")
 [ "${#scripts[@]}" -gt 0 ] || scripts=(check test)
-for s in "${scripts[@]}"; do (cd "$dir" && pnpm run --if-present "$s") || rc=1; done
+for s in "${scripts[@]}"; do timed "pnpm $s" bash -c 'cd "$1" && pnpm run --if-present "$2"' _ "$dir" "$s" || rc=1; done
 # A factory app's frontend refuses a redrawn src/ that its layout-gate record does not
 # judge as it lands, measured from the plan's CHANGE_BASE (the check's header has the rule).
 # Only an app on a factory release that stamps the check has one, so an app takes it with
 # its update, never at once.
-[ ! -f "$dir/scripts/check-layout-gate.mjs" ] || (cd "$dir" && node scripts/check-layout-gate.mjs) || rc=1
+[ ! -f "$dir/scripts/check-layout-gate.mjs" ] || timed "layout gate" bash -c 'cd "$1" && node scripts/check-layout-gate.mjs' _ "$dir" || rc=1
 exit "$rc"

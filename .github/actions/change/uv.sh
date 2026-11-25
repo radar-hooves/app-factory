@@ -5,8 +5,8 @@
 . "$(dirname "$0")/lib.sh"
 ws "${1:-.}"
 [ -f "$root/uv.lock" ] || { note "$name has no lock and no workspace: its image's smoke tests it"; exit 0; }
-(cd "$root" && uv sync --frozen --package "$name" --all-extras)
+timed "$name uv sync" bash -c 'cd "$1" && uv sync --frozen --package "$2" --all-extras' _ "$root" "$name"
 rc=0
-typecheck "$root" "$dir" "$name" || rc=1
-suite "$root" "$dir" "$name" || rc=1
+timed "$name mypy" typecheck "$root" "$dir" "$name" || rc=1
+timed "$name tests (all)" suite "$root" "$dir" "$name" || rc=1
 exit "$rc"
