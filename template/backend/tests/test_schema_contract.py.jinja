@@ -1,0 +1,120 @@
+"""The committed frontend types describe the backend this commit serves.
+
+`frontend/src/lib/api/schema.d.ts` is generated from `/openapi.json` and nothing
+else checks it is current: a backend change to the API ships with a frontend typed
+against the old one. This compares the app's live OpenAPI document with the
+committed file: the paths, the operation each path serves, the component schemas
+and each schema's fields. Seconds, no Node. Types and enum members are not
+compared; regenerating is the fix either way.
+
+Regenerate against a running backend, then format as the app's prettier does:
+`cd frontend && pnpm generate:api && pnpm exec prettier --write --ignore-path /dev/null src/lib/api/schema.d.ts`
+"""
+
+import re
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+
+_TYPES = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "api" / "schema.d.ts"
+_FIX = (
+    "frontend/src/lib/api/schema.d.ts is stale: it does not match this backend's OpenAPI. "
+    "Regenerate it: cd frontend && pnpm generate:api && "
+    "pnpm exec prettier --write --ignore-path /dev/null src/lib/api/schema.d.ts"
+)
+_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
+
+
+def _block(lines: list[str], opener: str) -> list[str]:
+    """The lines inside the first line that is `opener`, up to its closing brace at the same indent."""
+    start = next(i for i, line in enumerate(lines) if line.strip() == opener)
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    end = next(
+        i
+        for i in range(start + 1, len(lines))
+        if lines[i].startswith(" " * indent + "}") or (indent == 0 and lines[i].startswith("}"))
+    )
+    return lines[start + 1 : end]
+
+
+def _children(block: list[str]) -> dict[str, list[str]]:
+    """Each direct member of a block, by name, with the lines under it."""
+    first = next(line for line in block if line.strip())
+    indent = len(first) - len(first.lstrip())
+    members: dict[str, list[str]] = {}
+    current: list[str] = []
+    for line in block:
+        if len(line) - len(line.lstrip()) == indent and (m := re.match(r'\s*"?([^"?:\s]+)"?\??: ', line)):
+            current = members.setdefault(m.group(1), [])
+            current.append(line)
+        else:
+            current.append(line)
+    return members
+
+
+def committed() -> tuple[dict[str, set[str]], dict[str, set[str] | None]]:
+    """(path -> the operations it serves, schema -> its field names or None when not an object)."""
+    lines = _TYPES.read_text().splitlines()
+    paths = {
+        path: set(re.findall(r"^\s+(?:" + "|".join(_METHODS) + r')\??: operations\["([^"]+)"\]', "\n".join(body), re.M))
+        for path, body in _children(_block(lines, "export interface paths {")).items()
+    }
+    schemas: dict[str, set[str] | None] = {}
+    for name, body in _children(_block(_block(lines, "export interface components {"), "schemas: {")).items():
+        if not body[0].rstrip().endswith("{"):
+            schemas[name] = None
+            continue
+        fields = _children(body[1:-1]) if len(body) > 2 else {}
+        schemas[name] = {f for f in fields if not f.startswith("[")}
+    return paths, schemas
+
+
+def live(app: FastAPI) -> tuple[dict[str, set[str]], dict[str, set[str] | None]]:
+    spec = app.openapi()
+    paths = {
+        path: {op["operationId"] for method, op in item.items() if method in _METHODS}
+        for path, item in spec["paths"].items()
+    }
+    schemas: dict[str, set[str] | None] = {
+        name: set(s["properties"]) if s.get("type") == "object" and "properties" in s else None
+        for name, s in spec.get("components", {}).get("schemas", {}).items()
+    }
+    return paths, schemas
+
+
+def drift(app: FastAPI) -> list[str]:
+    """What differs, named; empty when the committed types are current."""
+    (c_paths, c_schemas), (l_paths, l_schemas) = committed(), live(app)
+    out = [
+        f"path {p}: committed {sorted(c_paths.get(p, ()))}, served {sorted(l_paths.get(p, ()))}"
+        for p in sorted(c_paths.keys() | l_paths.keys())
+        if c_paths.get(p) != l_paths.get(p)
+    ]
+    for name in sorted(c_schemas.keys() | l_schemas.keys()):
+        if name not in c_schemas or name not in l_schemas:
+            out.append(f"schema {name}: {'only served' if name in l_schemas else 'only committed'}")
+        elif c_schemas[name] != l_schemas[name] and None not in (c_schemas[name], l_schemas[name]):
+            out.append(
+                f"schema {name}: fields differ by {sorted((c_schemas[name] or set()) ^ (l_schemas[name] or set()))}"
+            )
+    return out
+
+
+def test_committed_types_match_the_served_openapi(app: FastAPI) -> None:
+    assert drift(app) == [], _FIX
+
+
+def test_a_stale_client_is_detected(app: FastAPI, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The gate can fail: a client missing a path, a schema or a field is named."""
+    text = _TYPES.read_text()
+    first_path = next(iter(committed()[0]))
+    first_field = next(f for f in next(f for f in committed()[1].values() if f))
+    stale = text.replace('"' + first_path + '": ', '"' + first_path + '-gone": ', 1)
+    stale = re.sub(rf'^(\s+)"?{re.escape(first_field)}"?\??: ', r"\1removed_field: ", stale, count=1, flags=re.M)
+    path = tmp_path / "schema.d.ts"
+    path.write_text(stale)
+    monkeypatch.setattr(f"{__name__}._TYPES", path)
+    found = drift(app)
+    assert any(first_path in line for line in found)
+    assert any("fields differ" in line for line in found)

@@ -212,6 +212,7 @@ _exclude:
   - "{% if headless %}backend/src/{{ package_name }}/elements.py{% endif %}"
   - "{% if headless %}backend/tests/test_elements.py{% endif %}"
   - "{% if headless %}backend/tests/test_version.py{% endif %}"
+  - "{% if headless %}backend/tests/test_schema_contract.py{% endif %}"
   # A slice the app declares in `omitted_slices` that nothing it keeps composes on:
   # its own files leave the render, and the composition files render without it.
   - "{% if 'agent' in omitted_slices %}backend/src/{{ package_name }}/api/agent{% endif %}"
