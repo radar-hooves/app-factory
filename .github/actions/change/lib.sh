@@ -69,18 +69,23 @@ typecheck() {  # <root> <dir> <name>
 # pytest on <path> from <cwd> in the workspace env at <root>, CHANGE_WORKERS workers (the
 # member's [tool.change] workers, default two) when xdist is there: each worker holds the app
 # (about 0.75 GB), and at four workers four legs filled the host's 16G runner pool and were
-# OOM-killed (01/11), so a member raises it only for a measured footprint. The path goes absolute: a conftest that changes
-# directory at import would otherwise start xdist's workers where the relative path names nothing.
-tests() {  # <root> <cwd> <path> [NAME=value...]
-  local args=(-p no:cacheprovider)
+# OOM-killed (01/11), so a member raises it only for a measured footprint. The paths go absolute: a conftest that changes
+# directory at import would otherwise start xdist's workers where a relative path names nothing.
+tests() {  # <root> <cwd> <path>... [NAME=value...]
+  local args=(-p no:cacheprovider) paths=() env=() a
+  for a in "${@:3}"; do
+    if [[ $a =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then env+=("$a"); else paths+=("$a"); fi
+  done
   (cd "$1" && uv run --no-sync python -c 'import xdist' 2>/dev/null) && args+=(-n "${CHANGE_WORKERS:-2}")
   # pytest's slowest 30 tests go to the run's summary page; its own output and status stand.
-  local out rc=0 t=$SECONDS
+  local out rc=0 t=$SECONDS label=$3
+  [ "${#paths[@]}" -eq 1 ] || label="${#paths[@]} test files"
   out=$(mktemp)
-  (cd "$2" && env "${@:4}" uv run --no-sync --project "$1" python -m pytest "$(realpath "$3")" "${args[@]}" --durations=30 --durations-min=0) | tee "$out" || rc=$?
+  (cd "$2" && mapfile -t abs < <(realpath "${paths[@]}") &&
+    env "${env[@]}" uv run --no-sync --project "$1" python -m pytest "${abs[@]}" "${args[@]}" --durations=30 --durations-min=0) | tee "$out" || rc=$?
   {
-    echo "- pytest $3: $((SECONDS - t)) s$([ "$rc" = 0 ] || echo " (exit $rc)")"
-    echo "<details><summary>pytest $3: slowest tests</summary>"
+    echo "- pytest $label: $((SECONDS - t)) s$([ "$rc" = 0 ] || echo " (exit $rc)")"
+    echo "<details><summary>pytest $label: slowest tests</summary>"
     echo
     echo '```'
     sed -n '/ slowest .* durations /,/^=\+ .* =\+$/p' "$out" | sed '$d'
@@ -116,10 +121,11 @@ repo_tests() {  # <top> [member-path...]
 }
 
 # Its own tests/, run from the workspace root as the repos' own runners do, under any
-# build.smoke_env its server_config.json declares. The repo's root member owns every path the
-# other members do not, so it runs every tests/ repo_tests finds.
+# build.smoke_env its server_config.json declares; on a leg the plan scoped, only the test
+# files of CHANGE_TESTS (paths in the member), in one run. The repo's root member owns every
+# path the other members do not, so it runs every tests/ repo_tests finds.
 suite() {  # <root> <dir> <name>
-  local smoke=() found=() members=() t known top rc=0 rel=${2#"$1"}
+  local smoke=() found=() members=() t known top rc=0 rel=${2#"$1"} scoped=
   rel=${rel#/}
   # Explicit: uv.sh tests this with ||, which turns off set -e in here.
   top=$(cd "$(git -C "$2" rev-parse --show-toplevel)" && pwd -P) || return
@@ -127,13 +133,20 @@ suite() {  # <root> <dir> <name>
     known=$(python3 "$here/plan.py" --repo "$top" --head HEAD --base HEAD) || return
     mapfile -t members < <(jq -r '.members[].path' <<<"$known")
     repo_tests "$top" "${members[@]}" || return
+  elif [ -n "${CHANGE_TESTS:-}" ]; then
+    read -ra found <<<"$CHANGE_TESTS"
+    scoped=1
+    note "$3: ${#found[@]} test files reach the change; main's run tests it whole"
+    found=("${found[@]/#/${rel:+$rel/}}")
   elif [ -d "$2/tests" ]; then
     found=("${rel:+$rel/}tests")
   fi
   [ "${#found[@]}" -gt 0 ] || { note "$3: no tests/, nothing to run"; return 0; }
   [ -f "$2/server_config.json" ] &&
     mapfile -t smoke < <(jq -r '.build.smoke_env // {} | to_entries[] | "\(.key)=\(.value)"' "$2/server_config.json")
-  for t in "${found[@]}"; do tests "$1" "$1" "$t" "${smoke[@]}" || rc=1; done
+  if [ -n "$scoped" ]; then tests "$1" "$1" "${found[@]}" "${smoke[@]}" || rc=1
+  else for t in "${found[@]}"; do tests "$1" "$1" "$t" "${smoke[@]}" || rc=1; done
+  fi
   return "$rc"
 }
 

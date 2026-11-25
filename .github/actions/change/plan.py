@@ -69,6 +69,21 @@ PLUGIN = re.compile(
     r"(?:.*/)?src/main/(?:kotlin|groovy)/(?:.*/)?([^/]+)\.gradle(?:\.kts)?"
 )
 GLOB = {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*", "?": "[^/]"}
+TEST_FILE = re.compile(r"tests/(?:.*/)?(?:test_[^/\s]*|[^/\s]*_test)\.py")
+# An import at any indent (a test's function-level ones too): its relative dots, the
+# module, and what it takes from it.
+IMPORT = re.compile(
+    r"^[ \t]*(?:from[ \t]+(\.*)([\w.]*)[ \t]+import[ \t]+(\([^)]*\)|[^\n#;]*)"
+    r"|import[ \t]+([^\n#;]+))",
+    re.M,
+)
+# A slice's code, and its own tests, which call it through the app fixture.
+SLICE_CODE = re.compile(r"src/[^/]+/api/([^/]+)/.*")
+SLICE_TESTS = re.compile(r"tests/api/([^/]+)/.*")
+# The factory's modules that compose the app from every slice.
+COMPOSES = re.compile(
+    r"src/[^/]+/(?:main|server|app_hooks|api/main|mcp/server|db/registry)\.py"
+)
 TMP = tempfile.TemporaryDirectory(prefix="plan-")
 TIMES: list[float] = []
 
@@ -254,6 +269,118 @@ def manifests(repo: str, sha: str) -> dict[str, bytes]:
     raw = git(repo, "archive", "--format=tar", sha, "--", *paths)
     with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
         return {m.name: tar.extractfile(m).read() for m in tar if m.isfile()}
+
+
+def reaches(repo: str, sha: str, d: str, changed: list[str]) -> list[str] | None:
+    """The test files of the uv member at d that its changed paths can reach, relative to
+    d, or None for its whole suite (also when they reach none, or every one).
+
+    A test is reached when its own imports, followed through the member's modules, reach a
+    changed one; a slice's tests (tests/api/<slice>/) when a module of that slice is; a
+    test that loads the composed app when any change reaches the app; every test under a
+    changed conftest.py or beside changed test data. A change outside src/ and tests/ (a
+    migration, the lock, a script), or to a module that composes the app, reaches it all.
+    """
+    if not d or any(
+        not f.startswith(("src/", "tests/")) or COMPOSES.fullmatch(f) for f in changed
+    ):
+        return None
+    py = sorted(
+        rel(p, d)
+        for p in tree(repo, sha)
+        if p.endswith(".py") and (within(p, join(d, "src")) or within(p, join(d, "tests")))
+    )
+    tests = [f for f in py if TEST_FILE.fullmatch(f)]
+    # A module the change deleted is still named by an import it left behind.
+    mods = {
+        f.removeprefix("src/")[:-3].replace("/", ".").removesuffix(".__init__"): f
+        for f in {*py, *(f for f in changed if f.endswith(".py"))}
+    }
+    raw = git(repo, "archive", "--format=tar", sha, "--", *(join(d, f) for f in py))
+    with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
+        text = {
+            rel(t.name, d): tar.extractfile(t).read().decode(errors="replace")
+            for t in tar
+            if t.isfile()
+        }
+    users: dict[str, set[str]] = {}
+    for f in py:
+        # A conftest's fixtures hold the whole app: what a test takes of it is unknowable.
+        if name_of(f) == "conftest.py":
+            continue
+        # A relative import starts from the module's package, or from the package itself.
+        pkg = f.removeprefix("src/")[:-3].split("/")[:-1]
+        for dots, frm, names, plain in IMPORT.findall(text.get(f, "")):
+            if plain:
+                targets = [t.split()[0] for t in plain.split(",") if t.strip()]
+            else:
+                up = len(dots) - 1
+                if up > len(pkg):
+                    continue
+                parts = (pkg[: len(pkg) - up] if dots else []) + [
+                    x for x in frm.split(".") if x
+                ]
+                taken = names.strip("()").replace("\n", " ").split(",")
+                targets = [".".join(parts)] + [
+                    ".".join([*parts, n.split()[0]]) for n in taken if n.strip()
+                ]
+            for t in targets:
+                # Importing a module runs every package __init__ above it.
+                parts = t.split(".")
+                for i in range(1, len(parts) + 1):
+                    if (m := mods.get(".".join(parts[:i]))) and m != f:
+                        users.setdefault(m, set()).add(f)
+    seen, whole = set(), set()
+    for f in changed:
+        if name_of(f) == "conftest.py":
+            whole.add(dir_of(f))
+        elif f.endswith(".py"):
+            seen.add(f)
+        elif f.startswith("src/"):
+            # Data a package reads: the modules of its nearest package.
+            p = dir_of(f)
+            while p != "src" and join(p, "__init__.py") not in py:
+                p = dir_of(p)
+            if p == "src":
+                return None
+            seen.update(m for m in py if dir_of(m) == p)
+        elif dir_of(f) != "tests" and any(within(t, dir_of(f)) for t in tests):
+            whole.add(dir_of(f))
+        else:
+            return None
+
+    def spread(todo: list[str]) -> None:
+        while todo:
+            f = todo.pop()
+            # A test another imports lends it helpers: followed only when it changed itself.
+            if COMPOSES.fullmatch(f) or (TEST_FILE.fullmatch(f) and f not in changed):
+                continue
+            for u in users.get(f, set()) - seen:
+                seen.add(u)
+                todo.append(u)
+
+    spread(list(seen))
+    if any(COMPOSES.fullmatch(f) for f in seen):
+        # Every module that imports one that composes the app imports all of it: only the
+        # tests and their helpers, which load the whole app, are followed from them.
+        loads = {
+            u
+            for c in py
+            if COMPOSES.fullmatch(c)
+            for u in users.get(c, ())
+            if u.startswith("tests/")
+        }
+        spread(list(loads - seen))
+        seen |= loads
+    slices = {m[1] for f in seen if (m := SLICE_CODE.fullmatch(f))}
+    out = [
+        t
+        for t in tests
+        if t in seen
+        or ((m := SLICE_TESTS.fullmatch(t)) and m[1] in slices)
+        or any(within(t, w) for w in whole)
+    ]
+    return out if 0 < len(out) < len(tests) else None
 
 
 def code(raw: bytes) -> str:
@@ -695,6 +822,7 @@ def plan(
     bases: list[str],
     roll: str = "",
     sources: tuple[str, ...] = (),
+    scope: tuple[str, ...] = (),
 ) -> dict:
     repo = os.path.abspath(repo)
     if not (head := resolve(repo, head)):
@@ -1019,11 +1147,14 @@ def plan(
         return cap(hits)
 
     @functools.cache
-    def evaluate(m: Member, base: str | None) -> tuple[bool, bool, tuple[str, ...]]:
-        """(test, ship, reasons) for one member against one base."""
+    def evaluate(
+        m: Member, base: str | None
+    ) -> tuple[bool, bool, tuple[str, ...], tuple[str, ...]]:
+        """(test, ship, reasons, owned) for one member against one base: owned is the paths
+        it owns that moved when nothing else (a pin, its lock, a read) tests it."""
         if base is None:
             # Deploy only on positive evidence: no base tests all, or only the roll.
-            return (False, False, ()) if rolled else (True, False, ("no base",))
+            return (False, False, (), ()) if rolled else (True, False, ("no base",), ())
         paths = diff(repo, base, head)
         lock = join(m.lock, "uv.lock") if m.lock is not None else None
         mine = [
@@ -1093,7 +1224,8 @@ def plan(
             else ()
         )
         note = ("lock: carried pin moved, ship only",) if carried and not test else ()
-        return test, ship, (*cap(mine), *why, *tests, *note, *held)
+        owned = () if why or tests else tuple(mine)
+        return test, ship, (*cap(mine), *why, *tests, *note, *held), owned
 
     artefacts = []
     if "Dockerfile" in tree(repo, head):
@@ -1112,6 +1244,9 @@ def plan(
         artefacts.append((image, held, srcs))
     if stray := set(sources) - {i for i, *_ in artefacts}:
         raise SystemExit(f"plan: --source names no root image: {sorted(stray)}")
+    if stray := set(scope) - {i for i, *_ in artefacts}:
+        raise SystemExit(f"plan: --scope names no root image: {sorted(stray)}")
+    scoped = {m for image, ms, _ in artefacts if image in scope for m in ms}
     base_for = {m: own.get(m.name, default) for m in members}
     for image, ms, _ in artefacts:
         base_for |= {m: own[image] for m in ms if image in own and m.name not in own}
@@ -1140,9 +1275,15 @@ def plan(
 
     out, reasons, shipped = [], {}, set()
     for m in members:
-        test, ship, why = evaluate(m, base_for[m])
+        test, ship, why, owned = evaluate(m, base_for[m])
         if m.name in rolled:
             test, ship, why = True, not newer(base_for[m]), (*why, "roll")
+        # A leg before landing tests what the change reaches; main's own run tests it all.
+        select = None
+        if test and owned and m in scoped and m.toolchain == "uv" and m.name not in rolled:
+            select = reaches(repo, head, m.path, [rel(p, m.path) for p in owned])
+            if select is not None:
+                why = (*why, f"scoped: {len(select)} test files reach it")
         if why:
             reasons[m.name] = list(why)
         if ship:
@@ -1158,6 +1299,7 @@ def plan(
                 "build_on": runners(m.change or {}, "build_on"),
                 "deploy_on": runners(m.change or {}, "deploy_on"),
                 "workers": workers(m.change or {}),
+                "select": " ".join(select or ()),
                 **(
                     {
                         "test_on": runners(
@@ -1267,9 +1409,24 @@ def main(argv: list[str] | None = None) -> None:
         default=[],
         help="a root image production runs from source: built only for its environment",
     )
+    ap.add_argument(
+        "--scope",
+        action="append",
+        default=[],
+        help="a root image whose host puts back a red main: its members test what reaches them",
+    )
     args = ap.parse_args(argv)
     print(
-        json.dumps(plan(args.repo, args.head, args.base, args.roll, tuple(args.source)))
+        json.dumps(
+            plan(
+                args.repo,
+                args.head,
+                args.base,
+                args.roll,
+                tuple(args.source),
+                tuple(args.scope),
+            )
+        )
     )
 
 
