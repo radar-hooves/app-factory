@@ -5,7 +5,7 @@ description = "The shell every household Tauri app has around its own domain cod
 authors = ["poodle64"]
 license = "MIT"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.95"
 publish = false
 
 [dependencies]
