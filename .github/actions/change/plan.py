@@ -1159,8 +1159,14 @@ def plan(
                 "deploy_on": runners(m.change or {}, "deploy_on"),
                 "workers": workers(m.change or {}),
                 **(
-                    {"test_on": runners(m.change, "test_on", join(m.path, DECLARED))}
-                    if m.toolchain == "command" and "test_on" in m.change
+                    {
+                        "test_on": runners(
+                            m.change,
+                            "test_on",
+                            join(m.path, DECLARED) if m.toolchain == "command" else "[tool.change]",
+                        )
+                    }
+                    if "test_on" in (m.change or {})
                     else {}
                 ),
                 "base": base_for[m],

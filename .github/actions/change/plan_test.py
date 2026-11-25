@@ -1820,6 +1820,32 @@ def test_a_declared_test_leg_names_no_runner_by_default(tmp_path):
     assert "test_on" not in member(plan(repo, base, base), "tree")
 
 
+def test_a_python_member_runs_its_test_leg_on_the_labels_it_names(mono):
+    repo, _ = mono
+    labels = ["self-hosted", "household", "mimir-test"]
+    head = change(
+        repo,
+        {
+            "packages/a/pyproject.toml": project(
+                "a", "lib", "dep", extra=f"[tool.change]\ntest_on = {labels!r}\n".replace("'", '"')
+            )
+        },
+    )
+    p = plan(repo, head, head)
+    assert member(p, "a")["test_on"] == labels
+    assert "test_on" not in member(p, "b")
+
+
+def test_a_python_members_test_on_must_be_a_list_of_labels(mono):
+    repo, _ = mono
+    head = change(
+        repo,
+        {"packages/a/pyproject.toml": project("a", "lib", "dep", extra='[tool.change]\ntest_on = "x"\n')},
+    )
+    with pytest.raises(SystemExit, match="test_on must be a list"):
+        plan(repo, head, head)
+
+
 def test_test_on_must_be_a_list_of_labels(tmp_path):
     repo, base = declared(tmp_path, 'test = "x"\ntest_on = "host-a"\n')
     with pytest.raises(SystemExit, match="test_on must be a list"):
