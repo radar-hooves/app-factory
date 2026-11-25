@@ -527,21 +527,29 @@ def _app_modules_reached(backend_root: Path, roots: list[Path]) -> list[Path]:
     seen: dict[Path, None] = {}
     pending = list(roots)
     while pending:
-        tree = ast.parse(pending.pop().read_text())
-        names: list[str] = []
-        for node in ast.walk(tree):
+        importer = pending.pop()
+        package = list(importer.parent.relative_to(src).parts) if importer.is_relative_to(src) else []
+        names: list[list[str]] = []
+        for node in ast.walk(ast.parse(importer.read_text())):
             if isinstance(node, ast.Import):
-                names += [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                names.append(node.module)
-                names += [f"{node.module}.{alias.name}" for alias in node.names]  # a submodule, or a name in one
-        for name in names:
-            if name.split(".")[0] != "{{ package_name }}":
+                names += [alias.name.split(".") for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:  # relative: resolved against the importer's own package
+                    if not package or node.level > len(package):
+                        continue
+                    base = package[: len(package) - node.level + 1]
+                else:
+                    base = []
+                module = base + (node.module.split(".") if node.module else [])
+                if module:
+                    names.append(module)
+                names += [[*module, alias.name] for alias in node.names]  # a submodule, or a name in one
+        for parts in names:
+            if parts[0] != "{{ package_name }}":
                 continue
-            parts = name.split(".")
             for end in range(1, len(parts) + 1):  # every package on the way, then the module itself
-                base = src.joinpath(*parts[:end])
-                for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+                base_path = src.joinpath(*parts[:end])
+                for candidate in (base_path.with_suffix(".py"), base_path / "__init__.py"):
                     if candidate.is_file() and candidate not in seen:
                         seen[candidate] = None
                         pending.append(candidate)

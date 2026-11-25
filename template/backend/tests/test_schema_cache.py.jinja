@@ -19,8 +19,15 @@ def _backend(root: Path, migration: str) -> Path:
     (package / "__init__.py").write_text("")
     (package / "db" / "__init__.py").write_text("")
     (package / "db" / "roles.py").write_text("# roles\n")
-    (package / "db" / "scoping.py").write_text("from {{ package_name }}.db.helper import scope\n")
     (package / "db" / "helper.py").write_text("def scope(): return 'v1'\n")
+    (package / "db" / "scoping.py").write_text(
+        "from {{ package_name }}.db.helper import scope\nfrom . import sibling\nfrom .nested import leaf\n"
+    )
+    (package / "db" / "sibling.py").write_text("X = 'v1'\n")
+    (package / "db" / "nested").mkdir()
+    (package / "db" / "nested" / "__init__.py").write_text("from ..helper2 import y\n")
+    (package / "db" / "nested" / "leaf.py").write_text("Y = 'v1'\n")
+    (package / "db" / "helper2.py").write_text("Z = 'v1'\n")
     (package / "db" / "unrelated.py").write_text("# nothing imports this\n")
     return root
 
@@ -56,6 +63,11 @@ def test_a_module_a_migration_imports_is_part_of_the_key(tmp_path: Path, monkeyp
 
     (package / "helper.py").write_text("def scope(): return 'v2'\n")  # reached through scoping
     assert conftest._schema_cache_path(backend) != key
+
+    for relative in ("sibling.py", "nested/leaf.py", "helper2.py"):  # reached only by relative imports
+        before = conftest._schema_cache_path(backend)
+        (package / relative).write_text("# edited\n")
+        assert conftest._schema_cache_path(backend) != before, relative
 
     keyed = conftest._schema_cache_path(backend)
     (package / "roles.py").write_text("# roles, edited\n")  # reached through env.py
