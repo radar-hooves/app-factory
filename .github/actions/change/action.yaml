@@ -10,7 +10,7 @@ description: 'Run one step script of the change pipeline against the checkout'
 
 inputs:
   step:
-    description: 'The script to run: plan, a toolchain leg (uv, pnpm, go, cargo, gradle, or command for a repo with no manifest that declares `test` in .github/change.toml), library, repo, typecheck, wait, group, or a deploy kind (wheel, image, mcp)'
+    description: 'The script to run: plan, a toolchain leg (uv, pnpm, go, cargo, gradle, or command for a repo, or a member directory, that declares `test` in its own .github/change.toml), library, repo, typecheck, wait, group, or a deploy kind (wheel, image, mcp)'
     required: true
   path:
     description: 'The member, context or repo directory, relative to the checkout'

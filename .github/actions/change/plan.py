@@ -247,7 +247,7 @@ def manifests(repo: str, sha: str) -> dict[str, bytes]:
     paths = sorted(
         p
         for p in tree(repo, sha)
-        if name_of(p) in READ or p.endswith(SCRIPT) or p == DECLARED
+        if name_of(p) in READ or p.endswith(SCRIPT) or p.endswith(DECLARED)
     )
     if not paths:
         return {}
@@ -647,6 +647,22 @@ def discover(
         if "test_on" in decl:
             runners(decl, "test_on", DECLARED)
         found[""] = Member(repo_name(repo), "", "command", "", (DECLARED,), change=decl)
+
+    # A member directory in a toolchain the plan does not know declares its own test beside
+    # the recognised members, and is tested when a change reaches it.
+    for p in sorted(files):
+        d = dir_of(dir_of(p))
+        if not p.endswith("/" + DECLARED) or not d:
+            continue
+        decl = parse(files[p])
+        test = decl.get("test") if isinstance(decl, dict) else None
+        if not isinstance(test, str) or not test.strip():
+            raise SystemExit(f"plan: {p} needs `test = \"<command>\"`: {decl}")
+        if d in found:
+            raise SystemExit(f"plan: {p} is beside a manifest member, {found[d].name}")
+        if "test_on" in decl:
+            runners(decl, "test_on", p)
+        found[d] = Member(d.replace("/", "-"), d, "command", "", (p,), change=decl)
 
     members = sorted(found.values(), key=lambda m: m.path)
     names = [m.name for m in members]
@@ -1143,7 +1159,7 @@ def plan(
                 "deploy_on": runners(m.change or {}, "deploy_on"),
                 "workers": workers(m.change or {}),
                 **(
-                    {"test_on": runners(m.change, "test_on", DECLARED)}
+                    {"test_on": runners(m.change, "test_on", join(m.path, DECLARED))}
                     if m.toolchain == "command" and "test_on" in m.change
                     else {}
                 ),

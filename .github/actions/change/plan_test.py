@@ -1773,6 +1773,39 @@ def test_a_declaration_beside_a_manifest_fails_the_plan(mono):
         plan(repo, head, head)
 
 
+def test_a_member_dir_in_an_unknown_toolchain_declares_its_own_test(mono):
+    repo, base = mono
+    plug = {
+        "plugins/jellyfin/.github/change.toml": 'test = "dotnet test Earworm.Plugin.sln"\n',
+        "plugins/jellyfin/Earworm.Plugin.sln": "s\n",
+        "plugins/jellyfin/src/P.cs": "c\n",
+    }
+    base = change(repo, plug)
+    row = member(plan(repo, base, base), "plugins-jellyfin")
+    assert (row["toolchain"], row["path"], row["deploy"]) == ("command", "plugins/jellyfin", "none")
+    head = change(repo, {"plugins/jellyfin/src/P.cs": "d\n"})
+    legs = plan(repo, head, base)["legs"]
+    assert legs == ["plugins-jellyfin"]
+    head2 = change(repo, {"packages/lib/lib.py": "x = 2\n", "README.md": "q\n"})
+    assert "plugins-jellyfin" not in plan(repo, head2, head)["legs"]
+    head3 = change(repo, {"plugins/jellyfin/.github/change.toml": 'test = "dotnet test -c Release"\n'})
+    assert plan(repo, head3, head2)["legs"] == ["plugins-jellyfin"]
+
+
+def test_a_member_dir_declaration_beside_a_manifest_fails_the_plan(mono):
+    repo, _ = mono
+    head = change(repo, {"packages/lib/.github/change.toml": 'test = "x"\n'})
+    with pytest.raises(SystemExit, match="beside a manifest member"):
+        plan(repo, head, head)
+
+
+def test_a_member_dir_declaration_needs_a_test_command(mono):
+    repo, _ = mono
+    head = change(repo, {"plugins/x/.github/change.toml": 'other = "x"\n'})
+    with pytest.raises(SystemExit, match="needs `test"):
+        plan(repo, head, head)
+
+
 def test_a_declared_test_leg_runs_on_the_labels_it_names(tmp_path):
     repo, base = declared(
         tmp_path,
