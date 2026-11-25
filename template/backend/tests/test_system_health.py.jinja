@@ -4,9 +4,9 @@ import pytest
 {%- if 'feedback' not in omitted_slices %}
 
 from {{ package_name }}.config import get_settings
+{%- endif %}
 
 from tests.support.api import API
-{%- endif %}
 
 
 @pytest.mark.integration

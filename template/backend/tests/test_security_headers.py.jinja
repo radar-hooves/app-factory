@@ -6,6 +6,8 @@ from httpx import ASGITransport, AsyncClient, Response
 from {{ package_name }}.config import get_settings
 from {{ package_name }}.main import create_app
 
+from tests.support.api import API
+
 
 async def _get(path: str) -> Response:
     app = create_app(settings=get_settings())
