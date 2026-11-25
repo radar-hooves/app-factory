@@ -424,6 +424,7 @@ pub fn http_client() -> reqwest_middleware::ClientWithMiddleware {
         .with(reqwest_tracing::TracingMiddleware::<
             client::HouseholdSpanBackend,
         >::new())
+        .with(client::Propagate)
         .build()
 }
 
@@ -1009,6 +1010,61 @@ mod tests {
         }
         assert!(rendered.contains("server.address"), "{rendered}");
         assert!(rendered.contains("/library/search"), "{rendered}");
+    }
+
+    /// The callee joins the caller's trace: the request carries W3C `traceparent`
+    /// naming the client span it was sent from.
+    #[test]
+    #[serial]
+    fn a_request_carries_its_client_span_as_traceparent() {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback listener");
+        let url = format!("http://{}/", listener.local_addr().expect("its address"));
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("one request");
+            let mut head = Vec::new();
+            let mut buf = [0; 1024];
+            while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).expect("the request head");
+                if n == 0 {
+                    break;
+                }
+                head.extend_from_slice(&buf[..n]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 204 No Content\r\nconnection: close\r\n\r\n")
+                .expect("a reply");
+            String::from_utf8_lossy(&head).to_lowercase()
+        });
+
+        opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+        let (providers, _, spans) = in_memory();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let (subscriber, _reload) = subscriber(&[], otlp_layers("test-service", &providers));
+        tracing::subscriber::with_default(subscriber, || {
+            runtime.block_on(async {
+                http_client()
+                    .get(&url)
+                    .send()
+                    .await
+                    .expect("the loopback answers");
+            });
+        });
+        let head = server.join().expect("the server thread");
+        providers.traces.force_flush().expect("flush spans");
+
+        let exported = spans.get_finished_spans().expect("spans");
+        let client = exported.first().expect("the client span was exported");
+        let want = format!(
+            "traceparent: 00-{}-{}-",
+            client.span_context.trace_id(),
+            client.span_context.span_id()
+        );
+        assert!(head.contains(&want), "{want} not in {head}");
     }
 
     #[test]

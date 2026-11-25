@@ -17,8 +17,9 @@
 //! that is where a Subsonic request signs its token — and `url::Url::path()`
 //! never includes it, so the split is structural, not a redaction pass.
 
+use opentelemetry_http::HeaderInjector;
 use reqwest::Request;
-use reqwest_middleware::{Error, Result};
+use reqwest_middleware::{Error, Middleware, Next, Result};
 use reqwest_tracing::ReqwestOtelSpanBackend;
 use tracing::{Span, field::Empty, info_span};
 
@@ -27,6 +28,32 @@ use tracing::{Span, field::Empty, info_span};
 pub(crate) const TARGET: &str = "telemetry::client";
 
 pub(crate) struct HouseholdSpanBackend;
+
+/// Writes the client span's W3C `traceparent` into the request through the
+/// propagator `init` installs. Chained after `TracingMiddleware`, so the client
+/// span is entered, and the OpenTelemetry layer activates its context on entry.
+/// Neither `OpenTelemetrySpanExt::context` nor reqwest-tracing's own propagation
+/// can see it: both downcast to the layer, which no downcast reaches through the
+/// reload slot `Guard::set_exporter` swaps.
+pub(crate) struct Propagate;
+
+#[async_trait::async_trait]
+impl Middleware for Propagate {
+    async fn handle(
+        &self,
+        mut request: Request,
+        extensions: &mut http::Extensions,
+        next: Next<'_>,
+    ) -> Result<reqwest::Response> {
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(
+                &opentelemetry::Context::current(),
+                &mut HeaderInjector(request.headers_mut()),
+            )
+        });
+        next.run(request, extensions).await
+    }
+}
 
 impl ReqwestOtelSpanBackend for HouseholdSpanBackend {
     fn on_request_start(request: &Request, _: &mut http::Extensions) -> Span {

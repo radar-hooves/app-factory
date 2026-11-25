@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+`http_client()` sends W3C `traceparent`, so the callee joins the caller's trace. It sent none: reqwest-tracing's propagation reads the span's context by downcasting to the OpenTelemetry layer, which sits in the reload slot no downcast passes, and its `opentelemetry_0_32` feature had trailed this crate's 0.33 since 02/11/2026. `client::Propagate` injects the context the layer activates on entering the client span; the 0.32 stack leaves the graph. `a_request_carries_its_client_span_as_traceparent` failed before (no header) and passes. A Nix-built app's `outputHashes` key becomes `"telemetry-0.7.1"`.
+
 ## 0.7.0
 
 The process sample carries `footprint_bytes`, the memory the OS charges the process: `phys_footprint` from `proc_pid_rusage` on macOS (what Activity Monitor and `footprint <pid>` report), `RssAnon + RssShmem + VmSwap` from `/proc/self/status` on Linux, absent on Windows. `rss_bytes` stays, but alone it hid a leak: macOS compresses untouched memory and compressed pages leave RSS, so Thoth's 20 GB leak (`footprint` 20 GB, `top` CMPRS 19G) read as a flat 517-550 MB for 11 days. Measured on huginn (macOS, Apple Silicon): a process holding 2 GiB reported `footprint_bytes` 2150696928 and `footprint <pid>` 2051 MB, the same figure. No new dependency (a four-line `extern` declaration of `proc_pid_rusage`, which libSystem provides).
