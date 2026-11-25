@@ -29,8 +29,8 @@ handed to the transport, whose body read would raise and whose own error
 middleware would answer 500 for nobody.
 
 A bearer this app's own token exchange issued (``asker``, the stamped
-``exchange.Exchange``) is not a machine's: it names a person, a persona's asker
-or one another app asked for. The gate routes it by its issuer, verifies it
+``exchange.Exchange``) names a person: a persona's asker, one another app asked
+for, or a machine asking as its own Authentik identity. The gate routes it by its issuer, verifies it
 from the issuer's JWKS with no userinfo call and no fallback, and hands the
 verified person to the tool layer on the request scope (``scope["asker"]``),
 where no client can write. No ``x-client-id`` is written for it.

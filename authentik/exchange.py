@@ -1,5 +1,9 @@
 """Provision one app's party to the token exchange (template `exchange.py`), and the estate's one mapping.
 
+The provider also takes the client-credentials grant, so a machine asks as its
+own Authentik identity (a person's device, a service account) with that
+identity's app password, and the token names it and carries its entitlements.
+
 Run by Authentik itself, inside the server container's own `ak shell`, the
 code on stdin and every input in the environment, so no value reaches a
 command line or a file:
@@ -25,7 +29,7 @@ nothing and a changed input converges. Design: `docs/design/exchange.md`.
 
 import os
 
-from authentik.common.oauth.constants import GRANT_TYPE_TOKEN_EXCHANGE, SubModes
+from authentik.common.oauth.constants import GRANT_TYPE_CLIENT_CREDENTIALS, GRANT_TYPE_TOKEN_EXCHANGE, SubModes
 from authentik.core.models import Application
 from authentik.crypto.models import CertificateKeyPair
 from authentik.flows.models import Flow
@@ -36,19 +40,30 @@ from authentik.providers.proxy.models import ProxyProvider
 ASKER = """\
 # The person's entitlements on the app a token is for, read from the application
 # its people sign in to (the proxy provider it federates), so a page and a persona
-# share one vocabulary; and, on a token exchange, the client that asked, which
-# authenticated before claims are built. radar-hooves/app-factory authentik/exchange.py.
+# share one vocabulary; and, on a token exchange or a machine's client-credentials
+# grant, the client that asked, which authenticated before claims are built. A
+# client-credentials grant carries no proof that application admits its user, so
+# it is held to that application's policy here, as the outpost holds a browser.
+# radar-hooves/app-factory authentik/exchange.py.
+from authentik.core.apps import AppAccessWithoutBindings
 from authentik.core.models import Application
+from authentik.policies.engine import PolicyEngine
 from authentik.providers.oauth2.utils import extract_client_auth
 from authentik.providers.proxy.models import ProxyProvider
 
 signin = ProxyProvider.objects.filter(pk__in=provider.jwt_federation_providers.values("pk"))
 application = Application.objects.filter(provider__in=signin).first()
 application = application or Application.objects.filter(provider=provider).first()
+grant = http_request.POST.get("grant_type") if http_request is not None else None
+if application and grant == "client_credentials":
+    engine = PolicyEngine(application, request.user, http_request)
+    engine.empty_result = AppAccessWithoutBindings.get()
+    engine.use_cache = False
+    engine.build()
+    application = application if engine.result.passing else None
 names = [entitlement.name for entitlement in request.user.app_entitlements(application)] if application else []
 claims = {"entitlements": names, "roles": names}
-exchange = "urn:ietf:params:oauth:grant-type:token-exchange"
-if http_request is not None and http_request.POST.get("grant_type") == exchange:
+if grant in ("urn:ietf:params:oauth:grant-type:token-exchange", "client_credentials"):
     claims["client_id"] = extract_client_auth(http_request)[0]
 return claims
 """
@@ -76,7 +91,7 @@ def provision() -> str:
             "name": name,
             "client_type": ClientType.CONFIDENTIAL,
             "client_secret": secret,
-            "grant_types": [GRANT_TYPE_TOKEN_EXCHANGE],
+            "grant_types": [GRANT_TYPE_TOKEN_EXCHANGE, GRANT_TYPE_CLIENT_CREDENTIALS],
             "authorization_flow": Flow.objects.get(slug="default-provider-authorization-implicit-consent"),
             "invalidation_flow": Flow.objects.get(slug="default-provider-invalidation-flow"),
             "signing_key": CertificateKeyPair.objects.get(
@@ -93,7 +108,8 @@ def provision() -> str:
     provider.property_mappings.set([*standard, mapping])
     provider.jwt_federation_providers.set(federated)
     # Hidden: it launches nothing. No policy binding of its own: the subject token
-    # proves the sign-in app admitted the person, and a service cuts by entitlement.
+    # proves the sign-in app admitted the person, the mapping holds a machine's own
+    # grant to that app's policy, and a service cuts by entitlement.
     Application.objects.update_or_create(
         slug=f"{app}-exchange",
         defaults={"name": name, "provider": provider, "meta_launch_url": "blank://blank"},

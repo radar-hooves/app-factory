@@ -28,14 +28,11 @@ actors:
 
   # The household's shared mcp-gateway consumer. Deployments set
   # {{ project_name | upper | replace('-', '_') }}_OIDC_IDENTITY_CLAIM=mcp_actor so any token minted through
-  # that Authentik client resolves to this one registered identity.
+  # that Authentik client resolves to this one registered identity, which reaches
+  # every tool whoever sits behind it. Delete this entry once each machine
+  # consumer asks as its own Authentik identity, which needs no entry here
+  # (app-factory docs/design/exchange.md, "A machine asks as itself").
   - client_id: mcp-service
     actor_id: claude-code
     actor_type: agent
     display: Claude Code via mcp-gateway
-
-  # Add one entry per further machine consumer, e.g.:
-  # - client_id: <the value of the identity claim on that caller's token>
-  #   actor_id: <your app's own stable id for it>
-  #   actor_type: agent
-  #   display: Human-readable description

@@ -12,8 +12,9 @@ Callers cannot self-declare identity: over HTTP the wire ``_meta.client_id`` is
 never trusted (only the header the gate itself wrote), and an identity absent
 from the registry is refused, never defaulted to a privileged actor.
 
-A bearer this app's own exchange issued names a person, not a machine: the
-gate verifies it and puts the :class:`~{{ package_name }}.exchange.Asker` on the request,
+A bearer this app's own exchange issued names a person, or a machine asking as
+its own Authentik identity by client credentials at that provider: the gate
+verifies it and puts the :class:`~{{ package_name }}.exchange.Asker` on the request,
 :func:`current_asker` reads it, and :func:`resolve_actor` answers that person
 (``actor_type`` ``person``, ``actor_id`` their ``sub``) with no
 ``config/actors.yaml`` row, since Authentik vouched for them. A person admitted
@@ -24,7 +25,8 @@ A person is held to the entitlements the tool's REST counterpart requires,
 declared on the tool as ``meta=requires("<module>", write=...)`` and enforced by
 :func:`person_may` under FastMCP's ``AuthMiddleware`` on call and on list. A tool
 that declares nothing is refused to a person and hidden from their list. A
-machine caller is not held to it: its gate is ``config/actors.yaml``.
+machine on the shared userinfo bearer is not held to it: its gate is
+``config/actors.yaml``.
 
 Authentik authenticates; this app authorises. Map ``actor_id`` / ``actor_type``
 onto your own server-side authorisation (roles, grants, tenancy) as the domain
