@@ -8,7 +8,8 @@ needs any successful endpoint uses `{API}/system/health`, open under every postu
 `test_app_posture.py` is the one place the document routes are named, because it is
 what proves them open or closed. Only the tests the factory stamps are held to this
 (the files `.template-parity.json` lists under `backend/tests/`); an app's own tests
-are the app's.
+are the app's. A fresh render has no manifest yet and holds only the factory's tests,
+so all of them are scanned.
 """
 
 import ast
@@ -19,7 +20,8 @@ TESTS = Path(__file__).parent
 PREFIX = "/" + "api"
 DOCUMENT = "/" + "openapi"
 POSTURE = {"test_app_posture.py", "test_declared_seams.py"}
-STAMPED = json.loads((TESTS.parents[1] / ".template-parity.json").read_text())["files"]
+MANIFEST = TESTS.parents[1] / ".template-parity.json"
+STAMPED = json.loads(MANIFEST.read_text())["files"] if MANIFEST.exists() else None
 
 
 def _literals(path: Path):
@@ -42,7 +44,7 @@ def test_no_test_names_the_default_api_prefix_or_the_openapi_document() -> None:
     found = [
         f"{path.relative_to(TESTS)}:{line}: {text!r}"
         for path in sorted(TESTS.rglob("*.py"))
-        if path.name not in POSTURE and path.relative_to(TESTS.parents[1]).as_posix() in STAMPED
+        if path.name not in POSTURE and (STAMPED is None or path.relative_to(TESTS.parents[1]).as_posix() in STAMPED)
         for line, text in _literals(path)
         if text.startswith(PREFIX) or text.startswith(DOCUMENT) or f" {PREFIX}/" in text
     ]
