@@ -54,9 +54,10 @@ function gitz(...args) {
 	return r.stdout.split('\0').filter(Boolean);
 }
 
-/** The build's inputs outside src/ that draw every route: static assets, the bundler's and compiler's config, path aliases. */
+/** The build's inputs outside src/ that draw every route: static assets, the bundler's and compiler's config, path aliases.
+ * Not the files only the browser's chrome reads and a page cannot show: the favicon, touch and app icons, and the web manifest. */
 export const GLOBAL =
-	/^(?:static\/.*|[\w.-]*(?:vite|svelte|tailwind|postcss)[\w.-]*\.config\.[cm]?[jt]s|tsconfig[\w.-]*\.json)$/;
+	/^(?:static\/(?!(?:favicon|apple-touch-icon|icon[-.])[\w.-]*$|[\w.-]*\.webmanifest$).*|[\w.-]*(?:vite|svelte|tailwind|postcss)[\w.-]*\.config\.[cm]?[jt]s|tsconfig[\w.-]*\.json)$/;
 const keeps = (path) => drawn(path) || GLOBAL.test(path);
 
 /** path → blob id of every drawn file and global build input: in the working tree, or at commit `ref`. */

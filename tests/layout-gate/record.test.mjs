@@ -210,6 +210,20 @@ test("the build's inputs outside src/ redraw every route: static assets and the 
 	);
 });
 
+test('icons and the web manifest redraw no route; any other static file still does', () => {
+	reset();
+	page('<p>a, for the icon test</p>\n');
+	assert.equal(judge({ '/a': 'ship', '/b': 'ship', '/': 'ship' }).status, 0);
+	assert.equal(check().status, 0);
+	for (const f of ['favicon.png', 'favicon.svg', 'apple-touch-icon.png', 'icon-512.png', 'manifest.webmanifest'])
+		put(`static/${f}`, `${f} v1\n`);
+	const r = check();
+	assert.equal(r.status, 0, r.stderr);
+	put('static/logo.png', 'logo\n');
+	assert.equal(check().status, 1);
+	reset();
+});
+
 test('a param inside a segment still keys the concrete URL on its page and imports', () => {
 	holds(
 		() => {
