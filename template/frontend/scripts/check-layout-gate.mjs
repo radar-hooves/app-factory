@@ -105,6 +105,11 @@ function git(...args) {
 	return spawnSync('git', args, { encoding: 'utf8' });
 }
 
+/** `--depth=1` only where the checkout is already shallow: on a full clone it would write a shallow boundary, shared by every worktree. */
+function depth() {
+	return git('rev-parse', '--is-shallow-repository').stdout.trim() === 'true' ? ['--depth=1'] : [];
+}
+
 const factoryCommit = (text) => /^_commit:\s*(\S+)/m.exec(text ?? '')?.[1] ?? null;
 const recordAt = (base) => {
 	const r = git('show', `${base}:./${RECORD}`);
@@ -174,7 +179,7 @@ export function ownChanges(now, was, tip) {
 
 function mainTip() {
 	if (process.env.CI && process.env.GITHUB_REF === 'refs/heads/main') return null;
-	if (git('fetch', '--no-tags', '--depth=1', 'origin', 'main').status !== 0) return null;
+	if (git('fetch', '--no-tags', ...depth(), 'origin', 'main').status !== 0) return null;
 	return drawnFiles('FETCH_HEAD');
 }
 
@@ -193,7 +198,7 @@ function main() {
 	if (!base) why = unmeasured(now, record);
 	else {
 		if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
-			const f = git('fetch', '--no-tags', '--depth=1', 'origin', base);
+			const f = git('fetch', '--no-tags', ...depth(), 'origin', base);
 			if (f.status !== 0) {
 				console.error(`layout gate: cannot fetch the base ${base}: ${f.stderr.trim()}`);
 				return 1;
