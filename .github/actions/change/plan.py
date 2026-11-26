@@ -276,8 +276,8 @@ def reaches(repo: str, sha: str, d: str, changed: list[str]) -> list[str] | None
     d, or None for its whole suite (also when they reach none, or every one).
 
     A test is reached when its own imports, followed through the member's modules, reach a
-    changed one; a slice's tests (tests/api/<slice>/) when a module of that slice is; a
-    test that loads the composed app when any change reaches the app; every test under a
+    changed one; a slice's tests (tests/api/<slice>/) when a module of that slice is; any
+    other test that loads the composed app when any change reaches the app; every test under a
     changed conftest.py or beside changed test data. A change outside src/ and tests/ (a
     migration, the lock, a script), or to a module that composes the app, reaches it all.
     """
@@ -362,13 +362,14 @@ def reaches(repo: str, sha: str, d: str, changed: list[str]) -> list[str] | None
     spread(list(seen))
     if any(COMPOSES.fullmatch(f) for f in seen):
         # Every module that imports one that composes the app imports all of it: only the
-        # tests and their helpers, which load the whole app, are followed from them.
+        # tests outside a slice's own, and their helpers, which load the whole app, are
+        # followed from them. A slice's tests call that slice, whatever app they build.
         loads = {
             u
             for c in py
             if COMPOSES.fullmatch(c)
             for u in users.get(c, ())
-            if u.startswith("tests/")
+            if u.startswith("tests/") and not SLICE_TESTS.fullmatch(u)
         }
         spread(list(loads - seen))
         seen |= loads

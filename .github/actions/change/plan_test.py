@@ -779,6 +779,7 @@ SLICED = {
     "backend/tests/test_lends.py": "from tests.api.bank.test_bank import helper\n",
     "backend/tests/api/gym/test_gym.py": "def test_gym():\n    pass\n",
     "backend/tests/api/bank/test_bank.py": "def helper():\n    pass\n",
+    "backend/tests/api/bank/test_app.py": "from sample_app.main import routers\n",
     "backend/tests/api/tax/conftest.py": "",
     "backend/tests/api/tax/test_tax.py": "def test_tax():\n    pass\n",
     "backend/tests/fixtures/golden.json": "{}\n",
@@ -793,6 +794,7 @@ def sliced(app) -> tuple[Path, str]:
 
 
 GYM, BANK, TAX = (f"tests/api/{s}/test_{s}.py" for s in ("gym", "bank", "tax"))
+APP = "tests/api/bank/test_app.py"  # a slice's test that builds the app runs with its slice
 
 
 @pytest.mark.parametrize(
@@ -800,10 +802,10 @@ GYM, BANK, TAX = (f"tests/api/{s}/test_{s}.py" for s in ("gym", "bank", "tax"))
     [
         # Its slice's tests, a slice importing it (in a function), and a test that loads the
         # composed app; never a slice it does not reach, nor a test lending helpers to one.
-        (["src/sample_app/api/gym/service.py"], [BANK, GYM, "tests/test_walk.py"]),
-        (["src/sample_app/api/gym/prompt.md"], [BANK, GYM, "tests/test_walk.py"]),
+        (["src/sample_app/api/gym/service.py"], [APP, BANK, GYM, "tests/test_walk.py"]),
+        (["src/sample_app/api/gym/prompt.md"], [APP, BANK, GYM, "tests/test_walk.py"]),
         # A relative import out of the slice reaches it.
-        (["src/sample_app/core.py"], [BANK, "tests/test_core.py", "tests/test_walk.py"]),
+        (["src/sample_app/core.py"], [APP, BANK, "tests/test_core.py", "tests/test_walk.py"]),
         # A package __init__ runs with every import below it.
         (["src/sample_app/api/tax/__init__.py"], [TAX, "tests/test_walk.py"]),
         # A changed test, and the tests it lends helpers to.
@@ -826,7 +828,7 @@ def test_a_deleted_module_reaches_the_modules_still_importing_it(sliced):
     repo, _ = sliced
     head = change(repo, delete=("backend/src/sample_app/api/gym/service.py",))
     reached = planner.reaches(str(repo), head, "backend", ["src/sample_app/api/gym/service.py"])
-    assert reached == [BANK, GYM, "tests/test_walk.py"]
+    assert reached == [APP, BANK, GYM, "tests/test_walk.py"]
 
 
 def test_a_scoped_root_images_member_tests_what_its_change_reaches(sliced):
@@ -1761,15 +1763,17 @@ def test_no_rollback_guard(tmp_path):
 
 
 def run_plan_sh(
-    repo: Path, head: str, runs: list[tuple[str, str]], tmp: Path, docker: str = "", **extra: str
+    repo: Path, head: str, runs: list[tuple[str, str]], tmp: Path, docker: str = "", gh: str = "", **extra: str
 ) -> dict:
     """plan.sh on a push to main, its history `runs` (newest first: sha, conclusion) served by a
-    stub gh, and docker by the script `docker`."""
+    stub gh (or the script `gh`), and docker by the script `docker`."""
     bin = tmp / "bin"
     bin.mkdir()
     listing = "".join(f"{i} {sha} push {end}\\n" for i, (sha, end) in enumerate(runs, 100))
     (bin / "gh").write_text(
-        f"#!/bin/sh\ncase \"$*\" in *branch=main*) printf '{listing}';; */jobs*) printf 'success\\tplan\\n';; esac\n"
+        f"#!/bin/sh\n{gh}\n"
+        if gh
+        else f"#!/bin/sh\ncase \"$*\" in *branch=main*) printf '{listing}';; */jobs*) printf 'success\\tplan\\n';; esac\n"
     )
     (bin / "docker").write_text(f"#!/bin/sh\n{docker}\n")
     for f in bin.iterdir():
@@ -1843,6 +1847,21 @@ def test_a_pull_request_scopes_a_source_run_image_whose_host_puts_back_red(
     )
     legs = {m["name"]: m["select"] for m in json.loads(out["members"])}
     assert legs["sample-app"] == (f"{TAX} tests/test_walk.py" if scoped else "")
+
+
+@pytest.mark.parametrize("job, whole", [("test sample-app (scoped)", True), ("test sample-app", False)])
+def test_main_tests_a_member_whole_when_its_branch_leg_was_scoped(sliced, tmp_path, job, whole):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    tree = run(repo, "git", "rev-parse", f"{head}^{{tree}}")
+    gh = f"""case "$*" in
+  *branch=main*) echo '100 {base} push success';;
+  *status=success*) echo '200 {head}';;
+  *commits/{head}*) echo {tree};;
+  *runs/200/jobs*) echo '{job}';;
+esac"""
+    out = run_plan_sh(repo, head, [], tmp_path, gh=gh)
+    assert ("sample-app" in [m["name"] for m in json.loads(out["members"])]) == whole
 
 
 def test_a_red_runs_code_is_carried_once_then_fixed_forward(app, tmp_path):
