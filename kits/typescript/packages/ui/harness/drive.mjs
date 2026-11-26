@@ -2278,6 +2278,31 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
+	// ── A pane with more below says so, and stops at the end ─────────────────
+	{
+		const { context, page } = await open('surface=texture&texture=grid', { width: 411, height: 800 });
+		await page.waitForSelector('#ds-main');
+		const fade = () =>
+			page.evaluate(() => {
+				const main = document.querySelector('#ds-main');
+				const s = getComputedStyle(main, '::after');
+				return { opacity: Number(s.opacity), content: s.content, position: s.position };
+			});
+		const top = await fade();
+		await page.evaluate(() => {
+			const main = document.querySelector('#ds-main');
+			main.scrollTop = main.scrollHeight;
+		});
+		await page.waitForTimeout(100);
+		const end = await fade();
+		check(
+			'foot fade: shown at the top of a long pane, gone at its end',
+			top.opacity > 0.9 && end.opacity < 0.1 && top.position === 'sticky',
+			`top ${top.opacity}, end ${end.opacity}, ${top.position}`
+		);
+		await context.close();
+	}
+
 	// ── An app retunes the inks in one declaration ───────────────────────────
 	// The whole reason the four knobs are read through var() fallbacks at the
 	// point of use rather than aliased at :root (design-system#8): an alias

@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.22] - 2026-11-26
+
+Need: the layout gate's judge calls a list or table cut mid-row at the foot of the shell's scroll pane `fix`, because nothing says there is more below (consumer: godswood via master-project, radar-hooves/godswood#985; /property/property-managers at 1728 and 411, /spending/categories-and-rules on a phone). Measured in Chromium 156 (`drive.mjs`, 411 and 1728 wide, light and dark): the fade's opacity is 1 at the top of a long pane and 0 at its end.
+
+### Changed
+
+- **The shell's scroll pane shows a foot fade while there is more below.** A 2.5rem fade to `--background` is pinned to the pane's bottom edge and eases away over the last 2.5rem of scroll; a pane that fits shows none. It is a pseudo-element of `.ds-shell-main` (no DOM, no hit-testing), driven by a scroll timeline, so a browser without scroll-driven animations shows no cue rather than a permanent veil. Not drawn on paper.
+
+### Consumer must change
+
+- Nothing to take it. A pane inside a page (a `RecordList`'s own scroller) is not the shell's pane and gets no fade.
+
 ## [2026.11.21] - 2026-11-25
 
 Need: two from the operator's look at godswood's Transactions in production, PocketSmith's ledger his exemplar (consumer: godswood, radar-hooves/godswood#958). Grouped by day with no ticks, the ledger's leading gutter held nothing, so the Payee column, its head and every day heading started 48px in from the card's edge and the headings read as "floating randomly to the right"; and an opened row sat 8px from the rows either side, so it was not plain which it belonged to. Measured in the harness at 1440px (`drive.mjs`): by day and by none with no ticks, the head, the rows and the day headings now start 16px inside the card, together; grouped by month with no ticks 48px, and with ticks 64px, as before; an opened row 16px clear of the cards above and below, its edge the accent.

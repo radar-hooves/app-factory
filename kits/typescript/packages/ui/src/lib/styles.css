@@ -1152,6 +1152,38 @@
 		container: ds-page / inline-size;
 	}
 
+	/* More below: a foot fade pinned to the pane's bottom edge, visible while
+	   there is scroll left and gone at the end. A sticky pseudo-element (no DOM,
+	   no hit-testing) whose opacity a scroll timeline drives over the last 2rem
+	   of travel; with no overflow the timeline is inactive and the base opacity
+	   0 holds. Where scroll timelines are unsupported the rule never applies, so
+	   no cue is better than a permanent veil over the last row. */
+	@supports (animation-timeline: scroll()) {
+		.ds-shell-main::after {
+			content: '';
+			position: sticky;
+			bottom: 0;
+			flex: none;
+			height: 2.5rem;
+			margin-top: -2.5rem;
+			background: linear-gradient(to bottom, transparent, var(--background));
+			pointer-events: none;
+			opacity: 0;
+			animation: ds-more-below linear both;
+			animation-timeline: scroll(nearest block);
+			animation-range: calc(100% - 2.5rem) 100%;
+		}
+	}
+
+	@keyframes ds-more-below {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
+	}
+
 	.ds-page {
 		--ds-page-gutter: 1rem;
 		--ds-page-block: 1.5rem;
@@ -1760,6 +1792,9 @@
 			display: block !important;
 			overflow: visible !important;
 			background: none !important;
+		}
+		.ds-shell-main::after {
+			display: none !important;
 		}
 	}
 }
