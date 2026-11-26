@@ -469,7 +469,7 @@
 		<button
 			type="button"
 			class={cn(
-				'text-muted-foreground hover:text-foreground pointer-events-auto -m-0.5 grid size-5 flex-none place-items-center rounded-sm',
+				'text-muted-foreground hover:text-foreground pointer-events-auto -m-0.5 ml-1 inline-grid size-5 flex-none place-items-center rounded-sm align-middle',
 				RING
 			)}
 			title={r.attachment}
@@ -481,7 +481,7 @@
 		</button>
 	{:else}
 		<span
-			class="text-muted-foreground pointer-events-auto grid flex-none place-items-center"
+			class="text-muted-foreground pointer-events-auto ml-1.5 inline-grid flex-none place-items-center align-middle"
 			title={r.attachment}
 			role="img"
 			aria-label="Attached: {r.attachment}"
@@ -540,8 +540,7 @@
 				data-slot="ledger-title"
 			>
 				<span class="flex min-w-0 items-center gap-1.5">
-					<span class="min-w-0 line-clamp-2 break-words">{r.title}</span>
-					{#if r.attachment}{@render clip(r)}{/if}
+					<span class={cn('min-w-0 break-words', !r.attachment && 'line-clamp-2')}>{#if r.attachment}{@const cut = r.title.lastIndexOf(' ') + 1}{r.title.slice(0, cut)}<span class="whitespace-nowrap">{r.title.slice(cut)}{@render clip(r)}</span>{:else}{r.title}{/if}</span>
 					{@render chip(r)}
 					{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
 				</span>
@@ -692,8 +691,7 @@
 			{/if}
 			<span class="pointer-events-none flex min-w-0 flex-col justify-center gap-0.5">
 				<span class="flex min-w-0 items-center gap-1.5">
-					<span class="min-w-0 line-clamp-2 font-medium break-words">{r.title}</span>
-					{#if r.attachment}{@render clip(r)}{/if}
+					<span class={cn('min-w-0 font-medium break-words', !r.attachment && 'line-clamp-2')}>{#if r.attachment}{@const cut = r.title.lastIndexOf(' ') + 1}{r.title.slice(0, cut)}<span class="whitespace-nowrap">{r.title.slice(cut)}{@render clip(r)}</span>{:else}{r.title}{/if}</span>
 					{@render chip(r)}
 					{#if titleColumn?.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render titleColumn.actions(r)}</span>{/if}
 				</span>

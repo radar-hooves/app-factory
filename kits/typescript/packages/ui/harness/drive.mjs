@@ -4509,6 +4509,28 @@ for (const density of ['comfortable', 'compact']) {
 		await context.close();
 	}
 
+	// The attachment paperclip stays with the payee's last word however it wraps.
+	for (const w of [411, 1440]) {
+		({ context, page, errors } = await open('surface=ledger&longclip=1', { width: w, height: 900 }, 'light'));
+		await page.addStyleTag({ content: SETTLE });
+		await page.waitForSelector('[data-slot="ledger-row"]');
+		const clip = await page.evaluate(() => {
+			const row = [...document.querySelectorAll('[data-slot="ledger-row"]')].find((r) => r.textContent.includes('Bunnings Warehouse Albion'));
+			const icon = row.querySelector('[data-slot="ledger-attachment"]');
+			const run = icon.parentElement;
+			const lastWord = document.createRange();
+			lastWord.selectNodeContents(run.firstChild);
+			const lines = [...lastWord.getClientRects()];
+			const word = lines.at(-1);
+			const i = icon.getBoundingClientRect();
+			const text = run.parentElement.getBoundingClientRect();
+			return { onLastLine: (i.top + i.bottom) / 2 > word.top && (i.top + i.bottom) / 2 < word.bottom && word.top > Math.min(...lines.map((l) => l.top)) - 1, mid: Math.abs((i.top + i.bottom) / 2 - (word.top + word.bottom) / 2), gap: i.left - word.right, whole: run.parentElement.scrollHeight <= run.parentElement.clientHeight + 1, inside: i.right <= text.right + 0.5, lines: Math.round(text.height / parseFloat(getComputedStyle(run.parentElement).lineHeight)) };
+		});
+		await page.screenshot({ path: `harness/dist/ledger-clip-${w}.png` });
+		check(`Ledger ${w}px: the paperclip sits on the payee's last line, beside its last word`, clip.onLastLine && clip.mid < 3 && clip.gap >= 0 && clip.gap < 12 && clip.inside && clip.whole, JSON.stringify(clip));
+		await context.close();
+	}
+
 	// By day, the date heads the group and its column goes; the head still lines up.
 	({ context, page, errors } = await open('surface=ledger&period=day&balance=1', { width: 1440, height: 900 }, 'light'));
 	await page.addStyleTag({ content: SETTLE });

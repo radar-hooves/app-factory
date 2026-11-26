@@ -858,6 +858,9 @@
 	// `longchip=1`: a title far longer than its line, beside a review chip.
 	if (params.get('longchip') === '1')
 		ledgerRows[1]!.title = 'Ray White Real Estate Paddington, trust account for the front dwelling';
+	// `longclip=1`: an attached row whose payee wraps, for the paperclip's place.
+	if (params.get('longclip') === '1')
+		ledgerRows[3]!.title = 'Bunnings Warehouse Albion trade counter, hinges and a gate latch for the back dwelling';
 	const ledgerData: LedgerFixtureRow[] = ledgerMany
 		? Array.from({ length: ledgerMany }, (_, i) => ({
 				id: 1000 + i,
