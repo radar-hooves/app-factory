@@ -2,9 +2,12 @@
 <html lang="en"{% if density == 'compact' %} data-ds-density="compact"{% endif %}>
 	<head>
 		<meta charset="utf-8" />
-		<!-- The app's icon set, from its own frontend/static/: the mark as SVG, a
-		     32px PNG where SVG is not drawn, a 180px touch icon, and the manifest. -->
+		<!-- The app's icon set, from its own frontend/static/: the mark as SVG, PNGs
+		     at 16 and 32px (each drawn at its size where the family has no one
+		     vector mark; a size the app does not ship is skipped), a 180px touch
+		     icon, and the manifest, which names the 512px icon installers need. -->
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<link rel="icon" href="%sveltekit.assets%/favicon-16.png" sizes="16x16" type="image/png" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" sizes="32x32" type="image/png" />
 		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
