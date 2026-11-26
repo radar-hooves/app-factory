@@ -811,6 +811,7 @@ APP = "tests/api/bank/test_app.py"  # a slice's test that builds the app runs wi
         # A changed test, and the tests it lends helpers to.
         ([BANK], [BANK, "tests/test_lends.py"]),
         (["tests/api/tax/conftest.py"], [TAX]),
+        (["tests/api/tax/golden/year.json"], [TAX]),
         # Shared test data, a migration, the composing modules and the root conftest reach all.
         (["tests/fixtures/golden.json"], None),
         (["alembic/versions/a.py"], None),

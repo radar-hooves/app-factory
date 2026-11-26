@@ -278,7 +278,7 @@ def reaches(repo: str, sha: str, d: str, changed: list[str]) -> list[str] | None
     A test is reached when its own imports, followed through the member's modules, reach a
     changed one; a slice's tests (tests/api/<slice>/) when a module of that slice is; any
     other test that loads the composed app when any change reaches the app; every test under a
-    changed conftest.py or beside changed test data. A change outside src/ and tests/ (a
+    changed conftest.py or nearest changed test data. A change outside src/ and tests/ (a
     migration, the lock, a script), or to a module that composes the app, reaches it all.
     """
     if not d or any(
@@ -344,10 +344,14 @@ def reaches(repo: str, sha: str, d: str, changed: list[str]) -> list[str] | None
             if p == "src":
                 return None
             seen.update(m for m in py if dir_of(m) == p)
-        elif dir_of(f) != "tests" and any(within(t, dir_of(f)) for t in tests):
-            whole.add(dir_of(f))
         else:
-            return None
+            # Test data: the tests of the nearest directory holding some, short of tests/.
+            p = dir_of(f)
+            while p != "tests" and not any(dir_of(t) == p for t in tests):
+                p = dir_of(p)
+            if p == "tests":
+                return None
+            whole.add(p)
 
     def spread(todo: list[str]) -> None:
         while todo:
