@@ -499,7 +499,7 @@
 	<div
 		bind:offsetWidth={listOuter}
 		bind:clientWidth={listInner}
-		class="relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
+		class="ds-foot-fade relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="record-rows"
 	>

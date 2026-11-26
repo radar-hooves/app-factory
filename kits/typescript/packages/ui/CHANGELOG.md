@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.23] - 2026-11-26
+
+Need: 2026.11.22's shell fade is inert on a list that scrolls inside its own box, so a `pageType: 'tool'` list page still ends cut mid-row with no cue and the layout gate's judge still calls /property/property-managers `fix` (consumer: godswood via master-project, radar-hooves/godswood#985). Measured in Chromium (`drive.mjs`, `?surface=records&long=1`, 411 and 1728 wide): the fade's opacity is 1 at the top of the overflowing list and 0 at its end.
+
+### Changed
+
+- **`RecordList` and `Ledger` show the same foot fade while there is more below.** Their scroller carries `.ds-foot-fade`, which shares the shell's rule (sticky pseudo-element, scroll timeline, no DOM or hit-testing change, `--background`, not drawn on paper); a list that fits shows none, and the sticky head and rows are untouched.
+
+### Consumer must change
+
+- Nothing.
+
 ## [2026.11.22] - 2026-11-26
 
 Need: the layout gate's judge calls a list or table cut mid-row at the foot of the shell's scroll pane `fix`, because nothing says there is more below (consumer: godswood via master-project, radar-hooves/godswood#985; /property/property-managers at 1728 and 411, /spending/categories-and-rules on a phone). Measured in Chromium 156 (`drive.mjs`, 411 and 1728 wide, light and dark): the fade's opacity is 1 at the top of a long pane and 0 at its end.
@@ -12,7 +24,7 @@ Need: the layout gate's judge calls a list or table cut mid-row at the foot of t
 
 ### Consumer must change
 
-- Nothing to take it. A pane inside a page (a `RecordList`'s own scroller) is not the shell's pane and gets no fade.
+- Nothing to take it.
 
 ## [2026.11.21] - 2026-11-25
 

@@ -909,7 +909,7 @@
 		bind:clientWidth={listInner}
 		bind:clientHeight={viewHeight}
 		onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
-		class="relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
+		class="ds-foot-fade relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="ledger-rows"
 	>

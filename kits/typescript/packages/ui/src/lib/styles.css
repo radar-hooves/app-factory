@@ -1157,9 +1157,12 @@
 	   no hit-testing) whose opacity a scroll timeline drives over the last 2rem
 	   of travel; with no overflow the timeline is inactive and the base opacity
 	   0 holds. Where scroll timelines are unsupported the rule never applies, so
-	   no cue is better than a permanent veil over the last row. */
+	   no cue is better than a permanent veil over the last row. A list that
+	   scrolls inside its own box (RecordList, Ledger) carries .ds-foot-fade for
+	   the same cue. */
 	@supports (animation-timeline: scroll()) {
-		.ds-shell-main::after {
+		.ds-shell-main::after,
+		.ds-foot-fade::after {
 			content: '';
 			position: sticky;
 			bottom: 0;
@@ -1793,7 +1796,8 @@
 			overflow: visible !important;
 			background: none !important;
 		}
-		.ds-shell-main::after {
+		.ds-shell-main::after,
+		.ds-foot-fade::after {
 			display: none !important;
 		}
 	}

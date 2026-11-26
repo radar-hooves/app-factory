@@ -2303,6 +2303,34 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await context.close();
 	}
 
+	// ── A list's own scroller says there is more below, and stops at the end ──
+	for (const w of [411, 1728]) {
+		const { context, page } = await open('surface=records&long=1', { width: w, height: 700 });
+		await page.waitForSelector('[data-slot="record-rows"]');
+		const fade = () =>
+			page.evaluate(() => {
+				const el = document.querySelector('[data-slot="record-rows"]');
+				const s = getComputedStyle(el, '::after');
+				return { opacity: Number(s.opacity), position: s.position, over: el.scrollHeight > el.clientHeight };
+			});
+		const top = await fade();
+		await page.evaluate(() => {
+			const el = document.querySelector('[data-slot="record-rows"]');
+			el.scrollTop = el.scrollHeight;
+		});
+		await page.waitForTimeout(100);
+		const end = await fade();
+		check(
+			`list foot fade @${w}: shown at the top of an overflowing list, gone at its end`,
+			top.over && top.opacity > 0.9 && end.opacity < 0.1 && top.position === 'sticky',
+			`over ${top.over}, top ${top.opacity}, end ${end.opacity}, ${top.position}`
+		);
+		await page.evaluate(() => (document.querySelector('[data-slot="record-rows"]').scrollTop = 0));
+		await page.waitForTimeout(100);
+		await page.screenshot({ path: `${process.env.SHOTS ?? '/tmp'}/list-foot-fade-${w}.png` });
+		await context.close();
+	}
+
 	// ── An app retunes the inks in one declaration ───────────────────────────
 	// The whole reason the four knobs are read through var() fallbacks at the
 	// point of use rather than aliased at :root (design-system#8): an alias
