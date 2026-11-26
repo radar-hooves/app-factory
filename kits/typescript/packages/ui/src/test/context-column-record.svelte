@@ -9,8 +9,9 @@
 	let {
 		withDocument = false,
 		ariaLabel,
-		list = false
-	}: { withDocument?: boolean; ariaLabel?: string; list?: boolean } = $props();
+		list = false,
+		withFind = false
+	}: { withDocument?: boolean; ariaLabel?: string; list?: boolean; withFind?: boolean } = $props();
 
 	let section = $state('Tenancy');
 	// svelte-ignore state_referenced_locally
@@ -20,6 +21,10 @@
 
 {#snippet doc()}
 	<DocumentPane title="Residential tenancy agreement" pages={['/p1.png']} onClose={() => (lease = false)} />
+{/snippet}
+
+{#snippet find()}
+	<input data-probe="find" aria-label="Find" />
 {/snippet}
 
 <AppShell
@@ -33,6 +38,7 @@
 	{#if list}
 		<ContextColumn
 			{ariaLabel}
+			find={withFind ? find : undefined}
 			stats={[{ label: 'Value', value: 1 }]}
 			statsInfo="Held today."
 		/>

@@ -28,6 +28,8 @@
 		stats: StatItem[];
 		statsTitle?: string;
 		statsInfo?: string;
+		/** The page's Find (search, filter chips, saved searches), above the stat card. */
+		find?: Snippet;
 		detail?: Snippet;
 		title?: never;
 		subtitle?: never;
@@ -49,6 +51,7 @@
 		stats?: never;
 		statsTitle?: never;
 		statsInfo?: never;
+		find?: never;
 		detail?: never;
 	};
 
@@ -56,6 +59,7 @@
 		stats,
 		statsTitle = 'At a glance',
 		statsInfo,
+		find,
 		detail,
 		title,
 		subtitle,
@@ -103,6 +107,9 @@
 					{/key}
 				{/if}
 			{:else}
+				{#if find}
+					{@render find()}
+				{/if}
 				<StatList items={stats ?? []} title={statsTitle} info={statsInfo} bare={framed} />
 				{#if detail}
 					{@render detail()}

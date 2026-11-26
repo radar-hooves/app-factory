@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.25] - 2026-11-27
+
+Need: a `Ledger` row's status icons (a transfer mark, a flag) sit in a narrow column left of the date or title, as in the PocketSmith table being replaced, and an opened row's editor lines up under it (consumer: godswood via master-project, radar-hooves/godswood#958).
+
+### Added
+
+- **`Ledger` `lead` snippet, `leadHead` string.** `lead={(row) => ...}` draws each row's icons in a fixed 2.5rem column between the gutter and the first text column (the date, or the title when rows group by day), with a blank head or `leadHead`. It is part of the grid `template`, so group heads and the head card line up, and `LedgerOpenContext.column('lead')` gives its grid line (0 when absent); every other column's line moves right by one when it shows. It is not in the Columns menu, and not drawn on a phone. Name each icon (`role="img"` with `aria-label`, or a `title`).
+
+- **`ContextColumn` list form takes a `find` snippet**, rendered above the stat card in the same column (search, filter chips, saved searches). It stays out of the sheet-title logic, as `detail` does. Consumer: godswood#958, the Transactions search above "This list".
+
+### Consumer must change
+
+- Nothing. A consumer that hard-codes a column line number past the gutter reads `ctx.column(key)` instead when it passes `lead`.
+
 ## [2026.11.24] - 2026-11-27
 
 Need: in a `Ledger` row, the attachment paperclip stays with the end of the payee however it wraps (consumer: godswood via master-project, radar-hooves/godswood branch `foreman/wt-c6801716`; at 411px it floated beside a wrapped payee). Measured in Chromium (`drive.mjs`, `?surface=ledger&longclip=1`, 411 and 1440 wide): the icon's centre sits inside the payee's last line box, 4px from its last word.

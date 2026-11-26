@@ -94,6 +94,8 @@
 		onOpenChange,
 		editor,
 		originActions,
+		lead,
+		leadHead,
 		onAttachment,
 		empty,
 		footer,
@@ -141,6 +143,16 @@
 		onOpenChange?: (id: Id | null) => void;
 		/** The opened row's content. */
 		editor?: Snippet<[R, LedgerOpenContext]>;
+		/**
+		 * A narrow column of per-row status icons left of the first text column
+		 * (a transfer mark, a flag): the module draws each row's icons, each with
+		 * its own accessible name. Fixed width, always shown, absent from the
+		 * Columns menu, and reported by `LedgerOpenContext.column('lead')`. Not
+		 * drawn on a phone.
+		 */
+		lead?: Snippet<[R]>;
+		/** The lead column's head: blank unless given. */
+		leadHead?: string;
 		/** Under a synthetic row's statement lines: split, join, undo. */
 		originActions?: Snippet<[R]>;
 		/** Makes the paperclip a button. */
@@ -153,6 +165,7 @@
 	} = $props();
 
 	const BUILT_IN: Record<string, Omit<LedgerColumn<R>, 'key'>> = {
+		lead: { label: 'Status', width: '2.5rem' },
 		date: { label: 'Date', width: { narrow: '4.25rem', wide: '7rem' }, sort: (r) => r.date.slice(0, 10) },
 		title: {
 			label: 'Description',
@@ -182,7 +195,7 @@
 	// ── Columns: the ledger's own three, the module's, the balance last ──
 	const resolved = $derived.by(() => {
 		const own = (key: string) => columns.find((c) => c.key === key);
-		const fixed = ['date', 'title', 'amount'].map((key) => ({
+		const fixed = [...(lead && !PHONE ? ['lead'] : []), 'date', 'title', 'amount'].map((key) => ({
 			...BUILT_IN[key],
 			...own(key),
 			key,
@@ -525,7 +538,15 @@
 	{#each shown as c, i (c.key)}
 		{@const style = `grid-column: ${i + 2}; grid-row: 1;`}
 		{@const through = openable && THROUGH}
-		{#if c.key === 'date'}
+		{#if c.key === 'lead'}
+			<span
+				class={cn(through, 'flex items-center justify-center gap-1 self-center')}
+				{style}
+				data-slot="ledger-lead"
+			>
+				{@render lead?.(r)}
+			</span>
+		{:else if c.key === 'date'}
 			<span class={cn(CELL, through, 'text-muted-foreground self-center tabular-nums')} {style}>
 				{date(r.date, WIDE)}
 				{#if c.actions}<span class="pointer-events-auto flex flex-none items-center gap-1" data-slot="ledger-actions">{@render c.actions(r)}</span>{/if}
@@ -885,7 +906,7 @@
 			data-slot="ledger-toolbar"
 		>
 			<LedgerColumns
-				offered={resolved.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))}
+				offered={resolved.filter((c) => c.key !== 'lead').map((c) => ({ key: c.key, label: c.label, locked: c.locked }))}
 				columns={prefs.columns}
 				grouping={{
 					options: LEDGER_PERIODS,
@@ -951,7 +972,7 @@
 					{#each shown as c (c.key)}
 						{@const mine = activeSort?.key === c.key ? activeSort : null}
 						<HeadCell
-							label={c.head ?? c.label}
+							label={c.key === 'lead' ? (leadHead ?? '') : (c.head ?? c.label)}
 							name={c.label}
 							align={c.align}
 							sortable={!!sorter(c)}

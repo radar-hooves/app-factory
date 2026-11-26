@@ -21,6 +21,7 @@
 		withBulk = true,
 		withEditor = true,
 		withActions = false,
+		withLead = false,
 		fyStart,
 		dateFormat,
 		groupTotals,
@@ -36,6 +37,7 @@
 		withBulk?: boolean;
 		withEditor?: boolean;
 		withActions?: boolean;
+		withLead?: boolean;
 		fyStart?: number;
 		dateFormat?: 'short' | 'numeric';
 		groupTotals?: boolean;
@@ -64,6 +66,7 @@
 	<div data-probe="editor">
 		Editing {row.title}
 		<span data-probe="amount-line">{ctx.column('amount')}</span>
+		<span data-probe="lead-line">{ctx.column('lead')}</span>
 		<button type="button" onclick={ctx.close}>Close</button>
 	</div>
 {/snippet}
@@ -72,12 +75,18 @@
 	<button type="button" onclick={() => (acted = `undo ${row.id}`)}>Undo</button>
 {/snippet}
 
+{#snippet mark(row: Row)}
+	{#if row.review}<span role="img" aria-label="Needs review {row.id}">!</span>{/if}
+{/snippet}
+
 {#snippet only(row: Row)}
 	<button type="button" onclick={() => (acted = `only ${row.title}`)}>Only {row.title}</button>
 {/snippet}
 
 <Ledger
 	{rows}
+	lead={withLead ? mark : undefined}
+	leadHead={withLead ? 'Flag' : undefined}
 	columns={withActions ? [...columns, { key: 'title', label: 'Payee', actions: only }] : columns}
 	{layout}
 	{fyStart}

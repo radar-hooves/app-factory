@@ -182,3 +182,13 @@ describe('ContextColumn: below 80rem', () => {
 		expect(within(dialog).getByRole('button', { name: 'Close Tenancy' })).toBeInTheDocument();
 	});
 });
+
+describe('ContextColumn: a list page’s find', () => {
+	it('renders the find above the stat card, in the same column', () => {
+		render(Harness, { list: true, withFind: true });
+		const find = screen.getByRole('textbox', { name: 'Find' });
+		const stats = column().querySelector('dl, [data-slot="stat-list"]')!;
+		expect(column().contains(find)).toBe(true);
+		expect(find.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+});

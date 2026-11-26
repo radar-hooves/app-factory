@@ -352,6 +352,29 @@ describe('Ledger: ticking rows', () => {
 	});
 });
 
+describe('Ledger: the lead column', () => {
+	it('puts the module’s row icons left of the date, under their own head, and out of the Columns menu', async () => {
+		const { all, probe } = mount({ withLead: true, layout: 'wide' });
+		const cell = all('[data-slot="ledger-lead"]');
+		expect(cell.length).toBeGreaterThan(0);
+		expect(screen.getAllByRole('img', { name: /^Needs review/ })).toHaveLength(1);
+		const head = all('[data-slot="ledger-head"]')[0]!;
+		expect(head.textContent).toContain('Flag');
+		expect(head.style.gridTemplateColumns.split(' ')[1]).toBe('2.5rem');
+		expect(cell[0]!.style.gridColumnStart).toBe('2');
+
+		await fireEvent.click(screen.getByRole('button', { name: /^Open Brisbane City Council/ }));
+		expect(probe('lead-line')).toBe('2');
+		expect(probe('amount-line')).toBe('5');
+	});
+
+	it('is absent without the snippet', () => {
+		const { all, probe } = mount();
+		expect(all('[data-slot="ledger-lead"]')).toHaveLength(0);
+		expect(probe('lead-line')).toBe('');
+	});
+});
+
 describe('Ledger: a row opened in place', () => {
 	it('lifts the row out of its card as the consumer’s content, and closes back', async () => {
 		const { all, probe } = mount();
