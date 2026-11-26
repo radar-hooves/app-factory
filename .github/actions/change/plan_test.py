@@ -170,8 +170,15 @@ def change(repo: Path, files: dict[str, str] | None = None, delete: tuple[str, .
     return commit(repo)
 
 
-def plan(repo: Path, head: str, *bases: str, roll: str = "", source: tuple[str, ...] = ()) -> dict:
-    return planner.plan(str(repo), head, list(bases), roll, source)
+def plan(
+    repo: Path,
+    head: str,
+    *bases: str,
+    roll: str = "",
+    source: tuple[str, ...] = (),
+    scope: tuple[str, ...] = (),
+) -> dict:
+    return planner.plan(str(repo), head, list(bases), roll, source, scope)
 
 
 def member(p: dict, name: str) -> dict:
@@ -744,6 +751,106 @@ def test_a_source_naming_no_root_image_is_fatal(mono):
     repo, head = mono
     with pytest.raises(SystemExit, match="--source names no root image"):
         plan(repo, head, head, source=("emb",))
+
+
+# A backend shaped like godswood's: slices under src/<package>/api/, their own tests under
+# tests/api/<slice>/, and the factory's modules that compose the app from them.
+SLICED = {
+    "backend/src/sample_app/__init__.py": "",
+    "backend/src/sample_app/main.py": "from sample_app.api.main import routers\n",
+    "backend/src/sample_app/core.py": "y = 1\n",
+    "backend/src/sample_app/api/__init__.py": "",
+    "backend/src/sample_app/api/main.py": (
+        "from sample_app.api.gym import router as gym\nfrom sample_app.api import bank, tax\n"
+    ),
+    "backend/src/sample_app/api/gym/__init__.py": "",
+    "backend/src/sample_app/api/gym/router.py": "from .service import x\n",
+    "backend/src/sample_app/api/gym/service.py": "x = 1\n",
+    "backend/src/sample_app/api/gym/prompt.md": "p\n",
+    "backend/src/sample_app/api/bank/__init__.py": "from . import service\n",
+    "backend/src/sample_app/api/bank/service.py": (
+        "def f():\n    from sample_app.api.gym.service import x\n    from ...core import y\n"
+    ),
+    "backend/src/sample_app/api/tax/__init__.py": "z = 1\n",
+    "backend/tests/__init__.py": "",
+    "backend/tests/conftest.py": "from sample_app.main import routers\n",
+    "backend/tests/test_walk.py": "from sample_app.main import routers\n",
+    "backend/tests/test_core.py": "from sample_app import core\n",
+    "backend/tests/test_lends.py": "from tests.api.bank.test_bank import helper\n",
+    "backend/tests/api/gym/test_gym.py": "def test_gym():\n    pass\n",
+    "backend/tests/api/bank/test_bank.py": "def helper():\n    pass\n",
+    "backend/tests/api/bank/test_app.py": "from sample_app.main import routers\n",
+    "backend/tests/api/tax/conftest.py": "",
+    "backend/tests/api/tax/test_tax.py": "def test_tax():\n    pass\n",
+    "backend/tests/fixtures/golden.json": "{}\n",
+    "backend/alembic/versions/a.py": "x = 1\n",
+}
+
+
+@pytest.fixture
+def sliced(app) -> tuple[Path, str]:
+    repo, _ = app
+    return repo, change(repo, SLICED)
+
+
+GYM, BANK, TAX = (f"tests/api/{s}/test_{s}.py" for s in ("gym", "bank", "tax"))
+APP = "tests/api/bank/test_app.py"  # a slice's test that builds the app runs with its slice
+
+
+@pytest.mark.parametrize(
+    "paths, reached",
+    [
+        # Its slice's tests, a slice importing it (in a function), and a test that loads the
+        # composed app; never a slice it does not reach, nor a test lending helpers to one.
+        (["src/sample_app/api/gym/service.py"], [APP, BANK, GYM, "tests/test_walk.py"]),
+        (["src/sample_app/api/gym/prompt.md"], [APP, BANK, GYM, "tests/test_walk.py"]),
+        # A relative import out of the slice reaches it.
+        (["src/sample_app/core.py"], [APP, BANK, "tests/test_core.py", "tests/test_walk.py"]),
+        # A package __init__ runs with every import below it.
+        (["src/sample_app/api/tax/__init__.py"], [TAX, "tests/test_walk.py"]),
+        # A changed test, and the tests it lends helpers to.
+        ([BANK], [BANK, "tests/test_lends.py"]),
+        (["tests/api/tax/conftest.py"], [TAX]),
+        (["tests/api/tax/golden/year.json"], [TAX]),
+        # Shared test data, a migration, the composing modules and the root conftest reach all.
+        (["tests/fixtures/golden.json"], None),
+        (["alembic/versions/a.py"], None),
+        (["src/sample_app/main.py"], None),
+        (["src/sample_app/api/main.py"], None),
+        (["tests/conftest.py"], None),
+    ],
+)
+def test_a_change_reaches_the_tests_its_imports_and_slices_lead_to(sliced, paths, reached):
+    repo, head = sliced
+    assert planner.reaches(str(repo), head, "backend", paths) == reached
+
+
+def test_a_deleted_module_reaches_the_modules_still_importing_it(sliced):
+    repo, _ = sliced
+    head = change(repo, delete=("backend/src/sample_app/api/gym/service.py",))
+    reached = planner.reaches(str(repo), head, "backend", ["src/sample_app/api/gym/service.py"])
+    assert reached == [APP, BANK, GYM, "tests/test_walk.py"]
+
+
+def test_a_scoped_root_images_member_tests_what_its_change_reaches(sliced):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    p = plan(repo, head, base, scope=("sample-app",))
+    assert member(p, "sample-app")["select"] == f"{TAX} tests/test_walk.py"
+    assert p["reasons"]["sample-app"][-1] == "scoped: 2 test files reach it"
+    # Unscoped, rolled, or moved by its lock, it tests whole.
+    assert member(plan(repo, head, base), "sample-app")["select"] == ""
+    assert member(plan(repo, head, base, roll="sample-app", scope=("sample-app",)), "sample-app")["select"] == ""
+    write(repo, {"backend/pyproject.toml": project("sample-app", extra='[dependency-groups]\ndev = ["tool"]\n')})
+    lock(repo / "backend", repo.parent / "dist")
+    moved = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 3\n"})
+    assert member(plan(repo, moved, base, scope=("sample-app",)), "sample-app")["select"] == ""
+
+
+def test_a_scope_naming_no_root_image_is_fatal(mono):
+    repo, head = mono
+    with pytest.raises(SystemExit, match="--scope names no root image"):
+        plan(repo, head, head, scope=("emb",))
 
 
 # docker as image.sh calls it: a registry whose :latest is $STUB/latest, and this host's
@@ -1531,6 +1638,42 @@ def test_a_root_members_suite_runs_the_nested_tests_and_fails_with_them(rooted, 
     assert r.returncode != 0 and "scripts/x/tests/test_x.py F" in r.stdout
 
 
+def test_a_scoped_leg_runs_only_its_test_files_in_one_run_and_misses_a_break_elsewhere(rooted, tmp_path):
+    """The break the scoped leg cannot reach is main's run's to find: the whole suite reds."""
+    shim = tmp_path / "bin" / "uv"
+    shim.parent.mkdir()
+    shim.write_text(
+        '#!/bin/sh\nwhile [ "$1" != python ]; do shift; done\nshift\n'
+        '[ "$2" = "import xdist" ] && exit 1\n'
+        f'exec "{sys.executable}" "$@"\n'
+    )
+    shim.chmod(0o755)
+    summary = shim.parent / "summary.md"
+    write(
+        rooted,
+        {
+            "backend/tests/api/gym/test_gym.py": "def test_gym():\n    pass\n",
+            "backend/tests/api/bank/test_bank.py": "def test_bank():\n    assert False\n",
+        },
+    )
+    top = os.path.realpath(rooted)
+
+    def leg(select: str) -> subprocess.CompletedProcess[str]:
+        env = {**ENV, "PATH": f"{shim.parent}{os.pathsep}{ENV['PATH']}", "GITHUB_STEP_SUMMARY": str(summary)}
+        script = f'. "{HERE}/lib.sh"; suite "$1" "$1/backend" app'
+        return subprocess.run(
+            ["bash", "-c", script, "-", top], cwd=top, env={**env, "CHANGE_TESTS": select}, capture_output=True, text=True
+        )
+
+    r = leg("tests/test_b.py tests/api/gym/test_gym.py")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "test_b.py ." in r.stdout and "test_gym.py ." in r.stdout and "test_bank" not in r.stdout
+    assert r.stdout.count("passed") == 1  # one pytest run
+    assert "- pytest 2 test files: " in summary.read_text()
+    r = leg("")
+    assert r.returncode != 0 and "test_bank.py F" in r.stdout
+
+
 def test_a_pnpm_root_members_repo_leg_runs_no_pytest_without_a_uv_workspace(tmp_path):
     """thoth: tests/e2e is its root pnpm member's, and no root uv workspace exists."""
     repo = tmp_path / "thoth"
@@ -1620,15 +1763,20 @@ def test_no_rollback_guard(tmp_path):
     assert no_rollback(shallow, gone, new).returncode == 1  # shallow cannot tell
 
 
-def run_plan_sh(repo: Path, head: str, runs: list[tuple[str, str]], tmp: Path, **extra: str) -> dict:
-    """plan.sh on a push to main, its history `runs` (newest first: sha, conclusion) served by a stub gh."""
+def run_plan_sh(
+    repo: Path, head: str, runs: list[tuple[str, str]], tmp: Path, docker: str = "", gh: str = "", **extra: str
+) -> dict:
+    """plan.sh on a push to main, its history `runs` (newest first: sha, conclusion) served by a
+    stub gh (or the script `gh`), and docker by the script `docker`."""
     bin = tmp / "bin"
     bin.mkdir()
     listing = "".join(f"{i} {sha} push {end}\\n" for i, (sha, end) in enumerate(runs, 100))
     (bin / "gh").write_text(
-        f"#!/bin/sh\ncase \"$*\" in *branch=main*) printf '{listing}';; */jobs*) printf 'success\\tplan\\n';; esac\n"
+        f"#!/bin/sh\n{gh}\n"
+        if gh
+        else f"#!/bin/sh\ncase \"$*\" in *branch=main*) printf '{listing}';; */jobs*) printf 'success\\tplan\\n';; esac\n"
     )
-    (bin / "docker").write_text("#!/bin/sh\n")
+    (bin / "docker").write_text(f"#!/bin/sh\n{docker}\n")
     for f in bin.iterdir():
         f.chmod(0o755)
     out = tmp / "out"
@@ -1664,6 +1812,78 @@ def test_code_from_a_red_run_ships_with_the_next_green_one_though_it_touched_onl
     (tmp_path / "green").mkdir()
     out = run_plan_sh(repo, tests, [(code, "success")], tmp_path / "green")
     assert out["deploys"] == "[]"
+
+
+def live_container(source: str, back: str) -> str:
+    """docker for live.sh: one running container of sample-app:latest with these labels."""
+    row = "\t".join(
+        ["r/radar-hooves/sample-app:latest", "", "running", "c1", "0", "sha256:1", source, "/sample-app", "", "sample-app", back]
+    )
+    return f'case "$1" in ps) echo c1;; inspect) printf \'%s\\n\' \'{row}\';; esac'
+
+
+@pytest.mark.parametrize(
+    "event, source, back, scoped",
+    [
+        ("pull_request", "true", "true", True),
+        # Its host would not put a red main back, or production runs an image.
+        ("pull_request", "true", "", False),
+        ("pull_request", "", "true", False),
+        # main's own run ships, so it tests whole.
+        ("push", "true", "true", False),
+    ],
+)
+def test_a_pull_request_scopes_a_source_run_image_whose_host_puts_back_red(
+    sliced, tmp_path, event, source, back, scoped
+):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    payload = tmp_path / "event.json"
+    payload.write_text(
+        json.dumps({"pull_request": {"head": {"sha": head, "repo": {"full_name": "o/sample-app"}}, "base": {"sha": base}}})
+    )
+    pr = {"GITHUB_EVENT_PATH": str(payload), "GITHUB_REF": "refs/pull/1/merge"} if event == "pull_request" else {}
+    out = run_plan_sh(
+        repo, head, [(base, "success")], tmp_path, docker=live_container(source, back), GITHUB_EVENT_NAME=event, **pr
+    )
+    legs = {m["name"]: m["select"] for m in json.loads(out["members"])}
+    assert legs["sample-app"] == (f"{TAX} tests/test_walk.py" if scoped else "")
+
+
+def test_a_pull_request_on_a_runner_naming_no_registry_reads_no_live_image(sliced, tmp_path):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    payload = tmp_path / "event.json"
+    payload.write_text(
+        json.dumps({"pull_request": {"head": {"sha": head, "repo": {"full_name": "o/sample-app"}}, "base": {"sha": base}}})
+    )
+    out = run_plan_sh(
+        repo,
+        head,
+        [],
+        tmp_path,
+        docker=live_container("true", "true"),
+        GITHUB_EVENT_NAME="pull_request",
+        GITHUB_EVENT_PATH=str(payload),
+        GITHUB_REF="refs/pull/1/merge",
+        CHANGE_REGISTRY="",
+    )
+    assert {m["name"]: m["select"] for m in json.loads(out["members"])}["sample-app"] == ""
+
+
+@pytest.mark.parametrize("job, whole", [("test sample-app (scoped)", True), ("test sample-app", False)])
+def test_main_tests_a_member_whole_when_its_branch_leg_was_scoped(sliced, tmp_path, job, whole):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    tree = run(repo, "git", "rev-parse", f"{head}^{{tree}}")
+    gh = f"""case "$*" in
+  *branch=main*) echo '100 {base} push success';;
+  *status=success*) echo '200 {head}';;
+  *commits/{head}*) echo {tree};;
+  *runs/200/jobs*) echo '{job}';;
+esac"""
+    out = run_plan_sh(repo, head, [], tmp_path, gh=gh)
+    assert ("sample-app" in [m["name"] for m in json.loads(out["members"])]) == whole
 
 
 def test_a_red_runs_code_is_carried_once_then_fixed_forward(app, tmp_path):

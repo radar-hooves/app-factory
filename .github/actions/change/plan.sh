@@ -10,6 +10,10 @@
 # A push whose tree a green run of this workflow already tested (its branch, before it
 # landed) skips those member test legs and ships on that run's tests. A green group leg
 # names its members in its `passed: ...` step, so grouped members skip too.
+# A run that ships nothing (a branch's, before it lands) tests only what the change reaches in
+# the members of a root image that runs from source and whose host puts back a commit main's
+# run turns red (its containers' household.puts-back-red=true): main's own run tests them whole,
+# since a scoped leg is named `test <member> (scoped)` and passes no tree on.
 # More than CHANGE_GROUPS members of one runner class share that many group legs (group.sh),
 # Gradle's past CHANGE_GRADLE_GROUPS, its pool's size; a library, an image's member or a
 # declared-runner member keeps its own leg. A member that ships with a library of this run
@@ -18,7 +22,9 @@
 . "$(dirname "$0")/lib.sh"
 repo=$(cd "${1:-.}" && pwd) head=${2:-} base=${3:-}
 ev=${GITHUB_EVENT_NAME:-} event=${GITHUB_EVENT_PATH:-/dev/null} roll=${ROLL:-}
-bases=() history=''
+bases=() scope=() history=''
+ship=false
+[ "${GITHUB_REF:-}" = refs/heads/main ] && [[ $ev =~ ^(push|workflow_dispatch)$ ]] && ship=true
 none='{"members":[],"artefacts":[],"libraries":[],"repo_suites":false,"typecheck_all":false,"changed_members":"","reasons":{}}'
 
 # The newest run of this workflow on main that went green and whose head is an ancestor of
@@ -96,23 +102,32 @@ else
       walk
       [ -n "$base$history" ] || base=$(git -C "$repo" rev-parse -q --verify "$(jq -r '.before // empty' "$event")^{commit}" || true)
     fi
-    # Names only, so images map to their live revisions.
-    known=$(python3 "$here/plan.py" --repo "$repo" --head "$head" --base "$head")
-    roots=$(jq -r '.artefacts[].image' <<<"$known")
-    mapfile -t images < <(jq -r '.artefacts[].image, (.members[] | select(.deploy == "image") | .name)' <<<"$known")
-    for img in "${images[@]}"; do
-      live=$("$here/live.sh" "$img")
-      rev=${live%%$'\t'*}
-      if [ -n "$rev" ] && git -C "$repo" rev-parse -q --verify "$rev^{commit}" >/dev/null; then
-        bases+=(--base "$img=$rev")
-      fi
-      if [ "${live#*$'\t'}" != true ]; then :
-      elif grep -qxF "$img" <<<"$roots"; then bases+=(--source "$img")
-      else note "$img runs from source, but only a root image builds as one: it builds as before"
-      fi
-    done
   fi
-  plan=$(python3 "$here/plan.py" --repo "$repo" --head "$head" ${base:+--base "$base"} "${bases[@]}" --roll "$roll")
+  # Names only, so images map to their live revisions. A pull request reads only its root
+  # images, and none on a runner that names no registry, which serves none of them.
+  known=$(python3 "$here/plan.py" --repo "$repo" --head "$head" --base "$head")
+  roots=$(jq -r '.artefacts[].image' <<<"$known")
+  images=()
+  [ "$ev" = pull_request ] && [ -z "${CHANGE_REGISTRY:-}" ] ||
+    mapfile -t images < <(jq -r --arg ev "$ev" '.artefacts[].image,
+      (.members[] | select(.deploy == "image" and $ev != "pull_request") | .name)' <<<"$known")
+  for img in "${images[@]}"; do
+    live=$("$here/live.sh" "$img")
+    rev=${live%%$'\t'*} rest=${live#*$'\t'}
+    source=${rest%%$'\t'*} back=${rest#*$'\t'}
+    if [ "$ship" = false ] && [ "$source" = true ] && [ "$back" = true ] && grep -qxF "$img" <<<"$roots"; then
+      scope+=(--scope "$img")
+    fi
+    [ "$ev" != pull_request ] || continue
+    if [ -n "$rev" ] && git -C "$repo" rev-parse -q --verify "$rev^{commit}" >/dev/null; then
+      bases+=(--base "$img=$rev")
+    fi
+    if [ "$source" != true ]; then :
+    elif grep -qxF "$img" <<<"$roots"; then bases+=(--source "$img")
+    else note "$img runs from source, but only a root image builds as one: it builds as before"
+    fi
+  done
+  plan=$(python3 "$here/plan.py" --repo "$repo" --head "$head" ${base:+--base "$base"} "${bases[@]}" "${scope[@]}" --roll "$roll")
   if [ "$ev" != pull_request ] && [ -z "$roll" ]; then
     mapfile -t passed < <(tested)
     # A library keeps its leg: its pass marker in this run is what its dependents ship on.
@@ -132,8 +147,6 @@ plan=$(jq -c 'def marker: "passed-" + gsub("[^A-Za-z0-9._-]"; "_");
   | .members |= map(.name as $n | . + {marker: ($n | marker),
       waits: [$under | to_entries[] | select(any(.value[]; . == $n)) | .key | marker]})
   | .libraries |= sort_by(. as $l | [$under[] | select(any(.[]; . == $l))] | length)' <<<"$plan")
-ship=false
-[ "${GITHUB_REF:-}" = refs/heads/main ] && [[ $ev =~ ^(push|workflow_dispatch)$ ]] && ship=true
 # A leg that publishes a wheel or an MCP server, and its `pwaits`: the libraries it waits on whose own
 # publish this run makes, since a dependant publishes only once its library has.
 plan=$(jq -c --argjson s "$ship" 'def rel: .deploy_now and $s and (.deploy | IN("wheel", "mcp"));

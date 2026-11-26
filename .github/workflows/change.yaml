@@ -14,6 +14,7 @@
 # A repo with no recognised manifest declares `test = "..."` in .github/change.toml, optionally `test_on = [labels]`: one member, run in its flake shell, shipping nothing, on `test_on` labels when it names them.
 # A member directory in a toolchain the plan does not know declares the same `.github/change.toml` of its own, beside the recognised members: one member named by its path, tested when a change reaches that directory or its declaration.
 # Past its pool's size (six; Gradle's two) of one runner class, the members share that many `group` legs (group.sh), each member still its own test, wait and deploy, a failure naming it; libraries, image members and members whose pass marker another job reads keep a leg of their own.
+# A run that ships nothing tests only what the change reaches in the members of a source-run root image whose host puts back a red main (plan.sh): that leg is `test <member> (scoped)`, so main's own run, finding no `test <member>` on its tree, tests the member whole.
 # A member that ships with a library of this run is a carrier: its legs and groups (`carrier`, `carrier-group`) start once the library legs end, so no leg waits on a leg that has not ended.
 # A repo sets its repository variable CHANGE_LEAN_CHECKOUT to 'true' for blobless checkouts that leave out docs/research (a large repo's legs fetch no blob they do not read); unset, every checkout is the whole repo.
 # The step logic lives in .github/actions/change/*.sh and runs by hand on a runner host.
@@ -97,7 +98,7 @@ jobs:
   member:
     needs: plan
     if: needs.plan.outputs.members != '[]'
-    name: test ${{ matrix.member.name }}
+    name: test ${{ matrix.member.name }}${{ matrix.member.select && ' (scoped)' || '' }}
     # A Gradle leg needs a runner that can hold its JVMs: the pool labels those `gradle`, and only
     # a gradle-dedicated runner carries it without `linux`, so no other repo's leg competes for it
     # (GitHub does not hand a runner its oldest job). Those runners are Linux, which Roborazzi's
@@ -118,6 +119,7 @@ jobs:
       CHANGED_MEMBERS: ${{ needs.plan.outputs.changed }}
       CHANGE_WORKERS: ${{ matrix.member.workers }}
       CHANGE_BASE: ${{ matrix.member.base }}
+      CHANGE_TESTS: ${{ matrix.member.select }}
     steps: &member-steps
       # A work directory a lean run left keeps its partial-clone config and missing blobs; a whole checkout starts from none.
       - if: vars.CHANGE_LEAN_CHECKOUT != 'true'

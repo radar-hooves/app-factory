@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # The REVISION this host's running containers of <image-name>:latest were built from, a tab,
-# and `true` when every one runs its app from a source checkout (the stack's own label
-# household.run-from-source=true): each nothing when none runs or they disagree. The planner's
-# base for an image member, and whether a root image builds only for its environment.
+# `true` when every one runs its app from a source checkout (the stack's own label
+# household.run-from-source=true), a tab, and `true` when every one's host puts back a commit
+# whose main change run goes red (household.puts-back-red=true): each nothing when none runs
+# or they disagree. The planner's base for an image member, whether a root image builds only
+# for its environment, and whether its members' legs before landing test only what a change
+# reaches.
 # image.sh sources it for running(), sole() and $revision.
 # Usage: live.sh <image-name>
 
@@ -11,7 +14,8 @@ revision='{{range .Config.Env}}{{if eq (index (split . "=") 0) "REVISION"}}{{ind
 
 # One line per running container of image $1 (:latest), tab-separated: its REVISION, its
 # health status (its state when it has no healthcheck), its id, its restart count, its image,
-# its household.run-from-source label, its name (leading slash). Only a stack's service counts:
+# its household.run-from-source label, its name (leading slash), its household.puts-back-red
+# label. Only a stack's service counts:
 # a one-off `docker compose run` container (label com.docker.compose.oneoff=True) and a bare
 # `docker run` (no com.docker.compose.service label) are left out.
 # `.ID`, never `.Id`: one untyped field drops docker to the raw map, where a container
@@ -20,8 +24,9 @@ running() {
   docker ps -q | { xargs -r docker inspect --format '{{.Config.Image}}{{"\t"}}'"$revision"'{{"\t"}}
     {{- if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}{{"\t"}}{{.ID}}{{"\t"}}{{.RestartCount}}{{"\t"}}{{.Image}}{{"\t"}}
     {{- index .Config.Labels "household.run-from-source"}}{{"\t"}}{{.Name}}{{"\t"}}
-    {{- index .Config.Labels "com.docker.compose.oneoff"}}{{"\t"}}{{index .Config.Labels "com.docker.compose.service"}}' \
-    || true; } | awk -F'\t' -v r="$1" 'BEGIN {OFS = FS} ($1 == r || $1 == r ":latest") && $9 != "True" && $10 != "" {print $2, $3, $4, $5, $6, $7, $8}'
+    {{- index .Config.Labels "com.docker.compose.oneoff"}}{{"\t"}}{{index .Config.Labels "com.docker.compose.service"}}{{"\t"}}
+    {{- index .Config.Labels "household.puts-back-red"}}' \
+    || true; } | awk -F'\t' -v r="$1" 'BEGIN {OFS = FS} ($1 == r || $1 == r ":latest") && $9 != "True" && $10 != "" {print $2, $3, $4, $5, $6, $7, $8, $11}'
 }
 
 # The one distinct value in column $1 of running()'s rows on stdin; nothing when none or several.
@@ -49,4 +54,4 @@ no_rollback() {  # <dir> <name> <live> <sha>
 need CHANGE_REGISTRY
 owner=${GITHUB_REPOSITORY_OWNER:-radar-hooves}
 rows=$(running "$CHANGE_REGISTRY/${owner,,}/${1,,}")
-printf '%s\t%s\n' "$(sole 1 <<<"$rows")" "$(sole 6 <<<"$rows")"
+printf '%s\t%s\t%s\n' "$(sole 1 <<<"$rows")" "$(sole 6 <<<"$rows")" "$(sole 8 <<<"$rows")"
