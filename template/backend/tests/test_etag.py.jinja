@@ -1,0 +1,19 @@
+"""`etag_matches` (`etag.py`): a conditional GET answers 304 to a weak or strong tag alike."""
+
+import pytest
+
+from {{ package_name }}.etag import etag_matches
+
+
+@pytest.mark.parametrize(
+    "header",
+    ['"abc"', 'W/"abc"', '"zzz", W/"abc"', '*'],
+)
+def test_a_strong_or_weak_tag_naming_the_etag_matches(header):
+    assert etag_matches(header, '"abc"')
+    assert etag_matches(header, 'W/"abc"')
+
+
+@pytest.mark.parametrize("header", [None, "", '"abd"', 'W/"abd", "x"'])
+def test_anything_else_does_not(header):
+    assert not etag_matches(header, '"abc"')

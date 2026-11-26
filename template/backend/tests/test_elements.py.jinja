@@ -69,6 +69,8 @@ async def test_the_loader_is_revalidated_on_every_load_and_answers_304_when_unch
     assert first.headers["cache-control"] == "no-cache, max-age=0, must-revalidate"
     again = await _get(app, "/elements/placed.js", headers={"if-none-match": first.headers["etag"]})
     assert again.status_code == 304
+    weakened = await _get(app, "/elements/placed.js", headers={"if-none-match": f'W/{first.headers["etag"]}'})
+    assert weakened.status_code == 304
     changed = await _get(_app(element_origins=f"{PLACER}, https://library.example.org"), "/elements/placed.js")
     assert changed.headers["etag"] != first.headers["etag"]
 

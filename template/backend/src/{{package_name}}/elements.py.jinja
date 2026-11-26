@@ -24,6 +24,7 @@ from starlette.responses import FileResponse, HTMLResponse, RedirectResponse, Re
 
 from {{ package_name }}.config import Settings
 from {{ package_name }}.config.paths import frontend_build_dir
+from {{ package_name }}.etag import etag_matches
 from {{ package_name }}.exceptions import NotFoundError
 
 # Short: the URL never changes across a release. Vary: Origin always, since the
@@ -71,6 +72,6 @@ def register_elements(app: FastAPI, settings: Settings) -> None:
         # an explicit max-age=0 because an edge's default browser TTL replaces a bare no-cache.
         etag = '"' + hashlib.sha256(body.encode()).hexdigest()[:16] + '"'
         headers = {"Cache-Control": "no-cache, max-age=0, must-revalidate", "ETag": etag}
-        if request.headers.get("if-none-match") == etag:
+        if etag_matches(request.headers.get("if-none-match"), etag):
             return Response(status_code=304, headers=headers)
         return Response(body, media_type="text/javascript", headers=headers)
