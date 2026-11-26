@@ -174,6 +174,8 @@ export function ownChanges(now, was, tip) {
 		if (now.has(p)) own.set(p, now.get(p));
 		else own.delete(p);
 	}
+	// A key follows imports through `read`: a file is read from where its blob came from.
+	own.read = (p) => (own.get(p) === now.get(p) ? now.read(p) : was.read(p));
 	return own;
 }
 

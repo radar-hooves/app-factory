@@ -7,6 +7,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { routeKey } from '../../template/frontend/scripts/layout-gate.mjs';
 import { ownChanges, refusal } from '../../template/frontend/scripts/check-layout-gate.mjs';
 
 const SCRIPTS = path.resolve(
@@ -509,4 +510,26 @@ test("a branch's own changes leave out what it took from main's tip", () => {
 	const record = { routes: {} };
 	assert.equal(refusal(now, ownChanges(now, was, new Map(now)), record), null);
 	assert.notEqual(refusal(now, own, record), null);
+});
+
+test('branch mode keys a route by its imports, as main mode does', () => {
+	const tree = (a, b) => {
+		const src = {
+			'src/routes/+page.svelte': "<script>import '$lib/a.js';</script>",
+			'src/routes/b/+page.svelte': "<script>import '$lib/b.js';</script>",
+			'src/lib/a.js': a,
+			'src/lib/b.js': b
+		};
+		const m = new Map(Object.entries(src));
+		m.read = (p) => src[p];
+		return m;
+	};
+	// The branch changed a.js; main's tip (taken into the branch) changed b.js.
+	const was = tree('a1', 'b1');
+	const now = tree('a2', 'b2');
+	const own = ownChanges(now, was, tree('a1', 'b2'));
+	assert.equal(routeKey(own, '/b'), routeKey(now, '/b'));
+	assert.notEqual(routeKey(own, '/'), routeKey(now, '/'));
+	const record = { routes: { '/b': { tree: routeKey(now, '/b') } } };
+	assert.equal(refusal(now, own, record)?.includes('/b changed'), false);
 });
