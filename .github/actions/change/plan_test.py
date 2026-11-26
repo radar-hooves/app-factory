@@ -1850,6 +1850,27 @@ def test_a_pull_request_scopes_a_source_run_image_whose_host_puts_back_red(
     assert legs["sample-app"] == (f"{TAX} tests/test_walk.py" if scoped else "")
 
 
+def test_a_pull_request_on_a_runner_naming_no_registry_reads_no_live_image(sliced, tmp_path):
+    repo, base = sliced
+    head = change(repo, {"backend/src/sample_app/api/tax/__init__.py": "z = 2\n"})
+    payload = tmp_path / "event.json"
+    payload.write_text(
+        json.dumps({"pull_request": {"head": {"sha": head, "repo": {"full_name": "o/sample-app"}}, "base": {"sha": base}}})
+    )
+    out = run_plan_sh(
+        repo,
+        head,
+        [],
+        tmp_path,
+        docker=live_container("true", "true"),
+        GITHUB_EVENT_NAME="pull_request",
+        GITHUB_EVENT_PATH=str(payload),
+        GITHUB_REF="refs/pull/1/merge",
+        CHANGE_REGISTRY="",
+    )
+    assert {m["name"]: m["select"] for m in json.loads(out["members"])}["sample-app"] == ""
+
+
 @pytest.mark.parametrize("job, whole", [("test sample-app (scoped)", True), ("test sample-app", False)])
 def test_main_tests_a_member_whole_when_its_branch_leg_was_scoped(sliced, tmp_path, job, whole):
     repo, base = sliced

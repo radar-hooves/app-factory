@@ -103,11 +103,14 @@ else
       [ -n "$base$history" ] || base=$(git -C "$repo" rev-parse -q --verify "$(jq -r '.before // empty' "$event")^{commit}" || true)
     fi
   fi
-  # Names only, so images map to their live revisions; a pull request reads only its root images.
+  # Names only, so images map to their live revisions. A pull request reads only its root
+  # images, and none on a runner that names no registry, which serves none of them.
   known=$(python3 "$here/plan.py" --repo "$repo" --head "$head" --base "$head")
   roots=$(jq -r '.artefacts[].image' <<<"$known")
-  mapfile -t images < <(jq -r --arg ev "$ev" '.artefacts[].image,
-    (.members[] | select(.deploy == "image" and $ev != "pull_request") | .name)' <<<"$known")
+  images=()
+  [ "$ev" = pull_request ] && [ -z "${CHANGE_REGISTRY:-}" ] ||
+    mapfile -t images < <(jq -r --arg ev "$ev" '.artefacts[].image,
+      (.members[] | select(.deploy == "image" and $ev != "pull_request") | .name)' <<<"$known")
   for img in "${images[@]}"; do
     live=$("$here/live.sh" "$img")
     rev=${live%%$'\t'*} rest=${live#*$'\t'}
