@@ -5,10 +5,7 @@ import pytest
 from {{ package_name }}.etag import etag_matches
 
 
-@pytest.mark.parametrize(
-    "header",
-    ['"abc"', 'W/"abc"', '"zzz", W/"abc"', '*'],
-)
+@pytest.mark.parametrize("header", ['"abc"', 'W/"abc"', '"zzz", W/"abc"', "*"])
 def test_a_strong_or_weak_tag_naming_the_etag_matches(header):
     assert etag_matches(header, '"abc"')
     assert etag_matches(header, 'W/"abc"')
