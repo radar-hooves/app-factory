@@ -77,7 +77,7 @@
 		"shiki": "^4.4.3"
 	},
 	"dependencies": {
-		"layerchart": "2.10.0"
+		"layerchart": "2.11.0"
 	},
 	"devDependencies": {
 		"@poodle64/design-tokens": "workspace:*",
@@ -107,7 +107,7 @@
 		"prepublishOnly": "pnpm run build",
 		"screenshots": "node scripts/screenshots.mjs"
 	},
-	"packageManager": "pnpm@12.20.0",
+	"packageManager": "pnpm@12.21.0",
 	"imports": {
 		"#lib": "./src/lib/index.js",
 		"#lib/*": "./src/lib/*"
