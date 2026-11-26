@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.24] - 2026-11-27
+
+Need: in a `Ledger` row, the attachment paperclip stays with the end of the payee however it wraps (consumer: godswood via master-project, radar-hooves/godswood branch `foreman/wt-c6801716`; at 411px it floated beside a wrapped payee). Measured in Chromium (`drive.mjs`, `?surface=ledger&longclip=1`, 411 and 1440 wide): the icon's centre sits inside the payee's last line box, 4px from its last word.
+
+### Changed
+
+- **The `Ledger` paperclip is inline in the payee text**, joined to its last word by a no-wrap span, in the wide and the phone row. A row with an attachment shows its whole payee instead of clamping at two lines, since a clamp would hide the paperclip with the cut words; rows without one are unchanged.
+
+### Consumer must change
+
+- Nothing.
+
 ## [2026.11.23] - 2026-11-26
 
 Need: 2026.11.22's shell fade is inert on a list that scrolls inside its own box, so a `pageType: 'tool'` list page still ends cut mid-row with no cue and the layout gate's judge still calls /property/property-managers `fix` (consumer: godswood via master-project, radar-hooves/godswood#985). Measured in Chromium (`drive.mjs`, `?surface=records&long=1`, 411 and 1728 wide): the fade's opacity is 1 at the top of the overflowing list and 0 at its end.
