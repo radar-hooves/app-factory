@@ -57,6 +57,7 @@
 	import { SHELL_TEXTURES, type ShellTexture } from '../dist/components/ui/app-shell/texture.js';
 	import Button from '../dist/components/ui/button/button.svelte';
 	import PageContainer from '../dist/components/ui/page-container/page-container.svelte';
+	import PageLead from '../dist/components/ui/page-lead/page-lead.svelte';
 	import PageSection from '../dist/components/ui/page-section/page-section.svelte';
 	import PageHeader from '../dist/components/ui/page-header/page-header.svelte';
 	import ContentSkeleton from '../dist/components/ui/content-skeleton/content-skeleton.svelte';
@@ -1939,6 +1940,37 @@
 {:else if surface === 'records' || surface === 'record'}
 	<Records {surface} {params} />
 	<ReportWidget />
+{:else if surface === 'ledger' && params.has('page')}
+	<!-- The ledger as a tool page's last block, under a header and a summary: a phone's list scrolls with the page. -->
+	<AppShell nav={[{ label: 'Spending', href: '#/spending', icon: LayoutDashboard }]} currentPath="#/spending" brandTitle="Harness" title="Transactions" onSearch={() => {}} pageType="tool">
+		<PageContainer>
+			<PageLead lead="1,204 lines since 1 July." subtitle="Newest first." />
+			<div class="bg-card h-40 flex-none rounded-lg border p-4 text-sm" data-probe="ledger-summary">A summary and its filters.</div>
+		<Ledger
+			rows={ledgerData}
+			columns={ledgerColumns}
+			title="Transactions"
+			preferencesNote="Kept for you on every ledger"
+			bind:preferences={ledgerPrefs}
+			bind:selected={ledgerSelected}
+			bind:open={ledgerOpen}
+			onAttachment={() => {}}
+			bulkActions={params.get('ticks') === '0' ? undefined : ledgerBulk}
+		>
+			{#snippet editor(row, ctx)}
+				<div class="flex items-center gap-3 p-4 text-sm" data-probe="ledger-editor">
+					<span class="flex-1">Editing {row.title}</span>
+					<Button variant="outline" size="sm" onclick={ctx.close}>Close</Button>
+				</div>
+			{/snippet}
+			{#snippet originActions()}
+				<Button variant="outline" size="sm">Split</Button>
+				<Button variant="outline" size="sm">Undo</Button>
+			{/snippet}
+		</Ledger>
+		<output class="hidden" data-probe="ledger-label-clicked">{ledgerLabelClicked}</output>
+		</PageContainer>
+	</AppShell>
 {:else if surface === 'ledger'}
 	<div class="bg-background flex h-screen flex-col p-4">
 		<Ledger

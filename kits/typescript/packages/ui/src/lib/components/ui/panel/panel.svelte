@@ -2,6 +2,8 @@
 	import type { Snippet, Component } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
+	import { columnSection } from '../context-column/collapse.svelte.js';
+	import SectionToggle from '../context-column/section-toggle.svelte';
 
 	// The generic titled section. Where DetailPanel is the *entity* surface (and
 	// owns a status and a close affordance), Panel is the plain section any route
@@ -28,6 +30,7 @@
 		children,
 		pad = true,
 		scroll = false,
+		foldable = true,
 		class: klass = '',
 		ref = $bindable(null),
 		...restProps
@@ -78,9 +81,15 @@
 		 * and the full height when given one (`h-full`).
 		 */
 		scroll?: boolean;
+		/** In a page's context column a titled section folds; `false` keeps this one open. */
+		foldable?: boolean;
 	} = $props();
 
 	const destructive = $derived(tone === 'destructive');
+	// In a context column a titled section folds, and the fold is remembered.
+	// svelte-ignore state_referenced_locally
+	const section = foldable ? columnSection(() => title) : null;
+	const folded = $derived(!!title && !!section?.collapsed);
 </script>
 
 <section
@@ -130,12 +139,16 @@
 					<p class="text-muted-foreground mt-1 text-sm">{description}</p>
 				{/if}
 			</div>
-			{#if action}
-				<div class="ml-auto flex items-center gap-1.5">{@render action()}</div>
+			{#if action || section}
+				<div class="ml-auto flex items-center gap-1.5">
+					{#if action}{@render action()}{/if}
+					{#if section && title}<SectionToggle {section} {title} />{/if}
+				</div>
 			{/if}
 		</header>
 	{/if}
 	<div
+		hidden={folded}
 		class={cn(
 			pad && 'pt-4',
 			// A flush table has no padding to end it, and its last row carries no rule of its own.
@@ -146,7 +159,7 @@
 	>
 		{@render children()}
 	</div>
-	{#if footer}
+	{#if footer && !folded}
 		<!--
 			`mt-auto` so a footer sits at the bottom of a panel that has been given a
 			height (a fixed-height column, a grid row) rather than floating under

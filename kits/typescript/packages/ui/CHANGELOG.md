@@ -2,6 +2,27 @@
 
 All notable changes to this package are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is CalVer (`YYYY.M.x`).
 
+## [2026.11.26] - 2026-11-27
+
+Need: six from the operator's screen walk of godswood on his phone (411px) and desktop (consumer: godswood via master-project, radar-hooves/godswood#958). Measured in Chromium (`drive.mjs`, 411, 360 and 1440 wide): the bar holds the menu and four icon buttons on one row (61px; two rows, 113px, before); a phone's `RecordList` and `Ledger` grow to their rows and the page's scroller carries them, a 800-row ledger staying windowed (19 to 28 rows in the DOM); the column's sections fold and the folds survive a reload; a touch checkbox is 24px painted, 45px to hit.
+
+### Added
+
+- **`Find`** (`@poodle64/ui/find`): the one Find, a titled section of the context column with a search box, filter chips (`filters`, each `{key, label, active, count?}`, reported through `onfilter(key)`), saved searches (`saved`, `onapply`, `onremove`, and `onsave(name)` for "Save this search") and `onclear`. The page owns the query, the filters and the saved list. It never takes focus, so the phone's sheet opens on the filters with no keyboard. `ContextColumn`'s `find` takes its props directly (`find={{ query, onquery, filters, ... }}`); a snippet still works.
+- **Every titled section in a page's aside folds.** `Panel` and `StatList` in an aside (a `ContextColumn` list form, or any `PageAside`) carry a chevron that folds the body, remembered per viewer in `localStorage` under the aside's name and the section's title. A record page's opened item does not fold; `Panel` takes `foldable={false}` for any other section to keep open. The column is still the page's aside, so a slide-out panel (the chat assistant) can take its place in the sheet or beside it.
+
+### Changed
+
+- **`AppShell` bar: the trail no longer has a 10rem floor on a phone.** It truncates to what the icon buttons leave, so the bar is one row at 411px (and 360px) however many icons it carries.
+- **A phone's `RecordList` and `Ledger`, the last block of a tool page, scroll with the page.** Below 480px the list takes its rows' height (the rows box is `overflow: visible`), so the header, summary and filters scroll away above it and an opened row's editor has the page's width. `Ledger` windows its rows against the page's scroller. A wide list, and a list outside a tool page, scroll in their own pane as before.
+- **`Checkbox` on a touch screen (`pointer: coarse`) is 24px with a 48px skirt**, in place of a 16px box with an invisible skirt. Unchanged with a mouse.
+- **The harness's drive script no longer waits on scroll-driven animations** (the shell's foot fade, 2026.11.22), which never finish: the drawer checks timed out on them, red on main since 27/11.
+
+### Consumer must change
+
+- Remove a page's own search box, "Find" pill, Filters button or filter sheet, and pass `find={{ ... }}` to `ContextColumn`. A hard-coded Find stays working, and its sections fold only if built from `Panel` or `StatList`.
+- The ledger's status-icon column (`lead`, `leadHead`) is 2026.11.25's.
+
 ## [2026.11.25] - 2026-11-27
 
 Need: a `Ledger` row's status icons (a transfer mark, a flag) sit in a narrow column left of the date or title, as in the PocketSmith table being replaced, and an opened row's editor lines up under it (consumer: godswood via master-project, radar-hooves/godswood#958).

@@ -10,8 +10,12 @@
 		withDocument = false,
 		ariaLabel,
 		list = false,
-		withFind = false
-	}: { withDocument?: boolean; ariaLabel?: string; list?: boolean; withFind?: boolean } = $props();
+		withFind = false,
+		findProps = false
+	}: { withDocument?: boolean; ariaLabel?: string; list?: boolean; withFind?: boolean; findProps?: boolean } = $props();
+
+	let filterOn = $state(false);
+	let query = $state('');
 
 	let section = $state('Tenancy');
 	// svelte-ignore state_referenced_locally
@@ -38,7 +42,17 @@
 	{#if list}
 		<ContextColumn
 			{ariaLabel}
-			find={withFind ? find : undefined}
+			find={withFind
+				? find
+				: findProps
+					? {
+							query,
+							onquery: (q) => (query = q),
+							filters: [{ key: 'review', label: 'Needs review', active: filterOn, count: 2 }],
+							onfilter: () => (filterOn = !filterOn),
+							saved: [{ id: 's', label: 'Needs review this month' }]
+						}
+					: undefined}
 			stats={[{ label: 'Value', value: 1 }]}
 			statsInfo="Held today."
 		/>

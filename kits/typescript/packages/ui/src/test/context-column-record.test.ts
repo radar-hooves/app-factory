@@ -192,3 +192,37 @@ describe('ContextColumn: a list page’s find', () => {
 		expect(find.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 });
+
+describe('ContextColumn: one Find, and folds', () => {
+	beforeEach(() => localStorage.clear());
+
+	it('draws the kit’s Find from props: a search box, chips that report their state, saved searches', async () => {
+		render(Harness, { props: { list: true, findProps: true } });
+		const find = column().querySelector('[data-slot="find"]')!;
+		expect(within(find as HTMLElement).getByRole('searchbox', { name: 'Find' })).toBeInTheDocument();
+		const chip = within(find as HTMLElement).getByRole('button', { name: 'Needs review 2' });
+		expect(chip).toHaveAttribute('aria-pressed', 'false');
+		await fireEvent.click(chip);
+		expect(chip).toHaveAttribute('aria-pressed', 'true');
+		expect(within(find as HTMLElement).getByRole('button', { name: 'Needs review this month' })).toBeInTheDocument();
+		expect(document.activeElement?.tagName).not.toBe('INPUT');
+	});
+
+	it('folds each titled section, remembers it, and leaves the others', async () => {
+		const first = render(Harness, { props: { list: true, findProps: true } });
+		const stats = () => column().querySelector('dl')!;
+		expect(stats()).not.toHaveAttribute('hidden');
+		await fireEvent.click(screen.getByRole('button', { name: 'Collapse At a glance' }));
+		expect(stats()).toHaveAttribute('hidden');
+		expect(screen.getByRole('button', { name: 'Expand At a glance' })).toHaveAttribute('aria-expanded', 'false');
+		expect(screen.getByRole('button', { name: 'Collapse Find' })).toHaveAttribute('aria-expanded', 'true');
+		first.unmount();
+		render(Harness, { props: { list: true, findProps: true } });
+		expect(column().querySelector('dl')).toHaveAttribute('hidden');
+	});
+
+	it('does not fold a record’s opened item', () => {
+		render(Harness);
+		expect(column().querySelector('[data-slot="section-toggle"]')).toBeNull();
+	});
+});

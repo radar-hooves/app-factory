@@ -1322,6 +1322,21 @@
 		padding-bottom: env(safe-area-inset-bottom);
 	}
 
+	/* On a phone a list is not a pane of its own: it takes its rows' height and
+	   scrolls with the page, under the header, the summary and the filters, instead
+	   of a short box of the frame's leftover height with rows cut top and bottom. */
+	.ds-page[data-page='tool'] :is(.ds-page-main, [data-slot='page-container']) > :is([data-slot='record-list'], [data-slot='ledger'])[data-layout='phone'],
+	.ds-page[data-page='tool'] :is(.ds-page-main, [data-slot='page-container']) > [data-fill]:has(> :is([data-slot='record-list'], [data-slot='ledger'])[data-layout='phone']),
+	.ds-page[data-page='tool'] .ds-page-main > [data-slot='page-container']:has(:is([data-slot='record-list'], [data-slot='ledger'])[data-layout='phone']) {
+		/* !important: the blocks' own `flex-1` utilities sit in a later layer. */
+		flex: none !important;
+		min-height: 0 !important;
+	}
+
+	.ds-page[data-page='tool'] :is([data-slot='record-list'], [data-slot='ledger'])[data-layout='phone'] > :is([data-slot='record-rows'], [data-slot='ledger-rows']) {
+		overflow: visible !important;
+	}
+
 	/* Panel: the content beside the pane is left-aligned to it, each block at
 	   the panel measure; `fill` content (a transcript) takes the whole frame and
 	   keeps its own gutters. */

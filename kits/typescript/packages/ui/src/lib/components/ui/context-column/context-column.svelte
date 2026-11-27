@@ -7,6 +7,8 @@
 	import IconAction from '../list-toolbar/icon-action.svelte';
 	import PageAside from '../app-shell/page-aside.svelte';
 	import X from '#lib/icons/x.svelte';
+	import Find from '../find/find.svelte';
+	import type { ComponentProps } from 'svelte';
 
 	// The page's context, in one of two forms, as the page's aside: the shell
 	// places it by the route's page type (`PageAside`), at a tool page's right
@@ -28,8 +30,8 @@
 		stats: StatItem[];
 		statsTitle?: string;
 		statsInfo?: string;
-		/** The page's Find (search, filter chips, saved searches), above the stat card. */
-		find?: Snippet;
+		/** The page's Find, above the stat card: the props of the kit's `Find` (the one Find every page draws), or a snippet. */
+		find?: Snippet | ComponentProps<typeof Find>;
 		detail?: Snippet;
 		title?: never;
 		subtitle?: never;
@@ -98,6 +100,7 @@
 							subtitle={framed ? undefined : subtitle}
 							action={onClose && !framed ? close : undefined}
 							pad={false}
+							foldable={false}
 							scroll
 							class="max-h-full min-h-0"
 							data-slot="context-column-item"
@@ -107,8 +110,10 @@
 					{/key}
 				{/if}
 			{:else}
-				{#if find}
+				{#if typeof find === 'function'}
 					{@render find()}
+				{:else if find}
+					<Find {...find} />
 				{/if}
 				<StatList items={stats ?? []} title={statsTitle} info={statsInfo} bare={framed} />
 				{#if detail}

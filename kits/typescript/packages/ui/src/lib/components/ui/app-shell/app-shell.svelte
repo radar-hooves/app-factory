@@ -868,7 +868,7 @@
 					{#if trail.length > 0}
 						<Breadcrumbs
 							items={trail}
-							class="min-w-0 max-sm:min-w-40 max-sm:flex-1 max-sm:basis-0"
+							class="min-w-0 max-sm:flex-1 max-sm:basis-0"
 							data-testid="ds-shell-title"
 						/>
 					{/if}
@@ -1058,7 +1058,7 @@
 					</div>
 					{#if aside && asideMode !== 'sheet'}
 						<aside class="ds-page-aside" aria-label={aside.label} data-testid="ds-page-aside">
-							<ColumnScope>{@render aside.body(asideState)}</ColumnScope>
+							<ColumnScope sections={aside.label}>{@render aside.body(asideState)}</ColumnScope>
 						</aside>
 					{/if}
 				</div>
@@ -1088,7 +1088,7 @@
 				{#if aside.description}<Sheet.Description>{aside.description}</Sheet.Description>{/if}
 			</Sheet.Header>
 			<div class="ds-page-aside-sheet">
-				<ColumnScope>{@render aside.body(asideState)}</ColumnScope>
+				<ColumnScope sections={aside.label}>{@render aside.body(asideState)}</ColumnScope>
 			</div>
 		</Sheet.Content>
 	</Sheet.Root>

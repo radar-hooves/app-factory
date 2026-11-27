@@ -408,6 +408,41 @@
 	let scrollTop = $state(0);
 	let viewHeight = $state(0);
 	let headHeight = $state(0);
+	let rowsEl = $state<HTMLElement>();
+	// What scrolls the rows: this box; or, where the page lets a phone's list grow
+	// to its rows (styles.css, `overflow: visible`), the page's own scroller. Read
+	// at every scroll and resize, never once: the box can mount before its styles.
+	$effect(() => {
+		const el = rowsEl;
+		if (!el) return;
+		const phone = PHONE;
+		const read = () => {
+			let host: HTMLElement | null = el;
+			const grown = phone && getComputedStyle(el).overflowY === 'visible';
+			if (grown) {
+				host = el.parentElement;
+				while (host && !/auto|scroll/.test(getComputedStyle(host).overflowY)) host = host.parentElement;
+			}
+			if (!host) return;
+			scrollTop = grown
+				? Math.max(0, host.getBoundingClientRect().top - el.getBoundingClientRect().top)
+				: host.scrollTop;
+			viewHeight = host.clientHeight;
+		};
+		const onScroll = (e: Event) => {
+			const t = e.target;
+			if (t instanceof Node && t.contains(el)) read();
+		};
+		read();
+		document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+		const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(read);
+		watch?.observe(el);
+		if (el.parentElement) watch?.observe(el.parentElement);
+		return () => {
+			document.removeEventListener('scroll', onScroll, { capture: true });
+			watch?.disconnect();
+		};
+	});
 	const range = $derived.by(() => {
 		const view = viewHeight || (typeof window === 'undefined' ? 800 : window.innerHeight);
 		const over = Math.max(400, view / 2);
@@ -926,8 +961,7 @@
 	<div
 		bind:offsetWidth={listOuter}
 		bind:clientWidth={listInner}
-		bind:clientHeight={viewHeight}
-		onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
+		bind:this={rowsEl}
 		class="ds-foot-fade relative min-h-0 flex-1 overflow-auto px-2 pb-3 [scrollbar-width:thin]"
 		style="scrollbar-gutter: stable;"
 		data-slot="ledger-rows"

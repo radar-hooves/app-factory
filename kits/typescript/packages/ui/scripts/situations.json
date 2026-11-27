@@ -362,8 +362,13 @@
         },
         {
           "name": "ContextColumn",
-          "props": "stats?, statsTitle?, statsInfo?, detail?, title?, subtitle?, onClose?, children?, documentPane?, ariaLabel?",
+          "props": "stats?, statsTitle?, statsInfo?, find?, detail?, title?, subtitle?, onClose?, children?, documentPane?, ariaLabel?",
           "insteadOf": "a hand-built right-hand <aside> with a stat card and a detail pane; on a record page, the one opened item (title, close, an inner scroll) and its DocumentPane; the page aside places it"
+        },
+        {
+          "name": "Find",
+          "props": "query?, filters?, saved?, title?, placeholder?, onquery?, onfilter?, onsave?, onapply?, onremove?, onclear?",
+          "insteadOf": "a page's own search box, Filters button or Find pill; the one Find (search, filter chips, saved searches) every list page draws, as ContextColumn's `find`"
         },
         {
           "name": "AppIdentity",

@@ -45,6 +45,8 @@
 	import Coins from '#lib/icons/coins.svelte';
 
 	let { surface, params }: { surface: 'records' | 'record'; params: URLSearchParams } = $props();
+	let findQuery = $state('');
+	let findOn = $state<string[]>([]);
 
 	// ── Invented pictures: a photo-like tile and an A4 page ──
 	const svg = (body: string, w: number, h: number) =>
@@ -404,6 +406,10 @@
 	/>
 {/snippet}
 
+{#snippet findDetail()}
+	<Panel title="Where it went"><p class="text-sm">Rates, insurance and repairs.</p></Panel>
+{/snippet}
+
 {#if surface === 'records' && list === 'categories'}
 	<AppShell {nav} currentPath="#/spending/categories" brandTitle="Godswood" title="Categories and rules" onSearch={() => {}} texture="grid" pageType="tool">
 		<PageContainer>
@@ -434,6 +440,21 @@
 				{ label: 'Needs you', value: 2, status: 'warning', sub: 'properties' }
 			]}
 			statsInfo="The owned properties, today."
+			find={params.has('find')
+				? {
+						query: findQuery,
+						onquery: (q) => (findQuery = q),
+						filters: [
+							{ key: 'review', label: 'Needs review', active: findOn.includes('review'), count: 2 },
+							{ key: 'rented', label: 'Rented', active: findOn.includes('rented'), count: 3 }
+						],
+						onfilter: (k) => (findOn = findOn.includes(k) ? findOn.filter((x) => x !== k) : [...findOn, k]),
+						saved: [{ id: 'a', label: 'Needs review this month' }],
+						onsave: () => {},
+						onapply: () => {}
+					}
+				: undefined}
+			detail={params.has('find') ? findDetail : undefined}
 		/>
 		<div class="flex min-h-0 min-w-0 flex-col" data-fill>
 				{#if list === 'managers'}

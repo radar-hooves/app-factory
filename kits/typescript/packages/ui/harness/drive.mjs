@@ -1346,7 +1346,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		// SETTLED box is the whole claim; this is what makes the number mean
 		// something rather than being tuned around.
 		await page.waitForFunction(() =>
-			document.getAnimations().every((animation) => animation.playState !== 'running')
+			document.getAnimations().every((animation) => animation.timeline instanceof DocumentTimeline ? animation.playState !== 'running' : true)
 		);
 
 		// The drawer overlays the page: a utility on the same element (`relative`,
@@ -1552,7 +1552,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 			() => document.querySelector('.ds-shell-rail')?.dataset.collapsed === 'true'
 		);
 		await page.waitForFunction(() =>
-			document.getAnimations().every((animation) => animation.playState !== 'running')
+			document.getAnimations().every((animation) => animation.timeline instanceof DocumentTimeline ? animation.playState !== 'running' : true)
 		);
 		await page.mouse.move(700, 400);
 		const slim = await read();
@@ -1614,7 +1614,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		// The rail's width transitions over 200ms; reading it on the next frame
 		// reports 243px and reads like the collapse never happened.
 		await page.waitForFunction(() =>
-			document.getAnimations().every((animation) => animation.playState !== 'running')
+			document.getAnimations().every((animation) => animation.timeline instanceof DocumentTimeline ? animation.playState !== 'running' : true)
 		);
 
 		const measured = await page.evaluate(() => ({
@@ -1650,7 +1650,7 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 		await page.mouse.move(700, 400);
 		const settle = () =>
 			page.waitForFunction(() =>
-				document.getAnimations().every((animation) => animation.playState !== 'running')
+				document.getAnimations().every((animation) => animation.timeline instanceof DocumentTimeline ? animation.playState !== 'running' : true)
 			);
 		await settle();
 		const read = () =>
@@ -5643,6 +5643,204 @@ for (const surface of ['page-kit', 'document-reader']) {
 	);
 	check('KeyFigures at 390px: no page error', errors.length === 0, JSON.stringify(errors));
 	await context.close();
+}
+
+// ── The operator's screen walk, 27/11/2026 (godswood): bar, phone lists, Find, folds, touch targets ──
+{
+	const PHONE = { hasTouch: true, isMobile: true };
+	const openPhone = async (query, width) => {
+		const context = await browser.newContext({ viewport: { width, height: 800 }, ...PHONE });
+		const page = await context.newPage();
+		const errors = [];
+		page.on('pageerror', (error) => errors.push(error.message));
+		await page.goto(`http://127.0.0.1:${PORT}/index.html?${query}`, { waitUntil: 'load' });
+		return { context, page, errors };
+	};
+
+	// One bar: a menu, the mark, a truncating title and four icon buttons hold one row at 411px.
+	for (const width of [411, 360]) {
+		const { context, page, errors } = await openPhone('surface=records&list=categories', width);
+		await page.waitForSelector('.ds-shell-bar');
+		const bar = await page.evaluate(() => {
+			const bar = document.querySelector('.ds-shell-bar');
+			const group = bar.querySelector('.ml-auto');
+			for (let i = 0; i < 2; i += 1) group.appendChild(group.firstElementChild.cloneNode(true));
+			const buttons = [...bar.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().width > 0);
+			return {
+				buttons: buttons.length,
+				rows: new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size,
+				height: Math.round(bar.getBoundingClientRect().height),
+				overflow: document.documentElement.scrollWidth - innerWidth
+			};
+		});
+		check(
+			`AppShell bar at ${width}px: the menu and four icon buttons stay on one row`,
+			bar.buttons === 5 && bar.rows === 1 && bar.height < 72 && bar.overflow <= 0,
+			JSON.stringify(bar)
+		);
+		check(`AppShell bar at ${width}px: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	// A phone's list scrolls with the page: no inner pane, the page's scroller carries it.
+	{
+		const { context, page, errors } = await openPhone('surface=records&list=categories', 411);
+		await page.waitForSelector('[data-slot="record-rows"]');
+		const list = await page.evaluate(() => {
+			const rows = document.querySelector('[data-slot="record-rows"]');
+			const main = document.querySelector('.ds-page-main');
+			return {
+				overflow: getComputedStyle(rows).overflowY,
+				inner: [rows.scrollHeight, rows.clientHeight],
+				page: [main.scrollHeight, main.clientHeight]
+			};
+		});
+		check(
+			'RecordList on a phone, a tool page’s last block: the rows scroll with the page, not in a pane',
+			list.overflow === 'visible' && list.inner[0] === list.inner[1] && list.page[0] > list.page[1],
+			JSON.stringify(list)
+		);
+		check('RecordList on a phone: no page error', errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+	{
+		const { context, page, errors } = await openPhone('surface=ledger&page=1&many=800', 411);
+		await page.waitForSelector('[data-slot="ledger-rows"]');
+		await page.waitForTimeout(400);
+		const read = () =>
+			page.evaluate(() => {
+				const rows = document.querySelector('[data-slot="ledger-rows"]');
+				const main = document.querySelector('.ds-page-main');
+				const seen = [...document.querySelectorAll('[data-slot="ledger-row"]')].filter((r) => {
+					const b = r.getBoundingClientRect();
+					return b.bottom > 0 && b.top < innerHeight;
+				}).length;
+				return {
+					overflow: getComputedStyle(rows).overflowY,
+					rendered: document.querySelectorAll('[data-slot="ledger-row"]').length,
+					inView: seen,
+					page: [main.scrollHeight, main.clientHeight]
+				};
+			});
+		const top = await read();
+		await page.evaluate(() => {
+			const main = document.querySelector('.ds-page-main');
+			main.scrollTop = main.scrollHeight / 2;
+		});
+		await page.waitForTimeout(400);
+		const mid = await read();
+		check(
+			'Ledger on a phone, a tool page’s last block: 800 rows scroll with the page and stay windowed (rows in view at the top and mid-list)',
+			top.overflow === 'visible' && top.page[0] > top.page[1] * 10 && top.rendered < 80 && mid.rendered < 80 && top.inView > 3 && mid.inView > 3,
+			JSON.stringify({ top, mid })
+		);
+		check('Ledger on a phone: no page error', errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+	{
+		const { context, page } = await open('surface=ledger&page=1&many=800', { width: 1440, height: 900 });
+		await page.waitForSelector('[data-slot="ledger-rows"]');
+		const wide = await page.evaluate(() => {
+			const rows = document.querySelector('[data-slot="ledger-rows"]');
+			return { overflow: getComputedStyle(rows).overflowY, inner: [rows.scrollHeight, rows.clientHeight] };
+		});
+		check(
+			'Ledger on a desktop: the rows still scroll in their own pane',
+			wide.overflow === 'auto' && wide.inner[0] > wide.inner[1] * 10,
+			JSON.stringify(wide)
+		);
+		await context.close();
+	}
+
+	// The context column: one Find, every section folds, the fold is remembered.
+	for (const width of [1440, 411]) {
+		const phone = width < 600;
+		const sections = phone ? ['Find', 'Where it went'] : ['Find', 'At a glance', 'Where it went'];
+		const { context, page, errors } = phone
+			? await openPhone('surface=records&find=1', width)
+			: await open('surface=records&find=1', { width, height: 900 });
+		if (phone) {
+			await page.click('[data-testid="ds-page-aside-open"]');
+			await page.waitForSelector('[data-slot="find"]');
+			await page.waitForTimeout(500);
+		} else await page.waitForSelector('[data-slot="find"]');
+		const shape = await page.evaluate(() => {
+			const column = document.querySelector('[data-slot="find"]').closest('[data-slot="context-column"]');
+			const chips = [...column.querySelectorAll('[data-slot="find-chip"]')].map((c) => c.getBoundingClientRect());
+			return {
+				sections: [...column.querySelectorAll('h2')].map((h) => h.textContent.trim()),
+				toggles: column.querySelectorAll('[data-slot="section-toggle"]').length,
+				input: !!column.querySelector('[data-slot="find-input"]'),
+				chips: chips.length,
+				chipsInView: chips.every((c) => c.top > 0 && c.bottom < innerHeight),
+				typing: document.activeElement?.matches('input') ?? false,
+				saved: !!column.querySelector('[data-slot="find-saved"]')
+			};
+		});
+		check(
+			`ContextColumn at ${width}px: one Find (search, chips, saved searches) above the stat card, every section with a fold, no keyboard`,
+			// In the phone's sheet the stat card is headed by the sheet's own title.
+			JSON.stringify(shape.sections) === JSON.stringify(sections) &&
+				shape.toggles === sections.length && shape.input && shape.chips === 2 && shape.chipsInView && !shape.typing && shape.saved,
+			JSON.stringify(shape)
+		);
+		await page.click('[aria-label="Collapse Find"]');
+		await page.click('[aria-label="Collapse Where it went"]');
+		const folded = await page.evaluate(() => {
+			const column = document.querySelector('[data-slot="context-column"]');
+			return {
+				hidden: [...column.querySelectorAll('[hidden]')].length,
+				visibleInput: column.querySelector('[data-slot="find-input"]')?.getBoundingClientRect().height ?? 0,
+				expanded: [...column.querySelectorAll('[data-slot="section-toggle"]')].map((b) => b.getAttribute('aria-expanded'))
+			};
+		});
+		check(
+			`ContextColumn at ${width}px: folding a section hides its body and leaves the others`,
+			folded.hidden >= 2 && folded.visibleInput === 0 && folded.expanded.join() === (phone ? 'false,false' : 'false,true,false'),
+			JSON.stringify(folded)
+		);
+		await page.reload({ waitUntil: 'load' });
+		if (phone) {
+			await page.click('[data-testid="ds-page-aside-open"]');
+			await page.waitForTimeout(500);
+		}
+		await page.waitForSelector('[data-slot="section-toggle"]');
+		const kept = await page.evaluate(() =>
+			[...document.querySelectorAll('[data-slot="context-column"] [data-slot="section-toggle"]')].map((b) => b.getAttribute('aria-expanded')).join()
+		);
+		check(`ContextColumn at ${width}px: the folds are remembered across a reload`, kept === (phone ? 'false,false' : 'false,true,false'), kept);
+		check(`ContextColumn at ${width}px: no page error`, errors.length === 0, JSON.stringify(errors));
+		await context.close();
+	}
+
+	// A checkbox on a touch screen is the platform's comfortable size, not a 16px box with an invisible skirt.
+	{
+		const { context, page } = await openPhone('surface=palette', 411);
+		await page.waitForSelector('[data-probe="checkbox"]');
+		const box = await page.evaluate(() => {
+			const el = document.querySelector('[data-probe="checkbox"]');
+			el.scrollIntoView({ block: 'center', inline: 'center' });
+			const r = el.getBoundingClientRect();
+			const cx = r.left + r.width / 2;
+			const cy = r.top + r.height / 2;
+			const hits = (x, y) => {
+				const at = document.elementFromPoint(x, y);
+				return at !== null && (at === el || el.contains(at));
+			};
+			const reach = (dx, dy) => {
+				let k = 0;
+				while (k < 60 && hits(cx + dx * (k + 1), cy + dy * (k + 1))) k += 1;
+				return k;
+			};
+			return { painted: [Math.round(r.width), Math.round(r.height)], target: [reach(-1, 0) + reach(1, 0), reach(0, -1) + reach(0, 1)] };
+		});
+		check(
+			'checkbox on a touch screen: painted 24px, pointer target at least 44px',
+			box.painted[0] === 24 && box.painted[1] === 24 && box.target[0] >= 44 && box.target[1] >= 44,
+			JSON.stringify(box)
+		);
+		await context.close();
+	}
 }
 
 await browser.close();

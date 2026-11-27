@@ -20,6 +20,8 @@
 	import type { WithElementRef } from '#lib/utils.js';
 	import InfoTip from '../info-tip/info-tip.svelte';
 	import StatusIcon from '../status/status-icon.svelte';
+	import { columnSection } from '../context-column/collapse.svelte.js';
+	import SectionToggle from '../context-column/section-toggle.svelte';
 
 	// The standing metric card for the right-hand context column: a route's
 	// low-context integers stacked as a vertical label→value list inside one card,
@@ -41,6 +43,10 @@
 		/** Leave the header out: the frame around the card (a dialogue) carries its title and info. */
 		bare?: boolean;
 	} = $props();
+
+	// In a context column the card folds, and the fold is remembered.
+	const section = columnSection(() => (bare ? undefined : title));
+	const folded = $derived(!!section?.collapsed);
 </script>
 
 <section
@@ -57,9 +63,10 @@
 					class="text-muted-foreground/50 hover:text-muted-foreground size-3.5 transition-colors"
 				/>
 			{/if}
+			{#if section}<span class="ml-auto flex"><SectionToggle {section} {title} /></span>{/if}
 		</header>
 	{/if}
-	<dl class="flex flex-col">
+	<dl class="flex flex-col" hidden={folded}>
 		{#each items as item (item.label)}
 			<div
 				class="border-border/60 flex items-center justify-between gap-3 border-b py-2.5 last:border-0"
