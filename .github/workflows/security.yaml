@@ -9,9 +9,9 @@ name: Security
 # routed to a GitHub-hosted runner. Routing, not a fence: a pull request runs
 # its own copy of this file, so the runner group's settings are what keep fork
 # code off atlas. This repo's own first-party code is its kits (template/ is
-# jinja source stamped into apps, not runnable code of this repo's own — its
-# own audit runs in the scaffolded app via
-# template/.github/workflows/security.yaml.jinja); trivy-fs reads every kit's
+# jinja source stamped into apps, not runnable code of this repo's own; it
+# stamps no security workflow, an app's gate being its change pipeline and
+# pre-commit gitleaks); trivy-fs reads every kit's
 # lock natively (kits/rust/Cargo.lock, uv.lock, kits/typescript/pnpm-lock.yaml),
 # this repo's dependency-audit gate (rules-library/core/supply-chain.md).
 #
