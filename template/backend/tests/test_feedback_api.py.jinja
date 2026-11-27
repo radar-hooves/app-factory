@@ -13,6 +13,8 @@ task path without a second, invisible connection.
 """
 
 import base64
+import subprocess
+import sys
 from collections.abc import Iterator
 
 import httpx
@@ -33,6 +35,31 @@ from tests.support.api import API
 _PNG_DATA_URL = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
+
+
+def test_import_does_not_vend() -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import builtins
+from unittest.mock import patch
+
+original_import = builtins.__import__
+def importing(name, globals=None, locals=None, fromlist=(), level=0):
+    if name == "{{ package_name }}" and "app_hooks" in fromlist:
+        vend()
+    return original_import(name, globals, locals, fromlist, level)
+
+with patch("{{ package_name }}.config.vend.vend") as vend:
+    with patch("builtins.__import__", side_effect=importing):
+        import {{ package_name }}.api.feedback.service
+    vend.assert_not_called()
+""",
+        ],
+        check=True,
+    )
 
 
 def _admin_headers() -> dict[str, str]:

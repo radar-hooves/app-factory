@@ -13,7 +13,6 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from {{ package_name }} import app_hooks
 from {{ package_name }}.api.feedback.models import FeedbackReport, FeedbackStatus
 from {{ package_name }}.api.feedback.schemas import FeedbackCreate
 from {{ package_name }}.config import Settings
@@ -119,6 +118,8 @@ def _loki_hint(session_id: str) -> str:
 
 def api_prefix() -> str:
     """Where this app mounts its API: the declared `app_hooks.API_PREFIX`, as `main.py` reads it."""
+    from {{ package_name }} import app_hooks
+
     return "/" + getattr(app_hooks, "API_PREFIX", "/api").strip("/")
 
 
