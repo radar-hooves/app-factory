@@ -78,10 +78,11 @@ OTHER_WORKSPACE = {
     "x-authentik-entitlements": "agent-jobagent",
 }
 
-#: Bounds every poll loop below -- the fake CLI answers in well under a
-#: second, so a real hang reads as a clean failure rather than the suite
-#: stalling.
-_POLL_TIMEOUT_SECONDS = 10.0
+#: Bounds every poll loop below, so a real hang reads as a clean failure rather
+#: than the suite stalling. The fake CLI answers in well under a second on an idle
+#: host, but each turn spawns a Python process, and a CI runner loaded to many
+#: times its cores took over ten seconds to start one.
+_POLL_TIMEOUT_SECONDS = 60.0
 
 JOB_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
 #: A Luhn-valid card number, as a statement prints one.
