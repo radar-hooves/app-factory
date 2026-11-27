@@ -40,7 +40,7 @@ services:
     tmpfs:
       - /tmp
     ports:
-      - '{{ backend_port }}:{{ backend_port }}'
+      - '127.0.0.1:{{ backend_port }}:{{ backend_port }}'
     environment:
       # There is no development database (stacks/dev-environment.md): the
       # workstation runs no backing services, so this points at the app's REAL
