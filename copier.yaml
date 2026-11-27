@@ -120,6 +120,7 @@ _skip_if_exists:
   - backend/src/{{ package_name }}/app_hooks.py
   - backend/tests/app_fixtures.py
   - frontend/tests/e2e/app-web-server.ts
+  - frontend/tests/e2e/additional-web-servers.ts
   - frontend/app-proxy.ts
   # Names the household's committed master-root file lacks; normally empty.
   - .mcp.json
@@ -169,6 +170,7 @@ _exclude:
   - "{% if not factory_selftest %}backend/tests/test_vend.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_workspace_race.py{% endif %}"
   - "{% if not factory_selftest %}backend/tests/test_version.py{% endif %}"
+  - "{% if not factory_selftest %}frontend/src/playwright-config.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/dev-identity.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/hooks.client.test.ts{% endif %}"
   - "{% if not factory_selftest %}frontend/src/lib/api/client.test.ts{% endif %}"
@@ -387,6 +389,7 @@ _migrations:
       - backend/tests/test_vend.py
       - backend/tests/test_workspace_race.py
       - backend/tests/test_version.py
+      - frontend/src/playwright-config.test.ts
       - frontend/src/dev-identity.test.ts
       - frontend/src/hooks.client.test.ts
       - frontend/src/lib/api/client.test.ts

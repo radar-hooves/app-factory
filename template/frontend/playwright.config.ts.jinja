@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { additionalWebServers } from './tests/e2e/additional-web-servers';
 import { appWebServer } from './tests/e2e/app-web-server';
 import { hostChromium } from './tests/e2e/host-browser';
 
@@ -78,26 +79,29 @@ export default defineConfig({
 			}
 		}
 	],
-	webServer: {
-		// The three seams an app may take are its own file's, so this stanza
-		// stays byte-identical everywhere: `command` and `timeout` replace,
-		// `env` merges over the identity variable below (tests/e2e/app-web-server.ts).
-		command: APP_WEB_SERVER.command ?? `vite dev --port ${E2E_PORT}`,
-		// Read by vite.config.ts's dev-identity header; keeps this suite's
-		// writes off whatever the interactive `dev-uid` identity owns.
-		env: {
-			{{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID,
-			{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS: E2E_ENTITLEMENTS,
-			...APP_WEB_SERVER.env
+	webServer: [
+		{
+			// The three seams an app may take are its own file's, so this stanza
+			// stays byte-identical everywhere: `command` and `timeout` replace,
+			// `env` merges over the identity variable below (tests/e2e/app-web-server.ts).
+			command: APP_WEB_SERVER.command ?? `vite dev --port ${E2E_PORT}`,
+			// Read by vite.config.ts's dev-identity header; keeps this suite's
+			// writes off whatever the interactive `dev-uid` identity owns.
+			env: {
+				{{ project_name | upper | replace('-', '_') }}_DEV_UID: E2E_UID,
+				{{ project_name | upper | replace('-', '_') }}_DEV_ENTITLEMENTS: E2E_ENTITLEMENTS,
+				...APP_WEB_SERVER.env
+			},
+			port: E2E_PORT,
+			// Never reuse — the whole point of the separate port and identity is
+			// that this suite controls the server it runs against.
+			reuseExistingServer: false,
+			// Playwright's own default, stated rather than inherited so an app that
+			// needs longer has somewhere to say so.
+			timeout: APP_WEB_SERVER.timeout ?? 60_000,
+			stdout: 'pipe',
+			stderr: 'pipe'
 		},
-		port: E2E_PORT,
-		// Never reuse — the whole point of the separate port and identity is
-		// that this suite controls the server it runs against.
-		reuseExistingServer: false,
-		// Playwright's own default, stated rather than inherited so an app that
-		// needs longer has somewhere to say so.
-		timeout: APP_WEB_SERVER.timeout ?? 60_000,
-		stdout: 'pipe',
-		stderr: 'pipe'
-	}
+		...additionalWebServers
+	]
 });
