@@ -2304,7 +2304,8 @@ window.__probe = { composite, stack, contrast, inkRatio, fillRatio };
 	}
 
 	// ── A list's own scroller says there is more below, and stops at the end ──
-	for (const w of [411, 1728]) {
+	// Only where the list is a pane: a phone's list scrolls with the page (checked below).
+	for (const w of [1728]) {
 		const { context, page } = await open('surface=records&long=1', { width: w, height: 700 });
 		await page.waitForSelector('[data-slot="record-rows"]');
 		const fade = () =>
@@ -5189,7 +5190,7 @@ for (const [height, long] of [
 			const top = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y);
 			return top === el || el.contains(top);
 		});
-		const scrollers = [...document.querySelectorAll('[data-slot="app-shell-content"], [data-slot="record-rows"]')];
+		const scrollers = [...document.querySelectorAll('.ds-page-main, [data-slot="app-shell-content"], [data-slot="record-rows"]')];
 		for (const el of scrollers) el.scrollTop = el.scrollHeight;
 		const ended = scrollers.some((el) => el.scrollHeight > el.clientHeight) && scrollers.every((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
 		const lastRow = [...document.querySelectorAll('[data-slot="record-row"]')].pop();
